@@ -1,0 +1,2 @@
+recursive-include bleemeo_agent/resources *
+recursive-include bleemeo_agent/templates *

@@ -1,0 +1,7 @@
+Format: http://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: bleemeo-agent
+Source: <https://github.com/bleemeo/agent>
+
+Files: *
+Copyright: __NO_COPYRIGHT_NOR_LICENSE__
+License:   __UNKNOWN__

@@ -1,0 +1,37 @@
+#!/usr/bin/make -f
+# See debhelper(7) (uncomment to enable)
+# output every command that modifies files on the build system.
+#DH_VERBOSE = 1
+
+# see EXAMPLES in dpkg-buildflags(1) and read /usr/share/dpkg/*
+DPKG_EXPORT_BUILDFLAGS = 1
+include /usr/share/dpkg/default.mk
+
+# main packaging script based on dh7 syntax
+%:
+	dh $@ --with python2
+
+# debmake generated override targets
+# Too cmplicated to provide examples here.
+
+# Check situation of Python on Debian
+#     https://wiki.debian.org/Python
+#
+# For transition to dh_python2 (jessie and later)
+#     https://wiki.debian.org/Python/TransitionToDHPython2
+#
+# To support python2.7 and python3, there are 2 ways to package:
+#   * packaging with --buildsystem=pybuild (jessie and later)
+#     https://wiki.debian.org/Python/Pybuild
+#     https://wiki.debian.org/Python/LibraryStyleGuide
+#
+#   * packaging without --buildsystem=pybuild (wheezy)
+#     https://wiki.debian.org/Python/AppStyleGuide
+#
+# To update the upstream source to support python3, see
+#     https://wiki.python.org/moin/Python2orPython3
+#     https://wiki.python.org/moin/PortingToPy3k/BilingualQuickRef
+
+
+
+

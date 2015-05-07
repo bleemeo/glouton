@@ -1,0 +1,14 @@
+improve me :)
+
+development::
+
+    (create virtualenv)
+    pip install -r requirements.txt
+    python setup.py develop
+
+    # code, change file, etc
+    # test agent by starting it:
+    bleemeo-agent
+
+    # Run tox to check for coding mistake
+    tox

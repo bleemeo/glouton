@@ -1,0 +1,27 @@
+Source: bleemeo-agent
+Section: misc
+Priority: extra
+Maintainer: Pierre Fersing <pierre.fersing@bleemeo.com>
+Build-Depends: debhelper (>=9),
+               dh-exec,
+               dh-python,
+               python-all,
+               python-setuptools,
+               python3-all
+Standards-Version: 3.9.5
+Homepage: https://bleemeo.com
+X-Python-Version: >= 2.7
+
+Package: bleemeo-agent
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${python:Depends},
+    collectd,
+    python-flask,
+    python-paho-mqtt,
+    python-stevedore,
+    nagios-plugins
+Description: Bleemeo agent
+ Bleemeo is a solution of Monitoring as a Service.
+ This package contains the agent which send metric to
+ the SaaS platform

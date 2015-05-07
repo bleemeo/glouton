@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Bleemeo Agent - local UI</title>
+</head>
+
+<body>
+<p>Registration status:
+{{ agent.registration_done }}
+</p>
+<h2>Checks</h2>
+<ul>
+    {% for check in agent.check_thread.checks %}
+        <li> {{ check.name }} : {{ check.hard_status }} ( {{check.soft_status }} - {{ check.soft_status_try }} / 4 ) </li>
+    {% endfor %}
+</ul>
+</body>
+
+</html>

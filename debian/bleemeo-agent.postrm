@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -e
+
+#DEBHELPER#
+
+case "$1" in
+    purge)
+        rm -f /var/lib/bleemeo/credentials
+        if [ -d /var/lib/bleemeo ]; then
+            rmdir --ignore-fail-on-non-empty /var/lib/bleemeo
+        fi
+        rm -f /etc/collectd/collectd.conf.d/bleemeo.conf
+        rm -f /etc/bleemeo/agent.conf.d/server.conf
+        if [ -d /etc/bleemeo/agent.conf.d ]; then
+            rmdir --ignore-fail-on-non-empty /etc/bleemeo/agent.conf.d
+        fi
+        if [ -d /etc/bleemeo ]; then
+            rmdir --ignore-fail-on-non-empty /etc/bleemeo
+        fi
+        deluser --quiet --system bleemeo > /dev/null || true
+        ;;
+esac
