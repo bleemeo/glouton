@@ -14,7 +14,7 @@ class MySQL(base.PluginV1Base):
             return False
 
         debian_cnf_raw = subprocess.check_output(
-                ['sudo', '--non-interactive', 'cat', '/etc/mysql/debian.cnf'],
+            ['sudo', '--non-interactive', 'cat', '/etc/mysql/debian.cnf'],
         )
         debian_cnf = ConfigParser.SafeConfigParser()
         debian_cnf.readfp(io.BytesIO(debian_cnf_raw))
@@ -37,10 +37,10 @@ LoadPlugin mysql
     </Database>
 </Plugin>
 """.format(
-        socket=self.mysql_socket,
-        user=self.mysql_user,
-        password=self.mysql_password,
-    )
+            socket=self.mysql_socket,
+            user=self.mysql_user,
+            password=self.mysql_password,
+        )
 
     def canonical_metric_name(self, name):
         if name.startswith('mysql-bleemeo.'):
@@ -49,6 +49,6 @@ LoadPlugin mysql
     def list_checks(self):
         return [(
             'MySQL database',
-            "/usr/lib/nagios/plugins/check_mysql -u '%s' -p '%s'" %
-                (self.mysql_user, self.mysql_password),
+            "/usr/lib/nagios/plugins/check_mysql -u '%s' -p '%s'" % (
+                self.mysql_user, self.mysql_password),
             3306)]

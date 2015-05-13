@@ -11,6 +11,7 @@ app_thread = threading.Thread(target=app.run)
 def home():
     return flask.render_template('index.html', agent=app.agent)
 
+
 @app.route('/about')
 def about():
     return flask.render_template('about.html', agent=app.agent)

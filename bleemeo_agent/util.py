@@ -117,6 +117,7 @@ def run_command_timeout(command, timeout=10):
 
     return (proc.returncode, output)
 
+
 def package_installed(package_name):
     """ Return True if given package is installed.
 
