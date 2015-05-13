@@ -1,22 +1,11 @@
-import subprocess
-
 from bleemeo_agent.plugins import base
+import bleemeo_agent.util
 
 
 class Apache(base.PluginV1Base):
 
     def dependencies_present(self):
-        try:
-            output = subprocess.check_output(
-                ['dpkg-query', '--show', '--showformat=${Status}',
-                    'apache2'],
-                stderr=subprocess.STDOUT,
-            )
-            apache_installed = output.startswith('install')
-        except subprocess.CalledProcessError:
-            apache_installed = False
-
-        return apache_installed
+        return bleemeo_agent.util.package_installed('apache2')
 
     def collectd_configure(self):
         return """

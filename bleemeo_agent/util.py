@@ -111,3 +111,19 @@ def run_command_timeout(command, timeout=10):
     killer_thread.join()
 
     return (proc.returncode, output)
+
+def package_installed(package_name):
+    """ Return True if given package is installed.
+
+        Work on Debian/Ubuntu derivate
+    """
+    try:
+        output = subprocess.check_output(
+            ['dpkg-query', '--show', '--showformat=${Status}', package_name],
+            stderr=subprocess.STDOUT,
+        )
+        installed = output.startswith('install')
+    except subprocess.CalledProcessError:
+        installed = False
+
+    return installed

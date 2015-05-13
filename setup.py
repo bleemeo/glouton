@@ -17,17 +17,9 @@ setup(
     entry_points={
         'bleemeo_agent.plugins_v1': [
             'apache = bleemeo_agent.plugins.apache:Apache',
+            'mysql = bleemeo_agent.plugins.mysql:MySQL',
         ],
     },
-    # entry_points={
-    #    'console_scripts': [
-    #        'gnucash-convert = compta_tools.convert:main',
-    #        'compta-list = compta_tools.script:list_account',
-    #        'compta-cli = compta_tools.cli:main',
-    #        'compta-shell = compta_tools.script:shell',
-    #        'compta-export = compta_tools.script:export',
-    #    ],
-    # },
     scripts=(
         'bin/bleemeo-agent',
     )
