@@ -1,20 +1,39 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>Bleemeo Agent - local UI</title>
-</head>
+{% set current_tab = "status" %}
+{% extends "layout.html" %}
 
-<body>
+{% block content %}
 <p>Registration status:
-{{ agent.registration_done }}
+{% if agent.registration_done %} done {% else %} in progress {% endif %}
 </p>
 <h2>Checks</h2>
 <ul>
     {% for check in agent.check_thread.checks %}
-        <li> {{ check.name }} : {{ check.hard_status }} ( {{check.soft_status }} - {{ check.soft_status_try }} / 4 ) </li>
+        <li> {{ check.name }} :
+            {% if check.soft_status == 0 %} {# good #}
+            <span class="text-success">
+                <span class="text-success glyphicon glyphicon-ok-sign" aria-hidden="true"></span>
+                Success
+            </span>
+            {% elif check.soft_status == 1 %} {# warning #}
+            <span class="text-warning">
+                <span class="text-warning glyphicon glyphicon-info-sign" aria-hidden="true"></span>
+                Warning
+            </span>
+            {% elif check.soft_status == 2 %} {# critical #}
+            <span class="text-danger">
+                <span class="text-danger glyphicon glyphicon-remove-sign" aria-hidden="true"></span>
+                Critical
+            </span>
+            {% else %} {# unknown #}
+            <span class="text-danger">
+                <span class="text-danger glyphicon glyphicon-question-sign" aria-hidden="true"></span>
+                Unknown
+            </span>
+            {% endif %}
+            {% if check.soft_status != 0 %}
+            (check {{ check.soft_status_try }} / 4)
+            {% endif %}
+        </li>
     {% endfor %}
 </ul>
-</body>
-
-</html>
+{% endblock %}
