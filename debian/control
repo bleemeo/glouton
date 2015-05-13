@@ -20,6 +20,7 @@ Depends: ${misc:Depends}, ${python:Depends},
     facter,
     python-flask,
     python-paho-mqtt,
+    python-requests,
     python-stevedore,
     nagios-plugins
 Description: Bleemeo agent

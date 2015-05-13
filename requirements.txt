@@ -1,3 +1,4 @@
 stevedore
 paho-mqtt
 flask
+requests

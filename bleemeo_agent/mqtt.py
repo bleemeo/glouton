@@ -21,6 +21,18 @@ class Connector(threading.Thread):
             logging.debug('MQTT connection established')
             self.connected = True
 
+        # Subscribing in on_connect() means that if we lose the connection and
+        # reconnect then subscriptions will be renewed.
+        client.subscribe('%s/agent/+/GET' % self.agent.login)
+
+    def on_message(self, client, userdata, message):
+        if message.topic == '%s/agent/configuration/GET' % self.agent.login:
+            self.agent.update_server_config(message.payload)
+        elif message.topic == '%s/agent/reload_plugins/GET' % self.agent.login:
+            self.agent.reload_plugins()
+        else:
+            logging.info('Unknown message on topic %s', message.topic)
+
     def on_disconnect(self, client, userdata, rc):
         logging.debug('MQTT connection lost')
         self.connected = False
@@ -33,6 +45,7 @@ class Connector(threading.Thread):
 
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_disconnect = self.on_disconnect
+        self.mqtt_client.on_message = self.on_message
 
         if self.agent.config.has_option('agent', 'mqtt_host'):
             mqtt_host = self.agent.config.get('agent', 'mqtt_host')

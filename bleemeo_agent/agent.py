@@ -1,7 +1,9 @@
 import json
 import logging
 import logging.handlers
+import os
 import signal
+import sys
 import time
 import threading
 
@@ -75,6 +77,7 @@ class Agent:
         self.password = password
 
         self.registration_done = False
+        self.re_exec = False
 
         self.is_terminating = threading.Event()
         self.mqtt_connector = bleemeo_agent.mqtt.Connector(self)
@@ -99,6 +102,17 @@ class Agent:
         finally:
             self.is_terminating.set()
 
+        if self.re_exec:
+            # Wait for other thread to complet
+            bleemeo_agent.web.shutdown_server()
+            self.mqtt_connector.join()
+            self.collectd_server.join()
+            self.check_thread.join()
+
+            # Re-exec ourself
+            os.execv(sys.executable, [sys.executable] + sys.argv)
+            logging.critical('execv failed?!')
+
     def setup_signal(self):
         """ Make kill (SIGKILL/SIGQUIT) send a KeyboardInterrupt
         """
@@ -121,7 +135,7 @@ class Agent:
         registration_next_retry = 0
         last_fact_send = 0
 
-        while True:
+        while not self.is_terminating.is_set():
             now = time.time()
             if not self.registration_done and registration_next_retry < now:
                 if self.register():
@@ -137,7 +151,7 @@ class Agent:
                 self.send_facts()
                 last_fact_send = now
 
-            time.sleep(10)
+            self.is_terminating.wait(10)
 
     def send_facts(self):
         facts = bleemeo_agent.util.get_facts()
@@ -169,3 +183,52 @@ class Agent:
 
         logging.debug('Enable plugin %s', extension.name)
         return True
+
+    def reload_plugins(self):
+        """ Check if list of plugins change. If it does restart agent.
+        """
+        plugins_v1_mgr = stevedore.enabled.EnabledExtensionManager(
+            namespace='bleemeo_agent.plugins_v1',
+            invoke_on_load=True,
+            invoke_args=(self,),
+            check_func=self.check_plugin_v1,
+            on_load_failure_callback=self.plugins_on_load_failure,
+        )
+        if (sorted(self.plugins_v1_mgr.names())
+                == sorted(plugins_v1_mgr.names())):
+            logging.debug('No change in plugins list, do not reload')
+            return
+
+        self.restart()
+
+    def update_server_config(self, configuration):
+        """ Update server configuration and restart agent if it changed
+        """
+        config_path = '/etc/bleemeo/agent.conf.d/server.conf'
+        if os.path.exists(config_path):
+            with open(config_path) as fd:
+                current_content = fd.read()
+
+            if current_content == configuration:
+                logging.debug('Server configuration unchanged, do not reload')
+                return
+
+        with open(config_path, 'w') as fd:
+            fd.write(configuration)
+
+        self.restart()
+
+    def restart(self):
+        """ Restart agent.
+        """
+        logging.info('Restarting...')
+
+        # Note: we can not do action here, because during re-exec we want to
+        # give time  to other thread to complet. especially mqtt_connector
+        # (sending pending message), but restart may be called from
+        # MQTT thread (while processing server sent configuration).
+        # That why we only set is_terminating flag and re_exec flag.
+        # The main thread will handle the re-exec.
+
+        self.re_exec = True
+        self.is_terminating.set()
