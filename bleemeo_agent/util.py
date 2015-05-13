@@ -1,4 +1,5 @@
 import datetime
+import json
 import time
 import logging
 import random
@@ -71,8 +72,7 @@ def get_facts():
 
         It will use facter/salt/ohai or simillar tools if available
     """
-    # Currently only very basic information
-
+    # Basic "minimal" facts
     facts = {
         'hostname': socket.gethostname(),
         'fqdn': socket.getfqdn(),
@@ -80,6 +80,11 @@ def get_facts():
         'current_time': datetime.datetime.now().isoformat(),
     }
 
+    # Update with facter facts
+    facter_raw = subprocess.check_output([
+        'facter', '--json'
+    ])
+    facts.update(json.loads(facter_raw))
     return facts
 
 

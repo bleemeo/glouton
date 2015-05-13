@@ -17,6 +17,7 @@ Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python:Depends},
     collectd,
+    facter,
     python-flask,
     python-paho-mqtt,
     python-stevedore,
