@@ -18,6 +18,8 @@ setup(
         'bleemeo_agent.plugins_v1': [
             'apache = bleemeo_agent.plugins.apache:Apache',
             'mysql = bleemeo_agent.plugins.mysql:MySQL',
+            'ntpd = bleemeo_agent.plugins.ntpd:Ntpd',
+            'redis = bleemeo_agent.plugins.redis:Redis',
         ],
     },
     scripts=(
