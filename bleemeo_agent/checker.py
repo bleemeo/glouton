@@ -1,5 +1,6 @@
 import itertools
 import logging
+import random
 import select
 import sched
 import shlex
@@ -89,14 +90,31 @@ class Check:
         self.soft_status = STATUS_GOOD
         self.soft_status_try = 4
 
-        self.reschedule()
+        self.reschedule(initial=True)
         self.open_socket()
 
-    def reschedule(self):
+    def reschedule(self, initial=False):
+        """ (re-)schedule this check
+
+            If initial is True, it's the first schedule (in this case use a
+            random delay).
+        """
         if self.soft_status == STATUS_GOOD or self.soft_status_try >= 4:
             delay = 60 * 5
         else:
             delay = 60
+
+        if initial:
+            # During startup, schedule all check to be run withing the
+            # first 2 minutes:
+            # * between 10 seconds and 1 minutes : all check without TCP ports
+            # * between 1 and 2 minutes : check with TCP ports (we will
+            #   open the socket immediatly, so for them if service is down
+            #   it should be detected quickly).
+            if self.tcp_port is None:
+                delay = random.randint(10, 60)
+            else:
+                delay = random.randint(60, 120)
 
         self.current_event = self.checker.scheduler.enter(
             delay,
