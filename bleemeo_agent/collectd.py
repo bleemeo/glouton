@@ -118,8 +118,14 @@ class Collectd(threading.Thread):
                 logging.debug('collectd already configured')
                 return
 
-        with open(self.collectd_config, 'w') as fd:
-            fd.write(config_content)
+        try:
+            with open(self.collectd_config, 'w') as fd:
+                fd.write(config_content)
+        except IOError:
+            logging.warning(
+                'Failed to write collectd configuration. '
+                'Continuing with current configuration')
+            return
 
         try:
             output = subprocess.check_output(

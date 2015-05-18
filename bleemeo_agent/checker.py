@@ -36,6 +36,11 @@ class Checker(threading.Thread):
 
     def run(self):
 
+        if len(self.agent.plugins_v1_mgr.names()) == 0:
+            logging.debug(
+                'No plugins loaded. Means no check, stop checker thread')
+            return
+
         checks = self.agent.plugins_v1_mgr.map_method('list_checks')
 
         # list_checks return a list. So checks is a list of list :/
@@ -167,6 +172,9 @@ class Check:
             'check %s: running command: %s', self.name, self.check_command)
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
             shlex.split(self.check_command))
+
+        if return_code > STATUS_UNKNOWN:
+            return_code = STATUS_UNKNOWN
 
         # when status goes GOOD, always go to good immediatly
         # for all other case, we need to have 4 tries before moving from

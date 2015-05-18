@@ -81,10 +81,16 @@ def get_facts():
     }
 
     # Update with facter facts
-    facter_raw = subprocess.check_output([
-        'facter', '--json'
-    ])
-    facts.update(json.loads(facter_raw))
+    try:
+        facter_raw = subprocess.check_output([
+            'facter', '--json'
+        ])
+        facts.update(json.loads(facter_raw))
+    except OSError:
+        facts.setdefault('errors', []).append('facter not installed')
+        logging.warning(
+            'facter is not installed. Only limited facts are sents')
+
     return facts
 
 
@@ -101,11 +107,15 @@ def run_command_timeout(command, timeout=10):
             # event is not set, so process didn't finished itself
             proc.terminate()
 
-    proc = subprocess.Popen(
-        command,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-    )
+    try:
+        proc = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+    except OSError:
+        # Most probably : command not found
+        return (127, "Unable to run command")
     proc_finished = threading.Event()
     killer_thread = threading.Thread(
         target=_kill_proc, args=(proc, proc_finished, timeout))
