@@ -1,14 +1,58 @@
-improve me :)
+Bleemeo Agent
+=============
 
-development::
+Bleemeo agent is in charge to transmit metrics and alert to Bleemeo SaaS platform (https://bleemeo.com).
 
-    (create virtualenv)
+It forward metric reveiced by collectd, it also manage collectd configuration for supported plugins.
+
+Information are send using HTTPS protocol (when agent start, to register itself) and MQTT protocol.
+MQTT is a connected protocol and bi-directionnal. Agent could be reconfigured from Saas platform.
+
+
+Development
+------------
+
+If you want to develop on bleemeo-agent, here are the step to run from a git checkout:
+
+* create a virtualenv.
+* Install dependencies and "install" bleemeo-agent::
+
     pip install -r requirements.txt
     python setup.py develop
 
-    # code, change file, etc
-    # test agent by starting it:
+* Run bleemeo-agent from repository root (where README and setup.py are)::
+
     bleemeo-agent
 
-    # Run tox to check for coding mistake
+The "python setup.py develop" will install the code present in repository but without copying it,
+so any change will be applied without need to re-run that command.
+Note that change to setup.py (especialy change to entry_points) will need to re-run python setup.py develop.
+
+
+Before commiting, run tox to check for coding mistakes::
+
+    (still in your virtualenv)
+    pip install tox
     tox
+
+Tox will run unittest and static check (flake8, which include pep8 checks).
+
+For more complet development environment, you will need to grant privilege to bleemeo-agent.
+This is normaly done when installing package and allow agent to configure collectd and
+read some files.
+
+Additionnal configuration are:
+
+* Install package required by agents::
+
+    sudo apt-get install collectd facter nagios-plugins
+
+* create a file /etc/collectd/collectd.conf.d/bleemeo.conf owned by your user::
+
+    sudo touch /etc/collectd/collectd.conf.d/bleemeo.conf
+    sudo chown $USER /etc/collectd/collectd.conf.d/bleemeo.conf
+
+* Copy the sudoers file::
+
+    sudo install -m 0440 debian/bleemeo-agent.sudoers /etc/sudoers.d/bleemeo
+    sudo sed -i "s/^bleemeo/$USER/" /etc/sudoers.d/bleemeo
