@@ -33,8 +33,8 @@ def main():
 
     (login, password) = bleemeo_agent.config.get_credentials(config)
     try:
-        daemon = Agent(config, login, password)
-        daemon.run()
+        agent = Agent(config, login, password)
+        agent.run()
     except Exception:
         logging.critical(
             'Unhandled error occured. Agent is will terminate',
@@ -156,7 +156,7 @@ class Agent:
     def send_facts(self):
         facts = bleemeo_agent.util.get_facts()
         self.mqtt_connector.publish(
-            'agents/facts/POST',
+            'agent/facts/POST',
             json.dumps(facts))
 
     def register(self):
