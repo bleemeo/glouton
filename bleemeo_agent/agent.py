@@ -31,9 +31,9 @@ def main():
         sleeper.sleep()
         config = bleemeo_agent.config.load_config()
 
-    (login, password) = bleemeo_agent.config.get_credentials(config)
+    generated_values = bleemeo_agent.config.get_generated_values(config)
     try:
-        agent = Agent(config, login, password)
+        agent = Agent(config, generated_values)
         agent.run()
     except Exception:
         logging.critical(
@@ -71,10 +71,9 @@ class Agent:
     """ Class that hold "global" information about the agent
     """
 
-    def __init__(self, config, login, password):
+    def __init__(self, config, generated_values):
         self.config = config
-        self.login = login
-        self.password = password
+        self.generated_values = generated_values
 
         self.registration_done = False
         self.re_exec = False
@@ -170,6 +169,10 @@ class Agent:
     def account_id(self):
         return self.config.get('agent', 'account_id')
 
+    @property
+    def login(self):
+        return self.generated_values['login']
+
     def plugins_on_load_failure(self, manager, entrypoint, exception):
         logging.info('Plugin %s failed to load : %s', entrypoint, exception)
 
@@ -186,6 +189,8 @@ class Agent:
 
     def reload_plugins(self):
         """ Check if list of plugins change. If it does restart agent.
+
+            Return True is list changed.
         """
         plugins_v1_mgr = stevedore.enabled.EnabledExtensionManager(
             namespace='bleemeo_agent.plugins_v1',
@@ -197,9 +202,10 @@ class Agent:
         if (sorted(self.plugins_v1_mgr.names())
                 == sorted(plugins_v1_mgr.names())):
             logging.debug('No change in plugins list, do not reload')
-            return
+            return False
 
         self.restart()
+        return True
 
     def update_server_config(self, configuration):
         """ Update server configuration and restart agent if it changed

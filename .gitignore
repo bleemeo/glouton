@@ -3,4 +3,4 @@ __pycache__
 *.egg-info
 .*.swp
 /.tox
-/credentials
+/generated_values.json

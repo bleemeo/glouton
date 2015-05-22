@@ -14,6 +14,7 @@ Path to configuration are hardcoded, in this order:
 import ConfigParser
 import glob
 import io
+import json
 import os
 import pkgutil
 import uuid
@@ -57,17 +58,33 @@ def config_files(paths):
     return files
 
 
-def get_credentials(config):
-    """ Load (or generate and save) credentials from credential_file.
+def get_generated_values(config):
+    """ Load (or generate and save) some generated value.
+
+        return a dictionary with:
+
+        * login / password : used to authenticate on MQTT)
+        * secret_key : used for Flask session/cookie
     """
-    filepath = config.get('agent', 'credential_file')
+    filepath = config.get('agent', 'generated_values_file')
+    file_change = False
+    values = {}
+
     if os.path.exists(filepath):
         with open(filepath) as fd:
-            (login, password) = fd.readline().split()
-    else:
-        login = str(uuid.uuid4())
-        password = bleemeo_agent.util.generate_password()
-        with open(filepath, 'w') as fd:
-            fd.write('%s %s\n' % (login, password))
+            values = json.load(fd)
 
-    return (login, password)
+    if 'login' not in values or 'password' not in values:
+        values['login'] = str(uuid.uuid4())
+        values['password'] = bleemeo_agent.util.generate_password()
+        file_change = True
+
+    if 'secret_key' not in values:
+        values['secret_key'] = bleemeo_agent.util.generate_password()
+        file_change = True
+
+    if file_change:
+        with open(filepath, 'w') as fd:
+            json.dump(values, fd)
+
+    return values

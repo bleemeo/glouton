@@ -2,7 +2,8 @@ import ConfigParser
 import os
 import tempfile
 
-from bleemeo_agent.config import (config_files, load_config, get_credentials)
+from bleemeo_agent.config import (
+    config_files, load_config, get_generated_values)
 
 
 def test_config_files():
@@ -35,18 +36,17 @@ def test_load_config():
     assert config.get('test', 'second_conf_loaded') == 'yes'
 
 
-def test_get_credentials():
+def test_get_generated_values():
     tmpdir = tempfile.mkdtemp()
-    filepath = os.path.join(tmpdir, 'credential')
+    filepath = os.path.join(tmpdir, 'generated_values.json')
     config = ConfigParser.SafeConfigParser()
     config.add_section('agent')
-    config.set('agent', 'credential_file', filepath)
+    config.set('agent', 'generated_values_file', filepath)
     try:
-        (login, password) = get_credentials(config)
+        values = get_generated_values(config)
         # re-read
-        (login2, password2) = get_credentials(config)
-        assert login == login2
-        assert password == password2
+        values2 = get_generated_values(config)
+        assert values == values2
         assert os.path.isfile(filepath)
     finally:
         try:

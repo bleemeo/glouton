@@ -12,6 +12,18 @@ def home():
     return flask.render_template('index.html', agent=app.agent)
 
 
+@app.route('/admin', methods=['GET', 'POST'])
+def admin():
+    if flask.request.method == 'POST':
+        if flask.request.form['action'] == 'refresh_plugins':
+            if app.agent.reload_plugins():
+                return flask.render_template(
+                    'restarting.html', agent=app.agent)
+            else:
+                flask.flash('Re-scan finished. List unchanged')
+    return flask.render_template('admin.html', agent=app.agent)
+
+
 @app.route('/about')
 def about():
     return flask.render_template('about.html', agent=app.agent)
@@ -40,6 +52,7 @@ def quit():
 
 def start_server(agent):
     app.agent = agent
+    app.secret_key = agent.generated_values['secret_key']
     app_thread.daemon = True
     app_thread.start()
 

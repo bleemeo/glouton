@@ -1,0 +1,12 @@
+{% set current_tab = "admin" %}
+{% extends "layout.html" %}
+
+{% block content %}
+<form method="POST">
+    <p>Enabled plugins: {{ ', '.join(agent.plugins_v1_mgr.names()) }}
+        <button type="submit" class="btn btn-sm" name="action" value="refresh_plugins">
+            <span class="glyphicon glyphicon-refresh"></span> Refresh
+        </button>
+    </p>
+</form>
+{% endblock %}

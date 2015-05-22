@@ -6,7 +6,7 @@ set -e
 
 case "$1" in
     purge)
-        rm -f /var/lib/bleemeo/credentials
+        rm -f /var/lib/bleemeo/generated_values.json
         if [ -d /var/lib/bleemeo ]; then
             rmdir --ignore-fail-on-non-empty /var/lib/bleemeo
         fi

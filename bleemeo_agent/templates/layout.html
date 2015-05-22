@@ -16,6 +16,8 @@
         <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
         <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
     <![endif]-->
+    {% block head %}
+    {% endblock %}
 </head>
 
   <body>
@@ -35,12 +37,23 @@
           <div id="navbar" class="navbar-collapse collapse">
             <ul class="nav navbar-nav">
                 <li {% if current_tab == "status" %}class="active"{% endif %}><a href="/">Status</a></li>
+                <li {% if current_tab == "admin" %}class="active"{% endif %}><a href="/admin">Admin</a></li>
                 <li {% if current_tab == "about" %}class="active"{% endif %}><a href="/about">About</a></li>
             </ul>
           </div><!--/.nav-collapse -->
         </div><!--/.container-fluid -->
       </nav>
 
+      {% with messages = get_flashed_messages() %}
+      {% if messages %}
+          {% for message in messages %}
+          <div class="alert alert-info alert-dismissible" role="alert">
+                <button type="button" class="close" data-dismiss="alert" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    {{ message }}
+          </div>
+          {% endfor %}
+      {% endif %}
+      {% endwith %}
       <!-- Main component for a primary marketing message or call to action -->
       <div class="jumbotron">
         {% block content %}{% endblock %}
