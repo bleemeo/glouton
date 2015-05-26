@@ -9,6 +9,13 @@
 <ul>
     {% for check in agent.check_thread.checks %}
         <li> {{ check.name }} :
+            {% if check.fake_failure_until %}
+            <span class="text-danger">
+                <span class="text-danger glyphicon glyphicon-remove-sign" aria-hidden="true"></span>
+                Critical (faked)
+            </span>
+            &emsp;real status :
+            {% endif %}
             {% if check.soft_status == 0 %} {# good #}
             <span class="text-success">
                 <span class="text-success glyphicon glyphicon-ok-sign" aria-hidden="true"></span>

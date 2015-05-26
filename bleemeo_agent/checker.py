@@ -60,16 +60,22 @@ class Checker(threading.Thread):
 
             * that agent is not being terminated
             * that all TCP socket are still openned
+            * status of "faked failure"
         """
 
         if self.agent.is_terminating.is_set():
             raise StopIteration
 
+        now = time.time()
         all_sockets = {}
 
         for check in self.checks:
             if check.tcp_socket is not None:
                 all_sockets[check.tcp_socket] = check
+
+            if (check.fake_failure_until
+                    and check.fake_failure_until < now):
+                check.fake_failure_stop()
 
         (rlist, _, _) = select.select(all_sockets.keys(), [], [], 0)
         for s in rlist:
@@ -89,6 +95,7 @@ class Check:
         self.tcp_socket = None
         self.last_run = time.time()
         self.current_event = None
+        self.fake_failure_until = None
 
         # hard/soft "name" taken from nagios for it's 4-tries before alert
         self.hard_status = STATUS_GOOD
@@ -196,10 +203,7 @@ class Check:
 
         if self.soft_status != self.hard_status and self.soft_status_try >= 4:
             self.hard_status = self.soft_status
-            logging.warning(
-                'check %s: alert, test is %s',
-                self.name, STATUS_NAME[self.hard_status])
-            # TODO: alert
+            self.alert()
 
         if self.soft_status != STATUS_GOOD and self.tcp_socket is not None:
             self.tcp_socket.close()
@@ -211,3 +215,24 @@ class Check:
             self.checker.scheduler.enter(5, 1, self.open_socket, ())
 
         self.reschedule()
+
+    def fake_failure_start(self):
+        self.fake_failure_until = time.time() + 900
+        self.alert(faked_status=STATUS_CRITICAL)
+
+    def fake_failure_stop(self):
+        self.fake_failure_until = None
+        self.alert(faked_status=STATUS_GOOD)
+
+    def alert(self, faked_status=None):
+        message = 'check %s: alert, test is %s'
+        if faked_status is not None:
+            status = faked_status
+            message = '[faked]' + message
+        else:
+            status = self.hard_status
+
+        logging.warning(
+            message,
+            self.name, STATUS_NAME[status])
+        # TODO: alert

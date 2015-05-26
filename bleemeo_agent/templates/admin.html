@@ -8,5 +8,42 @@
             <span class="glyphicon glyphicon-refresh"></span> Refresh
         </button>
     </p>
+<h2>Checks</h2>
+<p>
+<ul>
+    {% for check in agent.check_thread.checks %}
+        <li> {{ check.name }}
+            {% if check.fake_failure_until %}
+            <button type="submit" class="btn btn-sm" name="action" value="restore-{{ loop.index0 }}">
+                <span class="glyphicon glyphicon-refresh"></span> Stop faked failure
+            </button>
+            ( automaticaly restore to normal state in
+            {% with remaining = (check.fake_failure_until - now) / 60 %}
+            {% if remaining <= 1 %}
+                less than one minute
+            {% else %}
+                {{ remaining|round|int }} minutes
+            {% endif %}
+            {% endwith %}
+            )
+            {% else %}
+            <button type="submit" class="btn btn-sm" name="action" value="fake-failure-{{ loop.index0 }}">
+                <span class="glyphicon glyphicon-refresh"></span> Fake a failure
+            </button>
+            {% endif %}
+        </li>
+    {% endfor %}
+</ul>
+</p>
+<p>
+When you fake a failure, the selected item will act as if the tested service
+was down. So the check will switch to CRITICAL state and a alert will be raised.
+This allow you to check how your alerting works.
+</p>
+<p>
+Note: the faked failure will automaticaly restore to normal state after 15 minutes,
+or immedially if you use the "Stop faked failure" button. Also the alert will
+carry a flag "test" allowing you to known this was only a test.
+</p>
 </form>
 {% endblock %}
