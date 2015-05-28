@@ -70,6 +70,12 @@ def setup_logger(config):
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
 
+    # Special case for requets. Requests log "Starting new connection" in INFO
+    # we don't only want them in debug
+    if level != logging.DEBUG:
+        logger_request = logging.getLogger('requests')
+        logger_request.setLevel(logging.WARNING)
+
 
 class Agent:
     """ Class that hold "global" information about the agent
