@@ -1,4 +1,5 @@
 stevedore
 paho-mqtt
+passlib
 flask
 requests

@@ -3,12 +3,16 @@ import logging
 import logging.handlers
 import os
 import signal
+import socket
 import sys
 import time
 import threading
 
+import passlib.context
+import requests
 import stevedore
 
+import bleemeo_agent
 import bleemeo_agent.checker
 import bleemeo_agent.collectd
 import bleemeo_agent.config
@@ -163,6 +167,42 @@ class Agent:
 
             Return True if registration succeeded
         """
+        if self.config.has_option('agent', 'registration_url'):
+            registration_url = self.config.get('agent', 'registration_url')
+        else:
+            registration_url = (
+                'https://%s.bleemeo.com/api/agent/register/' % self.account_id)
+
+        myctx = passlib.context.CryptContext(schemes=["sha512_crypt"])
+        password_hash = myctx.encrypt(self.generated_values['password'])
+        payload = {
+            'account_id': self.account_id,
+            'registration_key': self.config.get('agent', 'registration_key'),
+            'login': self.generated_values['login'],
+            'password_hash': password_hash,
+            'agent_version': bleemeo_agent.__version__,
+            'hostname': socket.getfqdn(),
+        }
+        try:
+            response = requests.post(registration_url, data=payload)
+        except requests.exceptions.RequestException:
+            logging.debug('Registration failed', exc_info=True)
+            return False
+
+        content = None
+        if response.status_code == 200:
+            try:
+                content = response.json()
+            except ValueError:
+                logging.debug(
+                    'registration response is not a json : %s',
+                    response.content[:100])
+
+        if content is not None and content.get('registration') == 'success':
+            logging.debug('Regisration successfull')
+            return True
+
+        logging.debug('Registration failed, content=%s', content)
         return False
 
     @property
