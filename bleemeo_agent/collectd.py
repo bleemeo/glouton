@@ -101,7 +101,7 @@ class Collectd(threading.Thread):
                 points.append((metric, value, timestamp))
 
             self.agent.mqtt_connector.publish(
-                'agent/points/POST',
+                'api/v1/agent/points/POST',
                 json.dumps(points))
 
     def add_config(self, fragments):

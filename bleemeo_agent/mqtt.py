@@ -26,9 +26,11 @@ class Connector(threading.Thread):
         client.subscribe('%s/agent/+/GET' % self.agent.login)
 
     def on_message(self, client, userdata, message):
-        if message.topic == '%s/agent/configuration/GET' % self.agent.login:
+        config_topic = '%s/api/v1/agent/configuration/GET' % self.agent.login
+        reload_topic = '%s/api/v1/agent/reload_plugins/GET' % self.agent.login
+        if message.topic == config_topic:
             self.agent.update_server_config(message.payload)
-        elif message.topic == '%s/agent/reload_plugins/GET' % self.agent.login:
+        elif message.topic == reload_topic:
             self.agent.reload_plugins()
         else:
             logging.info('Unknown message on topic %s', message.topic)
@@ -39,7 +41,7 @@ class Connector(threading.Thread):
 
     def run(self):
         self.mqtt_client.will_set(
-            '%s/agent/disconnect/POST' % self.agent.login,
+            '%s/api/v1/agent/disconnect/POST' % self.agent.login,
             'disconnect-will %s' % self.uuid_connection,
             1)
 
@@ -65,13 +67,13 @@ class Connector(threading.Thread):
         self.mqtt_client.loop_start()
 
         self.mqtt_client.publish(
-            '%s/agent/connect/POST' % self.agent.login,
+            '%s/api/v1/agent/connect/POST' % self.agent.login,
             'connect %s' % self.uuid_connection,
             1)
 
         self.agent.is_terminating.wait()
         self.mqtt_client.publish(
-            '%s/agent/disconnect/POST' % self.agent.login,
+            '%s/api/v1/agent/disconnect/POST' % self.agent.login,
             'disconnect %s' % self.uuid_connection,
             1)
         self.mqtt_client.loop_stop()

@@ -159,7 +159,7 @@ class Agent:
     def send_facts(self):
         facts = bleemeo_agent.util.get_facts()
         self.mqtt_connector.publish(
-            'agent/facts/POST',
+            'api/v1/agent/facts/POST',
             json.dumps(facts))
 
     def register(self):
@@ -171,7 +171,8 @@ class Agent:
             registration_url = self.config.get('agent', 'registration_url')
         else:
             registration_url = (
-                'https://%s.bleemeo.com/api/agent/register/' % self.account_id)
+                'https://%s.bleemeo.com/api/v1/agent/register/'
+                % self.account_id)
 
         myctx = passlib.context.CryptContext(schemes=["sha512_crypt"])
         password_hash = myctx.encrypt(self.generated_values['password'])
