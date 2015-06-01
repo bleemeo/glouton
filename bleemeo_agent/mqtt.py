@@ -23,7 +23,7 @@ class Connector(threading.Thread):
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        client.subscribe('%s/agent/+/GET' % self.agent.login)
+        client.subscribe(str('%s/agent/+/GET' % self.agent.login))
 
     def on_message(self, client, userdata, message):
         config_topic = '%s/api/v1/agent/configuration/GET' % self.agent.login

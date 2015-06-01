@@ -19,6 +19,7 @@ setup(
             'apache = bleemeo_agent.plugins.apache:Apache',
             'disk = bleemeo_agent.plugins.disk:Disk',
             'mysql = bleemeo_agent.plugins.mysql:MySQL',
+            'nginx = bleemeo_agent.plugins.nginx:Nginx',
             'ntpd = bleemeo_agent.plugins.ntpd:Ntpd',
             'redis = bleemeo_agent.plugins.redis:Redis',
         ],

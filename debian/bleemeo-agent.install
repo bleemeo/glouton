@@ -1,3 +1,4 @@
 #!/usr/bin/dh-exec
 debian/bleemeo-agent.sudoers => etc/sudoers.d/bleemeo
 etc/agent.conf => etc/bleemeo/agent.conf
+share/nginx-enable-stub-status.conf => usr/share/bleemeo-agent/nginx-enable-stub-status.conf
