@@ -20,9 +20,11 @@ Depends: ${misc:Depends}, ${python:Depends},
     facter,
     python-flask,
     python-paho-mqtt,
+    python-passlib,
     python-requests,
     python-stevedore,
     nagios-plugins
+Recommends: docker-collectd-plugin
 Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to
