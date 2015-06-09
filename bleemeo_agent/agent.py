@@ -41,7 +41,7 @@ def main():
         agent.run()
     except Exception:
         logging.critical(
-            'Unhandled error occured. Agent is will terminate',
+            'Unhandled error occured. Agent will terminate',
             exc_info=True)
     finally:
         logging.info('Agent stopped')

@@ -48,6 +48,18 @@ def load_config(paths=None):
 
 
 def config_files(paths):
+    """ Return config files present in given paths.
+
+        For each path, if:
+
+        * it is a directory, return all *.conf files inside the directory
+        * it is a file, return the path
+        * no config file exists for the path, skip it
+
+        So, if path is ['/etc/bleemeo/agent.conf', '/etc/bleemeo/agent.conf.d']
+        you will get /etc/bleemeo/agent.conf (if it exists) and all
+        existings *.conf under /etc/bleemeo/agent.conf.d
+    """
     files = []
     for path in paths:
         if os.path.isfile(path):
@@ -59,11 +71,11 @@ def config_files(paths):
 
 
 def get_generated_values(config):
-    """ Load (or generate and save) some generated value.
+    """ Load (or generate and save) some generated values.
 
         return a dictionary with:
 
-        * login / password : used to authenticate on MQTT)
+        * login / password : used to authenticate on MQTT
         * secret_key : used for Flask session/cookie
     """
     filepath = config.get('agent', 'generated_values_file')

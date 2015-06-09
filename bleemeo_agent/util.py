@@ -70,7 +70,7 @@ def get_facts():
 
         Returned facts are informations like hostname, OS type/version, etc
 
-        It will use facter/salt/ohai or simillar tools if available
+        It will use facter tools if available
     """
     # Basic "minimal" facts
     facts = {

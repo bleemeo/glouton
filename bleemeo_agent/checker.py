@@ -165,7 +165,7 @@ class Check:
         """ Called when socket is "readable". When a socket is closed,
             it became "readable".
         """
-        # this call can NOT block, this is called when socket is readable
+        # this call can NOT block, it is called when socket is readable
         buffer = self.tcp_socket.recv(65536)
         if buffer == '':
             # this means connection was closed!
