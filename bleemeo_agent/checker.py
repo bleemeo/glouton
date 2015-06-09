@@ -1,4 +1,5 @@
 import itertools
+import json
 import logging
 import random
 import select
@@ -235,4 +236,12 @@ class Check:
         logging.warning(
             message,
             self.name, STATUS_NAME[status])
-        # TODO: alert
+        self.checker.agent.mqtt_connector.publish(
+            'api/v1/agent/alert/POST',
+            json.dumps({
+                'timestamp': time.time(),
+                'check': self.name,
+                'status': status,
+                'fake': faked_status is not None,
+            }),
+        )
