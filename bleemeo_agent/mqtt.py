@@ -54,6 +54,11 @@ class Connector(threading.Thread):
         else:
             mqtt_host = '%s.bleemeo.com' % self.agent.account_id
 
+        self.mqtt_client.username_pw_set(
+            self.agent.generated_values['login'],
+            self.agent.generated_values['password'],
+        )
+
         try:
             logging.debug('Connecting to MQTT broker at %s', mqtt_host)
             self.mqtt_client.connect(
