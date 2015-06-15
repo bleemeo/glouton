@@ -4,6 +4,9 @@ import time
 import flask
 import requests
 
+import bleemeo_agent.checker
+
+
 app = flask.Flask(__name__)
 app_thread = threading.Thread(target=app.run)
 
@@ -11,6 +14,48 @@ app_thread = threading.Thread(target=app.run)
 @app.route('/')
 def home():
     return flask.render_template('index.html', agent=app.agent)
+
+
+@app.route('/check.json')
+def check_json():
+    ignore_fake = ('ignore_fake' in flask.request.args)
+
+    if 'checks' in flask.request.args:
+        checks = [x for x in app.agent.check_thread.checks
+                  if x.name in flask.request.args['checks'].split(',')]
+    else:
+        checks = app.agent.check_thread.checks
+
+    data = {
+        'checks': [],
+        'global_status': bleemeo_agent.checker.STATUS_GOOD,
+    }
+    for check in checks:
+        check_info = {
+            'check_name': check.name,
+            'soft_status': check.soft_status,
+            'hard_status': check.hard_status,
+            'soft_status_try': check.soft_status_try,
+            'fake': False,
+        }
+        if check.fake_failure_until and not ignore_fake:
+            check_info.update({
+                'soft_status': bleemeo_agent.checker.STATUS_CRITICAL,
+                'hard_status': bleemeo_agent.checker.STATUS_CRITICAL,
+                'soft_status_try': 4,
+                'fake': True,
+            })
+
+        data['global_status'] = max(
+            data['global_status'], check_info['hard_status'])
+        data['checks'].append(check_info)
+
+    response = flask.jsonify(**data)
+    if data['global_status'] >= bleemeo_agent.checker.STATUS_CRITICAL:
+        response.status_code = 500
+    elif data['global_status'] == bleemeo_agent.checker.STATUS_WARNING:
+        response.status_code = 400
+    return response
 
 
 @app.route('/admin', methods=['GET', 'POST'])
