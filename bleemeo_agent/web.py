@@ -78,6 +78,7 @@ def admin():
             if check_index0 < len(app.agent.check_thread.checks):
                 check = app.agent.check_thread.checks[check_index0]
                 check.fake_failure_start()
+        return flask.redirect(flask.url_for('admin'))
 
     return flask.render_template(
         'admin.html', agent=app.agent, now=time.time())
