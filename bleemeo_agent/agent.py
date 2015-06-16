@@ -163,7 +163,7 @@ class Agent:
             self.is_terminating.wait(10)
 
     def send_facts(self):
-        facts = bleemeo_agent.util.get_facts()
+        facts = bleemeo_agent.util.get_facts(self)
         self.mqtt_connector.publish(
             'api/v1/agent/facts/POST',
             json.dumps(facts))

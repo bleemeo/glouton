@@ -23,15 +23,19 @@ class Connector(threading.Thread):
 
         # Subscribing in on_connect() means that if we lose the connection and
         # reconnect then subscriptions will be renewed.
-        client.subscribe(str('%s/agent/+/GET' % self.agent.login))
+        client.subscribe(str('%s/api/v1/agent/+/GET' % self.agent.login))
 
     def on_message(self, client, userdata, message):
         config_topic = '%s/api/v1/agent/configuration/GET' % self.agent.login
         reload_topic = '%s/api/v1/agent/reload_plugins/GET' % self.agent.login
+        fact_topic = '%s/api/v1/agent/request_facts/GET' % self.agent.login
         if message.topic == config_topic:
             self.agent.update_server_config(message.payload)
         elif message.topic == reload_topic:
             self.agent.reload_plugins()
+        elif message.topic == fact_topic:
+            logging.debug('Sending facts on server request')
+            self.agent.send_facts()
         else:
             logging.info('Unknown message on topic %s', message.topic)
 
