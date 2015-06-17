@@ -1,6 +1,7 @@
-import ConfigParser
 import os
 import tempfile
+
+from six.moves import configparser
 
 from bleemeo_agent.config import (
     config_files, load_config, get_generated_values)
@@ -39,7 +40,7 @@ def test_load_config():
 def test_get_generated_values():
     tmpdir = tempfile.mkdtemp()
     filepath = os.path.join(tmpdir, 'generated_values.json')
-    config = ConfigParser.SafeConfigParser()
+    config = configparser.SafeConfigParser()
     config.add_section('agent')
     config.set('agent', 'generated_values_file', filepath)
     try:

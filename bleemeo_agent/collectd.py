@@ -62,7 +62,7 @@ class Collectd(threading.Thread):
             logging.debug('collectd: client %s disconnectd', addr)
 
     def process_client_inner(self, sock_client, addr):
-        remain = ''
+        remain = b''
         sock_client.settimeout(1)
         while not self.agent.is_terminating.is_set():
             try:
@@ -70,13 +70,13 @@ class Collectd(threading.Thread):
             except socket.timeout:
                 continue
 
-            if tmp == '':
+            if tmp == b'':
                 break
 
-            lines = (remain + tmp).split('\n')
-            remain = ''
+            lines = (remain + tmp).split(b'\n')
+            remain = b''
 
-            if lines[-1] != '':
+            if lines[-1] != b'':
                 remain = lines[-1]
 
             # either it's '' or we moved it to remain.

@@ -11,13 +11,14 @@ Path to configuration are hardcoded, in this order:
 """
 
 
-import ConfigParser
 import glob
 import io
 import json
 import os
 import pkgutil
 import uuid
+
+from six.moves import configparser
 
 import bleemeo_agent.util
 
@@ -39,10 +40,10 @@ def load_config(paths=None):
         paths = PATHS
 
     default_config = pkgutil.get_data(
-        'bleemeo_agent.resources', 'default.conf')
+        'bleemeo_agent.resources', 'default.conf').decode('utf8')
 
-    config = ConfigParser.SafeConfigParser()
-    config.readfp(io.BytesIO(default_config))
+    config = configparser.SafeConfigParser()
+    config.readfp(io.StringIO(default_config))
     config.read(config_files(paths))
     return config
 

@@ -85,7 +85,7 @@ def get_facts(agent):
     try:
         facter_raw = subprocess.check_output([
             'facter', '--json'
-        ])
+        ]).decode('utf-8')
         facts.update(json.loads(facter_raw))
     except OSError:
         facts.setdefault('errors', []).append('facter not installed')
@@ -139,7 +139,7 @@ def package_installed(package_name):
             ['dpkg-query', '--show', '--showformat=${Status}', package_name],
             stderr=subprocess.STDOUT,
         )
-        installed = output.startswith('install')
+        installed = output.startswith(b'install')
     except subprocess.CalledProcessError:
         installed = False
 

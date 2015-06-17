@@ -3,3 +3,4 @@ paho-mqtt
 passlib
 flask
 requests
+six
