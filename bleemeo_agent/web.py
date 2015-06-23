@@ -21,10 +21,10 @@ def check_json():
     ignore_fake = ('ignore_fake' in flask.request.args)
 
     if 'checks' in flask.request.args:
-        checks = [x for x in app.agent.check_thread.checks
+        checks = [x for x in app.agent.checks
                   if x.name in flask.request.args['checks'].split(',')]
     else:
-        checks = app.agent.check_thread.checks
+        checks = app.agent.checks
 
     data = {
         'checks': [],
@@ -70,13 +70,13 @@ def admin():
                 flask.flash('Re-scan finished. List unchanged')
         elif action.startswith('restore-'):
             check_index0 = int(action[len('restore-'):])
-            if check_index0 < len(app.agent.check_thread.checks):
-                check = app.agent.check_thread.checks[check_index0]
+            if check_index0 < len(app.agent.checks):
+                check = app.agent.checks[check_index0]
                 check.fake_failure_stop()
         elif action.startswith('fake-failure-'):
             check_index0 = int(action[len('fake-failure-'):])
-            if check_index0 < len(app.agent.check_thread.checks):
-                check = app.agent.check_thread.checks[check_index0]
+            if check_index0 < len(app.agent.checks):
+                check = app.agent.checks[check_index0]
                 check.fake_failure_start()
         return flask.redirect(flask.url_for('admin'))
 

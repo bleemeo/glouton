@@ -2,6 +2,7 @@ import json
 import logging
 import logging.handlers
 import os
+import sched
 import signal
 import socket
 import sys
@@ -84,6 +85,7 @@ class Agent:
     def __init__(self, config, generated_values):
         self.config = config
         self.generated_values = generated_values
+        self.checks = []
 
         self.registration_done = False
         self.re_exec = False
@@ -91,7 +93,7 @@ class Agent:
         self.is_terminating = threading.Event()
         self.mqtt_connector = bleemeo_agent.mqtt.Connector(self)
         self.collectd_server = bleemeo_agent.collectd.Collectd(self)
-        self.check_thread = bleemeo_agent.checker.Checker(self)
+        self.scheduler = sched.scheduler(time.time, time.sleep)
 
         self.plugins_v1_mgr = stevedore.enabled.EnabledExtensionManager(
             namespace='bleemeo_agent.plugins_v1',
@@ -105,7 +107,11 @@ class Agent:
         try:
             self.setup_signal()
             self.start_threads()
-            self.loop_forever()
+            bleemeo_agent.checker.initialize_checks(self)
+            self.periodic_check()
+            self.register(bleemeo_agent.util.Sleeper(max_duration=1800))
+            self.send_facts()
+            self.scheduler.run()
         except KeyboardInterrupt:
             pass
         finally:
@@ -116,7 +122,6 @@ class Agent:
             bleemeo_agent.web.shutdown_server()
             self.mqtt_connector.join()
             self.collectd_server.join()
-            self.check_thread.join()
 
             # Re-exec ourself
             os.execv(sys.executable, [sys.executable] + sys.argv)
@@ -134,44 +139,33 @@ class Agent:
     def start_threads(self):
         self.mqtt_connector.start()
         self.collectd_server.start()
-        self.check_thread.start()
         bleemeo_agent.web.start_server(self)
 
-    def loop_forever(self):
-        """ Run forever. This loop will handle periodic events
+    def periodic_check(self):
+        """ Run few periodic check:
+
+            * that agent is not being terminated
+            * call bleemeo_agent.checker.periodic_check
         """
-        sleeper = bleemeo_agent.util.Sleeper(max_duration=1800)
-        registration_next_retry = 0
-        last_fact_send = 0
+        if self.is_terminating.is_set():
+            raise StopIteration
 
-        while not self.is_terminating.is_set():
-            now = time.time()
-            if not self.registration_done and registration_next_retry < now:
-                if self.register():
-                    logging.info('Agent registered')
-                    self.registration_done = True
-                else:
-                    sleep = sleeper.get_sleep_duration()
-                    logging.info(
-                        'Registration failed... retyring in %s', sleep)
-                    registration_next_retry = now + sleep
-
-            if last_fact_send + 3600 < now:
-                self.send_facts()
-                last_fact_send = now
-
-            self.is_terminating.wait(10)
+        bleemeo_agent.checker.periodic_check(self)
+        self.scheduler.enter(3, 1, self.periodic_check, ())
 
     def send_facts(self):
+        """ Send facts to Bleemeo SaaS and reschedule itself """
         facts = bleemeo_agent.util.get_facts(self)
         self.mqtt_connector.publish(
             'api/v1/agent/facts/POST',
             json.dumps(facts))
+        self.scheduler.enter(3600, 1, self.send_facts, ())
 
-    def register(self):
+    def register(self, sleeper):
         """ Register the agent to Bleemeo SaaS service
 
-            Return True if registration succeeded
+            Reschedule itself until it success. Use sleep, a
+            bleemeo_agent.util.Sleeper to have a exponential delay.
         """
         if self.config.has_option('agent', 'registration_url'):
             registration_url = self.config.get('agent', 'registration_url')
@@ -194,10 +188,10 @@ class Agent:
             response = requests.post(registration_url, data=payload)
         except requests.exceptions.RequestException:
             logging.debug('Registration failed', exc_info=True)
-            return False
+            response = None
 
         content = None
-        if response.status_code == 200:
+        if response is not None and response.status_code == 200:
             try:
                 content = response.json()
             except ValueError:
@@ -207,10 +201,14 @@ class Agent:
 
         if content is not None and content.get('registration') == 'success':
             logging.debug('Regisration successfull')
-            return True
+            return
+        elif content is not None:
+            logging.debug('Registration failed, content=%s', content)
 
-        logging.debug('Registration failed, content=%s', content)
-        return False
+        sleep = sleeper.get_sleep_duration()
+        logging.info(
+            'Registration failed... retyring in %s', sleep)
+        self.scheduler.enter(sleep, 1, self.register, (sleeper,))
 
     @property
     def account_id(self):

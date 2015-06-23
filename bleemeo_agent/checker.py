@@ -3,10 +3,8 @@ import json
 import logging
 import random
 import select
-import sched
 import shlex
 import socket
-import threading
 import time
 
 import bleemeo_agent.util
@@ -26,72 +24,50 @@ STATUS_NAME = {
 }
 
 
-class Checker(threading.Thread):
+def initialize_checks(agent):
+    if len(agent.plugins_v1_mgr.names()) == 0:
+        logging.debug(
+            'No plugins loaded. Initialization of checks skipped')
+        return
 
-    def __init__(self, agent):
-        super(Checker, self).__init__()
-        self.agent = agent
+    checks = agent.plugins_v1_mgr.map_method('list_checks')
 
-        self.scheduler = sched.scheduler(time.time, time.sleep)
-        self.checks = []
+    # list_checks return a list. So checks is a list of list :/
+    # itertools.chain is used to "flatten" the list
+    for (name, check_command, tcp_port) in itertools.chain(*checks):
+        check = Check(agent, name, check_command, tcp_port)
+        agent.checks.append(check)
 
-    def run(self):
 
-        if len(self.agent.plugins_v1_mgr.names()) == 0:
-            logging.debug(
-                'No plugins loaded. Means no check, stop checker thread')
-            return
+def periodic_check(agent):
+    """ Run few periodic check:
 
-        checks = self.agent.plugins_v1_mgr.map_method('list_checks')
+        * that all TCP socket are still openned
+        * status of "faked failure"
+    """
+    now = time.time()
+    all_sockets = {}
 
-        # list_checks return a list. So checks is a list of list :/
-        # itertools.chain is used to "flatten" the list
-        for (name, check_command, tcp_port) in itertools.chain(*checks):
-            check = Check(self, name, check_command, tcp_port)
-            self.checks.append(check)
+    for check in agent.checks:
+        if check.tcp_socket is not None:
+            all_sockets[check.tcp_socket] = check
 
-        try:
-            self.periodic_check()
-            self.scheduler.run()
-        except StopIteration:
-            pass
+        if (check.fake_failure_until
+                and check.fake_failure_until < now):
+            check.fake_failure_stop()
 
-    def periodic_check(self):
-        """ Run few periodic check:
-
-            * that agent is not being terminated
-            * that all TCP socket are still openned
-            * status of "faked failure"
-        """
-
-        if self.agent.is_terminating.is_set():
-            raise StopIteration
-
-        now = time.time()
-        all_sockets = {}
-
-        for check in self.checks:
-            if check.tcp_socket is not None:
-                all_sockets[check.tcp_socket] = check
-
-            if (check.fake_failure_until
-                    and check.fake_failure_until < now):
-                check.fake_failure_stop()
-
-        (rlist, _, _) = select.select(all_sockets.keys(), [], [], 0)
-        for s in rlist:
-            all_sockets[s].check_socket()
-
-        self.scheduler.enter(3, 2, self.periodic_check, ())
+    (rlist, _, _) = select.select(all_sockets.keys(), [], [], 0)
+    for s in rlist:
+        all_sockets[s].check_socket()
 
 
 class Check:
-    def __init__(self, checker, name, check_command, tcp_port):
+    def __init__(self, agent, name, check_command, tcp_port):
 
         self.name = name
         self.check_command = check_command
         self.tcp_port = tcp_port
-        self.checker = checker
+        self.agent = agent
 
         self.tcp_socket = None
         self.last_run = time.time()
@@ -129,7 +105,7 @@ class Check:
             else:
                 delay = random.randint(60, 120)
 
-        self.current_event = self.checker.scheduler.enter(
+        self.current_event = self.agent.scheduler.enter(
             delay,
             1,
             self.run_check,
@@ -157,7 +133,7 @@ class Check:
                 'check %s: failed to open socket to %s',
                 self.name, self.tcp_port)
             if self.current_event is not None:
-                self.checker.scheduler.cancel(self.current_event)
+                self.agent.scheduler.cancel(self.current_event)
                 self.current_event = None
             self.run_check()
 
@@ -213,7 +189,7 @@ class Check:
         if (self.soft_status == STATUS_GOOD
                 and self.tcp_port is not None
                 and self.tcp_socket is None):
-            self.checker.scheduler.enter(5, 1, self.open_socket, ())
+            self.agent.scheduler.enter(5, 1, self.open_socket, ())
 
         self.reschedule()
 
@@ -236,7 +212,7 @@ class Check:
         logging.warning(
             message,
             self.name, STATUS_NAME[status])
-        self.checker.agent.mqtt_connector.publish(
+        self.agent.mqtt_connector.publish(
             'api/v1/agent/alert/POST',
             json.dumps({
                 'timestamp': time.time(),

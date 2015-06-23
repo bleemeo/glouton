@@ -11,7 +11,7 @@
 <h2>Checks</h2>
 <p>
 <ul>
-    {% for check in agent.check_thread.checks %}
+    {% for check in agent.checks %}
         <li> {{ check.name }}
             {% if check.fake_failure_until %}
             <button type="submit" class="btn btn-sm" name="action" value="restore-{{ loop.index0 }}">
