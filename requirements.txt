@@ -2,5 +2,6 @@ stevedore
 paho-mqtt
 passlib
 flask
+psutil
 requests
 six

@@ -7,6 +7,8 @@ import socket
 import subprocess
 import threading
 
+import psutil
+
 import bleemeo_agent
 
 
@@ -144,3 +146,33 @@ def package_installed(package_name):
         installed = False
 
     return installed
+
+
+def get_processes_info():
+    """ Return informations on all running process.
+
+        Information (per process) returned are:
+
+        * pid
+        * create_time
+        * name
+        * cmdline
+        * ppid
+        * memory usage
+        * cpu_percent
+        * status (running, sleeping...)
+    """
+    result = []
+    for process in psutil.process_iter():
+        result.append({
+            'pid': process.pid,
+            'create_time': process.create_time(),
+            'name': process.name(),
+            'cmdline': process.cmdline(),
+            'ppid': process.ppid(),
+            'memory_rss': process.memory_info().rss,
+            'cpu_percent': process.cpu_percent(),
+            'status': process.status(),
+        })
+
+    return result

@@ -111,6 +111,7 @@ class Agent:
             self.periodic_check()
             self.register(bleemeo_agent.util.Sleeper(max_duration=1800))
             self.send_facts()
+            self.send_process_info()
             self.scheduler.run()
         except KeyboardInterrupt:
             pass
@@ -160,6 +161,16 @@ class Agent:
             'api/v1/agent/facts/POST',
             json.dumps(facts))
         self.scheduler.enter(3600, 1, self.send_facts, ())
+
+    def send_process_info(self):
+        info = bleemeo_agent.util.get_processes_info()
+        self.mqtt_connector.publish(
+            'api/v1/agent/process_info/POST',
+            json.dumps({
+                'timestamp': time.time(),
+                'processes': info,
+            }))
+        self.scheduler.enter(60, 1, self.send_process_info, ())
 
     def register(self, sleeper):
         """ Register the agent to Bleemeo SaaS service
