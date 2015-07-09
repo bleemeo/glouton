@@ -4,20 +4,17 @@ import logging.handlers
 import os
 import sched
 import signal
-import socket
 import sys
 import time
 import threading
 
-import passlib.context
-import requests
 import stevedore
 
 import bleemeo_agent
+import bleemeo_agent.bleemeo
 import bleemeo_agent.checker
 import bleemeo_agent.collectd
 import bleemeo_agent.config
-import bleemeo_agent.mqtt
 import bleemeo_agent.util
 import bleemeo_agent.web
 
@@ -27,19 +24,9 @@ def main():
     setup_logger(config)
     logging.info('Agent starting...')
 
-    sleeper = bleemeo_agent.util.Sleeper()
-    while (not config.has_option('agent', 'account_id')
-            or not config.has_option('agent', 'registration_key')):
-        logging.warning(
-            'agent.account_id and/or agent.registration_key is undefine. '
-            'Please see https://docs.bleemeo.com/how-to-configure-agent')
-        sleeper.sleep()
-        config = bleemeo_agent.config.load_config()
-
-    generated_values = bleemeo_agent.config.get_generated_values(config)
     try:
-        agent = Agent(config, generated_values)
-        agent.run()
+        core = Core(config)
+        core.run()
     except Exception:
         logging.critical(
             'Unhandled error occured. Agent will terminate',
@@ -78,21 +65,51 @@ def setup_logger(config):
         logger_request.setLevel(logging.WARNING)
 
 
-class Agent:
-    """ Class that hold "global" information about the agent
-    """
+class StoredValue:
+    """ Persistant store for value used by agent.
 
-    def __init__(self, config, generated_values):
+        Currently store in a json file
+    """
+    def __init__(self, filename):
+        self.filename = filename
+        self._content = {}
+        self.reload()
+
+    def reload(self):
+        if os.path.exists(self.filename):
+            with open(self.filename) as fd:
+                self._content = json.load(fd)
+
+    def save(self):
+        try:
+            with open(self.filename, 'w') as fd:
+                json.dump(self._content, fd)
+        except IOError as exc:
+            logging.warning('Failed to store file : %s', exc)
+
+    def get(self, key, default=None):
+        return self._content.get(key, default)
+
+    def set(self, key, value):
+        self._content[key] = value
+        self.save()
+
+
+class Core:
+    def __init__(self, config):
         self.config = config
-        self.generated_values = generated_values
+        self.stored_values = StoredValue(
+            config.get(
+                'agent',
+                'stored_values_file',
+                '/var/lib/bleemeo/store.json'))
         self.checks = []
 
-        self.registration_done = False
         self.re_exec = False
 
         self.is_terminating = threading.Event()
-        self.mqtt_connector = bleemeo_agent.mqtt.Connector(self)
-        self.collectd_server = bleemeo_agent.collectd.Collectd(self)
+        self.bleemeo_connector = None
+        self.collectd_server = None
         self.scheduler = sched.scheduler(time.time, time.sleep)
 
         self.plugins_v1_mgr = stevedore.enabled.EnabledExtensionManager(
@@ -109,11 +126,10 @@ class Agent:
             self.start_threads()
             bleemeo_agent.checker.initialize_checks(self)
             self.periodic_check()
-            self.register(bleemeo_agent.util.Sleeper(max_duration=1800))
             self.send_facts()
             self.send_process_info()
             self.scheduler.run()
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, StopIteration):
             pass
         finally:
             self.is_terminating.set()
@@ -138,8 +154,13 @@ class Agent:
         signal.signal(signal.SIGQUIT, handler)
 
     def start_threads(self):
-        self.mqtt_connector.start()
+
+        self.bleemeo_connector = bleemeo_agent.bleemeo.BleemeoConnector(self)
+        self.bleemeo_connector.start()
+
+        self.collectd_server = bleemeo_agent.collectd.Collectd(self)
         self.collectd_server.start()
+
         bleemeo_agent.web.start_server(self)
 
     def periodic_check(self):
@@ -147,6 +168,7 @@ class Agent:
 
             * that agent is not being terminated
             * call bleemeo_agent.checker.periodic_check
+            * reschedule itself every 3 seconds
         """
         if self.is_terminating.is_set():
             raise StopIteration
@@ -157,77 +179,20 @@ class Agent:
     def send_facts(self):
         """ Send facts to Bleemeo SaaS and reschedule itself """
         facts = bleemeo_agent.util.get_facts(self)
-        self.mqtt_connector.publish(
+        self.bleemeo_connector.publish(
             'api/v1/agent/facts/POST',
             json.dumps(facts))
         self.scheduler.enter(3600, 1, self.send_facts, ())
 
     def send_process_info(self):
         info = bleemeo_agent.util.get_processes_info()
-        self.mqtt_connector.publish(
+        self.bleemeo_connector.publish(
             'api/v1/agent/process_info/POST',
             json.dumps({
                 'timestamp': time.time(),
                 'processes': info,
             }))
         self.scheduler.enter(60, 1, self.send_process_info, ())
-
-    def register(self, sleeper):
-        """ Register the agent to Bleemeo SaaS service
-
-            Reschedule itself until it success. Use sleep, a
-            bleemeo_agent.util.Sleeper to have a exponential delay.
-        """
-        if self.config.has_option('agent', 'registration_url'):
-            registration_url = self.config.get('agent', 'registration_url')
-        else:
-            registration_url = (
-                'https://%s.bleemeo.com/api/v1/agent/register/'
-                % self.account_id)
-
-        myctx = passlib.context.CryptContext(schemes=["sha512_crypt"])
-        password_hash = myctx.encrypt(self.generated_values['password'])
-        payload = {
-            'account_id': self.account_id,
-            'registration_key': self.config.get('agent', 'registration_key'),
-            'login': self.generated_values['login'],
-            'password_hash': password_hash,
-            'agent_version': bleemeo_agent.__version__,
-            'hostname': socket.getfqdn(),
-        }
-        try:
-            response = requests.post(registration_url, data=payload)
-        except requests.exceptions.RequestException:
-            logging.debug('Registration failed', exc_info=True)
-            response = None
-
-        content = None
-        if response is not None and response.status_code == 200:
-            try:
-                content = response.json()
-            except ValueError:
-                logging.debug(
-                    'registration response is not a json : %s',
-                    response.content[:100])
-
-        if content is not None and content.get('registration') == 'success':
-            logging.debug('Regisration successfull')
-            return
-        elif content is not None:
-            logging.debug('Registration failed, content=%s', content)
-
-        sleep = sleeper.get_sleep_duration()
-        logging.info(
-            'Registration failed... retyring in %s', sleep)
-        self.scheduler.enter(sleep, 1, self.register, (sleeper,))
-
-    @property
-    def account_id(self):
-        return self.config.get('agent', 'account_id')
-
-    @property
-    def login(self):
-        return self.generated_values['login']
 
     def plugins_on_load_failure(self, manager, entrypoint, exception):
         logging.info('Plugin %s failed to load : %s', entrypoint, exception)
@@ -236,9 +201,6 @@ class Agent:
         has_dependencies = extension.obj.dependencies_present()
         if not has_dependencies:
             return False
-
-        # TODO: check for a blacklist of plugins
-        self.collectd_server.add_config(extension.obj.collectd_configure())
 
         logging.debug('Enable plugin %s', extension.name)
         return True
@@ -280,6 +242,16 @@ class Agent:
 
         self.restart()
 
+    def reload_config(self):
+        self.config = bleemeo_agent.config.load_config()
+        self.stored_values = StoredValue(
+            self.config.get(
+                'agent',
+                'stored_values_file',
+                '/var/lib/bleemeo/store.json'))
+
+        return self.config
+
     def restart(self):
         """ Restart agent.
         """
@@ -294,3 +266,12 @@ class Agent:
 
         self.re_exec = True
         self.is_terminating.set()
+
+    def emit_metric(self, timestamp, name, tags, value):
+        """ Sent a metric to all configured output
+        """
+        # currently, only bleemeo output exists :)
+        if not isinstance(value, dict):
+            value = {'value': value}
+
+        self.bleemeo_connector.emit_metric(timestamp, name, tags, value)

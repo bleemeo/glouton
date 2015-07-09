@@ -62,12 +62,12 @@ def periodic_check(agent):
 
 
 class Check:
-    def __init__(self, agent, name, check_command, tcp_port):
+    def __init__(self, core, name, check_command, tcp_port):
 
         self.name = name
         self.check_command = check_command
         self.tcp_port = tcp_port
-        self.agent = agent
+        self.core = core
 
         self.tcp_socket = None
         self.last_run = time.time()
@@ -105,7 +105,7 @@ class Check:
             else:
                 delay = random.randint(60, 120)
 
-        self.current_event = self.agent.scheduler.enter(
+        self.current_event = self.core.scheduler.enter(
             delay,
             1,
             self.run_check,
@@ -133,7 +133,7 @@ class Check:
                 'check %s: failed to open socket to %s',
                 self.name, self.tcp_port)
             if self.current_event is not None:
-                self.agent.scheduler.cancel(self.current_event)
+                self.core.scheduler.cancel(self.current_event)
                 self.current_event = None
             self.run_check()
 
@@ -189,7 +189,7 @@ class Check:
         if (self.soft_status == STATUS_GOOD
                 and self.tcp_port is not None
                 and self.tcp_socket is None):
-            self.agent.scheduler.enter(5, 1, self.open_socket, ())
+            self.core.scheduler.enter(5, 1, self.open_socket, ())
 
         self.reschedule()
 
@@ -212,7 +212,8 @@ class Check:
         logging.warning(
             message,
             self.name, STATUS_NAME[status])
-        self.agent.mqtt_connector.publish(
+        # XXX: send alert as metric? as event?
+        self.core.bleemeo_connector.publish(
             'api/v1/agent/alert/POST',
             json.dumps({
                 'timestamp': time.time(),

@@ -67,7 +67,7 @@ def generate_password(length=10,
     return ''.join(random.choice(allowed_chars) for i in range(length))
 
 
-def get_facts(agent):
+def get_facts(core):
     """ Return facts/grains/information about current machine.
 
         Returned facts are informations like hostname, OS type/version, etc
@@ -80,7 +80,7 @@ def get_facts(agent):
         'fqdn': socket.getfqdn(),
         'agent_version': bleemeo_agent.__version__,
         'current_time': datetime.datetime.now().isoformat(),
-        'account_uuid': agent.account_id,
+        'account_uuid': core.bleemeo_connector.account_id,
     }
 
     # Update with facter facts

@@ -13,14 +13,10 @@ Path to configuration are hardcoded, in this order:
 
 import glob
 import io
-import json
 import os
 import pkgutil
-import uuid
 
 from six.moves import configparser
-
-import bleemeo_agent.util
 
 
 PATHS = [
@@ -29,6 +25,24 @@ PATHS = [
     'etc/agent.conf',
     'etc/agent.conf.d'
 ]
+
+
+class FallbackConfigParser:
+    """ A wrapper around ConfigParser that allow "get" method with a fallback
+        default value.
+    """
+
+    def __init__(self, config):
+        self._config = config
+
+    def has_option(self, section, option):
+        return self._config.has_option(section, option)
+
+    def get(self, section, option, default=None):
+        if self._config.has_option(section, option):
+            return self._config.get(section, option)
+        else:
+            return default
 
 
 def load_config(paths=None):
@@ -45,7 +59,7 @@ def load_config(paths=None):
     config = configparser.SafeConfigParser()
     config.readfp(io.StringIO(default_config))
     config.read(config_files(paths))
-    return config
+    return FallbackConfigParser(config)
 
 
 def config_files(paths):
@@ -69,35 +83,3 @@ def config_files(paths):
             files.extend(sorted(glob.glob(os.path.join(path, '*.conf'))))
 
     return files
-
-
-def get_generated_values(config):
-    """ Load (or generate and save) some generated values.
-
-        return a dictionary with:
-
-        * login / password : used to authenticate on MQTT
-        * secret_key : used for Flask session/cookie
-    """
-    filepath = config.get('agent', 'generated_values_file')
-    file_change = False
-    values = {}
-
-    if os.path.exists(filepath):
-        with open(filepath) as fd:
-            values = json.load(fd)
-
-    if 'login' not in values or 'password' not in values:
-        values['login'] = str(uuid.uuid4())
-        values['password'] = bleemeo_agent.util.generate_password()
-        file_change = True
-
-    if 'secret_key' not in values:
-        values['secret_key'] = bleemeo_agent.util.generate_password()
-        file_change = True
-
-    if file_change:
-        with open(filepath, 'w') as fd:
-            json.dump(values, fd)
-
-    return values

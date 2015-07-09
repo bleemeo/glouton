@@ -13,7 +13,7 @@ app_thread = threading.Thread(target=app.run)
 
 @app.route('/')
 def home():
-    return flask.render_template('index.html', agent=app.agent)
+    return flask.render_template('index.html', core=app.core)
 
 
 @app.route('/check.json')
@@ -21,10 +21,10 @@ def check_json():
     ignore_fake = ('ignore_fake' in flask.request.args)
 
     if 'checks' in flask.request.args:
-        checks = [x for x in app.agent.checks
+        checks = [x for x in app.core.checks
                   if x.name in flask.request.args['checks'].split(',')]
     else:
-        checks = app.agent.checks
+        checks = app.core.checks
 
     data = {
         'checks': [],
@@ -63,30 +63,30 @@ def admin():
     if flask.request.method == 'POST':
         action = flask.request.form.get('action')
         if action == 'refresh_plugins':
-            if app.agent.reload_plugins():
+            if app.core.reload_plugins():
                 return flask.render_template(
-                    'restarting.html', agent=app.agent)
+                    'restarting.html', core=app.core)
             else:
                 flask.flash('Re-scan finished. List unchanged')
         elif action.startswith('restore-'):
             check_index0 = int(action[len('restore-'):])
-            if check_index0 < len(app.agent.checks):
-                check = app.agent.checks[check_index0]
+            if check_index0 < len(app.core.checks):
+                check = app.core.checks[check_index0]
                 check.fake_failure_stop()
         elif action.startswith('fake-failure-'):
             check_index0 = int(action[len('fake-failure-'):])
-            if check_index0 < len(app.agent.checks):
-                check = app.agent.checks[check_index0]
+            if check_index0 < len(app.core.checks):
+                check = app.core.checks[check_index0]
                 check.fake_failure_start()
         return flask.redirect(flask.url_for('admin'))
 
     return flask.render_template(
-        'admin.html', agent=app.agent, now=time.time())
+        'admin.html', core=app.core, now=time.time())
 
 
 @app.route('/about')
 def about():
-    return flask.render_template('about.html', agent=app.agent)
+    return flask.render_template('about.html', core=app.core)
 
 
 @app.route('/_quit')
@@ -97,7 +97,7 @@ def quit():
     # I didn't find better way to stop a flask application... we need to be
     # during a request processing to access "werkzeug.server.shutdown" :/
     # So when agent want to shutdown, it need to do one request to this URL.
-    if not app.agent.is_terminating.is_set():
+    if not app.core.is_terminating.is_set():
         # hum... agent is not stopping...
         # Since this endpoint is "public", maybe someone is trying to
         # mess with us, just ignore the request
@@ -110,9 +110,12 @@ def quit():
     return 'Shutdown in progress...'
 
 
-def start_server(agent):
-    app.agent = agent
-    app.secret_key = agent.generated_values['secret_key']
+def start_server(core):
+    app.core = core
+    if app.core.stored_values.get('web_secret_key') is None:
+        app.core.stored_values.set(
+            'web_secret_key', bleemeo_agent.util.generate_password())
+    app.secret_key = app.core.stored_values.get('web_secret_key')
     app_thread.daemon = True
     app_thread.start()
 

@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
-import bleemeo_agent.agent
+import bleemeo_agent.core
 
 
 if __name__ == '__main__':
-    bleemeo_agent.agent.main()
+    bleemeo_agent.core.main()

@@ -3,11 +3,11 @@
 
 {% block content %}
 <p>Registration status:
-{% if agent.registration_done %} done {% else %} in progress {% endif %}
+{% if core.bleemeo_connector.registration_done %} done {% else %} in progress {% endif %}
 </p>
 <h2>Checks</h2>
 <ul>
-    {% for check in agent.checks %}
+    {% for check in core.checks %}
         <li> {{ check.name }} :
             {% if check.fake_failure_until %}
             <span class="text-danger">

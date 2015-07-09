@@ -9,8 +9,8 @@ class PluginV1Base(object):
     """ Base class for plugins version 1
     """
 
-    def __init__(self, agent):
-        self.agent = agent
+    def __init__(self, core):
+        self.core = core
 
     @abc.abstractmethod
     def dependencies_present(self):

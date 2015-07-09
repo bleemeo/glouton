@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import socket
@@ -21,11 +20,18 @@ LoadPlugin write_graphite
 
 class Collectd(threading.Thread):
 
-    def __init__(self, agent):
+    def __init__(self, core):
         super(Collectd, self).__init__()
 
-        self.agent = agent
+        self.core = core
         self.config_fragments = [COLLECTD_CONFIG_FRAGMENTS]
+
+        plugins_config_fragments = self.core.plugins_v1_mgr.map_method(
+            'collectd_configure')
+
+        for config_fragment in plugins_config_fragments:
+            self.config_fragments.append(config_fragment)
+
         self.collectd_config = '/etc/collectd/collectd.conf.d/bleemeo.conf'
 
     def run(self):
@@ -38,7 +44,7 @@ class Collectd(threading.Thread):
         sock_server.settimeout(1)
 
         clients = []
-        while not self.agent.is_terminating.is_set():
+        while not self.core.is_terminating.is_set():
             try:
                 (sock_client, addr) = sock_server.accept()
                 t = threading.Thread(
@@ -64,7 +70,7 @@ class Collectd(threading.Thread):
     def process_client_inner(self, sock_client, addr):
         remain = b''
         sock_client.settimeout(1)
-        while not self.agent.is_terminating.is_set():
+        while not self.core.is_terminating.is_set():
             try:
                 tmp = sock_client.recv(4096)
             except socket.timeout:
@@ -82,7 +88,6 @@ class Collectd(threading.Thread):
             # either it's '' or we moved it to remain.
             del lines[-1]
 
-            points = []
             for line in lines:
                 # inspired from graphite project : lib/carbon/protocols.py
                 metric, value, timestamp = line.split()
@@ -92,17 +97,18 @@ class Collectd(threading.Thread):
                 # the first component is the hostname
                 metric = metric.split('.', 1)[1]
 
-                for extension in self.agent.plugins_v1_mgr:
+                for extension in self.core.plugins_v1_mgr:
                     result = extension.obj.canonical_metric_name(metric)
                     if result:
                         metric = result
                         break  # first who rename win
 
-                points.append((metric, value, timestamp))
-
-            self.agent.mqtt_connector.publish(
-                'api/v1/agent/points/POST',
-                json.dumps(points))
+                self.core.emit_metric(
+                    timestamp,
+                    metric,
+                    {},
+                    value
+                )
 
     def add_config(self, fragments):
         if fragments:
