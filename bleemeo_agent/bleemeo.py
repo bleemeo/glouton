@@ -178,7 +178,7 @@ class BleemeoConnector(threading.Thread):
 
         logging.info(
             'Registration failed... retyring in %s', sleep_delay)
-        new_sleep_delay = max(sleep_delay * 2, 1800)
+        new_sleep_delay = min(sleep_delay * 2, 1800)
         self.core.scheduler.enter(
             sleep_delay, 1, self.register, (new_sleep_delay,))
 

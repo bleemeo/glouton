@@ -46,7 +46,7 @@ class InfluxDBConnector(threading.Thread):
                     'Failed to connect to InfluxDB. Retrying in %s second',
                     sleep_delay)
                 self.core.is_terminating.wait(sleep_delay)
-                sleep_delay = max(sleep_delay * 2, 300)
+                sleep_delay = min(sleep_delay * 2, 300)
 
     def _create_retention_policy(self, replication_factor=3):
         try:
