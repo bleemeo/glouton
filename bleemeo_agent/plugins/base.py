@@ -24,10 +24,10 @@ class PluginV1Base(object):
             Return string with section to add in collectd.conf
         """
 
-    @abc.abstractmethod
-    def canonical_metric_name(self, name):
+    def collectd_rename_metric(self, name, timestamp, value):
         """ Return the canonical name for given metric
         """
+        return None
 
     @abc.abstractmethod
     def list_checks(self):

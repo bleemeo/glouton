@@ -111,6 +111,7 @@ class Core:
         self.bleemeo_connector = None
         self.collectd_server = None
         self.scheduler = sched.scheduler(time.time, time.sleep)
+        self.last_metrics = {}
 
         self.plugins_v1_mgr = stevedore.enabled.EnabledExtensionManager(
             namespace='bleemeo_agent.plugins_v1',
@@ -267,11 +268,38 @@ class Core:
         self.re_exec = True
         self.is_terminating.set()
 
-    def emit_metric(self, timestamp, name, tags, value):
+    def emit_metric(self, metric):
         """ Sent a metric to all configured output
         """
-        # currently, only bleemeo output exists :)
-        if not isinstance(value, dict):
-            value = {'value': value}
+        def exclude_same_metric(item):
+            if item['tags'] == metric['tags']:
+                return False
+            else:
+                return True
 
-        self.bleemeo_connector.emit_metric(timestamp, name, tags, value)
+        # We use list(...) to force evaluation of the result and avoid a
+        # possible memory leak. In Python3 filter return a "filter object".
+        # Without list() we may end with a filter object on a filter object
+        # on a filter object ...
+        measurement = metric['measurement']
+        self.last_metrics[measurement] = list(filter(
+            exclude_same_metric, self.last_metrics.get(measurement, [])))
+        self.last_metrics[measurement].append(metric)
+
+        if not metric.get('ignore'):
+            if 'ignore' in metric:
+                del metric['ignore']
+
+            # currently, only bleemeo output exists :)
+            self.bleemeo_connector.emit_metric(metric)
+
+    def get_last_metric(self, name, tags):
+        """ Return the last metric matching name and tags.
+
+            None is returned if the metric is not found
+        """
+        for metric in self.last_metrics.get(name, []):
+            if metric['tags'] == tags:
+                return metric
+
+        return None

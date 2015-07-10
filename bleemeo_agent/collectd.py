@@ -1,5 +1,7 @@
 import logging
+import multiprocessing
 import os
+import re
 import socket
 import subprocess
 import threading
@@ -18,6 +20,14 @@ LoadPlugin write_graphite
 """
 
 
+class ComputationFail(Exception):
+    pass
+
+
+class MissingMetric(Exception):
+    pass
+
+
 class Collectd(threading.Thread):
 
     def __init__(self, core):
@@ -33,6 +43,7 @@ class Collectd(threading.Thread):
             self.config_fragments.append(config_fragment)
 
         self.collectd_config = '/etc/collectd/collectd.conf.d/bleemeo.conf'
+        self.computed_metrics_pending = set()
 
     def run(self):
         self.write_config()
@@ -97,18 +108,119 @@ class Collectd(threading.Thread):
                 # the first component is the hostname
                 metric = metric.split('.', 1)[1]
 
-                for extension in self.core.plugins_v1_mgr:
-                    result = extension.obj.canonical_metric_name(metric)
-                    if result:
-                        metric = result
-                        break  # first who rename win
+                self.emit_metric(metric, timestamp, value)
 
-                self.core.emit_metric(
-                    timestamp,
-                    metric,
-                    {},
-                    value
-                )
+            self._check_computed_metrics()
+
+    def _check_computed_metrics(self):
+        """ Some metric are computed from other one. For example CPU stats
+            are aggregated over all CPUs.
+
+            When any cpu state arrive, we flag the aggregate value as "pending"
+            and this function check if stats for all CPU core are fresh enough
+            to compute the aggregate.
+
+            This function use self.computed_metrics_pending, which old a list
+            of (metric_name, "instance", timestamp).
+            Instance is something like "sda", "sdb" or "eth0", "eth1".
+        """
+        processed = set()
+        for item in self.computed_metrics_pending:
+            (name, instance, timestamp) = item
+            try:
+                self._compute_metric(name, instance, timestamp)
+                processed.add(item)
+            except ComputationFail:
+                logging.debug(
+                    'Failed to compute metric %s at time %s',
+                    name, timestamp)
+                # we will never be able to recompute it.
+                # mark it as done and continue :/
+                processed.add(item)
+            except MissingMetric:
+                # Some metric are missing to do computing. Wait a bit by
+                # keeping this entry in self.computed_metrics_pending
+                pass
+
+        self.computed_metrics_pending.difference_update(processed)
+
+    def _compute_metric(self, name, instance, timestamp):  # NOQA
+        def get_metric(measurements, searched_tags):
+            """ Helper that do common task when retriving metrics:
+
+                * check that metric exists and is not too old
+                  (or Raise MissingMetric)
+                * If the last metric is more recent that the one we want
+                  to compute, raise ComputationFail. We will never be
+                  able to compute the requested value.
+            """
+            metric = self.core.get_last_metric(measurements, searched_tags)
+            if metric is None or metric['time'] < timestamp:
+                raise MissingMetric()
+            elif metric['time'] < timestamp:
+                raise ComputationFail()
+            return metric['fields']['value']
+
+        tags = {}
+
+        if name.startswith('cpu_'):
+            cores = multiprocessing.cpu_count()
+            value = 0
+            for i in range(cores):
+                value += get_metric(name, {'cpu': i})
+        elif name == 'disk_total':
+            tags = {'path': instance}
+            used = get_metric('disk_used', tags)
+            value = used
+            for sub_type in ('free', 'reserved'):
+                value += get_metric('disk_%s' % sub_type, tags)
+        elif name == 'mem_total':
+            used = get_metric('mem_used', tags)
+            value = used
+            for sub_type in ('buffered', 'cached', 'free'):
+                value += get_metric('mem_%s' % sub_type, tags)
+        elif name == 'process_total':
+            types = [
+                'blocked', 'paging', 'running', 'sleeping',
+                'stopped', 'zombies',
+            ]
+            value = 0
+            for sub_type in types:
+                value += get_metric('process_status_%s' % sub_type, tags)
+        elif name == 'swap_total':
+            used = get_metric('swap_used', tags)
+            value = used + get_metric('swap_free', tags)
+
+        if name in ('disk_total', 'mem_total', 'swap_total'):
+            self.core.emit_metric({
+                'measurement': name.replace('_total', '_used_perc'),
+                'time': timestamp,
+                'tags': tags,
+                'fields': {'value': float(used) / value * 100},
+            })
+        self.core.emit_metric({
+            'measurement': name,
+            'time': timestamp,
+            'tags': tags,
+            'fields': {'value': value},
+        })
+
+    def emit_metric(self, metric, timestamp, value):
+        """ Rename a metric and pass it to core
+        """
+        metric = _rename_metric(
+            metric, timestamp, value, self.computed_metrics_pending)
+        if metric is None:
+            for extension in self.core.plugins_v1_mgr:
+                metric = extension.obj.collectd_rename_metric(
+                    metric, timestamp, value)
+                if metric is not None:
+                    break  # first who processed it wins
+            else:
+                # If no-one take care of processing the metric, skip it
+                return
+
+        self.core.emit_metric(metric)
 
     def add_config(self, fragments):
         if fragments:
@@ -150,3 +262,107 @@ class Collectd(threading.Thread):
                 output)
         else:
             logging.debug('collectd reconfigured and restarted : %s', output)
+
+
+# https://collectd.org/wiki/index.php/Naming_schema
+# carbon output change "/" in ".".
+# Example of metic name:
+# cpu-0.cpu-idle
+# df-var-lib.df_complex-free
+# disk-sda.disk_octets.read
+collectd_regex = re.compile(
+    r'(?P<plugin>[^-.]+)(-(?P<plugin_instance>[^.]+))?\.'
+    r'(?P<type>[^.-]+)([.-](?P<type_instance>.+))?')
+
+
+def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
+    """ Process metric to rename it and add tags
+
+        If the metric is used to compute a derrived metric, add it to
+        computed_metrics_pending.
+
+        Return None is metric is unknown
+    """
+    match = collectd_regex.match(name)
+    if match is None:
+        return None
+    match_dict = match.groupdict()
+
+    ignore = False
+    tags = {}
+    if match_dict['plugin'] == 'cpu':
+        name = 'cpu_%s' % match_dict['type_instance']
+        tags = {'cpu': int(match_dict['plugin_instance'])}
+        ignore = True
+        computed_metrics_pending.add((name, None, timestamp))
+    elif match_dict['type'] == 'df_complex':
+        name = 'disk_%s' % match_dict['type_instance']
+        path = match_dict['plugin_instance']
+        if path == 'root':
+            path = '/'
+        else:
+            path = '/' + path.replace('-', '/')
+        tags = {'path': path}
+        computed_metrics_pending.add(('disk_total', tags['path'], timestamp))
+    elif match_dict['plugin'] == 'disk':
+        kind_name = {
+            'disk_merged': '_merged',
+            'disk_octets': '_bytes',
+            'disk_ops': 's',  # will become readS and writeS
+            'disk_time': '_time',
+        }[match_dict['type']]
+
+        name = 'io_%s%s' % (match_dict['type_instance'], kind_name)
+        tags = {'name': match_dict['plugin_instance']}
+    elif match_dict['plugin'] == 'interface':
+        kind_name = {
+            'if_errors': 'err',
+            'if_octets': 'bytes',
+            'if_packets': 'packets',
+        }[match_dict['type']]
+
+        if match_dict['type_instance'] == 'rx':
+            direction = 'recv'
+        else:
+            direction = 'sent'
+
+        # Special case, if it's some error, we use "in" and "out"
+        if kind_name == 'err':
+            direction = direction.replace('recv', 'in').replace('sent', 'out')
+
+        name = 'net_%s_%s' % (kind_name, direction)
+        tags = {'interface': match_dict['plugin_instance']}
+    elif match_dict['plugin'] == 'load':
+        duration = {
+            'longterm': 15,
+            'midterm': 5,
+            'shortterm': 1,
+        }[match_dict['type_instance']]
+        name = 'system_load%s' % duration
+    elif match_dict['plugin'] == 'memory':
+        name = 'mem_%s' % match_dict['type_instance']
+        computed_metrics_pending.add(('mem_total', None, timestamp))
+    elif (match_dict['plugin'] == 'processes'
+            and match_dict['type'] == 'fork_rate'):
+        name = 'process_fork_rate'
+    elif (match_dict['plugin'] == 'processes'
+            and match_dict['type'] == 'ps_state'):
+        name = 'process_status_%s' % match_dict['type_instance']
+        computed_metrics_pending.add(('process_total', None, timestamp))
+    elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
+        name = 'swap_%s' % match_dict['type_instance']
+        computed_metrics_pending.add(('swap_total', None, timestamp))
+    elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap_io':
+        name = 'swap_%s' % match_dict['type_instance']
+    elif match_dict['plugin'] == 'users':
+        name = 'users_logged'
+    else:
+        return None
+
+    return {
+        'measurement': name,
+        'time': timestamp,
+        'fields': {'value': value},
+        'tags': tags,
+        'ignore': ignore,
+    }

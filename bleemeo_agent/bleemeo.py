@@ -182,15 +182,10 @@ class BleemeoConnector(threading.Thread):
         self.core.scheduler.enter(
             sleep_delay, 1, self.register, (new_sleep_delay,))
 
-    def emit_metric(self, timestamp, name, tags, value):
+    def emit_metric(self, metric):
         self.publish(
             'api/v1/agent/points/POST',
-            json.dumps({
-                'time': timestamp,
-                'measurement': name,
-                'fields': value,
-                'tags': tags,
-            })
+            json.dumps(metric)
         )
 
     @property
