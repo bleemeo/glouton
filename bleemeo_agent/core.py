@@ -1,3 +1,4 @@
+import copy
 import json
 import logging
 import logging.handlers
@@ -15,6 +16,7 @@ import bleemeo_agent.bleemeo
 import bleemeo_agent.checker
 import bleemeo_agent.collectd
 import bleemeo_agent.config
+import bleemeo_agent.influxdb
 import bleemeo_agent.util
 import bleemeo_agent.web
 
@@ -58,11 +60,17 @@ def setup_logger(config):
     handler.setFormatter(formatter)
     root_logger.addHandler(handler)
 
-    # Special case for requets. Requests log "Starting new connection" in INFO
-    # we don't only want them in debug
+    # Special case for requets.
+    # Requests log "Starting new connection" in INFO
+    # Requests log each query in DEBUG
     if level != logging.DEBUG:
+        # When not in debug, log neither of above
         logger_request = logging.getLogger('requests')
         logger_request.setLevel(logging.WARNING)
+    else:
+        # Even in debug, don't log every query
+        logger_request = logging.getLogger('requests')
+        logger_request.setLevel(logging.INFO)
 
 
 class StoredValue:
@@ -109,6 +117,7 @@ class Core:
 
         self.is_terminating = threading.Event()
         self.bleemeo_connector = None
+        self.influx_connector = None
         self.collectd_server = None
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.last_metrics = {}
@@ -158,6 +167,9 @@ class Core:
 
         self.bleemeo_connector = bleemeo_agent.bleemeo.BleemeoConnector(self)
         self.bleemeo_connector.start()
+
+        self.influx_connector = bleemeo_agent.influxdb.InfluxDBConnector(self)
+        self.influx_connector.start()
 
         self.collectd_server = bleemeo_agent.collectd.Collectd(self)
         self.collectd_server.start()
@@ -290,8 +302,8 @@ class Core:
             if 'ignore' in metric:
                 del metric['ignore']
 
-            # currently, only bleemeo output exists :)
-            self.bleemeo_connector.emit_metric(metric)
+            self.bleemeo_connector.emit_metric(copy.deepcopy(metric))
+            self.influx_connector.emit_metric(copy.deepcopy(metric))
 
     def get_last_metric(self, name, tags):
         """ Return the last metric matching name and tags.

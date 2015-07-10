@@ -1,3 +1,4 @@
+influxdb
 stevedore
 paho-mqtt
 passlib
