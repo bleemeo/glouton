@@ -40,6 +40,8 @@ class Collectd(threading.Thread):
             'collectd_configure')
 
         for config_fragment in plugins_config_fragments:
+            if not config_fragment:
+                continue
             self.config_fragments.append(config_fragment)
 
         self.collectd_config = '/etc/collectd/collectd.conf.d/bleemeo.conf'
@@ -171,9 +173,20 @@ class Collectd(threading.Thread):
         elif name == 'disk_total':
             tags = {'path': instance}
             used = get_metric('disk_used', tags)
-            value = used
-            for sub_type in ('free', 'reserved'):
-                value += get_metric('disk_%s' % sub_type, tags)
+            value = used + get_metric('disk_free', tags)
+            # used_perc could be more that 100% is reserved space is used.
+            # We limit it to 100% (105% would be confusing).
+            used_perc = min(float(used) / value * 100, 100)
+
+            # But still, total will including reserved space
+            value += get_metric('disk_reserved', tags)
+
+            self.core.emit_metric({
+                'measurement': name.replace('_total', '_used_perc'),
+                'time': timestamp,
+                'tags': tags,
+                'fields': {'value': used_perc},
+            })
         elif name == 'mem_total':
             used = get_metric('mem_used', tags)
             value = used
@@ -191,7 +204,7 @@ class Collectd(threading.Thread):
             used = get_metric('swap_used', tags)
             value = used + get_metric('swap_free', tags)
 
-        if name in ('disk_total', 'mem_total', 'swap_total'):
+        if name in ('mem_total', 'swap_total'):
             self.core.emit_metric({
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
