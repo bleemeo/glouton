@@ -1,6 +1,7 @@
-import ConfigParser
 import io
 import subprocess
+
+from six.moves import configparser
 
 from bleemeo_agent.plugins import base
 import bleemeo_agent.util
@@ -16,8 +17,8 @@ class MySQL(base.PluginV1Base):
         debian_cnf_raw = subprocess.check_output(
             ['sudo', '--non-interactive', 'cat', '/etc/mysql/debian.cnf'],
         )
-        debian_cnf = ConfigParser.SafeConfigParser()
-        debian_cnf.readfp(io.BytesIO(debian_cnf_raw))
+        debian_cnf = configparser.SafeConfigParser()
+        debian_cnf.readfp(io.StringIO(debian_cnf_raw.decode('utf-8')))
 
         self.mysql_socket = debian_cnf.get('client', 'socket')
         self.mysql_user = debian_cnf.get('client', 'user')
@@ -42,9 +43,22 @@ LoadPlugin mysql
             password=self.mysql_password,
         )
 
-    def canonical_metric_name(self, name):
-        if name.startswith('mysql-bleemeo.'):
-            return name.replace('mysql-bleemeo.', 'mysql-server.')
+    def collectd_rename_metric(self, name, timestamp, value):
+        if not name.startswith('mysql-bleemeo.'):
+            return None
+
+        name = name[len('mysql-bleemeo.'):]
+        if not name.startswith('mysql_'):
+            name = 'mysql_' + name
+
+        return {
+            'measurement': name,
+            'time': timestamp,
+            'fields': {
+                'value': value,
+            },
+            'tags': {},
+        }
 
     def list_checks(self):
         return [(

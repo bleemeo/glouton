@@ -35,9 +35,24 @@ LoadPlugin nginx
 </Plugin>
 """
 
-    def canonical_metric_name(self, name):
-        if name.startswith('nginx.'):
-            return name.replace('nginx.', 'httpd-server.')
+    def collectd_rename_metric(self, name, timestamp, value):
+        if not name.startswith('nginx.'):
+            return None
+
+        # metric start with "nginx.some_name" or "nginx.nginx_other_name"
+        # Change to have all "nginx_{some,other}_name"
+        name = name[len('nginx.'):]
+        if not name.startswith('nginx_'):
+            name = 'nginx_' + name
+
+        return {
+            'measurement': name,
+            'time': timestamp,
+            'fields': {
+                'value': value,
+            },
+            'tags': {},
+        }
 
     def list_checks(self):
         return [(

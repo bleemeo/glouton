@@ -27,8 +27,5 @@ LoadPlugin python
 </Plugin>
 """
 
-    def canonical_metric_name(self, name):
-        pass
-
     def list_checks(self):
         return []

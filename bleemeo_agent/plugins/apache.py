@@ -17,9 +17,17 @@ LoadPlugin apache
 </Plugin>
 """
 
-    def canonical_metric_name(self, name):
+    def collectd_rename_metric(self, name, timestamp, value):
         if name.startswith('apache-bleemeo.'):
-            return name.replace('apache-bleemeo.', 'httpd-server.')
+            name = name[len('apache-bleemeo.'):]
+            return {
+                'measurement': name,
+                'time': timestamp,
+                'fields': {
+                    'value': value,
+                },
+                'tags': {},
+            }
 
     def list_checks(self):
         return [(

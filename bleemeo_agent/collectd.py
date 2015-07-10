@@ -218,15 +218,15 @@ class Collectd(threading.Thread):
             'fields': {'value': value},
         })
 
-    def emit_metric(self, metric, timestamp, value):
+    def emit_metric(self, name, timestamp, value):
         """ Rename a metric and pass it to core
         """
         metric = _rename_metric(
-            metric, timestamp, value, self.computed_metrics_pending)
+            name, timestamp, value, self.computed_metrics_pending)
         if metric is None:
             for extension in self.core.plugins_v1_mgr:
                 metric = extension.obj.collectd_rename_metric(
-                    metric, timestamp, value)
+                    name, timestamp, value)
                 if metric is not None:
                     break  # first who processed it wins
             else:

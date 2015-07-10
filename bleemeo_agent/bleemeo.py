@@ -158,7 +158,6 @@ class BleemeoConnector(threading.Thread):
         try:
             response = requests.post(registration_url, data=payload)
         except requests.exceptions.RequestException:
-            logging.debug('Registration failed', exc_info=True)
             response = None
 
         content = None

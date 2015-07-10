@@ -17,19 +17,18 @@ class PluginV1Base(object):
         """ Check for dependencies and return True if available
         """
 
-    @abc.abstractmethod
     def collectd_configure(self):
         """ Do action needed to configure collectd
 
             Return string with section to add in collectd.conf
         """
+        return None
 
     def collectd_rename_metric(self, name, timestamp, value):
         """ Return the canonical name for given metric
         """
         return None
 
-    @abc.abstractmethod
     def list_checks(self):
         """ Return list of checks to run.
 
@@ -42,3 +41,4 @@ class PluginV1Base(object):
             * tcp_port is the TCP port associated with this check. It could
               be None.
         """
+        return []

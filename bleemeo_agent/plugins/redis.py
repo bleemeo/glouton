@@ -17,10 +17,6 @@ LoadPlugin redis
 </Plugin>
 """
 
-    def canonical_metric_name(self, name):
-        if name.startswith('redis-bleemeo.'):
-            return name.replace('redis-bleemeo.', 'redis-server.')
-
     def list_checks(self):
         return [(
             'Redis server',

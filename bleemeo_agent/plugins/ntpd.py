@@ -14,8 +14,23 @@ LoadPlugin ntpd
 </Plugin>
 """
 
-    def canonical_metric_name(self, name):
-        pass
+    def collectd_rename_metric(self, name, timestamp, value):
+
+        if name == 'ntpd.time_offset-loop':
+            name = 'ntp_time_offset'
+        elif name == 'ntpd.frequency_offset-loop':
+            name = 'ntp_frequency_offset'
+        else:
+            return None
+
+        return {
+            'measurement': name,
+            'time': timestamp,
+            'fields': {
+                'value': value,
+            },
+            'tags': {},
+        }
 
     def list_checks(self):
         return [(
