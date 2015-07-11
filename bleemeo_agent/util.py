@@ -168,7 +168,7 @@ def get_processes_info():
             'pid': process.pid,
             'create_time': process.create_time(),
             'name': process.name(),
-            'cmdline': process.cmdline(),
+            'cmdline': ' '.join(process.cmdline()),
             'ppid': process.ppid(),
             'memory_rss': process.memory_info().rss,
             'cpu_percent': process.cpu_percent(),

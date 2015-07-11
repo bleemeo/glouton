@@ -198,13 +198,18 @@ class Core:
         self.scheduler.enter(3600, 1, self.send_facts, ())
 
     def send_process_info(self):
+        now = time.time()
         info = bleemeo_agent.util.get_processes_info()
-        self.bleemeo_connector.publish(
-            'api/v1/agent/process_info/POST',
-            json.dumps({
-                'timestamp': time.time(),
-                'processes': info,
-            }))
+        for process_info in info:
+            self.emit_metric({
+                'measurement': 'process_info',
+                'time': now,
+                'tags': {
+                    'pid': str(process_info.pop('pid')),
+                    'create_time': str(process_info.pop('create_time')),
+                },
+                'fields': process_info,
+            }, store_last_value=False)
         self.scheduler.enter(60, 1, self.send_process_info, ())
 
     def plugins_on_load_failure(self, manager, entrypoint, exception):
@@ -280,7 +285,7 @@ class Core:
         self.re_exec = True
         self.is_terminating.set()
 
-    def emit_metric(self, metric):
+    def emit_metric(self, metric, store_last_value=True):
         """ Sent a metric to all configured output
         """
         def exclude_same_metric(item):
@@ -289,14 +294,15 @@ class Core:
             else:
                 return True
 
-        # We use list(...) to force evaluation of the result and avoid a
-        # possible memory leak. In Python3 filter return a "filter object".
-        # Without list() we may end with a filter object on a filter object
-        # on a filter object ...
-        measurement = metric['measurement']
-        self.last_metrics[measurement] = list(filter(
-            exclude_same_metric, self.last_metrics.get(measurement, [])))
-        self.last_metrics[measurement].append(metric)
+        if store_last_value:
+            # We use list(...) to force evaluation of the result and avoid a
+            # possible memory leak. In Python3 filter return a "filter object".
+            # Without list() we may end with a filter object on a filter object
+            # on a filter object ...
+            measurement = metric['measurement']
+            self.last_metrics[measurement] = list(filter(
+                exclude_same_metric, self.last_metrics.get(measurement, [])))
+            self.last_metrics[measurement].append(metric)
 
         if not metric.get('ignore'):
             if 'ignore' in metric:
