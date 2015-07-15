@@ -1,9 +1,12 @@
+from __future__ import absolute_import
+
 import logging
 import math
 import socket
 import threading
 
 import influxdb
+import influxdb.exceptions
 import requests
 from six.moves import queue
 
