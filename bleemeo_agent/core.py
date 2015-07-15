@@ -1,7 +1,9 @@
+import collections
 import copy
 import json
 import logging
 import logging.handlers
+import multiprocessing
 import os
 import sched
 import signal
@@ -103,6 +105,17 @@ class StoredValue:
         self.save()
 
 
+# Metric are Ok if value is inside [low_warning, high_warning] (both limit
+# included in the interval).
+# When value is below low_warning (or above high_warning), the status is
+# warning.
+# When value is below low_critical (or above high_critical), the status is
+# critical.
+Threshold = collections.namedtuple(
+    'Threshold',
+    ['low_critical', 'low_warning', 'high_warning', 'high_critical'])
+
+
 class Core:
     def __init__(self, config):
         self.config = config
@@ -112,6 +125,7 @@ class Core:
                 'stored_values_file',
                 '/var/lib/bleemeo/store.json'))
         self.checks = []
+        self.thresholds = {}
 
         self.re_exec = False
 
@@ -129,6 +143,20 @@ class Core:
             check_func=self.check_plugin_v1,
             on_load_failure_callback=self.plugins_on_load_failure,
         )
+        self._define_thresholds()
+
+    def _define_thresholds(self):
+        """ Fill self.thresholds
+
+            Currently only hard-coded value are added.
+        """
+        num_core = multiprocessing.cpu_count()
+        self.thresholds['cpu_idle'] = Threshold(
+            10 * num_core, 20 * num_core, None, None)
+        self.thresholds['disk_used_perc'] = Threshold(None, None, 80, 90)
+        self.thresholds['net_err_in'] = Threshold(None, None, None, 0)
+        self.thresholds['net_err_out'] = Threshold(None, None, None, 0)
+        self.thresholds['mem_used_perc'] = Threshold(None, None, 80, 90)
 
     def run(self):
         try:
@@ -294,6 +322,10 @@ class Core:
             else:
                 return True
 
+        metric = copy.deepcopy(metric)
+        if not metric.get('ignore'):
+            self.check_threshold(metric)
+
         if store_last_value:
             # We use list(...) to force evaluation of the result and avoid a
             # possible memory leak. In Python3 filter return a "filter object".
@@ -311,13 +343,49 @@ class Core:
             self.bleemeo_connector.emit_metric(copy.deepcopy(metric))
             self.influx_connector.emit_metric(copy.deepcopy(metric))
 
+    def check_threshold(self, metric):
+        """ Check if threshold is defined for given metric. If yes, check
+            it and add a "status" tag.
+        """
+        threshold = self.thresholds.get(metric['measurement'])
+        if threshold is None:
+            return
+
+        value = metric['fields'].get('value')
+        if value is None:
+            return
+
+        if (threshold.low_critical is not None
+                and value < threshold.low_critical):
+            status = 'critical'
+        elif (threshold.low_warning is not None
+                and value < threshold.low_warning):
+            status = 'warning'
+        elif (threshold.high_critical is not None
+                and value > threshold.high_critical):
+            status = 'critical'
+        elif (threshold.high_warning is not None
+                and value > threshold.high_warning):
+            status = 'warning'
+        else:
+            status = 'ok'
+
+        logging.debug('Metric %s has status %s', metric['measurement'], status)
+        metric['tags']['status'] = status
+
     def get_last_metric(self, name, tags):
         """ Return the last metric matching name and tags.
 
             None is returned if the metric is not found
         """
         for metric in self.last_metrics.get(name, []):
-            if metric['tags'] == tags:
+            if 'status' in metric['tags']:
+                metric_no_status = copy.deepcopy(metric)
+                del metric_no_status['tags']['status']
+            else:
+                metric_no_status = metric
+
+            if metric_no_status['tags'] == tags:
                 return metric
 
         return None
