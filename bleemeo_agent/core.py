@@ -408,14 +408,17 @@ class Core:
 
             None is returned if the metric is not found
         """
-        for metric in self.last_metrics.get(name, []):
-            if 'status' in metric['tags']:
-                metric_no_status = copy.deepcopy(metric)
-                del metric_no_status['tags']['status']
-            else:
-                metric_no_status = metric
+        if 'status' in tags:
+            tags = tags.copy()
+            del tags['status']
 
-            if metric_no_status['tags'] == tags:
+        for metric in self.last_metrics.get(name, []):
+            metric_tags = metric['tags']
+            if 'status' in metric_tags:
+                metric_tags = metric_tags.copy()
+                del metric_tags['status']
+
+            if metric_tags == tags:
                 return metric
 
         return None
@@ -472,9 +475,13 @@ class Core:
 
         processes = []
         # Sort process by CPU consumption (then PID, when cpu % is the same)
+        # Since we want a descending order for CPU usage, we have
+        # reverse=True... but for PID we want a ascending order. That's why we
+        # use a negation for the PID.
         sorted_process = sorted(
             self.last_metrics.get('process_info', []),
-            key=lambda x: (x['fields']['cpu_percent'], x['tags']['pid']))
+            key=lambda x: (x['fields']['cpu_percent'], -int(x['tags']['pid'])),
+            reverse=True)
         for metric in sorted_process:
             if metric['time'] < timestamp:
                 # stale metric, probably a process that has terminated

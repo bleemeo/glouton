@@ -22,3 +22,7 @@ hr {
     background-color: black;
     color: white;
 }
+
+.add-left-margin {
+    margin-left: 2em;
+}

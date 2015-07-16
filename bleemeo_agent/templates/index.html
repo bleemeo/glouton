@@ -41,10 +41,127 @@
 </div>
 <div class="row">
     <div class="col-xs-5">
-        disk space and co
+    {% for disk_metric in core.last_metrics['disk_used_perc'] %}
+    {% with %}
+        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['tags'], 0) %}
+        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['tags'], 0) %}
+        {% set disk_total_user = disk_used + disk_free %}
+        {% set disk_threshold = core.thresholds['disk_used_perc'] %}
+        <div>
+            <div class="panel-heading" role="tab" id="disk-heading-{{ loop.index }}">
+                <h4 class="panel-title">
+                    <a role="button" data-toggle="collapse" href="#disk-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="disk-collapse-{{ loop.index }}">
+                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        {{ disk_metric['tags']['path'] }} disk space
+                    </a>
+                </h4>
+            </div>
+            <div id="disk-collapse-{{ loop.index }}" class="panel-collapse collapse" role="tabpanel" aria-labelledby="disk-heading-{{ loop.index }}">
+                <div class="panel-body add-left-margin">
+                    Value: {{ disk_used|filesizeformat(True) }}<br/>
+                    Status: {{ disk_metric['tags']['status']|capitalize }} <br/>
+                    Warning: {{ (disk_total_user * disk_threshold.high_warning / 100)|filesizeformat(True) }} <br/>
+                    Critical: {{ (disk_total_user * disk_threshold.high_critical / 100)|filesizeformat(True) }} <br/>
+                </div>
+            </div>
+        </div>
+    {% endwith %}
+    {% endfor %}
+    {% with %}
+        {% set mem_metric = core.get_last_metric('mem_used_perc', {}) %}
+        {% if mem_metric is not none %}
+        {% set mem_total = core.get_last_metric_value('mem_total', {}, 0) %}
+        {% set mem_used = mem_metric['fields']['value'] / 100 * mem_total %}
+        {% set mem_threshold = core.thresholds['mem_used_perc'] %}
+        <div>
+            <div class="panel-heading" role="tab" id="mem-heading">
+                <h4 class="panel-title">
+                    <a role="button" data-toggle="collapse" href="#mem-collapse" aria-expanded="false" aria-controls="mem-collapse">
+                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        Memory usage
+                    </a>
+                </h4>
+            </div>
+            <div id="mem-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="mem-heading">
+                <div class="panel-body add-left-margin">
+                    Value: {{ mem_used|filesizeformat(True) }}<br/>
+                    Status: {{ mem_metric['tags']['status']|capitalize }} <br/>
+                    Warning: {{ (mem_total * mem_threshold.high_warning / 100)|filesizeformat(True) }} <br/>
+                    Critical: {{ (mem_total * mem_threshold.high_critical / 100)|filesizeformat(True) }} <br/>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endwith %}
+    {% for net_metric in core.last_metrics['net_bytes_recv'] %}
+    {% with %}
+        {% set sent_bytes = core.get_last_metric_value('net_bytes_sent', net_metric['tags'], 0) %}
+        {% set recv_bytes = net_metric['fields']['value'] %}
+        <div>
+            <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
+                <h4 class="panel-title">
+                    <a role="button" data-toggle="collapse" href="#net-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="net-collapse-{{ loop.index }}">
+                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        {{ net_metric['tags']['interface'] }} traffic
+                    </a>
+                </h4>
+            </div>
+            <div id="net-collapse-{{ loop.index }}" class="panel-collapse collapse" role="tabpanel" aria-labelledby="net-heading-{{ loop.index }}">
+                <div class="panel-body add-left-margin">
+                    Received bytes: {{ recv_bytes|netsizeformat }}<br/>
+                    Sent bytes: {{ sent_bytes|netsizeformat }}<br/>
+                </div>
+            </div>
+        </div>
+    {% endwith %}
+    {% endfor %}
+    {% with %}
+        {% set cpu_metric = core.get_last_metric('cpu_idle', {}) %}
+        {% if cpu_metric is not none %}
+        {% set cpu_user = core.get_last_metric_value('cpu_user', {}, 0) %}
+        {% set cpu_system = core.get_last_metric_value('cpu_system', {}, 0) %}
+        {% set cpu_idle = cpu_metric['fields']['value'] %}
+        {% set cpu_other = num_core * 100 - cpu_user - cpu_system - cpu_idle %}
+        {% if cpu_other < 0 %}
+            {% set cpu_other = 0 %}
+        {% endif %}
+        {% set cpu_threshold = core.thresholds['cpu_idle'] %}
+        <div>
+            <div class="panel-heading" role="tab" id="cpu-heading">
+                <h4 class="panel-title">
+                    <a role="button" data-toggle="collapse" href="#cpu-collapse" aria-expanded="false" aria-controls="cpu-collapse">
+                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        CPU usage
+                    </a>
+                </h4>
+            </div>
+            <div id="cpu-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="cpu-heading">
+                <div class="panel-body add-left-margin">
+                    Used CPU by applications : {{ cpu_user|round(1) }} %<br/>
+                    Used CPU by system : {{ cpu_system|round(1) }} %<br/>
+                    Used CPU by other tasks : {{ cpu_other|round(1) }} %<br/>
+                    Idle CPU : {{ cpu_idle|round(1) }} %<br/>
+                    Status: {{ cpu_metric['tags']['status']|capitalize }} <br/>
+                    Warning (when idle is below): {{ (100 * cpu_threshold.low_warning / 100) }} %<br/>
+                    Critical (when idle is below): {{ (100 * cpu_threshold.low_critical / 100) }} %<br/>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    {% endwith %}
     </div>
     <div class="col-xs-7">
         <pre class="top-output">{{ core.get_top_output() }}</pre>
     </div>
 </div>
+{% endblock %}
+{% block js %}
+<script>
+// change the glyphicon when entry is shown/hidden.
+$('.collapse').on('show.bs.collapse', function(){
+    $(this).parent().find(".glyphicon-chevron-right").removeClass("glyphicon-chevron-right").addClass("glyphicon-chevron-down");
+}).on('hide.bs.collapse', function(){
+    $(this).parent().find(".glyphicon-chevron-down").removeClass("glyphicon-chevron-down").addClass("glyphicon-chevron-right");
+});
+</script>
 {% endblock %}

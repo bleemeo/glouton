@@ -1,6 +1,8 @@
+import multiprocessing
 import threading
 
 import flask
+import jinja2.filters
 import requests
 
 import bleemeo_agent.checker
@@ -13,9 +15,10 @@ app_thread = threading.Thread(target=app.run)
 @app.route('/')
 def home():
     loads = app.core.get_loads()
+    num_core = multiprocessing.cpu_count()
 
     return flask.render_template(
-        'index.html', core=app.core, loads=' '.join(loads))
+        'index.html', core=app.core, loads=' '.join(loads), num_core=num_core)
 
 
 @app.route('/_quit')
@@ -37,6 +40,17 @@ def quit():
         raise RuntimeError('Not running with the Werkzeug Server')
     func()
     return 'Shutdown in progress...'
+
+
+@app.template_filter('netsizeformat')
+def filter_netsizeformat(value):
+    """ Same as standard filesizeformat but for network.
+
+        Convert to human readable network bandwidth (e.g 13 kbps, 4.1 Mbps...)
+    """
+    return (jinja2.filters.do_filesizeformat(value * 8, False)
+            .replace('Bytes', 'bps')
+            .replace('B', 'bps'))
 
 
 def start_server(core):
