@@ -87,9 +87,8 @@ def get_facts(core):
     else:
         product_name = ''
 
-    with open('/proc/uptime', 'r') as f:
-        uptime_seconds = float(f.readline().split()[0])
-        uptime_string = format_uptime(uptime_seconds)
+    uptime_seconds = get_uptime()
+    uptime_string = format_uptime(uptime_seconds)
 
     primary_address = get_primary_address()
 
@@ -99,6 +98,7 @@ def get_facts(core):
         'fqdn': socket.getfqdn(),
         'os_pretty_name': pretty_name,
         'uptime': uptime_string,
+        'uptime_seconds': uptime_seconds,
         'primary_address': primary_address,
         'product_name': product_name,
         'agent_version': bleemeo_agent.__version__,
@@ -118,6 +118,12 @@ def get_facts(core):
             'facter is not installed. Only limited facts are sents')
 
     return facts
+
+
+def get_uptime():
+    with open('/proc/uptime', 'r') as f:
+        uptime_seconds = float(f.readline().split()[0])
+        return uptime_seconds
 
 
 def format_uptime(uptime_seconds):

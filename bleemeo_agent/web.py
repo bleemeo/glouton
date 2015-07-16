@@ -12,13 +12,7 @@ app_thread = threading.Thread(target=app.run)
 
 @app.route('/')
 def home():
-    loads = []
-    for term in [1, 5, 15]:
-        metric = app.core.get_last_metric('system_load%s' % term, {})
-        if metric is None:
-            loads.append('?')
-        else:
-            loads.append('%s' % metric['fields']['value'])
+    loads = app.core.get_loads()
 
     return flask.render_template(
         'index.html', core=app.core, loads=' '.join(loads))

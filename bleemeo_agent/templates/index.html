@@ -30,13 +30,21 @@
         Tags: AWS, eu-west-1, web, ubuntu {# TODO #}<br/>
         </p>
     </div>
-    <div class="col-xs-6">
+    <div class="col-xs-offset-1 col-xs-4">
         <div class="well text-center">
             <span class="glyphicon-very-large text-success">
                 <span class="glyphicon glyphicon-ok"></span>
             </span>
             <div>84 checks are OK {# TODO #}</div>
         </div>
+    </div>
+</div>
+<div class="row">
+    <div class="col-xs-5">
+        disk space and co
+    </div>
+    <div class="col-xs-7">
+        <pre class="top-output">{{ core.get_top_output() }}</pre>
     </div>
 </div>
 {% endblock %}

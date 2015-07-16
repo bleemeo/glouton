@@ -17,3 +17,8 @@ hr {
     font-size: 16em;
     line-height: 75%;
 }
+
+.top-output {
+    background-color: black;
+    color: white;
+}

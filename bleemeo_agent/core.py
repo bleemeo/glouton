@@ -1,5 +1,6 @@
 import collections
 import copy
+import datetime
 import json
 import logging
 import logging.handlers
@@ -11,6 +12,8 @@ import sys
 import time
 import threading
 
+import jinja2
+import psutil
 import stevedore
 
 import bleemeo_agent
@@ -165,6 +168,7 @@ class Core:
             self.start_threads()
             bleemeo_agent.checker.initialize_checks(self)
             self.periodic_check()
+            self._purge_metrics()
             self.send_facts()
             self.send_process_info()
             self.scheduler.run()
@@ -218,6 +222,28 @@ class Core:
         bleemeo_agent.checker.periodic_check(self)
         self.scheduler.enter(3, 1, self.periodic_check, ())
 
+    def _purge_metrics(self):
+        """ Remove old metrics from self.last_metrics
+
+            Some metric may stay in last_metrics unupdated, for example
+            when a process with PID=42 terminated, no metric will update the
+            metric for this process.
+
+            For this reason, from time to time, scan last_metrics and drop
+            any value older than 6 minutes.
+        """
+        now = time.time()
+        cutoff = now - 60 * 6
+
+        def exclude_old_metric(item):
+            return item['time'] >= cutoff
+
+        # XXX: concurrent access with emit_metric.
+        for (measurement, metrics) in self.last_metrics.items():
+            self.last_metrics[measurement] = list(filter(
+                exclude_old_metric, metrics))
+        self.scheduler.enter(300, 1, self._purge_metrics, ())
+
     def send_facts(self):
         """ Send facts to Bleemeo SaaS and reschedule itself """
         self.last_facts = bleemeo_agent.util.get_facts(self)
@@ -238,7 +264,7 @@ class Core:
                     'create_time': str(process_info.pop('create_time')),
                 },
                 'fields': process_info,
-            }, store_last_value=False)
+            })
         self.scheduler.enter(60, 1, self.send_process_info, ())
 
     def plugins_on_load_failure(self, manager, entrypoint, exception):
@@ -333,6 +359,9 @@ class Core:
             # Without list() we may end with a filter object on a filter object
             # on a filter object ...
             measurement = metric['measurement']
+            # XXX: concurrent access.
+            # Note: different thread should not access the SAME
+            # measurement, so it should be safe.
             self.last_metrics[measurement] = list(filter(
                 exclude_same_metric, self.last_metrics.get(measurement, [])))
             self.last_metrics[measurement].append(metric)
@@ -390,3 +419,137 @@ class Core:
                 return metric
 
         return None
+
+    def get_last_metric_value(self, name, tags, default=None):
+        """ Return value for given metric.
+
+            It use self.get_last_metric and assume the metric only
+            contains one field named "value".
+
+            Return default if metric is not found or if the metric don't have
+            a field "value".
+        """
+        metric = self.get_last_metric(name, tags)
+        if metric is not None and 'value' in metric['fields']:
+            return metric['fields']['value']
+        else:
+            return default
+
+    def get_loads(self):
+        """ Return (load1, load5, load15).
+
+            Value are took from last_metrics, so collectd need to feed the
+            value or "?" is used instead of real value
+        """
+        loads = []
+        for term in [1, 5, 15]:
+            metric = self.get_last_metric('system_load%s' % term, {})
+            if metric is None:
+                loads.append('?')
+            else:
+                loads.append('%s' % metric['fields']['value'])
+        return loads
+
+    def get_top_output(self):
+        """ Return a top-like output
+        """
+        env = jinja2.Environment(
+            loader=jinja2.PackageLoader('bleemeo_agent', 'templates'))
+        template = env.get_template('top.txt')
+
+        timestamp = 0
+        for metric in self.last_metrics.get('process_info', []):
+            timestamp = max(timestamp, metric['time'])
+
+        if timestamp == 0:
+            # use time from last cpu_* metrics
+            metric = self.get_last_metric('cpu_idle', {})
+            if metric is None:
+                return 'top - waiting for metrics...'
+            timestamp = metric['time']
+
+        memory_total = psutil.virtual_memory().total
+
+        processes = []
+        # Sort process by CPU consumption (then PID, when cpu % is the same)
+        sorted_process = sorted(
+            self.last_metrics.get('process_info', []),
+            key=lambda x: (x['fields']['cpu_percent'], x['tags']['pid']))
+        for metric in sorted_process:
+            if metric['time'] < timestamp:
+                # stale metric, probably a process that has terminated
+                continue
+
+            # convert status (like "sleeping", "running") to one char status
+            status = {
+                psutil.STATUS_RUNNING: 'R',
+                psutil.STATUS_SLEEPING: 'S',
+                psutil.STATUS_DISK_SLEEP: 'D',
+                psutil.STATUS_STOPPED: 'T',
+                psutil.STATUS_TRACING_STOP: 'T',
+                psutil.STATUS_ZOMBIE: 'Z',
+            }.get(metric['fields']['status'], '?')
+            processes.append(
+                ('%(pid)5s %(ppid)5s %(res)6d %(status)s '
+                    '%(cpu)5.1f %(mem)4.1f %(cmd)s') %
+                {
+                    'pid': metric['tags']['pid'],
+                    'ppid': metric['fields']['ppid'],
+                    'res': metric['fields']['memory_rss'] / 1024,
+                    'status': status,
+                    'cpu': metric['fields']['cpu_percent'],
+                    'mem':
+                        float(metric['fields']['memory_rss']) / memory_total,
+                    'cmd': metric['fields']['name'],
+                })
+            if len(processes) >= 25:
+                # show only top-25 process (sorted by CPU consumption)
+                break
+
+        time_top = datetime.datetime.fromtimestamp(timestamp).time()
+        time_top = time_top.replace(microsecond=0)
+        uptime_second = bleemeo_agent.util.get_uptime()
+        num_core = multiprocessing.cpu_count()
+        return template.render(
+            time_top=time_top,
+            uptime=bleemeo_agent.util.format_uptime(uptime_second),
+            users=int(self.get_last_metric_value('users_logged', {}, 0)),
+            loads=', '.join(self.get_loads()),
+            process_total='%3d' % self.get_last_metric_value(
+                'process_total', {}, 0),
+            process_running='%3d' % self.get_last_metric_value(
+                'process_status_running', {}, 0),
+            process_sleeping='%3d' % self.get_last_metric_value(
+                'process_status_sleeping', {}, 0),
+            process_stopped='%3d' % self.get_last_metric_value(
+                'process_status_stopped', {}, 0),
+            process_zombie='%3d' % self.get_last_metric_value(
+                'process_status_zombies', {}, 0),
+            cpu_user='%5.1f' % (
+                self.get_last_metric_value('cpu_user', {}, 0) / num_core),
+            cpu_system='%5.1f' % (
+                self.get_last_metric_value('cpu_system', {}, 0) / num_core),
+            cpu_nice='%5.1f' % (
+                self.get_last_metric_value('cpu_nice', {}, 0) / num_core),
+            cpu_idle='%5.1f' % (
+                self.get_last_metric_value('cpu_idle', {}, 0)/num_core),
+            cpu_wait='%5.1f' % (
+                self.get_last_metric_value('cpu_wait', {}, 0) / num_core),
+            mem_total='%8d' % (
+                self.get_last_metric_value('mem_total', {}, 0)/1024),
+            mem_used='%8d' % (
+                self.get_last_metric_value('mem_used', {}, 0)/1024),
+            mem_free='%8d' % (
+                self.get_last_metric_value('mem_free', {}, 0)/1024),
+            mem_buffered='%8d' % (
+                self.get_last_metric_value('mem_buffered', {}, 0)/1024),
+            mem_cached='%8d' % (
+                self.get_last_metric_value('mem_cached', {}, 0)/1024),
+            swap_total='%8d' % (
+                self.get_last_metric_value('swap_total', {}, 0)/1024),
+            swap_used='%8d' % (
+                self.get_last_metric_value('swap_used', {}, 0)/1024),
+            swap_free='%8d' % (
+                self.get_last_metric_value('swap_free', {}, 0)/1024),
+            processes=processes,
+        )
