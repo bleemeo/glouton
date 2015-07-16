@@ -1,0 +1,19 @@
+.inline-headers h1 {
+    display: inline-block;
+    vertical-align: baseline;
+}
+
+.padding-top-1 {
+    padding-top: 1em;
+}
+
+hr {
+    margin-top: 0;
+    border-color: #528bd1;
+    border-width: 0.5em;
+}
+
+.glyphicon-very-large {
+    font-size: 16em;
+    line-height: 75%;
+}

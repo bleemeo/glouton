@@ -1,47 +1,42 @@
-{% set current_tab = "status" %}
 {% extends "layout.html" %}
 
 {% block content %}
-<p>Registration status:
-{% if core.bleemeo_connector.registration_done %} done {% else %} in progress {% endif %}
-</p>
-<h2>Checks</h2>
-<ul>
-    {% for check in core.checks %}
-        <li> {{ check.name }} :
-            {% if check.fake_failure_until %}
-            <span class="text-danger">
-                <span class="text-danger glyphicon glyphicon-remove-sign" aria-hidden="true"></span>
-                Critical (faked)
+<div class="row padding-top-1">
+    <div class="col-xs-8 col-sm-8 col-md-8">
+        <div class="inline-headers">
+            <h1>{{ core.last_facts['fqdn'] }}</h1>
+            &nbsp;
+            <span class="h2"><span class="glyphicon glyphicon-pencil"></span></span>
+        </div>
+    </div>
+    <div class="col-xs-offset-1 col-xs-3 col-sm-offset-2 col-sm-2 col-md-offset-3 col-md-1">
+        <img src="/static/logo.png"/>
+    </div>
+</div>
+<hr/>
+<div class="row">
+    <div class="col-xs-6">
+        <p>
+        {{ core.last_facts['primary_address'] }}<br/>
+        {{ core.last_facts['os_pretty_name'] }}<br/>
+        {% if core.last_facts['product_name'] %}
+        {{ core.last_facts['product_name'] }}<br/>
+        {% endif %}
+        Uptime: {{ core.last_facts['uptime'] }}<br/>
+        Load: {{ loads }}<br/>
+        Registration: 1st January 1970 {# TODO #}<br/>
+        Last Report: 6th July 2015 {# TODO #}<br/>
+        <br/>
+        Tags: AWS, eu-west-1, web, ubuntu {# TODO #}<br/>
+        </p>
+    </div>
+    <div class="col-xs-6">
+        <div class="well text-center">
+            <span class="glyphicon-very-large text-success">
+                <span class="glyphicon glyphicon-ok"></span>
             </span>
-            &emsp;real status :
-            {% endif %}
-            {% if check.soft_status == 0 %} {# good #}
-            <span class="text-success">
-                <span class="text-success glyphicon glyphicon-ok-sign" aria-hidden="true"></span>
-                Success
-            </span>
-            {% elif check.soft_status == 1 %} {# warning #}
-            <span class="text-warning">
-                <span class="text-warning glyphicon glyphicon-info-sign" aria-hidden="true"></span>
-                Warning
-            </span>
-            {% elif check.soft_status == 2 %} {# critical #}
-            <span class="text-danger">
-                <span class="text-danger glyphicon glyphicon-remove-sign" aria-hidden="true"></span>
-                Critical
-            </span>
-            {% else %} {# unknown #}
-            <span class="text-danger">
-                <span class="text-danger glyphicon glyphicon-question-sign" aria-hidden="true"></span>
-                Unknown
-            </span>
-            {% endif %}
-            {% if check.soft_status != 0 %}
-            (check {{ check.soft_status_try }} / 4)
-            {% endif %}
-        </li>
-    {% endfor %}
-</ul>
-<a href="/check.json">Machine-friendly output (JSON)</a>
+            <div>84 checks are OK {# TODO #}</div>
+        </div>
+    </div>
+</div>
 {% endblock %}

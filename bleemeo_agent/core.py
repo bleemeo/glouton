@@ -125,6 +125,7 @@ class Core:
                 'stored_values_file',
                 '/var/lib/bleemeo/store.json'))
         self.checks = []
+        self.last_facts = {}
         self.thresholds = {}
 
         self.re_exec = False
@@ -219,10 +220,10 @@ class Core:
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS and reschedule itself """
-        facts = bleemeo_agent.util.get_facts(self)
+        self.last_facts = bleemeo_agent.util.get_facts(self)
         self.bleemeo_connector.publish(
             'api/v1/agent/facts/POST',
-            json.dumps(facts))
+            json.dumps(self.last_facts))
         self.scheduler.enter(3600, 1, self.send_facts, ())
 
     def send_process_info(self):
