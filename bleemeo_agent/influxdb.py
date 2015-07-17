@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import logging
 import math
 import socket
+import time
 import threading
 
 import influxdb
@@ -22,6 +23,10 @@ class InfluxDBConnector(threading.Thread):
 
         self.influx_client = None
         self._queue = queue.Queue(1000)
+
+        # Used to avoid "flooding" logs about dropped messages
+        self._queue_full_last_warning = 0
+        self._queue_full_count_warning = 0
 
     def _do_connect(self):
         self.influx_client = influxdb.InfluxDBClient()
@@ -50,6 +55,7 @@ class InfluxDBConnector(threading.Thread):
                     sleep_delay)
                 self.core.is_terminating.wait(sleep_delay)
                 sleep_delay = min(sleep_delay * 2, 300)
+                self._warn_queue_full()
 
     def _create_retention_policy(self, replication_factor=3):
         try:
@@ -89,6 +95,7 @@ class InfluxDBConnector(threading.Thread):
 
         while not self.core.is_terminating.is_set():
             self._process_queue()
+            self._warn_queue_full()
             self.core.is_terminating.wait(10)
 
     def emit_metric(self, metric):
@@ -106,5 +113,17 @@ class InfluxDBConnector(threading.Thread):
         try:
             self._queue.put_nowait(metric)
         except queue.Full:
+            self._queue_full_count_warning += 1
+
+    def _warn_queue_full(self):
+        """ Log a warning is metric were dropped
+        """
+        now = time.time()
+        if (self._queue_full_count_warning
+                and self._queue_full_last_warning < now - 60):
             logging.warning(
-                'InfluxDB connector queue is full. Dropping metrics')
+                    'InfluxDB connector: %s metric(s) were dropped due to '
+                    'overflow of the sending queue',
+                self._queue_full_count_warning)
+            self._queue_full_last_warning = now
+            self._queue_full_count_warning = 0
