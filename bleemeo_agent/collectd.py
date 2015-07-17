@@ -36,8 +36,11 @@ class Collectd(threading.Thread):
         self.core = core
         self.config_fragments = [COLLECTD_CONFIG_FRAGMENTS]
 
-        plugins_config_fragments = self.core.plugins_v1_mgr.map_method(
-            'collectd_configure')
+        if len(self.core.plugins_v1_mgr.names()):
+            plugins_config_fragments = self.core.plugins_v1_mgr.map_method(
+                'collectd_configure')
+        else:
+            plugins_config_fragments = []
 
         for config_fragment in plugins_config_fragments:
             if not config_fragment:
