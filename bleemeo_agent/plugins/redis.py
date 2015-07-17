@@ -19,7 +19,8 @@ LoadPlugin redis
 
     def list_checks(self):
         return [(
-            'Redis server',
+            'redis-server',
+            'Check that Redis server is alive',
             (r'/usr/lib/nagios/plugins/check_tcp -H localhost -p 6379 '
                 r'-Es "PING\n" -e "+PONG"'),
             6379)]

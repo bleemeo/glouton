@@ -9,7 +9,8 @@ class Disk(base.PluginV1Base):
 
     def list_checks(self):
         return [(
-            'disk usage',
+            'disk-usage',
+            'Check that disk are not filled',
             ('/usr/lib/nagios/plugins/check_disk -w 10% -c 5% -l '
                 '-X tmpfs -X devtmpfs'),
             None)]

@@ -56,6 +56,7 @@ LoadPlugin nginx
 
     def list_checks(self):
         return [(
-            'Nginx webserver',
+            'nginx-webserver',
+            'Check that Nginx is alive',
             '/usr/lib/nagios/plugins/check_http -H localhost',
             80)]

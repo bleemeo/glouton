@@ -16,9 +16,28 @@ app_thread = threading.Thread(target=app.run)
 def home():
     loads = app.core.get_loads()
     num_core = multiprocessing.cpu_count()
+    check_count_ok = 0
+    check_count_warning = 0
+    check_count_critical = 0
+    for metrics in app.core.last_metrics.values():
+        for metric in metrics:
+            if 'status' in metric['tags']:
+                if metric['tags']['status'] == 'ok':
+                    check_count_ok += 1
+                elif metric['tags']['status'] == 'warning':
+                    check_count_warning += 1
+                else:
+                    check_count_critical += 1
 
     return flask.render_template(
-        'index.html', core=app.core, loads=' '.join(loads), num_core=num_core)
+        'index.html',
+        core=app.core,
+        loads=' '.join(loads),
+        num_core=num_core,
+        check_count_ok=check_count_ok,
+        check_count_warning=check_count_warning,
+        check_count_critical=check_count_critical,
+    )
 
 
 @app.route('/_quit')

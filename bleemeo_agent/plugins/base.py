@@ -32,10 +32,14 @@ class PluginV1Base(object):
     def list_checks(self):
         """ Return list of checks to run.
 
-            The list contains 3-tuple with (name, check_command, tcp_port),
-            where:
+            The list contains 4-tuple with (short_name, description,
+                check_command, tcp_port) where:
 
-            * name describe what is checked
+            * short_name is a short unique name. It should not contains space
+              or special character (avoid ".", "/", ...) It is used to name the
+              measurement.
+            * description is a description for human so we can figure what this
+              check does.
             * check_command point to a programm (and it's argument). The
               pointed programm should behave like a nagios check.
             * tcp_port is the TCP port associated with this check. It could

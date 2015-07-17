@@ -62,7 +62,8 @@ LoadPlugin mysql
 
     def list_checks(self):
         return [(
-            'MySQL database',
+            'mysql-database',
+            'Check that MySQL is alive',
             "/usr/lib/nagios/plugins/check_mysql -u '%s' -p '%s'" % (
                 self.mysql_user, self.mysql_password),
             3306)]

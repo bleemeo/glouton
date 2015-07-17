@@ -34,6 +34,7 @@ LoadPlugin ntpd
 
     def list_checks(self):
         return [(
-            'NTP server',
+            'ntp-server',
+            'Check that clock is synchronized with NTP',
             '/usr/lib/nagios/plugins/check_ntp -H localhost -w 0.5 -c 1',
             None)]

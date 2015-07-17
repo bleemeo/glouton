@@ -32,10 +32,28 @@
     </div>
     <div class="col-xs-offset-1 col-xs-4">
         <div class="well text-center">
-            <span class="glyphicon-very-large text-success">
-                <span class="glyphicon glyphicon-ok"></span>
+            <span class="glyphicon-very-large">
+                {% if check_count_critical %}
+                <span class="text-danger">
+                    <span class="glyphicon glyphicon-remove"></span>
+                </span>
+                {% elif check_count_warning %}
+                <span class="text-warning">
+                    <span class="glyphicon glyphicon-warning-sign"></span>
+                </span>
+                {% else %}
+                <span class="text-success">
+                    <span class="glyphicon glyphicon-ok"></span>
+                </span>
+                {% endif %}
             </span>
-            <div>84 checks are OK {# TODO #}</div>
+            <div>{{ check_count_ok }} checks are OK</div>
+            {% if check_count_warning %}
+            <div>{{ check_count_warning }} checks are WARNING</div>
+            {% endif %}
+            {% if check_count_critical %}
+            <div>{{ check_count_critical }} checks are CRITICAL</div>
+            {% endif %}
         </div>
     </div>
 </div>

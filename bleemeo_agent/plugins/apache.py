@@ -31,6 +31,7 @@ LoadPlugin apache
 
     def list_checks(self):
         return [(
-            'apache webserver',
+            'apache-webserver',
+            'Check that Apache server is alive',
             '/usr/lib/nagios/plugins/check_http -H localhost',
             80)]
