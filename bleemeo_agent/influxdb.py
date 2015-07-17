@@ -22,7 +22,7 @@ class InfluxDBConnector(threading.Thread):
         self.retention_policy_name = 'standard_policy'
 
         self.influx_client = None
-        self._queue = queue.Queue(1000)
+        self._queue = queue.Queue(5000)
 
         # Used to avoid "flooding" logs about dropped messages
         self._queue_full_last_warning = 0
@@ -122,8 +122,8 @@ class InfluxDBConnector(threading.Thread):
         if (self._queue_full_count_warning
                 and self._queue_full_last_warning < now - 60):
             logging.warning(
-                    'InfluxDB connector: %s metric(s) were dropped due to '
-                    'overflow of the sending queue',
+                'InfluxDB connector: %s metric(s) were dropped due to '
+                'overflow of the sending queue',
                 self._queue_full_count_warning)
             self._queue_full_last_warning = now
             self._queue_full_count_warning = 0
