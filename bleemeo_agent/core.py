@@ -400,7 +400,6 @@ class Core:
         else:
             status = 'ok'
 
-        logging.debug('Metric %s has status %s', metric['measurement'], status)
         metric['tags']['status'] = status
 
     def get_last_metric(self, name, tags):
