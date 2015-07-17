@@ -16,9 +16,22 @@ app_thread = threading.Thread(target=app.run)
 def home():
     loads = app.core.get_loads()
     num_core = multiprocessing.cpu_count()
+    check_info = _gather_checks_info()
+
+    return flask.render_template(
+        'index.html',
+        core=app.core,
+        loads=' '.join(loads),
+        num_core=num_core,
+        check_info=check_info,
+    )
+
+
+def _gather_checks_info():
     check_count_ok = 0
     check_count_warning = 0
     check_count_critical = 0
+    checks = []
     for metrics in app.core.last_metrics.values():
         for metric in metrics:
             if 'status' in metric['tags']:
@@ -28,15 +41,42 @@ def home():
                     check_count_warning += 1
                 else:
                     check_count_critical += 1
+                threshold = app.core.thresholds.get(metric['measurement'])
+                if threshold is not None:
+                    threshold = threshold._asdict()
+
+                tags = metric['tags'].copy()
+                del tags['status']
+
+                pretty_name = metric['measurement']
+                for (key, value) in tags.items():
+                    pretty_name = '%s for %s %s' % (pretty_name, key, value)
+                checks.append({
+                    'name': metric['measurement'],
+                    'pretty_name': pretty_name,
+                    'tags': tags,
+                    'status': metric['tags']['status'],
+                    'value': metric['fields'].get('value'),
+                    'threshold': threshold,
+                })
+
+    return {
+        'checks': checks,
+        'count_ok':  check_count_ok,
+        'count_warning': check_count_warning,
+        'count_critical': check_count_critical,
+        'count_total': len(checks),
+    }
+
+
+@app.route('/check')
+def check():
+    check_info = _gather_checks_info()
 
     return flask.render_template(
-        'index.html',
+        'check.html',
         core=app.core,
-        loads=' '.join(loads),
-        num_core=num_core,
-        check_count_ok=check_count_ok,
-        check_count_warning=check_count_warning,
-        check_count_critical=check_count_critical,
+        check_info=check_info,
     )
 
 

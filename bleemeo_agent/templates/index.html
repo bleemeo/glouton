@@ -1,19 +1,6 @@
 {% extends "layout.html" %}
 
 {% block content %}
-<div class="row padding-top-1">
-    <div class="col-xs-8 col-sm-8 col-md-8">
-        <div class="inline-headers">
-            <h1>{{ core.last_facts['fqdn'] }}</h1>
-            &nbsp;
-            <span class="h2"><span class="glyphicon glyphicon-pencil"></span></span>
-        </div>
-    </div>
-    <div class="col-xs-offset-1 col-xs-3 col-sm-offset-2 col-sm-2 col-md-offset-3 col-md-1">
-        <img src="/static/logo.png"/>
-    </div>
-</div>
-<hr/>
 <div class="row">
     <div class="col-xs-6">
         <p>
@@ -31,13 +18,14 @@
         </p>
     </div>
     <div class="col-xs-offset-1 col-xs-4">
+      <a href="{{ url_for('check') }}">
         <div class="well text-center">
             <span class="glyphicon-very-large">
-                {% if check_count_critical %}
+                {% if check_info['count_critical'] %}
                 <span class="text-danger">
                     <span class="glyphicon glyphicon-remove"></span>
                 </span>
-                {% elif check_count_warning %}
+                {% elif check_info['count_warning'] %}
                 <span class="text-warning">
                     <span class="glyphicon glyphicon-warning-sign"></span>
                 </span>
@@ -47,14 +35,15 @@
                 </span>
                 {% endif %}
             </span>
-            <div>{{ check_count_ok }} checks are OK</div>
-            {% if check_count_warning %}
-            <div>{{ check_count_warning }} checks are WARNING</div>
+            <div>{{ check_info['count_ok'] }} checks are OK</div>
+            {% if check_info['count_warning'] %}
+            <div>{{ check_info['count_warning'] }} checks are WARNING</div>
             {% endif %}
-            {% if check_count_critical %}
-            <div>{{ check_count_critical }} checks are CRITICAL</div>
+            {% if check_info['count_critical'] %}
+            <div>{{ check_info['count_critical'] }} checks are CRITICAL</div>
             {% endif %}
         </div>
+      </a>
     </div>
 </div>
 <div class="row">

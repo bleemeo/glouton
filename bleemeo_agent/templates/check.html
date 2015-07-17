@@ -1,0 +1,55 @@
+{% extends "layout.html" %}
+
+{% block content %}
+
+<table class="table">
+    <thead><tr>
+        <th>Status</th>
+        <th>Name</th>
+        <th>Value</th>
+        <th>Threshold</th>
+    </tr></thead>
+    <tbody>
+    {% for check in check_info['checks'] %}
+    <tr>
+        <td>
+            {% if check['status'] == 'ok' %}
+            <span class="text-success">
+                <span class="glyphicon glyphicon-ok"></span>
+            {% elif check['status'] == 'warning' %}
+            <span class="text-warning">
+                <span class="glyphicon glyphicon-warning-sign"></span>
+            {% else %}
+            <span class="text-danger">
+                <span class="glyphicon glyphicon-remove"></span>
+            {% endif %}
+            {{ check['status'] }}
+            </span>
+        </td>
+        <td>{{ check['pretty_name'] }}</td>
+        <td>{{ check['value']|round(1) }}</td>
+        <td>
+        {% with threshold = check['threshold'] %}
+            {% if threshold is none %}
+                -
+            {% else %}
+                {% if threshold['low_critical'] is not none %}
+                    critical below {{ threshold['low_critical'] }}
+                {% endif %}
+                {% if threshold['low_warning'] is not none %}
+                    and warning below {{ threshold['low_warning'] }}
+                {% endif %}
+                {% if threshold['high_critical'] is not none %}
+                    critical above {{ threshold['high_critical'] }}
+                {% endif %}
+                {% if threshold['high_warning'] is not none %}
+                    and warning above {{ threshold['high_warning'] }}
+                {% endif %}
+            {% endif %}
+        {% endwith %}
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endblock %}
