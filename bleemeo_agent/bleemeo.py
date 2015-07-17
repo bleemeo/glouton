@@ -1,6 +1,7 @@
 import json
 import logging
 import socket
+import time
 import threading
 import uuid
 
@@ -17,6 +18,9 @@ class BleemeoConnector(threading.Thread):
         super(BleemeoConnector, self).__init__()
         self.core = core
 
+        self._queue_size = 0
+        self._queue_full_last_warning = 0
+        self._queue_full_count_warning = 0
         self.mqtt_client = mqtt.Client()
         self.uuid_connection = uuid.uuid4()
         self.connected = False
@@ -47,6 +51,9 @@ class BleemeoConnector(threading.Thread):
     def on_disconnect(self, client, userdata, rc):
         logging.debug('MQTT connection lost')
         self.connected = False
+
+    def on_publish(self, client, userdata, mid):
+        self._queue_size -= 1
 
     def check_config_requirement(self):
         config = self.core.config
@@ -88,6 +95,7 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_disconnect = self.on_disconnect
         self.mqtt_client.on_message = self.on_message
+        self.mqtt_client.on_publish = self.on_publish
 
         if self.core.config.has_option('bleemeo', 'mqtt_host'):
             mqtt_host = self.core.config.get('bleemeo', 'mqtt_host')
@@ -111,26 +119,32 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.loop_start()
 
-        self.mqtt_client.publish(
-            '%s/api/v1/agent/connect/POST' % self.login,
-            'connect %s' % self.uuid_connection,
-            1)
+        self.publish(
+            'api/v1/agent/connect/POST',
+            'connect %s' % self.uuid_connection)
 
-        self.core.is_terminating.wait()
-        self.mqtt_client.publish(
-            '%s/api/v1/agent/disconnect/POST' % self.login,
-            'disconnect %s' % self.uuid_connection,
-            1)
+        while not self.core.is_terminating.is_set():
+            self._warn_queue_full()
+            self.core.is_terminating.wait(3)
+
+        self.publish(
+            'api/v1/agent/disconnect/POST',
+            'disconnect %s' % self.uuid_connection)
         self.mqtt_client.loop_stop()
 
         self.mqtt_client.disconnect()
         self.mqtt_client.loop()
 
     def publish(self, topic, message):
+        if self._queue_size > 5000:
+            self._queue_full_count_warning += 1
+            return
+
         self.mqtt_client.publish(
             '%s/%s' % (self.login, topic),
             message,
             1)
+        self._queue_size += 1
 
     def register(self, sleep_delay=10):
         """ Register the agent to Bleemeo SaaS service
@@ -186,6 +200,17 @@ class BleemeoConnector(threading.Thread):
             'api/v1/agent/points/POST',
             json.dumps(metric)
         )
+
+    def _warn_queue_full(self):
+        now = time.time()
+        if (self._queue_full_count_warning
+                and self._queue_full_last_warning < now - 60):
+            logging.warning(
+                'Bleemeo connector: %s metric(s) were dropped due to '
+                'overflow of the sending queue',
+                self._queue_full_count_warning)
+            self._queue_full_last_warning = now
+            self._queue_full_count_warning = 0
 
     @property
     def account_id(self):
