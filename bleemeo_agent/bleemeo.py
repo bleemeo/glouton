@@ -58,17 +58,18 @@ class BleemeoConnector(threading.Thread):
     def check_config_requirement(self):
         config = self.core.config
         sleep_delay = 10
-        while (not config.has_option('bleemeo', 'account_id')
-                or not config.has_option('bleemeo', 'registration_key')):
+        while (config.get('bleemeo.account_id') is None
+                or config.get('bleemeo.registration.key') is None):
             logging.warning(
                 'bleemeo.account_id and/or '
-                'bleemeo.registration_key is undefine. '
+                'bleemeo.registration.key is undefine. '
                 'Please see https://docs.bleemeo.com/how-to-configure-agent')
             self.core.is_terminating.wait(sleep_delay)
             if self.core.is_terminating.is_set():
                 raise StopIteration
             config = self.core.reload_config()
             sleep_delay = min(sleep_delay * 2, 600)
+            self._warn_queue_full()
 
         if (self.core.stored_values.get('login') is None
                 or self.core.stored_values.get('password') is None):
@@ -97,10 +98,9 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.on_publish = self.on_publish
 
-        if self.core.config.has_option('bleemeo', 'mqtt_host'):
-            mqtt_host = self.core.config.get('bleemeo', 'mqtt_host')
-        else:
-            mqtt_host = '%s.bleemeo.com' % self.account_id
+        mqtt_host = self.core.config.get(
+            'bleemeo.mqtt_host',
+            '%s.bleemeo.com' % self.account_id)
 
         self.mqtt_client.username_pw_set(
             self.login,
@@ -155,7 +155,7 @@ class BleemeoConnector(threading.Thread):
             'https://%s.bleemeo.com/api/v1/agent/register/' % self.account_id)
 
         registration_url = self.core.config.get(
-            'bleemeo', 'registration_url', default_url)
+            'bleemeo.registration.url', default_url)
 
         myctx = passlib.context.CryptContext(schemes=["sha512_crypt"])
         password_hash = myctx.encrypt(
@@ -163,7 +163,7 @@ class BleemeoConnector(threading.Thread):
         payload = {
             'account_id': self.account_id,
             'registration_key': self.core.config.get(
-                'bleemeo', 'registration_key'),
+                'bleemeo.registration.key'),
             'login': self.login,
             'password_hash': password_hash,
             'agent_version': bleemeo_agent.__version__,
@@ -214,7 +214,7 @@ class BleemeoConnector(threading.Thread):
 
     @property
     def account_id(self):
-        return self.core.config.get('agent', 'account_id')
+        return self.core.config.get('bleemeo.account_id')
 
     @property
     def login(self):

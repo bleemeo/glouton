@@ -1,0 +1,51 @@
+# Agent configuration files are written in yaml.
+#
+# Configuration could be overridden by files under
+# /etc/bleemeo/agent.conf.d/*.yml
+# We suggest to create a file under that folder and leave this
+# file unchanged.
+#
+# Files from the agent.conf.d folder are read in dictonary order (e.g.
+# 00-defaults.yml is read before 99-custom.yml)
+
+agent:
+    # Agent will generate few values the first time it's started:
+    # * a couple (login, password) used to communicated over MQTT and send to
+    #   Bleemeo during the registration (over HTTPS).
+    # * and a secret_key used by local web-server
+    # It will store them in this file.
+    stored_values_file: /var/lib/bleemeo/store.json
+
+logging:
+    level: info
+    file: /var/log/bleemeo/agent.log
+
+# You can define a threshold on ANY metric. You only need to know it's name and
+# add an entry like this one:
+#   metric_name:
+#       low_critical: 1.0
+#       low_warning: 2.0
+#       high_warning: 3
+#       high_critical: 4.2
+# You can omit any of the above 4 threshold (or explicitly set it to null).
+#
+thresholds:
+    cpu_idle:
+        # When cpu_idle fall bellow 10%, it is critical. 20 % is warning.
+        # Note: cpu_* threshold "scale" with the number of core, e.g. on a
+        # quad-core, total CPU is 400%, a value of 10 means 10 * 4 = 40% of the
+        # total 400%.
+        low_warning: 20
+        low_critical: 10
+    disk_used_perc:
+        # This time, it is when value is above given thresholds that status
+        # change to warning or critical.
+        high_warning: 80
+        high_critical: 90
+    net_err_in:
+        high_critical: 0
+    net_err_out:
+        high_critical: 0
+    mem_used_perc:
+        high_warning: 80
+        high_critical: 90

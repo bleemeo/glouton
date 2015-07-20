@@ -33,16 +33,16 @@
             {% if threshold is none %}
                 -
             {% else %}
-                {% if threshold['low_critical'] is not none %}
+                {% if 'low_critical' in threshold %}
                     critical below {{ threshold['low_critical'] }}
                 {% endif %}
-                {% if threshold['low_warning'] is not none %}
+                {% if 'low_warning' in threshold%}
                     and warning below {{ threshold['low_warning'] }}
                 {% endif %}
-                {% if threshold['high_critical'] is not none %}
+                {% if 'high_critical' in threshold%}
                     critical above {{ threshold['high_critical'] }}
                 {% endif %}
-                {% if threshold['high_warning'] is not none %}
+                {% if 'high_warning' in threshold %}
                     and warning above {{ threshold['high_warning'] }}
                 {% endif %}
             {% endif %}

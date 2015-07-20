@@ -42,8 +42,6 @@ def _gather_checks_info():
                 else:
                     check_count_critical += 1
                 threshold = app.core.thresholds.get(metric['measurement'])
-                if threshold is not None:
-                    threshold = threshold._asdict()
 
                 tags = metric['tags'].copy()
                 del tags['status']

@@ -1,4 +1,3 @@
-import collections
 import copy
 import datetime
 import json
@@ -49,12 +48,12 @@ def setup_logger(config):
         'warning': logging.WARNING,
         'error': logging.ERROR,
     }
-    level = level_map[config.get('logging', 'level').lower()]
+    level = level_map[config.get('logging.level', 'info').lower()]
 
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
 
-    log_file = config.get('logging', 'file')
+    log_file = config.get('logging.file', '-')
     if log_file.lower() not in ('-', 'stdout'):
         handler = logging.handlers.WatchedFileHandler(log_file)
     else:
@@ -108,24 +107,12 @@ class StoredValue:
         self.save()
 
 
-# Metric are Ok if value is inside [low_warning, high_warning] (both limit
-# included in the interval).
-# When value is below low_warning (or above high_warning), the status is
-# warning.
-# When value is below low_critical (or above high_critical), the status is
-# critical.
-Threshold = collections.namedtuple(
-    'Threshold',
-    ['low_critical', 'low_warning', 'high_warning', 'high_critical'])
-
-
 class Core:
     def __init__(self, config):
         self.config = config
         self.stored_values = StoredValue(
             config.get(
-                'agent',
-                'stored_values_file',
+                'agent.stored_values_file',
                 '/var/lib/bleemeo/store.json'))
         self.checks = []
         self.last_facts = {}
@@ -150,17 +137,17 @@ class Core:
         self._define_thresholds()
 
     def _define_thresholds(self):
-        """ Fill self.thresholds
+        """ Fill self.thresholds from config.thresholds
 
-            Currently only hard-coded value are added.
+            It mostly a "copy", only cpu_* are multiplied by the number of
+            cpu cores.
         """
         num_core = multiprocessing.cpu_count()
-        self.thresholds['cpu_idle'] = Threshold(
-            10 * num_core, 20 * num_core, None, None)
-        self.thresholds['disk_used_perc'] = Threshold(None, None, 80, 90)
-        self.thresholds['net_err_in'] = Threshold(None, None, None, 0)
-        self.thresholds['net_err_out'] = Threshold(None, None, None, 0)
-        self.thresholds['mem_used_perc'] = Threshold(None, None, 80, 90)
+        self.thresholds = copy.deepcopy(self.config.get('thresholds'))
+        for key, value in self.thresholds.items():
+            if key.startswith('cpu_'):
+                for threshold_name in value:
+                    value[threshold_name] *= num_core
 
     def run(self):
         try:
@@ -319,8 +306,7 @@ class Core:
         self.config = bleemeo_agent.config.load_config()
         self.stored_values = StoredValue(
             self.config.get(
-                'agent',
-                'stored_values_file',
+                'agent.stored_values_file',
                 '/var/lib/bleemeo/store.json'))
 
         return self.config
@@ -385,17 +371,17 @@ class Core:
         if value is None:
             return
 
-        if (threshold.low_critical is not None
-                and value < threshold.low_critical):
+        if (threshold.get('low_critical') is not None
+                and value < threshold.get('low_critical')):
             status = 'critical'
-        elif (threshold.low_warning is not None
-                and value < threshold.low_warning):
+        elif (threshold.get('low_warning') is not None
+                and value < threshold.get('low_warning')):
             status = 'warning'
-        elif (threshold.high_critical is not None
-                and value > threshold.high_critical):
+        elif (threshold.get('high_critical') is not None
+                and value > threshold.get('high_critical')):
             status = 'critical'
-        elif (threshold.high_warning is not None
-                and value > threshold.high_warning):
+        elif (threshold.get('high_warning') is not None
+                and value > threshold.get('high_warning')):
             status = 'warning'
         else:
             status = 'ok'

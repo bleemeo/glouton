@@ -6,3 +6,4 @@ flask
 psutil
 requests
 six
+pyyaml

@@ -1,0 +1,18 @@
+# Local configuration. Used for dev. NOT included in releases
+
+# Log to stdout and in debug
+logging:
+    file: "-"
+    level: debug
+
+# Configure manatory settings with dummy value and point URLs to localhost
+bleemeo:
+    account_id: test
+    registration:
+        key: test
+        url: http://localhost:8000/
+    mqtt_host: localhost
+
+agent:
+    # Agent need to write a generated_values.json file. Write it in current directory.
+    stored_values_file: generated_values.json

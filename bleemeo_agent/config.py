@@ -1,48 +1,62 @@
 """
-Load configuration (using ConfigParser) from a "conf.d" folder.
+Load configuration (in yaml) from a "conf.d" folder.
 
 Path to configuration are hardcoded, in this order:
 
-* /etc/bleemeo/agent.conf
-* /etc/bleemeo/agent.conf.d/*.conf
-* etc/agent.conf
-* etc/agent.conf.d/*.conf
+* /etc/bleemeo/agent.yml
+* /etc/bleemeo/agent.conf.d/*.yml
+* etc/agent.yml
+* etc/agent.conf.d/*.yml
 
 """
 
 
+import functools
 import glob
-import io
 import os
-import pkgutil
 
-from six.moves import configparser
+import yaml
 
 
 PATHS = [
-    '/etc/bleemeo/agent.conf',
+    '/etc/bleemeo/agent.yml',
     '/etc/bleemeo/agent.conf.d',
-    'etc/agent.conf',
+    'etc/agent.yml',
     'etc/agent.conf.d'
 ]
 
 
-class FallbackConfigParser:
-    """ A wrapper around ConfigParser that allow "get" method with a fallback
-        default value.
+class Config(dict):
+    """
+    Work exacly like a normal dict, but "get" method known about sub-dict
     """
 
-    def __init__(self, config):
-        self._config = config
+    def get(self, name, default=None, separator='.'):
+        """ If name contains separator ("." by default), it will search
+            in sub-dict.
 
-    def has_option(self, section, option):
-        return self._config.has_option(section, option)
+            Example, if you config is {'category': {'value': 5}}, then
+            get('category.value') will return 5.
+        """
+        current = self
+        for path in name.split(separator):
+            if path not in current:
+                return default
+            current = current[path]
+        return current
 
-    def get(self, section, option, default=None):
-        if self._config.has_option(section, option):
-            return self._config.get(section, option)
+
+def merge_dict(destination, source):
+    """ Merge two dictionary (recursivly). destination is modified
+    """
+    for (key, value) in source.items():
+        if (key in destination
+                and isinstance(value, dict)
+                and isinstance(destination[key], dict)):
+            destination[key] = merge_dict(destination[key], value)
         else:
-            return default
+            destination[key] = value
+    return destination
 
 
 def load_config(paths=None):
@@ -53,13 +67,14 @@ def load_config(paths=None):
     if paths is None:
         paths = PATHS
 
-    default_config = pkgutil.get_data(
-        'bleemeo_agent.resources', 'default.conf').decode('utf8')
+    default_config = Config()
 
-    config = configparser.SafeConfigParser()
-    config.readfp(io.StringIO(default_config))
-    config.read(config_files(paths))
-    return FallbackConfigParser(config)
+    configs = [default_config]
+    for filepath in config_files(paths):
+        with open(filepath) as fd:
+            configs.append(yaml.load(fd))
+
+    return functools.reduce(merge_dict, configs)
 
 
 def config_files(paths):
@@ -67,19 +82,19 @@ def config_files(paths):
 
         For each path, if:
 
-        * it is a directory, return all *.conf files inside the directory
+        * it is a directory, return all *.yml files inside the directory
         * it is a file, return the path
         * no config file exists for the path, skip it
 
-        So, if path is ['/etc/bleemeo/agent.conf', '/etc/bleemeo/agent.conf.d']
-        you will get /etc/bleemeo/agent.conf (if it exists) and all
-        existings *.conf under /etc/bleemeo/agent.conf.d
+        So, if path is ['/etc/bleemeo/agent.yml', '/etc/bleemeo/agent.conf.d']
+        you will get /etc/bleemeo/agent.yml (if it exists) and all
+        existings *.yml under /etc/bleemeo/agent.conf.d
     """
     files = []
     for path in paths:
         if os.path.isfile(path):
             files.append(path)
         elif os.path.isdir(path):
-            files.extend(sorted(glob.glob(os.path.join(path, '*.conf'))))
+            files.extend(sorted(glob.glob(os.path.join(path, '*.yml'))))
 
     return files

@@ -1,0 +1,9 @@
+main_conf_loaded: yes
+overridden_value: main
+merged_dict:
+    main: 1.0
+sub_section:
+    nested:
+        key1: "value1"
+        key2: value2
+        desc: this dictionary (nested) will be remplaced by none in first.yml

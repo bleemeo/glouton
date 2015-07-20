@@ -1,0 +1,6 @@
+first_conf_loaded: yes
+overridden_value: first
+merged_dict:
+    first: "yes"
+sub_section:
+    nested: null
