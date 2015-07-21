@@ -43,7 +43,9 @@ class Collectd(threading.Thread):
         super(Collectd, self).__init__()
 
         self.core = core
-        self.collectd_config = '/etc/collectd/collectd.conf.d/bleemeo.conf'
+        self.collectd_config = self.core.config.get(
+            'collectd.config_file',
+            '/etc/collectd/collectd.conf.d/bleemeo.conf')
         self.computed_metrics_pending = set()
 
     def _get_collectd_config(self):
