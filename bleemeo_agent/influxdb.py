@@ -18,7 +18,7 @@ class InfluxDBConnector(threading.Thread):
         super(InfluxDBConnector, self).__init__()
         self.core = core
 
-        self.db_name = 'bleemeo'
+        self.db_name = self.core.config.get('influxdb.db_name', 'bleemeo')
         self.retention_policy_name = 'standard_policy'
 
         self.influx_client = None

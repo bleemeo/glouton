@@ -49,3 +49,6 @@ thresholds:
     mem_used_perc:
         high_warning: 80
         high_critical: 90
+    io_utilisation:
+        high_warning: 80
+        high_critical: 90

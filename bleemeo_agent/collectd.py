@@ -17,6 +17,15 @@ LoadPlugin write_graphite
      Protocol "tcp"
   </Node>
 </Plugin>
+LoadPlugin python
+<Plugin python>
+  ModulePath "/usr/share/collectd"
+
+  Import "diskstats"
+  <Module diskstats>
+    ${DISKS}
+  </Module>
+</Plugin>
 """
 
 
@@ -34,7 +43,21 @@ class Collectd(threading.Thread):
         super(Collectd, self).__init__()
 
         self.core = core
-        self.config_fragments = [COLLECTD_CONFIG_FRAGMENTS]
+        self.collectd_config = '/etc/collectd/collectd.conf.d/bleemeo.conf'
+        self.computed_metrics_pending = set()
+
+    def _get_collectd_config(self):
+        """ Return configuration for collectd
+        """
+        base_config = COLLECTD_CONFIG_FRAGMENTS
+        # XXX: since we detect disks at startup, any disk hot-pluged
+        # won't be seen.
+        disks = self._list_disks()
+        base_config = base_config.replace(
+            '${DISKS}',
+            '\n'.join('    Disk %s' % x for x in disks)
+        )
+        self.config_fragments = [base_config]
 
         if len(self.core.plugins_v1_mgr.names()):
             plugins_config_fragments = self.core.plugins_v1_mgr.map_method(
@@ -46,9 +69,28 @@ class Collectd(threading.Thread):
             if not config_fragment:
                 continue
             self.config_fragments.append(config_fragment)
+        config_content = '\n'.join(self.config_fragments)
+        return config_content
 
-        self.collectd_config = '/etc/collectd/collectd.conf.d/bleemeo.conf'
-        self.computed_metrics_pending = set()
+    def _list_disks(self):
+        """ Return list of disks available on this systems
+
+            Read /proc/diskstats, and return any disk that match
+            some pre-determined pattern (sdX, vdX, ...)
+        """
+        # match hda, sda, vda, xvda (and sdb, sdc... for each type)
+        # Also match mmcblk0, mmcblk1... (usefull for raspberrypi-like)
+        # Note: the "+" after [a-z] is not a mistake, with more than
+        # 26 drive, the 27th is sdaa, then sdab, sdac...
+        patterns = re.compile(
+            r'^(((hd|sd|vd|xvd)[a-z]+)|(mmcblk[0-9]+))$')
+        disks = []
+        with open('/proc/diskstats') as fd:
+            for line in fd:
+                (major, minor, name) = line.split()[:3]
+                if patterns.match(name):
+                    disks.append(name)
+        return disks
 
     def run(self):
         self.write_config()
@@ -190,6 +232,12 @@ class Collectd(threading.Thread):
                 'tags': tags,
                 'fields': {'value': used_perc},
             })
+        elif name == 'io_utilisation':
+            tags = {'name': instance}
+            io_time = get_metric('io_time', tags)
+            # io_time is a number of ms spent doing IO (per seconds)
+            # utilisation is 100% when we spent 1000ms during one seconds
+            value = io_time / 1000. * 100.
         elif name == 'mem_total':
             used = get_metric('mem_used', tags)
             value = used
@@ -243,7 +291,7 @@ class Collectd(threading.Thread):
             self.config_fragments.append(fragments)
 
     def write_config(self):
-        config_content = '\n'.join(self.config_fragments)
+        config_content = self._get_collectd_config()
         if os.path.exists(self.collectd_config):
             with open(self.collectd_config) as fd:
                 current_content = fd.read()
@@ -320,16 +368,27 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
             path = '/' + path.replace('-', '/')
         tags = {'path': path}
         computed_metrics_pending.add(('disk_total', tags['path'], timestamp))
-    elif match_dict['plugin'] == 'disk':
-        kind_name = {
-            'disk_merged': '_merged',
-            'disk_octets': '_bytes',
-            'disk_ops': 's',  # will become readS and writeS
-            'disk_time': '_time',
-        }[match_dict['type']]
+    elif match_dict['plugin'] == 'diskstats':
+        name = {
+            'reads_merged': 'io_read_merged',
+            'reading_milliseconds': 'io_read_time',
+            'reads_completed': 'io_reads',
+            'writes_completed': 'io_writes',
+            'sectors_read': 'io_read_bytes',
+            'writing_milliseconds': 'io_write_time',
+            'sectors_written': 'io_write_bytes',
+            'io_milliseconds_weighted': 'io_time_weighted',
+            'io_milliseconds': 'io_time',
+            'io_inprogress': 'io_inprogress',
+        }[match_dict['type_instance']]
 
-        name = 'io_%s%s' % (match_dict['type_instance'], kind_name)
         tags = {'name': match_dict['plugin_instance']}
+        if name == 'io_time':
+            computed_metrics_pending.add(
+                ('io_utilisation', match_dict['plugin_instance'], timestamp))
+        if name in ['io_read_bytes', 'io_write_bytes']:
+            # metric is expressed in "sector". Sector is 512-bytes
+            value = value * 512
     elif match_dict['plugin'] == 'interface':
         kind_name = {
             'if_errors': 'err',

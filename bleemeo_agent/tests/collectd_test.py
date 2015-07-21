@@ -20,12 +20,12 @@ def test_collectd_regex():
     }
 
     match = bleemeo_agent.collectd.collectd_regex.match(
-        'disk-sda.disk_octets.read')
+        'diskstats-sda.counter-sectors_read')
     assert match.groupdict() == {
-        'plugin': 'disk',
+        'plugin': 'diskstats',
         'plugin_instance': 'sda',
-        'type': 'disk_octets',
-        'type_instance': 'read',
+        'type': 'counter',
+        'type_instance': 'sectors_read',
     }
 
     match = bleemeo_agent.collectd.collectd_regex.match(
@@ -88,7 +88,7 @@ def test_rename_metric():
 
     pending = set()
     result = bleemeo_agent.collectd._rename_metric(
-        'disk-sda.disk_ops.read',
+        'diskstats-sda.counter-reads_completed',
         12345,
         42,
         pending)
