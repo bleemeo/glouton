@@ -17,7 +17,6 @@ setup(
     entry_points={
         'bleemeo_agent.plugins_v1': [
             'apache = bleemeo_agent.plugins.apache:Apache',
-            'disk = bleemeo_agent.plugins.disk:Disk',
             'docker = bleemeo_agent.plugins.docker:Docker',
             'mysql = bleemeo_agent.plugins.mysql:MySQL',
             'nginx = bleemeo_agent.plugins.nginx:Nginx',
