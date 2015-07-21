@@ -104,7 +104,8 @@ class InfluxDBConnector(threading.Thread):
         # TODO: the NaN filter only support metric with ONE fields named
         # "value". Currently only collectd generate NaN value are use one
         # the field "value".
-        if math.isnan(metric['fields'].get('value', 0.0)):
+        value = metric['fields'].get('value', 0.0)
+        if isinstance(value, float) and math.isnan(value):
             return
 
         # InfluxDB want an integer for timestamp, not a float

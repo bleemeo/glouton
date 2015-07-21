@@ -5,6 +5,7 @@ import logging
 import logging.handlers
 import multiprocessing
 import os
+import random
 import sched
 import signal
 import sys
@@ -135,6 +136,7 @@ class Core:
             on_load_failure_callback=self.plugins_on_load_failure,
         )
         self._define_thresholds()
+        self._schedule_metric_pull()
 
     def _define_thresholds(self):
         """ Fill self.thresholds from config.thresholds
@@ -148,6 +150,33 @@ class Core:
             if key.startswith('cpu_'):
                 for threshold_name in value:
                     value[threshold_name] *= num_core
+
+    def _schedule_metric_pull(self):
+        """ Schedule metric which are pulled
+        """
+        for (name, config) in self.config.get('metric.pull', {}).items():
+            config_type = config.get('type', 'raw')
+            interval = config.get('interval', 10)
+            if config_type == 'raw':
+                self.scheduler.enter(
+                    random.randint(1, interval),
+                    1,
+                    bleemeo_agent.util.pull_raw_metric,
+                    (self, name)
+                )
+            elif config_type == 'json':
+                self.scheduler.enter(
+                    random.randint(1, interval),
+                    1,
+                    bleemeo_agent.util.pull_json_metric,
+                    (self, name)
+                )
+            else:
+                logging.warning(
+                    'Unsupported type "%s" for pulled metric %s',
+                    config_type,
+                    name
+                )
 
     def run(self):
         try:

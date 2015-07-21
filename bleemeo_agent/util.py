@@ -10,6 +10,7 @@ import subprocess
 import threading
 
 import psutil
+import requests
 
 import bleemeo_agent
 
@@ -273,3 +274,118 @@ def get_processes_info():
         })
 
     return result
+
+
+def _get_url(name, metric_config):
+    response = None
+    try:
+        response = requests.get(
+            metric_config['url'],
+            verify=metric_config.get('ssl_check', True),
+            timeout=3.0,
+        )
+    except requests.exceptions.ConnectionError:
+        logging.warning(
+            'Failed to retrive metric %s : failed to establish connection',
+            name)
+    except requests.exceptions.ConnectionError:
+        logging.warning(
+            'Failed to retrive metric %s : request timed out',
+            name)
+    except requests.exceptions.RequestException:
+        logging.warning(
+            'Failed to retrive metric %s',
+            name)
+
+    return response
+
+
+def pull_raw_metric(core, name):
+    """ Pull a metrics (on HTTP(s)) in "raw" format.
+
+        "raw" format means that the URL must return one number in plain/text.
+
+        We expect to have the following configuration key under
+        section "metric.pull.$NAME.":
+
+        * url : where to fetch the metric [mandatory]
+        * tags: tags to add on your metric (a dict) [default: no tags]
+        * interval : retrive the metric every interval seconds [default: 10s]
+        * ssl_check : should we check that SSL certificate are valid
+          [default: yes]
+    """
+    metric_config = core.config.get('metric.pull.%s' % name, {})
+    if 'url' not in metric_config:
+        logging.warning('Missing URL for metric %s. Ignoring it', name)
+        return
+
+    response = _get_url(name, metric_config)
+    if response is not None:
+        value = None
+        try:
+            value = float(response.content)
+        except ValueError:
+            logging.warning(
+                'Failed to retrive metric %s : response it not a number',
+                name)
+
+        if value is not None:
+            metric = {
+                'time': time.time(),
+                'measurement': name,
+                'tags': metric_config.get('tags', {}),
+                'fields': {
+                    'value': value,
+                }
+            }
+            core.emit_metric(metric)
+
+    core.scheduler.enter(
+        metric_config.get('interval', 10), 1, pull_raw_metric, (core, name))
+
+
+def pull_json_metric(core, name):
+    """ Pull a metrics (on HTTP(s)) in "json" format.
+
+        "json" format means that the URL must return a JSON content which
+        is the fields of the metric. For simple metric, it should only contains
+        one entry "value", e.g.:
+
+        >>> {"value": 42.0}
+
+        We expect to have the following configuration key under
+        section "metric.pull.$NAME.":
+
+        * url : where to fetch the metric [mandatory]
+        * tags: tags to add on your metric (a dict) [default: no tags]
+        * interval : retrive the metric every interval seconds [default: 10s]
+        * ssl_check : should we check that SSL certificate are valid
+          [default: yes]
+    """
+    metric_config = core.config.get('metric.pull.%s' % name, {})
+    response = None
+    if 'url' not in metric_config:
+        logging.warning('Missing URL for metric %s. Ignoring it', name)
+        return
+
+    response = _get_url(name, metric_config)
+    if response is not None:
+        fields = None
+        try:
+            fields = response.json()
+        except ValueError:
+            logging.warning(
+                'Failed to retrive metric %s : response it not a json',
+                name)
+
+        if fields is not None:
+            metric = {
+                'time': time.time(),
+                'measurement': name,
+                'tags': metric_config.get('tags', {}),
+                'fields': fields,
+            }
+            core.emit_metric(metric)
+
+    core.scheduler.enter(
+        metric_config.get('interval', 10), 1, pull_json_metric, (core, name))

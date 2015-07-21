@@ -52,3 +52,21 @@ thresholds:
     io_utilisation:
         high_warning: 80
         high_critical: 90
+
+
+# Additional metric could be retrived over HTTP(s) by the agent.
+# Two retriver are available: "raw" and "json"
+# * "raw" expect one number in a text/plain response
+# * "json" expect a JSON which will become the fields of the metric. Usually
+#   it is a JSON that looks like {"value": 123.456}
+#
+# Example of metrics:
+# metric:
+#   pull:
+#       the_name_of_your_metric:
+#           url: http://localhost:8080/myapp/metric/users_count
+#           type: raw  # or json. Default to raw
+#           tags:  # tags to add to the metric. Default to none
+#               application: myapp
+#           ssl_check: true  # should SSL certificate be checked? Default to yes
+#           interval: 10  # retrive the metric every N seconds, default to 10
