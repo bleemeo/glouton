@@ -185,12 +185,19 @@ def get_primary_address():
     # psutils could retrive IP address from interface, but we don't
     # known which is the "primary" interface.
     # For now rely on "ip" command
-    output = subprocess.check_output(
-        ['ip', 'route', 'get', '8.8.8.8'])
-    split_output = output.split()
-    for (index, word) in enumerate(split_output):
-        if word == 'src':
-            return split_output[index+1]
+    try:
+        output = subprocess.check_output(
+            ['ip', 'route', 'get', '8.8.8.8'])
+        split_output = output.split()
+        for (index, word) in enumerate(split_output):
+            if word == 'src':
+                return split_output[index+1]
+    except subprocess.CalledProcessError:
+        # Either "ip" is not found... or you don't have a route to 8.8.8.8
+        # (no internet ?).
+        # We could try with psutil, but "ip" is present on all recent ditro
+        # and you should have internet :)
+        pass
 
     return None
 
