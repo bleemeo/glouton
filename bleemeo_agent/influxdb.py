@@ -29,7 +29,10 @@ class InfluxDBConnector(threading.Thread):
         self._queue_full_count_warning = 0
 
     def _do_connect(self):
-        self.influx_client = influxdb.InfluxDBClient()
+        self.influx_client = influxdb.InfluxDBClient(
+            host=self.core.config.get('influxdb.server.host', 'localhost'),
+            port=self.core.config.get('influxdb.server.port', 8086),
+        )
         try:
             self.influx_client.create_database(self.db_name)
             logging.info('Database %s created', self.db_name)
