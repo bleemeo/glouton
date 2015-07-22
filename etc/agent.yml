@@ -16,6 +16,12 @@ agent:
     # It will store them in this file.
     stored_values_file: /var/lib/bleemeo/store.json
 
+# You can configure tags for your agent
+#tags:
+#    - web-server
+#    - application-1
+#    - ...
+
 logging:
     level: info
     file: /var/log/bleemeo/agent.log
