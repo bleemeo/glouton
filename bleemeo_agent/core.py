@@ -9,8 +9,8 @@ import random
 import sched
 import signal
 import sys
-import time
 import threading
+import time
 
 import jinja2
 import psutil

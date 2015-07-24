@@ -3,8 +3,8 @@ from __future__ import absolute_import
 import logging
 import math
 import socket
-import time
 import threading
+import time
 
 import influxdb
 import influxdb.exceptions

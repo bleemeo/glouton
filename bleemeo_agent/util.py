@@ -1,6 +1,5 @@
 import datetime
 import json
-import time
 import logging
 import os
 import random
@@ -8,6 +7,7 @@ import shlex
 import socket
 import subprocess
 import threading
+import time
 
 import psutil
 import requests

@@ -1,8 +1,8 @@
 import json
 import logging
 import socket
-import time
 import threading
+import time
 import uuid
 
 import paho.mqtt.client as mqtt
