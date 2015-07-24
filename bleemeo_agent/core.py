@@ -358,11 +358,17 @@ class Core:
     def emit_metric(self, metric, store_last_value=True):
         """ Sent a metric to all configured output
         """
+        metric_tags = metric['tags']
+        if 'status' in metric_tags:
+            del metric_tags['status']
+
         def exclude_same_metric(item):
-            if item['tags'] == metric['tags']:
-                return False
-            else:
-                return True
+            item_tags = item['tags']
+            if 'status' in item_tags:
+                item_tags = item_tags.copy()
+                del item_tags['status']
+
+            return item_tags != metric_tags
 
         metric = copy.deepcopy(metric)
         if not metric.get('ignore'):
