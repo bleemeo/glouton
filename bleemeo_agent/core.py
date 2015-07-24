@@ -217,8 +217,10 @@ class Core:
         self.bleemeo_connector = bleemeo_agent.bleemeo.BleemeoConnector(self)
         self.bleemeo_connector.start()
 
-        self.influx_connector = bleemeo_agent.influxdb.InfluxDBConnector(self)
-        self.influx_connector.start()
+        if self.config.get('influxdb.enabled', True):
+            self.influx_connector = (
+                bleemeo_agent.influxdb.InfluxDBConnector(self))
+            self.influx_connector.start()
 
         self.collectd_server = bleemeo_agent.collectd.Collectd(self)
         self.collectd_server.start()
@@ -392,7 +394,8 @@ class Core:
                 del metric['ignore']
 
             self.bleemeo_connector.emit_metric(copy.deepcopy(metric))
-            self.influx_connector.emit_metric(copy.deepcopy(metric))
+            if self.config.get('influxdb.enabled', True):
+                self.influx_connector.emit_metric(copy.deepcopy(metric))
 
     def check_threshold(self, metric):
         """ Check if threshold is defined for given metric. If yes, check
