@@ -89,7 +89,7 @@ class BleemeoConnector(threading.Thread):
         self.register()
 
         self.mqtt_client.will_set(
-            '%s/api/v1/agent/disconnect/POST' % self.login,
+            'api/v0/agent/%s/disconnect' % self.login,
             'disconnect-will %s' % self.uuid_connection,
             1)
 
@@ -120,7 +120,7 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.loop_start()
 
         self.publish(
-            'api/v1/agent/connect/POST',
+            'api/v0/agent/%s/connect' % self.login,
             'connect %s' % self.uuid_connection)
 
         while not self.core.is_terminating.is_set():
@@ -128,7 +128,7 @@ class BleemeoConnector(threading.Thread):
             self.core.is_terminating.wait(3)
 
         self.publish(
-            'api/v1/agent/disconnect/POST',
+            'api/v0/agent/%s/disconnect' % self.login,
             'disconnect %s' % self.uuid_connection)
         self.mqtt_client.loop_stop()
 
@@ -141,7 +141,7 @@ class BleemeoConnector(threading.Thread):
             return
 
         self.mqtt_client.publish(
-            '%s/%s' % (self.login, topic),
+            topic,
             message,
             1)
         self._queue_size += 1
@@ -197,8 +197,8 @@ class BleemeoConnector(threading.Thread):
 
     def emit_metric(self, metric):
         self.publish(
-            'api/v1/agent/points/POST',
-            json.dumps(metric)
+            'api/v0/agent/%s/data' % self.login,
+            json.dumps([metric])
         )
 
     def _warn_queue_full(self):
