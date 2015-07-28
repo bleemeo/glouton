@@ -84,7 +84,9 @@ class InfluxDBConnector(threading.Thread):
                 metric['tags']['hostname'] = socket.getfqdn()
                 try:
                     self.influx_client.write_points(
-                        [metric], retention_policy=self.retention_policy_name)
+                        [metric],
+                        retention_policy=self.retention_policy_name,
+                        time_precision='s')
                 except (requests.exceptions.ConnectionError,
                         influxdb.exceptions.InfluxDBClientError):
                     logging.debug('InfluxDB write error... retrying')
