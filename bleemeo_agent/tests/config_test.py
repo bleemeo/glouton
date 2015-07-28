@@ -43,6 +43,7 @@ def test_config_files():
 
     wants = [
         'bleemeo_agent/tests/configs/main.yml',
+        'bleemeo_agent/tests/configs/conf.d/empty.yml',
         'bleemeo_agent/tests/configs/conf.d/first.yml',
         'bleemeo_agent/tests/configs/conf.d/second.yml',
     ]

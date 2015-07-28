@@ -72,7 +72,10 @@ def load_config(paths=None):
     configs = [default_config]
     for filepath in config_files(paths):
         with open(filepath) as fd:
-            configs.append(yaml.load(fd))
+            config = yaml.load(fd)
+            # config could be None if file is empty
+            if config is not None:
+                configs.append(config)
 
     return functools.reduce(merge_dict, configs)
 
