@@ -10,8 +10,8 @@ case "$1" in
 
             echo 'Setting permissions for user bleemeo'
             touch /etc/collectd/collectd.conf.d/bleemeo.conf
-            touch /etc/bleemeo/agent.conf.d/server.conf
-            chown bleemeo /var/lib/bleemeo /var/log/bleemeo /etc/collectd/collectd.conf.d/bleemeo.conf /etc/bleemeo/agent.conf.d/server.conf
+            touch /etc/bleemeo/agent.conf.d/server.yml
+            chown bleemeo /var/lib/bleemeo /var/log/bleemeo /etc/collectd/collectd.conf.d/bleemeo.conf /etc/bleemeo/agent.conf.d/server.yml
         fi
         ;;
 esac

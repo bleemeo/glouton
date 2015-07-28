@@ -17,14 +17,20 @@ Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python:Depends},
     collectd,
-    facter,
+    collectd-diskstats,
     python-flask,
+    python-influxdb,
     python-paho-mqtt,
     python-passlib,
+    python-psutil,
     python-requests,
     python-stevedore,
+    python-yaml,
+Recommends:
+    docker-collectd-plugin,
+    facter,
+    sudo,
     nagios-plugins
-Recommends: docker-collectd-plugin
 Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to
