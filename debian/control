@@ -27,6 +27,7 @@ Depends: ${misc:Depends}, ${python:Depends},
     python-stevedore,
     python-yaml,
 Recommends:
+    ca-certificates,
     docker-collectd-plugin,
     facter,
     sudo,

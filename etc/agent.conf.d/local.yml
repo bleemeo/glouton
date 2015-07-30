@@ -11,7 +11,14 @@ bleemeo:
     registration:
         key: test
         url: http://localhost:8000/
-    mqtt_host: localhost
+    mqtt:
+        host: localhost
+        ssl: False
+        # default is to use /etc/ssl/certs/ca-certificates.crt
+        # cafile: /path/to/ca-bundle.crt
+        # insecure mean do not check that hostname match. It still check
+        # that certificate is signed by a CA
+        # ssl_insecure: True
 
 agent:
     # Agent need to write a generated_values.json file. Write it in current directory.

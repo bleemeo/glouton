@@ -1,6 +1,7 @@
 import json
 import logging
 import socket
+import ssl
 import threading
 import time
 import uuid
@@ -92,6 +93,17 @@ class BleemeoConnector(threading.Thread):
             'api/v0/agent/%s/disconnect' % self.login,
             'disconnect-will %s' % self.uuid_connection,
             1)
+        if self.core.config.get('bleemeo.mqtt.ssl', True):
+            self.mqtt_client.tls_set(
+                self.core.config.get(
+                    'bleemeo.mqtt.cafile',
+                    '/etc/ssl/certs/ca-certificates.crt'
+                ),
+                tls_version=ssl.PROTOCOL_TLSv1_2
+            )
+            self.mqtt_client.tls_insecure_set(
+                self.core.config.get('bleemeo.mqtt.ssl_insecure', False)
+            )
 
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_disconnect = self.on_disconnect
@@ -99,7 +111,7 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.on_publish = self.on_publish
 
         mqtt_host = self.core.config.get(
-            'bleemeo.mqtt_host',
+            'bleemeo.mqtt.host',
             '%s.bleemeo.com' % self.account_id)
 
         self.mqtt_client.username_pw_set(
