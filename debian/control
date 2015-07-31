@@ -5,6 +5,7 @@ Maintainer: Pierre Fersing <pierre.fersing@bleemeo.com>
 Build-Depends: debhelper (>=9),
                dh-exec,
                dh-python,
+               dh-systemd,
                python-all,
                python-setuptools,
                python3-all

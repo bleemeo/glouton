@@ -1,0 +1,11 @@
+[Unit]
+Description=Bleemeo agent
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/bleemeo-agent
+Restart=always
+User=bleemeo
+
+[Install]
+WantedBy=multi-user.target

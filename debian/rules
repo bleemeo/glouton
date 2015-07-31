@@ -9,7 +9,7 @@ include /usr/share/dpkg/default.mk
 
 # main packaging script based on dh7 syntax
 %:
-	dh $@ --with python2
+	dh $@ --with python2,systemd
 
 # debmake generated override targets
 # Too cmplicated to provide examples here.
