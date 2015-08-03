@@ -104,8 +104,10 @@ def get_facts(core):
         'product_name': product_name,
         'agent_version': bleemeo_agent.__version__,
         'current_time': datetime.datetime.now().isoformat(),
-        'account_uuid': core.bleemeo_connector.account_id,
     }
+
+    if core.bleemeo_connector is not None:
+        facts['account_uuid'] = core.bleemeo_connector.account_id
 
     # Update with facter facts
     try:

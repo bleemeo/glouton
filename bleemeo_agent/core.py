@@ -214,8 +214,10 @@ class Core:
 
     def start_threads(self):
 
-        self.bleemeo_connector = bleemeo_agent.bleemeo.BleemeoConnector(self)
-        self.bleemeo_connector.start()
+        if self.config.get('bleemeo.enabled', True):
+            self.bleemeo_connector = (
+                bleemeo_agent.bleemeo.BleemeoConnector(self))
+            self.bleemeo_connector.start()
 
         if self.config.get('influxdb.enabled', True):
             self.influx_connector = (
@@ -264,10 +266,13 @@ class Core:
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS and reschedule itself """
+        # Note: even if we do not sent them to Bleemeo SaaS, calling this
+        # method is still usefull. Web UI use last_facts.
         self.last_facts = bleemeo_agent.util.get_facts(self)
-        self.bleemeo_connector.publish(
-            'api/v1/agent/facts/POST',
-            json.dumps(self.last_facts))
+        if self.bleemeo_connector is not None:
+            self.bleemeo_connector.publish(
+                'api/v1/agent/facts/POST',
+                json.dumps(self.last_facts))
         self.scheduler.enter(3600, 1, self.send_facts, ())
 
     def send_process_info(self):
@@ -357,43 +362,48 @@ class Core:
         self.re_exec = True
         self.is_terminating.set()
 
-    def emit_metric(self, metric, store_last_value=True):
-        """ Sent a metric to all configured output
+    def _store_last_value(self, metric):
+        """ Store the metric in self.last_matrics, replacing the previous value
         """
-        metric_tags = metric['tags']
-        if 'status' in metric_tags:
-            del metric_tags['status']
-
         def exclude_same_metric(item):
             item_tags = item['tags']
             if 'status' in item_tags:
                 item_tags = item_tags.copy()
                 del item_tags['status']
 
-            return item_tags != metric_tags
+            return item_tags != metric['tags']
 
+        # We use list(...) to force evaluation of the result and avoid a
+        # possible memory leak. In Python3 filter return a "filter object".
+        # Without list() we may end with a filter object on a filter object
+        # on a filter object ...
+        measurement = metric['measurement']
+        # XXX: concurrent access.
+        # Note: different thread should not access the SAME
+        # measurement, so it should be safe.
+        self.last_metrics[measurement] = list(filter(
+            exclude_same_metric, self.last_metrics.get(measurement, [])))
+        self.last_metrics[measurement].append(metric)
+
+    def emit_metric(self, metric, store_last_value=True):
+        """ Sent a metric to all configured output
+        """
         metric = copy.deepcopy(metric)
+        if 'status' in metric['tags']:
+            del metric['tags']['status']
+
         if not metric.get('ignore'):
             self.check_threshold(metric)
 
         if store_last_value:
-            # We use list(...) to force evaluation of the result and avoid a
-            # possible memory leak. In Python3 filter return a "filter object".
-            # Without list() we may end with a filter object on a filter object
-            # on a filter object ...
-            measurement = metric['measurement']
-            # XXX: concurrent access.
-            # Note: different thread should not access the SAME
-            # measurement, so it should be safe.
-            self.last_metrics[measurement] = list(filter(
-                exclude_same_metric, self.last_metrics.get(measurement, [])))
-            self.last_metrics[measurement].append(metric)
+            self._store_last_value(metric)
 
         if not metric.get('ignore'):
             if 'ignore' in metric:
                 del metric['ignore']
 
-            self.bleemeo_connector.emit_metric(copy.deepcopy(metric))
+            if self.config.get('bleemeo.enabled', True):
+                self.bleemeo_connector.emit_metric(copy.deepcopy(metric))
             if self.config.get('influxdb.enabled', True):
                 self.influx_connector.emit_metric(copy.deepcopy(metric))
 
