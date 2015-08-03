@@ -78,22 +78,29 @@ class InfluxDBConnector(threading.Thread):
                 raise
 
     def _process_queue(self):
+        metrics = []
         try:
             while True:
                 metric = self._queue.get_nowait()
                 metric['tags']['hostname'] = socket.getfqdn()
-                try:
-                    self.influx_client.write_points(
-                        [metric],
-                        retention_policy=self.retention_policy_name,
-                        time_precision='s')
-                except (requests.exceptions.ConnectionError,
-                        influxdb.exceptions.InfluxDBClientError):
-                    logging.debug('InfluxDB write error... retrying')
-                    self.emit_metric(metric)  # re-enqueue the metric
-                    break
+                metrics.append(metric)
         except queue.Empty:
             pass
+
+        if len(metrics) == 0:
+            return
+
+        try:
+            self.influx_client.write_points(
+                metrics,
+                retention_policy=self.retention_policy_name,
+                time_precision='s')
+        except (requests.exceptions.ConnectionError,
+                influxdb.exceptions.InfluxDBClientError):
+            logging.debug('InfluxDB write error... retrying')
+            # re-enqueue the metric
+            for metric in metrics:
+                self.emit_metric(metric)
 
     def run(self):
         self._connect()
