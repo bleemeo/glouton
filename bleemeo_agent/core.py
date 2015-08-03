@@ -365,13 +365,17 @@ class Core:
     def _store_last_value(self, metric):
         """ Store the metric in self.last_matrics, replacing the previous value
         """
+        metric_tags = metric['tags'].copy()
+        if 'status' in metric_tags:
+            del metric_tags['status']
+
         def exclude_same_metric(item):
             item_tags = item['tags']
             if 'status' in item_tags:
                 item_tags = item_tags.copy()
                 del item_tags['status']
 
-            return item_tags != metric['tags']
+            return item_tags != metric_tags
 
         # We use list(...) to force evaluation of the result and avoid a
         # possible memory leak. In Python3 filter return a "filter object".
