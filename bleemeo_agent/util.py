@@ -255,6 +255,16 @@ def package_installed(package_name):
     return installed
 
 
+def clean_cmdline(cmdline):
+    """ Remove character that may cause trouble.
+
+        Known problem:
+
+        * new-line : for InfluxDB line-protocol
+    """
+    return cmdline.replace('\r', '\\r').replace('\n', '\\n')
+
+
 def get_processes_info():
     """ Return informations on all running process.
 
@@ -275,7 +285,7 @@ def get_processes_info():
             'pid': process.pid,
             'create_time': process.create_time(),
             'name': process.name(),
-            'cmdline': ' '.join(process.cmdline()),
+            'cmdline': clean_cmdline(' '.join(process.cmdline())),
             'ppid': process.ppid(),
             'memory_rss': process.memory_info().rss,
             'cpu_percent': process.cpu_percent(),
