@@ -9,6 +9,7 @@ import uuid
 import paho.mqtt.client as mqtt
 import passlib.context
 import requests
+from six.moves import queue
 
 import bleemeo_agent
 
@@ -19,6 +20,7 @@ class BleemeoConnector(threading.Thread):
         super(BleemeoConnector, self).__init__()
         self.core = core
 
+        self._queue = queue.Queue()
         self._queue_size = 0
         self._queue_full_last_warning = 0
         self._queue_full_count_warning = 0
@@ -136,8 +138,7 @@ class BleemeoConnector(threading.Thread):
             'connect %s' % self.uuid_connection)
 
         while not self.core.is_terminating.is_set():
-            self._warn_queue_full()
-            self.core.is_terminating.wait(3)
+            self._loop()
 
         self.publish(
             'api/v0/agent/%s/disconnect' % self.login,
@@ -147,8 +148,31 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.disconnect()
         self.mqtt_client.loop()
 
+    def _loop(self):
+        """ Call as long as agent is running. It's the "main" method for
+            Bleemeo connector thread.
+        """
+        metrics = []
+        timeout = 3
+
+        try:
+            while True:
+                metric = self._queue.get(timeout=timeout)
+                timeout = 0  # Only wait for the first get
+                metrics.append(metric)
+        except queue.Empty:
+            pass
+
+        if len(metrics) != 0:
+            self.publish(
+                'api/v0/agent/%s/data' % self.login,
+                json.dumps(metrics)
+            )
+
+        self._warn_queue_full()
+
     def publish(self, topic, message):
-        if self._queue_size > 5000:
+        if self._queue_size > 500:
             self._queue_full_count_warning += 1
             return
 
@@ -208,17 +232,14 @@ class BleemeoConnector(threading.Thread):
             sleep_delay, 1, self.register, (new_sleep_delay,))
 
     def emit_metric(self, metric):
-        self.publish(
-            'api/v0/agent/%s/data' % self.login,
-            json.dumps([metric])
-        )
+        self._queue.put(metric)
 
     def _warn_queue_full(self):
         now = time.time()
         if (self._queue_full_count_warning
                 and self._queue_full_last_warning < now - 60):
             logging.warning(
-                'Bleemeo connector: %s metric(s) were dropped due to '
+                'Bleemeo connector: %s message(s) were dropped due to '
                 'overflow of the sending queue',
                 self._queue_full_count_warning)
             self._queue_full_last_warning = now
