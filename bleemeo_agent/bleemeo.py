@@ -33,24 +33,6 @@ class BleemeoConnector(threading.Thread):
             logging.debug('MQTT connection established')
             self.connected = True
 
-        # Subscribing in on_connect() means that if we lose the connection and
-        # reconnect then subscriptions will be renewed.
-        client.subscribe(str('%s/api/v1/agent/+/GET' % self.login))
-
-    def on_message(self, client, userdata, message):
-        config_topic = '%s/api/v1/agent/configuration/GET' % self.login
-        reload_topic = '%s/api/v1/agent/reload_plugins/GET' % self.login
-        fact_topic = '%s/api/v1/agent/request_facts/GET' % self.login
-        if message.topic == config_topic:
-            self.core.update_server_config(message.payload)
-        elif message.topic == reload_topic:
-            self.core.reload_plugins()
-        elif message.topic == fact_topic:
-            logging.debug('Sending facts on server request')
-            self.core.send_facts()
-        else:
-            logging.info('Unknown message on topic %s', message.topic)
-
     def on_disconnect(self, client, userdata, rc):
         logging.debug('MQTT connection lost')
         self.connected = False
@@ -109,7 +91,6 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_disconnect = self.on_disconnect
-        self.mqtt_client.on_message = self.on_message
         self.mqtt_client.on_publish = self.on_publish
 
         mqtt_host = self.core.config.get(

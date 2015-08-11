@@ -27,35 +27,6 @@ except NotImplementedError:
     using_sysrandom = False
 
 
-class Sleeper:
-    """ Helper to manage exponential sleep time.
-
-        You can get the next duration of sleep with self.current_duration
-    """
-
-    def __init__(self, start_duration=10, max_duration=600):
-        self.start_duration = start_duration
-        self.max_duration = max_duration
-
-        # number of sleep done with minimal duration
-        self.grace_count = 3
-        self.current_duration = start_duration
-
-    def get_sleep_duration(self):
-        if self.grace_count > 0:
-            self.grace_count -= 1
-        else:
-            self.current_duration = min(
-                self.max_duration, self.current_duration * 2)
-
-        return self.current_duration
-
-    def sleep(self):
-        duration = self.get_sleep_duration()
-        logging.debug('Sleeping %s seconds', duration)
-        time.sleep(duration)
-
-
 # Taken from Django project
 def generate_password(length=10,
                       allowed_chars='abcdefghjkmnpqrstuvwxyz'
