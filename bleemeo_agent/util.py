@@ -305,6 +305,10 @@ def pull_raw_metric(core, name):
           [default: yes]
     """
     metric_config = core.config.get('metric.pull.%s' % name, {})
+
+    core.scheduler.enter(
+        metric_config.get('interval', 10), 1, pull_raw_metric, (core, name))
+
     if 'url' not in metric_config:
         logging.warning('Missing URL for metric %s. Ignoring it', name)
         return
@@ -330,9 +334,6 @@ def pull_raw_metric(core, name):
             }
             core.emit_metric(metric)
 
-    core.scheduler.enter(
-        metric_config.get('interval', 10), 1, pull_raw_metric, (core, name))
-
 
 def pull_json_metric(core, name):
     """ Pull a metrics (on HTTP(s)) in "json" format.
@@ -353,6 +354,10 @@ def pull_json_metric(core, name):
           [default: yes]
     """
     metric_config = core.config.get('metric.pull.%s' % name, {})
+
+    core.scheduler.enter(
+        metric_config.get('interval', 10), 1, pull_json_metric, (core, name))
+
     response = None
     if 'url' not in metric_config:
         logging.warning('Missing URL for metric %s. Ignoring it', name)
@@ -376,6 +381,3 @@ def pull_json_metric(core, name):
                 'fields': fields,
             }
             core.emit_metric(metric)
-
-    core.scheduler.enter(
-        metric_config.get('interval', 10), 1, pull_json_metric, (core, name))

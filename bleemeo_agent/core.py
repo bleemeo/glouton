@@ -229,8 +229,8 @@ class Core:
         if self.is_terminating.is_set():
             raise StopIteration
 
-        bleemeo_agent.checker.periodic_check(self)
         self.scheduler.enter(3, 1, self.periodic_check, ())
+        bleemeo_agent.checker.periodic_check(self)
 
     def _purge_metrics(self):
         """ Remove old metrics from self.last_metrics
@@ -242,6 +242,8 @@ class Core:
             For this reason, from time to time, scan last_metrics and drop
             any value older than 6 minutes.
         """
+        self.scheduler.enter(300, 1, self._purge_metrics, ())
+
         now = time.time()
         cutoff = now - 60 * 6
 
@@ -252,20 +254,20 @@ class Core:
         for (measurement, metrics) in self.last_metrics.items():
             self.last_metrics[measurement] = list(filter(
                 exclude_old_metric, metrics))
-        self.scheduler.enter(300, 1, self._purge_metrics, ())
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS and reschedule itself """
         # Note: even if we do not sent them to Bleemeo SaaS, calling this
         # method is still usefull. Web UI use last_facts.
+        self.scheduler.enter(3600, 1, self.send_facts, ())
         self.last_facts = bleemeo_agent.util.get_facts(self)
         if self.bleemeo_connector is not None:
             self.bleemeo_connector.publish(
                 'api/v1/agent/facts/POST',
                 json.dumps(self.last_facts))
-        self.scheduler.enter(3600, 1, self.send_facts, ())
 
     def send_process_info(self):
+        self.scheduler.enter(60, 1, self.send_process_info, ())
         now = time.time()
         info = bleemeo_agent.util.get_processes_info()
         for process_info in info:
@@ -278,7 +280,6 @@ class Core:
                 },
                 'fields': process_info,
             })
-        self.scheduler.enter(60, 1, self.send_process_info, ())
 
     def plugins_on_load_failure(self, manager, entrypoint, exception):
         logging.info('Plugin %s failed to load : %s', entrypoint, exception)

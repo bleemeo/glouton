@@ -139,6 +139,7 @@ class Check:
             self.open_socket()
 
     def run_check(self):
+        self.reschedule()
         self.last_run = time.time()
         logging.debug(
             'check %s: running command: %s',
@@ -168,5 +169,3 @@ class Check:
                 and self.tcp_port is not None
                 and self.tcp_socket is None):
             self.core.scheduler.enter(5, 1, self.open_socket, ())
-
-        self.reschedule()
