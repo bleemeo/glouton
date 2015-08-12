@@ -94,7 +94,10 @@ class StoredValue:
 
     def save(self):
         try:
-            with open(self.filename, 'w') as fd:
+            # Don't simply use open. This file must have limited permission
+            open_flags = os.O_WRONLY | os.O_CREAT
+            fileno = os.open(self.filename, open_flags, 0o600)
+            with os.fdopen(fileno, 'w') as fd:
                 json.dump(self._content, fd)
         except IOError as exc:
             logging.warning('Failed to store file : %s', exc)
