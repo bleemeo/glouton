@@ -22,9 +22,35 @@ agent:
 #    - application-1
 #    - ...
 
+
+# logger configuration. See https://docs.python.org/3/library/logging.config.html#logging-config-dictschema
 logging:
-    level: info
-    file: /var/log/bleemeo/agent.log
+    formatters:
+        simple:
+            format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+        syslog:
+            format: "bleemeo-agent[%(process)d]: %(levelname)s - %(message)s"
+    handlers:
+        console:
+            class: logging.StreamHandler
+            formatter: simple
+        syslog:
+            class: logging.handlers.SysLogHandler
+            address: /dev/log
+            formatter: syslog
+        #logfile:
+        #    class: logging.handlers.WatchedFileHandler
+        #    filename: /var/log/bleemeo/agent.log
+        #    formatter: simple
+    loggers:
+        stevedore:
+            level: WARNING
+        requests:
+            level: WARNING
+    root:
+        level: INFO
+        handlers:
+            - syslog
 
 # You can define a threshold on ANY metric. You only need to know it's name and
 # add an entry like this one:

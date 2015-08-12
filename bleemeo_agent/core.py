@@ -2,7 +2,7 @@ import copy
 import datetime
 import json
 import logging
-import logging.handlers
+import logging.config
 import multiprocessing
 import os
 import random
@@ -26,12 +26,10 @@ import bleemeo_agent.web
 
 
 def main():
-    config = bleemeo_agent.config.load_config()
-    setup_logger(config)
-    logging.info('Agent starting...')
+    logging.basicConfig()
 
     try:
-        core = Core(config)
+        core = Core()
         core.run()
     except Exception:
         logging.critical(
@@ -39,42 +37,6 @@ def main():
             exc_info=True)
     finally:
         logging.info('Agent stopped')
-
-
-def setup_logger(config):
-    level_map = {
-        'debug': logging.DEBUG,
-        'info': logging.INFO,
-        'warning': logging.WARNING,
-        'error': logging.ERROR,
-    }
-    level = level_map[config.get('logging.level', 'info').lower()]
-
-    root_logger = logging.getLogger()
-    root_logger.setLevel(level)
-
-    log_file = config.get('logging.file', '-')
-    if log_file.lower() not in ('-', 'stdout'):
-        handler = logging.handlers.WatchedFileHandler(log_file)
-    else:
-        handler = logging.StreamHandler()
-
-    handler.setLevel(level)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-    handler.setFormatter(formatter)
-    root_logger.addHandler(handler)
-
-    # Special case for requets.
-    # Requests log "Starting new connection" in INFO
-    # Requests log each query in DEBUG
-    if level != logging.DEBUG:
-        # When not in debug, log neither of above
-        logger_request = logging.getLogger('requests')
-        logger_request.setLevel(logging.WARNING)
-    else:
-        # Even in debug, don't log every query
-        logger_request = logging.getLogger('requests')
-        logger_request.setLevel(logging.INFO)
 
 
 class StoredValue:
@@ -111,12 +73,10 @@ class StoredValue:
 
 
 class Core:
-    def __init__(self, config):
-        self.config = config
-        self.stored_values = StoredValue(
-            config.get(
-                'agent.stored_values_file',
-                '/var/lib/bleemeo/store.json'))
+    def __init__(self):
+        self.reload_config()
+        self._config_logger()
+        logging.info('Agent starting...')
         self.checks = []
         self.last_facts = {}
         self.thresholds = {}
@@ -137,6 +97,14 @@ class Core:
         )
         self._define_thresholds()
         self._schedule_metric_pull()
+
+    def _config_logger(self):
+        logger_config = {
+            'version': 1,
+            'disable_existing_loggers': False,
+        }
+        logger_config.update(self.config.get('logging', {}))
+        logging.config.dictConfig(logger_config)
 
     def _define_thresholds(self):
         """ Fill self.thresholds from config.thresholds

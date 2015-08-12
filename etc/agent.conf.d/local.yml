@@ -2,8 +2,10 @@
 
 # Log to stdout and in debug
 logging:
-    file: "-"
-    level: debug
+    root:
+        level: DEBUG
+        handlers:
+            - console
 
 # Configure manatory settings with dummy value and point URLs to localhost
 bleemeo:
