@@ -267,7 +267,7 @@ class Core:
                 json.dumps(self.last_facts))
 
     def send_process_info(self):
-        self.scheduler.enter(60, 1, self.send_process_info, ())
+        self.scheduler.enter(10, 1, self.send_process_info, ())
         now = time.time()
         info = bleemeo_agent.util.get_processes_info()
         for process_info in info:
