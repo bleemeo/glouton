@@ -1,5 +1,9 @@
 {% extends "layout.html" %}
 
+{% block head %}
+    <meta http-equiv="refresh" content="10">
+{% endblock %}
+
 {% block content %}
 <div class="row">
     <div class="col-xs-6">
@@ -48,7 +52,7 @@
 </div>
 <div class="row">
     <div class="col-xs-5">
-    {% for disk_metric in core.last_metrics['disk_used_perc'] %}
+    {% for disk_metric in core.last_metrics['disk_used_perc']|sort(attribute='tags.path') %}
     {% with %}
         {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['tags'], 0) %}
         {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['tags'], 0) %}
@@ -100,7 +104,7 @@
         </div>
         {% endif %}
     {% endwith %}
-    {% for net_metric in core.last_metrics['net_bytes_recv'] %}
+    {% for net_metric in core.last_metrics['net_bytes_recv']|sort(attribute='tags.interface') %}
     {% with %}
         {% set sent_bytes = core.get_last_metric_value('net_bytes_sent', net_metric['tags'], 0) %}
         {% set recv_bytes = net_metric['fields']['value'] %}
