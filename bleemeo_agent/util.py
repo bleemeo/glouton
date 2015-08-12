@@ -161,7 +161,7 @@ def get_primary_address():
     try:
         output = subprocess.check_output(
             ['ip', 'route', 'get', '8.8.8.8'])
-        split_output = output.split()
+        split_output = output.decode('utf-8').split()
         for (index, word) in enumerate(split_output):
             if word == 'src':
                 return split_output[index+1]
