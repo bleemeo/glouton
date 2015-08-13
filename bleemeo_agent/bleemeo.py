@@ -39,6 +39,7 @@ class BleemeoConnector(threading.Thread):
 
     def on_publish(self, client, userdata, mid):
         self._queue_size -= 1
+        self.core.update_last_report()
 
     def check_config_requirement(self):
         config = self.core.config

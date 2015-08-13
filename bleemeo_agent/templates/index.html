@@ -16,7 +16,7 @@
         Uptime: {{ core.last_facts['uptime'] }}<br/>
         Load: {{ loads }}<br/>
         Registration: 1st January 1970 {# TODO #}<br/>
-        Last Report: 6th July 2015 {# TODO #}<br/>
+        Last Report: {{ core.last_report.strftime('%c') }}<br/>
         <br/>
         Tags: {{ ', '.join(core.config.get('tags', [])) }}<br/>
         </p>

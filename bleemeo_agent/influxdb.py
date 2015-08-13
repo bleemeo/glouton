@@ -95,6 +95,7 @@ class InfluxDBConnector(threading.Thread):
                 metrics,
                 retention_policy=self.retention_policy_name,
                 time_precision='s')
+            self.core.update_last_report()
         except (requests.exceptions.ConnectionError,
                 influxdb.exceptions.InfluxDBClientError):
             logging.debug('InfluxDB write error... retrying')

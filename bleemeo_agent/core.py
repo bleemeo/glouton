@@ -87,6 +87,7 @@ class Core:
         self.collectd_server = None
         self.scheduler = sched.scheduler(time.time, time.sleep)
         self.last_metrics = {}
+        self.last_report = datetime.datetime.fromtimestamp(0)
 
         self.plugins_v1_mgr = stevedore.enabled.EnabledExtensionManager(
             namespace='bleemeo_agent.plugins_v1',
@@ -317,6 +318,9 @@ class Core:
                 self.bleemeo_connector.emit_metric(copy.deepcopy(metric))
             if self.config.get('influxdb.enabled', True):
                 self.influx_connector.emit_metric(copy.deepcopy(metric))
+
+    def update_last_report(self):
+        self.last_report = max(datetime.datetime.now(), self.last_report)
 
     def check_threshold(self, metric):
         """ Check if threshold is defined for given metric. If yes, check
