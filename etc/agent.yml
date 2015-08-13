@@ -47,6 +47,8 @@ logging:
             level: WARNING
         requests:
             level: WARNING
+        werkzeug:
+            level: WARNING
     root:
         level: INFO
         handlers:
