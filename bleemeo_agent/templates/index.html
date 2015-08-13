@@ -15,10 +15,12 @@
         {% endif %}
         Uptime: {{ core.last_facts['uptime'] }}<br/>
         Load: {{ loads }}<br/>
-        Registration: 1st January 1970 {# TODO #}<br/>
+        <!-- Registration: 1st January 1970 {# TODO #}<br/> -->
         Last Report: {{ core.last_report.strftime('%c') }}<br/>
         <br/>
+        {% if core.config.get('tags') %}
         Tags: {{ ', '.join(core.config.get('tags', [])) }}<br/>
+        {% endif %}
         </p>
     </div>
     <div class="col-xs-offset-1 col-xs-4">
