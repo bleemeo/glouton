@@ -5,12 +5,11 @@ import logging
 import logging.config
 import multiprocessing
 import os
-import random
-import sched
 import signal
 import threading
 import time
 
+import apscheduler.schedulers.blocking
 import jinja2
 import psutil
 import stevedore
@@ -85,7 +84,7 @@ class Core:
         self.bleemeo_connector = None
         self.influx_connector = None
         self.collectd_server = None
-        self.scheduler = sched.scheduler(time.time, time.sleep)
+        self.scheduler = apscheduler.schedulers.blocking.BlockingScheduler()
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
@@ -127,18 +126,18 @@ class Core:
             config_type = config.get('type', 'raw')
             interval = config.get('interval', 10)
             if config_type == 'raw':
-                self.scheduler.enter(
-                    random.randint(1, interval),
-                    1,
+                self.scheduler.add_job(
                     bleemeo_agent.util.pull_raw_metric,
-                    (self, name)
+                    args=(self, name),
+                    trigger='interval',
+                    seconds=interval,
                 )
             elif config_type == 'json':
-                self.scheduler.enter(
-                    random.randint(1, interval),
-                    1,
+                self.scheduler.add_job(
                     bleemeo_agent.util.pull_json_metric,
-                    (self, name)
+                    args=(self, name),
+                    trigger='interval',
+                    seconds=interval,
                 )
             else:
                 logging.warning(
@@ -151,16 +150,14 @@ class Core:
         try:
             self.setup_signal()
             self.start_threads()
+            self.schedule_tasks()
             bleemeo_agent.checker.initialize_checks(self)
-            self.periodic_check()
-            self._purge_metrics()
-            self.send_facts()
-            self.send_process_info()
-            self.scheduler.run()
-        except (KeyboardInterrupt, StopIteration):
+            self.scheduler.start()
+        except KeyboardInterrupt:
             pass
         finally:
             self.is_terminating.set()
+            self.scheduler.shutdown()
 
     def setup_signal(self):
         """ Make kill (SIGKILL/SIGQUIT) send a KeyboardInterrupt
@@ -170,6 +167,30 @@ class Core:
 
         signal.signal(signal.SIGTERM, handler)
         signal.signal(signal.SIGQUIT, handler)
+
+    def schedule_tasks(self):
+        self.scheduler.add_job(
+            bleemeo_agent.checker.periodic_check,
+            args=(self,),
+            trigger='interval',
+            seconds=3,
+        )
+        self.scheduler.add_job(
+            self._purge_metrics,
+            trigger='interval',
+            minutes=5,
+        )
+        self.scheduler.add_job(
+            self.send_facts,
+            next_run_time=datetime.datetime.now(),
+            trigger='interval',
+            hours=1,
+        )
+        self.scheduler.add_job(
+            self.send_process_info,
+            trigger='interval',
+            seconds=10,
+        )
 
     def start_threads(self):
 
@@ -188,19 +209,6 @@ class Core:
 
         bleemeo_agent.web.start_server(self)
 
-    def periodic_check(self):
-        """ Run few periodic check:
-
-            * that agent is not being terminated
-            * call bleemeo_agent.checker.periodic_check
-            * reschedule itself every 3 seconds
-        """
-        if self.is_terminating.is_set():
-            raise StopIteration
-
-        self.scheduler.enter(3, 1, self.periodic_check, ())
-        bleemeo_agent.checker.periodic_check(self)
-
     def _purge_metrics(self):
         """ Remove old metrics from self.last_metrics
 
@@ -211,8 +219,6 @@ class Core:
             For this reason, from time to time, scan last_metrics and drop
             any value older than 6 minutes.
         """
-        self.scheduler.enter(300, 1, self._purge_metrics, ())
-
         now = time.time()
         cutoff = now - 60 * 6
 
@@ -225,10 +231,9 @@ class Core:
                 exclude_old_metric, metrics))
 
     def send_facts(self):
-        """ Send facts to Bleemeo SaaS and reschedule itself """
+        """ Send facts to Bleemeo SaaS """
         # Note: even if we do not sent them to Bleemeo SaaS, calling this
         # method is still usefull. Web UI use last_facts.
-        self.scheduler.enter(3600, 1, self.send_facts, ())
         self.last_facts = bleemeo_agent.util.get_facts(self)
         if self.bleemeo_connector is not None:
             self.bleemeo_connector.publish(
@@ -236,7 +241,6 @@ class Core:
                 json.dumps(self.last_facts))
 
     def send_process_info(self):
-        self.scheduler.enter(10, 1, self.send_process_info, ())
         now = time.time()
         info = bleemeo_agent.util.get_processes_info()
         for process_info in info:

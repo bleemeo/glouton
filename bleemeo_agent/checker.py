@@ -1,3 +1,4 @@
+import datetime
 import itertools
 import logging
 import random
@@ -68,37 +69,25 @@ class Check:
 
         self.tcp_socket = None
         self.last_run = time.time()
-        self.current_event = None
 
-        self.reschedule(initial=True)
-        self.open_socket()
+        # During startup, schedule all check to be run within the
+        # first minute:
+        # * between 10 seconds and 30 seconds : all check without TCP ports
+        # * between 30 seconds and 1 minute : check with TCP ports (we will
+        #   open the socket immediatly, so for them if service is down
+        #   it should be detected quickly).
+        if self.tcp_port is None:
+            sched_delta = datetime.timedelta(seconds=random.randint(10, 30))
+        else:
+            sched_delta = datetime.timedelta(seconds=random.randint(30, 60))
 
-    def reschedule(self, initial=False):
-        """ (re-)schedule this check
-
-            If initial is True, it's the first schedule (in this case use a
-            random delay).
-        """
-        delay = 60
-
-        if initial:
-            # During startup, schedule all check to be run withing the
-            # first minute:
-            # * between 10 seconds and 30 seconds : all check without TCP ports
-            # * between 30 seconds and 1 minute : check with TCP ports (we will
-            #   open the socket immediatly, so for them if service is down
-            #   it should be detected quickly).
-            if self.tcp_port is None:
-                delay = random.randint(10, 30)
-            else:
-                delay = random.randint(30, 60)
-
-        self.current_event = self.core.scheduler.enter(
-            delay,
-            1,
+        self.current_job = self.core.scheduler.add_job(
             self.run_check,
-            (),
+            next_run_time=datetime.datetime.now() + sched_delta,
+            trigger='interval',
+            seconds=60,
         )
+        self.open_socket()
 
     def open_socket(self):
         if self.tcp_port is None:
@@ -120,10 +109,8 @@ class Check:
             logging.debug(
                 'check %s: failed to open socket to %s',
                 self.name, self.tcp_port)
-            if self.current_event is not None:
-                self.core.scheduler.cancel(self.current_event)
-                self.current_event = None
-            self.run_check()
+            # reschedule job to be run immediately
+            self.current_job.modify(next_run_time=datetime.datetime.now())
 
     def check_socket(self):
         """ Called when socket is "readable". When a socket is closed,
@@ -139,7 +126,6 @@ class Check:
             self.open_socket()
 
     def run_check(self):
-        self.reschedule()
         self.last_run = time.time()
         logging.debug(
             'check %s: running command: %s',
@@ -168,4 +154,8 @@ class Check:
         if (return_code == STATUS_OK
                 and self.tcp_port is not None
                 and self.tcp_socket is None):
-            self.core.scheduler.enter(5, 1, self.open_socket, ())
+            self.core.scheduler.add_job(
+                self.open_socket,
+                'date',
+                run_date=datetime.dateime.now() + datetime.timedelta(seconds=5)
+            )

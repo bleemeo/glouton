@@ -49,6 +49,8 @@ logging:
             level: WARNING
         werkzeug:
             level: WARNING
+        apscheduler:
+            level: WARNING
     root:
         level: INFO
         handlers:

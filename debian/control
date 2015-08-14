@@ -19,6 +19,7 @@ Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python:Depends},
     collectd,
     collectd-diskstats,
+    python-apscheduler,
     python-flask,
     python-influxdb,
     python-paho-mqtt,

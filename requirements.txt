@@ -1,3 +1,4 @@
+apscheduler
 influxdb
 stevedore
 paho-mqtt

@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import socket
@@ -164,7 +165,7 @@ class BleemeoConnector(threading.Thread):
             1)
         self._queue_size += 1
 
-    def register(self, sleep_delay=10):
+    def register(self, sleep_delay=datetime.timedelta(seconds=10)):
         """ Register the agent to Bleemeo SaaS service
 
             Reschedule itself until it success.
@@ -209,9 +210,13 @@ class BleemeoConnector(threading.Thread):
 
         logging.info(
             'Registration failed... retyring in %s', sleep_delay)
-        new_sleep_delay = min(sleep_delay * 2, 1800)
-        self.core.scheduler.enter(
-            sleep_delay, 1, self.register, (new_sleep_delay,))
+        new_sleep_delay = min(sleep_delay * 2, datetime.timedelta(minutes=30))
+        self.core.scheduler.add_job(
+            self.register,
+            args=(new_sleep_delay,),
+            trigger='date',
+            run_date=datetime.datetime.now() + sleep_delay,
+        )
 
     def emit_metric(self, metric):
         self._queue.put(metric)
