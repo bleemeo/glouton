@@ -187,6 +187,11 @@ class Core:
             hours=1,
         )
         self.scheduler.add_job(
+            self._gather_metrics,
+            trigger='interval',
+            seconds=10,
+        )
+        self.scheduler.add_job(
             self.send_process_info,
             trigger='interval',
             seconds=10,
@@ -208,6 +213,23 @@ class Core:
         self.collectd_server.start()
 
         bleemeo_agent.web.start_server(self)
+
+    def _gather_metrics(self):
+        """ Gather and send some metric missing from collectd
+
+            Currently only uptime is sent.
+        """
+        uptime_seconds = bleemeo_agent.util.get_uptime()
+        now = time.time()
+
+        self.emit_metric({
+            'measurement': 'uptime',
+            'tags': {},
+            'time': now,
+            'fields': {
+                'value': uptime_seconds,
+            },
+        })
 
     def _purge_metrics(self):
         """ Remove old metrics from self.last_metrics
