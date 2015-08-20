@@ -168,7 +168,7 @@ class Core:
             self.send_facts,
             next_run_time=datetime.datetime.now(),
             trigger='interval',
-            hours=1,
+            hours=24,
         )
         self.scheduler.add_job(
             self._gather_metrics,
