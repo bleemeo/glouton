@@ -4,7 +4,7 @@ Tasks: {{ process_total }} total,  {{ process_running }} running, {{ process_sl
 KiB Mem:  {{ mem_total }} total, {{ mem_used }} used, {{ mem_free }} free, {{ mem_buffered }} buffers
 KiB Swap: {{ swap_total }} total, {{ swap_used }} used, {{ swap_free }} free, {{ mem_cached }} cached Mem
 
-  PID  PPID    RES S  %CPU %MEM COMMAND
+  PID USER         RES S  %CPU %MEM     TIME+ COMMAND
 {% for process_line in processes -%}
 {{ process_line }}
 {% endfor -%}

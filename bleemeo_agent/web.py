@@ -17,6 +17,7 @@ def home():
     loads = app.core.get_loads()
     num_core = multiprocessing.cpu_count()
     check_info = _gather_checks_info()
+    top_output = bleemeo_agent.util.get_top_output(app.core.top_info)
 
     return flask.render_template(
         'index.html',
@@ -24,6 +25,7 @@ def home():
         loads=' '.join(loads),
         num_core=num_core,
         check_info=check_info,
+        top_output=top_output,
     )
 
 

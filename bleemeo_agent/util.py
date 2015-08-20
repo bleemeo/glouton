@@ -9,6 +9,7 @@ import subprocess
 import threading
 import time
 
+import jinja2
 import psutil
 import requests
 
@@ -138,6 +139,22 @@ def format_uptime(uptime_seconds):
             uptime_days, text_days, uptime_hours, text_hours)
 
     return uptime_string
+
+
+def format_cpu_time(cpu_time):
+    """ Format CPU time to top-like format
+
+        Input is time in seconds.
+
+        Output will be "7:29.31" (e.g. 7 minutes, 29.31 second).
+
+        For large number (4 digits minute), we show second as integer.
+    """
+    minutes = int(cpu_time / 60)
+    if minutes > 999:
+        return '%s:%.0f' % (minutes, cpu_time % 60)
+    else:
+        return '%s:%.2f' % (minutes, cpu_time % 60)
 
 
 def get_os_pretty_name():
@@ -294,6 +311,99 @@ def get_top_info():
     }
 
     return result
+
+
+def get_top_output(top_info):
+    """ Return a top-like output
+    """
+    env = jinja2.Environment(
+        loader=jinja2.PackageLoader('bleemeo_agent', 'templates'))
+    template = env.get_template('top.txt')
+
+    if top_info is None:
+        return 'top - waiting for metrics...'
+
+    memory_total = top_info['memory']['total']
+    processes = []
+    # Sort process by CPU consumption (then PID, when cpu % is the same)
+    # Since we want a descending order for CPU usage, we have
+    # reverse=True... but for PID we want a ascending order. That's why we
+    # use a negation for the PID.
+    sorted_process = sorted(
+        top_info['processes'],
+        key=lambda x: (x['cpu_percent'], -int(x['pid'])),
+        reverse=True)
+    for metric in sorted_process[:25]:
+        # convert status (like "sleeping", "running") to one char status
+        status = {
+            psutil.STATUS_RUNNING: 'R',
+            psutil.STATUS_SLEEPING: 'S',
+            psutil.STATUS_DISK_SLEEP: 'D',
+            psutil.STATUS_STOPPED: 'T',
+            psutil.STATUS_TRACING_STOP: 'T',
+            psutil.STATUS_ZOMBIE: 'Z',
+        }.get(metric['status'], '?')
+        processes.append(
+            ('%(pid)5s %(user)-9.9s %(res)6d %(status)s '
+                '%(cpu)5.1f %(mem)4.1f %(time)9s %(cmd)s') %
+            {
+                'pid': metric['pid'],
+                'user': metric['username'],
+                'res': metric['memory_rss'] / 1024,
+                'status': status,
+                'cpu': metric['cpu_percent'],
+                'mem':
+                    float(metric['memory_rss']) / memory_total,
+                'time': format_cpu_time(metric['cpu_times']),
+                'cmd': metric['name'],
+            })
+
+    process_total = len(top_info['processes'])
+    process_running = len(filter(
+        lambda x: x['status'] == psutil.STATUS_RUNNING,
+        top_info['processes']
+    ))
+    process_sleeping = len(filter(
+        lambda x: x['status'] == psutil.STATUS_SLEEPING,
+        top_info['processes']
+    ))
+    process_stopped = len(filter(
+        lambda x: x['status'] == psutil.STATUS_STOPPED,
+        top_info['processes']
+    ))
+    process_zombie = len(filter(
+        lambda x: x['status'] == psutil.STATUS_ZOMBIE,
+        top_info['processes']
+    ))
+
+    date_top = datetime.datetime.fromtimestamp(top_info['time'])
+    time_top = date_top.time().replace(microsecond=0)
+
+    return template.render(
+        time_top=time_top,
+        uptime=bleemeo_agent.util.format_uptime(top_info['uptime']),
+        top_info=top_info,
+        loads=', '.join('%.2f' % x for x in top_info['loads']),
+        process_total='%3d' % process_total,
+        process_running='%3d' % process_running,
+        process_sleeping='%3d' % process_sleeping,
+        process_stopped='%3d' % process_stopped,
+        process_zombie='%3d' % process_zombie,
+        cpu_user='%5.1f' % top_info['cpu']['user'],
+        cpu_system='%5.1f' % top_info['cpu']['system'],
+        cpu_nice='%5.1f' % top_info['cpu']['nice'],
+        cpu_idle='%5.1f' % top_info['cpu']['idle'],
+        cpu_wait='%5.1f' % top_info['cpu']['iowait'],
+        mem_total='%8d' % (top_info['memory']['total'] / 1024),
+        mem_used='%8d' % (top_info['memory']['used'] / 1024),
+        mem_free='%8d' % (top_info['memory']['free'] / 1024),
+        mem_buffered='%8d' % (top_info['memory']['buffers'] / 1024),
+        mem_cached='%8d' % (top_info['memory']['cached'] / 1024),
+        swap_total='%8d' % (top_info['swap']['total'] / 1024),
+        swap_used='%8d' % (top_info['swap']['used'] / 1024),
+        swap_free='%8d' % (top_info['swap']['free'] / 1024),
+        processes=processes,
+    )
 
 
 def _get_url(name, metric_config):
