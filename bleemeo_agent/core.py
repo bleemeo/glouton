@@ -122,28 +122,13 @@ class Core:
         """ Schedule metric which are pulled
         """
         for (name, config) in self.config.get('metric.pull', {}).items():
-            config_type = config.get('type', 'raw')
             interval = config.get('interval', 10)
-            if config_type == 'raw':
-                self.scheduler.add_job(
-                    bleemeo_agent.util.pull_raw_metric,
-                    args=(self, name),
-                    trigger='interval',
-                    seconds=interval,
-                )
-            elif config_type == 'json':
-                self.scheduler.add_job(
-                    bleemeo_agent.util.pull_json_metric,
-                    args=(self, name),
-                    trigger='interval',
-                    seconds=interval,
-                )
-            else:
-                logging.warning(
-                    'Unsupported type "%s" for pulled metric %s',
-                    config_type,
-                    name
-                )
+            self.scheduler.add_job(
+                bleemeo_agent.util.pull_raw_metric,
+                args=(self, name),
+                trigger='interval',
+                seconds=interval,
+            )
 
     def run(self):
         try:
@@ -225,9 +210,7 @@ class Core:
             'measurement': 'uptime',
             'tags': {},
             'time': now,
-            'fields': {
-                'value': uptime_seconds,
-            },
+            'value': uptime_seconds,
         })
 
     def _purge_metrics(self):
@@ -346,7 +329,7 @@ class Core:
         if threshold is None:
             return
 
-        value = metric['fields'].get('value')
+        value = metric['value']
         if value is None:
             return
 
@@ -390,14 +373,10 @@ class Core:
     def get_last_metric_value(self, name, tags, default=None):
         """ Return value for given metric.
 
-            It use self.get_last_metric and assume the metric only
-            contains one field named "value".
-
-            Return default if metric is not found or if the metric don't have
-            a field "value".
+            Return default if metric is not found.
         """
         metric = self.get_last_metric(name, tags)
-        if metric is not None and 'value' in metric['fields']:
-            return metric['fields']['value']
+        if metric is not None:
+            return metric['value']
         else:
             return default

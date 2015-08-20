@@ -82,7 +82,6 @@ class InfluxDBConnector(threading.Thread):
         try:
             while True:
                 metric = self._queue.get_nowait()
-                metric['tags']['hostname'] = socket.getfqdn()
                 metrics.append(metric)
         except queue.Empty:
             pass
@@ -101,7 +100,7 @@ class InfluxDBConnector(threading.Thread):
             logging.debug('InfluxDB write error... retrying')
             # re-enqueue the metric
             for metric in metrics:
-                self.emit_metric(metric)
+                self._enqueue(metric)
 
     def run(self):
         self._connect()
@@ -114,16 +113,19 @@ class InfluxDBConnector(threading.Thread):
     def emit_metric(self, metric):
         # InfluxDB can't store "NaN" (not a number)...
         # drop any metric that contain a NaN
-        # TODO: the NaN filter only support metric with ONE fields named
-        # "value". Currently only collectd generate NaN value are use one
-        # the field "value".
-        value = metric['fields'].get('value', 0.0)
+        value = metric.pop('value')
         if isinstance(value, float) and math.isnan(value):
             return
 
         # InfluxDB want an integer for timestamp, not a float
         metric['time'] = int(metric['time'])
 
+        metric['fields'] = {'value': value}
+        metric['tags']['hostname'] = socket.getfqdn()
+
+        self._enqueue(metric)
+
+    def _enqueue(self, metric):
         try:
             self._queue.put_nowait(metric)
         except queue.Full:

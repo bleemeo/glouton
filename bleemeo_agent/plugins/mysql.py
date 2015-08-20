@@ -54,9 +54,7 @@ LoadPlugin mysql
         return {
             'measurement': name,
             'time': timestamp,
-            'fields': {
-                'value': value,
-            },
+            'value': value,
             'tags': {},
         }
 

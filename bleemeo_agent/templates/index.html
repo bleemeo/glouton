@@ -84,7 +84,7 @@
         {% set mem_metric = core.get_last_metric('mem_used_perc', {}) %}
         {% if mem_metric is not none %}
         {% set mem_total = core.get_last_metric_value('mem_total', {}, 0) %}
-        {% set mem_used = mem_metric['fields']['value'] / 100 * mem_total %}
+        {% set mem_used = mem_metric['value'] / 100 * mem_total %}
         {% set mem_threshold = core.thresholds['mem_used_perc'] %}
         <div>
             <div class="panel-heading" role="tab" id="mem-heading">
@@ -109,7 +109,7 @@
     {% for net_metric in core.last_metrics['net_bytes_recv']|sort(attribute='tags.interface') %}
     {% with %}
         {% set sent_bytes = core.get_last_metric_value('net_bytes_sent', net_metric['tags'], 0) %}
-        {% set recv_bytes = net_metric['fields']['value'] %}
+        {% set recv_bytes = net_metric['value'] %}
         <div>
             <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
                 <h4 class="panel-title">
@@ -133,7 +133,7 @@
         {% if cpu_metric is not none %}
         {% set cpu_user = core.get_last_metric_value('cpu_user', {}, 0) %}
         {% set cpu_system = core.get_last_metric_value('cpu_system', {}, 0) %}
-        {% set cpu_idle = cpu_metric['fields']['value'] %}
+        {% set cpu_idle = cpu_metric['value'] %}
         {% set cpu_other = num_core * 100 - cpu_user - cpu_system - cpu_idle %}
         {% if cpu_other < 0 %}
             {% set cpu_other = 0 %}

@@ -91,17 +91,14 @@ thresholds:
 
 
 # Additional metric could be retrived over HTTP(s) by the agent.
-# Two retriver are available: "raw" and "json"
-# * "raw" expect one number in a text/plain response
-# * "json" expect a JSON which will become the fields of the metric. Usually
-#   it is a JSON that looks like {"value": 123.456}
+#
+# It expect response to be only one number in a text/plain response.
 #
 # Example of metrics:
 # metric:
 #   pull:
 #       the_name_of_your_metric:
 #           url: http://localhost:8080/myapp/metric/users_count
-#           type: raw  # or json. Default to raw
 #           tags:  # tags to add to the metric. Default to none
 #               application: myapp
 #           ssl_check: true  # should SSL certificate be checked? Default to yes

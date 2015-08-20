@@ -56,7 +56,7 @@ def _gather_checks_info():
                     'pretty_name': pretty_name,
                     'tags': tags,
                     'status': metric['tags']['status'],
-                    'value': metric['fields'].get('value'),
+                    'value': metric['value'],
                     'threshold': threshold,
                 })
 

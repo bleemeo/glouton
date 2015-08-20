@@ -208,7 +208,7 @@ class Collectd(threading.Thread):
                 raise MissingMetric()
             elif metric['time'] < timestamp:
                 raise ComputationFail()
-            return metric['fields']['value']
+            return metric['value']
 
         tags = {}
 
@@ -232,7 +232,7 @@ class Collectd(threading.Thread):
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
                 'tags': tags,
-                'fields': {'value': used_perc},
+                'value': used_perc,
             })
         elif name == 'io_utilisation':
             tags = {'name': instance}
@@ -262,13 +262,13 @@ class Collectd(threading.Thread):
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
                 'tags': tags,
-                'fields': {'value': float(used) / value * 100},
+                'value': float(used) / value * 100,
             })
         self.core.emit_metric({
             'measurement': name,
             'time': timestamp,
             'tags': tags,
-            'fields': {'value': value},
+            'value': value,
         })
 
     def emit_metric(self, name, timestamp, value):
@@ -439,7 +439,7 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
     return {
         'measurement': name,
         'time': timestamp,
-        'fields': {'value': value},
+        'value': value,
         'tags': tags,
         'ignore': ignore,
     }

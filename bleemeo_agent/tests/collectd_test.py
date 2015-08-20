@@ -48,7 +48,7 @@ def test_rename_metric():
     assert result == {
         'measurement': 'cpu_idle',
         'time': 12345,
-        'fields': {'value': 42},
+        'value': 42,
         'tags': {'cpu': 0},
         'ignore': True,
     }
@@ -64,7 +64,7 @@ def test_rename_metric():
     assert result == {
         'measurement': 'users_logged',
         'time': 12345,
-        'fields': {'value': 42},
+        'value': 42,
         'tags': {},
         'ignore': False,
     }
@@ -79,7 +79,7 @@ def test_rename_metric():
     assert result == {
         'measurement': 'disk_free',
         'time': 12345,
-        'fields': {'value': 42},
+        'value': 42,
         'tags': {'path': '/var/lib'},
         'ignore': False,
     }
@@ -95,7 +95,7 @@ def test_rename_metric():
     assert result == {
         'measurement': 'io_reads',
         'time': 12345,
-        'fields': {'value': 42},
+        'value': 42,
         'tags': {'name': 'sda'},
         'ignore': False,
     }

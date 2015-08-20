@@ -142,9 +142,7 @@ class Check:
                 'status': STATUS_NAME[return_code],
             },
             'time': self.last_run,
-            'fields': {
-                'value': return_code,
-            },
+            'value': return_code,
         })
 
         if return_code != STATUS_OK and self.tcp_socket is not None:
