@@ -14,7 +14,7 @@ app_thread = threading.Thread(target=app.run)
 
 @app.route('/')
 def home():
-    loads = app.core.get_loads()
+    loads = bleemeo_agent.util.get_loadavg()
     num_core = multiprocessing.cpu_count()
     check_info = _gather_checks_info()
     top_output = bleemeo_agent.util.get_top_output(app.core.top_info)
@@ -22,7 +22,7 @@ def home():
     return flask.render_template(
         'index.html',
         core=app.core,
-        loads=' '.join(loads),
+        loads=' '.join('%.2f' % x for x in loads),
         num_core=num_core,
         check_info=check_info,
         top_output=top_output,

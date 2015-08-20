@@ -401,18 +401,3 @@ class Core:
             return metric['fields']['value']
         else:
             return default
-
-    def get_loads(self):
-        """ Return (load1, load5, load15).
-
-            Value are took from last_metrics, so collectd need to feed the
-            value or "?" is used instead of real value
-        """
-        loads = []
-        for term in [1, 5, 15]:
-            metric = self.get_last_metric('system_load%s' % term, {})
-            if metric is None:
-                loads.append('?')
-            else:
-                loads.append('%s' % metric['fields']['value'])
-        return loads
