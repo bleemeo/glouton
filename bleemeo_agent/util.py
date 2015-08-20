@@ -100,6 +100,13 @@ def get_uptime():
         return uptime_seconds
 
 
+def get_loadavg():
+    with open('/proc/loadavg', 'r') as fd:
+        loads = fd.readline().split()[:3]
+
+    return [float(x) for x in loads]
+
+
 def format_uptime(uptime_seconds):
     """ Format uptime to human readable format
 
@@ -236,32 +243,55 @@ def clean_cmdline(cmdline):
     return cmdline.replace('\r', '\\r').replace('\n', '\\n')
 
 
-def get_processes_info():
-    """ Return informations on all running process.
-
-        Information (per process) returned are:
-
-        * pid
-        * create_time
-        * name
-        * cmdline
-        * ppid
-        * memory usage
-        * cpu_percent
-        * status (running, sleeping...)
+def get_top_info():
+    """ Return informations needed to build a "top" view.
     """
-    result = []
+    processes = []
     for process in psutil.process_iter():
-        result.append({
+        processes.append({
             'pid': process.pid,
             'create_time': process.create_time(),
             'name': process.name(),
-            'cmdline': clean_cmdline(' '.join(process.cmdline())),
+            'cmdline': process.cmdline(),
             'ppid': process.ppid(),
             'memory_rss': process.memory_info().rss,
             'cpu_percent': process.cpu_percent(),
+            'cpu_times': process.cpu_times().user + process.cpu_times().system,
             'status': process.status(),
+            'username': process.username(),
         })
+
+    now = time.time()
+    cpu_usage = psutil.cpu_times_percent()
+    memory_usage = psutil.virtual_memory()
+    swap_usage = psutil.swap_memory()
+
+    result = {
+        'time': now,
+        'uptime': get_uptime(),
+        'loads': get_loadavg(),
+        'users': len(psutil.users()),
+        'processes': processes,
+        'cpu': {
+            'user': cpu_usage.user,
+            'nice': cpu_usage.nice,
+            'system': cpu_usage.system,
+            'idle': cpu_usage.idle,
+            'iowait': cpu_usage.iowait,
+        },
+        'memory': {
+            'total': memory_usage.total,
+            'used': memory_usage.used,
+            'free': memory_usage.free,
+            'buffers': memory_usage.buffers,
+            'cached': memory_usage.cached,
+        },
+        'swap': {
+            'total': swap_usage.total,
+            'used': swap_usage.used,
+            'free': swap_usage.free,
+        }
+    }
 
     return result
 

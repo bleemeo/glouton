@@ -154,6 +154,12 @@ class BleemeoConnector(threading.Thread):
 
         self._warn_queue_full()
 
+    def publish_top_info(self, top_info):
+        self.publish(
+            'api/v0/agent/%s/top_info' % self.login,
+            json.dumps(top_info)
+        )
+
     def publish(self, topic, message):
         if self._queue_size > 500:
             self._queue_full_count_warning += 1

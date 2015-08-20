@@ -1,4 +1,4 @@
-top - {{ time_top }} up {{ uptime }},  {{ users }} users,  load average: {{ loads}}
+top - {{ time_top }} up {{ uptime }},  {{ top_info.users }} users,  load average: {{ loads}}
 Tasks: {{ process_total }} total,  {{ process_running }} running, {{ process_sleeping }} sleeping, {{ process_stopped }} stopped, {{ process_zombie }} zombie
 %Cpu(s): {{ cpu_user }} us, {{ cpu_system }} sy, {{ cpu_nice }} ni, {{ cpu_idle }} id, {{ cpu_wait }} wa
 KiB Mem:  {{ mem_total }} total, {{ mem_used }} used, {{ mem_free }} free, {{ mem_buffered }} buffers

@@ -79,6 +79,7 @@ class Core:
         self.checks = []
         self.last_facts = {}
         self.thresholds = {}
+        self.top_info = None
 
         self.is_terminating = threading.Event()
         self.bleemeo_connector = None
@@ -192,9 +193,9 @@ class Core:
             seconds=10,
         )
         self.scheduler.add_job(
-            self.send_process_info,
+            self.send_top_info,
             trigger='interval',
-            seconds=10,
+            seconds=3,
         )
 
     def start_threads(self):
@@ -262,19 +263,10 @@ class Core:
                 'api/v1/agent/facts/POST',
                 json.dumps(self.last_facts))
 
-    def send_process_info(self):
-        now = time.time()
-        info = bleemeo_agent.util.get_processes_info()
-        for process_info in info:
-            self.emit_metric({
-                'measurement': 'process_info',
-                'time': now,
-                'tags': {
-                    'pid': str(process_info.pop('pid')),
-                    'create_time': str(process_info.pop('create_time')),
-                },
-                'fields': process_info,
-            })
+    def send_top_info(self):
+        self.top_info = bleemeo_agent.util.get_top_info()
+        if self.bleemeo_connector is not None:
+            self.bleemeo_connector.publish_top_info(self.top_info)
 
     def plugins_on_load_failure(self, manager, entrypoint, exception):
         logging.info('Plugin %s failed to load : %s', entrypoint, exception)
@@ -434,33 +426,20 @@ class Core:
             loader=jinja2.PackageLoader('bleemeo_agent', 'templates'))
         template = env.get_template('top.txt')
 
-        timestamp = 0
-        for metric in self.last_metrics.get('process_info', []):
-            timestamp = max(timestamp, metric['time'])
+        if self.top_info is None:
+            return 'top - waiting for metrics...'
 
-        if timestamp == 0:
-            # use time from last cpu_* metrics
-            metric = self.get_last_metric('cpu_idle', {})
-            if metric is None:
-                return 'top - waiting for metrics...'
-            timestamp = metric['time']
-
-        memory_total = psutil.virtual_memory().total
-
+        memory_total = self.top_info['memory']['total']
         processes = []
         # Sort process by CPU consumption (then PID, when cpu % is the same)
         # Since we want a descending order for CPU usage, we have
         # reverse=True... but for PID we want a ascending order. That's why we
         # use a negation for the PID.
         sorted_process = sorted(
-            self.last_metrics.get('process_info', []),
-            key=lambda x: (x['fields']['cpu_percent'], -int(x['tags']['pid'])),
+            self.top_info['processes'],
+            key=lambda x: (x['cpu_percent'], -int(x['pid'])),
             reverse=True)
-        for metric in sorted_process:
-            if metric['time'] < timestamp:
-                # stale metric, probably a process that has terminated
-                continue
-
+        for metric in sorted_process[:25]:
             # convert status (like "sleeping", "running") to one char status
             status = {
                 psutil.STATUS_RUNNING: 'R',
@@ -469,68 +448,64 @@ class Core:
                 psutil.STATUS_STOPPED: 'T',
                 psutil.STATUS_TRACING_STOP: 'T',
                 psutil.STATUS_ZOMBIE: 'Z',
-            }.get(metric['fields']['status'], '?')
+            }.get(metric['status'], '?')
             processes.append(
                 ('%(pid)5s %(ppid)5s %(res)6d %(status)s '
                     '%(cpu)5.1f %(mem)4.1f %(cmd)s') %
                 {
-                    'pid': metric['tags']['pid'],
-                    'ppid': metric['fields']['ppid'],
-                    'res': metric['fields']['memory_rss'] / 1024,
+                    'pid': metric['pid'],
+                    'ppid': metric['ppid'],
+                    'res': metric['memory_rss'] / 1024,
                     'status': status,
-                    'cpu': metric['fields']['cpu_percent'],
+                    'cpu': metric['cpu_percent'],
                     'mem':
-                        float(metric['fields']['memory_rss']) / memory_total,
-                    'cmd': metric['fields']['name'],
+                        float(metric['memory_rss']) / memory_total,
+                    'cmd': metric['name'],
                 })
-            if len(processes) >= 25:
-                # show only top-25 process (sorted by CPU consumption)
-                break
 
-        time_top = datetime.datetime.fromtimestamp(timestamp).time()
-        time_top = time_top.replace(microsecond=0)
-        uptime_second = bleemeo_agent.util.get_uptime()
-        num_core = multiprocessing.cpu_count()
+        process_total = len(self.top_info['processes'])
+        process_running = len(filter(
+            lambda x: x['status'] == psutil.STATUS_RUNNING,
+            self.top_info['processes']
+        ))
+        process_sleeping = len(filter(
+            lambda x: x['status'] == psutil.STATUS_SLEEPING,
+            self.top_info['processes']
+        ))
+        process_stopped = len(filter(
+            lambda x: x['status'] == psutil.STATUS_STOPPED,
+            self.top_info['processes']
+        ))
+        process_zombie = len(filter(
+            lambda x: x['status'] == psutil.STATUS_ZOMBIE,
+            self.top_info['processes']
+        ))
+
+        date_top = datetime.datetime.fromtimestamp(self.top_info['time'])
+        time_top = date_top.time().replace(microsecond=0)
+
         return template.render(
             time_top=time_top,
-            uptime=bleemeo_agent.util.format_uptime(uptime_second),
-            users=int(self.get_last_metric_value('users_logged', {}, 0)),
-            loads=', '.join(self.get_loads()),
-            process_total='%3d' % self.get_last_metric_value(
-                'process_total', {}, 0),
-            process_running='%3d' % self.get_last_metric_value(
-                'process_status_running', {}, 0),
-            process_sleeping='%3d' % self.get_last_metric_value(
-                'process_status_sleeping', {}, 0),
-            process_stopped='%3d' % self.get_last_metric_value(
-                'process_status_stopped', {}, 0),
-            process_zombie='%3d' % self.get_last_metric_value(
-                'process_status_zombies', {}, 0),
-            cpu_user='%5.1f' % (
-                self.get_last_metric_value('cpu_user', {}, 0) / num_core),
-            cpu_system='%5.1f' % (
-                self.get_last_metric_value('cpu_system', {}, 0) / num_core),
-            cpu_nice='%5.1f' % (
-                self.get_last_metric_value('cpu_nice', {}, 0) / num_core),
-            cpu_idle='%5.1f' % (
-                self.get_last_metric_value('cpu_idle', {}, 0)/num_core),
-            cpu_wait='%5.1f' % (
-                self.get_last_metric_value('cpu_wait', {}, 0) / num_core),
-            mem_total='%8d' % (
-                self.get_last_metric_value('mem_total', {}, 0)/1024),
-            mem_used='%8d' % (
-                self.get_last_metric_value('mem_used', {}, 0)/1024),
-            mem_free='%8d' % (
-                self.get_last_metric_value('mem_free', {}, 0)/1024),
-            mem_buffered='%8d' % (
-                self.get_last_metric_value('mem_buffered', {}, 0)/1024),
-            mem_cached='%8d' % (
-                self.get_last_metric_value('mem_cached', {}, 0)/1024),
-            swap_total='%8d' % (
-                self.get_last_metric_value('swap_total', {}, 0)/1024),
-            swap_used='%8d' % (
-                self.get_last_metric_value('swap_used', {}, 0)/1024),
-            swap_free='%8d' % (
-                self.get_last_metric_value('swap_free', {}, 0)/1024),
+            uptime=bleemeo_agent.util.format_uptime(self.top_info['uptime']),
+            top_info=self.top_info,
+            loads=', '.join('%.2f' % x for x in self.top_info['loads']),
+            process_total='%3d' % process_total,
+            process_running='%3d' % process_running,
+            process_sleeping='%3d' % process_sleeping,
+            process_stopped='%3d' % process_stopped,
+            process_zombie='%3d' % process_zombie,
+            cpu_user='%5.1f' % self.top_info['cpu']['user'],
+            cpu_system='%5.1f' % self.top_info['cpu']['system'],
+            cpu_nice='%5.1f' % self.top_info['cpu']['nice'],
+            cpu_idle='%5.1f' % self.top_info['cpu']['idle'],
+            cpu_wait='%5.1f' % self.top_info['cpu']['iowait'],
+            mem_total='%8d' % (self.top_info['memory']['total'] / 1024),
+            mem_used='%8d' % (self.top_info['memory']['used'] / 1024),
+            mem_free='%8d' % (self.top_info['memory']['free'] / 1024),
+            mem_buffered='%8d' % (self.top_info['memory']['buffers'] / 1024),
+            mem_cached='%8d' % (self.top_info['memory']['cached'] / 1024),
+            swap_total='%8d' % (self.top_info['swap']['total'] / 1024),
+            swap_used='%8d' % (self.top_info['swap']['used'] / 1024),
+            swap_free='%8d' % (self.top_info['swap']['free'] / 1024),
             processes=processes,
         )
