@@ -23,6 +23,7 @@ LoadPlugin python
 
   Import "diskstats"
   <Module diskstats>
+    DeltaPerSecond yes
     ${DISKS}
   </Module>
 </Plugin>
@@ -57,7 +58,7 @@ class Collectd(threading.Thread):
         disks = self._list_disks()
         base_config = base_config.replace(
             '${DISKS}',
-            '\n'.join('    Disk %s' % x for x in disks)
+            '\n'.join('Disk %s' % x for x in disks)
         )
         self.config_fragments = [base_config]
 
