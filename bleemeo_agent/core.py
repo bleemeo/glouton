@@ -10,7 +10,6 @@ import threading
 import time
 
 import apscheduler.schedulers.blocking
-import stevedore
 
 import bleemeo_agent
 import bleemeo_agent.bleemeo
@@ -87,13 +86,6 @@ class Core:
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
-        self.plugins_v1_mgr = stevedore.enabled.EnabledExtensionManager(
-            namespace='bleemeo_agent.plugins_v1',
-            invoke_on_load=True,
-            invoke_args=(self,),
-            check_func=self.check_plugin_v1,
-            on_load_failure_callback=self.plugins_on_load_failure,
-        )
         self._define_thresholds()
         self._schedule_metric_pull()
 
@@ -248,17 +240,6 @@ class Core:
         self.top_info = bleemeo_agent.util.get_top_info()
         if self.bleemeo_connector is not None:
             self.bleemeo_connector.publish_top_info(self.top_info)
-
-    def plugins_on_load_failure(self, manager, entrypoint, exception):
-        logging.info('Plugin %s failed to load : %s', entrypoint, exception)
-
-    def check_plugin_v1(self, extension):
-        has_dependencies = extension.obj.dependencies_present()
-        if not has_dependencies:
-            return False
-
-        logging.debug('Enable plugin %s', extension.name)
-        return True
 
     def reload_config(self):
         self.config = bleemeo_agent.config.load_config()

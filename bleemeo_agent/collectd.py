@@ -60,20 +60,8 @@ class Collectd(threading.Thread):
             '${DISKS}',
             '\n'.join('Disk %s' % x for x in disks)
         )
-        self.config_fragments = [base_config]
 
-        if len(self.core.plugins_v1_mgr.names()):
-            plugins_config_fragments = self.core.plugins_v1_mgr.map_method(
-                'collectd_configure')
-        else:
-            plugins_config_fragments = []
-
-        for config_fragment in plugins_config_fragments:
-            if not config_fragment:
-                continue
-            self.config_fragments.append(config_fragment)
-        config_content = '\n'.join(self.config_fragments)
-        return config_content
+        return base_config
 
     def _list_disks(self):
         """ Return list of disks available on this systems
@@ -277,21 +265,8 @@ class Collectd(threading.Thread):
         """
         metric = _rename_metric(
             name, timestamp, value, self.computed_metrics_pending)
-        if metric is None:
-            for extension in self.core.plugins_v1_mgr:
-                metric = extension.obj.collectd_rename_metric(
-                    name, timestamp, value)
-                if metric is not None:
-                    break  # first who processed it wins
-            else:
-                # If no-one take care of processing the metric, skip it
-                return
-
-        self.core.emit_metric(metric)
-
-    def add_config(self, fragments):
-        if fragments:
-            self.config_fragments.append(fragments)
+        if metric is not None:
+            self.core.emit_metric(metric)
 
     def write_config(self):
         config_content = self._get_collectd_config()

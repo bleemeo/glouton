@@ -26,14 +26,11 @@ Depends: ${misc:Depends}, ${python:Depends},
     python-passlib,
     python-psutil,
     python-requests,
-    python-stevedore,
     python-yaml,
 Recommends:
     ca-certificates,
-    docker-collectd-plugin,
     facter,
-    sudo,
-    nagios-plugins
+    sudo
 Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to

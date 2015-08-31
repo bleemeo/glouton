@@ -1,5 +1,4 @@
 import datetime
-import itertools
 import logging
 import random
 import select
@@ -25,18 +24,8 @@ STATUS_NAME = {
 
 
 def initialize_checks(core):
-    if len(core.plugins_v1_mgr.names()) == 0:
-        logging.debug(
-            'No plugins loaded. Initialization of checks skipped')
-        return
-
-    checks = core.plugins_v1_mgr.map_method('list_checks')
-
-    # list_checks return a list. So checks is a list of list :/
-    # itertools.chain is used to "flatten" the list
-    for (name, descr, check_command, tcp_port) in itertools.chain(*checks):
-        check = Check(core, name, descr, check_command, tcp_port)
-        core.checks.append(check)
+    # TODO: discovery and/or read from configuration file
+    pass
 
 
 def periodic_check(core):

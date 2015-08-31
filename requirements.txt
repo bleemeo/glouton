@@ -1,6 +1,5 @@
 apscheduler
 influxdb
-stevedore
 paho-mqtt
 passlib
 flask

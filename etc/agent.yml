@@ -43,8 +43,6 @@ logging:
         #    filename: /var/log/bleemeo/agent.log
         #    formatter: simple
     loggers:
-        stevedore:
-            level: WARNING
         requests:
             level: WARNING
         werkzeug:
