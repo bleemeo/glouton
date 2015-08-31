@@ -54,7 +54,7 @@ class StoredValue:
     def save(self):
         try:
             # Don't simply use open. This file must have limited permission
-            open_flags = os.O_WRONLY | os.O_CREAT
+            open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
             fileno = os.open(self.filename, open_flags, 0o600)
             with os.fdopen(fileno, 'w') as fd:
                 json.dump(self._content, fd)
