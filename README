@@ -19,13 +19,11 @@ If you want to try bleemeo-agent, here are the step to run from a git checkout:
     pip install -r requirements.txt
     python setup.py develop
 
-* Install collectd and allow Bleemeo agent to configure it::
+* Install collectd and configure it::
 
     sudo apt-get install collectd
-    sudo touch /etc/collectd/collectd.conf.d/bleemeo.conf
-    sudo chown $USER /etc/collectd/collectd.conf.d/bleemeo.conf
-    sudo install -m 0440 debian/bleemeo-agent.sudoers /etc/sudoers.d/bleemeo
-    sudo sed -i "s/^bleemeo/$USER/" /etc/sudoers.d/bleemeo
+    sudo install -m 0644 debian/bleemeo-agent.collectd.conf /etc/collectd/collectd.conf.d/bleemeo.conf
+    sudo service collectd restart
 
 * Also to have IO stat, install diskstat.py in /usr/share/collectd::
 
@@ -44,6 +42,3 @@ need to re-install the agent.
 
 Note that change to setup.py (especialy change to entry_points) will still need
 to re-run python setup.py develop.
-
-Sudoers will allow your current user (which run the agent) to restart collectd.
-It also allow few other action needed for auto-discovery.

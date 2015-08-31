@@ -29,8 +29,7 @@ Depends: ${misc:Depends}, ${python:Depends},
     python-yaml,
 Recommends:
     ca-certificates,
-    facter,
-    sudo
+    facter
 Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to

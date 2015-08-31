@@ -10,7 +10,6 @@ case "$1" in
         if [ -d /var/lib/bleemeo ]; then
             rmdir --ignore-fail-on-non-empty /var/lib/bleemeo
         fi
-        rm -f /etc/collectd/collectd.conf.d/bleemeo.conf
         rm -f /etc/bleemeo/agent.conf.d/server.conf
         if [ -d /etc/bleemeo/agent.conf.d ]; then
             rmdir --ignore-fail-on-non-empty /etc/bleemeo/agent.conf.d

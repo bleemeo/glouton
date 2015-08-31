@@ -1,1 +1,0 @@
-bleemeo     ALL=(root) NOPASSWD: /usr/sbin/service collectd restart
