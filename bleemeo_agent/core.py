@@ -256,7 +256,7 @@ class Core:
         measurement = metric['measurement']
         self.last_metrics[(measurement, tag)] = metric
 
-    def emit_metric(self, metric, store_last_value=True):
+    def emit_metric(self, metric):
         """ Sent a metric to all configured output
         """
         metric = metric.copy()
@@ -264,8 +264,7 @@ class Core:
         if not metric.get('ignore'):
             self.check_threshold(metric)
 
-        if store_last_value:
-            self._store_last_value(metric)
+        self._store_last_value(metric)
 
         if not metric.get('ignore'):
             if 'ignore' in metric:
