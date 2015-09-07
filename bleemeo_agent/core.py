@@ -259,7 +259,7 @@ class Core:
     def emit_metric(self, metric, store_last_value=True):
         """ Sent a metric to all configured output
         """
-        metric = copy.deepcopy(metric)
+        metric = metric.copy()
 
         if not metric.get('ignore'):
             self.check_threshold(metric)
@@ -272,9 +272,9 @@ class Core:
                 del metric['ignore']
 
             if self.config.get('bleemeo.enabled', True):
-                self.bleemeo_connector.emit_metric(copy.deepcopy(metric))
+                self.bleemeo_connector.emit_metric(metric.copy())
             if self.config.get('influxdb.enabled', True):
-                self.influx_connector.emit_metric(copy.deepcopy(metric))
+                self.influx_connector.emit_metric(metric.copy())
 
     def update_last_report(self):
         self.last_report = max(datetime.datetime.now(), self.last_report)
