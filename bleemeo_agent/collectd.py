@@ -203,10 +203,10 @@ class Collectd(threading.Thread):
     def emit_metric(self, name, timestamp, value):
         """ Rename a metric and pass it to core
         """
-        metric = _rename_metric(
+        (metric, no_emit) = _rename_metric(
             name, timestamp, value, self.computed_metrics_pending)
         if metric is not None:
-            self.core.emit_metric(metric)
+            self.core.emit_metric(metric, no_emit=no_emit)
 
 
 # https://collectd.org/wiki/index.php/Naming_schema
@@ -233,12 +233,12 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
         return None
     match_dict = match.groupdict()
 
-    ignore = False
+    no_emit = False
     tag = None
     if match_dict['plugin'] == 'cpu':
         name = 'cpu_%s' % match_dict['type_instance']
         tag = match_dict['plugin_instance']
-        ignore = True
+        no_emit = True
         computed_metrics_pending.add((name, None, timestamp))
     elif match_dict['type'] == 'df_complex':
         name = 'disk_%s' % match_dict['type_instance']
@@ -313,13 +313,12 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
     elif match_dict['plugin'] == 'users':
         name = 'users_logged'
     else:
-        return None
+        return (None, None)
 
-    return {
+    return ({
         'measurement': name,
         'time': timestamp,
         'value': value,
         'tag': tag,
         'status': None,
-        'ignore': ignore,
-    }
+    }, no_emit)

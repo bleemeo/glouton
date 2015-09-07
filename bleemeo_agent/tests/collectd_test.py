@@ -40,7 +40,7 @@ def test_collectd_regex():
 
 def test_rename_metric():
     pending = set()
-    result = bleemeo_agent.collectd._rename_metric(
+    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
         'cpu-0.cpu-idle',
         12345,
         42,
@@ -51,13 +51,13 @@ def test_rename_metric():
         'value': 42,
         'tag': '0',
         'status': None,
-        'ignore': True,
     }
+    assert no_emit is True
     assert len(pending) == 1
     assert ('cpu_idle', None, 12345) in pending
 
     pending = set()
-    result = bleemeo_agent.collectd._rename_metric(
+    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
         'users.users',
         12345,
         42,
@@ -68,12 +68,12 @@ def test_rename_metric():
         'value': 42,
         'tag': None,
         'status': None,
-        'ignore': False,
     }
+    assert no_emit is False
     assert len(pending) == 0
 
     pending = set()
-    result = bleemeo_agent.collectd._rename_metric(
+    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
         'df-var-lib.df_complex-free',
         12345,
         42,
@@ -84,13 +84,13 @@ def test_rename_metric():
         'value': 42,
         'tag': '/var/lib',
         'status': None,
-        'ignore': False,
     }
+    assert no_emit is False
     assert len(pending) == 1
     assert ('disk_total', '/var/lib', 12345) in pending
 
     pending = set()
-    result = bleemeo_agent.collectd._rename_metric(
+    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
         'diskstats-sda.counter-reads_completed',
         12345,
         42,
@@ -101,6 +101,6 @@ def test_rename_metric():
         'value': 42,
         'tag': 'sda',
         'status': None,
-        'ignore': False,
     }
+    assert no_emit is False
     assert len(pending) == 0
