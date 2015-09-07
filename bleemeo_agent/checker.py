@@ -127,9 +127,8 @@ class Check:
 
         self.core.emit_metric({
             'measurement': 'check-%s' % self.short_name,
-            'tags': {
-                'status': STATUS_NAME[return_code],
-            },
+            'status': STATUS_NAME[return_code],
+            'tag': None,
             'time': self.last_run,
             'value': return_code,
         })

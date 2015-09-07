@@ -200,7 +200,8 @@ class Core:
 
         self.emit_metric({
             'measurement': 'uptime',
-            'tags': {},
+            'tag': None,
+            'status': None,
             'time': now,
             'value': uptime_seconds,
         })
@@ -209,8 +210,7 @@ class Core:
         """ Remove old metrics from self.last_metrics
 
             Some metric may stay in last_metrics unupdated, for example
-            when a process with PID=42 terminated, no metric will update the
-            metric for this process.
+            disk usage from an unmounted partition.
 
             For this reason, from time to time, scan last_metrics and drop
             any value older than 6 minutes.
@@ -218,13 +218,12 @@ class Core:
         now = time.time()
         cutoff = now - 60 * 6
 
-        def exclude_old_metric(item):
-            return item['time'] >= cutoff
-
         # XXX: concurrent access with emit_metric.
-        for (measurement, metrics) in self.last_metrics.items():
-            self.last_metrics[measurement] = list(filter(
-                exclude_old_metric, metrics))
+        self.last_metrics = {
+            (measurement, tag): metric
+            for ((measurement, tag), metric) in self.last_metrics.items()
+            if metric['time'] >= cutoff
+        }
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS """
@@ -253,36 +252,14 @@ class Core:
     def _store_last_value(self, metric):
         """ Store the metric in self.last_matrics, replacing the previous value
         """
-        metric_tags = metric['tags'].copy()
-        if 'status' in metric_tags:
-            del metric_tags['status']
-
-        def exclude_same_metric(item):
-            item_tags = item['tags']
-            if 'status' in item_tags:
-                item_tags = item_tags.copy()
-                del item_tags['status']
-
-            return item_tags != metric_tags
-
-        # We use list(...) to force evaluation of the result and avoid a
-        # possible memory leak. In Python3 filter return a "filter object".
-        # Without list() we may end with a filter object on a filter object
-        # on a filter object ...
+        tag = metric['tag']
         measurement = metric['measurement']
-        # XXX: concurrent access.
-        # Note: different thread should not access the SAME
-        # measurement, so it should be safe.
-        self.last_metrics[measurement] = list(filter(
-            exclude_same_metric, self.last_metrics.get(measurement, [])))
-        self.last_metrics[measurement].append(metric)
+        self.last_metrics[(measurement, tag)] = metric
 
     def emit_metric(self, metric, store_last_value=True):
         """ Sent a metric to all configured output
         """
         metric = copy.deepcopy(metric)
-        if 'status' in metric['tags']:
-            del metric['tags']['status']
 
         if not metric.get('ignore'):
             self.check_threshold(metric)
@@ -329,34 +306,21 @@ class Core:
         else:
             status = 'ok'
 
-        metric['tags']['status'] = status
+        metric['status'] = status
 
-    def get_last_metric(self, name, tags):
-        """ Return the last metric matching name and tags.
+    def get_last_metric(self, name, tag):
+        """ Return the last metric matching name and tag.
 
             None is returned if the metric is not found
         """
-        if 'status' in tags:
-            tags = tags.copy()
-            del tags['status']
+        return self.last_metrics.get((name, tag), None)
 
-        for metric in self.last_metrics.get(name, []):
-            metric_tags = metric['tags']
-            if 'status' in metric_tags:
-                metric_tags = metric_tags.copy()
-                del metric_tags['status']
-
-            if metric_tags == tags:
-                return metric
-
-        return None
-
-    def get_last_metric_value(self, name, tags, default=None):
+    def get_last_metric_value(self, name, tag, default=None):
         """ Return value for given metric.
 
             Return default if metric is not found.
         """
-        metric = self.get_last_metric(name, tags)
+        metric = self.get_last_metric(name, tag)
         if metric is not None:
             return metric['value']
         else:

@@ -54,10 +54,10 @@
 </div>
 <div class="row">
     <div class="col-xs-5">
-    {% for disk_metric in core.last_metrics['disk_used_perc']|sort(attribute='tags.path') %}
+    {% for disk_metric in disks_used_perc|sort(attribute='tag') %}
     {% with %}
-        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['tags'], 0) %}
-        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['tags'], 0) %}
+        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['tag'], 0) %}
+        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['tag'], 0) %}
         {% set disk_total_user = disk_used + disk_free %}
         {% set disk_threshold = core.thresholds['disk_used_perc'] %}
         <div>
@@ -65,14 +65,14 @@
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#disk-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="disk-collapse-{{ loop.index }}">
                         <span class="glyphicon glyphicon-chevron-right"></span>
-                        {{ disk_metric['tags']['path'] }} disk space
+                        {{ disk_metric['tag'] }} disk space
                     </a>
                 </h4>
             </div>
             <div id="disk-collapse-{{ loop.index }}" class="panel-collapse collapse" role="tabpanel" aria-labelledby="disk-heading-{{ loop.index }}">
                 <div class="panel-body add-left-margin">
                     Value: {{ disk_used|filesizeformat(True) }}<br/>
-                    Status: {{ disk_metric['tags']['status']|capitalize }} <br/>
+                    Status: {{ disk_metric['status']|capitalize }} <br/>
                     Warning: {{ (disk_total_user * disk_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
                     Critical: {{ (disk_total_user * disk_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
                 </div>
@@ -81,9 +81,9 @@
     {% endwith %}
     {% endfor %}
     {% with %}
-        {% set mem_metric = core.get_last_metric('mem_used_perc', {}) %}
+        {% set mem_metric = core.get_last_metric('mem_used_perc', None) %}
         {% if mem_metric is not none %}
-        {% set mem_total = core.get_last_metric_value('mem_total', {}, 0) %}
+        {% set mem_total = core.get_last_metric_value('mem_total', None, 0) %}
         {% set mem_used = mem_metric['value'] / 100 * mem_total %}
         {% set mem_threshold = core.thresholds['mem_used_perc'] %}
         <div>
@@ -98,7 +98,7 @@
             <div id="mem-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="mem-heading">
                 <div class="panel-body add-left-margin">
                     Value: {{ mem_used|filesizeformat(True) }}<br/>
-                    Status: {{ mem_metric['tags']['status']|capitalize }} <br/>
+                    Status: {{ mem_metric['status']|capitalize }} <br/>
                     Warning: {{ (mem_total * mem_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
                     Critical: {{ (mem_total * mem_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
                 </div>
@@ -106,16 +106,16 @@
         </div>
         {% endif %}
     {% endwith %}
-    {% for net_metric in core.last_metrics['net_bytes_recv']|sort(attribute='tags.interface') %}
+    {% for net_metric in nets_bytes_recv|sort(attribute='tag') %}
     {% with %}
-        {% set sent_bytes = core.get_last_metric_value('net_bytes_sent', net_metric['tags'], 0) %}
+        {% set sent_bytes = core.get_last_metric_value('net_bytes_sent', net_metric['tag'], 0) %}
         {% set recv_bytes = net_metric['value'] %}
         <div>
             <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#net-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="net-collapse-{{ loop.index }}">
                         <span class="glyphicon glyphicon-chevron-right"></span>
-                        {{ net_metric['tags']['interface'] }} traffic
+                        {{ net_metric['tag'] }} traffic
                     </a>
                 </h4>
             </div>
@@ -129,10 +129,10 @@
     {% endwith %}
     {% endfor %}
     {% with %}
-        {% set cpu_metric = core.get_last_metric('cpu_idle', {}) %}
+        {% set cpu_metric = core.get_last_metric('cpu_idle', None) %}
         {% if cpu_metric is not none %}
-        {% set cpu_user = core.get_last_metric_value('cpu_user', {}, 0) %}
-        {% set cpu_system = core.get_last_metric_value('cpu_system', {}, 0) %}
+        {% set cpu_user = core.get_last_metric_value('cpu_user', None, 0) %}
+        {% set cpu_system = core.get_last_metric_value('cpu_system', None, 0) %}
         {% set cpu_idle = cpu_metric['value'] %}
         {% set cpu_other = num_core * 100 - cpu_user - cpu_system - cpu_idle %}
         {% if cpu_other < 0 %}
@@ -154,7 +154,7 @@
                     Used CPU by system : {{ cpu_system|round(1) }} %<br/>
                     Used CPU by other tasks : {{ cpu_other|round(1) }} %<br/>
                     Idle CPU : {{ cpu_idle|round(1) }} %<br/>
-                    Status: {{ cpu_metric['tags']['status']|capitalize }} <br/>
+                    Status: {{ cpu_metric['status']|capitalize }} <br/>
                     Warning (when idle is below): {{ (100 * cpu_threshold['low_warning'] / 100) }} %<br/>
                     Critical (when idle is below): {{ (100 * cpu_threshold['low_critical'] / 100) }} %<br/>
                 </div>

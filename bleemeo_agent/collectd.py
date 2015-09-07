@@ -119,7 +119,7 @@ class Collectd(threading.Thread):
         self.computed_metrics_pending.difference_update(processed)
 
     def _compute_metric(self, name, instance, timestamp):  # NOQA
-        def get_metric(measurements, searched_tags):
+        def get_metric(measurements, searched_tag):
             """ Helper that do common task when retriving metrics:
 
                 * check that metric exists and is not too old
@@ -128,48 +128,49 @@ class Collectd(threading.Thread):
                   to compute, raise ComputationFail. We will never be
                   able to compute the requested value.
             """
-            metric = self.core.get_last_metric(measurements, searched_tags)
+            metric = self.core.get_last_metric(measurements, searched_tag)
             if metric is None or metric['time'] < timestamp:
                 raise MissingMetric()
             elif metric['time'] < timestamp:
                 raise ComputationFail()
             return metric['value']
 
-        tags = {}
+        tag = None
 
         if name.startswith('cpu_'):
             cores = multiprocessing.cpu_count()
             value = 0
             for i in range(cores):
-                value += get_metric(name, {'cpu': i})
+                value += get_metric(name, str(i))
         elif name == 'disk_total':
-            tags = {'path': instance}
-            used = get_metric('disk_used', tags)
-            value = used + get_metric('disk_free', tags)
+            tag = instance
+            used = get_metric('disk_used', tag)
+            value = used + get_metric('disk_free', tag)
             # used_perc could be more that 100% is reserved space is used.
             # We limit it to 100% (105% would be confusing).
             used_perc = min(float(used) / value * 100, 100)
 
             # But still, total will including reserved space
-            value += get_metric('disk_reserved', tags)
+            value += get_metric('disk_reserved', tag)
 
             self.core.emit_metric({
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
-                'tags': tags,
+                'tag': tag,
+                'status': None,
                 'value': used_perc,
             })
         elif name == 'io_utilisation':
-            tags = {'name': instance}
-            io_time = get_metric('io_time', tags)
+            tag = instance
+            io_time = get_metric('io_time', tag)
             # io_time is a number of ms spent doing IO (per seconds)
             # utilisation is 100% when we spent 1000ms during one seconds
             value = io_time / 1000. * 100.
         elif name == 'mem_total':
-            used = get_metric('mem_used', tags)
+            used = get_metric('mem_used', tag)
             value = used
             for sub_type in ('buffered', 'cached', 'free'):
-                value += get_metric('mem_%s' % sub_type, tags)
+                value += get_metric('mem_%s' % sub_type, tag)
         elif name == 'process_total':
             types = [
                 'blocked', 'paging', 'running', 'sleeping',
@@ -177,22 +178,25 @@ class Collectd(threading.Thread):
             ]
             value = 0
             for sub_type in types:
-                value += get_metric('process_status_%s' % sub_type, tags)
+                value += get_metric('process_status_%s' % sub_type, tag)
         elif name == 'swap_total':
-            used = get_metric('swap_used', tags)
-            value = used + get_metric('swap_free', tags)
+            used = get_metric('swap_used', tag)
+            value = used + get_metric('swap_free', tag)
 
         if name in ('mem_total', 'swap_total'):
             self.core.emit_metric({
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
-                'tags': tags,
+                'tag': None,
+                'status': None,
                 'value': float(used) / value * 100,
             })
+
         self.core.emit_metric({
             'measurement': name,
             'time': timestamp,
-            'tags': tags,
+            'tag': tag,
+            'status': None,
             'value': value,
         })
 
@@ -217,7 +221,7 @@ collectd_regex = re.compile(
 
 
 def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
-    """ Process metric to rename it and add tags
+    """ Process metric to rename it and add tag
 
         If the metric is used to compute a derrived metric, add it to
         computed_metrics_pending.
@@ -230,10 +234,10 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
     match_dict = match.groupdict()
 
     ignore = False
-    tags = {}
+    tag = None
     if match_dict['plugin'] == 'cpu':
         name = 'cpu_%s' % match_dict['type_instance']
-        tags = {'cpu': int(match_dict['plugin_instance'])}
+        tag = match_dict['plugin_instance']
         ignore = True
         computed_metrics_pending.add((name, None, timestamp))
     elif match_dict['type'] == 'df_complex':
@@ -243,8 +247,8 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
             path = '/'
         else:
             path = '/' + path.replace('-', '/')
-        tags = {'path': path}
-        computed_metrics_pending.add(('disk_total', tags['path'], timestamp))
+        tag = path
+        computed_metrics_pending.add(('disk_total', tag, timestamp))
     elif match_dict['plugin'] == 'diskstats':
         name = {
             'reads_merged': 'io_read_merged',
@@ -259,7 +263,7 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
             'io_inprogress': 'io_inprogress',
         }[match_dict['type_instance']]
 
-        tags = {'name': match_dict['plugin_instance']}
+        tag = match_dict['plugin_instance']
         if name == 'io_time':
             computed_metrics_pending.add(
                 ('io_utilisation', match_dict['plugin_instance'], timestamp))
@@ -283,7 +287,7 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
             direction = direction.replace('recv', 'in').replace('sent', 'out')
 
         name = 'net_%s_%s' % (kind_name, direction)
-        tags = {'interface': match_dict['plugin_instance']}
+        tag = match_dict['plugin_instance']
     elif match_dict['plugin'] == 'load':
         duration = {
             'longterm': 15,
@@ -315,6 +319,7 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
         'measurement': name,
         'time': timestamp,
         'value': value,
-        'tags': tags,
+        'tag': tag,
+        'status': None,
         'ignore': ignore,
     }

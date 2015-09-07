@@ -117,6 +117,14 @@ class InfluxDBConnector(threading.Thread):
         if isinstance(value, float) and math.isnan(value):
             return
 
+        tag = metric.pop('tag')
+        status = metric.pop('status')
+        metric['tags'] = {}
+        if tag is not None:
+            metric['tags']['item'] = tag
+        if status is not None:
+            metric['tags']['status'] = status
+
         # InfluxDB want an integer for timestamp, not a float
         metric['time'] = int(metric['time'])
 

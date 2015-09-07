@@ -49,7 +49,8 @@ def test_rename_metric():
         'measurement': 'cpu_idle',
         'time': 12345,
         'value': 42,
-        'tags': {'cpu': 0},
+        'tag': '0',
+        'status': None,
         'ignore': True,
     }
     assert len(pending) == 1
@@ -65,7 +66,8 @@ def test_rename_metric():
         'measurement': 'users_logged',
         'time': 12345,
         'value': 42,
-        'tags': {},
+        'tag': None,
+        'status': None,
         'ignore': False,
     }
     assert len(pending) == 0
@@ -80,7 +82,8 @@ def test_rename_metric():
         'measurement': 'disk_free',
         'time': 12345,
         'value': 42,
-        'tags': {'path': '/var/lib'},
+        'tag': '/var/lib',
+        'status': None,
         'ignore': False,
     }
     assert len(pending) == 1
@@ -96,7 +99,8 @@ def test_rename_metric():
         'measurement': 'io_reads',
         'time': 12345,
         'value': 42,
-        'tags': {'name': 'sda'},
+        'tag': 'sda',
+        'status': None,
         'ignore': False,
     }
     assert len(pending) == 0

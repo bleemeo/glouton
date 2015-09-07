@@ -18,6 +18,16 @@ def home():
     num_core = multiprocessing.cpu_count()
     check_info = _gather_checks_info()
     top_output = bleemeo_agent.util.get_top_output(app.core.top_info)
+    disks_used_perc = [
+        metric
+        for metric in app.core.last_metrics.values()
+        if metric['measurement'] == 'disk_used_perc'
+    ]
+    nets_bytes_recv = [
+        metric
+        for metric in app.core.last_metrics.values()
+        if metric['measurement'] == 'net_bytes_recv'
+    ]
 
     return flask.render_template(
         'index.html',
@@ -26,6 +36,8 @@ def home():
         num_core=num_core,
         check_info=check_info,
         top_output=top_output,
+        disks_used_perc=disks_used_perc,
+        nets_bytes_recv=nets_bytes_recv,
     )
 
 
@@ -34,31 +46,27 @@ def _gather_checks_info():
     check_count_warning = 0
     check_count_critical = 0
     checks = []
-    for metrics in app.core.last_metrics.values():
-        for metric in metrics:
-            if 'status' in metric['tags']:
-                if metric['tags']['status'] == 'ok':
-                    check_count_ok += 1
-                elif metric['tags']['status'] == 'warning':
-                    check_count_warning += 1
-                else:
-                    check_count_critical += 1
-                threshold = app.core.thresholds.get(metric['measurement'])
+    for metric in app.core.last_metrics.values():
+        if metric['status'] is not None:
+            if metric['status'] == 'ok':
+                check_count_ok += 1
+            elif metric['status'] == 'warning':
+                check_count_warning += 1
+            else:
+                check_count_critical += 1
+            threshold = app.core.thresholds.get(metric['measurement'])
 
-                tags = metric['tags'].copy()
-                del tags['status']
-
-                pretty_name = metric['measurement']
-                for (key, value) in tags.items():
-                    pretty_name = '%s for %s %s' % (pretty_name, key, value)
-                checks.append({
-                    'name': metric['measurement'],
-                    'pretty_name': pretty_name,
-                    'tags': tags,
-                    'status': metric['tags']['status'],
-                    'value': metric['value'],
-                    'threshold': threshold,
-                })
+            pretty_name = metric['measurement']
+            if metric['tag'] is not None:
+                pretty_name = '%s for %s' % (pretty_name, metric['tag'])
+            checks.append({
+                'name': metric['measurement'],
+                'pretty_name': pretty_name,
+                'tag': metric['tag'],
+                'status': metric['status'],
+                'value': metric['value'],
+                'threshold': threshold,
+            })
 
     return {
         'checks': checks,
