@@ -222,6 +222,7 @@ class BleemeoConnector(threading.Thread):
             args=(new_sleep_delay,),
             trigger='date',
             run_date=datetime.datetime.now() + sleep_delay,
+            misfire_grace_time=None,  # always run this job, even if late
         )
 
     def emit_metric(self, metric):
