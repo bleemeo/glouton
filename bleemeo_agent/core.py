@@ -44,6 +44,7 @@ class StoredValue:
         self.filename = filename
         self._content = {}
         self.reload()
+        self._write_lock = threading.RLock()
 
     def reload(self):
         if os.path.exists(self.filename):
@@ -51,21 +52,26 @@ class StoredValue:
                 self._content = json.load(fd)
 
     def save(self):
-        try:
-            # Don't simply use open. This file must have limited permission
-            open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-            fileno = os.open(self.filename, open_flags, 0o600)
-            with os.fdopen(fileno, 'w') as fd:
-                json.dump(self._content, fd)
-        except IOError as exc:
-            logging.warning('Failed to store file : %s', exc)
+        with self._write_lock:
+            try:
+                # Don't simply use open. This file must have limited permission
+                open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+                fileno = os.open(self.filename + '.tmp', open_flags, 0o600)
+                with os.fdopen(fileno, 'w') as fd:
+                    json.dump(self._content, fd)
+                    fd.flush()
+                    os.fsync(fd.fileno())
+                os.rename(self.filename + '.tmp', self.filename)
+            except IOError as exc:
+                logging.warning('Failed to store file : %s', exc)
 
     def get(self, key, default=None):
         return self._content.get(key, default)
 
     def set(self, key, value):
-        self._content[key] = value
-        self.save()
+        with self._write_lock:
+            self._content[key] = value
+            self.save()
 
 
 class Core:
