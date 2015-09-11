@@ -267,6 +267,41 @@ class BleemeoConnector(threading.Thread):
             metrics_uuid.setdefault(metric_name, None)
             self.core.stored_values.set('metrics_uuid', metrics_uuid)
 
+    def send_facts(self, facts):
+        base_url = self.bleemeo_base_url
+        fact_url = urllib_parse.urljoin(base_url, '/v1/agentfact/')
+        facts_uuid = self.core.stored_values.get('facts_uuid', {})
+
+        # first delete any already sent facts
+        try:
+            for fact_name, fact_uuid in facts_uuid.items():
+                logging.debug(
+                    'Deleting fact %s (uuid=%s)', fact_name, fact_uuid)
+                requests.delete(
+                    urllib_parse.urljoin(fact_url, '%s/' % fact_uuid)
+                )
+        finally:
+            self.core.stored_values.set('facts_uuid', facts_uuid)
+
+        # then create one agentfact for item in the mapping.
+        try:
+            for fact_name, value in facts.items():
+                payload = {
+                    'agent': '/v1/agent/%s/' % self.agent_uuid,
+                    'key': fact_name,
+                    'value': str(value),
+                }
+                response = requests.post(fact_url, data=payload)
+                if response.status_code == 201:
+                    facts_uuid[fact_name] = response.json()['id']
+                    logging.debug(
+                        'Send fact %s, stored with uuid %s',
+                        fact_name,
+                        facts_uuid[fact_name]
+                    )
+        finally:
+            self.core.stored_values.set('facts_uuid', facts_uuid)
+
     def _warn_mqtt_queue_full(self):
         now = time.time()
         if (self._mqtt_queue_full_count_warning

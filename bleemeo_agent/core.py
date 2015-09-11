@@ -237,9 +237,7 @@ class Core:
         # method is still usefull. Web UI use last_facts.
         self.last_facts = bleemeo_agent.util.get_facts(self)
         if self.bleemeo_connector is not None:
-            self.bleemeo_connector.publish(
-                'api/v1/agent/facts/POST',
-                json.dumps(self.last_facts))
+            self.bleemeo_connector.send_facts(self.last_facts)
 
     def send_top_info(self):
         self.top_info = bleemeo_agent.util.get_top_info()
