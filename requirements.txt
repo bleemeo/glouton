@@ -1,7 +1,6 @@
 apscheduler
 influxdb
 paho-mqtt
-passlib
 flask
 psutil
 requests
