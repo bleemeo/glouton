@@ -9,10 +9,10 @@ logging:
 
 # Configure manatory settings with dummy value and point URLs to localhost
 bleemeo:
+    api_base: http://localhost:8000/
     account_id: 54dfadc4-64a6-4010-a92d-180b1232f282
     registration:
         key: test
-        url: http://localhost:8000/v1/agent/
     mqtt:
         host: localhost
         ssl: False

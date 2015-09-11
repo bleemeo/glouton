@@ -10,6 +10,7 @@ import uuid
 import paho.mqtt.client as mqtt
 import requests
 from six.moves import queue
+from six.moves import urllib_parse
 
 import bleemeo_agent
 
@@ -20,10 +21,10 @@ class BleemeoConnector(threading.Thread):
         super(BleemeoConnector, self).__init__()
         self.core = core
 
-        self._queue = queue.Queue()
-        self._queue_size = 0
-        self._queue_full_last_warning = 0
-        self._queue_full_count_warning = 0
+        self._metric_queue = queue.Queue()
+        self._mqtt_queue_size = 0
+        self._mqtt_queue_full_last_warning = 0
+        self._mqtt_queue_full_count_warning = 0
         self.mqtt_client = mqtt.Client()
         self.uuid_connection = uuid.uuid4()
         self.connected = False
@@ -38,7 +39,7 @@ class BleemeoConnector(threading.Thread):
         self.connected = False
 
     def on_publish(self, client, userdata, mid):
-        self._queue_size -= 1
+        self._mqtt_queue_size -= 1
         self.core.update_last_report()
 
     def check_config_requirement(self):
@@ -55,11 +56,13 @@ class BleemeoConnector(threading.Thread):
                 raise StopIteration
             config = self.core.reload_config()
             sleep_delay = min(sleep_delay * 2, 600)
-            self._warn_queue_full()
+            self._warn_mqtt_queue_full()
 
         if self.core.stored_values.get('password') is None:
             self.core.stored_values.set(
                 'password', bleemeo_agent.util.generate_password())
+        if self.core.stored_values.get('metrics_uuid') is None:
+            self.core.stored_values.set('metrics_uuid', {})
 
     def run(self):
         try:
@@ -76,6 +79,12 @@ class BleemeoConnector(threading.Thread):
         #    defined and is needed to next step)
         if self.core.is_terminating.is_set():
             return
+
+        self.core.scheduler.add_job(
+            self._register_metric,
+            trigger='interval',
+            minutes=1,
+        )
 
         self.mqtt_client.will_set(
             'api/v0/agent/%s/disconnect' % self.agent_uuid,
@@ -142,7 +151,7 @@ class BleemeoConnector(threading.Thread):
 
         try:
             while True:
-                metric = self._queue.get(timeout=timeout)
+                metric = self._metric_queue.get(timeout=timeout)
                 timeout = 0  # Only wait for the first get
                 metrics.append(metric)
         except queue.Empty:
@@ -154,7 +163,7 @@ class BleemeoConnector(threading.Thread):
                 json.dumps(metrics)
             )
 
-        self._warn_queue_full()
+        self._warn_mqtt_queue_full()
 
     def publish_top_info(self, top_info):
         self.publish(
@@ -163,24 +172,22 @@ class BleemeoConnector(threading.Thread):
         )
 
     def publish(self, topic, message):
-        if self._queue_size > 500:
-            self._queue_full_count_warning += 1
+        if self._mqtt_queue_size > 500:
+            self._mqtt_queue_full_count_warning += 1
             return
 
         self.mqtt_client.publish(
             topic,
             message,
             1)
-        self._queue_size += 1
+        self._mqtt_queue_size += 1
 
     def register(self):
         """ Register the agent to Bleemeo SaaS service
         """
         sleep_delay = datetime.timedelta(seconds=10)
-        default_url = 'https://api.bleemeo.com/v1/agent/'
-
-        registration_url = self.core.config.get(
-            'bleemeo.registration.url', default_url)
+        base_url = self.bleemeo_base_url
+        registration_url = urllib_parse.urljoin(base_url, '/v1/agent/')
 
         payload = {
             'account': '/v1/account/%s/' % self.account_id,
@@ -216,19 +223,60 @@ class BleemeoConnector(threading.Thread):
             self.core.is_terminating.wait(sleep_delay.total_seconds())
             sleep_delay = min(sleep_delay * 2, datetime.timedelta(minutes=30))
 
-    def emit_metric(self, metric):
-        self._queue.put(metric)
+    def _register_metric(self):
+        """ Check for any unregistered metrics and register them
+        """
+        base_url = self.bleemeo_base_url
+        registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
 
-    def _warn_queue_full(self):
+        metrics_uuid = self.core.stored_values.get('metrics_uuid')
+        changed = False
+
+        try:
+            for metric_name, metric_uuid in metrics_uuid.items():
+                if metric_uuid is None:
+                    logging.debug('Registering metric %s', metric_name)
+                    payload = {
+                        'agent': '/v1/agent/%s/' % self.agent_uuid,
+                        'label': metric_name,
+                    }
+                    response = requests.post(registration_url, data=payload)
+                    if response.status_code != 201:
+                        logging.debug(
+                            'Metric registration failed. Server response = %s',
+                            response.content
+                        )
+                        return
+                    metrics_uuid[metric_name] = response.json()['id']
+                    logging.debug(
+                        'Metric %s registered with uuid %s',
+                        metric_name,
+                        metrics_uuid[metric_name],
+                    )
+                    changed = True
+        finally:
+            if changed:
+                self.core.stored_values.set('metrics_uuid', metrics_uuid)
+
+    def emit_metric(self, metric):
+        self._metric_queue.put(metric)
+        metric_name = metric['measurement']
+
+        metrics_uuid = self.core.stored_values.get('metrics_uuid', {})
+        if metric_name not in metrics_uuid:
+            metrics_uuid.setdefault(metric_name, None)
+            self.core.stored_values.set('metrics_uuid', metrics_uuid)
+
+    def _warn_mqtt_queue_full(self):
         now = time.time()
-        if (self._queue_full_count_warning
-                and self._queue_full_last_warning < now - 60):
+        if (self._mqtt_queue_full_count_warning
+                and self._mqtt_queue_full_last_warning < now - 60):
             logging.warning(
                 'Bleemeo connector: %s message(s) were dropped due to '
                 'overflow of the sending queue',
-                self._queue_full_count_warning)
-            self._queue_full_last_warning = now
-            self._queue_full_count_warning = 0
+                self._mqtt_queue_full_count_warning)
+            self._mqtt_queue_full_last_warning = now
+            self._mqtt_queue_full_count_warning = 0
 
     @property
     def account_id(self):
@@ -237,3 +285,10 @@ class BleemeoConnector(threading.Thread):
     @property
     def agent_uuid(self):
         return self.core.stored_values.get('agent_uuid')
+
+    @property
+    def bleemeo_base_url(self):
+        return self.core.config.get(
+            'bleemeo.api_base',
+            'https://api.bleemeo.com/'
+        )
