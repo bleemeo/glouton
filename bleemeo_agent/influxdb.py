@@ -18,7 +18,7 @@ class InfluxDBConnector(threading.Thread):
         super(InfluxDBConnector, self).__init__()
         self.core = core
 
-        self.db_name = self.core.config.get('influxdb.db_name', 'bleemeo')
+        self.db_name = self.core.config.get('influxdb.db_name', 'metrics')
         self.retention_policy_name = 'standard_policy'
 
         self.influx_client = None
@@ -129,7 +129,10 @@ class InfluxDBConnector(threading.Thread):
         metric['time'] = int(metric['time'])
 
         metric['fields'] = {'value': value}
-        metric['tags']['hostname'] = socket.getfqdn()
+        if self.core.agent_uuid is None:
+            metric['tags']['hostname'] = socket.getfqdn()
+        else:
+            metric['tags']['agent_uuid'] = self.core.agent_uuid
 
         self._enqueue(metric)
 

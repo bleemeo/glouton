@@ -332,3 +332,13 @@ class Core:
             return metric['value']
         else:
             return default
+
+    @property
+    def agent_uuid(self):
+        """ Return a UUID for this agent.
+
+            Currently, it's the UUID assigned by Bleemeo SaaS during
+            registration.
+        """
+        if self.bleemeo_connector is not None:
+            return self.bleemeo_connector.agent_uuid
