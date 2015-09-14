@@ -182,6 +182,10 @@ class Collectd(threading.Thread):
         elif name == 'swap_total':
             used = get_metric('swap_used', tag)
             value = used + get_metric('swap_free', tag)
+        elif name in ('net_bits_recv', 'net_bits_sent'):
+            tag = instance
+            value = get_metric(name.replace('bits', 'bytes'), instance)
+            value = value * 8
 
         if name in ('mem_total', 'swap_total'):
             self.core.emit_metric({
@@ -282,12 +286,19 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
         else:
             direction = 'sent'
 
-        # Special case, if it's some error, we use "in" and "out"
+        tag = match_dict['plugin_instance']
+
+        # Special cases:
+        # * if it's some error, we use "in" and "out"
+        # * for bytes, we need to convert it to bits
         if kind_name == 'err':
             direction = direction.replace('recv', 'in').replace('sent', 'out')
+        elif kind_name == 'bytes':
+            no_emit = True
+            computed_metrics_pending.add(
+                ('net_bits_%s' % direction, tag, timestamp))
 
         name = 'net_%s_%s' % (kind_name, direction)
-        tag = match_dict['plugin_instance']
     elif match_dict['plugin'] == 'load':
         duration = {
             'longterm': 15,
