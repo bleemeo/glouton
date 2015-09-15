@@ -73,6 +73,14 @@ class BleemeoConnector(threading.Thread):
         if self.agent_uuid is None:
             self.register()
 
+        # first fact are gathered before agent had registred. Since
+        # the job is run every day, it a bit too long to wait.
+        # If at this point facts_uuid is undefined, facts were never sent.
+        # In this case, just re-send last facts
+        if (self.core.last_facts
+                and self.core.stored_values.get('facts_uuid') is None):
+            self.send_facts(self.core.last_facts)
+
         # Register return on two case:
         # 1) registration is done => continue normal processing
         # 2) agent is stopping    => we must exit (self.agent_uuid is not
@@ -86,6 +94,20 @@ class BleemeoConnector(threading.Thread):
             minutes=1,
         )
 
+        self._mqtt_setup()
+
+        while not self.core.is_terminating.is_set():
+            self._loop()
+
+        self.publish(
+            'api/v0/agent/%s/disconnect' % self.agent_uuid,
+            'disconnect %s' % self.uuid_connection)
+        self.mqtt_client.loop_stop()
+
+        self.mqtt_client.disconnect()
+        self.mqtt_client.loop()
+
+    def _mqtt_setup(self):
         self.mqtt_client.will_set(
             'api/v0/agent/%s/disconnect' % self.agent_uuid,
             'disconnect-will %s' % self.uuid_connection,
@@ -130,17 +152,6 @@ class BleemeoConnector(threading.Thread):
         self.publish(
             'api/v0/agent/%s/connect' % self.agent_uuid,
             'connect %s' % self.uuid_connection)
-
-        while not self.core.is_terminating.is_set():
-            self._loop()
-
-        self.publish(
-            'api/v0/agent/%s/disconnect' % self.agent_uuid,
-            'disconnect %s' % self.uuid_connection)
-        self.mqtt_client.loop_stop()
-
-        self.mqtt_client.disconnect()
-        self.mqtt_client.loop()
 
     def _loop(self):
         """ Call as long as agent is running. It's the "main" method for
@@ -216,7 +227,15 @@ class BleemeoConnector(threading.Thread):
                 logging.debug('Regisration successfull')
                 return
             elif content is not None:
-                logging.debug('Registration failed, content=%s', content)
+                logging.debug(
+                    'Registration failed, content (json) = %s',
+                    content
+                )
+            else:
+                logging.debug(
+                    'Registration failed, content = %s',
+                    response.content
+                )
 
             logging.info(
                 'Registration failed... retyring in %s', sleep_delay)
@@ -268,6 +287,10 @@ class BleemeoConnector(threading.Thread):
             self.core.stored_values.set('metrics_uuid', metrics_uuid)
 
     def send_facts(self, facts):
+        if self.agent_uuid is None:
+            logging.debug('Do not sent fact before agent registration')
+            return
+
         base_url = self.bleemeo_base_url
         fact_url = urllib_parse.urljoin(base_url, '/v1/agentfact/')
         facts_uuid = self.core.stored_values.get('facts_uuid', {})
