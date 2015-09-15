@@ -106,9 +106,9 @@
         </div>
         {% endif %}
     {% endwith %}
-    {% for net_metric in nets_bytes_recv|sort(attribute='tag') %}
+    {% for net_metric in nets_bits_recv|sort(attribute='tag') %}
     {% with %}
-        {% set sent_bytes = core.get_last_metric_value('net_bytes_sent', net_metric['tag'], 0) %}
+        {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric['tag'], 0) %}
         {% set recv_bytes = net_metric['value'] %}
         <div>
             <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
@@ -121,8 +121,8 @@
             </div>
             <div id="net-collapse-{{ loop.index }}" class="panel-collapse collapse" role="tabpanel" aria-labelledby="net-heading-{{ loop.index }}">
                 <div class="panel-body add-left-margin">
-                    Received bytes: {{ recv_bytes|netsizeformat }}<br/>
-                    Sent bytes: {{ sent_bytes|netsizeformat }}<br/>
+                    Received bits: {{ recv_bytes|netsizeformat }}<br/>
+                    Sent bits: {{ sent_bytes|netsizeformat }}<br/>
                 </div>
             </div>
         </div>

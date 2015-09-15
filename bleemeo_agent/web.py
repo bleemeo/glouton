@@ -23,10 +23,10 @@ def home():
         for metric in app.core.last_metrics.values()
         if metric['measurement'] == 'disk_used_perc'
     ]
-    nets_bytes_recv = [
+    nets_bits_recv = [
         metric
         for metric in app.core.last_metrics.values()
-        if metric['measurement'] == 'net_bytes_recv'
+        if metric['measurement'] == 'net_bits_recv'
     ]
 
     return flask.render_template(
@@ -37,7 +37,7 @@ def home():
         check_info=check_info,
         top_output=top_output,
         disks_used_perc=disks_used_perc,
-        nets_bytes_recv=nets_bytes_recv,
+        nets_bits_recv=nets_bits_recv,
     )
 
 
