@@ -303,6 +303,9 @@ class BleemeoConnector(threading.Thread):
                 requests.delete(
                     urllib_parse.urljoin(fact_url, '%s/' % fact_uuid)
                 )
+        except:
+            logging.debug('Failed to remove old facts.', exc_info=True)
+            return
         finally:
             self.core.stored_values.set('facts_uuid', facts_uuid)
 
@@ -322,6 +325,8 @@ class BleemeoConnector(threading.Thread):
                         fact_name,
                         facts_uuid[fact_name]
                     )
+        except:
+            logging.debug('Failed to send facts.', exc_info=True)
         finally:
             self.core.stored_values.set('facts_uuid', facts_uuid)
 

@@ -134,12 +134,14 @@ class Core:
             self.start_threads()
             self.schedule_tasks()
             bleemeo_agent.checker.initialize_checks(self)
-            self.scheduler.start()
+            try:
+                self.scheduler.start()
+            finally:
+                self.scheduler.shutdown()
         except KeyboardInterrupt:
             pass
         finally:
             self.is_terminating.set()
-            self.scheduler.shutdown()
 
     def setup_signal(self):
         """ Make kill (SIGKILL/SIGQUIT) send a KeyboardInterrupt
