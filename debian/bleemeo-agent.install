@@ -1,3 +1,4 @@
 #!/usr/bin/dh-exec
 debian/bleemeo-agent.collectd.conf => etc/collectd/collectd.conf.d/bleemeo.conf
+debian/bleemeo-agent.sudoers => etc/sudoers.d/bleemeo
 etc/agent.yml => etc/bleemeo/agent.yml

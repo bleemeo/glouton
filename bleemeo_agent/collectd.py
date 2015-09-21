@@ -20,6 +20,17 @@ LoadPlugin apache
 </Plugin>
 """
 
+MYSQL_COLLECTD_CONFIG = """
+LoadPlugin mysql
+<Plugin mysql>
+    <Database bleemeo>
+        Host "%(address)s"
+        User "%(user)s"
+        Password "%(password)s"
+    </Database>
+</Plugin>
+"""
+
 
 class ComputationFail(Exception):
     pass
@@ -68,6 +79,11 @@ class Collectd(threading.Thread):
                 APACHE_COLLECTD_CONFIG %
                 self.core.discovered_services['apache']
             )
+        if 'mysql' in self.core.discovered_services:
+            collectd_config += (
+                MYSQL_COLLECTD_CONFIG %
+                self.core.discovered_services['mysql']
+            )
 
         return collectd_config
 
@@ -88,7 +104,7 @@ class Collectd(threading.Thread):
                 return
 
         if (collectd_config == BASE_COLLECTD_CONFIG
-                and not os.path.exists(collectd_config)):
+                and not os.path.exists(collectd_config_path)):
             logging.debug(
                 'collectd generated config would be empty, skip writting it'
             )
@@ -417,6 +433,16 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
         if match_dict['type_instance']:
             name += '.' + match_dict['type_instance']
         service = 'apache'
+    elif (match_dict['plugin'] == 'mysql'
+            and match_dict['plugin_instance'] == 'bleemeo'):
+        name = match_dict['type']
+        if match_dict['type_instance']:
+            name += '.' + match_dict['type_instance']
+
+        if not name.startswith('mysql_'):
+            name = 'mysql_' + name
+
+        service = 'mysql'
     else:
         return (None, None)
 
