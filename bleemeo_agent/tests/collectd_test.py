@@ -51,6 +51,7 @@ def test_rename_metric():
         'value': 42,
         'tag': '0',
         'status': None,
+        'service': None,
     }
     assert no_emit is True
     assert len(pending) == 1
@@ -68,6 +69,7 @@ def test_rename_metric():
         'value': 42,
         'tag': None,
         'status': None,
+        'service': None,
     }
     assert no_emit is False
     assert len(pending) == 0
@@ -84,6 +86,7 @@ def test_rename_metric():
         'value': 42,
         'tag': '/var/lib',
         'status': None,
+        'service': None,
     }
     assert no_emit is False
     assert len(pending) == 1
@@ -101,6 +104,7 @@ def test_rename_metric():
         'value': 42,
         'tag': 'sda',
         'status': None,
+        'service': None,
     }
     assert no_emit is False
     assert len(pending) == 0

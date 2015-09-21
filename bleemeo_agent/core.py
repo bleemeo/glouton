@@ -1,15 +1,19 @@
 import copy
 import datetime
+import io
 import json
 import logging
 import logging.config
 import multiprocessing
 import os
 import signal
+import subprocess
 import threading
 import time
 
 import apscheduler.schedulers.blocking
+import psutil
+from six.moves import configparser
 
 import bleemeo_agent
 import bleemeo_agent.bleemeo
@@ -19,6 +23,14 @@ import bleemeo_agent.config
 import bleemeo_agent.influxdb
 import bleemeo_agent.util
 import bleemeo_agent.web
+
+
+KNOWN_SERVICES = [
+    {'port': 80, 'process': 'apache2', 'service': 'apache'},
+    {'port': 80, 'process': 'httpd', 'service': 'apache'},
+    {'port': 80, 'process': 'nginx', 'service': 'nginx'},
+    {'port': 3306, 'service': 'mysql'},
+]
 
 
 def main():
@@ -82,6 +94,7 @@ class Core:
         self.checks = []
         self.last_facts = {}
         self.thresholds = {}
+        self.discovered_services = {}
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -131,6 +144,7 @@ class Core:
     def run(self):
         try:
             self.setup_signal()
+            self._run_discovery()
             self.start_threads()
             self.schedule_tasks()
             bleemeo_agent.checker.initialize_checks(self)
@@ -210,6 +224,7 @@ class Core:
             'measurement': 'uptime',
             'tag': None,
             'status': None,
+            'service': None,
             'time': now,
             'value': uptime_seconds,
         })
@@ -232,6 +247,75 @@ class Core:
             for ((measurement, tag), metric) in self.last_metrics.items()
             if metric['time'] >= cutoff
         }
+
+    def _run_discovery(self):
+        """ Try to discover some service based on known port/process
+        """
+        # First discover local services. It may find docker process
+        # if agent is running on docker host.
+        listening_ports = {}
+        for connection in psutil.net_connections():
+            if connection.status == 'LISTEN':
+                address = connection.laddr[0]
+                if address == '::' or address == '0.0.0.0' or address == '::1':
+                    # convert "any address" to "localhost"
+                    # Also assume that IPv6 socket (:: & ::1) are IPv4/6 socket
+                    address = '127.0.0.1'
+
+                listening_ports[connection.laddr[1]] = {
+                    'address': address,
+                    'container': 'host',
+                }
+
+        process_names = set()
+
+        for process in psutil.process_iter():
+            process_names.add(process.name())
+
+        for service_info in KNOWN_SERVICES:
+            if (service_info['port'] in listening_ports
+                    and ('process' not in service_info
+                         or service_info['process'] in process_names)):
+
+                service_port = listening_ports[service_info['port']]
+                self.discovered_services[service_info['service']] = {
+                    'port': service_info['port'],
+                    'address': service_port['address'],
+                    'container': service_port['container'],
+                }
+
+        # some service may need additionnal information, like password
+        if 'mysql' in self.discovered_services:
+            self._discover_mysql()
+
+    def _discover_mysql(self):
+        """ Find a MySQL user
+        """
+        mysql_user = 'root'
+        mysql_password = ''
+
+        if self.discovered_services['mysql']['container'] == 'host':
+            # grab maintenace password from debian.cnf
+            try:
+                debian_cnf_raw = subprocess.check_output(
+                    [
+                        'sudo', '--non-interactive',
+                        'cat', '/etc/mysql/debian.cnf'
+                    ],
+                )
+            except subprocess.CalledProcessError:
+                debian_cnf_raw = ''
+
+            debian_cnf = configparser.SafeConfigParser()
+            debian_cnf.readfp(io.StringIO(debian_cnf_raw.decode('utf-8')))
+            try:
+                mysql_user = debian_cnf.get('client', 'user')
+                mysql_password = debian_cnf.get('client', 'password')
+            except (configparser.NoSectionError, configparser.NoOptionError):
+                pass
+
+        self.discovered_services['mysql']['user'] = mysql_user
+        self.discovered_services['mysql']['password'] = mysql_password
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS """

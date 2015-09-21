@@ -28,6 +28,7 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client = mqtt.Client()
         self.uuid_connection = uuid.uuid4()
         self.connected = False
+        self.metrics_uuid = self._load_metrics_uuid()
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -61,8 +62,6 @@ class BleemeoConnector(threading.Thread):
         if self.core.stored_values.get('password') is None:
             self.core.stored_values.set(
                 'password', bleemeo_agent.util.generate_password())
-        if self.core.stored_values.get('metrics_uuid') is None:
-            self.core.stored_values.set('metrics_uuid', {})
 
     def run(self):
         try:
@@ -91,7 +90,7 @@ class BleemeoConnector(threading.Thread):
         self.core.scheduler.add_job(
             self._register_metric,
             trigger='interval',
-            minutes=1,
+            seconds=15,
         )
 
         self._mqtt_setup()
@@ -248,17 +247,22 @@ class BleemeoConnector(threading.Thread):
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
 
-        metrics_uuid = self.core.stored_values.get('metrics_uuid')
         changed = False
 
         try:
-            for metric_name, metric_uuid in metrics_uuid.items():
+            for metric, metric_uuid in self.metrics_uuid.items():
+                (metric_name, service) = metric
                 if metric_uuid is None:
                     logging.debug('Registering metric %s', metric_name)
                     payload = {
                         'agent': '/v1/agent/%s/' % self.agent_uuid,
                         'label': metric_name,
                     }
+                    if service is not None:
+                        payload['service'] = (
+                            '/v1/service/%s/' %
+                            self._get_service_uuid(service)
+                        )
                     response = requests.post(registration_url, data=payload)
                     if response.status_code != 201:
                         logging.debug(
@@ -266,27 +270,81 @@ class BleemeoConnector(threading.Thread):
                             response.content
                         )
                         return
-                    metrics_uuid[metric_name] = response.json()['id']
+                    self.metrics_uuid[(metric_name, service)] = (
+                        response.json()['id']
+                    )
                     logging.debug(
                         'Metric %s registered with uuid %s',
                         metric_name,
-                        metrics_uuid[metric_name],
+                        self.metrics_uuid[(metric_name, service)],
                     )
                     changed = True
         finally:
             if changed:
-                self.core.stored_values.set('metrics_uuid', metrics_uuid)
+                self._save_metrics_uuid()
+
+    def _get_service_uuid(self, service_name):
+        base_url = self.bleemeo_base_url
+        registration_url = urllib_parse.urljoin(base_url, '/v1/service/')
+
+        services_uuid = self.core.stored_values.get('services_uuid', {})
+
+        if service_name in services_uuid:
+            return services_uuid[service_name]
+
+        payload = {
+            'account': '/v1/account/%s/' % self.account_id,
+            'agent': '/v1/agent/%s/' % self.agent_uuid,
+            'label': service_name,
+        }
+
+        response = requests.post(registration_url, data=payload)
+        if response.status_code != 201:
+            logging.debug(
+                'Service registration failed. Server response = %s',
+                response.content
+            )
+            raise ValueError('failed to create service')
+        services_uuid[service_name] = response.json()['id']
+        logging.debug(
+            'Service %s registered with uuid %s',
+            service_name,
+            services_uuid[service_name],
+        )
+        self.core.stored_values.set('services_uuid', services_uuid)
+
+        return services_uuid[service_name]
+
+    def _load_metrics_uuid(self):
+        """ Metrics UUID are persistent in "stored_value" JSON file.
+
+            Since we want key to be (metric_name, service_name), which
+            is not a string (but a tuple of string), it can't be stored
+            as-is in JSON file.
+        """
+        metrics_uuid = {}
+        json_metrics_uuid = self.core.stored_values.get('metrics_uuid', [])
+        for (metric_name, service_name, metric_uuid) in json_metrics_uuid:
+            metrics_uuid[(metric_name, service_name)] = metric_uuid
+
+        return metrics_uuid
+
+    def _save_metrics_uuid(self):
+        json_metrics_uuid = []
+        for metric, metric_uuid in self.metrics_uuid.items():
+            (metric_name, service_name) = metric
+            json_metrics_uuid.append((metric_name, service_name, metric_uuid))
+        self.core.stored_values.set('metrics_uuid', json_metrics_uuid)
 
     def emit_metric(self, metric):
         self._metric_queue.put(metric)
         metric_name = metric['measurement']
+        service = metric['service']
 
-        metrics_uuid = self.core.stored_values.get('metrics_uuid', {})
-        if metric_name not in metrics_uuid:
-            metrics_uuid.setdefault(metric_name, None)
-            self.core.stored_values.set('metrics_uuid', metrics_uuid)
+        if (metric_name, service) not in self.metrics_uuid:
+            self.metrics_uuid.setdefault((metric_name, service), None)
 
-    def send_facts(self, facts):
+    def send_facts(self, facts):  # NOQA
         if self.agent_uuid is None:
             logging.debug('Do not sent fact before agent registration')
             return
@@ -297,12 +355,22 @@ class BleemeoConnector(threading.Thread):
 
         # first delete any already sent facts
         try:
-            for fact_name, fact_uuid in facts_uuid.items():
+            # We use "list" to create a copy of facts_uuid, so
+            # we modify facts_uuid (remove entry) while iterating over it
+            for fact_name, fact_uuid in list(facts_uuid.items()):
                 logging.debug(
                     'Deleting fact %s (uuid=%s)', fact_name, fact_uuid)
-                requests.delete(
+                response = requests.delete(
                     urllib_parse.urljoin(fact_url, '%s/' % fact_uuid)
                 )
+                if response.status_code == 204:
+                    del facts_uuid[fact_name]
+                else:
+                    logging.debug(
+                        'Delete failed, excepted code=204, recveived %s',
+                        response.status_code
+                    )
+                    return
         except:
             logging.debug('Failed to remove old facts.', exc_info=True)
             return
@@ -325,6 +393,12 @@ class BleemeoConnector(threading.Thread):
                         fact_name,
                         facts_uuid[fact_name]
                     )
+                else:
+                    logging.debug(
+                        'Fact registration failed. Server response = %s',
+                        response.content
+                    )
+                    return
         except:
             logging.debug('Failed to send facts.', exc_info=True)
         finally:

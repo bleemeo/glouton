@@ -119,6 +119,7 @@ class InfluxDBConnector(threading.Thread):
 
         tag = metric.pop('tag')
         status = metric.pop('status')
+        del metric['service']  # InfluxDB don't store service
         metric['tags'] = {}
         if tag is not None:
             metric['tags']['item'] = tag

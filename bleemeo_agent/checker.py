@@ -129,6 +129,7 @@ class Check:
             'measurement': 'check-%s' % self.short_name,
             'status': STATUS_NAME[return_code],
             'tag': None,
+            'service': None,
             'time': self.last_run,
             'value': return_code,
         })
