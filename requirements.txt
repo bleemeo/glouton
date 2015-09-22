@@ -1,4 +1,5 @@
 apscheduler
+docker-py
 influxdb
 paho-mqtt
 flask

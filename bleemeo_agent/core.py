@@ -12,6 +12,7 @@ import threading
 import time
 
 import apscheduler.schedulers.blocking
+import docker
 import psutil
 from six.moves import configparser
 
@@ -31,6 +32,8 @@ KNOWN_SERVICES = [
     {'process': 'nginx', 'service': 'nginx', 'port': 80},
     {'process': 'mysqld', 'service': 'mysql', 'port': 3306},
 ]
+
+DOCKER_API_VERSION = '1.17'
 
 
 def main():
@@ -144,7 +147,10 @@ class Core:
     def run(self):
         try:
             self.setup_signal()
-            self._run_discovery()
+            try:
+                self._run_discovery()
+            except:
+                logging.debug('Discovery failed', exc_info=True)
             self.start_threads()
             self.schedule_tasks()
             bleemeo_agent.checker.initialize_checks(self)
@@ -251,21 +257,32 @@ class Core:
     def _run_discovery(self):
         """ Try to discover some service based on known port/process
         """
-        # First discover local services. It may find docker process
-        # if agent is running on docker host, but docker discovery
-        # will override local discovery.
-        process_names = set()
+        process_names = {}
 
         for process in psutil.process_iter():
-            process_names.add(process.name())
+            process_names[process.name()] = 'host'
+
+        docker_client = docker.Client(version=DOCKER_API_VERSION)
+        for container in docker_client.containers():
+            for process in docker_client.top(container['Id'])['Processes']:
+                # process[7] is command line. e.g. /usr/bin/mysqld param
+                name = os.path.basename(process[7].split()[0])
+                process_names[name] = container['Id']
 
         for service_info in KNOWN_SERVICES:
             if service_info['process'] in process_names:
 
+                container = process_names[service_info['process']]
+                if container == 'host':
+                    address = '127.0.0.1'
+                else:
+                    container_info = docker_client.inspect_container(container)
+                    address = container_info['NetworkSettings']['IPAddress']
+
                 self.discovered_services[service_info['service']] = {
                     'port': service_info['port'],
-                    'address': '127.0.0.1',
-                    'container': 'host',
+                    'address': address,
+                    'container': container,
                 }
 
         # some service may need additionnal information, like password
@@ -278,7 +295,8 @@ class Core:
         mysql_user = 'root'
         mysql_password = ''
 
-        if self.discovered_services['mysql']['container'] == 'host':
+        container = self.discovered_services['mysql']['container']
+        if container == 'host':
             # grab maintenace password from debian.cnf
             try:
                 debian_cnf_raw = subprocess.check_output(
@@ -297,6 +315,14 @@ class Core:
                 mysql_password = debian_cnf.get('client', 'password')
             except (configparser.NoSectionError, configparser.NoOptionError):
                 pass
+        else:
+            # MySQL is running inside a docker.
+            docker_client = docker.Client(version=DOCKER_API_VERSION)
+            container_info = docker_client.inspect_container(container)
+            for env in container_info['Config']['Env']:
+                # env has the form "VARIABLE=value"
+                if env.startswith('MYSQL_ROOT_PASSWORD='):
+                    mysql_password = env.replace('MYSQL_ROOT_PASSWORD=', '')
 
         self.discovered_services['mysql']['user'] = mysql_user
         self.discovered_services['mysql']['password'] = mysql_password
