@@ -26,10 +26,10 @@ import bleemeo_agent.web
 
 
 KNOWN_SERVICES = [
-    {'port': 80, 'process': 'apache2', 'service': 'apache'},
-    {'port': 80, 'process': 'httpd', 'service': 'apache'},
-    {'port': 80, 'process': 'nginx', 'service': 'nginx'},
-    {'port': 3306, 'service': 'mysql'},
+    {'process': 'apache2', 'service': 'apache', 'port': 80},
+    {'process': 'httpd', 'service': 'apache', 'port': 80},
+    {'process': 'nginx', 'service': 'nginx', 'port': 80},
+    {'process': 'mysqld', 'service': 'mysql', 'port': 3306},
 ]
 
 
@@ -252,36 +252,20 @@ class Core:
         """ Try to discover some service based on known port/process
         """
         # First discover local services. It may find docker process
-        # if agent is running on docker host.
-        listening_ports = {}
-        for connection in psutil.net_connections():
-            if connection.status == 'LISTEN':
-                address = connection.laddr[0]
-                if address == '::' or address == '0.0.0.0' or address == '::1':
-                    # convert "any address" to "localhost"
-                    # Also assume that IPv6 socket (:: & ::1) are IPv4/6 socket
-                    address = '127.0.0.1'
-
-                listening_ports[connection.laddr[1]] = {
-                    'address': address,
-                    'container': 'host',
-                }
-
+        # if agent is running on docker host, but docker discovery
+        # will override local discovery.
         process_names = set()
 
         for process in psutil.process_iter():
             process_names.add(process.name())
 
         for service_info in KNOWN_SERVICES:
-            if (service_info['port'] in listening_ports
-                    and ('process' not in service_info
-                         or service_info['process'] in process_names)):
+            if service_info['process'] in process_names:
 
-                service_port = listening_ports[service_info['port']]
                 self.discovered_services[service_info['service']] = {
                     'port': service_info['port'],
-                    'address': service_port['address'],
-                    'container': service_port['container'],
+                    'address': '127.0.0.1',
+                    'container': 'host',
                 }
 
         # some service may need additionnal information, like password
