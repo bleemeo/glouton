@@ -19,7 +19,7 @@ STATUS_NAME = {
     STATUS_OK: 'ok',
     STATUS_WARNING: 'warning',
     STATUS_CRITICAL: 'critical',
-    STATUS_UNKNOWN: 'unkonw',
+    STATUS_UNKNOWN: 'unknown',
 }
 
 
