@@ -26,12 +26,12 @@ import bleemeo_agent.util
 import bleemeo_agent.web
 
 
-KNOWN_SERVICES = [
-    {'process': 'apache2', 'service': 'apache', 'port': 80},
-    {'process': 'httpd', 'service': 'apache', 'port': 80},
-    {'process': 'nginx', 'service': 'nginx', 'port': 80},
-    {'process': 'mysqld', 'service': 'mysql', 'port': 3306},
-]
+KNOWN_PROCESS = {
+    'apache2': {'service': 'apache', 'port': 80},
+    'httpd': {'service': 'apache', 'port': 80},
+    'nginx': {'service': 'nginx', 'port': 80},
+    'mysqld': {'service': 'mysql', 'port': 3306},
+}
 
 DOCKER_API_VERSION = '1.17'
 
@@ -264,27 +264,59 @@ class Core:
             self.collectd_server.update_discovery(old_discovered_services)
             bleemeo_agent.checker.update_checks(self, old_discovered_services)
 
+    def _get_processes_map(self):
+        """ Return a mapping from PID to name and container in which
+            process is running.
+
+            When running in host / root pid namespace, associate None
+            for the container (else it's the docker container name)
+        """
+        # Contains list of all processes from root pid_namespace point-of-view
+        # key is the PID, value is {'name': 'mysqld', 'container': 'db'}
+        # container is None in case of processes running outside docker
+        processes = {}
+
+        is_in_docker = os.path.exists('/.dockerinit')
+
+        # host (a.k.a the root pid namespace) see ALL process.
+        # They are added in container "None" (i.e. running in the host),
+        # but if they are running in a docker, they will be updated later
+        if not is_in_docker:
+            for process in psutil.process_iter():
+                processes[process.pid] = {
+                    'name': process.name(),
+                    'container': None,
+                }
+
+        docker_client = docker.Client(version=DOCKER_API_VERSION)
+        for container in docker_client.containers():
+            # container has... nameS
+            # Also name start with "/". I think it may have mulitple name
+            # and/or other "/" with docker-in-docker.
+            container_name = container['Names'][0].lstrip('/')
+            for process in docker_client.top(container_name)['Processes']:
+                # process[1] is the pid as string. It is the PID from the
+                # point-of-view of root pid namespace.
+                pid = int(process[1])
+                # process[7] is command line. e.g. /usr/bin/mysqld param
+                name = os.path.basename(process[7].split()[0])
+                processes.setdefault(pid, {'name': name})
+                processes[pid]['container'] = container_name
+
+        return processes
+
     def _run_discovery(self):
         """ Try to discover some service based on known port/process
         """
         discovered_services = {}
-        process_names = {}
-
-        for process in psutil.process_iter():
-            process_names[process.name()] = 'host'
-
         docker_client = docker.Client(version=DOCKER_API_VERSION)
-        for container in docker_client.containers():
-            for process in docker_client.top(container['Id'])['Processes']:
-                # process[7] is command line. e.g. /usr/bin/mysqld param
-                name = os.path.basename(process[7].split()[0])
-                process_names[name] = container['Id']
+        processes = self._get_processes_map()
 
-        for service_info in KNOWN_SERVICES:
-            if service_info['process'] in process_names:
-
-                container = process_names[service_info['process']]
-                if container == 'host':
+        for process in processes.values():
+            if process['name'] in KNOWN_PROCESS:
+                service_info = KNOWN_PROCESS[process['name']]
+                container = process['container']
+                if container is None:
                     address = '127.0.0.1'
                 else:
                     container_info = docker_client.inspect_container(container)
@@ -309,7 +341,7 @@ class Core:
         mysql_password = ''
 
         container = discovered_services['mysql']['container']
-        if container == 'host':
+        if container is None:
             # grab maintenace password from debian.cnf
             try:
                 debian_cnf_raw = subprocess.check_output(
