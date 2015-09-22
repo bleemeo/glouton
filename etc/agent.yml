@@ -49,6 +49,8 @@ logging:
             level: WARNING
         apscheduler:
             level: WARNING
+        docker:
+            level: INFO
     root:
         level: INFO
         handlers:

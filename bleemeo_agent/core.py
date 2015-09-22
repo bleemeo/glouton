@@ -94,7 +94,6 @@ class Core:
         self.reload_config()
         self._config_logger()
         logging.info('Agent starting...')
-        self.checks = []
         self.last_facts = {}
         self.thresholds = {}
         self.discovered_services = {}
@@ -147,13 +146,8 @@ class Core:
     def run(self):
         try:
             self.setup_signal()
-            try:
-                self._run_discovery()
-            except:
-                logging.debug('Discovery failed', exc_info=True)
             self.start_threads()
             self.schedule_tasks()
-            bleemeo_agent.checker.initialize_checks(self)
             try:
                 self.scheduler.start()
             finally:
@@ -175,7 +169,6 @@ class Core:
     def schedule_tasks(self):
         self.scheduler.add_job(
             bleemeo_agent.checker.periodic_check,
-            args=(self,),
             trigger='interval',
             seconds=3,
         )
@@ -189,6 +182,12 @@ class Core:
             next_run_time=datetime.datetime.now(),
             trigger='interval',
             hours=24,
+        )
+        self.scheduler.add_job(
+            self.update_discovery,
+            next_run_time=datetime.datetime.now(),
+            trigger='interval',
+            hours=1,
         )
         self.scheduler.add_job(
             self._gather_metrics,
@@ -254,9 +253,21 @@ class Core:
             if metric['time'] >= cutoff
         }
 
+    def update_discovery(self):
+        old_discovered_services = self.discovered_services
+        self.discovered_services = self._run_discovery()
+
+        if old_discovered_services != self.discovered_services:
+            logging.debug(
+                'Update configuration after change in discovered services'
+            )
+            self.collectd_server.update_discovery(old_discovered_services)
+            bleemeo_agent.checker.update_checks(self, old_discovered_services)
+
     def _run_discovery(self):
         """ Try to discover some service based on known port/process
         """
+        discovered_services = {}
         process_names = {}
 
         for process in psutil.process_iter():
@@ -279,23 +290,25 @@ class Core:
                     container_info = docker_client.inspect_container(container)
                     address = container_info['NetworkSettings']['IPAddress']
 
-                self.discovered_services[service_info['service']] = {
+                discovered_services[service_info['service']] = {
                     'port': service_info['port'],
                     'address': address,
                     'container': container,
                 }
 
         # some service may need additionnal information, like password
-        if 'mysql' in self.discovered_services:
-            self._discover_mysql()
+        if 'mysql' in discovered_services:
+            self._discover_mysql(discovered_services)
 
-    def _discover_mysql(self):
+        return discovered_services
+
+    def _discover_mysql(self, discovered_services):
         """ Find a MySQL user
         """
         mysql_user = 'root'
         mysql_password = ''
 
-        container = self.discovered_services['mysql']['container']
+        container = discovered_services['mysql']['container']
         if container == 'host':
             # grab maintenace password from debian.cnf
             try:
@@ -324,8 +337,8 @@ class Core:
                 if env.startswith('MYSQL_ROOT_PASSWORD='):
                     mysql_password = env.replace('MYSQL_ROOT_PASSWORD=', '')
 
-        self.discovered_services['mysql']['user'] = mysql_user
-        self.discovered_services['mysql']['password'] = mysql_password
+        discovered_services['mysql']['user'] = mysql_user
+        discovered_services['mysql']['password'] = mysql_password
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS """

@@ -32,18 +32,30 @@ NAGIOS_CHECKS = {
 DEFAULT_CHECK = '/usr/lib/nagios/plugins/check_tcp -H %(address)s -p %(port)s'
 
 
-def initialize_checks(core):
+# global variable with all checks created
+CHECKS = {}
+
+
+def update_checks(core, old_discovered_services):
     for service, config in core.discovered_services.items():
+        if old_discovered_services.get(service) == config:
+            # configuration didn't changed. Skip it
+            continue
+
         try:
             check_command = NAGIOS_CHECKS.get(service, DEFAULT_CHECK)
             check_command = check_command % config
-            core.checks.append(Check(
+            new_check = Check(
                 core,
                 service,
                 check_command,
                 config['address'],
                 config['port'],
-            ))
+            )
+            old_check = CHECKS.get(service)
+            if old_check is not None:
+                old_check.stop()
+            CHECKS[service] = new_check
         except:
             logging.debug(
                 'Failed to initialize check for service %s',
@@ -51,15 +63,21 @@ def initialize_checks(core):
                 exc_info=True
             )
 
+    old_services = set(CHECKS.keys())
+    services = set(core.discovered_services.keys())
+    for removed_service in (old_services - services):
+        CHECKS[removed_service].stop()
+        del CHECKS[removed_service]
 
-def periodic_check(core):
+
+def periodic_check():
     """ Run few periodic check:
 
         * that all TCP socket are still openned
     """
     all_sockets = {}
 
-    for check in core.checks:
+    for check in CHECKS.values():
         if check.tcp_socket is not None:
             all_sockets[check.tcp_socket] = check
 
@@ -72,8 +90,8 @@ class Check:
     def __init__(self, core, name, check_command, tcp_address, tcp_port):
 
         logging.debug(
-            'Created new check with name=%s, check_command=%s, tcp_port=%s',
-            name, check_command, tcp_port)
+            'Created new check with name=%s, tcp_port=%s',
+            name, tcp_port)
         self.name = name
         self.check_command = check_command
         self.tcp_address = tcp_address
@@ -100,7 +118,7 @@ class Check:
             trigger='interval',
             seconds=60,
         )
-        self.core.scheduler.add_job(
+        self.open_socket_job = self.core.scheduler.add_job(
             self.open_socket,
             'date',
             run_date=(
@@ -117,6 +135,7 @@ class Check:
             self.tcp_socket = None
 
         self.tcp_socket = socket.socket()
+        self.tcp_socket.settimeout(2)
         try:
             self.tcp_socket.connect((self.tcp_address, self.tcp_port))
         except socket.error:
@@ -147,8 +166,8 @@ class Check:
     def run_check(self):
         self.last_run = time.time()
         logging.debug(
-            'check %s: running command: %s',
-            self.name, self.check_command)
+            'check %s: running check command',
+            self.name)
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
             shlex.split(self.check_command))
 
@@ -171,10 +190,17 @@ class Check:
         if (return_code == STATUS_OK
                 and self.tcp_port is not None
                 and self.tcp_socket is None):
-            self.core.scheduler.add_job(
+            self.open_socket_job = self.core.scheduler.add_job(
                 self.open_socket,
                 'date',
                 run_date=(
                     datetime.datetime.now() + datetime.timedelta(seconds=5)
                 ),
             )
+
+    def stop(self):
+        """ Unschedule this check
+        """
+        logging.debug('Stoping check %s', self.name)
+        self.open_socket_job.remove()
+        self.current_job.remove()

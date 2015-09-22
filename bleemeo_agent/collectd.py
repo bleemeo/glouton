@@ -49,13 +49,6 @@ class Collectd(threading.Thread):
         self.computed_metrics_pending = set()
 
     def run(self):
-        try:
-            self._write_config()
-        except:
-            logging.warning(
-                'Failed to write collectd configuration. '
-                'Continuing with current configuration')
-
         sock_server = socket.socket()
         sock_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock_server.bind(('127.0.0.1', 2003))
@@ -76,6 +69,14 @@ class Collectd(threading.Thread):
 
         sock_server.close()
         [x.join() for x in clients]
+
+    def update_discovery(self, old_discovered_services):
+        try:
+            self._write_config()
+        except:
+            logging.warning(
+                'Failed to write collectd configuration. '
+                'Continuing with current configuration')
 
     def _get_collectd_config(self):
         collectd_config = BASE_COLLECTD_CONFIG
