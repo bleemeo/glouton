@@ -49,7 +49,12 @@ class Collectd(threading.Thread):
         self.computed_metrics_pending = set()
 
     def run(self):
-        self._write_config()
+        try:
+            self._write_config()
+        except:
+            logging.warning(
+                'Failed to write collectd configuration. '
+                'Continuing with current configuration')
 
         sock_server = socket.socket()
         sock_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
@@ -110,18 +115,12 @@ class Collectd(threading.Thread):
             )
             return
 
-        try:
-            # Don't simply use open. This file must have limited permission
-            # since it may contains password
-            open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-            fileno = os.open(collectd_config_path, open_flags, 0o600)
-            with os.fdopen(fileno, 'w') as fd:
-                fd.write(collectd_config)
-        except IOError:
-            logging.warning(
-                'Failed to write collectd configuration. '
-                'Continuing with current configuration')
-            return
+        # Don't simply use open. This file must have limited permission
+        # since it may contains password
+        open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        fileno = os.open(collectd_config_path, open_flags, 0o600)
+        with os.fdopen(fileno, 'w') as fd:
+            fd.write(collectd_config)
 
         try:
             output = subprocess.check_output(
