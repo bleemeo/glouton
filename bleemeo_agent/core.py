@@ -289,6 +289,12 @@ class Core:
                 }
 
         docker_client = docker.Client(version=DOCKER_API_VERSION)
+        try:
+            docker_client.ping()
+        except:
+            logging.debug('docker ping failed. Assume docker is not used')
+            return processes
+
         for container in docker_client.containers():
             # container has... nameS
             # Also name start with "/". I think it may have mulitple name
