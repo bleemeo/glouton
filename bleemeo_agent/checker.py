@@ -23,9 +23,33 @@ STATUS_NAME = {
 }
 
 
+NAGIOS_CHECKS = {
+    'mysql': "/usr/lib/nagios/plugins/check_mysql "
+             "-u '%(user)s' -p '%(password)s' -H %(address)s",
+    'apache': '/usr/lib/nagios/plugins/check_http -H %(address)s'
+}
+
+DEFAULT_CHECK = '/usr/lib/nagios/plugins/check_tcp -H %(address)s -p %(port)s'
+
+
 def initialize_checks(core):
-    # TODO: discovery and/or read from configuration file
-    pass
+    for service, config in core.discovered_services.items():
+        try:
+            check_command = NAGIOS_CHECKS.get(service, DEFAULT_CHECK)
+            check_command = check_command % config
+            core.checks.append(Check(
+                core,
+                service,
+                check_command,
+                config['address'],
+                config['port'],
+            ))
+        except:
+            logging.debug(
+                'Failed to initialize check for service %s',
+                service,
+                exc_info=True
+            )
 
 
 def periodic_check(core):
@@ -45,14 +69,14 @@ def periodic_check(core):
 
 
 class Check:
-    def __init__(self, core, short_name, description, check_command, tcp_port):
+    def __init__(self, core, name, check_command, tcp_address, tcp_port):
 
         logging.debug(
             'Created new check with name=%s, check_command=%s, tcp_port=%s',
-            short_name, check_command, tcp_port)
-        self.short_name = short_name
-        self.description = description
+            name, check_command, tcp_port)
+        self.name = name
         self.check_command = check_command
+        self.tcp_address = tcp_address
         self.tcp_port = tcp_port
         self.core = core
 
@@ -76,7 +100,13 @@ class Check:
             trigger='interval',
             seconds=60,
         )
-        self.open_socket()
+        self.core.scheduler.add_job(
+            self.open_socket,
+            'date',
+            run_date=(
+                datetime.datetime.now() + datetime.timedelta(seconds=5)
+            ),
+        )
 
     def open_socket(self):
         if self.tcp_port is None:
@@ -88,7 +118,7 @@ class Check:
 
         self.tcp_socket = socket.socket()
         try:
-            self.tcp_socket.connect(('127.0.0.1', self.tcp_port))
+            self.tcp_socket.connect((self.tcp_address, self.tcp_port))
         except socket.error:
             self.tcp_socket.close()
             self.tcp_socket = None
@@ -118,7 +148,7 @@ class Check:
         self.last_run = time.time()
         logging.debug(
             'check %s: running command: %s',
-            self.short_name, self.check_command)
+            self.name, self.check_command)
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
             shlex.split(self.check_command))
 
@@ -126,7 +156,7 @@ class Check:
             return_code = STATUS_UNKNOWN
 
         self.core.emit_metric({
-            'measurement': 'check-%s' % self.short_name,
+            'measurement': 'check-%s' % self.name,
             'status': STATUS_NAME[return_code],
             'tag': None,
             'service': None,
@@ -144,5 +174,7 @@ class Check:
             self.core.scheduler.add_job(
                 self.open_socket,
                 'date',
-                run_date=datetime.dateime.now() + datetime.timedelta(seconds=5)
+                run_date=(
+                    datetime.datetime.now() + datetime.timedelta(seconds=5)
+                ),
             )
