@@ -96,7 +96,7 @@ class Core:
         logging.info('Agent starting...')
         self.last_facts = {}
         self.thresholds = {}
-        self.discovered_services = {}
+        self.discovered_services = []
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -272,20 +272,21 @@ class Core:
             for the container (else it's the docker container name)
         """
         # Contains list of all processes from root pid_namespace point-of-view
-        # key is the PID, value is {'name': 'mysqld', 'container': 'db'}
-        # container is None in case of processes running outside docker
+        # key is the PID, value is {'name': 'mysqld', 'instance': 'db'}
+        # instance is the container name. In case of processes running
+        # outside docker, it's None
         processes = {}
 
         is_in_docker = os.path.exists('/.dockerinit')
 
         # host (a.k.a the root pid namespace) see ALL process.
-        # They are added in container "None" (i.e. running in the host),
+        # They are added in instance "None" (i.e. running in the host),
         # but if they are running in a docker, they will be updated later
         if not is_in_docker:
             for process in psutil.process_iter():
                 processes[process.pid] = {
                     'name': process.name(),
-                    'container': None,
+                    'instance': None,
                 }
 
         docker_client = docker.Client(version=DOCKER_API_VERSION)
@@ -307,47 +308,49 @@ class Core:
                 # process[7] is command line. e.g. /usr/bin/mysqld param
                 name = os.path.basename(process[7].split()[0])
                 processes.setdefault(pid, {'name': name})
-                processes[pid]['container'] = container_name
+                processes[pid]['instance'] = container_name
 
         return processes
 
     def _run_discovery(self):
         """ Try to discover some service based on known port/process
         """
-        discovered_services = {}
+        discovered_services = []
         docker_client = docker.Client(version=DOCKER_API_VERSION)
         processes = self._get_processes_map()
 
         for process in processes.values():
             if process['name'] in KNOWN_PROCESS:
-                service_info = KNOWN_PROCESS[process['name']]
-                container = process['container']
-                if container is None:
+                discovery_info = KNOWN_PROCESS[process['name']]
+                instance = process['instance']
+                if instance is None:
                     address = '127.0.0.1'
                 else:
-                    container_info = docker_client.inspect_container(container)
+                    container_info = docker_client.inspect_container(instance)
                     address = container_info['NetworkSettings']['IPAddress']
 
-                discovered_services[service_info['service']] = {
-                    'port': service_info['port'],
+                service_info = {
+                    'port': discovery_info['port'],
                     'address': address,
-                    'container': container,
+                    'instance': instance,
+                    'service': discovery_info['service'],
                 }
+                # some service may need additionnal information, like password
+                if service_info['service'] == 'mysql':
+                    self._discover_mysql(service_info)
 
-        # some service may need additionnal information, like password
-        if 'mysql' in discovered_services:
-            self._discover_mysql(discovered_services)
+                discovered_services.append(service_info)
 
         return discovered_services
 
-    def _discover_mysql(self, discovered_services):
+    def _discover_mysql(self, service_info):
         """ Find a MySQL user
         """
         mysql_user = 'root'
         mysql_password = ''
 
-        container = discovered_services['mysql']['container']
-        if container is None:
+        instance = service_info['instance']
+        if instance is None:
             # grab maintenace password from debian.cnf
             try:
                 debian_cnf_raw = subprocess.check_output(
@@ -369,14 +372,14 @@ class Core:
         else:
             # MySQL is running inside a docker.
             docker_client = docker.Client(version=DOCKER_API_VERSION)
-            container_info = docker_client.inspect_container(container)
+            container_info = docker_client.inspect_container(instance)
             for env in container_info['Config']['Env']:
                 # env has the form "VARIABLE=value"
                 if env.startswith('MYSQL_ROOT_PASSWORD='):
                     mysql_password = env.replace('MYSQL_ROOT_PASSWORD=', '')
 
-        discovered_services['mysql']['user'] = mysql_user
-        discovered_services['mysql']['password'] = mysql_password
+        service_info['user'] = mysql_user
+        service_info['password'] = mysql_password
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS """
