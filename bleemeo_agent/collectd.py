@@ -31,6 +31,14 @@ LoadPlugin mysql
 </Plugin>
 """
 
+# Ignore all network interface starting with one of those prefix
+NETWORK_INTERFACE_BLACKLIST = [
+    'docker',
+    'lo',
+    'veth',
+    'virbr',
+]
+
 
 class ComputationFail(Exception):
     pass
@@ -38,6 +46,13 @@ class ComputationFail(Exception):
 
 class MissingMetric(Exception):
     pass
+
+
+def network_interface_blacklist(if_name):
+    for pattern in NETWORK_INTERFACE_BLACKLIST:
+        if if_name.startswith(pattern):
+            return True
+    return False
 
 
 class Collectd(threading.Thread):
@@ -387,6 +402,8 @@ def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
             direction = 'sent'
 
         tag = match_dict['plugin_instance']
+        if network_interface_blacklist(tag):
+            return (None, None)
 
         # Special cases:
         # * if it's some error, we use "in" and "out"
