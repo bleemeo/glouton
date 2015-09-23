@@ -79,9 +79,11 @@ class InfluxDBConnector(threading.Thread):
 
     def _process_queue(self):
         metrics = []
+        timeout = 3
         try:
             while True:
-                metric = self._queue.get_nowait()
+                metric = self._queue.get(timeout=timeout)
+                timeout = 0  # Only wait for the first get
                 metrics.append(metric)
         except queue.Empty:
             pass
@@ -108,7 +110,6 @@ class InfluxDBConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             self._process_queue()
             self._warn_queue_full()
-            self.core.is_terminating.wait(10)
 
     def emit_metric(self, metric):
         # InfluxDB can't store "NaN" (not a number)...
