@@ -89,6 +89,13 @@ thresholds:
         high_warning: 80
         high_critical: 90
 
+# Ignore all network interface starting with one of those prefix
+network_interface_blacklist:
+    - docker
+    - lo
+    - veth
+    - virbr
+    - vnet
 
 # Additional metric could be retrived over HTTP(s) by the agent.
 #

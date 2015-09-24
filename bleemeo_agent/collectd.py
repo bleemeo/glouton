@@ -31,13 +31,15 @@ LoadPlugin mysql
 </Plugin>
 """
 
-# Ignore all network interface starting with one of those prefix
-NETWORK_INTERFACE_BLACKLIST = [
-    'docker',
-    'lo',
-    'veth',
-    'virbr',
-]
+# https://collectd.org/wiki/index.php/Naming_schema
+# carbon output change "/" in ".".
+# Example of metic name:
+# cpu-0.cpu-idle
+# df-var-lib.df_complex-free
+# disk-sda.disk_octets.read
+collectd_regex = re.compile(
+    r'(?P<plugin>[^-.]+)(-(?P<plugin_instance>[^.]+))?\.'
+    r'(?P<type>[^.-]+)([.-](?P<type_instance>.+))?')
 
 
 class ComputationFail(Exception):
@@ -46,13 +48,6 @@ class ComputationFail(Exception):
 
 class MissingMetric(Exception):
     pass
-
-
-def network_interface_blacklist(if_name):
-    for pattern in NETWORK_INTERFACE_BLACKLIST:
-        if if_name.startswith(pattern):
-            return True
-    return False
 
 
 class Collectd(threading.Thread):
@@ -196,6 +191,12 @@ class Collectd(threading.Thread):
 
             self._check_computed_metrics()
 
+    def network_interface_blacklist(self, if_name):
+        for pattern in self.core.config.get('network_interface_blacklist', []):
+            if if_name.startswith(pattern):
+                return True
+        return False
+
     def _check_computed_metrics(self):
         """ Some metric are computed from other one. For example CPU stats
             are aggregated over all CPUs.
@@ -320,154 +321,147 @@ class Collectd(threading.Thread):
     def emit_metric(self, name, timestamp, value):
         """ Rename a metric and pass it to core
         """
-        (metric, no_emit) = _rename_metric(
-            name, timestamp, value, self.computed_metrics_pending)
+        (metric, no_emit) = self._rename_metric(name, timestamp, value)
         if metric is not None:
             self.core.emit_metric(metric, no_emit=no_emit)
 
+    def _rename_metric(self, name, timestamp, value):  # NOQA
+        """ Process metric to rename it and add tag
 
-# https://collectd.org/wiki/index.php/Naming_schema
-# carbon output change "/" in ".".
-# Example of metic name:
-# cpu-0.cpu-idle
-# df-var-lib.df_complex-free
-# disk-sda.disk_octets.read
-collectd_regex = re.compile(
-    r'(?P<plugin>[^-.]+)(-(?P<plugin_instance>[^.]+))?\.'
-    r'(?P<type>[^.-]+)([.-](?P<type_instance>.+))?')
+            If the metric is used to compute a derrived metric, add it to
+            computed_metrics_pending.
 
+            Return None if metric is unknown
+        """
+        match = collectd_regex.match(name)
+        if match is None:
+            return None
+        match_dict = match.groupdict()
 
-def _rename_metric(name, timestamp, value, computed_metrics_pending):  # NOQA
-    """ Process metric to rename it and add tag
+        no_emit = False
+        tag = None
+        service = None
 
-        If the metric is used to compute a derrived metric, add it to
-        computed_metrics_pending.
+        if match_dict['plugin'] == 'cpu':
+            name = 'cpu_%s' % match_dict['type_instance']
+            tag = match_dict['plugin_instance']
+            no_emit = True
+            self.computed_metrics_pending.add((name, None, timestamp))
+        elif match_dict['type'] == 'df_complex':
+            name = 'disk_%s' % match_dict['type_instance']
+            path = match_dict['plugin_instance']
+            if path == 'root':
+                path = '/'
+            else:
+                path = '/' + path.replace('-', '/')
+            tag = path
+            self.computed_metrics_pending.add(('disk_total', tag, timestamp))
+        elif match_dict['plugin'] == 'diskstats':
+            name = {
+                'reads_merged': 'io_read_merged',
+                'reading_milliseconds': 'io_read_time',
+                'reads_completed': 'io_reads',
+                'writes_completed': 'io_writes',
+                'sectors_read': 'io_read_bytes',
+                'writing_milliseconds': 'io_write_time',
+                'sectors_written': 'io_write_bytes',
+                'io_milliseconds_weighted': 'io_time_weighted',
+                'io_milliseconds': 'io_time',
+                'io_inprogress': 'io_inprogress',
+            }[match_dict['type_instance']]
 
-        Return None is metric is unknown
-    """
-    match = collectd_regex.match(name)
-    if match is None:
-        return None
-    match_dict = match.groupdict()
+            tag = match_dict['plugin_instance']
+            if name == 'io_time':
+                self.computed_metrics_pending.add(
+                    ('io_utilisation', tag, timestamp))
+            if name in ['io_read_bytes', 'io_write_bytes']:
+                # metric is expressed in "sector". Sector is 512-bytes
+                value = value * 512
+        elif match_dict['plugin'] == 'interface':
+            kind_name = {
+                'if_errors': 'err',
+                'if_octets': 'bytes',
+                'if_packets': 'packets',
+            }[match_dict['type']]
 
-    no_emit = False
-    tag = None
-    service = None
+            if match_dict['type_instance'] == 'rx':
+                direction = 'recv'
+            else:
+                direction = 'sent'
 
-    if match_dict['plugin'] == 'cpu':
-        name = 'cpu_%s' % match_dict['type_instance']
-        tag = match_dict['plugin_instance']
-        no_emit = True
-        computed_metrics_pending.add((name, None, timestamp))
-    elif match_dict['type'] == 'df_complex':
-        name = 'disk_%s' % match_dict['type_instance']
-        path = match_dict['plugin_instance']
-        if path == 'root':
-            path = '/'
+            tag = match_dict['plugin_instance']
+            if self.network_interface_blacklist(tag):
+                return (None, None)
+
+            # Special cases:
+            # * if it's some error, we use "in" and "out"
+            # * for bytes, we need to convert it to bits
+            if kind_name == 'err':
+                direction = (
+                    direction
+                    .replace('recv', 'in')
+                    .replace('sent', 'out')
+                )
+            elif kind_name == 'bytes':
+                no_emit = True
+                self.computed_metrics_pending.add(
+                    ('net_bits_%s' % direction, tag, timestamp))
+
+            name = 'net_%s_%s' % (kind_name, direction)
+        elif match_dict['plugin'] == 'load':
+            duration = {
+                'longterm': 15,
+                'midterm': 5,
+                'shortterm': 1,
+            }[match_dict['type_instance']]
+            name = 'system_load%s' % duration
+        elif match_dict['plugin'] == 'memory':
+            name = 'mem_%s' % match_dict['type_instance']
+            self.computed_metrics_pending.add(('mem_total', None, timestamp))
+        elif (match_dict['plugin'] == 'processes'
+                and match_dict['type'] == 'fork_rate'):
+            name = 'process_fork_rate'
+        elif (match_dict['plugin'] == 'processes'
+                and match_dict['type'] == 'ps_state'):
+            name = 'process_status_%s' % match_dict['type_instance']
+            self.computed_metrics_pending.add(
+                ('process_total', None, timestamp))
+        elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
+            name = 'swap_%s' % match_dict['type_instance']
+            self.computed_metrics_pending.add(('swap_total', None, timestamp))
+        elif (match_dict['plugin'] == 'swap'
+                and match_dict['type'] == 'swap_io'):
+            name = 'swap_%s' % match_dict['type_instance']
+        elif match_dict['plugin'] == 'users':
+            name = 'users_logged'
+        elif (match_dict['plugin'] == 'apache'
+                and match_dict['plugin_instance'].startswith('bleemeo-')):
+            name = match_dict['type']
+            if match_dict['type_instance']:
+                name += '.' + match_dict['type_instance']
+
+            tag = match_dict['plugin_instance'].replace('bleemeo-', '')
+            service = 'apache'
+        elif (match_dict['plugin'] == 'mysql'
+                and match_dict['plugin_instance'].startswith('bleemeo-')):
+            name = match_dict['type']
+            if match_dict['type_instance']:
+                name += '.' + match_dict['type_instance']
+
+            if not name.startswith('mysql_'):
+                name = 'mysql_' + name
+
+            tag = match_dict['plugin_instance'].replace('bleemeo-', '')
+
+            service = 'mysql'
         else:
-            path = '/' + path.replace('-', '/')
-        tag = path
-        computed_metrics_pending.add(('disk_total', tag, timestamp))
-    elif match_dict['plugin'] == 'diskstats':
-        name = {
-            'reads_merged': 'io_read_merged',
-            'reading_milliseconds': 'io_read_time',
-            'reads_completed': 'io_reads',
-            'writes_completed': 'io_writes',
-            'sectors_read': 'io_read_bytes',
-            'writing_milliseconds': 'io_write_time',
-            'sectors_written': 'io_write_bytes',
-            'io_milliseconds_weighted': 'io_time_weighted',
-            'io_milliseconds': 'io_time',
-            'io_inprogress': 'io_inprogress',
-        }[match_dict['type_instance']]
-
-        tag = match_dict['plugin_instance']
-        if name == 'io_time':
-            computed_metrics_pending.add(
-                ('io_utilisation', match_dict['plugin_instance'], timestamp))
-        if name in ['io_read_bytes', 'io_write_bytes']:
-            # metric is expressed in "sector". Sector is 512-bytes
-            value = value * 512
-    elif match_dict['plugin'] == 'interface':
-        kind_name = {
-            'if_errors': 'err',
-            'if_octets': 'bytes',
-            'if_packets': 'packets',
-        }[match_dict['type']]
-
-        if match_dict['type_instance'] == 'rx':
-            direction = 'recv'
-        else:
-            direction = 'sent'
-
-        tag = match_dict['plugin_instance']
-        if network_interface_blacklist(tag):
             return (None, None)
 
-        # Special cases:
-        # * if it's some error, we use "in" and "out"
-        # * for bytes, we need to convert it to bits
-        if kind_name == 'err':
-            direction = direction.replace('recv', 'in').replace('sent', 'out')
-        elif kind_name == 'bytes':
-            no_emit = True
-            computed_metrics_pending.add(
-                ('net_bits_%s' % direction, tag, timestamp))
-
-        name = 'net_%s_%s' % (kind_name, direction)
-    elif match_dict['plugin'] == 'load':
-        duration = {
-            'longterm': 15,
-            'midterm': 5,
-            'shortterm': 1,
-        }[match_dict['type_instance']]
-        name = 'system_load%s' % duration
-    elif match_dict['plugin'] == 'memory':
-        name = 'mem_%s' % match_dict['type_instance']
-        computed_metrics_pending.add(('mem_total', None, timestamp))
-    elif (match_dict['plugin'] == 'processes'
-            and match_dict['type'] == 'fork_rate'):
-        name = 'process_fork_rate'
-    elif (match_dict['plugin'] == 'processes'
-            and match_dict['type'] == 'ps_state'):
-        name = 'process_status_%s' % match_dict['type_instance']
-        computed_metrics_pending.add(('process_total', None, timestamp))
-    elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
-        name = 'swap_%s' % match_dict['type_instance']
-        computed_metrics_pending.add(('swap_total', None, timestamp))
-    elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap_io':
-        name = 'swap_%s' % match_dict['type_instance']
-    elif match_dict['plugin'] == 'users':
-        name = 'users_logged'
-    elif (match_dict['plugin'] == 'apache'
-            and match_dict['plugin_instance'].startswith('bleemeo-')):
-        name = match_dict['type']
-        if match_dict['type_instance']:
-            name += '.' + match_dict['type_instance']
-
-        tag = match_dict['plugin_instance'].replace('bleemeo-', '')
-        service = 'apache'
-    elif (match_dict['plugin'] == 'mysql'
-            and match_dict['plugin_instance'].startswith('bleemeo-')):
-        name = match_dict['type']
-        if match_dict['type_instance']:
-            name += '.' + match_dict['type_instance']
-
-        if not name.startswith('mysql_'):
-            name = 'mysql_' + name
-
-        tag = match_dict['plugin_instance'].replace('bleemeo-', '')
-
-        service = 'mysql'
-    else:
-        return (None, None)
-
-    return ({
-        'measurement': name,
-        'time': timestamp,
-        'value': value,
-        'tag': tag,
-        'service': service,
-        'status': None,
-    }, no_emit)
+        return ({
+            'measurement': name,
+            'time': timestamp,
+            'value': value,
+            'tag': tag,
+            'service': service,
+            'status': None,
+        }, no_emit)

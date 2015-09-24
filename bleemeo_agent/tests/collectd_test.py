@@ -39,12 +39,14 @@ def test_collectd_regex():
 
 
 def test_rename_metric():
-    pending = set()
-    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
+    # For this test, Collectd object does not really need Core object
+    core = None
+    collectd = bleemeo_agent.collectd.Collectd(core)
+    (result, no_emit) = collectd._rename_metric(
         'cpu-0.cpu-idle',
         12345,
         42,
-        pending)
+    )
     assert result == {
         'measurement': 'cpu_idle',
         'time': 12345,
@@ -54,15 +56,15 @@ def test_rename_metric():
         'service': None,
     }
     assert no_emit is True
-    assert len(pending) == 1
-    assert ('cpu_idle', None, 12345) in pending
+    assert len(collectd.computed_metrics_pending) == 1
+    assert ('cpu_idle', None, 12345) in collectd.computed_metrics_pending
 
-    pending = set()
-    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
+    collectd.computed_metrics_pending = set()
+    (result, no_emit) = collectd._rename_metric(
         'users.users',
         12345,
         42,
-        pending)
+    )
     assert result == {
         'measurement': 'users_logged',
         'time': 12345,
@@ -72,14 +74,14 @@ def test_rename_metric():
         'service': None,
     }
     assert no_emit is False
-    assert len(pending) == 0
+    assert len(collectd.computed_metrics_pending) == 0
 
-    pending = set()
-    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
+    collectd.computed_metrics_pending = set()
+    (result, no_emit) = collectd._rename_metric(
         'df-var-lib.df_complex-free',
         12345,
         42,
-        pending)
+    )
     assert result == {
         'measurement': 'disk_free',
         'time': 12345,
@@ -89,15 +91,18 @@ def test_rename_metric():
         'service': None,
     }
     assert no_emit is False
-    assert len(pending) == 1
-    assert ('disk_total', '/var/lib', 12345) in pending
+    assert len(collectd.computed_metrics_pending) == 1
+    assert (
+        ('disk_total', '/var/lib', 12345)
+        in collectd.computed_metrics_pending
+    )
 
-    pending = set()
-    (result, no_emit) = bleemeo_agent.collectd._rename_metric(
+    collectd.computed_metrics_pending = set()
+    (result, no_emit) = collectd._rename_metric(
         'diskstats-sda.counter-reads_completed',
         12345,
         42,
-        pending)
+    )
     assert result == {
         'measurement': 'io_reads',
         'time': 12345,
@@ -107,4 +112,4 @@ def test_rename_metric():
         'service': None,
     }
     assert no_emit is False
-    assert len(pending) == 0
+    assert len(collectd.computed_metrics_pending) == 0

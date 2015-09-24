@@ -167,7 +167,7 @@ class Check:
             return_code = STATUS_UNKNOWN
 
         self.core.emit_metric({
-            'measurement': 'check-%s' % self.service,
+            'measurement': '%s_check' % self.service,
             'status': STATUS_NAME[return_code],
             'tag': self.instance,
             'service': self.service,
