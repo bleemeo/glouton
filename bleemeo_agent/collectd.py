@@ -59,9 +59,13 @@ class Collectd(threading.Thread):
         self.computed_metrics_pending = set()
 
     def run(self):
+        bind_address = self.core.config.get(
+            'collectd.graphite_listener.address', '127.0.0.1')
+        bind_port = self.core.config.get(
+            'collectd.graphite_listener.port', 2003)
         sock_server = socket.socket()
         sock_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock_server.bind(('127.0.0.1', 2003))
+        sock_server.bind((bind_address, bind_port))
         sock_server.listen(5)
         sock_server.settimeout(1)
 

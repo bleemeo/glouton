@@ -9,7 +9,7 @@ import bleemeo_agent.checker
 
 
 app = flask.Flask(__name__)
-app_thread = threading.Thread(target=app.run)
+app_thread = None
 
 
 @app.route('/')
@@ -121,11 +121,21 @@ def filter_netsizeformat(value):
 
 
 def start_server(core):
+    global app_thread
+
+    bind_address = core.config.get(
+        'web.listener.address', '127.0.0.1')
+    bind_port = core.config.get(
+        'web.listener.port', 5000)
     app.core = core
     if app.core.stored_values.get('web_secret_key') is None:
         app.core.stored_values.set(
             'web_secret_key', bleemeo_agent.util.generate_password())
     app.secret_key = app.core.stored_values.get('web_secret_key')
+    app_thread = threading.Thread(
+        target=app.run,
+        kwargs={'host': bind_address, 'port': bind_port}
+    )
     app_thread.daemon = True
     app_thread.start()
 
