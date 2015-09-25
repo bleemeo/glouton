@@ -33,8 +33,6 @@ KNOWN_PROCESS = {
     'mysqld': {'service': 'mysql', 'port': 3306},
 }
 
-DOCKER_API_VERSION = '1.17'
-
 
 def main():
     logging.basicConfig()
@@ -277,19 +275,17 @@ class Core:
         # outside docker, it's None
         processes = {}
 
-        is_in_docker = os.path.exists('/.dockerinit')
-
         # host (a.k.a the root pid namespace) see ALL process.
         # They are added in instance "None" (i.e. running in the host),
         # but if they are running in a docker, they will be updated later
-        if not is_in_docker:
+        if not bleemeo_agent.util.is_in_docker():
             for process in psutil.process_iter():
                 processes[process.pid] = {
                     'name': process.name(),
                     'instance': None,
                 }
 
-        docker_client = docker.Client(version=DOCKER_API_VERSION)
+        docker_client = docker.Client(version=bleemeo_agent.DOCKER_API_VERSION)
         try:
             docker_client.ping()
         except:
@@ -316,7 +312,7 @@ class Core:
         """ Try to discover some service based on known port/process
         """
         discovered_services = []
-        docker_client = docker.Client(version=DOCKER_API_VERSION)
+        docker_client = docker.Client(version=bleemeo_agent.DOCKER_API_VERSION)
         processes = self._get_processes_map()
 
         for process in processes.values():
@@ -371,7 +367,8 @@ class Core:
                 pass
         else:
             # MySQL is running inside a docker.
-            docker_client = docker.Client(version=DOCKER_API_VERSION)
+            docker_client = docker.Client(
+                version=bleemeo_agent.DOCKER_API_VERSION)
             container_info = docker_client.inspect_container(instance)
             for env in container_info['Config']['Env']:
                 # env has the form "VARIABLE=value"
