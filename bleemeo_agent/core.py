@@ -96,7 +96,7 @@ class Core:
         logging.info('Agent starting...')
         self.last_facts = {}
         self.thresholds = {}
-        self.discovered_services = []
+        self.discovered_services = None
         self.top_info = None
 
         self.is_terminating = threading.Event()
