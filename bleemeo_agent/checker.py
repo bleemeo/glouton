@@ -36,7 +36,7 @@ DEFAULT_CHECK = '/usr/lib/nagios/plugins/check_tcp -H %(address)s -p %(port)s'
 CHECKS = []
 
 
-def update_checks(core, old_discovered_services):
+def update_checks(core):
     global CHECKS
     for check in CHECKS:
         check.stop()

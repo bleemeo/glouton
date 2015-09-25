@@ -84,7 +84,7 @@ class Collectd(threading.Thread):
         sock_server.close()
         [x.join() for x in clients]
 
-    def update_discovery(self, old_discovered_services):
+    def update_discovery(self):
         try:
             self._write_config()
         except:

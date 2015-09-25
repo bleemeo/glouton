@@ -254,15 +254,15 @@ class Core:
         }
 
     def update_discovery(self):
-        old_discovered_services = self.discovered_services
-        self.discovered_services = self._run_discovery()
+        new_discovered_services = self._run_discovery()
 
-        if old_discovered_services != self.discovered_services:
+        if new_discovered_services != self.discovered_services:
+            self.discovered_services = new_discovered_services
             logging.debug(
                 'Update configuration after change in discovered services'
             )
-            self.collectd_server.update_discovery(old_discovered_services)
-            bleemeo_agent.checker.update_checks(self, old_discovered_services)
+            self.collectd_server.update_discovery()
+            bleemeo_agent.checker.update_checks(self)
 
     def _get_processes_map(self):
         """ Return a mapping from PID to name and container in which
