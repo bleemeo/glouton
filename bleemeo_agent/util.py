@@ -353,7 +353,7 @@ def get_top_output(top_info):
                 'status': status,
                 'cpu': metric['cpu_percent'],
                 'mem':
-                    float(metric['memory_rss']) / memory_total,
+                    float(metric['memory_rss']) / memory_total * 100,
                 'time': format_cpu_time(metric['cpu_times']),
                 'cmd': metric['name'],
             })
