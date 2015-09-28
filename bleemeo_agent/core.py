@@ -108,6 +108,14 @@ class Core:
         self._define_thresholds()
         self._schedule_metric_pull()
 
+    @property
+    def container(self):
+        """ Return the container type in which the agent is running.
+
+            It's None if running outside any container.
+        """
+        return self.config.get('container', None)
+
     def _config_logger(self):
         logger_config = {
             'version': 1,
@@ -278,7 +286,7 @@ class Core:
         # host (a.k.a the root pid namespace) see ALL process.
         # They are added in instance "None" (i.e. running in the host),
         # but if they are running in a docker, they will be updated later
-        if not bleemeo_agent.util.is_in_docker():
+        if self.container is None:
             for process in psutil.process_iter():
                 processes[process.pid] = {
                     'name': process.name(),

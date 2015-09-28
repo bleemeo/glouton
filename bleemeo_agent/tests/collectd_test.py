@@ -1,6 +1,11 @@
 import bleemeo_agent.collectd
 
 
+class DummyCore:
+    def __init__(self):
+        self.config = {}
+
+
 def test_collectd_regex():
     match = bleemeo_agent.collectd.collectd_regex.match('cpu-0.cpu-idle')
     assert match.groupdict() == {
@@ -39,8 +44,7 @@ def test_collectd_regex():
 
 
 def test_rename_metric():
-    # For this test, Collectd object does not really need Core object
-    core = None
+    core = DummyCore()
     collectd = bleemeo_agent.collectd.Collectd(core)
     (result, no_emit) = collectd._rename_metric(
         'cpu-0.cpu-idle',

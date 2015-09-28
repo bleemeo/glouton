@@ -2,6 +2,7 @@ import logging
 import multiprocessing
 import os
 import re
+import shlex
 import socket
 import subprocess
 import threading
@@ -141,7 +142,10 @@ class Collectd(threading.Thread):
         self._restart_collectd()
 
     def _restart_collectd(self):
-        if bleemeo_agent.util.is_in_docker():
+        restart_cmd = self.core.config.get(
+            'collectd.restart_command',
+            'sudo --non-interactive service collectd restart')
+        if restart_cmd == 'docker':
             # use docker stop/start to restart the collectd container
             docker_client = docker.Client(
                 version=bleemeo_agent.DOCKER_API_VERSION)
@@ -159,8 +163,7 @@ class Collectd(threading.Thread):
         else:
             try:
                 output = subprocess.check_output(
-                    ['sudo', '--non-interactive',
-                        'service', 'collectd', 'restart'],
+                    shlex.split(restart_cmd),
                     stderr=subprocess.STDOUT,
                 )
                 return_code = 0
@@ -383,6 +386,11 @@ class Collectd(threading.Thread):
                 path = '/'
             else:
                 path = '/' + path.replace('-', '/')
+            path = self._disk_path_rename(path)
+            if path is None:
+                # this partition is ignored
+                return (None, None)
+
             tag = path
             self.computed_metrics_pending.add(('disk_total', tag, timestamp))
         elif match_dict['plugin'] == 'diskstats':
@@ -494,3 +502,29 @@ class Collectd(threading.Thread):
             'service': service,
             'status': None,
         }, no_emit)
+
+    def _disk_path_rename(self, path):
+        """ Rename (and possibly ignore) a disk partition
+
+            In case of collectd running in a container, it's used to show
+            partition as seen by the host, instead of as seen by a container.
+        """
+        ignored_patterns = self.core.config.get('collectd.disk_ignore', [])
+        for pattern in ignored_patterns:
+            if path.startswith(pattern):
+                return None
+
+        mount_point = self.core.config.get('collectd.disk_mount_point')
+        if mount_point is None:
+            return path
+
+        if not path.startswith(mount_point):
+            # partition don't start with mount_point, so it's a parition
+            # which is only inside the container. Ignore it
+            return None
+
+        path = path.replace(mount_point, '')
+        if not path.startswith('/'):
+            path = '/' + path
+
+        return path

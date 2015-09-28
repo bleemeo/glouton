@@ -108,10 +108,6 @@ def get_loadavg():
     return [float(x) for x in loads]
 
 
-def is_in_docker():
-    return os.path.exists('/.dockerinit')
-
-
 def format_uptime(uptime_seconds):
     """ Format uptime to human readable format
 
