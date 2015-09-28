@@ -46,8 +46,6 @@ def get_facts(core):
     """ Return facts/grains/information about current machine.
 
         Returned facts are informations like hostname, OS type/version, etc
-
-        It will use facter tools if available
     """
     if os.path.exists('/etc/os-release'):
         pretty_name = get_os_pretty_name()
@@ -80,17 +78,6 @@ def get_facts(core):
 
     if core.bleemeo_connector is not None:
         facts['account_uuid'] = core.bleemeo_connector.account_id
-
-    # Update with facter facts
-    try:
-        facter_raw = subprocess.check_output([
-            'facter', '--json'
-        ]).decode('utf-8')
-        facts.update(json.loads(facter_raw))
-    except OSError:
-        facts.setdefault('errors', []).append('facter not installed')
-        logging.warning(
-            'facter is not installed. Only limited facts are sents')
 
     return facts
 
