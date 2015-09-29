@@ -20,15 +20,15 @@ Depends: ${misc:Depends}, ${python:Depends},
     collectd,
     collectd-diskstats,
     python-apscheduler,
-    python-docker,
     python-flask,
-    python-influxdb,
-    python-paho-mqtt,
     python-psutil,
     python-requests,
     python-yaml,
 Recommends:
     ca-certificates,
+    python-docker,
+    python-influxdb,
+    python-paho-mqtt,
 Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to

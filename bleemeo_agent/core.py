@@ -12,18 +12,34 @@ import threading
 import time
 
 import apscheduler.schedulers.blocking
-import docker
 import psutil
 from six.moves import configparser
 
 import bleemeo_agent
-import bleemeo_agent.bleemeo
 import bleemeo_agent.checker
 import bleemeo_agent.collectd
 import bleemeo_agent.config
-import bleemeo_agent.influxdb
 import bleemeo_agent.util
 import bleemeo_agent.web
+
+
+# Optional dependencies
+try:
+    import docker
+except ImportError:
+    docker = None
+
+try:
+    # May fail because of missing mqtt dependency
+    import bleemeo_agent.bleemeo
+except ImportError:
+    bleemeo_agent.bleemeo = None
+
+try:
+    # May fail because of missing influxdb dependency
+    import bleemeo_agent.influxdb
+except ImportError:
+    bleemeo_agent.influxdb = None
 
 
 KNOWN_PROCESS = {
@@ -178,6 +194,12 @@ class Core:
     def _docker_connect(self):
         """ Try to connect to docker remote API
         """
+        if docker is None:
+            logging.debug(
+                'docker-py not installed. Skipping docker-related feature'
+            )
+            return
+
         self.docker_client = docker.Client(
             version=DOCKER_API_VERSION,
         )
@@ -225,14 +247,26 @@ class Core:
     def start_threads(self):
 
         if self.config.get('bleemeo.enabled', True):
-            self.bleemeo_connector = (
-                bleemeo_agent.bleemeo.BleemeoConnector(self))
-            self.bleemeo_connector.start()
+            if bleemeo_agent.bleemeo is None:
+                logging.warning(
+                    'Missing dependency (paho-mqtt), '
+                    'can not start Bleemeo connector'
+                )
+            else:
+                self.bleemeo_connector = (
+                    bleemeo_agent.bleemeo.BleemeoConnector(self))
+                self.bleemeo_connector.start()
 
         if self.config.get('influxdb.enabled', True):
-            self.influx_connector = (
-                bleemeo_agent.influxdb.InfluxDBConnector(self))
-            self.influx_connector.start()
+            if bleemeo_agent.influxdb is None:
+                logging.warning(
+                    'Missing dependency (influxdb), '
+                    'can not start InfluxDB connector'
+                )
+            else:
+                self.influx_connector = (
+                    bleemeo_agent.influxdb.InfluxDBConnector(self))
+                self.influx_connector.start()
 
         self.collectd_server = bleemeo_agent.collectd.Collectd(self)
         self.collectd_server.start()
@@ -442,9 +476,9 @@ class Core:
         self._store_last_value(metric)
 
         if not no_emit:
-            if self.config.get('bleemeo.enabled', True):
+            if self.bleemeo_connector is not None:
                 self.bleemeo_connector.emit_metric(metric.copy())
-            if self.config.get('influxdb.enabled', True):
+            if self.influx_connector is not None:
                 self.influx_connector.emit_metric(metric.copy())
 
     def update_last_report(self):
