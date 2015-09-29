@@ -135,8 +135,8 @@ class Check:
         if self.tcp_socket is None:
             # open_socket failed, run check now
             logging.debug(
-                'check %s (on %s): failed to open socket to %s',
-                self.service, self.instance, self.tcp_port
+                'check %s (on %s): failed to open socket to %s:%s',
+                self.service, self.instance, self.tcp_address, self.tcp_port
             )
             # reschedule job to be run immediately
             self.current_job.modify(next_run_time=datetime.datetime.now())
@@ -150,18 +150,20 @@ class Check:
         if buffer == '':
             # this means connection was closed!
             logging.debug(
-                'check %s (on %s) : connection to port %s closed',
-                self.service, self.instance, self.tcp_port
+                'check %s (on %s) : connection to %s:%s closed',
+                self.service, self.instance, self.tcp_address, self.tcp_port
             )
             self.open_socket()
 
     def run_check(self):
         self.last_run = time.time()
-        logging.debug(
-            'check %s (on %s): running check command %s',
-            self.service, self.instance, self.check_command_safe)
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
             shlex.split(self.check_command))
+
+        logging.debug(
+            'check %s (on %s): return code is %s for command %s',
+            self.service, self.instance, return_code, self.check_command_safe
+        )
 
         if return_code > STATUS_UNKNOWN:
             return_code = STATUS_UNKNOWN
