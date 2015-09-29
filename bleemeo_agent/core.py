@@ -33,6 +33,8 @@ KNOWN_PROCESS = {
     'mysqld': {'service': 'mysql', 'port': 3306},
 }
 
+DOCKER_API_VERSION = '1.17'
+
 
 def main():
     logging.basicConfig()
@@ -101,12 +103,12 @@ class Core:
         self.bleemeo_connector = None
         self.influx_connector = None
         self.collectd_server = None
+        self.docker_client = None
         self.scheduler = apscheduler.schedulers.blocking.BlockingScheduler()
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
         self._define_thresholds()
-        self._schedule_metric_pull()
 
     @property
     def container(self):
@@ -152,6 +154,7 @@ class Core:
     def run(self):
         try:
             self.setup_signal()
+            self._docker_connect()
             self.start_threads()
             self.schedule_tasks()
             try:
@@ -171,6 +174,18 @@ class Core:
 
         signal.signal(signal.SIGTERM, handler)
         signal.signal(signal.SIGQUIT, handler)
+
+    def _docker_connect(self):
+        """ Try to connect to docker remote API
+        """
+        self.docker_client = docker.Client(
+            version=DOCKER_API_VERSION,
+        )
+        try:
+            self.docker_client.ping()
+        except:
+            logging.debug('Docker ping failed. Assume Docker is not used')
+            self.docker_client = None
 
     def schedule_tasks(self):
         self.scheduler.add_job(
@@ -205,6 +220,7 @@ class Core:
             trigger='interval',
             seconds=3,
         )
+        self._schedule_metric_pull()
 
     def start_threads(self):
 
@@ -293,19 +309,15 @@ class Core:
                     'instance': None,
                 }
 
-        docker_client = docker.Client(version=bleemeo_agent.DOCKER_API_VERSION)
-        try:
-            docker_client.ping()
-        except:
-            logging.debug('docker ping failed. Assume docker is not used')
+        if self.docker_client is None:
             return processes
 
-        for container in docker_client.containers():
+        for container in self.docker_client.containers():
             # container has... nameS
             # Also name start with "/". I think it may have mulitple name
             # and/or other "/" with docker-in-docker.
             container_name = container['Names'][0].lstrip('/')
-            for process in docker_client.top(container_name)['Processes']:
+            for process in self.docker_client.top(container_name)['Processes']:
                 # process[1] is the pid as string. It is the PID from the
                 # point-of-view of root pid namespace.
                 pid = int(process[1])
@@ -320,7 +332,6 @@ class Core:
         """ Try to discover some service based on known port/process
         """
         discovered_services = []
-        docker_client = docker.Client(version=bleemeo_agent.DOCKER_API_VERSION)
         processes = self._get_processes_map()
 
         for process in processes.values():
@@ -330,7 +341,9 @@ class Core:
                 if instance is None:
                     address = '127.0.0.1'
                 else:
-                    container_info = docker_client.inspect_container(instance)
+                    container_info = self.docker_client.inspect_container(
+                        instance
+                    )
                     address = container_info['NetworkSettings']['IPAddress']
 
                 service_info = {
@@ -375,9 +388,7 @@ class Core:
                 pass
         else:
             # MySQL is running inside a docker.
-            docker_client = docker.Client(
-                version=bleemeo_agent.DOCKER_API_VERSION)
-            container_info = docker_client.inspect_container(instance)
+            container_info = self.docker_client.inspect_container(instance)
             for env in container_info['Config']['Env']:
                 # env has the form "VARIABLE=value"
                 if env.startswith('MYSQL_ROOT_PASSWORD='):
