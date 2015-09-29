@@ -3,7 +3,11 @@ import bleemeo_agent.collectd
 
 class DummyCore:
     def __init__(self):
-        self.config = {}
+        self.config = {
+            'disk_monitor': [
+                '^(hd|sd|vd|xvd)[a-z]$',
+            ]
+        }
 
 
 def test_collectd_regex():
@@ -103,7 +107,7 @@ def test_rename_metric():
 
     collectd.computed_metrics_pending = set()
     (result, no_emit) = collectd._rename_metric(
-        'diskstats-sda.counter-reads_completed',
+        'disk-sda.disk_ops.read',
         12345,
         42,
     )

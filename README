@@ -25,10 +25,6 @@ If you want to try bleemeo-agent, here are the step to run from a git checkout:
     sudo install -m 0644 debian/bleemeo-agent.collectd.conf /etc/collectd/collectd.conf.d/bleemeo.conf
     sudo service collectd restart
 
-* Also to have IO stat, install diskstat.py in /usr/share/collectd::
-
-    sudo wget -O /usr/share/collectd/diskstats.py https://raw.githubusercontent.com/PierreF/collectd-diskstats/master/diskstats.py
-
 * Run bleemeo-agent from repository root (where README and setup.py are)::
 
     bleemeo-agent

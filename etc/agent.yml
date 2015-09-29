@@ -97,6 +97,11 @@ network_interface_blacklist:
     - virbr
     - vnet
 
+# Disk to monitor IO statistics
+disk_monitor:
+    - ^(hd|sd|vd|xvd)[a-z]$
+    - ^mmcblk[0-9]$
+
 # Additional metric could be retrived over HTTP(s) by the agent.
 #
 # It expect response to be only one number in a text/plain response.

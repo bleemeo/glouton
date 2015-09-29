@@ -389,27 +389,28 @@ class Collectd(threading.Thread):
 
             tag = path
             self.computed_metrics_pending.add(('disk_total', tag, timestamp))
-        elif match_dict['plugin'] == 'diskstats':
-            name = {
-                'reads_merged': 'io_read_merged',
-                'reading_milliseconds': 'io_read_time',
-                'reads_completed': 'io_reads',
-                'writes_completed': 'io_writes',
-                'sectors_read': 'io_read_bytes',
-                'writing_milliseconds': 'io_write_time',
-                'sectors_written': 'io_write_bytes',
-                'io_milliseconds_weighted': 'io_time_weighted',
-                'io_milliseconds': 'io_time',
-                'io_inprogress': 'io_inprogress',
-            }[match_dict['type_instance']]
+        elif match_dict['plugin'] == 'disk':
+            if match_dict['type_instance'] == 'io_time':
+                name = 'io_time'
+            elif match_dict['type_instance'] == 'weighted_io_time':
+                name = 'io_time_weighted'
+            elif match_dict['type'] == 'pending_operations':
+                name = 'io_inprogress'
+            else:
+                kind_name = {
+                    'disk_merged': '_merged',
+                    'disk_octets': '_bytes',
+                    'disk_ops': 's',  # will become readS and writeS
+                    'disk_time': '_time',
+                }[match_dict['type']]
+                name = 'io_%s%s' % (match_dict['type_instance'], kind_name)
 
             tag = match_dict['plugin_instance']
+            if self._ignored_disk(tag):
+                return (None, None)
             if name == 'io_time':
                 self.computed_metrics_pending.add(
                     ('io_utilisation', tag, timestamp))
-            if name in ['io_read_bytes', 'io_write_bytes']:
-                # metric is expressed in "sector". Sector is 512-bytes
-                value = value * 512
         elif match_dict['plugin'] == 'interface':
             kind_name = {
                 'if_errors': 'err',
@@ -505,12 +506,12 @@ class Collectd(threading.Thread):
             In case of collectd running in a container, it's used to show
             partition as seen by the host, instead of as seen by a container.
         """
-        ignored_patterns = self.core.config.get('collectd.disk_ignore', [])
+        ignored_patterns = self.core.config.get('df.path_ignore', [])
         for pattern in ignored_patterns:
             if path.startswith(pattern):
                 return None
 
-        mount_point = self.core.config.get('collectd.disk_mount_point')
+        mount_point = self.core.config.get('df.host_mount_point')
         if mount_point is None:
             return path
 
@@ -524,3 +525,13 @@ class Collectd(threading.Thread):
             path = '/' + path
 
         return path
+
+    def _ignored_disk(self, disk):
+        """ Tell if disk should be monitored. It avoid monitoring sda1 or
+            dm-1
+        """
+        for pattern in self.core.config.get('disk_monitor', []):
+            if re.match(pattern, disk):
+                return False
+
+        return True
