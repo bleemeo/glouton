@@ -425,7 +425,7 @@ def pull_raw_metric(core, name):
         section "metric.pull.$NAME.":
 
         * url : where to fetch the metric [mandatory]
-        * tag: tag to add on your metric [default: None - no tag]
+        * item: item to add on your metric [default: None - no item]
         * interval : retrive the metric every interval seconds [default: 10s]
         * ssl_check : should we check that SSL certificate are valid
           [default: yes]
@@ -450,7 +450,7 @@ def pull_raw_metric(core, name):
             metric = {
                 'time': time.time(),
                 'measurement': name,
-                'tag': metric_config.get('tag', None),
+                'item': metric_config.get('item', None),
                 'status': None,
                 'value': value,
             }

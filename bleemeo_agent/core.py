@@ -300,7 +300,7 @@ class Core:
 
         self.emit_metric({
             'measurement': 'uptime',
-            'tag': None,
+            'item': None,
             'status': None,
             'service': None,
             'time': now,
@@ -321,8 +321,8 @@ class Core:
 
         # XXX: concurrent access with emit_metric.
         self.last_metrics = {
-            (measurement, tag): metric
-            for ((measurement, tag), metric) in self.last_metrics.items()
+            (measurement, item): metric
+            for ((measurement, item), metric) in self.last_metrics.items()
             if metric['time'] >= cutoff
         }
 
@@ -500,9 +500,9 @@ class Core:
     def _store_last_value(self, metric):
         """ Store the metric in self.last_matrics, replacing the previous value
         """
-        tag = metric['tag']
+        item = metric['item']
         measurement = metric['measurement']
-        self.last_metrics[(measurement, tag)] = metric
+        self.last_metrics[(measurement, item)] = metric
 
     def emit_metric(self, metric, no_emit=False):
         """ Sent a metric to all configured output
@@ -557,19 +557,19 @@ class Core:
 
         metric['status'] = status
 
-    def get_last_metric(self, name, tag):
-        """ Return the last metric matching name and tag.
+    def get_last_metric(self, name, item):
+        """ Return the last metric matching name and item.
 
             None is returned if the metric is not found
         """
-        return self.last_metrics.get((name, tag), None)
+        return self.last_metrics.get((name, item), None)
 
-    def get_last_metric_value(self, name, tag, default=None):
+    def get_last_metric_value(self, name, item, default=None):
         """ Return value for given metric.
 
             Return default if metric is not found.
         """
-        metric = self.get_last_metric(name, tag)
+        metric = self.get_last_metric(name, item)
         if metric is not None:
             return metric['value']
         else:

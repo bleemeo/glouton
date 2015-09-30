@@ -57,12 +57,12 @@ def _gather_checks_info():
             threshold = app.core.thresholds.get(metric['measurement'])
 
             pretty_name = metric['measurement']
-            if metric['tag'] is not None:
-                pretty_name = '%s for %s' % (pretty_name, metric['tag'])
+            if metric['item'] is not None:
+                pretty_name = '%s for %s' % (pretty_name, metric['item'])
             checks.append({
                 'name': metric['measurement'],
                 'pretty_name': pretty_name,
-                'tag': metric['tag'],
+                'item': metric['item'],
                 'status': metric['status'],
                 'value': metric['value'],
                 'threshold': threshold,

@@ -111,6 +111,6 @@ disk_monitor:
 #   pull:
 #       the_name_of_your_metric:
 #           url: http://localhost:8080/myapp/metric/users_count
-#           tag: myapp  # tag to add to the metric. Default to none
+#           item: myapp  # item to add to the metric. Default to none
 #           ssl_check: true  # should SSL certificate be checked? Default to yes
 #           interval: 10  # retrive the metric every N seconds, default to 10

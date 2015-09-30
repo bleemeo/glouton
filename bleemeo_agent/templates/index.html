@@ -54,10 +54,10 @@
 </div>
 <div class="row">
     <div class="col-xs-5">
-    {% for disk_metric in disks_used_perc|sort(attribute='tag') %}
+    {% for disk_metric in disks_used_perc|sort(attribute='item') %}
     {% with %}
-        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['tag'], 0) %}
-        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['tag'], 0) %}
+        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['item'], 0) %}
+        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['item'], 0) %}
         {% set disk_total_user = disk_used + disk_free %}
         {% set disk_threshold = core.thresholds['disk_used_perc'] %}
         <div>
@@ -65,7 +65,7 @@
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#disk-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="disk-collapse-{{ loop.index }}">
                         <span class="glyphicon glyphicon-chevron-right"></span>
-                        {{ disk_metric['tag'] }} disk space
+                        {{ disk_metric['item'] }} disk space
                     </a>
                 </h4>
             </div>
@@ -106,16 +106,16 @@
         </div>
         {% endif %}
     {% endwith %}
-    {% for net_metric in nets_bits_recv|sort(attribute='tag') %}
+    {% for net_metric in nets_bits_recv|sort(attribute='item') %}
     {% with %}
-        {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric['tag'], 0) %}
+        {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric['item'], 0) %}
         {% set recv_bytes = net_metric['value'] %}
         <div>
             <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#net-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="net-collapse-{{ loop.index }}">
                         <span class="glyphicon glyphicon-chevron-right"></span>
-                        {{ net_metric['tag'] }} traffic
+                        {{ net_metric['item'] }} traffic
                     </a>
                 </h4>
             </div>

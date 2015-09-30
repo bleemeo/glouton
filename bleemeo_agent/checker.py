@@ -167,7 +167,7 @@ class Check:
         self.core.emit_metric({
             'measurement': '%s_check' % self.service,
             'status': STATUS_NAME[return_code],
-            'tag': self.instance,
+            'item': self.instance,
             'service': self.service,
             'time': self.last_run,
             'value': return_code,

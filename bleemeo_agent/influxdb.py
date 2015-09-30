@@ -118,12 +118,12 @@ class InfluxDBConnector(threading.Thread):
         if isinstance(value, float) and math.isnan(value):
             return
 
-        tag = metric.pop('tag')
+        item = metric.pop('item')
         status = metric.pop('status')
         del metric['service']  # InfluxDB don't store service
         metric['tags'] = {}
-        if tag is not None:
-            metric['tags']['item'] = tag
+        if item is not None:
+            metric['tags']['item'] = item
         if status is not None:
             metric['tags']['status'] = status
 

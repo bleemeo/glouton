@@ -235,14 +235,14 @@ class Collectd(threading.Thread):
             to compute the aggregate.
 
             This function use self.computed_metrics_pending, which old a list
-            of (metric_name, "instance", timestamp).
-            Instance is something like "sda", "sdb" or "eth0", "eth1".
+            of (metric_name, item, timestamp).
+            Item is something like "sda", "sdb" or "eth0", "eth1".
         """
         processed = set()
-        for item in self.computed_metrics_pending:
-            (name, instance, timestamp) = item
+        for entry in self.computed_metrics_pending:
+            (name, item, timestamp) = entry
             try:
-                self._compute_metric(name, instance, timestamp)
+                self._compute_metric(name, item, timestamp)
                 processed.add(item)
             except ComputationFail:
                 logging.debug(
@@ -258,8 +258,8 @@ class Collectd(threading.Thread):
 
         self.computed_metrics_pending.difference_update(processed)
 
-    def _compute_metric(self, name, instance, timestamp):  # NOQA
-        def get_metric(measurements, searched_tag):
+    def _compute_metric(self, name, item, timestamp):  # NOQA
+        def get_metric(measurements, searched_item):
             """ Helper that do common task when retriving metrics:
 
                 * check that metric exists and is not too old
@@ -268,45 +268,41 @@ class Collectd(threading.Thread):
                   to compute, raise ComputationFail. We will never be
                   able to compute the requested value.
             """
-            metric = self.core.get_last_metric(measurements, searched_tag)
+            metric = self.core.get_last_metric(measurements, searched_item)
             if metric is None or metric['time'] < timestamp:
                 raise MissingMetric()
             elif metric['time'] < timestamp:
                 raise ComputationFail()
             return metric['value']
 
-        tag = None
-
         if name == 'disk_total':
-            tag = instance
-            used = get_metric('disk_used', tag)
-            value = used + get_metric('disk_free', tag)
+            used = get_metric('disk_used', item)
+            value = used + get_metric('disk_free', item)
             # used_perc could be more that 100% is reserved space is used.
             # We limit it to 100% (105% would be confusing).
             used_perc = min(float(used) / value * 100, 100)
 
             # But still, total will including reserved space
-            value += get_metric('disk_reserved', tag)
+            value += get_metric('disk_reserved', item)
 
             self.core.emit_metric({
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
-                'tag': tag,
+                'item': item,
                 'status': None,
                 'service': None,
                 'value': used_perc,
             })
         elif name == 'io_utilisation':
-            tag = instance
-            io_time = get_metric('io_time', tag)
+            io_time = get_metric('io_time', item)
             # io_time is a number of ms spent doing IO (per seconds)
             # utilisation is 100% when we spent 1000ms during one seconds
             value = io_time / 1000. * 100.
         elif name == 'mem_total':
-            used = get_metric('mem_used', tag)
+            used = get_metric('mem_used', item)
             value = used
             for sub_type in ('buffered', 'cached', 'free'):
-                value += get_metric('mem_%s' % sub_type, tag)
+                value += get_metric('mem_%s' % sub_type, item)
         elif name == 'process_total':
             types = [
                 'blocked', 'paging', 'running', 'sleeping',
@@ -314,10 +310,10 @@ class Collectd(threading.Thread):
             ]
             value = 0
             for sub_type in types:
-                value += get_metric('process_status_%s' % sub_type, tag)
+                value += get_metric('process_status_%s' % sub_type, item)
         elif name == 'swap_total':
-            used = get_metric('swap_used', tag)
-            value = used + get_metric('swap_free', tag)
+            used = get_metric('swap_used', item)
+            value = used + get_metric('swap_free', item)
         else:
             logging.debug('Unknown computed metric %s', name)
             return
@@ -326,7 +322,7 @@ class Collectd(threading.Thread):
             self.core.emit_metric({
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
-                'tag': None,
+                'item': None,
                 'status': None,
                 'service': None,
                 'value': float(used) / value * 100,
@@ -335,7 +331,7 @@ class Collectd(threading.Thread):
         self.core.emit_metric({
             'measurement': name,
             'time': timestamp,
-            'tag': tag,
+            'item': item,
             'status': None,
             'service': None,
             'value': value,
@@ -349,7 +345,7 @@ class Collectd(threading.Thread):
             self.core.emit_metric(metric, no_emit=no_emit)
 
     def _rename_metric(self, name, timestamp, value):  # NOQA
-        """ Process metric to rename it and add tag
+        """ Process metric to rename it and add item
 
             If the metric is used to compute a derrived metric, add it to
             computed_metrics_pending.
@@ -362,7 +358,7 @@ class Collectd(threading.Thread):
         match_dict = match.groupdict()
 
         no_emit = False
-        tag = None
+        item = None
         service = None
 
         if match_dict['plugin'] == 'cpu':
@@ -381,8 +377,8 @@ class Collectd(threading.Thread):
                 # this partition is ignored
                 return (None, None)
 
-            tag = path
-            self.computed_metrics_pending.add(('disk_total', tag, timestamp))
+            item = path
+            self.computed_metrics_pending.add(('disk_total', item, timestamp))
         elif match_dict['plugin'] == 'disk':
             if match_dict['type_instance'] == 'io_time':
                 name = 'io_time'
@@ -399,12 +395,12 @@ class Collectd(threading.Thread):
                 }[match_dict['type']]
                 name = 'io_%s%s' % (match_dict['type_instance'], kind_name)
 
-            tag = match_dict['plugin_instance']
-            if self._ignored_disk(tag):
+            item = match_dict['plugin_instance']
+            if self._ignored_disk(item):
                 return (None, None)
             if name == 'io_time':
                 self.computed_metrics_pending.add(
-                    ('io_utilisation', tag, timestamp))
+                    ('io_utilisation', item, timestamp))
         elif match_dict['plugin'] == 'interface':
             kind_name = {
                 'if_errors': 'err',
@@ -417,8 +413,8 @@ class Collectd(threading.Thread):
             else:
                 direction = 'sent'
 
-            tag = match_dict['plugin_instance']
-            if self.network_interface_blacklist(tag):
+            item = match_dict['plugin_instance']
+            if self.network_interface_blacklist(item):
                 return (None, None)
 
             # Special cases:
@@ -467,7 +463,7 @@ class Collectd(threading.Thread):
             if match_dict['type_instance']:
                 name += '.' + match_dict['type_instance']
 
-            tag = match_dict['plugin_instance'].replace('bleemeo-', '')
+            item = match_dict['plugin_instance'].replace('bleemeo-', '')
             service = 'apache'
         elif (match_dict['plugin'] == 'mysql'
                 and match_dict['plugin_instance'].startswith('bleemeo-')):
@@ -478,7 +474,7 @@ class Collectd(threading.Thread):
             if not name.startswith('mysql_'):
                 name = 'mysql_' + name
 
-            tag = match_dict['plugin_instance'].replace('bleemeo-', '')
+            item = match_dict['plugin_instance'].replace('bleemeo-', '')
 
             service = 'mysql'
         else:
@@ -488,7 +484,7 @@ class Collectd(threading.Thread):
             'measurement': name,
             'time': timestamp,
             'value': value,
-            'tag': tag,
+            'item': item,
             'service': service,
             'status': None,
         }, no_emit)
