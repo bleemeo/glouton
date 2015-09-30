@@ -36,7 +36,7 @@ LoadPlugin mysql
 # https://collectd.org/wiki/index.php/Naming_schema
 # carbon output change "/" in ".".
 # Example of metic name:
-# cpu-0.cpu-idle
+# cpu.percent-idle
 # df-var-lib.df_complex-free
 # disk-sda.disk_octets.read
 collectd_regex = re.compile(
@@ -276,12 +276,7 @@ class Collectd(threading.Thread):
 
         tag = None
 
-        if name.startswith('cpu_'):
-            cores = multiprocessing.cpu_count()
-            value = 0
-            for i in range(cores):
-                value += get_metric(name, str(i))
-        elif name == 'disk_total':
+        if name == 'disk_total':
             tag = instance
             used = get_metric('disk_used', tag)
             value = used + get_metric('disk_free', tag)
@@ -371,10 +366,9 @@ class Collectd(threading.Thread):
         service = None
 
         if match_dict['plugin'] == 'cpu':
+            cores = multiprocessing.cpu_count()
             name = 'cpu_%s' % match_dict['type_instance']
-            tag = match_dict['plugin_instance']
-            no_emit = True
-            self.computed_metrics_pending.add((name, None, timestamp))
+            value = value * cores
         elif match_dict['type'] == 'df_complex':
             name = 'disk_%s' % match_dict['type_instance']
             path = match_dict['plugin_instance']

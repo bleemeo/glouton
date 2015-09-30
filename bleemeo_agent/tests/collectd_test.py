@@ -1,3 +1,5 @@
+import multiprocessing
+
 import bleemeo_agent.collectd
 
 
@@ -51,21 +53,21 @@ def test_rename_metric():
     core = DummyCore()
     collectd = bleemeo_agent.collectd.Collectd(core)
     (result, no_emit) = collectd._rename_metric(
-        'cpu-0.cpu-idle',
+        'cpu.percent-idle',
         12345,
         42,
     )
+    cores = multiprocessing.cpu_count()
     assert result == {
         'measurement': 'cpu_idle',
         'time': 12345,
-        'value': 42,
-        'tag': '0',
+        'value': 42 * cores,
+        'tag': None,
         'status': None,
         'service': None,
     }
-    assert no_emit is True
-    assert len(collectd.computed_metrics_pending) == 1
-    assert ('cpu_idle', None, 12345) in collectd.computed_metrics_pending
+    assert no_emit is False
+    assert len(collectd.computed_metrics_pending) == 0
 
     collectd.computed_metrics_pending = set()
     (result, no_emit) = collectd._rename_metric(
