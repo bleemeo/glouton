@@ -250,13 +250,15 @@ class BleemeoConnector(threading.Thread):
 
         try:
             for metric, metric_uuid in self.metrics_uuid.items():
-                (metric_name, service) = metric
+                (metric_name, service, item) = metric
                 if metric_uuid is None:
                     logging.debug('Registering metric %s', metric_name)
                     payload = {
                         'agent': '/v1/agent/%s/' % self.agent_uuid,
                         'label': metric_name,
                     }
+                    if item is not None:
+                        payload['item'] = item
                     if service is not None:
                         payload['service'] = (
                             '/v1/service/%s/' %
@@ -269,13 +271,13 @@ class BleemeoConnector(threading.Thread):
                             response.content
                         )
                         return
-                    self.metrics_uuid[(metric_name, service)] = (
+                    self.metrics_uuid[(metric_name, service, item)] = (
                         response.json()['id']
                     )
                     logging.debug(
                         'Metric %s registered with uuid %s',
                         metric_name,
-                        self.metrics_uuid[(metric_name, service)],
+                        self.metrics_uuid[(metric_name, service, item)],
                     )
                     changed = True
         finally:
@@ -317,31 +319,35 @@ class BleemeoConnector(threading.Thread):
     def _load_metrics_uuid(self):
         """ Metrics UUID are persistent in "stored_value" JSON file.
 
-            Since we want key to be (metric_name, service_name), which
+            Since we want key to be (metric_name, service_name, item), which
             is not a string (but a tuple of string), it can't be stored
             as-is in JSON file.
         """
         metrics_uuid = {}
         json_metrics_uuid = self.core.stored_values.get('metrics_uuid', [])
-        for (metric_name, service_name, metric_uuid) in json_metrics_uuid:
-            metrics_uuid[(metric_name, service_name)] = metric_uuid
+        for row in json_metrics_uuid:
+            (metric_name, service_name, item, metric_uuid) = row
+            metrics_uuid[(metric_name, service_name, item)] = metric_uuid
 
         return metrics_uuid
 
     def _save_metrics_uuid(self):
         json_metrics_uuid = []
         for metric, metric_uuid in self.metrics_uuid.items():
-            (metric_name, service_name) = metric
-            json_metrics_uuid.append((metric_name, service_name, metric_uuid))
+            (metric_name, service_name, item) = metric
+            json_metrics_uuid.append(
+                (metric_name, service_name, item, metric_uuid)
+            )
         self.core.stored_values.set('metrics_uuid', json_metrics_uuid)
 
     def emit_metric(self, metric):
         self._metric_queue.put(metric)
         metric_name = metric['measurement']
         service = metric['service']
+        item = metric['item']
 
-        if (metric_name, service) not in self.metrics_uuid:
-            self.metrics_uuid.setdefault((metric_name, service), None)
+        if (metric_name, service, item) not in self.metrics_uuid:
+            self.metrics_uuid.setdefault((metric_name, service, item), None)
 
     def send_facts(self, facts):  # NOQA
         if self.agent_uuid is None:
