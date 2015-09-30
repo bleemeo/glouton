@@ -317,10 +317,9 @@ class Collectd(threading.Thread):
         elif name == 'swap_total':
             used = get_metric('swap_used', tag)
             value = used + get_metric('swap_free', tag)
-        elif name in ('net_bits_recv', 'net_bits_sent'):
-            tag = instance
-            value = get_metric(name.replace('bits', 'bytes'), instance)
-            value = value * 8
+        else:
+            logging.debug('Unknown computed metric %s', name)
+            return
 
         if name in ('mem_total', 'swap_total'):
             self.core.emit_metric({
@@ -431,9 +430,8 @@ class Collectd(threading.Thread):
                     .replace('sent', 'out')
                 )
             elif kind_name == 'bytes':
-                no_emit = True
-                self.computed_metrics_pending.add(
-                    ('net_bits_%s' % direction, tag, timestamp))
+                kind_name = 'bits'
+                value = value * 8
 
             name = 'net_%s_%s' % (kind_name, direction)
         elif match_dict['plugin'] == 'load':
