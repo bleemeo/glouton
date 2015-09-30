@@ -1,4 +1,4 @@
-apscheduler
+apscheduler<3.0.0
 docker-py
 influxdb
 paho-mqtt

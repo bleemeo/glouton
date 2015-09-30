@@ -87,9 +87,8 @@ class BleemeoConnector(threading.Thread):
         if self.core.is_terminating.is_set():
             return
 
-        self.core.scheduler.add_job(
+        self.core.scheduler.add_interval_job(
             self._register_metric,
-            trigger='interval',
             seconds=15,
         )
 

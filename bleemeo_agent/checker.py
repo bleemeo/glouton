@@ -97,10 +97,9 @@ class Check:
         self.tcp_socket = None
         self.last_run = time.time()
 
-        self.current_job = self.core.scheduler.add_job(
+        self.current_job = self.core.scheduler.add_interval_job(
             self.run_check,
-            next_run_time=datetime.datetime.now(),
-            trigger='interval',
+            start_date=datetime.datetime.now() + datetime.timedelta(seconds=1),
             seconds=60,
         )
         self.open_socket_job = None
@@ -128,7 +127,15 @@ class Check:
                 self.service, self.instance, self.tcp_address, self.tcp_port
             )
             # reschedule job to be run immediately
-            self.current_job.modify(next_run_time=datetime.datetime.now())
+            self.core.scheduler.unschedule_job(self.current_job)
+            self.current_job = self.core.scheduler.add_interval_job(
+                self.run_check,
+                start_date=(
+                    datetime.datetime.now() +
+                    datetime.timedelta(seconds=1)
+                ),
+                seconds=60,
+            )
 
     def check_socket(self):
         """ Called when socket is "readable". When a socket is closed,
@@ -173,10 +180,9 @@ class Check:
         if (return_code == STATUS_OK
                 and self.tcp_port is not None
                 and self.tcp_socket is None):
-            self.open_socket_job = self.core.scheduler.add_job(
+            self.open_socket_job = self.core.scheduler.add_date_job(
                 self.open_socket,
-                'date',
-                run_date=(
+                date=(
                     datetime.datetime.now() + datetime.timedelta(seconds=5)
                 ),
             )
@@ -185,6 +191,8 @@ class Check:
         """ Unschedule this check
         """
         logging.debug('Stoping check %s (on %s)', self.service, self.instance)
-        if self.open_socket_job:
-            self.open_socket_job.remove()
-        self.current_job.remove()
+        try:
+            self.core.scheduler.unschedule_job(self.open_socket_job)
+        except KeyError:
+            pass  # job may be unscheduled
+        self.core.scheduler.unschedule_job(self.current_job)

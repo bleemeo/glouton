@@ -11,7 +11,7 @@ import subprocess
 import threading
 import time
 
-import apscheduler.schedulers.blocking
+import apscheduler.scheduler
 import psutil
 from six.moves import configparser
 
@@ -120,7 +120,7 @@ class Core:
         self.influx_connector = None
         self.collectd_server = None
         self.docker_client = None
-        self.scheduler = apscheduler.schedulers.blocking.BlockingScheduler()
+        self.scheduler = apscheduler.scheduler.Scheduler(standalone=True)
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
@@ -160,10 +160,9 @@ class Core:
         """
         for (name, config) in self.config.get('metric.pull', {}).items():
             interval = config.get('interval', 10)
-            self.scheduler.add_job(
+            self.scheduler.add_interval_interval_job(
                 bleemeo_agent.util.pull_raw_metric,
                 args=(self, name),
-                trigger='interval',
                 seconds=interval,
             )
 
@@ -210,36 +209,37 @@ class Core:
             self.docker_client = None
 
     def schedule_tasks(self):
-        self.scheduler.add_job(
-            bleemeo_agent.checker.periodic_check,
-            trigger='interval',
+        # If we schedule a job with start_date = now, when scheduler pickup
+        # the job, start_date will be in the past and next run will be
+        # current time + interval. In case of daily job, we don't want this.
+        # With now + 3 seconds, when scheduler pickup the job, start_date
+        # is no in the past and used as next run time.
+        # This assume that scheduler will be started in less than 3 seconds
+        now_scheduler = datetime.datetime.now() + datetime.timedelta(seconds=3)
+        self.scheduler.add_interval_job(
+            func=bleemeo_agent.checker.periodic_check,
             seconds=3,
         )
-        self.scheduler.add_job(
+        self.scheduler.add_interval_job(
             self._purge_metrics,
-            trigger='interval',
             minutes=5,
         )
-        self.scheduler.add_job(
+        self.scheduler.add_interval_job(
             self.send_facts,
-            next_run_time=datetime.datetime.now(),
-            trigger='interval',
+            start_date=now_scheduler,
             hours=24,
         )
-        self._discovery_job = self.scheduler.add_job(
+        self._discovery_job = self.scheduler.add_interval_job(
             self.update_discovery,
-            next_run_time=datetime.datetime.now(),
-            trigger='interval',
+            start_date=now_scheduler,
             hours=1,
         )
-        self.scheduler.add_job(
+        self.scheduler.add_interval_job(
             self._gather_metrics,
-            trigger='interval',
             seconds=10,
         )
-        self.scheduler.add_job(
+        self.scheduler.add_interval_job(
             self.send_top_info,
-            trigger='interval',
             seconds=3,
         )
         self._schedule_metric_pull()
@@ -449,8 +449,11 @@ class Core:
             # container to start (e.g. "mysqld" process to start, and
             # not just the wrapper shell script)
             now = datetime.datetime.now()
-            self._discovery_job.modify(
-                next_run_time=now + datetime.timedelta(seconds=10),
+            self.scheduler.unschedule_job(self._discovery_job)
+            self._discovery_job = self.scheduler.add_interval_job(
+                self.update_discovery,
+                start_date=now + datetime.timedelta(seconds=10),
+                hours=1,
             )
 
     def send_facts(self):
