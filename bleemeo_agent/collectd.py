@@ -243,14 +243,14 @@ class Collectd(threading.Thread):
             (name, item, timestamp) = entry
             try:
                 self._compute_metric(name, item, timestamp)
-                processed.add(item)
+                processed.add(entry)
             except ComputationFail:
                 logging.debug(
                     'Failed to compute metric %s at time %s',
                     name, timestamp)
                 # we will never be able to recompute it.
                 # mark it as done and continue :/
-                processed.add(item)
+                processed.add(entry)
             except MissingMetric:
                 # Some metric are missing to do computing. Wait a bit by
                 # keeping this entry in self.computed_metrics_pending
@@ -271,7 +271,7 @@ class Collectd(threading.Thread):
             metric = self.core.get_last_metric(measurements, searched_item)
             if metric is None or metric['time'] < timestamp:
                 raise MissingMetric()
-            elif metric['time'] < timestamp:
+            elif metric['time'] > timestamp:
                 raise ComputationFail()
             return metric['value']
 
