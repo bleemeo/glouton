@@ -355,8 +355,15 @@ class Core:
         # but if they are running in a docker, they will be updated later
         if self.container is None:
             for process in psutil.process_iter():
+                # We prefer cmdline if available, because name is cached
+                # and may not return new name (after exec, see bug
+                # https://github.com/giampaolo/psutil/issues/692)
+                if process.cmdline() and process.cmdline()[0]:
+                    name = os.path.basename(process.cmdline()[0])
+                else:
+                    name = process.name()
                 processes[process.pid] = {
-                    'name': os.path.basename(process.cmdline()[0]),
+                    'name': name,
                     'instance': None,
                 }
 
