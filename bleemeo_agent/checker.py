@@ -1,6 +1,5 @@
 import datetime
 import logging
-import random
 import select
 import shlex
 import socket
@@ -98,23 +97,13 @@ class Check:
         self.tcp_socket = None
         self.last_run = time.time()
 
-        # During startup, schedule all check to be run within the
-        # first minute.
-        sched_delta = datetime.timedelta(seconds=random.randint(5, 60))
-
         self.current_job = self.core.scheduler.add_job(
             self.run_check,
-            next_run_time=datetime.datetime.now() + sched_delta,
+            next_run_time=datetime.datetime.now(),
             trigger='interval',
             seconds=60,
         )
-        self.open_socket_job = self.core.scheduler.add_job(
-            self.open_socket,
-            'date',
-            run_date=(
-                datetime.datetime.now() + datetime.timedelta(seconds=5)
-            ),
-        )
+        self.open_socket_job = None
 
     def open_socket(self):
         if self.tcp_port is None:
@@ -165,7 +154,7 @@ class Check:
             self.service, self.instance, return_code, self.check_command_safe
         )
 
-        if return_code > STATUS_UNKNOWN:
+        if return_code > STATUS_UNKNOWN or return_code < 0:
             return_code = STATUS_UNKNOWN
 
         self.core.emit_metric({
@@ -196,5 +185,6 @@ class Check:
         """ Unschedule this check
         """
         logging.debug('Stoping check %s (on %s)', self.service, self.instance)
-        self.open_socket_job.remove()
+        if self.open_socket_job:
+            self.open_socket_job.remove()
         self.current_job.remove()

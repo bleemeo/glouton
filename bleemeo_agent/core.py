@@ -171,8 +171,8 @@ class Core:
         try:
             self.setup_signal()
             self._docker_connect()
-            self.start_threads()
             self.schedule_tasks()
+            self.start_threads()
             try:
                 self.scheduler.start()
             finally:
@@ -226,7 +226,7 @@ class Core:
             trigger='interval',
             hours=24,
         )
-        self.scheduler.add_job(
+        self._discovery_job = self.scheduler.add_job(
             self.update_discovery,
             next_run_time=datetime.datetime.now(),
             trigger='interval',
@@ -272,6 +272,11 @@ class Core:
         self.collectd_server.start()
 
         bleemeo_agent.web.start_server(self)
+
+        if self.docker_client is not None:
+            thread = threading.Thread(target=self._watch_docker_event)
+            thread.daemon = True
+            thread.start()
 
     def _gather_metrics(self):
         """ Gather and send some metric missing from collectd
@@ -339,7 +344,7 @@ class Core:
         if self.container is None:
             for process in psutil.process_iter():
                 processes[process.pid] = {
-                    'name': process.name(),
+                    'name': os.path.basename(process.cmdline()[0]),
                     'instance': None,
                 }
 
@@ -372,6 +377,10 @@ class Core:
             if process['name'] in KNOWN_PROCESS:
                 discovery_info = KNOWN_PROCESS[process['name']]
                 instance = process['instance']
+                logging.debug(
+                    'Discovered service %s on %s',
+                    discovery_info['service'], instance
+                )
                 if instance is None:
                     address = '127.0.0.1'
                 else:
@@ -392,6 +401,7 @@ class Core:
 
                 discovered_services.append(service_info)
 
+        logging.debug('Discovery found %s services', len(discovered_services))
         return discovered_services
 
     def _discover_mysql(self, service_info):
@@ -430,6 +440,18 @@ class Core:
 
         service_info['user'] = mysql_user
         service_info['password'] = mysql_password
+
+    def _watch_docker_event(self):
+        """ Watch for docker event and re-run discovery
+        """
+        for event in self.docker_client.events(decode=True):
+            # We request discovery in 10 seconds to allow newly created
+            # container to start (e.g. "mysqld" process to start, and
+            # not just the wrapper shell script)
+            now = datetime.datetime.now()
+            self._discovery_job.modify(
+                next_run_time=now + datetime.timedelta(seconds=10),
+            )
 
     def send_facts(self):
         """ Send facts to Bleemeo SaaS """

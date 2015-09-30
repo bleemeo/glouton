@@ -29,6 +29,7 @@ LoadPlugin mysql
         Host "%(address)s"
         User "%(user)s"
         Password "%(password)s"
+        ConnectTimeout 2
     </Database>
 </Plugin>
 """
