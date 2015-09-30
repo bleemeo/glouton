@@ -183,12 +183,24 @@ class Core:
 
     def setup_signal(self):
         """ Make kill (SIGKILL/SIGQUIT) send a KeyboardInterrupt
+
+            Make SIGHUP trigger a discovery
         """
         def handler(signum, frame):
             raise KeyboardInterrupt
 
+        def handler_hup(signum, frame):
+            now = datetime.datetime.now()
+            self.scheduler.unschedule_job(self._discovery_job)
+            self._discovery_job = self.scheduler.add_interval_job(
+                self.update_discovery,
+                start_date=now + datetime.timedelta(seconds=1),
+                hours=1,
+            )
+
         signal.signal(signal.SIGTERM, handler)
         signal.signal(signal.SIGQUIT, handler)
+        signal.signal(signal.SIGHUP, handler_hup)
 
     def _docker_connect(self):
         """ Try to connect to docker remote API
