@@ -463,7 +463,14 @@ class Core:
     def _watch_docker_event(self):
         """ Watch for docker event and re-run discovery
         """
-        for event in self.docker_client.events(decode=True):
+        try:
+            generator = self.docker_client.events(decode=True)
+        except TypeError:
+            # older version of docker-py does decode=True by default
+            # (and don't have this option)
+            generator = self.docker_client.events()
+
+        for event in generator:
             # We request discovery in 10 seconds to allow newly created
             # container to start (e.g. "mysqld" process to start, and
             # not just the wrapper shell script)
