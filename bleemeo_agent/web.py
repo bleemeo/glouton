@@ -128,10 +128,10 @@ def start_server(core):
     bind_port = core.config.get(
         'web.listener.port', 5000)
     app.core = core
-    if app.core.stored_values.get('web_secret_key') is None:
-        app.core.stored_values.set(
+    if app.core.state.get('web_secret_key') is None:
+        app.core.state.set(
             'web_secret_key', bleemeo_agent.util.generate_password())
-    app.secret_key = app.core.stored_values.get('web_secret_key')
+    app.secret_key = app.core.state.get('web_secret_key')
     app_thread = threading.Thread(
         target=app.run,
         kwargs={'host': bind_address, 'port': bind_port}

@@ -66,8 +66,8 @@ def main():
         logging.info('Agent stopped')
 
 
-class StoredValue:
-    """ Persistant store for value used by agent.
+class State:
+    """ Persistant store for state of the agent.
 
         Currently store in a json file
     """
@@ -497,10 +497,10 @@ class Core:
 
     def reload_config(self):
         self.config = bleemeo_agent.config.load_config()
-        self.stored_values = StoredValue(
+        self.state = State(
             self.config.get(
-                'agent.stored_values_file',
-                '/var/lib/bleemeo/store.json'))
+                'agent.state_file',
+                '/var/lib/bleemeo/state.json'))
 
         return self.config
 

@@ -59,8 +59,8 @@ class BleemeoConnector(threading.Thread):
             sleep_delay = min(sleep_delay * 2, 600)
             self._warn_mqtt_queue_full()
 
-        if self.core.stored_values.get('password') is None:
-            self.core.stored_values.set(
+        if self.core.state.get('password') is None:
+            self.core.state.set(
                 'password', bleemeo_agent.util.generate_password())
 
     def run(self):
@@ -77,7 +77,7 @@ class BleemeoConnector(threading.Thread):
         # If at this point facts_uuid is undefined, facts were never sent.
         # In this case, just re-send last facts
         if (self.core.last_facts
-                and self.core.stored_values.get('facts_uuid') is None):
+                and self.core.state.get('facts_uuid') is None):
             self.send_facts(self.core.last_facts)
 
         # Register return on two case:
@@ -132,7 +132,7 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.username_pw_set(
             self.agent_uuid,
-            self.core.stored_values.get('password'),
+            self.core.state.get('password'),
         )
 
         try:
@@ -200,7 +200,7 @@ class BleemeoConnector(threading.Thread):
 
         payload = {
             'account': '/v1/account/%s/' % self.account_id,
-            'password': self.core.stored_values.get('password'),
+            'password': self.core.state.get('password'),
             'display_name': socket.getfqdn(),
             'fqdn': socket.getfqdn(),
         }
@@ -221,7 +221,7 @@ class BleemeoConnector(threading.Thread):
                         response.content[:100])
 
             if content is not None and 'id' in content:
-                self.core.stored_values.set('agent_uuid', content['id'])
+                self.core.state.set('agent_uuid', content['id'])
                 logging.debug('Regisration successfull')
                 return
             elif content is not None:
@@ -288,7 +288,7 @@ class BleemeoConnector(threading.Thread):
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/service/')
 
-        services_uuid = self.core.stored_values.get('services_uuid', {})
+        services_uuid = self.core.state.get('services_uuid', {})
 
         if service_name in services_uuid:
             return services_uuid[service_name]
@@ -312,19 +312,19 @@ class BleemeoConnector(threading.Thread):
             service_name,
             services_uuid[service_name],
         )
-        self.core.stored_values.set('services_uuid', services_uuid)
+        self.core.state.set('services_uuid', services_uuid)
 
         return services_uuid[service_name]
 
     def _load_metrics_uuid(self):
-        """ Metrics UUID are persistent in "stored_value" JSON file.
+        """ Metrics UUID are persisted in state JSON file.
 
             Since we want key to be (metric_name, service_name, item), which
             is not a string (but a tuple of string), it can't be stored
             as-is in JSON file.
         """
         metrics_uuid = {}
-        json_metrics_uuid = self.core.stored_values.get('metrics_uuid', [])
+        json_metrics_uuid = self.core.state.get('metrics_uuid', [])
         for row in json_metrics_uuid:
             (metric_name, service_name, item, metric_uuid) = row
             metrics_uuid[(metric_name, service_name, item)] = metric_uuid
@@ -338,7 +338,7 @@ class BleemeoConnector(threading.Thread):
             json_metrics_uuid.append(
                 (metric_name, service_name, item, metric_uuid)
             )
-        self.core.stored_values.set('metrics_uuid', json_metrics_uuid)
+        self.core.state.set('metrics_uuid', json_metrics_uuid)
 
     def emit_metric(self, metric):
         self._metric_queue.put(metric)
@@ -356,7 +356,7 @@ class BleemeoConnector(threading.Thread):
 
         base_url = self.bleemeo_base_url
         fact_url = urllib_parse.urljoin(base_url, '/v1/agentfact/')
-        facts_uuid = self.core.stored_values.get('facts_uuid', {})
+        facts_uuid = self.core.state.get('facts_uuid', {})
 
         # first delete any already sent facts
         try:
@@ -380,7 +380,7 @@ class BleemeoConnector(threading.Thread):
             logging.debug('Failed to remove old facts.', exc_info=True)
             return
         finally:
-            self.core.stored_values.set('facts_uuid', facts_uuid)
+            self.core.state.set('facts_uuid', facts_uuid)
 
         # then create one agentfact for item in the mapping.
         try:
@@ -407,7 +407,7 @@ class BleemeoConnector(threading.Thread):
         except:
             logging.debug('Failed to send facts.', exc_info=True)
         finally:
-            self.core.stored_values.set('facts_uuid', facts_uuid)
+            self.core.state.set('facts_uuid', facts_uuid)
 
     def _warn_mqtt_queue_full(self):
         now = time.time()
@@ -426,7 +426,7 @@ class BleemeoConnector(threading.Thread):
 
     @property
     def agent_uuid(self):
-        return self.core.stored_values.get('agent_uuid')
+        return self.core.state.get('agent_uuid')
 
     @property
     def bleemeo_base_url(self):

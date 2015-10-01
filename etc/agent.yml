@@ -9,12 +9,11 @@
 # 00-defaults.yml is read before 99-custom.yml)
 
 agent:
-    # Agent will generate few values the first time it's started:
-    # * a couple (login, password) used to communicated over MQTT and send to
-    #   Bleemeo during the registration (over HTTPS).
-    # * and a secret_key used by local web-server
-    # It will store them in this file.
-    stored_values_file: /var/lib/bleemeo/store.json
+    # Agent store his current state in a JSON file. This file contains
+    # the agent UUID retrived when it registered with Bleemeo SaaS.
+    # It also contains which metrics were seen by the agent, which are
+    # registered on Bleemeo SaaS, ...
+    state_file: /var/lib/bleemeo/state.json
 
 # You can configure tags for your agent
 #tags:

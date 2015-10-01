@@ -3,4 +3,6 @@ __pycache__
 *.egg-info
 .*.swp
 /.tox
+/.cache
+/state.json
 /generated_values.json

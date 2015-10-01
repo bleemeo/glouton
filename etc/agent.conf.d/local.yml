@@ -24,4 +24,4 @@ bleemeo:
 
 agent:
     # Agent need to write a generated_values.json file. Write it in current directory.
-    stored_values_file: generated_values.json
+    state_file: state.json
