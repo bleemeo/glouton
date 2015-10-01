@@ -251,6 +251,11 @@ def get_top_info():
     """
     processes = []
     for process in psutil.process_iter():
+        try:
+            username = process.username()
+        except KeyError:
+            # the uid can't be resolved by the system
+            username = str(process.uids().real)
         processes.append({
             'pid': process.pid,
             'create_time': process.create_time(),
@@ -261,7 +266,7 @@ def get_top_info():
             'cpu_percent': process.cpu_percent(),
             'cpu_times': process.cpu_times().user + process.cpu_times().system,
             'status': process.status(),
-            'username': process.username(),
+            'username': username,
         })
 
     now = time.time()
