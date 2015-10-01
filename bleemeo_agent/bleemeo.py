@@ -47,10 +47,10 @@ class BleemeoConnector(threading.Thread):
         config = self.core.config
         sleep_delay = 10
         while (config.get('bleemeo.account_id') is None
-                or config.get('bleemeo.registration.key') is None):
+                or config.get('bleemeo.registration_key') is None):
             logging.warning(
                 'bleemeo.account_id and/or '
-                'bleemeo.registration.key is undefine. '
+                'bleemeo.registration_key is undefine. '
                 'Please see https://docs.bleemeo.com/how-to-configure-agent')
             self.core.is_terminating.wait(sleep_delay)
             if self.core.is_terminating.is_set():
