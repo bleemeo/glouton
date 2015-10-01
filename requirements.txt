@@ -1,6 +1,6 @@
 apscheduler<3.0.0
 docker-py
-influxdb
+influxdb > 2.6.0
 paho-mqtt
 flask
 psutil
