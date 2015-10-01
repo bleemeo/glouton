@@ -11,6 +11,14 @@ case "$1" in
             echo 'Setting permissions for user bleemeo'
             chown bleemeo /var/lib/bleemeo /var/log/bleemeo
         fi
+        # Bleemeo agent modify collectd configuration.
+        if [ -x "/etc/init.d/collectd" ]; then
+            if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+                invoke-rc.d collectd restart || exit $?
+            else
+                /etc/init.d/collectd restart || exit $?
+            fi
+        fi
         ;;
 esac
 
