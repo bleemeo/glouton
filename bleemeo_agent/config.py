@@ -3,10 +3,10 @@ Load configuration (in yaml) from a "conf.d" folder.
 
 Path to configuration are hardcoded, in this order:
 
-* /etc/bleemeo/agent.yml
-* /etc/bleemeo/agent.conf.d/*.yml
-* etc/agent.yml
-* etc/agent.conf.d/*.yml
+* /etc/bleemeo/agent.conf
+* /etc/bleemeo/agent.conf.d/*.conf
+* etc/agent.conf
+* etc/agent.conf.d/*.conf
 
 """
 
@@ -19,9 +19,9 @@ import yaml
 
 
 PATHS = [
-    '/etc/bleemeo/agent.yml',
+    '/etc/bleemeo/agent.conf',
     '/etc/bleemeo/agent.conf.d',
-    'etc/agent.yml',
+    'etc/agent.conf',
     'etc/agent.conf.d'
 ]
 
@@ -85,19 +85,19 @@ def config_files(paths):
 
         For each path, if:
 
-        * it is a directory, return all *.yml files inside the directory
+        * it is a directory, return all *.conf files inside the directory
         * it is a file, return the path
         * no config file exists for the path, skip it
 
-        So, if path is ['/etc/bleemeo/agent.yml', '/etc/bleemeo/agent.conf.d']
-        you will get /etc/bleemeo/agent.yml (if it exists) and all
-        existings *.yml under /etc/bleemeo/agent.conf.d
+        So, if path is ['/etc/bleemeo/agent.conf', '/etc/bleemeo/agent.conf.d']
+        you will get /etc/bleemeo/agent.conf (if it exists) and all
+        existings *.conf under /etc/bleemeo/agent.conf.d
     """
     files = []
     for path in paths:
         if os.path.isfile(path):
             files.append(path)
         elif os.path.isdir(path):
-            files.extend(sorted(glob.glob(os.path.join(path, '*.yml'))))
+            files.extend(sorted(glob.glob(os.path.join(path, '*.conf'))))
 
     return files

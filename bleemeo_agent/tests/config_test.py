@@ -42,13 +42,13 @@ def test_config_files():
         ['/etc/passwd']) == ['/etc/passwd']
 
     wants = [
-        'bleemeo_agent/tests/configs/main.yml',
-        'bleemeo_agent/tests/configs/conf.d/empty.yml',
-        'bleemeo_agent/tests/configs/conf.d/first.yml',
-        'bleemeo_agent/tests/configs/conf.d/second.yml',
+        'bleemeo_agent/tests/configs/main.conf',
+        'bleemeo_agent/tests/configs/conf.d/empty.conf',
+        'bleemeo_agent/tests/configs/conf.d/first.conf',
+        'bleemeo_agent/tests/configs/conf.d/second.conf',
     ]
     paths = [
-        'bleemeo_agent/tests/configs/main.yml',
+        'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d'
     ]
     assert bleemeo_agent.config.config_files(paths) == wants
@@ -56,7 +56,7 @@ def test_config_files():
 
 def test_load_config():
     config = bleemeo_agent.config.load_config([
-        'bleemeo_agent/tests/configs/main.yml',
+        'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d',
     ])
 
