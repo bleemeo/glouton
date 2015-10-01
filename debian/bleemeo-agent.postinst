@@ -9,8 +9,7 @@ case "$1" in
             adduser --system --group --quiet --home "/var/lib/bleemeo" --no-create-home --disabled-login bleemeo
 
             echo 'Setting permissions for user bleemeo'
-            touch /etc/bleemeo/agent.conf.d/server.yml
-            chown bleemeo /var/lib/bleemeo /var/log/bleemeo /etc/bleemeo/agent.conf.d/server.yml
+            chown bleemeo /var/lib/bleemeo /var/log/bleemeo
         fi
         ;;
 esac

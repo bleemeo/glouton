@@ -2,4 +2,4 @@
 debian/bleemeo-agent.collectd.conf => etc/collectd/collectd.conf.d/bleemeo.conf
 debian/bleemeo-agent.sudoers => etc/sudoers.d/bleemeo
 debian/bleemeo-agent.apt.conf => etc/apt/apt.conf.d/05bleemeo-agent
-etc/agent.yml => etc/bleemeo/agent.yml
+etc/agent.conf => etc/bleemeo/agent.conf
