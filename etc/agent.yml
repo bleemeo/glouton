@@ -45,6 +45,8 @@ logging:
     loggers:
         requests:
             level: WARNING
+        urllib3:
+            level: INFO
         werkzeug:
             level: WARNING
         apscheduler:
