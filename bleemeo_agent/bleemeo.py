@@ -206,19 +206,22 @@ class BleemeoConnector(threading.Thread):
         }
 
         while not self.core.is_terminating.is_set():
+            content = None
             try:
                 response = requests.post(registration_url, data=payload)
+                if response.status_code == 201:
+                    content = response.json()
+                else:
+                    logging.debug(
+                        'Registration failed, content = %s',
+                        response.content
+                    )
             except requests.exceptions.RequestException:
                 response = None
-
-            content = None
-            if response is not None and response.status_code == 201:
-                try:
-                    content = response.json()
-                except ValueError:
-                    logging.debug(
-                        'registration response is not a json : %s',
-                        response.content[:100])
+            except ValueError:
+                logging.debug(
+                    'registration response is not a json : %s',
+                    response.content[:100])
 
             if content is not None and 'id' in content:
                 self.core.state.set('agent_uuid', content['id'])
@@ -228,11 +231,6 @@ class BleemeoConnector(threading.Thread):
                 logging.debug(
                     'Registration failed, content (json) = %s',
                     content
-                )
-            else:
-                logging.debug(
-                    'Registration failed, content = %s',
-                    response.content
                 )
 
             logging.info(
