@@ -17,6 +17,7 @@ Package: bleemeo-agent
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python:Depends},
+    adduser,
     collectd,
     python-apscheduler,
     python-flask,
