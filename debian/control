@@ -26,6 +26,7 @@ Depends: ${misc:Depends}, ${python:Depends},
     python-yaml,
 Recommends:
     ca-certificates,
+    nagios-plugins,
     python-docker,
     python-influxdb (>= 2.6.0~),
     python-paho-mqtt,
