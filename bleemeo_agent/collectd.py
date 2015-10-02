@@ -189,6 +189,7 @@ class Collectd(threading.Thread):
     def process_client_inner(self, sock_client, addr):
         remain = b''
         sock_client.settimeout(1)
+        last_timestamp = 0
         while not self.core.is_terminating.is_set():
             try:
                 tmp = sock_client.recv(4096)
@@ -211,6 +212,13 @@ class Collectd(threading.Thread):
                 # inspired from graphite project : lib/carbon/protocols.py
                 metric, value, timestamp = line.split()
                 (timestamp, value) = (float(timestamp), float(value))
+
+                if timestamp - last_timestamp > 1:
+                    # Collectd send us the next "wave" of measure.
+                    # Be sure computed metrics of previous one are
+                    # done.
+                    self._check_computed_metrics()
+                last_timestamp = timestamp
 
                 metric = metric.decode('utf-8')
                 # the first component is the hostname
