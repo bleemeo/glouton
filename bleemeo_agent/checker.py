@@ -42,10 +42,13 @@ def update_checks(core):
 
     CHECKS = []
 
-    for service_info in core.discovered_services:
+    for key, service_info in core.discovered_services.items():
+        (service_name, instance) = key
         try:
             new_check = Check(
                 core,
+                service_name,
+                instance,
                 service_info,
             )
             CHECKS.append(new_check)
@@ -74,15 +77,15 @@ def periodic_check():
 
 
 class Check:
-    def __init__(self, core, service_info):
+    def __init__(self, core, service_name, instance, service_info):
 
         # Safe because it do not contains password, so it could be logged
         self.check_command_safe = NAGIOS_CHECKS.get(
-            service_info['service'],
+            service_name,
             DEFAULT_CHECK
         )
-        self.service = service_info['service']
-        self.instance = service_info['instance']
+        self.service = service_name
+        self.instance = service_name
         self.check_command = self.check_command_safe % service_info
         self.tcp_address = service_info['address']
         self.tcp_port = service_info['port']

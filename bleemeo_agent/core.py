@@ -104,6 +104,31 @@ class State:
             self._content[key] = value
             self.save()
 
+    def set_complex_dict(self, key, value):
+        """ Store a dictionary as list in JSON file.
+
+            This is usefull when you dictionary has key which could
+            not be stored in JSON. For example the key is a couple of
+            value (e.g. metric_name, item_tag).
+        """
+        json_value = []
+        for k, v in value.items():
+            json_value.append([k, v])
+        self.set(key, json_value)
+
+    def get_complex_dict(self, key, default=None):
+        """ Reverse of set_complex_dict
+        """
+        json_value = self.get(key)
+        if json_value is None:
+            return default
+
+        value = {}
+        for row in json_value:
+            (k, v) = row
+            value[tuple(k)] = v
+        return value
+
 
 class Core:
     def __init__(self):
@@ -112,7 +137,6 @@ class Core:
         logging.info('Agent starting...')
         self.last_facts = {}
         self.thresholds = {}
-        self.discovered_services = None
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -125,6 +149,9 @@ class Core:
         self.last_report = datetime.datetime.fromtimestamp(0)
 
         self._define_thresholds()
+        self.discovered_services = self.state.get_complex_dict(
+            'discovered_services', {}
+        )
 
     @property
     def container(self):
@@ -172,6 +199,7 @@ class Core:
             self._docker_connect()
             self.schedule_tasks()
             self.start_threads()
+            bleemeo_agent.checker.update_checks(self)
             try:
                 self.scheduler.start()
             finally:
@@ -331,6 +359,8 @@ class Core:
 
         if new_discovered_services != self.discovered_services:
             self.discovered_services = new_discovered_services
+            self.state.set_complex_dict(
+                'discovered_services', self.discovered_services)
             logging.debug(
                 'Update configuration after change in discovered services'
             )
@@ -389,16 +419,17 @@ class Core:
     def _run_discovery(self):
         """ Try to discover some service based on known port/process
         """
-        discovered_services = []
+        discovered_services = self.discovered_services.copy()
         processes = self._get_processes_map()
 
         for process in processes.values():
             if process['name'] in KNOWN_PROCESS:
                 discovery_info = KNOWN_PROCESS[process['name']]
                 instance = process['instance']
+                service_name = discovery_info['service']
                 logging.debug(
                     'Discovered service %s on %s',
-                    discovery_info['service'], instance
+                    service_name, instance
                 )
                 if instance is None:
                     address = '127.0.0.1'
@@ -411,25 +442,22 @@ class Core:
                 service_info = {
                     'port': discovery_info['port'],
                     'address': address,
-                    'instance': instance,
-                    'service': discovery_info['service'],
                 }
                 # some service may need additionnal information, like password
-                if service_info['service'] == 'mysql':
-                    self._discover_mysql(service_info)
+                if service_name == 'mysql':
+                    self._discover_mysql(instance, service_info)
 
-                discovered_services.append(service_info)
+                discovered_services[(service_name, instance)] = service_info
 
         logging.debug('Discovery found %s services', len(discovered_services))
         return discovered_services
 
-    def _discover_mysql(self, service_info):
+    def _discover_mysql(self, instance, service_info):
         """ Find a MySQL user
         """
         mysql_user = 'root'
         mysql_password = ''
 
-        instance = service_info['instance']
         if instance is None:
             # grab maintenace password from debian.cnf
             try:

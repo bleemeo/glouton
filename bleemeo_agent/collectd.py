@@ -60,6 +60,7 @@ class Collectd(threading.Thread):
 
         self.core = core
         self.computed_metrics_pending = set()
+        self.update_discovery()
 
     def run(self):
         bind_address = self.core.config.get(
@@ -98,10 +99,14 @@ class Collectd(threading.Thread):
 
     def _get_collectd_config(self):
         collectd_config = BASE_COLLECTD_CONFIG
-        for service_info in self.core.discovered_services:
-            if service_info['service'] == 'apache':
+        for key, service_info in self.core.discovered_services.items():
+            (service_name, instance) = key
+
+            service_info = service_info.copy()
+            service_info['instance'] = instance
+            if service_name == 'apache':
                 collectd_config += APACHE_COLLECTD_CONFIG % service_info
-            if service_info['service'] == 'mysql':
+            if service_name == 'mysql':
                 collectd_config += MYSQL_COLLECTD_CONFIG % service_info
 
         return collectd_config
