@@ -28,7 +28,9 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client = mqtt.Client()
         self.uuid_connection = uuid.uuid4()
         self.connected = False
-        self.metrics_uuid = self._load_metrics_uuid()
+        self.metrics_uuid = self.core.state.get_complex_dict(
+            'metrics_uuid', {}
+        )
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -280,7 +282,9 @@ class BleemeoConnector(threading.Thread):
                     changed = True
         finally:
             if changed:
-                self._save_metrics_uuid()
+                self.core.state.set_complex_dict(
+                    'metrics_uuid', self.metrics_uuid
+                )
 
     def _get_service_uuid(self, service_name):
         base_url = self.bleemeo_base_url
@@ -313,21 +317,6 @@ class BleemeoConnector(threading.Thread):
         self.core.state.set('services_uuid', services_uuid)
 
         return services_uuid[service_name]
-
-    def _load_metrics_uuid(self):
-        """ Metrics UUID are persisted in state JSON file.
-
-            Since we want key to be (metric_name, service_name, item), which
-            is not a string (but a tuple of string), it can't be stored
-            as-is in JSON file.
-        """
-        metrics_uuid = {}
-        json_metrics_uuid = self.core.state.get('metrics_uuid', [])
-        for row in json_metrics_uuid:
-            (metric_name, service_name, item, metric_uuid) = row
-            metrics_uuid[(metric_name, service_name, item)] = metric_uuid
-
-        return metrics_uuid
 
     def _save_metrics_uuid(self):
         json_metrics_uuid = []
