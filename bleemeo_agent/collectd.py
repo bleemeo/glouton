@@ -477,6 +477,8 @@ class Collectd(threading.Thread):
                 name += '.' + match_dict['type_instance']
 
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
+            if item == 'None':
+                item = None
             service = 'apache'
         elif (match_dict['plugin'] == 'mysql'
                 and match_dict['plugin_instance'].startswith('bleemeo-')):
@@ -488,6 +490,8 @@ class Collectd(threading.Thread):
                 name = 'mysql_' + name
 
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
+            if item == 'None':
+                item = None
 
             service = 'mysql'
         else:

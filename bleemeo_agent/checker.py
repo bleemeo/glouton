@@ -85,7 +85,7 @@ class Check:
             DEFAULT_CHECK
         )
         self.service = service_name
-        self.instance = service_name
+        self.instance = instance
         self.check_command = self.check_command_safe % service_info
         self.tcp_address = service_info['address']
         self.tcp_port = service_info['port']

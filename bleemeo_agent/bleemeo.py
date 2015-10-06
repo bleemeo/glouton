@@ -31,6 +31,9 @@ class BleemeoConnector(threading.Thread):
         self.metrics_uuid = self.core.state.get_complex_dict(
             'metrics_uuid', {}
         )
+        self.services_uuid = self.core.state.get_complex_dict(
+            'services_uuid', {}
+        )
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -90,7 +93,7 @@ class BleemeoConnector(threading.Thread):
             return
 
         self.core.scheduler.add_interval_job(
-            self._register_metric,
+            self._register_bleemeo_objects,
             seconds=15,
         )
 
@@ -240,6 +243,70 @@ class BleemeoConnector(threading.Thread):
             self.core.is_terminating.wait(sleep_delay.total_seconds())
             sleep_delay = min(sleep_delay * 2, datetime.timedelta(minutes=30))
 
+    def _register_bleemeo_objects(self):
+        """ Check for unregistered object with Bleemeo SaaS
+        """
+        self._register_services()
+        self._register_metric()
+
+    def _register_services(self):
+        """ Check for any unregistered services and register them
+
+            Also check for changed services and update them
+        """
+        base_url = self.bleemeo_base_url
+        registration_url = urllib_parse.urljoin(base_url, '/v1/service/')
+
+        changed = False
+
+        try:
+            for key, service_info in self.core.discovered_services.items():
+                (service_name, instance) = key
+                entry = {
+                    'address': service_info['address'],
+                    'port': service_info['port'],
+                    'protocol': 6,  # TCP, currently service are only TCP
+                }
+                if key in self.services_uuid:
+                    entry['uuid'] = self.services_uuid[key]['uuid']
+                    # check for possible update
+                    service_uuid = self.services_uuid[key]['uuid']
+                    if self.services_uuid[key] == entry:
+                        # already registered and up-to-date
+                        continue
+                    method = requests.put
+                    url = registration_url + str(service_uuid) + '/'
+                    expected_code = 200
+                else:
+                    method = requests.post
+                    url = registration_url
+                    expected_code = 201
+
+                payload = entry.copy()
+                payload.update({
+                    'account': '/v1/account/%s/' % self.account_id,
+                    'agent': '/v1/agent/%s/' % self.agent_uuid,
+                    'label': service_name,
+                })
+                if instance is not None:
+                    payload['instance'] = instance
+
+                response = method(url, data=payload)
+                if response.status_code != expected_code:
+                    logging.debug(
+                        'Service registration failed. Server response = %s',
+                        response.content
+                    )
+                    continue
+                entry['uuid'] = response.json()['id']
+                self.services_uuid[key] = entry
+                changed = True
+        finally:
+            if changed:
+                self.core.state.set_complex_dict(
+                    'services_uuid', self.services_uuid
+                )
+
     def _register_metric(self):
         """ Check for any unregistered metrics and register them
         """
@@ -260,9 +327,10 @@ class BleemeoConnector(threading.Thread):
                     if item is not None:
                         payload['item'] = item
                     if service is not None:
+                        # When a service is set, item == instance
                         payload['service'] = (
                             '/v1/service/%s/' %
-                            self._get_service_uuid(service)
+                            self.services_uuid[(service, item)]['uuid']
                         )
                     response = requests.post(registration_url, data=payload)
                     if response.status_code != 201:
@@ -285,38 +353,6 @@ class BleemeoConnector(threading.Thread):
                 self.core.state.set_complex_dict(
                     'metrics_uuid', self.metrics_uuid
                 )
-
-    def _get_service_uuid(self, service_name):
-        base_url = self.bleemeo_base_url
-        registration_url = urllib_parse.urljoin(base_url, '/v1/service/')
-
-        services_uuid = self.core.state.get('services_uuid', {})
-
-        if service_name in services_uuid:
-            return services_uuid[service_name]
-
-        payload = {
-            'account': '/v1/account/%s/' % self.account_id,
-            'agent': '/v1/agent/%s/' % self.agent_uuid,
-            'label': service_name,
-        }
-
-        response = requests.post(registration_url, data=payload)
-        if response.status_code != 201:
-            logging.debug(
-                'Service registration failed. Server response = %s',
-                response.content
-            )
-            raise ValueError('failed to create service')
-        services_uuid[service_name] = response.json()['id']
-        logging.debug(
-            'Service %s registered with uuid %s',
-            service_name,
-            services_uuid[service_name],
-        )
-        self.core.state.set('services_uuid', services_uuid)
-
-        return services_uuid[service_name]
 
     def emit_metric(self, metric):
         self._metric_queue.put(metric)
