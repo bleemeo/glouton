@@ -318,15 +318,6 @@ class BleemeoConnector(threading.Thread):
 
         return services_uuid[service_name]
 
-    def _save_metrics_uuid(self):
-        json_metrics_uuid = []
-        for metric, metric_uuid in self.metrics_uuid.items():
-            (metric_name, service_name, item) = metric
-            json_metrics_uuid.append(
-                (metric_name, service_name, item, metric_uuid)
-            )
-        self.core.state.set('metrics_uuid', json_metrics_uuid)
-
     def emit_metric(self, metric):
         self._metric_queue.put(metric)
         metric_name = metric['measurement']
