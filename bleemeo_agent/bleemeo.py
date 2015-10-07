@@ -167,7 +167,26 @@ class BleemeoConnector(threading.Thread):
             while True:
                 metric = self._metric_queue.get(timeout=timeout)
                 timeout = 0  # Only wait for the first get
-                metrics.append(metric)
+                metric_uuid = self.metrics_uuid.get(
+                    (metric['measurement'], metric['service'], metric['item'])
+                )
+                if metric_uuid is None:
+                    # UUID is not available now. Ignore this metric for now
+                    self._metric_queue.put(metric)
+                    if len(metrics) != 0:
+                        # Send metrics that are ready
+                        break
+                    else:
+                        # sleep a short time to avoid looping for nothing
+                        # and consuming all CPU
+                        time.sleep(0.1)
+                        continue
+                bleemeo_metric = metric.copy()
+                bleemeo_metric['uuid'] = metric_uuid
+                bleemeo_metric.pop('service')
+                metrics.append(bleemeo_metric)
+                if len(metrics) > 1000:
+                    break
         except queue.Empty:
             pass
 
@@ -355,7 +374,8 @@ class BleemeoConnector(threading.Thread):
                 )
 
     def emit_metric(self, metric):
-        self._metric_queue.put(metric)
+        if self._metric_queue.qsize() < 100000:
+            self._metric_queue.put(metric)
         metric_name = metric['measurement']
         service = metric['service']
         item = metric['item']
