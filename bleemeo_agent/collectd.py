@@ -34,6 +34,14 @@ LoadPlugin mysql
 </Plugin>
 """
 
+NTPD_COLLECTD_CONFIG = """
+LoadPlugin ntpd
+<Plugin ntpd>
+    Host "%(address)s"
+    Port "%(port)s"
+</Plugin>
+"""
+
 # https://collectd.org/wiki/index.php/Naming_schema
 # carbon output change "/" in ".".
 # Example of metic name:
@@ -108,6 +116,8 @@ class Collectd(threading.Thread):
                 collectd_config += APACHE_COLLECTD_CONFIG % service_info
             if service_name == 'mysql':
                 collectd_config += MYSQL_COLLECTD_CONFIG % service_info
+            if service_name == 'ntp':
+                collectd_config += NTPD_COLLECTD_CONFIG % service_info
 
         return collectd_config
 

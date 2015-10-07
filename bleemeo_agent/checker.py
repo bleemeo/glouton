@@ -25,10 +25,13 @@ STATUS_NAME = {
 NAGIOS_CHECKS = {
     'mysql': "/usr/lib/nagios/plugins/check_mysql "
              "-u '%(user)s' -p '%(password)s' -H %(address)s",
-    'apache': '/usr/lib/nagios/plugins/check_http -H %(address)s'
+    'apache': '/usr/lib/nagios/plugins/check_http -H %(address)s',
+    'ntp': '/usr/lib/nagios/plugins/check_ntp_peer -H %(address)s',
 }
 
-DEFAULT_CHECK = '/usr/lib/nagios/plugins/check_tcp -H %(address)s -p %(port)s'
+DEFAULT_TCP_CHECK = (
+    '/usr/lib/nagios/plugins/check_tcp -H %(address)s -p %(port)s'
+)
 
 
 # global variable with all checks created
@@ -52,6 +55,8 @@ def update_checks(core):
                 service_info,
             )
             CHECKS.append(new_check)
+        except NotImplementedError:
+            pass
         except:
             logging.debug(
                 'Failed to initialize check for service %s',
@@ -80,16 +85,22 @@ class Check:
     def __init__(self, core, service_name, instance, service_info):
 
         # Safe because it do not contains password, so it could be logged
-        self.check_command_safe = NAGIOS_CHECKS.get(
-            service_name,
-            DEFAULT_CHECK
-        )
+        self.check_command_safe = NAGIOS_CHECKS.get(service_name)
         self.service = service_name
         self.instance = instance
-        self.check_command = self.check_command_safe % service_info
-        self.tcp_address = service_info['address']
-        self.tcp_port = service_info['port']
+        self.address = service_info['address']
         self.core = core
+
+        if service_info['protocol'] == socket.IPPROTO_TCP:
+            self.tcp_port = service_info['port']
+            if self.check_command_safe is None:
+                self.check_command_safe = DEFAULT_TCP_CHECK
+        else:
+            self.tcp_port = None
+
+        if self.check_command_safe is None:
+            raise NotImplementedError("No check for this service")
+        self.check_command = self.check_command_safe % service_info
 
         logging.debug(
             'Created new check for service %s (on %s)',
@@ -118,7 +129,7 @@ class Check:
         self.tcp_socket = socket.socket()
         self.tcp_socket.settimeout(2)
         try:
-            self.tcp_socket.connect((self.tcp_address, self.tcp_port))
+            self.tcp_socket.connect((self.address, self.tcp_port))
         except socket.error:
             self.tcp_socket.close()
             self.tcp_socket = None
@@ -127,7 +138,7 @@ class Check:
             # open_socket failed, run check now
             logging.debug(
                 'check %s (on %s): failed to open socket to %s:%s',
-                self.service, self.instance, self.tcp_address, self.tcp_port
+                self.service, self.instance, self.address, self.tcp_port
             )
             # reschedule job to be run immediately
             self.core.scheduler.unschedule_job(self.current_job)
@@ -150,7 +161,7 @@ class Check:
             # this means connection was closed!
             logging.debug(
                 'check %s (on %s) : connection to %s:%s closed',
-                self.service, self.instance, self.tcp_address, self.tcp_port
+                self.service, self.instance, self.address, self.tcp_port
             )
             self.open_socket()
 

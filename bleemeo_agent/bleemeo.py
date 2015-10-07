@@ -180,7 +180,8 @@ class BleemeoConnector(threading.Thread):
                         # sleep a short time to avoid looping for nothing
                         # and consuming all CPU
                         time.sleep(0.1)
-                        continue
+                        # Allow thread to gracefully exit if agent is stopping
+                        return
                 bleemeo_metric = metric.copy()
                 bleemeo_metric['uuid'] = metric_uuid
                 bleemeo_metric.pop('service')
@@ -287,7 +288,7 @@ class BleemeoConnector(threading.Thread):
                 entry = {
                     'address': service_info['address'],
                     'port': service_info['port'],
-                    'protocol': 6,  # TCP, currently service are only TCP
+                    'protocol': service_info['protocol'],
                 }
                 if key in self.services_uuid:
                     entry['uuid'] = self.services_uuid[key]['uuid']

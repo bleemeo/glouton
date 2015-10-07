@@ -7,6 +7,7 @@ import logging.config
 import multiprocessing
 import os
 import signal
+import socket
 import subprocess
 import threading
 import time
@@ -43,10 +44,31 @@ except ImportError:
 
 
 KNOWN_PROCESS = {
-    'apache2': {'service': 'apache', 'port': 80},
-    'httpd': {'service': 'apache', 'port': 80},
-    'nginx': {'service': 'nginx', 'port': 80},
-    'mysqld': {'service': 'mysql', 'port': 3306},
+    'apache2': {
+        'service': 'apache',
+        'port': 80,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'httpd': {
+        'service': 'apache',
+        'port': 80,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'nginx': {
+        'service': 'nginx',
+        'port': 80,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'mysqld': {
+        'service': 'mysql',
+        'port': 3306,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'ntpd': {
+        'service': 'ntp',
+        'port': 123,
+        'protocol': socket.IPPROTO_UDP,
+    }
 }
 
 DOCKER_API_VERSION = '1.17'
@@ -424,9 +446,9 @@ class Core:
 
         for process in processes.values():
             if process['name'] in KNOWN_PROCESS:
-                discovery_info = KNOWN_PROCESS[process['name']]
+                service_info = KNOWN_PROCESS[process['name']].copy()
                 instance = process['instance']
-                service_name = discovery_info['service']
+                service_name = service_info['service']
                 logging.debug(
                     'Discovered service %s on %s',
                     service_name, instance
@@ -439,10 +461,7 @@ class Core:
                     )
                     address = container_info['NetworkSettings']['IPAddress']
 
-                service_info = {
-                    'port': discovery_info['port'],
-                    'address': address,
-                }
+                service_info['address'] = address
                 # some service may need additionnal information, like password
                 if service_name == 'mysql':
                     self._discover_mysql(instance, service_info)
