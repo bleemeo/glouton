@@ -199,6 +199,9 @@ class BleemeoConnector(threading.Thread):
         self._warn_mqtt_queue_full()
 
     def publish_top_info(self, top_info):
+        if self.agent_uuid is None:
+            return
+
         self.publish(
             'api/v0/agent/%s/top_info' % self.agent_uuid,
             json.dumps(top_info)
