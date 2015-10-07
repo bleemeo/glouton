@@ -54,21 +54,26 @@ KNOWN_PROCESS = {
         'port': 80,
         'protocol': socket.IPPROTO_TCP,
     },
-    'nginx': {
-        'service': 'nginx',
-        'port': 80,
-        'protocol': socket.IPPROTO_TCP,
-    },
     'mysqld': {
         'service': 'mysql',
         'port': 3306,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'named': {
+        'service': 'bind',
+        'port': 53,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'nginx': {
+        'service': 'nginx',
+        'port': 80,
         'protocol': socket.IPPROTO_TCP,
     },
     'ntpd': {
         'service': 'ntp',
         'port': 123,
         'protocol': socket.IPPROTO_UDP,
-    }
+    },
 }
 
 DOCKER_API_VERSION = '1.17'
