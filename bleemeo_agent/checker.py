@@ -30,6 +30,7 @@ NAGIOS_CHECKS = {
     'openldap': '/usr/lib/nagios/plugins/check_ldap -H %(address)s -3 -b ""',
     'postgresql': '/usr/lib/nagios/plugins/check_pgsql '
                   '-H %(address)s -l %(user)s -p %(password)s',
+    'smtp': '/usr/lib/nagios/plugins/check_smtp -H %(address)s',
 }
 
 DEFAULT_TCP_CHECK = (

@@ -69,6 +69,11 @@ KNOWN_PROCESS = {
         'port': 53,
         'protocol': socket.IPPROTO_TCP,
     },
+    'master': {  # postfix
+        'service': 'smtp',
+        'port': 25,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'nginx': {
         'service': 'nginx',
         'port': 80,
