@@ -49,6 +49,11 @@ KNOWN_PROCESS = {
         'port': 80,
         'protocol': socket.IPPROTO_TCP,
     },
+    'dovecot': {
+        'service': 'imap',
+        'port': 143,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'exim4': {
         'service': 'smtp',
         'port': 25,

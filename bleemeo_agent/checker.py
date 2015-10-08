@@ -26,6 +26,7 @@ NAGIOS_CHECKS = {
     'mysql': "/usr/lib/nagios/plugins/check_mysql "
              "-u '%(user)s' -p '%(password)s' -H %(address)s",
     'apache': '/usr/lib/nagios/plugins/check_http -H %(address)s',
+    'imap': '/usr/lib/nagios/plugins/check_imap -H %(address)s',
     'ntp': '/usr/lib/nagios/plugins/check_ntp_peer -H %(address)s',
     'openldap': '/usr/lib/nagios/plugins/check_ldap -H %(address)s -3 -b ""',
     'postgresql': '/usr/lib/nagios/plugins/check_pgsql '
