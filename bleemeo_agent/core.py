@@ -54,6 +54,11 @@ KNOWN_PROCESS = {
         'port': 80,
         'protocol': socket.IPPROTO_TCP,
     },
+    'mosquitto': {
+        'service': 'mqtt',
+        'port': 1883,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'mysqld': {
         'service': 'mysql',
         'port': 3306,
