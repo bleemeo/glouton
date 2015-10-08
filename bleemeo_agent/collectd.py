@@ -42,6 +42,41 @@ LoadPlugin ntpd
 </Plugin>
 """
 
+POSTGRESQL_COMMON_COLLECTD_CONFIG = r"""
+LoadPlugin postgresql
+<Plugin postgresql>
+    <Query "bleemeo-transactions">
+        Statement "SELECT sum(xact_commit) xact_commit, \
+                sum(xact_rollback) xact_rollback \
+                FROM pg_stat_database;"
+        <Result>
+            Type "pg_xact"
+            InstancePrefix "commit"
+            ValuesFrom "xact_commit"
+        </Result>
+        <Result>
+            Type "pg_xact"
+            InstancePrefix "rollback"
+            ValuesFrom "xact_rollback"
+        </Result>
+    </Query>
+</Plugin>
+"""
+
+POSTGRESQL_COLLECTD_CONFIG = r"""
+<Plugin postgresql>
+    <Database "postgres">
+        Host "%(address)s"
+        Port "%(port)s"
+        User "%(user)s"
+        Password "%(password)s"
+        SSLMode "prefer"
+        Query "bleemeo-transactions"
+        Instance "bleemeo-%(instance)s"
+    </Database>
+</Plugin>
+"""
+
 # https://collectd.org/wiki/index.php/Naming_schema
 # carbon output change "/" in ".".
 # Example of metic name:
@@ -106,6 +141,7 @@ class Collectd(threading.Thread):
             logging.debug('exception is:', exc_info=True)
 
     def _get_collectd_config(self):
+        has_postgres = False
         collectd_config = BASE_COLLECTD_CONFIG
         for key, service_info in self.core.discovered_services.items():
             (service_name, instance) = key
@@ -114,10 +150,17 @@ class Collectd(threading.Thread):
             service_info['instance'] = instance
             if service_name == 'apache':
                 collectd_config += APACHE_COLLECTD_CONFIG % service_info
-            if service_name == 'mysql':
+            if (service_name == 'mysql'
+                    and service_info.get('password') is not None):
                 collectd_config += MYSQL_COLLECTD_CONFIG % service_info
             if service_name == 'ntp':
                 collectd_config += NTPD_COLLECTD_CONFIG % service_info
+            if (service_name == 'postgresql'
+                    and service_info.get('password') is not None):
+                if not has_postgres:
+                    collectd_config += POSTGRESQL_COMMON_COLLECTD_CONFIG
+                    has_postgres = True
+                collectd_config += POSTGRESQL_COLLECTD_CONFIG % service_info
 
         return collectd_config
 
@@ -504,6 +547,13 @@ class Collectd(threading.Thread):
                 item = None
 
             service = 'mysql'
+        elif (match_dict['plugin'] == 'postgresql'
+                and match_dict['plugin_instance'].startswith('bleemeo-')):
+            name = 'postgresql_' + match_dict['type_instance']
+            item = match_dict['plugin_instance'].replace('bleemeo-', '')
+            if item == 'None':
+                item = None
+            service = 'postgresql'
         else:
             return (None, None)
 

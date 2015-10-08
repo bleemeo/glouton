@@ -74,6 +74,11 @@ KNOWN_PROCESS = {
         'port': 123,
         'protocol': socket.IPPROTO_UDP,
     },
+    'postgres': {
+        'service': 'postgresql',
+        'port': 5432,
+        'protocol': socket.IPPROTO_TCP,
+    },
 }
 
 DOCKER_API_VERSION = '1.17'
@@ -470,6 +475,8 @@ class Core:
                 # some service may need additionnal information, like password
                 if service_name == 'mysql':
                     self._discover_mysql(instance, service_info)
+                if service_name == 'postgresql':
+                    self._discover_pgsql(instance, service_info)
 
                 discovered_services[(service_name, instance)] = service_info
 
@@ -479,8 +486,8 @@ class Core:
     def _discover_mysql(self, instance, service_info):
         """ Find a MySQL user
         """
-        mysql_user = 'root'
-        mysql_password = ''
+        mysql_user = None
+        mysql_password = None
 
         if instance is None:
             # grab maintenace password from debian.cnf
@@ -507,10 +514,29 @@ class Core:
             for env in container_info['Config']['Env']:
                 # env has the form "VARIABLE=value"
                 if env.startswith('MYSQL_ROOT_PASSWORD='):
+                    mysql_user = 'root'
                     mysql_password = env.replace('MYSQL_ROOT_PASSWORD=', '')
 
         service_info['user'] = mysql_user
         service_info['password'] = mysql_password
+
+    def _discover_pgsql(self, instance, service_info):
+        """ Find a PostgreSQL user
+        """
+        user = None
+        password = None
+
+        if instance is not None:
+            # Only know to extract user/password from Docker container
+            container_info = self.docker_client.inspect_container(instance)
+            for env in container_info['Config']['Env']:
+                # env has the form "VARIABLE=value"
+                if env.startswith('POSTGRES_PASSWORD='):
+                    password = env.replace('POSTGRES_PASSWORD=', '')
+                    user = 'postgres'
+
+        service_info['user'] = user
+        service_info['password'] = password
 
     def _watch_docker_event(self):
         """ Watch for docker event and re-run discovery

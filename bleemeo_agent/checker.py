@@ -27,6 +27,8 @@ NAGIOS_CHECKS = {
              "-u '%(user)s' -p '%(password)s' -H %(address)s",
     'apache': '/usr/lib/nagios/plugins/check_http -H %(address)s',
     'ntp': '/usr/lib/nagios/plugins/check_ntp_peer -H %(address)s',
+    'postgresql': '/usr/lib/nagios/plugins/check_pgsql '
+                  '-H %(address)s -l %(user)s -p %(password)s',
 }
 
 DEFAULT_TCP_CHECK = (
@@ -86,6 +88,12 @@ class Check:
 
         # Safe because it do not contains password, so it could be logged
         self.check_command_safe = NAGIOS_CHECKS.get(service_name)
+        if (service_info.get('password') is None
+                and service_name in ('mysql', 'postgresql')):
+            # For those check, if password is not set the dedicated check
+            # will fail.
+            self.check_command_safe = None
+
         self.service = service_name
         self.instance = instance
         self.address = service_info['address']
