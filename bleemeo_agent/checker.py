@@ -27,6 +27,9 @@ NAGIOS_CHECKS = {
              "-u '%(user)s' -p '%(password)s' -H %(address)s",
     'apache': '/usr/lib/nagios/plugins/check_http -H %(address)s',
     'imap': '/usr/lib/nagios/plugins/check_imap -H %(address)s',
+    'influxdb': '/usr/lib/nagios/plugins/check_http '
+                '-H %(address)s -p %(port)s '
+                '-u http://%(address)s:%(port)s/ping',
     'ntp': '/usr/lib/nagios/plugins/check_ntp_peer -H %(address)s',
     'openldap': '/usr/lib/nagios/plugins/check_ldap -H %(address)s -3 -b ""',
     'postgresql': '/usr/lib/nagios/plugins/check_pgsql '

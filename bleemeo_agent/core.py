@@ -64,6 +64,11 @@ KNOWN_PROCESS = {
         'port': 80,
         'protocol': socket.IPPROTO_TCP,
     },
+    'influxd': {
+        'service': 'influxdb',
+        'port': 8086,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'mosquitto': {
         'service': 'mqtt',
         'port': 1883,
