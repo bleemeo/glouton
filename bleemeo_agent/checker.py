@@ -32,6 +32,8 @@ NAGIOS_CHECKS = {
     'postgresql': '/usr/lib/nagios/plugins/check_pgsql '
                   '-H %(address)s -l %(user)s -p %(password)s',
     'smtp': '/usr/lib/nagios/plugins/check_smtp -H %(address)s',
+    'squid': '/usr/lib/nagios/plugins/check_http '
+             '-H %(address)s -p %(port)s -e HTTP',
 }
 
 DEFAULT_TCP_CHECK = (
