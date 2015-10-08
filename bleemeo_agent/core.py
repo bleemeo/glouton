@@ -79,6 +79,11 @@ KNOWN_PROCESS = {
         'port': 123,
         'protocol': socket.IPPROTO_UDP,
     },
+    'slapd': {
+        'service': 'openldap',
+        'port': 389,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'postgres': {
         'service': 'postgresql',
         'port': 5432,
