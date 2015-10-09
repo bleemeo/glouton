@@ -287,9 +287,10 @@ class BleemeoConnector(threading.Thread):
                 (service_name, instance) = key
                 entry = {
                     'address': service_info['address'],
-                    'port': service_info['port'],
-                    'protocol': service_info['protocol'],
                 }
+                if service_info.get('protocol') is not None:
+                    service_info['port'] = service_info['port']
+                    service_info['protocol'] = service_info['protocol']
                 if key in self.services_uuid:
                     entry['uuid'] = self.services_uuid[key]['uuid']
                     # check for possible update

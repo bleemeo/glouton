@@ -107,7 +107,7 @@ class Check:
         self.address = service_info['address']
         self.core = core
 
-        if service_info['protocol'] == socket.IPPROTO_TCP:
+        if service_info.get('protocol') == socket.IPPROTO_TCP:
             self.tcp_port = service_info['port']
             if self.check_command_safe is None:
                 self.check_command_safe = DEFAULT_TCP_CHECK

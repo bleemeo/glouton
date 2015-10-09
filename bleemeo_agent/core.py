@@ -44,9 +44,17 @@ except ImportError:
 
 
 KNOWN_PROCESS = {
+    'asterisk': {
+        'service': 'asterisk',
+    },
     'apache2': {
         'service': 'apache',
         'port': 80,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    '-s ejabberd': {  # beam process
+        'service': 'jabber',
+        'port': 5222,
         'protocol': socket.IPPROTO_TCP,
     },
     'dovecot': {
@@ -89,7 +97,7 @@ KNOWN_PROCESS = {
         'port': 25,
         'protocol': socket.IPPROTO_TCP,
     },
-    'nginx': {
+    'nginx:': {
         'service': 'nginx',
         'port': 80,
         'protocol': socket.IPPROTO_TCP,
@@ -114,6 +122,16 @@ KNOWN_PROCESS = {
         'port': 5432,
         'protocol': socket.IPPROTO_TCP,
     },
+    'redis-server': {
+        'service': 'redis',
+        'port': 6379,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'org.apache.zookeeper.server.quorum.QuorumPeerMain': {  # java process
+        'service': 'zookeeper',
+        'port': 2181,
+        'protocol': socket.IPPROTO_TCP,
+    },
 }
 
 DOCKER_API_VERSION = '1.17'
@@ -131,6 +149,22 @@ def main():
             exc_info=True)
     finally:
         logging.info('Agent stopped')
+
+
+def get_service_info(cmdline):
+    """ Return service_info from KNOWN_PROCESS matching this command line
+    """
+    name = os.path.basename(cmdline.split()[0])
+    # For now, special case for java and erlang process.
+    # Need a more general way to manage those case. Every interpreter/VM
+    # language are affected.
+    if name == 'java' or name.startswith('beam'):
+        # For them, we search in the command line
+        for (key, service_info) in KNOWN_PROCESS.items():
+            if key in cmdline:
+                return service_info
+    else:
+        return KNOWN_PROCESS.get(name)
 
 
 class State:
@@ -452,15 +486,15 @@ class Core:
         # but if they are running in a docker, they will be updated later
         if self.container is None:
             for process in psutil.process_iter():
-                # We prefer cmdline if available, because name is cached
-                # and may not return new name (after exec, see bug
-                # https://github.com/giampaolo/psutil/issues/692)
+                # Cmdline may be unavailable (permission issue ?)
+                # When unavailable, depending on psutil version, it returns
+                # either [] or ['']
                 if process.cmdline() and process.cmdline()[0]:
-                    name = os.path.basename(process.cmdline()[0])
+                    cmdline = ' '.join(process.cmdline())
                 else:
-                    name = process.name()
+                    cmdline = process.name()
                 processes[process.pid] = {
-                    'name': name,
+                    'cmdline': cmdline,
                     'instance': None,
                 }
 
@@ -477,8 +511,8 @@ class Core:
                 # point-of-view of root pid namespace.
                 pid = int(process[1])
                 # process[7] is command line. e.g. /usr/bin/mysqld param
-                name = os.path.basename(process[7].split()[0])
-                processes.setdefault(pid, {'name': name})
+                cmdline = process[7]
+                processes.setdefault(pid, {'cmdline': cmdline})
                 processes[pid]['instance'] = container_name
 
         return processes
@@ -490,8 +524,9 @@ class Core:
         processes = self._get_processes_map()
 
         for process in processes.values():
-            if process['name'] in KNOWN_PROCESS:
-                service_info = KNOWN_PROCESS[process['name']].copy()
+            service_info = get_service_info(process['cmdline'])
+            if service_info is not None:
+                service_info = service_info.copy()
                 instance = process['instance']
                 service_name = service_info['service']
                 logging.debug(
