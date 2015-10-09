@@ -131,6 +131,36 @@ PROCESS_SERVICE = [
         '/usr/sbin/exim4 -bd -q30m',
         'smtp'
     ),
+    (
+        '/usr/sbin/freeradius -f',
+        'freeradius'
+    ),
+    (
+        (
+            '/usr/sbin/varnishd -P /var/run/varnishd.pid -a :6081 '
+            '-T localhost:6082 -f /etc/varnish/default.vcl '
+            '-S /etc/varnish/secret -s malloc,256m'
+        ),
+        'varnish'
+    ),
+
+    # Other command / service
+    (
+        (
+            '/usr/sbin/openvpn --writepid /run/openvpn/server.pid '
+            '--daemon ovpn-server --cd /etc/openvpn '
+            '--config /etc/openvpn/server.conf --script-security 2'
+        ),
+        'openvpn',
+    ),
+    (
+        '/usr/sbin/libvirtd -d',
+        'libvirt'
+    ),
+    (
+        'haproxy -f /usr/local/etc/haproxy/haproxy.cfg',
+        'haproxy'
+    ),
 ]
 
 

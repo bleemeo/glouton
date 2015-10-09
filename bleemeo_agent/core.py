@@ -67,6 +67,12 @@ KNOWN_PROCESS = {
         'port': 25,
         'protocol': socket.IPPROTO_TCP,
     },
+    'freeradius': {
+        'service': 'freeradius',
+    },
+    'haproxy': {
+        'service': 'haproxy',
+    },
     'httpd': {
         'service': 'apache',
         'port': 80,
@@ -76,6 +82,9 @@ KNOWN_PROCESS = {
         'service': 'influxdb',
         'port': 8086,
         'protocol': socket.IPPROTO_TCP,
+    },
+    'libvirtd': {
+        'service': 'libvirt',
     },
     'mosquitto': {
         'service': 'mqtt',
@@ -107,6 +116,9 @@ KNOWN_PROCESS = {
         'port': 123,
         'protocol': socket.IPPROTO_UDP,
     },
+    'openvpn': {
+        'service': 'openvpn',
+    },
     'slapd': {
         'service': 'openldap',
         'port': 389,
@@ -126,6 +138,9 @@ KNOWN_PROCESS = {
         'service': 'redis',
         'port': 6379,
         'protocol': socket.IPPROTO_TCP,
+    },
+    'varnishd': {
+        'service': 'varnish',
     },
     'org.apache.zookeeper.server.quorum.QuorumPeerMain': {  # java process
         'service': 'zookeeper',
