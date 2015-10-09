@@ -77,6 +77,17 @@ POSTGRESQL_COLLECTD_CONFIG = r"""
 </Plugin>
 """
 
+REDIS_COLLECTD_CONFIG = """
+LoadPlugin redis
+<Plugin redis>
+    <Node "bleemeo-%(instance)s">
+        Host "%(address)s"
+        Port "%(port)s"
+        Timeout 2000
+    </Node>
+</Plugin>
+"""
+
 # https://collectd.org/wiki/index.php/Naming_schema
 # carbon output change "/" in ".".
 # Example of metic name:
@@ -161,6 +172,8 @@ class Collectd(threading.Thread):
                     collectd_config += POSTGRESQL_COMMON_COLLECTD_CONFIG
                     has_postgres = True
                 collectd_config += POSTGRESQL_COLLECTD_CONFIG % service_info
+            if service_name == 'redis':
+                collectd_config += REDIS_COLLECTD_CONFIG % service_info
 
         return collectd_config
 
@@ -554,6 +567,19 @@ class Collectd(threading.Thread):
             if item == 'None':
                 item = None
             service = 'postgresql'
+        elif (match_dict['plugin'] == 'redis'
+                and match_dict['plugin_instance'].startswith('bleemeo-')):
+            name = match_dict['type']
+            if match_dict['type_instance']:
+                name += '.' + match_dict['type_instance']
+
+            name = 'redis_' + name
+
+            item = match_dict['plugin_instance'].replace('bleemeo-', '')
+            if item == 'None':
+                item = None
+
+            service = 'redis'
         else:
             return (None, None)
 
