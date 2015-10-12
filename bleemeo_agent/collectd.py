@@ -580,6 +580,11 @@ class Collectd(threading.Thread):
                 item = None
 
             service = 'redis'
+        elif (match_dict['plugin'] == 'ntpd'
+                and match_dict['type'] == 'time_offset'
+                and match_dict['type_instance'] == 'loop'):
+            name = 'ntp_time_offset'
+            service = 'ntp'
         else:
             return (None, None)
 
