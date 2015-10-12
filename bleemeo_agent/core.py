@@ -471,7 +471,10 @@ class Core:
         }
 
     def update_discovery(self):
-        new_discovered_services = self._run_discovery()
+        discovered_running_services = self._run_discovery()
+        new_discovered_services = self.discovered_services.copy()
+        new_discovered_services.update(discovered_running_services)
+        logging.debug('%s services are present', len(new_discovered_services))
 
         if new_discovered_services != self.discovered_services:
             self.discovered_services = new_discovered_services
@@ -535,7 +538,7 @@ class Core:
     def _run_discovery(self):
         """ Try to discover some service based on known port/process
         """
-        discovered_services = self.discovered_services.copy()
+        discovered_services = {}
         processes = self._get_processes_map()
 
         for process in processes.values():
@@ -544,6 +547,9 @@ class Core:
                 service_info = service_info.copy()
                 instance = process['instance']
                 service_name = service_info['service']
+                if (service_name, instance) in discovered_services:
+                    # Service already found
+                    continue
                 logging.debug(
                     'Discovered service %s on %s',
                     service_name, instance
@@ -565,7 +571,9 @@ class Core:
 
                 discovered_services[(service_name, instance)] = service_info
 
-        logging.debug('Discovery found %s services', len(discovered_services))
+        logging.debug(
+            'Discovery found %s running services', len(discovered_services)
+        )
         return discovered_services
 
     def _discover_mysql(self, instance, service_info):
