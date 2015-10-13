@@ -303,7 +303,7 @@ class Core:
         """
         for (name, config) in self.config.get('metric.pull', {}).items():
             interval = config.get('interval', 10)
-            self.scheduler.add_interval_interval_job(
+            self.scheduler.add_interval_job(
                 bleemeo_agent.util.pull_raw_metric,
                 args=(self, name),
                 seconds=interval,

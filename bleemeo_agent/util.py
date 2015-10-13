@@ -457,6 +457,7 @@ def pull_raw_metric(core, name):
                 'measurement': name,
                 'item': metric_config.get('item', None),
                 'status': None,
+                'service': None,
                 'value': value,
             }
             core.emit_metric(metric)
