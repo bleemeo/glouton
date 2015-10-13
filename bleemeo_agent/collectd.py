@@ -540,7 +540,7 @@ class Collectd(threading.Thread):
                 and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = match_dict['type']
             if match_dict['type_instance']:
-                name += '.' + match_dict['type_instance']
+                name += '_' + match_dict['type_instance']
 
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
@@ -550,7 +550,7 @@ class Collectd(threading.Thread):
                 and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = match_dict['type']
             if match_dict['type_instance']:
-                name += '.' + match_dict['type_instance']
+                name += '_' + match_dict['type_instance']
 
             if not name.startswith('mysql_'):
                 name = 'mysql_' + name
@@ -571,7 +571,7 @@ class Collectd(threading.Thread):
                 and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = match_dict['type']
             if match_dict['type_instance']:
-                name += '.' + match_dict['type_instance']
+                name += '_' + match_dict['type_instance']
 
             name = 'redis_' + name
 
