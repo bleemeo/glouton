@@ -289,16 +289,16 @@ class BleemeoConnector(threading.Thread):
                     'address': service_info['address'],
                 }
                 if service_info.get('protocol') is not None:
-                    service_info['port'] = service_info['port']
-                    service_info['protocol'] = service_info['protocol']
+                    entry['port'] = service_info['port']
+                    entry['protocol'] = service_info['protocol']
                 if key in self.services_uuid:
                     entry['uuid'] = self.services_uuid[key]['uuid']
                     # check for possible update
-                    service_uuid = self.services_uuid[key]['uuid']
                     if self.services_uuid[key] == entry:
                         # already registered and up-to-date
                         continue
                     method = requests.put
+                    service_uuid = self.services_uuid[key]['uuid']
                     url = registration_url + str(service_uuid) + '/'
                     expected_code = 200
                 else:
