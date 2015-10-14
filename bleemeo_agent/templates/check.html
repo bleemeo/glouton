@@ -15,13 +15,13 @@
         <td>
             {% if check['status'] == 'ok' %}
             <span class="text-success">
-                <span class="glyphicon glyphicon-ok"></span>
+                <i class="fa fa-check"></i>
             {% elif check['status'] == 'warning' %}
             <span class="text-warning">
-                <span class="glyphicon glyphicon-warning-sign"></span>
+                <i class="fa fa-warning"></i>
             {% else %}
             <span class="text-danger">
-                <span class="glyphicon glyphicon-remove"></span>
+                <i class="fa fa-remove"></i>
             {% endif %}
             {{ check['status'] }}
             </span>

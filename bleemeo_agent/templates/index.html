@@ -2,7 +2,6 @@
 
 {% block head %}
     <meta http-equiv="refresh" content="10">
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
 {% endblock %}
 
 {% block content %}
@@ -27,7 +26,7 @@
     <div class="col-xs-offset-1 col-xs-4">
       <a href="{{ url_for('check') }}">
         <div class="well text-center">
-            <span class="glyphicon-very-large">
+            <span class="icon-very-large">
                 {% if check_info['count_critical'] %}
                 <span class="text-danger">
                     <i class="fa fa-remove"></i>
@@ -65,7 +64,7 @@
             <div class="panel-heading" role="tab" id="disk-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#disk-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="disk-collapse-{{ loop.index }}">
-                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        <i class="fa fa-chevron-right"></i>
                         {{ disk_metric['item'] }} disk space
                     </a>
                 </h4>
@@ -91,7 +90,7 @@
             <div class="panel-heading" role="tab" id="mem-heading">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#mem-collapse" aria-expanded="false" aria-controls="mem-collapse">
-                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        <i class="fa fa-chevron-right"></i>
                         Memory usage
                     </a>
                 </h4>
@@ -115,7 +114,7 @@
             <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#net-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="net-collapse-{{ loop.index }}">
-                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        <i class="fa fa-chevron-right"></i>
                         {{ net_metric['item'] }} traffic
                     </a>
                 </h4>
@@ -144,7 +143,7 @@
             <div class="panel-heading" role="tab" id="cpu-heading">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#cpu-collapse" aria-expanded="false" aria-controls="cpu-collapse">
-                        <span class="glyphicon glyphicon-chevron-right"></span>
+                        <i class="fa fa-chevron-right"></i>
                         CPU usage
                     </a>
                 </h4>
@@ -171,11 +170,11 @@
 {% endblock %}
 {% block js %}
 <script>
-// change the glyphicon when entry is shown/hidden.
+// change the font-awesome icon when entry is shown/hidden.
 $('.collapse').on('show.bs.collapse', function(){
-    $(this).parent().find(".glyphicon-chevron-right").removeClass("glyphicon-chevron-right").addClass("glyphicon-chevron-down");
+    $(this).parent().find(".fa-chevron-right").removeClass("fa-chevron-right").addClass("fa-chevron-down");
 }).on('hide.bs.collapse', function(){
-    $(this).parent().find(".glyphicon-chevron-down").removeClass("glyphicon-chevron-down").addClass("glyphicon-chevron-right");
+    $(this).parent().find(".fa-chevron-down").removeClass("fa-chevron-down").addClass("fa-chevron-right");
 });
 </script>
 {% endblock %}
