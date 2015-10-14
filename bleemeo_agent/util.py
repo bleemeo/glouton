@@ -350,22 +350,22 @@ def get_top_output(top_info):
             })
 
     process_total = len(top_info['processes'])
-    process_running = len(filter(
-        lambda x: x['status'] == psutil.STATUS_RUNNING,
-        top_info['processes']
-    ))
-    process_sleeping = len(filter(
-        lambda x: x['status'] == psutil.STATUS_SLEEPING,
-        top_info['processes']
-    ))
-    process_stopped = len(filter(
-        lambda x: x['status'] == psutil.STATUS_STOPPED,
-        top_info['processes']
-    ))
-    process_zombie = len(filter(
-        lambda x: x['status'] == psutil.STATUS_ZOMBIE,
-        top_info['processes']
-    ))
+    process_running = len([
+        x for x in top_info['processes']
+        if x['status'] == psutil.STATUS_RUNNING
+    ])
+    process_sleeping = len([
+        x for x in top_info['processes']
+        if x['status'] == psutil.STATUS_SLEEPING
+    ])
+    process_stopped = len([
+        x for x in top_info['processes']
+        if x['status'] == psutil.STATUS_STOPPED
+    ])
+    process_zombie = len([
+        x for x in top_info['processes']
+        if x['status'] == psutil.STATUS_ZOMBIE
+    ])
 
     date_top = datetime.datetime.fromtimestamp(top_info['time'])
     time_top = date_top.time().replace(microsecond=0)
