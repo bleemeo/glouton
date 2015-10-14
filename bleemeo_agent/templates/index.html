@@ -1,9 +1,5 @@
 {% extends "layout.html" %}
 
-{% block head %}
-    <meta http-equiv="refresh" content="10">
-{% endblock %}
-
 {% block content %}
 <div class="row">
     <div class="col-xs-6">
@@ -176,5 +172,22 @@ $('.collapse').on('show.bs.collapse', function(){
 }).on('hide.bs.collapse', function(){
     $(this).parent().find(".fa-chevron-down").removeClass("fa-chevron-down").addClass("fa-chevron-right");
 });
+
+// Refresh the page every 10 seconds.
+function refresh() {
+    /*
+       We use location.assign (and not location.reload or
+       HTTP header meta http-equiv="refresh"), because only location.assign
+       play well with caching.
+       Other method will do a request on servers for... every resource (css,
+       img, js,...).
+
+       location.reload(false) or http-equiv="refresh" act like
+       pressing F5, and location.relaoad(true) act like pressing Ctrl-F5 (at
+       least with Firefox).
+     */
+    window.location.assign(window.location);
+}
+setTimeout(refresh, 10000);
 </script>
 {% endblock %}
