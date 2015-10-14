@@ -2,6 +2,7 @@
 
 {% block head %}
     <meta http-equiv="refresh" content="10">
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/font-awesome/4.4.0/css/font-awesome.min.css">
 {% endblock %}
 
 {% block content %}
@@ -29,15 +30,15 @@
             <span class="glyphicon-very-large">
                 {% if check_info['count_critical'] %}
                 <span class="text-danger">
-                    <span class="glyphicon glyphicon-remove"></span>
+                    <i class="fa fa-remove"></i>
                 </span>
                 {% elif check_info['count_warning'] %}
                 <span class="text-warning">
-                    <span class="glyphicon glyphicon-warning-sign"></span>
+                    <i class="fa fa-warning"></i>
                 </span>
                 {% else %}
                 <span class="text-success">
-                    <span class="glyphicon glyphicon-ok"></span>
+                    <i class="fa fa-check"></i>
                 </span>
                 {% endif %}
             </span>

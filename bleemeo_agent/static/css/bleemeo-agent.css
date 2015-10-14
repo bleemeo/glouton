@@ -26,3 +26,7 @@ hr {
 .add-left-margin {
     margin-left: 2em;
 }
+
+.text-warning {
+    color: #F29D50;
+}
