@@ -71,7 +71,9 @@ def update_checks(core):
             )
             CHECKS.append(new_check)
         except NotImplementedError:
-            pass
+            logging.debug(
+                'No check exists for service %s', service_info['service']
+            )
         except:
             logging.debug(
                 'Failed to initialize check for service %s',
@@ -229,5 +231,8 @@ class Check:
         try:
             self.core.scheduler.unschedule_job(self.open_socket_job)
         except KeyError:
-            pass  # job may be unscheduled
+            logging.debug(
+                'Job for check %s (on %s) was already unscheduled',
+                self.service, self.instance
+            )
         self.core.scheduler.unschedule_job(self.current_job)

@@ -265,6 +265,7 @@ class Core:
         self.last_report = datetime.datetime.fromtimestamp(0)
 
         self._define_thresholds()
+        self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
         )

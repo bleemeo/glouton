@@ -131,11 +131,11 @@ class Collectd(threading.Thread):
         while not self.core.is_terminating.is_set():
             try:
                 (sock_client, addr) = sock_server.accept()
-                t = threading.Thread(
+                client_thread = threading.Thread(
                     target=self.process_client,
                     args=(sock_client, addr))
-                t.start()
-                clients.append(t)
+                client_thread.start()
+                clients.append(client_thread)
             except socket.timeout:
                 pass
 
@@ -235,9 +235,9 @@ class Collectd(threading.Thread):
                     stderr=subprocess.STDOUT,
                 )
                 return_code = 0
-            except subprocess.CalledProcessError as e:
-                output = e.output
-                return_code = e.returncode
+            except subprocess.CalledProcessError as exception:
+                output = exception.output
+                return_code = exception.returncode
 
             if return_code != 0:
                 logging.info(
@@ -252,12 +252,12 @@ class Collectd(threading.Thread):
         logging.debug('collectd: client connectd from %s', addr)
 
         try:
-            self.process_client_inner(sock_client, addr)
+            self.process_client_inner(sock_client)
         finally:
             sock_client.close()
             logging.debug('collectd: client %s disconnectd', addr)
 
-    def process_client_inner(self, sock_client, addr):
+    def process_client_inner(self, sock_client):
         remain = b''
         sock_client.settimeout(1)
         last_timestamp = 0
@@ -433,7 +433,7 @@ class Collectd(threading.Thread):
         """
         match = collectd_regex.match(name)
         if match is None:
-            return None
+            return (None, None)
         match_dict = match.groupdict()
 
         no_emit = False

@@ -291,7 +291,8 @@ def get_top_output(top_info):
     """ Return a top-like output
     """
     env = jinja2.Environment(
-        loader=jinja2.PackageLoader('bleemeo_agent', 'templates'))
+        loader=jinja2.PackageLoader('bleemeo_agent', 'templates'),
+        autoescape=True)
     template = env.get_template('top.txt')
 
     if top_info is None:
