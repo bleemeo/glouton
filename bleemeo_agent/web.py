@@ -3,7 +3,6 @@ import threading
 
 import flask
 import jinja2.filters
-import requests
 
 import bleemeo_agent.checker
 
@@ -88,27 +87,6 @@ def check():
     )
 
 
-@app.route('/_quit')
-def quit():
-    # "internal" request endpoint. Used to stop Web thread.
-    # We need to stop web-thread during reload/re-exec (or else, the port will
-    # be already used).
-    # I didn't find better way to stop a flask application... we need to be
-    # during a request processing to access "werkzeug.server.shutdown" :/
-    # So when agent want to shutdown, it need to do one request to this URL.
-    if not app.core.is_terminating.is_set():
-        # hum... agent is not stopping...
-        # Since this endpoint is "public", maybe someone is trying to
-        # mess with us, just ignore the request
-        return flask.redirect(flask.url_for('home'))
-
-    func = flask.request.environ.get('werkzeug.server.shutdown')
-    if func is None:
-        raise RuntimeError('Not running with the Werkzeug Server')
-    func()
-    return 'Shutdown in progress...'
-
-
 @app.template_filter('netsizeformat')
 def filter_netsizeformat(value):
     """ Same as standard filesizeformat but for network.
@@ -138,16 +116,3 @@ def start_server(core):
     )
     app_thread.daemon = True
     app_thread.start()
-
-
-def shutdown_server():
-    bind_address = app.core.config.get(
-        'web.listener.address', '127.0.0.1')
-
-    if bind_address == '0.0.0.0':
-        bind_address = '127.0.0.1'
-
-    bind_port = app.core.config.get(
-        'web.listener.port', 8015)
-    requests.get('http://%s:%s/_quit' % (bind_address, bind_port))
-    app_thread.join()
