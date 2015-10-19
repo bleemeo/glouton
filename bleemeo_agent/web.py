@@ -126,7 +126,7 @@ def start_server(core):
     bind_address = core.config.get(
         'web.listener.address', '127.0.0.1')
     bind_port = core.config.get(
-        'web.listener.port', 5000)
+        'web.listener.port', 8015)
     app.core = core
     if app.core.state.get('web_secret_key') is None:
         app.core.state.set(
@@ -141,5 +141,13 @@ def start_server(core):
 
 
 def shutdown_server():
-    requests.get('http://localhost:5000/_quit')
+    bind_address = app.core.config.get(
+        'web.listener.address', '127.0.0.1')
+
+    if bind_address == '0.0.0.0':
+        bind_address = '127.0.0.1'
+
+    bind_port = app.core.config.get(
+        'web.listener.port', 8015)
+    requests.get('http://%s:%s/_quit' % (bind_address, bind_port))
     app_thread.join()

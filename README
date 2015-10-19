@@ -29,7 +29,7 @@ If you want to try bleemeo-agent, here are the step to run from a git checkout:
 
     bleemeo-agent
 
-* Bleemeo agent have a local web UI accessible on http://localhost:5000, it
+* Bleemeo agent have a local web UI accessible on http://localhost:8015, it
   will also write in InfluxDB on localhost if installed.
 
 The "python setup.py develop" will install bleemeo-agent and run it from the
