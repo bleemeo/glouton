@@ -114,29 +114,31 @@ class InfluxDBConnector(threading.Thread):
     def emit_metric(self, metric):
         # InfluxDB can't store "NaN" (not a number)...
         # drop any metric that contain a NaN
-        value = metric.pop('value')
+        value = metric['value']
         if isinstance(value, float) and math.isnan(value):
             return
 
-        item = metric.pop('item')
-        status = metric.pop('status')
-        del metric['service']  # InfluxDB don't store service
-        metric['tags'] = {}
-        if item is not None:
-            metric['tags']['item'] = item
-        if status is not None:
-            metric['tags']['status'] = status
+        influx_metric = {
+            'measurement': metric['measurement'],
+            'time': int(metric['time']),
+            'fields': {
+                'value': metric['value'],
+            },
+            'tags': {
+            },
+        }
 
-        # InfluxDB want an integer for timestamp, not a float
-        metric['time'] = int(metric['time'])
+        if metric.get('item') is not None:
+            influx_metric['tags']['item'] = metric['item']
+        if metric.get('status') is not None:
+            influx_metric['tags']['status'] = metric['status']
 
-        metric['fields'] = {'value': value}
         if self.core.agent_uuid is None:
-            metric['tags']['hostname'] = socket.getfqdn()
+            influx_metric['tags']['hostname'] = socket.getfqdn()
         else:
-            metric['tags']['agent_uuid'] = self.core.agent_uuid
+            influx_metric['tags']['agent_uuid'] = self.core.agent_uuid
 
-        self._enqueue(metric)
+        self._enqueue(influx_metric)
 
     def _enqueue(self, metric):
         try:

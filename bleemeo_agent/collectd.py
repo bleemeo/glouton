@@ -368,8 +368,6 @@ class Collectd(threading.Thread):
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
                 'item': item,
-                'status': None,
-                'service': None,
                 'value': used_perc,
             })
         elif name == 'io_utilisation':
@@ -401,20 +399,17 @@ class Collectd(threading.Thread):
             self.core.emit_metric({
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
-                'item': None,
-                'status': None,
-                'service': None,
                 'value': float(used) / value * 100,
             })
 
-        self.core.emit_metric({
+        metric = {
             'measurement': name,
             'time': timestamp,
-            'item': item,
-            'status': None,
-            'service': None,
             'value': value,
-        })
+        }
+        if item is not None:
+            metric['item'] = item
+        self.core.emit_metric(metric)
 
     def emit_metric(self, name, timestamp, value):
         """ Rename a metric and pass it to core
@@ -588,14 +583,16 @@ class Collectd(threading.Thread):
         else:
             return (None, None)
 
-        return ({
+        metric = {
             'measurement': name,
             'time': timestamp,
             'value': value,
-            'item': item,
-            'service': service,
-            'status': None,
-        }, no_emit)
+        }
+        if service is not None:
+            metric['service'] = service
+        if item is not None:
+            metric['item'] = item
+        return (metric, no_emit)
 
     def _disk_path_rename(self, path):
         """ Rename (and possibly ignore) a disk partition

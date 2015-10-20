@@ -201,14 +201,16 @@ class Check:
         if return_code > STATUS_UNKNOWN or return_code < 0:
             return_code = STATUS_UNKNOWN
 
-        self.core.emit_metric({
+        metric = {
             'measurement': '%s_check' % self.service,
             'status': STATUS_NAME[return_code],
-            'item': self.instance,
             'service': self.service,
             'time': self.last_run,
-            'value': return_code,
-        })
+            'value': float(return_code),
+        }
+        if self.instance is not None:
+            metric['item'] = self.instance
+        self.core.emit_metric(metric)
 
         if return_code != STATUS_OK and self.tcp_socket is not None:
             self.tcp_socket.close()

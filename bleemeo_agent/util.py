@@ -446,9 +446,8 @@ def pull_raw_metric(core, name):
             metric = {
                 'time': time.time(),
                 'measurement': name,
-                'item': metric_config.get('item', None),
-                'status': None,
-                'service': None,
                 'value': value,
             }
+            if metric_config.get('item') is not None:
+                metric['item'] = metric_config.get('item')
             core.emit_metric(metric)

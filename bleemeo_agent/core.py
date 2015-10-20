@@ -445,9 +445,6 @@ class Core:
 
         self.emit_metric({
             'measurement': 'uptime',
-            'item': None,
-            'status': None,
-            'service': None,
             'time': now,
             'value': uptime_seconds,
         })
@@ -679,7 +676,7 @@ class Core:
     def _store_last_value(self, metric):
         """ Store the metric in self.last_matrics, replacing the previous value
         """
-        item = metric['item']
+        item = metric.get('item')
         measurement = metric['measurement']
         self.last_metrics[(measurement, item)] = metric
 

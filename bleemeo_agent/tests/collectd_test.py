@@ -62,9 +62,6 @@ def test_rename_metric():
         'measurement': 'cpu_idle',
         'time': 12345,
         'value': 42 * cores,
-        'item': None,
-        'status': None,
-        'service': None,
     }
     assert no_emit is False
     assert len(collectd.computed_metrics_pending) == 0
@@ -79,9 +76,6 @@ def test_rename_metric():
         'measurement': 'users_logged',
         'time': 12345,
         'value': 42,
-        'item': None,
-        'status': None,
-        'service': None,
     }
     assert no_emit is False
     assert len(collectd.computed_metrics_pending) == 0
@@ -97,8 +91,6 @@ def test_rename_metric():
         'time': 12345,
         'value': 42,
         'item': '/var/lib',
-        'status': None,
-        'service': None,
     }
     assert no_emit is False
     assert len(collectd.computed_metrics_pending) == 1
@@ -118,8 +110,6 @@ def test_rename_metric():
         'time': 12345,
         'value': 42,
         'item': 'sda',
-        'status': None,
-        'service': None,
     }
     assert no_emit is False
     assert len(collectd.computed_metrics_pending) == 0

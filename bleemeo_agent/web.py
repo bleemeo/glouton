@@ -46,7 +46,7 @@ def _gather_checks_info():
     check_count_critical = 0
     checks = []
     for metric in app.core.last_metrics.values():
-        if metric['status'] is not None:
+        if metric.get('status') is not None:
             if metric['status'] == 'ok':
                 check_count_ok += 1
             elif metric['status'] == 'warning':
@@ -56,13 +56,13 @@ def _gather_checks_info():
             threshold = app.core.thresholds.get(metric['measurement'])
 
             pretty_name = metric['measurement']
-            if metric['item'] is not None:
+            if metric.get('item') is not None:
                 pretty_name = '%s for %s' % (pretty_name, metric['item'])
             checks.append({
                 'name': metric['measurement'],
                 'pretty_name': pretty_name,
-                'item': metric['item'],
-                'status': metric['status'],
+                'item': metric.get('item'),
+                'status': metric.get('status'),
                 'value': metric['value'],
                 'threshold': threshold,
             })
