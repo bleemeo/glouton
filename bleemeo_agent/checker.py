@@ -207,6 +207,7 @@ class Check:
             'service': self.service,
             'time': self.last_run,
             'value': float(return_code),
+            'check_output': output,
         }
         if self.instance is not None:
             metric['item'] = self.instance
