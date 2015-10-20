@@ -688,18 +688,16 @@ class Core:
             Usefull for metric needed to compute derivated one like CPU
             usage from one core.
         """
-        metric = metric.copy()
-
         if not no_emit:
-            self.check_threshold(metric)
+            metric = self.check_threshold(metric)
 
         self._store_last_value(metric)
 
         if not no_emit:
             if self.bleemeo_connector is not None:
-                self.bleemeo_connector.emit_metric(metric.copy())
+                self.bleemeo_connector.emit_metric(metric)
             if self.influx_connector is not None:
-                self.influx_connector.emit_metric(metric.copy())
+                self.influx_connector.emit_metric(metric)
 
     def update_last_report(self):
         self.last_report = max(datetime.datetime.now(), self.last_report)
@@ -710,11 +708,11 @@ class Core:
         """
         threshold = self.thresholds.get(metric['measurement'])
         if threshold is None:
-            return
+            return metric
 
         value = metric['value']
         if value is None:
-            return
+            return metric
 
         if (threshold.get('low_critical') is not None
                 and value < threshold.get('low_critical')):
@@ -731,7 +729,9 @@ class Core:
         else:
             status = 'ok'
 
+        metric = metric.copy()
         metric['status'] = status
+        return metric
 
     def get_last_metric(self, name, item):
         """ Return the last metric matching name and item.
