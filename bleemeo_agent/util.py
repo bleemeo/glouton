@@ -216,7 +216,14 @@ def run_command_timeout(command, timeout=10):
     proc_finished.set()
     killer_thread.join()
 
-    return (proc.returncode, output)
+    returncode = proc.returncode
+    if returncode == -15:
+        # code -15 means SIGKILL, which is used by _kill_proc thread
+        # to implement timeout.
+        # Change returncode from timeout to a critical status
+        returncode = 2
+
+    return (returncode, output)
 
 
 def clean_cmdline(cmdline):
