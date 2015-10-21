@@ -113,7 +113,6 @@ class Collectd(threading.Thread):
         super(Collectd, self).__init__()
 
         self.core = core
-        self.computed_metrics_pending = set()
         self.update_discovery()
 
     def run(self):
@@ -261,6 +260,7 @@ class Collectd(threading.Thread):
         remain = b''
         sock_client.settimeout(1)
         last_timestamp = 0
+        computed_metrics_pending = set()
         while not self.core.is_terminating.is_set():
             try:
                 tmp = sock_client.recv(4096)
@@ -288,16 +288,17 @@ class Collectd(threading.Thread):
                     # Collectd send us the next "wave" of measure.
                     # Be sure computed metrics of previous one are
                     # done.
-                    self._check_computed_metrics()
+                    self._check_computed_metrics(computed_metrics_pending)
                 last_timestamp = timestamp
 
                 metric = metric.decode('utf-8')
                 # the first component is the hostname
                 metric = metric.split('.', 1)[1]
 
-                self.emit_metric(metric, timestamp, value)
+                self.emit_metric(
+                    metric, timestamp, value, computed_metrics_pending)
 
-            self._check_computed_metrics()
+            self._check_computed_metrics(computed_metrics_pending)
 
     def network_interface_blacklist(self, if_name):
         for pattern in self.core.config.get('network_interface_blacklist', []):
@@ -305,7 +306,7 @@ class Collectd(threading.Thread):
                 return True
         return False
 
-    def _check_computed_metrics(self):
+    def _check_computed_metrics(self, computed_metrics_pending):
         """ Some metric are computed from other one. For example CPU stats
             are aggregated over all CPUs.
 
@@ -313,12 +314,12 @@ class Collectd(threading.Thread):
             and this function check if stats for all CPU core are fresh enough
             to compute the aggregate.
 
-            This function use self.computed_metrics_pending, which old a list
+            This function use computed_metrics_pending, which old a list
             of (metric_name, item, timestamp).
             Item is something like "sda", "sdb" or "eth0", "eth1".
         """
         processed = set()
-        for entry in self.computed_metrics_pending:
+        for entry in computed_metrics_pending:
             (name, item, timestamp) = entry
             try:
                 self._compute_metric(name, item, timestamp)
@@ -332,10 +333,10 @@ class Collectd(threading.Thread):
                 processed.add(entry)
             except MissingMetric:
                 # Some metric are missing to do computing. Wait a bit by
-                # keeping this entry in self.computed_metrics_pending
+                # keeping this entry in computed_metrics_pending
                 pass
 
-        self.computed_metrics_pending.difference_update(processed)
+        computed_metrics_pending.difference_update(processed)
 
     def _compute_metric(self, name, item, timestamp):  # NOQA
         def get_metric(measurements, searched_item):
@@ -411,14 +412,16 @@ class Collectd(threading.Thread):
             metric['item'] = item
         self.core.emit_metric(metric)
 
-    def emit_metric(self, name, timestamp, value):
+    def emit_metric(self, name, timestamp, value, computed_metrics_pending):
         """ Rename a metric and pass it to core
         """
-        (metric, no_emit) = self._rename_metric(name, timestamp, value)
+        (metric, no_emit) = self._rename_metric(
+            name, timestamp, value, computed_metrics_pending)
         if metric is not None:
             self.core.emit_metric(metric, no_emit=no_emit)
 
-    def _rename_metric(self, name, timestamp, value):  # NOQA
+    def _rename_metric(  # NOQA
+            self, name, timestamp, value, computed_metrics_pending):
         """ Process metric to rename it and add item
 
             If the metric is used to compute a derrived metric, add it to
@@ -452,7 +455,7 @@ class Collectd(threading.Thread):
                 return (None, None)
 
             item = path
-            self.computed_metrics_pending.add(('disk_total', item, timestamp))
+            computed_metrics_pending.add(('disk_total', item, timestamp))
         elif match_dict['plugin'] == 'disk':
             if match_dict['type_instance'] == 'io_time':
                 name = 'io_time'
@@ -473,7 +476,7 @@ class Collectd(threading.Thread):
             if self._ignored_disk(item):
                 return (None, None)
             if name == 'io_time':
-                self.computed_metrics_pending.add(
+                computed_metrics_pending.add(
                     ('io_utilisation', item, timestamp))
         elif match_dict['plugin'] == 'interface':
             kind_name = {
@@ -514,18 +517,18 @@ class Collectd(threading.Thread):
             name = 'system_load%s' % duration
         elif match_dict['plugin'] == 'memory':
             name = 'mem_%s' % match_dict['type_instance']
-            self.computed_metrics_pending.add(('mem_total', None, timestamp))
+            computed_metrics_pending.add(('mem_total', None, timestamp))
         elif (match_dict['plugin'] == 'processes'
                 and match_dict['type'] == 'fork_rate'):
             name = 'process_fork_rate'
         elif (match_dict['plugin'] == 'processes'
                 and match_dict['type'] == 'ps_state'):
             name = 'process_status_%s' % match_dict['type_instance']
-            self.computed_metrics_pending.add(
+            computed_metrics_pending.add(
                 ('process_total', None, timestamp))
         elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
             name = 'swap_%s' % match_dict['type_instance']
-            self.computed_metrics_pending.add(('swap_total', None, timestamp))
+            computed_metrics_pending.add(('swap_total', None, timestamp))
         elif (match_dict['plugin'] == 'swap'
                 and match_dict['type'] == 'swap_io'):
             name = 'swap_%s' % match_dict['type_instance']

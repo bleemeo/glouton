@@ -52,10 +52,12 @@ def test_collectd_regex():
 def test_rename_metric():
     core = DummyCore()
     collectd = bleemeo_agent.collectd.Collectd(core)
+    computed_metrics_pending = set()
     (result, no_emit) = collectd._rename_metric(
         'cpu.percent-idle',
         12345,
         42,
+        computed_metrics_pending,
     )
     cores = multiprocessing.cpu_count()
     assert result == {
@@ -64,13 +66,14 @@ def test_rename_metric():
         'value': 42 * cores,
     }
     assert no_emit is False
-    assert len(collectd.computed_metrics_pending) == 0
+    assert len(computed_metrics_pending) == 0
 
-    collectd.computed_metrics_pending = set()
+    computed_metrics_pending = set()
     (result, no_emit) = collectd._rename_metric(
         'users.users',
         12345,
         42,
+        computed_metrics_pending,
     )
     assert result == {
         'measurement': 'users_logged',
@@ -78,13 +81,14 @@ def test_rename_metric():
         'value': 42,
     }
     assert no_emit is False
-    assert len(collectd.computed_metrics_pending) == 0
+    assert len(computed_metrics_pending) == 0
 
-    collectd.computed_metrics_pending = set()
+    computed_metrics_pending = set()
     (result, no_emit) = collectd._rename_metric(
         'df-var-lib.df_complex-free',
         12345,
         42,
+        computed_metrics_pending,
     )
     assert result == {
         'measurement': 'disk_free',
@@ -93,17 +97,18 @@ def test_rename_metric():
         'item': '/var/lib',
     }
     assert no_emit is False
-    assert len(collectd.computed_metrics_pending) == 1
+    assert len(computed_metrics_pending) == 1
     assert (
         ('disk_total', '/var/lib', 12345)
-        in collectd.computed_metrics_pending
+        in computed_metrics_pending
     )
 
-    collectd.computed_metrics_pending = set()
+    computed_metrics_pending = set()
     (result, no_emit) = collectd._rename_metric(
         'disk-sda.disk_ops.read',
         12345,
         42,
+        computed_metrics_pending,
     )
     assert result == {
         'measurement': 'io_reads',
@@ -112,4 +117,4 @@ def test_rename_metric():
         'item': 'sda',
     }
     assert no_emit is False
-    assert len(collectd.computed_metrics_pending) == 0
+    assert len(computed_metrics_pending) == 0
