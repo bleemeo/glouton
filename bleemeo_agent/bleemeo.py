@@ -103,7 +103,7 @@ class BleemeoConnector(threading.Thread):
             self._loop()
 
         self.publish(
-            'api/v0/agent/%s/disconnect' % self.agent_uuid,
+            '/v1/agent/%s/disconnect' % self.agent_uuid,
             'disconnect %s' % self.uuid_connection)
         self.mqtt_client.loop_stop()
 
@@ -112,7 +112,7 @@ class BleemeoConnector(threading.Thread):
 
     def _mqtt_setup(self):
         self.mqtt_client.will_set(
-            'api/v0/agent/%s/disconnect' % self.agent_uuid,
+            '/v1/agent/%s/disconnect' % self.agent_uuid,
             'disconnect-will %s' % self.uuid_connection,
             1)
         if self.core.config.get('bleemeo.mqtt.ssl', True):
@@ -153,7 +153,7 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.loop_start()
 
         self.publish(
-            'api/v0/agent/%s/connect' % self.agent_uuid,
+            '/v1/agent/%s/connect' % self.agent_uuid,
             'connect %s' % self.uuid_connection)
 
     def _loop(self):
@@ -195,7 +195,7 @@ class BleemeoConnector(threading.Thread):
 
         if len(metrics) != 0:
             self.publish(
-                'api/v0/agent/%s/data' % self.agent_uuid,
+                '/v1/agent/%s/data' % self.agent_uuid,
                 json.dumps(metrics)
             )
 
@@ -206,7 +206,7 @@ class BleemeoConnector(threading.Thread):
             return
 
         self.publish(
-            'api/v0/agent/%s/top_info' % self.agent_uuid,
+            '/v1/agent/%s/top_info' % self.agent_uuid,
             json.dumps(top_info)
         )
 
