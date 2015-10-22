@@ -1,5 +1,3 @@
-import multiprocessing
-
 import bleemeo_agent.collectd
 
 
@@ -59,11 +57,10 @@ def test_rename_metric():
         42,
         computed_metrics_pending,
     )
-    cores = multiprocessing.cpu_count()
     assert result == {
         'measurement': 'cpu_idle',
         'time': 12345,
-        'value': 42 * cores,
+        'value': 42,
     }
     assert no_emit is False
     assert len(computed_metrics_pending) == 0

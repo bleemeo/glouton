@@ -130,7 +130,7 @@
         {% set cpu_user = core.get_last_metric_value('cpu_user', None, 0) %}
         {% set cpu_system = core.get_last_metric_value('cpu_system', None, 0) %}
         {% set cpu_idle = cpu_metric['value'] %}
-        {% set cpu_other = num_core * 100 - cpu_user - cpu_system - cpu_idle %}
+        {% set cpu_other = 100 - cpu_user - cpu_system - cpu_idle %}
         {% if cpu_other < 0 %}
             {% set cpu_other = 0 %}
         {% endif %}

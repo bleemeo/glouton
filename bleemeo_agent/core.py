@@ -1,10 +1,8 @@
-import copy
 import datetime
 import io
 import json
 import logging
 import logging.config
-import multiprocessing
 import os
 import signal
 import socket
@@ -252,7 +250,6 @@ class Core:
         self._config_logger()
         logging.info('Agent starting...')
         self.last_facts = {}
-        self.thresholds = {}
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -264,7 +261,7 @@ class Core:
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
-        self._define_thresholds()
+        self.thresholds = self.config.get('thresholds', {})
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
@@ -285,19 +282,6 @@ class Core:
         }
         logger_config.update(self.config.get('logging', {}))
         logging.config.dictConfig(logger_config)
-
-    def _define_thresholds(self):
-        """ Fill self.thresholds from config.thresholds
-
-            It mostly a "copy", only cpu_* are multiplied by the number of
-            cpu cores.
-        """
-        num_core = multiprocessing.cpu_count()
-        self.thresholds = copy.deepcopy(self.config.get('thresholds'))
-        for key, value in self.thresholds.items():
-            if key.startswith('cpu_'):
-                for threshold_name in value:
-                    value[threshold_name] *= num_core
 
     def _schedule_metric_pull(self):
         """ Schedule metric which are pulled

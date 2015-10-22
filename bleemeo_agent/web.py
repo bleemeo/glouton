@@ -1,4 +1,3 @@
-import multiprocessing
 import threading
 
 import flask
@@ -14,7 +13,6 @@ app_thread = None
 @app.route('/')
 def home():
     loads = bleemeo_agent.util.get_loadavg()
-    num_core = multiprocessing.cpu_count()
     check_info = _gather_checks_info()
     top_output = bleemeo_agent.util.get_top_output(app.core.top_info)
     disks_used_perc = [
@@ -32,7 +30,6 @@ def home():
         'index.html',
         core=app.core,
         loads=' '.join('%.2f' % x for x in loads),
-        num_core=num_core,
         check_info=check_info,
         top_output=top_output,
         disks_used_perc=disks_used_perc,

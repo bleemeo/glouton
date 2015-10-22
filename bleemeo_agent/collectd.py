@@ -1,5 +1,4 @@
 import logging
-import multiprocessing
 import os
 import re
 import shlex
@@ -439,9 +438,7 @@ class Collectd(threading.Thread):
         service = None
 
         if match_dict['plugin'] == 'cpu':
-            cores = multiprocessing.cpu_count()
             name = 'cpu_%s' % match_dict['type_instance']
-            value = value * cores
         elif match_dict['type'] == 'df_complex':
             name = 'disk_%s' % match_dict['type_instance']
             path = match_dict['plugin_instance']
