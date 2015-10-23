@@ -370,11 +370,6 @@ class Collectd(threading.Thread):
                 'item': item,
                 'value': used_perc,
             })
-        elif name == 'io_utilisation':
-            io_time = get_metric('io_time', item)
-            # io_time is a number of ms spent doing IO (per seconds)
-            # utilisation is 100% when we spent 1000ms during one seconds
-            value = io_time / 1000. * 100.
         elif name == 'mem_total':
             used = get_metric('mem_used', item)
             value = used
@@ -411,26 +406,18 @@ class Collectd(threading.Thread):
             metric['item'] = item
         self.core.emit_metric(metric)
 
-    def emit_metric(self, name, timestamp, value, computed_metrics_pending):
-        """ Rename a metric and pass it to core
-        """
-        (metric, no_emit) = self._rename_metric(
-            name, timestamp, value, computed_metrics_pending)
-        if metric is not None:
-            self.core.emit_metric(metric, no_emit=no_emit)
-
-    def _rename_metric(  # NOQA
+    def emit_metric(  # NOQA
             self, name, timestamp, value, computed_metrics_pending):
-        """ Process metric to rename it and add item
+        """ Rename a metric and pass it to core
 
             If the metric is used to compute a derrived metric, add it to
             computed_metrics_pending.
 
-            Return None if metric is unknown
+            Nothing is emitted if metric is unknown
         """
         match = collectd_regex.match(name)
         if match is None:
-            return (None, None)
+            return
         match_dict = match.groupdict()
 
         no_emit = False
@@ -439,6 +426,12 @@ class Collectd(threading.Thread):
 
         if match_dict['plugin'] == 'cpu':
             name = 'cpu_%s' % match_dict['type_instance']
+            if name == 'cpu_idle':
+                self.core.emit_metric({
+                    'measurement': 'cpu_used',
+                    'time': timestamp,
+                    'value': 100 - value,
+                })
         elif match_dict['type'] == 'df_complex':
             name = 'disk_%s' % match_dict['type_instance']
             path = match_dict['plugin_instance']
@@ -449,7 +442,7 @@ class Collectd(threading.Thread):
             path = self._disk_path_rename(path)
             if path is None:
                 # this partition is ignored
-                return (None, None)
+                return
 
             item = path
             computed_metrics_pending.add(('disk_total', item, timestamp))
@@ -471,10 +464,17 @@ class Collectd(threading.Thread):
 
             item = match_dict['plugin_instance']
             if self._ignored_disk(item):
-                return (None, None)
+                return
             if name == 'io_time':
-                computed_metrics_pending.add(
-                    ('io_utilisation', item, timestamp))
+                self.core.emit_metric({
+                    'measurement': 'io_utilisation',
+                    # io_time is a number of ms spent doing IO (per seconds)
+                    # utilisation is 100% when we spent 1000ms during one
+                    # second
+                    'value': value / 1000. * 100.,
+                    'time': timestamp,
+                    'item': item,
+                })
         elif match_dict['plugin'] == 'interface':
             kind_name = {
                 'if_errors': 'err',
@@ -489,7 +489,7 @@ class Collectd(threading.Thread):
 
             item = match_dict['plugin_instance']
             if self.network_interface_blacklist(item):
-                return (None, None)
+                return
 
             # Special cases:
             # * if it's some error, we use "in" and "out"
@@ -581,7 +581,7 @@ class Collectd(threading.Thread):
             name = 'ntp_time_offset'
             service = 'ntp'
         else:
-            return (None, None)
+            return
 
         metric = {
             'measurement': name,
@@ -592,7 +592,8 @@ class Collectd(threading.Thread):
             metric['service'] = service
         if item is not None:
             metric['item'] = item
-        return (metric, no_emit)
+
+        self.core.emit_metric(metric, no_emit=no_emit)
 
     def _disk_path_rename(self, path):
         """ Rename (and possibly ignore) a disk partition
