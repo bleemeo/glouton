@@ -100,6 +100,7 @@ class InfluxDBConnector(threading.Thread):
         except (requests.exceptions.ConnectionError,
                 influxdb.exceptions.InfluxDBClientError):
             logging.debug('InfluxDB write error... retrying')
+            time.sleep(3)
             # re-enqueue the metric
             for metric in metrics:
                 self._enqueue(metric)
