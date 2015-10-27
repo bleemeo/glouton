@@ -161,6 +161,7 @@ class BleemeoConnector(threading.Thread):
             Bleemeo connector thread.
         """
         metrics = []
+        repush_metric = None
         timeout = 3
 
         try:
@@ -176,15 +177,19 @@ class BleemeoConnector(threading.Thread):
                 if metric_uuid is None:
                     # UUID is not available now. Ignore this metric for now
                     self._metric_queue.put(metric)
-                    if len(metrics) != 0:
-                        # Send metrics that are ready
-                        break
-                    else:
-                        # sleep a short time to avoid looping for nothing
+                    if repush_metric is metric:
+                        # It has looped, the first re-pushed metric was
+                        # re-read.
+                        # Sleep a short time to avoid looping for nothing
                         # and consuming all CPU
-                        time.sleep(0.1)
-                        # Allow thread to gracefully exit if agent is stopping
-                        return
+                        time.sleep(0.5)
+                        break
+
+                    if repush_metric is None:
+                        repush_metric = metric
+
+                    continue
+
                 bleemeo_metric = metric.copy()
                 bleemeo_metric['uuid'] = metric_uuid
                 metrics.append(bleemeo_metric)
