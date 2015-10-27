@@ -452,7 +452,7 @@ class Collectd(threading.Thread):
             elif match_dict['type_instance'] == 'weighted_io_time':
                 name = 'io_time_weighted'
             elif match_dict['type'] == 'pending_operations':
-                name = 'io_inprogress'
+                name = 'io_pending_operations'
             else:
                 kind_name = {
                     'disk_merged': '_merged',
@@ -467,9 +467,9 @@ class Collectd(threading.Thread):
                 return
             if name == 'io_time':
                 self.core.emit_metric({
-                    'measurement': 'io_utilisation',
+                    'measurement': 'io_utilization',
                     # io_time is a number of ms spent doing IO (per seconds)
-                    # utilisation is 100% when we spent 1000ms during one
+                    # utilization is 100% when we spent 1000ms during one
                     # second
                     'value': value / 1000. * 100.,
                     'time': timestamp,
