@@ -229,7 +229,7 @@ class BleemeoConnector(threading.Thread):
         registration_url = urllib_parse.urljoin(base_url, '/v1/agent/')
 
         payload = {
-            'account': '/v1/account/%s/' % self.account_id,
+            'account': self.account_id,
             'password': self.core.state.get('password'),
             'display_name': socket.getfqdn(),
             'fqdn': socket.getfqdn(),
@@ -310,8 +310,8 @@ class BleemeoConnector(threading.Thread):
 
                 payload = entry.copy()
                 payload.update({
-                    'account': '/v1/account/%s/' % self.account_id,
-                    'agent': '/v1/agent/%s/' % self.agent_uuid,
+                    'account': self.account_id,
+                    'agent': self.agent_uuid,
                     'label': service_name,
                 })
                 if instance is not None:
@@ -347,7 +347,7 @@ class BleemeoConnector(threading.Thread):
                 if metric_uuid is None:
                     logging.debug('Registering metric %s', metric_name)
                     payload = {
-                        'agent': '/v1/agent/%s/' % self.agent_uuid,
+                        'agent': self.agent_uuid,
                         'label': metric_name,
                     }
                     if item is not None:
@@ -355,7 +355,6 @@ class BleemeoConnector(threading.Thread):
                     if service is not None:
                         # When a service is set, item == instance
                         payload['service'] = (
-                            '/v1/service/%s/' %
                             self.services_uuid[(service, item)]['uuid']
                         )
                     response = requests.post(registration_url, data=payload)
@@ -427,7 +426,7 @@ class BleemeoConnector(threading.Thread):
         try:
             for fact_name, value in facts.items():
                 payload = {
-                    'agent': '/v1/agent/%s/' % self.agent_uuid,
+                    'agent': self.agent_uuid,
                     'key': fact_name,
                     'value': str(value),
                 }
