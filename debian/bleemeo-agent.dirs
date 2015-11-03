@@ -1,3 +1,2 @@
 var/lib/bleemeo
-var/log/bleemeo
 etc/bleemeo/agent.conf.d

@@ -1,7 +1,0 @@
-/var/log/bleemeo/agent.log {
-    rotate 5
-    weekly
-    create
-    delaycompress
-    noifempty
-}
