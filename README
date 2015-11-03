@@ -14,10 +14,9 @@ Quickstart
 If you want to try bleemeo-agent, here are the step to run from a git checkout:
 
 * create a virtualenv.
-* Install dependencies and "install" bleemeo-agent::
+* Install bleemeo-agent with its dependencies::
 
     pip install -r requirements.txt
-    python setup.py develop
 
 * Install collectd and configure it::
 
@@ -31,10 +30,3 @@ If you want to try bleemeo-agent, here are the step to run from a git checkout:
 
 * Bleemeo agent have a local web UI accessible on http://localhost:8015, it
   will also write in InfluxDB on localhost if installed.
-
-The "python setup.py develop" will install bleemeo-agent and run it from the
-git checkout directly. It allow you to modify the code and see change without
-need to re-install the agent.
-
-Note that change to setup.py (especialy change to entry_points) will still need
-to re-run python setup.py develop.
