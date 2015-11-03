@@ -33,16 +33,16 @@
             {% if threshold is none %}
                 -
             {% else %}
-                {% if 'low_critical' in threshold %}
+                {% if threshold.get('low_critical') is not none %}
                     critical below {{ threshold['low_critical'] }}
                 {% endif %}
-                {% if 'low_warning' in threshold%}
+                {% if threshold.get('low_warning') is not none %}
                     and warning below {{ threshold['low_warning'] }}
                 {% endif %}
-                {% if 'high_critical' in threshold%}
+                {% if threshold.get('high_critical') is not none %}
                     critical above {{ threshold['high_critical'] }}
                 {% endif %}
-                {% if 'high_warning' in threshold %}
+                {% if threshold.get('high_warning') is not none %}
                     and warning above {{ threshold['high_warning'] }}
                 {% endif %}
             {% endif %}

@@ -55,7 +55,7 @@
         {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['item'], 0) %}
         {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['item'], 0) %}
         {% set disk_total_user = disk_used + disk_free %}
-        {% set disk_threshold = core.thresholds['disk_used_perc'] %}
+        {% set disk_threshold = core.thresholds.get('disk_used_perc', {}) %}
         <div>
             <div class="panel-heading" role="tab" id="disk-heading-{{ loop.index }}">
                 <h4 class="panel-title">
@@ -69,8 +69,12 @@
                 <div class="panel-body add-left-margin">
                     Value: {{ disk_used|filesizeformat(True) }}<br/>
                     Status: {{ disk_metric['status']|capitalize }} <br/>
+                    {% if disk_threshold.get('high_warning') %}
                     Warning: {{ (disk_total_user * disk_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
+                    {% endif %}
+                    {% if disk_threshold.get('high_critical') %}
                     Critical: {{ (disk_total_user * disk_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -81,7 +85,7 @@
         {% if mem_metric is not none %}
         {% set mem_total = core.get_last_metric_value('mem_total', None, 0) %}
         {% set mem_used = mem_metric['value'] / 100 * mem_total %}
-        {% set mem_threshold = core.thresholds['mem_used_perc'] %}
+        {% set mem_threshold = core.thresholds.get('mem_used_perc', {}) %}
         <div>
             <div class="panel-heading" role="tab" id="mem-heading">
                 <h4 class="panel-title">
@@ -95,8 +99,12 @@
                 <div class="panel-body add-left-margin">
                     Value: {{ mem_used|filesizeformat(True) }}<br/>
                     Status: {{ mem_metric['status']|capitalize }} <br/>
+                    {% if mem_threshold.get('high_warning') %}
                     Warning: {{ (mem_total * mem_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
+                    {% endif %}
+                    {% if mem_threshold.get('high_critical') %}
                     Critical: {{ (mem_total * mem_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
+                    {% endif %}
                 </div>
             </div>
         </div>
@@ -134,7 +142,7 @@
         {% if cpu_other < 0 %}
             {% set cpu_other = 0 %}
         {% endif %}
-        {% set cpu_threshold = core.thresholds['cpu_idle'] %}
+        {% set cpu_threshold = core.thresholds.get('cpu_idle', {}) %}
         <div>
             <div class="panel-heading" role="tab" id="cpu-heading">
                 <h4 class="panel-title">
@@ -151,8 +159,12 @@
                     Used CPU by other tasks : {{ cpu_other|round(1) }} %<br/>
                     Idle CPU : {{ cpu_idle|round(1) }} %<br/>
                     Status: {{ cpu_metric['status']|capitalize }} <br/>
+                    {% if cpu_threshold.get('low_warning') %}
                     Warning (when idle is below): {{ (100 * cpu_threshold['low_warning'] / 100) }} %<br/>
+                    {% endif %}
+                    {% if cpu_threshold.get('low_critical') %}
                     Critical (when idle is below): {{ (100 * cpu_threshold['low_critical'] / 100) }} %<br/>
+                    {% endif %}
                 </div>
             </div>
         </div>
