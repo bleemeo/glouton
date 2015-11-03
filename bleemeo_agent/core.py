@@ -151,7 +151,10 @@ DOCKER_API_VERSION = '1.17'
 
 
 def main():
-    logging.basicConfig()
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
 
     try:
         core = Core()
@@ -279,6 +282,12 @@ class Core:
         logger_config = {
             'version': 1,
             'disable_existing_loggers': False,
+            'loggers': {
+                'requests': {'level': logging.WARNING},
+                'urllib3': {'level': logging.WARNING},
+                'werkzeug': {'level': logging.WARNING},
+                'apscheduler': {'level': logging.WARNING},
+            },
         }
         logger_config.update(self.config.get('logging', {}))
         logging.config.dictConfig(logger_config)
@@ -653,7 +662,7 @@ class Core:
         self.state = State(
             self.config.get(
                 'agent.state_file',
-                '/var/lib/bleemeo/state.json'))
+                'state.json'))
 
         return self.config
 
