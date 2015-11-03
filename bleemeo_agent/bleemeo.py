@@ -243,7 +243,11 @@ class BleemeoConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             content = None
             try:
-                response = requests.post(registration_url, data=payload)
+                response = requests.post(
+                    registration_url,
+                    data=payload,
+                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                )
                 if response.status_code == 201:
                     content = response.json()
                 else:
@@ -322,7 +326,11 @@ class BleemeoConnector(threading.Thread):
                 if instance is not None:
                     payload['instance'] = instance
 
-                response = method(url, data=payload)
+                response = method(
+                    url,
+                    data=payload,
+                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                )
                 if response.status_code != expected_code:
                     logging.debug(
                         'Service registration failed. Server response = %s',
@@ -362,7 +370,11 @@ class BleemeoConnector(threading.Thread):
                         payload['service'] = (
                             self.services_uuid[(service, item)]['uuid']
                         )
-                    response = requests.post(registration_url, data=payload)
+                    response = requests.post(
+                        registration_url,
+                        data=payload,
+                        headers={'X-Requested-With': 'XMLHttpRequest'},
+                    )
                     if response.status_code != 201:
                         logging.debug(
                             'Metric registration failed. Server response = %s',
@@ -411,7 +423,8 @@ class BleemeoConnector(threading.Thread):
                 logging.debug(
                     'Deleting fact %s (uuid=%s)', fact_name, fact_uuid)
                 response = requests.delete(
-                    urllib_parse.urljoin(fact_url, '%s/' % fact_uuid)
+                    urllib_parse.urljoin(fact_url, '%s/' % fact_uuid),
+                    headers={'X-Requested-With': 'XMLHttpRequest'},
                 )
                 if response.status_code == 204:
                     del facts_uuid[fact_name]
@@ -435,7 +448,11 @@ class BleemeoConnector(threading.Thread):
                     'key': fact_name,
                     'value': str(value),
                 }
-                response = requests.post(fact_url, data=payload)
+                response = requests.post(
+                    fact_url,
+                    data=payload,
+                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                )
                 if response.status_code == 201:
                     facts_uuid[fact_name] = response.json()['id']
                     logging.debug(
