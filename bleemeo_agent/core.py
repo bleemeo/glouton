@@ -398,7 +398,7 @@ class Core:
                     bleemeo_agent.bleemeo.BleemeoConnector(self))
                 self.bleemeo_connector.start()
 
-        if self.config.get('influxdb.enabled', True):
+        if self.config.get('influxdb.enabled', False):
             if bleemeo_agent.influxdb is None:
                 logging.warning(
                     'Missing dependency (influxdb), '
