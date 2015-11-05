@@ -211,13 +211,14 @@ class Collectd(threading.Thread):
         restart_cmd = self.core.config.get(
             'collectd.restart_command',
             'sudo --non-interactive service collectd restart')
-        if restart_cmd == 'docker':
+        collectd_container = self.core.config.get('collectd.docker_name')
+        if collectd_container is not None:
             # use docker stop/start to restart the collectd container
-            self.core.docker_client.stop('collectd')
+            self.core.docker_client.stop(collectd_container)
             for _ in range(10):
                 time.sleep(0.2)
                 container_info = self.core.docker_client.inspect_container(
-                    'collectd'
+                    collectd_container
                 )
                 running = container_info['State']['Running']
                 if not running:
@@ -225,7 +226,7 @@ class Collectd(threading.Thread):
             if running:
                 logging.info(
                     'Collectd container still running... restart may fail')
-            self.core.docker_client.start('collectd')
+            self.core.docker_client.start(collectd_container)
         else:
             try:
                 output = subprocess.check_output(
