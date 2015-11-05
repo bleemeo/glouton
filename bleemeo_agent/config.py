@@ -29,6 +29,8 @@ PATHS = [
 class Config(dict):
     """
     Work exacly like a normal dict, but "get" method known about sub-dict
+
+    Also add "set" method that known about sub-dict.
     """
 
     def get(self, name, default=None, separator='.'):
@@ -44,6 +46,24 @@ class Config(dict):
                 return default
             current = current[path]
         return current
+
+    def set(self, name, value, separator='.'):
+        """ If name contains separator ("." by default), it will search
+            in sub-dict.
+
+            Example, set(category.value, 5) write result in
+            self['category']['value'] = 5.
+            It does create intermediary dict as needed (in your example,
+            self['category'] = {} if not already an dict).
+        """
+        current = self
+        splitted_name = name.split(separator)
+        (paths, last_name) = (splitted_name[:-1], splitted_name[-1])
+        for path in paths:
+            if not isinstance(current.get(path), dict):
+                current[path] = {}
+            current = current[path]
+        current[last_name] = value
 
 
 def merge_dict(destination, source):

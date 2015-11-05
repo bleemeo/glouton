@@ -41,6 +41,11 @@ except ImportError:
     bleemeo_agent.influxdb = None
 
 
+ENVIRON_CONFIG_VARS = [
+    ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id'),
+    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key'),
+]
+
 KNOWN_PROCESS = {
     'asterisk': {
         'service': 'asterisk',
@@ -659,6 +664,10 @@ class Core:
 
     def reload_config(self):
         self.config = bleemeo_agent.config.load_config()
+        for (env_name, conf_name) in ENVIRON_CONFIG_VARS:
+            if env_name in os.environ:
+                self.config.set(conf_name, os.environ[env_name])
+
         self.state = State(
             self.config.get(
                 'agent.state_file',

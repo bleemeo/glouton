@@ -1,6 +1,30 @@
 import bleemeo_agent.config
 
 
+def test_config_object():
+    conf = bleemeo_agent.config.Config()
+    conf['test'] = {
+        'a': 'a',
+        'one': 1,
+        'sub-level': {
+            'two': 2.0,
+        },
+    }
+
+    assert conf.get('test.a') == 'a'
+    assert conf.get('test.one') == 1
+    assert conf.get('test.sub-level.two') == 2.0
+    assert conf.get('test.does.not.exists') is None
+    assert conf.get('test.does.not.exists', 'default') == 'default'
+
+    conf.set('test.b', 'B')
+    assert conf.get('test.b') == 'B'
+    assert conf.get('test.one') == 1
+
+    conf.set('test.now.does.exists.value', 42)
+    assert conf.get('test.now.does.exists.value') == 42
+
+
 def test_merge_dict():
     assert bleemeo_agent.config.merge_dict({}, {}) == {}
     assert (
