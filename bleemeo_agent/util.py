@@ -78,6 +78,10 @@ def get_facts(core):
     if core.bleemeo_connector is not None:
         facts['account_uuid'] = core.bleemeo_connector.account_id
 
+    if core.docker_client is not None and core.container:
+        facts['hostname'] = core.docker_client.info()['Name']
+        facts['fqdn'] = facts['hostname']
+
     return facts
 
 
