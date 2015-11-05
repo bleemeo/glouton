@@ -74,28 +74,17 @@ class BleemeoConnector(threading.Thread):
         except StopIteration:
             return
 
-        if self.agent_uuid is None:
-            self.register()
-
-        # first fact are gathered before agent had registred. Since
-        # the job is run every day, it a bit too long to wait.
-        # If at this point facts_uuid is undefined, facts were never sent.
-        # In this case, just re-send last facts
-        if (self.core.last_facts
-                and self.core.state.get('facts_uuid') is None):
-            self.send_facts(self.core.last_facts)
-
-        # Register return on two case:
-        # 1) registration is done => continue normal processing
-        # 2) agent is stopping    => we must exit (self.agent_uuid is not
-        #    defined and is needed to next step)
-        if self.core.is_terminating.is_set():
-            return
-
         self.core.scheduler.add_interval_job(
             self._register_bleemeo_objects,
+            start_date=datetime.datetime.now() + datetime.timedelta(seconds=4),
             seconds=15,
         )
+
+        while self.agent_uuid is None:
+            # Waiting for registration
+            self.core.is_terminating.wait(16)
+            if self.core.is_terminating.is_set():
+                return
 
         self._mqtt_setup()
 
@@ -229,7 +218,6 @@ class BleemeoConnector(threading.Thread):
     def register(self):
         """ Register the agent to Bleemeo SaaS service
         """
-        sleep_delay = datetime.timedelta(seconds=10)
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/agent/')
 
@@ -240,46 +228,45 @@ class BleemeoConnector(threading.Thread):
             'fqdn': socket.getfqdn(),
         }
 
-        while not self.core.is_terminating.is_set():
-            content = None
-            try:
-                response = requests.post(
-                    registration_url,
-                    data=payload,
-                    headers={'X-Requested-With': 'XMLHttpRequest'},
-                )
-                if response.status_code == 201:
-                    content = response.json()
-                else:
-                    logging.debug(
-                        'Registration failed, content = %s',
-                        response.content
-                    )
-            except requests.exceptions.RequestException:
-                response = None
-            except ValueError:
+        content = None
+        try:
+            response = requests.post(
+                registration_url,
+                data=payload,
+                headers={'X-Requested-With': 'XMLHttpRequest'},
+            )
+            if response.status_code == 201:
+                content = response.json()
+            else:
                 logging.debug(
-                    'registration response is not a json : %s',
-                    response.content[:100])
-
-            if content is not None and 'id' in content:
-                self.core.state.set('agent_uuid', content['id'])
-                logging.debug('Regisration successfull')
-                return
-            elif content is not None:
-                logging.debug(
-                    'Registration failed, content (json) = %s',
-                    content
+                    'Registration failed, content = %s',
+                    response.content
                 )
+        except requests.exceptions.RequestException:
+            response = None
+        except ValueError:
+            logging.debug(
+                'Registration failed, response is not a json : %s',
+                response.content[:100])
 
-            logging.info(
-                'Registration failed... retyring in %s', sleep_delay)
-            self.core.is_terminating.wait(sleep_delay.total_seconds())
-            sleep_delay = min(sleep_delay * 2, datetime.timedelta(minutes=30))
+        if content is not None and 'id' in content:
+            self.core.state.set('agent_uuid', content['id'])
+            logging.debug('Regisration successfull')
+        elif content is not None:
+            logging.debug(
+                'Registration failed, content (json) = %s',
+                content
+            )
 
     def _register_bleemeo_objects(self):
         """ Check for unregistered object with Bleemeo SaaS
         """
+        if self.agent_uuid is None:
+            self.register()
+
+        if self.agent_uuid is None:
+            return
+
         self._register_services()
         self._register_metric()
 
