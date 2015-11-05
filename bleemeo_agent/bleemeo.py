@@ -221,11 +221,16 @@ class BleemeoConnector(threading.Thread):
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/agent/')
 
+        name = self.core.last_facts.get('fqdn')
+        if not name:
+            logging.debug('Register delayed, fact fqdn not available')
+            return
+
         payload = {
             'account': self.account_id,
             'password': self.core.state.get('password'),
-            'display_name': socket.getfqdn(),
-            'fqdn': socket.getfqdn(),
+            'display_name': name,
+            'fqdn': name,
         }
 
         content = None
