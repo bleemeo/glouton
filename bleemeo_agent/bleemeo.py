@@ -25,6 +25,7 @@ class BleemeoConnector(threading.Thread):
         self._mqtt_queue_size = 0
         self._mqtt_queue_full_last_warning = 0
         self._mqtt_queue_full_count_warning = 0
+        self._last_facts_sent = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
         self.uuid_connection = uuid.uuid4()
         self.connected = False
@@ -275,6 +276,9 @@ class BleemeoConnector(threading.Thread):
         self._register_services()
         self._register_metric()
 
+        if self._last_facts_sent < self.core.last_facts_update:
+            self.send_facts()
+
     def _register_services(self):
         """ Check for any unregistered services and register them
 
@@ -398,11 +402,7 @@ class BleemeoConnector(threading.Thread):
         if (metric_name, service, item) not in self.metrics_uuid:
             self.metrics_uuid.setdefault((metric_name, service, item), None)
 
-    def send_facts(self, facts):  # NOQA
-        if self.agent_uuid is None:
-            logging.debug('Do not sent fact before agent registration')
-            return
-
+    def send_facts(self):
         base_url = self.bleemeo_base_url
         fact_url = urllib_parse.urljoin(base_url, '/v1/agentfact/')
         facts_uuid = self.core.state.get('facts_uuid', {})
@@ -434,7 +434,7 @@ class BleemeoConnector(threading.Thread):
 
         # then create one agentfact for item in the mapping.
         try:
-            for fact_name, value in facts.items():
+            for fact_name, value in self.core.last_facts.items():
                 payload = {
                     'agent': self.agent_uuid,
                     'key': fact_name,
@@ -460,8 +460,11 @@ class BleemeoConnector(threading.Thread):
                     return
         except:
             logging.debug('Failed to send facts.', exc_info=True)
+            return
         finally:
             self.core.state.set('facts_uuid', facts_uuid)
+
+        self._last_facts_sent = datetime.datetime.now()
 
     def _warn_mqtt_queue_full(self):
         now = time.time()

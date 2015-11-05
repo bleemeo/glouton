@@ -258,6 +258,7 @@ class Core:
         self._config_logger()
         logging.info('Agent starting...')
         self.last_facts = {}
+        self.last_facts_update = datetime.datetime(1970, 1, 1)
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -380,7 +381,7 @@ class Core:
             minutes=5,
         )
         self.scheduler.add_interval_job(
-            self.send_facts,
+            self.update_facts,
             start_date=now_scheduler,
             hours=24,
         )
@@ -649,13 +650,10 @@ class Core:
                 hours=1,
             )
 
-    def send_facts(self):
-        """ Send facts to Bleemeo SaaS """
-        # Note: even if we do not sent them to Bleemeo SaaS, calling this
-        # method is still usefull. Web UI use last_facts.
+    def update_facts(self):
+        """ Update facts """
         self.last_facts = bleemeo_agent.util.get_facts(self)
-        if self.bleemeo_connector is not None:
-            self.bleemeo_connector.send_facts(self.last_facts)
+        self.last_facts_update = datetime.datetime.now()
 
     def send_top_info(self):
         self.top_info = bleemeo_agent.util.get_top_info()
