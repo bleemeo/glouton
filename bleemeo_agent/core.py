@@ -282,7 +282,7 @@ class Core:
 
             It's None if running outside any container.
         """
-        return self.config.get('container', None)
+        return self.config.get('container.type', None)
 
     def _config_logger(self):
         logger_config = {
@@ -496,10 +496,11 @@ class Core:
         # outside docker, it's None
         processes = {}
 
-        # host (a.k.a the root pid namespace) see ALL process.
-        # They are added in instance "None" (i.e. running in the host),
-        # but if they are running in a docker, they will be updated later
-        if self.container is None:
+        if (self.container is None
+                or self.config.get('container.pid_namespace_host')):
+            # The host pid namespace see ALL process.
+            # They are added in instance "None" (i.e. running in the host),
+            # but if they are running in a docker, they will be updated later
             for process in psutil.process_iter():
                 # Cmdline may be unavailable (permission issue ?)
                 # When unavailable, depending on psutil version, it returns
