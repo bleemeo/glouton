@@ -16,15 +16,17 @@ setup(
     include_package_data=True,
     install_requires=[
         'apscheduler < 3.0.0',
-        'docker-py',
-        'influxdb > 2.6.0',
-        'paho-mqtt',
         'flask',
-        'psutil',
+        'psutil >= 2.0.0',
         'requests',
         'six',
         'pyyaml',
     ],
+    extras_require={
+        'docker': ['docker-py'],
+        'influxdb': ['influxdb > 2.6.0'],
+        'bleemeo': ['paho-mqtt'],
+    },
     scripts=(
         'bin/bleemeo-agent',
     )

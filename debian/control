@@ -19,11 +19,7 @@ Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python:Depends},
     adduser,
     collectd,
-    python-apscheduler,
-    python-flask,
     python-psutil (>= 2.0.0~),
-    python-requests,
-    python-yaml,
 Recommends:
     ca-certificates,
     nagios-plugins,
