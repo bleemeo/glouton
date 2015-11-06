@@ -390,11 +390,19 @@ def get_top_output(top_info):
 
 def _get_url(name, metric_config):
     response = None
+    args = {
+        'verify': metric_config.get('ssl_check', True),
+        'timeout': 3.0,
+    }
+    if metric_config.get('username') is not None:
+        args['auth'] = (
+            metric_config.get('username'),
+            metric_config.get('password', '')
+        )
     try:
         response = requests.get(
             metric_config['url'],
-            verify=metric_config.get('ssl_check', True),
-            timeout=3.0,
+            **args
         )
     except requests.exceptions.ConnectionError:
         logging.warning(
@@ -423,6 +431,8 @@ def pull_raw_metric(core, name):
         * url : where to fetch the metric [mandatory]
         * item: item to add on your metric [default: None - no item]
         * interval : retrive the metric every interval seconds [default: 10s]
+        * username : username used for basic authentication [default: no auth]
+        * password : password used for basic authentication [default: ""]
         * ssl_check : should we check that SSL certificate are valid
           [default: yes]
     """
