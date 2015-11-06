@@ -137,12 +137,8 @@
         {% if cpu_metric is not none %}
         {% set cpu_user = core.get_last_metric_value('cpu_user', None, 0) %}
         {% set cpu_system = core.get_last_metric_value('cpu_system', None, 0) %}
-        {% set cpu_idle = core.get_last_metric_value('cpu_idle', None, 0) %}
         {% set cpu_used = cpu_metric['value'] %}
-        {% set cpu_other = 100 - cpu_user - cpu_system - cpu_idle %}
-        {% if cpu_other < 0 %}
-            {% set cpu_other = 0 %}
-        {% endif %}
+        {% set cpu_other = core.get_last_metric_value('cpu_other', None, 0) %}
         {% set cpu_threshold = core.thresholds.get('cpu_used', {}) %}
         <div>
             <div class="panel-heading" role="tab" id="cpu-heading">

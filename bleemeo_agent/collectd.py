@@ -371,6 +371,10 @@ class Collectd(threading.Thread):
                 'item': item,
                 'value': used_perc,
             })
+        elif name == 'cpu_other':
+            value = get_metric('cpu_used', None)
+            value -= get_metric('cpu_user', None)
+            value -= get_metric('cpu_system', None)
         elif name == 'mem_total':
             used = get_metric('mem_used', item)
             value = used
@@ -433,6 +437,7 @@ class Collectd(threading.Thread):
                     'time': timestamp,
                     'value': 100 - value,
                 })
+            computed_metrics_pending.add(('cpu_other', None, timestamp))
         elif match_dict['type'] == 'df_complex':
             name = 'disk_%s' % match_dict['type_instance']
             path = match_dict['plugin_instance']
