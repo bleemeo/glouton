@@ -133,16 +133,17 @@
     {% endwith %}
     {% endfor %}
     {% with %}
-        {% set cpu_metric = core.get_last_metric('cpu_idle', None) %}
+        {% set cpu_metric = core.get_last_metric('cpu_used', None) %}
         {% if cpu_metric is not none %}
         {% set cpu_user = core.get_last_metric_value('cpu_user', None, 0) %}
         {% set cpu_system = core.get_last_metric_value('cpu_system', None, 0) %}
-        {% set cpu_idle = cpu_metric['value'] %}
+        {% set cpu_idle = core.get_last_metric_value('cpu_idle', None, 0) %}
+        {% set cpu_used = cpu_metric['value'] %}
         {% set cpu_other = 100 - cpu_user - cpu_system - cpu_idle %}
         {% if cpu_other < 0 %}
             {% set cpu_other = 0 %}
         {% endif %}
-        {% set cpu_threshold = core.thresholds.get('cpu_idle', {}) %}
+        {% set cpu_threshold = core.thresholds.get('cpu_used', {}) %}
         <div>
             <div class="panel-heading" role="tab" id="cpu-heading">
                 <h4 class="panel-title">
@@ -154,16 +155,18 @@
             </div>
             <div id="cpu-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="cpu-heading">
                 <div class="panel-body add-left-margin">
-                    Used CPU by applications : {{ cpu_user|round(1) }} %<br/>
-                    Used CPU by system : {{ cpu_system|round(1) }} %<br/>
-                    Used CPU by other tasks : {{ cpu_other|round(1) }} %<br/>
-                    Idle CPU : {{ cpu_idle|round(1) }} %<br/>
+                    Used CPU : {{ cpu_used|round(1) }} % <br/>
+                    <ul>
+                        <li>by applications : {{ cpu_user|round(1) }} %</li>
+                        <li>by system : {{ cpu_system|round(1) }} %</li>
+                        <li>by other tasks : {{ cpu_other|round(1) }} %</li>
+                    </ul>
                     Status: {{ cpu_metric['status']|capitalize }} <br/>
-                    {% if cpu_threshold.get('low_warning') %}
-                    Warning (when idle is below): {{ (100 * cpu_threshold['low_warning'] / 100) }} %<br/>
+                    {% if cpu_threshold.get('high_warning') %}
+                    Warning : {{ cpu_threshold['high_warning'] }} %<br/>
                     {% endif %}
-                    {% if cpu_threshold.get('low_critical') %}
-                    Critical (when idle is below): {{ (100 * cpu_threshold['low_critical'] / 100) }} %<br/>
+                    {% if cpu_threshold.get('high_critical') %}
+                    Critical : {{ cpu_threshold['high_critical'] }} %<br/>
                     {% endif %}
                 </div>
             </div>
