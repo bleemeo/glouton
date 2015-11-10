@@ -270,7 +270,7 @@ class Core:
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
-        self.thresholds = self.config.get('thresholds', {})
+        self.thresholds = self.define_thresholds()
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
@@ -297,6 +297,23 @@ class Core:
         }
         logger_config.update(self.config.get('logging', {}))
         logging.config.dictConfig(logger_config)
+
+    def define_thresholds(self):
+        self.thresholds = self.config.get('thresholds', {})
+        bleemeo_agent.config.merge_dict(
+            self.thresholds,
+            self.state.get('thresholds', {})
+        )
+        # Remove entry with only None
+        self.thresholds = {
+            metric_name: metric_thresholds
+            for (metric_name, metric_thresholds) in self.thresholds.items()
+            if metric_thresholds.get('low_warning') is not None
+            or metric_thresholds.get('low_critical') is not None
+            or metric_thresholds.get('high_warning') is not None
+            or metric_thresholds.get('high_critical') is not None
+        }
+        return self.thresholds
 
     def _schedule_metric_pull(self):
         """ Schedule metric which are pulled

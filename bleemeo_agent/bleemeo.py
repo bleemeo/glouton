@@ -26,6 +26,7 @@ class BleemeoConnector(threading.Thread):
         self._mqtt_queue_full_last_warning = 0
         self._mqtt_queue_full_count_warning = 0
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
+        self._last_threshold_update = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
         self.uuid_connection = uuid.uuid4()
         self.connected = False
@@ -279,6 +280,35 @@ class BleemeoConnector(threading.Thread):
         if self._last_facts_sent < self.core.last_facts_update:
             self.send_facts()
 
+        now = datetime.datetime.now()
+        if now - self._last_threshold_update > datetime.timedelta(hours=1):
+            self._retrive_threshold()
+
+    def _retrive_threshold(self):
+        """ Retrieve threshold for all registered metrics
+        """
+        logging.debug('Retrieving thresholds')
+        thresholds = {}
+        base_url = self.bleemeo_base_url
+        metric_base_url = urllib_parse.urljoin(base_url, '/v1/metric/')
+        for metric_uuid in self.metrics_uuid.values():
+            if metric_uuid is None:
+                continue
+            metric_url = metric_base_url + metric_uuid + '/'
+            response = requests.get(metric_url)
+            if response.status_code == 200:
+                data = response.json()
+                thresholds[data['label']] = {
+                    'low_warning': data['threshold_low_warning'],
+                    'low_critical': data['threshold_low_critical'],
+                    'high_warning': data['threshold_high_warning'],
+                    'high_critical': data['threshold_high_critical'],
+                }
+
+        self.core.state.set('thresholds', thresholds)
+        self.core.define_thresholds()
+        self._last_threshold_update = datetime.datetime.now()
+
     def _register_services(self):
         """ Check for any unregistered services and register them
 
@@ -347,6 +377,7 @@ class BleemeoConnector(threading.Thread):
         """
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
+        thresholds = self.core.state.get('thresholds', {})
 
         changed = False
 
@@ -377,9 +408,16 @@ class BleemeoConnector(threading.Thread):
                             response.content
                         )
                         return
+                    data = response.json()
                     self.metrics_uuid[(metric_name, service, item)] = (
-                        response.json()['id']
+                        data['id']
                     )
+                    thresholds[data['label']] = {
+                        'low_warning': data['threshold_low_warning'],
+                        'low_critical': data['threshold_low_critical'],
+                        'high_warning': data['threshold_high_warning'],
+                        'high_critical': data['threshold_high_critical'],
+                    }
                     logging.debug(
                         'Metric %s registered with uuid %s',
                         metric_name,
@@ -391,6 +429,8 @@ class BleemeoConnector(threading.Thread):
                 self.core.state.set_complex_dict(
                     'metrics_uuid', self.metrics_uuid
                 )
+                self.core.state.set('thresholds', thresholds)
+                self.core.define_thresholds()
 
     def emit_metric(self, metric):
         if self._metric_queue.qsize() < 100000:
