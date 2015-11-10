@@ -5,7 +5,6 @@ import socket
 import ssl
 import threading
 import time
-import uuid
 
 import paho.mqtt.client as mqtt
 import requests
@@ -28,8 +27,6 @@ class BleemeoConnector(threading.Thread):
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
         self._last_threshold_update = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
-        self.uuid_connection = uuid.uuid4()
-        self.connected = False
         self.metrics_uuid = self.core.state.get_complex_dict(
             'metrics_uuid', {}
         )
@@ -40,11 +37,9 @@ class BleemeoConnector(threading.Thread):
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             logging.debug('MQTT connection established')
-            self.connected = True
 
     def on_disconnect(self, client, userdata, rc):
         logging.debug('MQTT connection lost')
-        self.connected = False
 
     def on_publish(self, client, userdata, mid):
         self._mqtt_queue_size -= 1
@@ -95,7 +90,8 @@ class BleemeoConnector(threading.Thread):
 
         self.publish(
             'v1/agent/%s/disconnect' % self.agent_uuid,
-            'disconnect %s' % self.uuid_connection)
+            'disconnect'
+        )
         self.mqtt_client.loop_stop()
 
         self.mqtt_client.disconnect()
@@ -104,8 +100,9 @@ class BleemeoConnector(threading.Thread):
     def _mqtt_setup(self):
         self.mqtt_client.will_set(
             'v1/agent/%s/disconnect' % self.agent_uuid,
-            'disconnect-will %s' % self.uuid_connection,
-            1)
+            'disconnect-will',
+            1,
+        )
         if self.core.config.get('bleemeo.mqtt.ssl', True):
             self.mqtt_client.tls_set(
                 self.core.config.get(
@@ -145,7 +142,8 @@ class BleemeoConnector(threading.Thread):
 
         self.publish(
             'v1/agent/%s/connect' % self.agent_uuid,
-            'connect %s' % self.uuid_connection)
+            'connect',
+        )
 
     def _loop(self):
         """ Call as long as agent is running. It's the "main" method for
