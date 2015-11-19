@@ -68,7 +68,9 @@
             <div id="disk-collapse-{{ loop.index }}" class="panel-collapse collapse" role="tabpanel" aria-labelledby="disk-heading-{{ loop.index }}">
                 <div class="panel-body add-left-margin">
                     Value: {{ disk_used|filesizeformat(True) }}<br/>
+                    {% if 'status' in disk_metric %}
                     Status: {{ disk_metric['status']|capitalize }} <br/>
+                    {% endif %}
                     {% if disk_threshold.get('high_warning') %}
                     Warning: {{ (disk_total_user * disk_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
                     {% endif %}
@@ -98,7 +100,9 @@
             <div id="mem-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="mem-heading">
                 <div class="panel-body add-left-margin">
                     Value: {{ mem_used|filesizeformat(True) }}<br/>
+                    {% if 'status' in mem_metric %}
                     Status: {{ mem_metric['status']|capitalize }} <br/>
+                    {% endif %}
                     {% if mem_threshold.get('high_warning') %}
                     Warning: {{ (mem_total * mem_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
                     {% endif %}
@@ -157,7 +161,9 @@
                         <li>by system : {{ cpu_system|round(1) }} %</li>
                         <li>by other tasks : {{ cpu_other|round(1) }} %</li>
                     </ul>
+                    {% if 'status' in cpu_metric %}
                     Status: {{ cpu_metric['status']|capitalize }} <br/>
+                    {% endif %}
                     {% if cpu_threshold.get('high_warning') %}
                     Warning : {{ cpu_threshold['high_warning'] }} %<br/>
                     {% endif %}
