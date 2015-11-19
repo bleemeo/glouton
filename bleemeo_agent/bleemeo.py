@@ -289,21 +289,22 @@ class BleemeoConnector(threading.Thread):
         thresholds = {}
         base_url = self.bleemeo_base_url
         metric_base_url = urllib_parse.urljoin(base_url, '/v1/metric/')
-        for metric_uuid in self.metrics_uuid.values():
+        for (metric, metric_uuid) in self.metrics_uuid.items():
+            (metric_name, service, item) = metric
             if metric_uuid is None:
                 continue
             metric_url = metric_base_url + metric_uuid + '/'
             response = requests.get(metric_url)
             if response.status_code == 200:
                 data = response.json()
-                thresholds[data['label']] = {
+                thresholds[(metric_name, item)] = {
                     'low_warning': data['threshold_low_warning'],
                     'low_critical': data['threshold_low_critical'],
                     'high_warning': data['threshold_high_warning'],
                     'high_critical': data['threshold_high_critical'],
                 }
 
-        self.core.state.set('thresholds', thresholds)
+        self.core.state.set_complex_dict('thresholds', thresholds)
         self.core.define_thresholds()
         self._last_threshold_update = datetime.datetime.now()
 
@@ -375,7 +376,7 @@ class BleemeoConnector(threading.Thread):
         """
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
-        thresholds = self.core.state.get('thresholds', {})
+        thresholds = self.core.state.get_complex_dict('thresholds', {})
 
         changed = False
 
@@ -410,7 +411,7 @@ class BleemeoConnector(threading.Thread):
                     self.metrics_uuid[(metric_name, service, item)] = (
                         data['id']
                     )
-                    thresholds[data['label']] = {
+                    thresholds[(metric_name, item)] = {
                         'low_warning': data['threshold_low_warning'],
                         'low_critical': data['threshold_low_critical'],
                         'high_warning': data['threshold_high_warning'],
@@ -427,7 +428,7 @@ class BleemeoConnector(threading.Thread):
                 self.core.state.set_complex_dict(
                     'metrics_uuid', self.metrics_uuid
                 )
-                self.core.state.set('thresholds', thresholds)
+                self.core.state.set_complex_dict('thresholds', thresholds)
                 self.core.define_thresholds()
 
     def emit_metric(self, metric):

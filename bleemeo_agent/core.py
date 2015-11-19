@@ -302,17 +302,8 @@ class Core:
         self.thresholds = self.config.get('thresholds', {})
         bleemeo_agent.config.merge_dict(
             self.thresholds,
-            self.state.get('thresholds', {})
+            self.state.get_complex_dict('thresholds', {})
         )
-        # Remove entry with only None
-        self.thresholds = {
-            metric_name: metric_thresholds
-            for (metric_name, metric_thresholds) in self.thresholds.items()
-            if metric_thresholds.get('low_warning') is not None
-            or metric_thresholds.get('low_critical') is not None
-            or metric_thresholds.get('high_warning') is not None
-            or metric_thresholds.get('high_critical') is not None
-        }
         return self.thresholds
 
     def _schedule_metric_pull(self):
@@ -713,11 +704,36 @@ class Core:
     def update_last_report(self):
         self.last_report = max(datetime.datetime.now(), self.last_report)
 
+    def get_threshold(self, metric_name, item=None):
+        """ Get threshold definition for given metric
+
+            Return None if no threshold is defined
+        """
+        threshold = self.thresholds.get((metric_name, item))
+
+        if threshold is None:
+            threshold = self.thresholds.get(metric_name)
+
+        if threshold is None:
+            return None
+
+        # If all threshold are None, don't run check
+        if (threshold.get('low_warning') is None
+                and threshold.get('low_critical') is None
+                and threshold.get('high_warning') is None
+                and threshold.get('high_critical') is None):
+            threshold = None
+
+        return threshold
+
     def check_threshold(self, metric):
         """ Check if threshold is defined for given metric. If yes, check
             it and add a "status" tag.
         """
-        threshold = self.thresholds.get(metric['measurement'])
+        threshold = self.get_threshold(
+            metric['measurement'], metric.get('item')
+        )
+
         if threshold is None:
             return metric
 

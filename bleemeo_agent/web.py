@@ -50,7 +50,9 @@ def _gather_checks_info():
                 check_count_warning += 1
             else:
                 check_count_critical += 1
-            threshold = app.core.thresholds.get(metric['measurement'])
+            threshold = app.core.get_threshold(
+                metric['measurement'], metric.get('item'),
+            )
 
             pretty_name = metric['measurement']
             if metric.get('item') is not None:
