@@ -692,7 +692,8 @@ class Core:
     def emit_metric(self, metric):
         """ Sent a metric to all configured output
         """
-        metric = self.check_threshold(metric)
+        if metric.get('status_of') is None:
+            metric = self.check_threshold(metric)
 
         self._store_last_value(metric)
 
@@ -729,6 +730,10 @@ class Core:
     def check_threshold(self, metric):
         """ Check if threshold is defined for given metric. If yes, check
             it and add a "status" tag.
+
+            Also emit another metric suffixed with _status. The value
+            of this metrics is 0, 1, 2 or 3 for ok, warning, critical
+            and unknown respectively.
         """
         threshold = self.get_threshold(
             metric['measurement'], metric.get('item')
@@ -744,20 +749,32 @@ class Core:
         if (threshold.get('low_critical') is not None
                 and value < threshold.get('low_critical')):
             status = 'critical'
+            status_value = 2.0
         elif (threshold.get('low_warning') is not None
                 and value < threshold.get('low_warning')):
             status = 'warning'
+            status_value = 1.0
         elif (threshold.get('high_critical') is not None
                 and value > threshold.get('high_critical')):
             status = 'critical'
+            status_value = 2.0
         elif (threshold.get('high_warning') is not None
                 and value > threshold.get('high_warning')):
             status = 'warning'
+            status_value = 1.0
         else:
             status = 'ok'
+            status_value = 0.0
 
         metric = metric.copy()
         metric['status'] = status
+
+        metric_status = metric.copy()
+        metric_status['measurement'] = metric['measurement'] + '_status'
+        metric_status['value'] = status_value
+        metric_status['status_of'] = metric['measurement']
+        self.emit_metric(metric_status)
+
         return metric
 
     def get_last_metric(self, name, item):

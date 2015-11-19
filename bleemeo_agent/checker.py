@@ -202,7 +202,7 @@ class Check:
             return_code = STATUS_UNKNOWN
 
         metric = {
-            'measurement': '%s_check' % self.service,
+            'measurement': '%s_status' % self.service,
             'status': STATUS_NAME[return_code],
             'service': self.service,
             'time': self.last_run,

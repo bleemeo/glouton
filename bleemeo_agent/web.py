@@ -43,7 +43,8 @@ def _gather_checks_info():
     check_count_critical = 0
     checks = []
     for metric in app.core.last_metrics.values():
-        if metric.get('status') is not None:
+        if (metric.get('status') is not None
+                and metric.get('status_of') is None):
             if metric['status'] == 'ok':
                 check_count_ok += 1
             elif metric['status'] == 'warning':
