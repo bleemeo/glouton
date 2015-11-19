@@ -698,24 +698,17 @@ class Core:
         measurement = metric['measurement']
         self.last_metrics[(measurement, item)] = metric
 
-    def emit_metric(self, metric, no_emit=False):
+    def emit_metric(self, metric):
         """ Sent a metric to all configured output
-
-            When no_emit is True, metric is only stored in last_metric
-            and not sent to backend (InfluxDB and Bleemeo).
-            Usefull for metric needed to compute derivated one like CPU
-            usage from one core.
         """
-        if not no_emit:
-            metric = self.check_threshold(metric)
+        metric = self.check_threshold(metric)
 
         self._store_last_value(metric)
 
-        if not no_emit:
-            if self.bleemeo_connector is not None:
-                self.bleemeo_connector.emit_metric(metric)
-            if self.influx_connector is not None:
-                self.influx_connector.emit_metric(metric)
+        if self.bleemeo_connector is not None:
+            self.bleemeo_connector.emit_metric(metric)
+        if self.influx_connector is not None:
+            self.influx_connector.emit_metric(metric)
 
     def update_last_report(self):
         self.last_report = max(datetime.datetime.now(), self.last_report)

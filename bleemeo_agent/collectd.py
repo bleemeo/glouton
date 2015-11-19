@@ -425,7 +425,6 @@ class Collectd(threading.Thread):
             return
         match_dict = match.groupdict()
 
-        no_emit = False
         item = None
         service = None
 
@@ -599,7 +598,7 @@ class Collectd(threading.Thread):
         if item is not None:
             metric['item'] = item
 
-        self.core.emit_metric(metric, no_emit=no_emit)
+        self.core.emit_metric(metric)
 
     def _disk_path_rename(self, path):
         """ Rename (and possibly ignore) a disk partition
