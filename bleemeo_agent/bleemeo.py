@@ -124,7 +124,7 @@ class BleemeoConnector(threading.Thread):
             '%s.bleemeo.com' % self.account_id)
 
         self.mqtt_client.username_pw_set(
-            self.agent_uuid,
+            '%s@bleemeo.com' % self.agent_uuid,
             self.core.state.get('password'),
         )
 
