@@ -124,8 +124,8 @@ class BleemeoConnector(threading.Thread):
             '%s.bleemeo.com' % self.account_id)
 
         self.mqtt_client.username_pw_set(
-            '%s@bleemeo.com' % self.agent_uuid,
-            self.core.state.get('password'),
+            self.agent_username,
+            self.agent_password,
         )
 
         try:
@@ -226,9 +226,10 @@ class BleemeoConnector(threading.Thread):
             logging.debug('Register delayed, fact fqdn not available')
             return
 
+        registration_key = self.core.config.get('bleemeo.registration_key')
         payload = {
             'account': self.account_id,
-            'password': self.core.state.get('password'),
+            'initial_password': self.core.state.get('password'),
             'display_name': name,
             'fqdn': name,
         }
@@ -238,6 +239,7 @@ class BleemeoConnector(threading.Thread):
             response = requests.post(
                 registration_url,
                 data=payload,
+                auth=('%s@bleemeo.com' % self.account_id, registration_key),
                 headers={'X-Requested-With': 'XMLHttpRequest'},
             )
             if response.status_code == 201:
@@ -294,7 +296,10 @@ class BleemeoConnector(threading.Thread):
             if metric_uuid is None:
                 continue
             metric_url = metric_base_url + metric_uuid + '/'
-            response = requests.get(metric_url)
+            response = requests.get(
+                metric_url,
+                auth=(self.agent_username, self.agent_password),
+            )
             if response.status_code == 200:
                 data = response.json()
                 thresholds[(metric_name, item)] = {
@@ -354,6 +359,7 @@ class BleemeoConnector(threading.Thread):
                 response = method(
                     url,
                     data=payload,
+                    auth=(self.agent_username, self.agent_password),
                     headers={'X-Requested-With': 'XMLHttpRequest'},
                 )
                 if response.status_code != expected_code:
@@ -399,6 +405,7 @@ class BleemeoConnector(threading.Thread):
                     response = requests.post(
                         registration_url,
                         data=payload,
+                        auth=(self.agent_username, self.agent_password),
                         headers={'X-Requested-With': 'XMLHttpRequest'},
                     )
                     if response.status_code != 201:
@@ -455,6 +462,7 @@ class BleemeoConnector(threading.Thread):
                     'Deleting fact %s (uuid=%s)', fact_name, fact_uuid)
                 response = requests.delete(
                     urllib_parse.urljoin(fact_url, '%s/' % fact_uuid),
+                    auth=(self.agent_username, self.agent_password),
                     headers={'X-Requested-With': 'XMLHttpRequest'},
                 )
                 if response.status_code == 204:
@@ -482,6 +490,7 @@ class BleemeoConnector(threading.Thread):
                 response = requests.post(
                     fact_url,
                     data=payload,
+                    auth=(self.agent_username, self.agent_password),
                     headers={'X-Requested-With': 'XMLHttpRequest'},
                 )
                 if response.status_code == 201:
@@ -523,6 +532,14 @@ class BleemeoConnector(threading.Thread):
     @property
     def agent_uuid(self):
         return self.core.state.get('agent_uuid')
+
+    @property
+    def agent_username(self):
+        return '%s@bleemeo.com' % self.agent_uuid
+
+    @property
+    def agent_password(self):
+        return self.core.state.get('password')
 
     @property
     def bleemeo_base_url(self):
