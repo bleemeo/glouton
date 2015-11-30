@@ -26,10 +26,14 @@ def home():
         if metric['measurement'] == 'net_bits_recv'
     ]
 
+    uptime_seconds = bleemeo_agent.util.get_uptime()
+    uptime_string = bleemeo_agent.util.format_uptime(uptime_seconds)
+
     return flask.render_template(
         'index.html',
         core=app.core,
         loads=' '.join('%.2f' % x for x in loads),
+        uptime=uptime_string,
         check_info=check_info,
         top_output=top_output,
         disks_used_perc=disks_used_perc,

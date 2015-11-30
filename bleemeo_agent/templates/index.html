@@ -9,7 +9,7 @@
         {% if core.last_facts['product_name'] %}
         {{ core.last_facts['product_name'] }}<br/>
         {% endif %}
-        Uptime: {{ core.last_facts['uptime'] }}<br/>
+        Uptime: {{ uptime }}<br/>
         Load: {{ loads }}<br/>
         <!-- Registration: 1st January 1970 {# TODO #}<br/> -->
         Last Report: {{ core.last_report.strftime('%c') }}<br/>

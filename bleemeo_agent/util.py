@@ -57,9 +57,6 @@ def get_facts(core):
     else:
         product_name = ''
 
-    uptime_seconds = get_uptime()
-    uptime_string = format_uptime(uptime_seconds)
-
     primary_address = get_primary_address()
 
     # Basic "minimal" facts
@@ -67,8 +64,6 @@ def get_facts(core):
         'hostname': socket.gethostname(),
         'fqdn': socket.getfqdn(),
         'os_pretty_name': pretty_name,
-        'uptime': uptime_string,
-        'uptime_seconds': uptime_seconds,
         'primary_address': primary_address,
         'product_name': product_name,
         'agent_version': bleemeo_agent.__version__,
