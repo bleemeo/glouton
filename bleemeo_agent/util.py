@@ -46,34 +46,80 @@ def get_facts(core):
 
         Returned facts are informations like hostname, OS type/version, etc
     """
-    if os.path.exists('/etc/os-release'):
-        pretty_name = get_os_pretty_name()
-    else:
-        pretty_name = 'Unknown OS'
+    os_information = read_os_release()
+    try:
+        os_codename = subprocess.check_output(
+            ['lsb_release', '--codename', '--short']
+        ).decode('utf8').strip()
+    except OSError:
+        os_codename = None
 
     if os.path.exists('/sys/devices/virtual/dmi/id/product_name'):
         with open('/sys/devices/virtual/dmi/id/product_name') as fd:
             product_name = fd.read()
     else:
-        product_name = ''
+        product_name = None
 
     primary_address = get_primary_address()
+    architecture = subprocess.check_output(
+        ['uname', '--machine']
+    ).decode('utf8').strip()
+    fqdn = socket.getfqdn()
+    if '.' in fqdn:
+        (hostname, domain) = fqdn.split('.', 1)
+    else:
+        (hostname, domain) = (fqdn, None)
+    kernel = subprocess.check_output(
+        ['uname', '--kernel-name']
+    ).decode('utf8').strip()
+    kernel_release = subprocess.check_output(
+        ['uname', '--kernel-release']
+    ).decode('utf8').strip()
+    kernel_version = kernel_release.split('-')[0]
+    kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
 
-    # Basic "minimal" facts
+    try:
+        with open('/etc/timezone', 'r') as content_file:
+            timezone = content_file.read().strip()
+    except IOError:
+        timezone = None
+
     facts = {
-        'hostname': socket.gethostname(),
-        'fqdn': socket.getfqdn(),
-        'os_pretty_name': pretty_name,
+        'agent_version': bleemeo_agent.__version__,
+        'architecture': architecture,
+        'current_time': datetime.datetime.now().isoformat(),
+        'domain': domain,
+        'fqdn': fqdn,
+        'hostname': hostname,
+        'kernel': kernel,
+        'kernel_major_version': kernel_major_version,
+        'kernel_release': kernel_release,
+        'kernel_version': kernel_version,
+        'os_codename': os_codename,
+        'os_family': os_information.get('ID_LIKE', None),
+        'os_name': os_information.get('NAME', None),
+        'os_pretty_name': os_information.get('PRETTY_NAME', None),
+        'os_version': os_information.get('VERSION_ID', None),
+        'os_version_long': os_information.get('VERSION', None),
         'primary_address': primary_address,
         'product_name': product_name,
-        'agent_version': bleemeo_agent.__version__,
-        'current_time': datetime.datetime.now().isoformat(),
+        'timezone': timezone,
     }
 
     if core.bleemeo_connector is not None:
         facts['account_uuid'] = core.bleemeo_connector.account_id
 
+    facts = strip_none(facts)
+
     return facts
+
+
+def strip_none(facts):
+    """ Remove facts with "None" as value
+    """
+    return {
+        key: value for (key, value) in facts.items() if value is not None
+    }
 
 
 def get_uptime():
@@ -138,19 +184,23 @@ def format_cpu_time(cpu_time):
         return '%s:%.2f' % (minutes, cpu_time % 60)
 
 
-def get_os_pretty_name():
-    """ Return the PRETTY_NAME from os-release
+def read_os_release():
+    """ Read os-release file and returns its content as dict
+
+        os-relase is a FreeDesktop standard:
+        http://www.freedesktop.org/software/systemd/man/os-release.html
     """
+    result = {}
     with open('/etc/os-release') as fd:
         for line in fd:
             line = line.strip()
-            if line.startswith('PRETTY_NAME'):
-                (_, value) = line.split('=')
-                # value is a quoted string (single or double quote).
-                # Use shlex.split to convert to normal string (handling
-                # correctly if the string contains escaped quote)
-                value = shlex.split(value)[0]
-                return value
+            (key, value) = line.split('=', 1)
+            # value is a quoted string (single or double quote).
+            # Use shlex.split to convert to normal string (handling
+            # correctly if the string contains escaped quote)
+            value = shlex.split(value)[0]
+            result[key] = value
+    return result
 
 
 def get_primary_address():
