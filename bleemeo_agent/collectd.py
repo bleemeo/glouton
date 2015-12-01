@@ -585,6 +585,8 @@ class Collectd(threading.Thread):
                 and match_dict['type_instance'] == 'loop'):
             name = 'ntp_time_offset'
             service = 'ntp'
+            # value is in ms. Convert it to second
+            value = value / 1000.
         else:
             return
 
