@@ -77,6 +77,7 @@ def get_facts(core):
     ).decode('utf8').strip()
     kernel_version = kernel_release.split('-')[0]
     kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
+    virtual = get_virtual_type()
 
     try:
         with open('/etc/timezone', 'r') as content_file:
@@ -104,6 +105,7 @@ def get_facts(core):
         'primary_address': primary_address,
         'product_name': product_name,
         'timezone': timezone,
+        'virtual': virtual,
     }
 
     if core.bleemeo_connector is not None:
@@ -228,6 +230,24 @@ def get_primary_address():
         pass
 
     return None
+
+
+def get_virtual_type():
+    """ Return what virtualization is used. "physical" if it's bare-metal.
+    """
+    result = 'physical'
+    if os.path.exists('/sys/devices/virtual/dmi/id/chassis_vendor'):
+        with open('/sys/devices/virtual/dmi/id/chassis_vendor') as fd:
+            vendor_name = fd.read()
+    else:
+        return result
+
+    if 'qemu' in vendor_name.lower():
+        result = 'qemu'
+    elif 'xen' in vendor_name.lower():
+        result = 'xen'
+
+    return result
 
 
 def run_command_timeout(command, timeout=10):
