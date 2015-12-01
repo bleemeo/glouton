@@ -311,11 +311,19 @@ def get_top_info():
         except KeyError:
             # the uid can't be resolved by the system
             username = str(process.uids().real)
+
+        # Cmdline may be unavailable (permission issue ?)
+        # When unavailable, depending on psutil version, it returns
+        # either [] or ['']
+        if process.cmdline() and process.cmdline()[0]:
+            cmdline = ' '.join(process.cmdline())
+        else:
+            cmdline = process.name()
         processes.append({
             'pid': process.pid,
             'create_time': process.create_time(),
             'name': process.name(),
-            'cmdline': process.cmdline(),
+            'cmdline': cmdline,
             'ppid': process.ppid(),
             'memory_rss': process.memory_info().rss,
             'cpu_percent': process.cpu_percent(),
