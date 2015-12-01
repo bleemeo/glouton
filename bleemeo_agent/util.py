@@ -325,7 +325,7 @@ def get_top_info():
             'name': process.name(),
             'cmdline': cmdline,
             'ppid': process.ppid(),
-            'memory_rss': process.memory_info().rss,
+            'memory_rss': process.memory_info().rss / 1024,
             'cpu_percent': process.cpu_percent(),
             'cpu_times': process.cpu_times().user + process.cpu_times().system,
             'status': process.status(),
@@ -351,16 +351,16 @@ def get_top_info():
             'iowait': cpu_usage.iowait,
         },
         'memory': {
-            'total': memory_usage.total,
-            'used': memory_usage.used,
-            'free': memory_usage.free,
-            'buffers': memory_usage.buffers,
-            'cached': memory_usage.cached,
+            'total': memory_usage.total / 1024,
+            'used': memory_usage.used / 1024,
+            'free': memory_usage.free / 1024,
+            'buffers': memory_usage.buffers / 1024,
+            'cached': memory_usage.cached / 1024,
         },
         'swap': {
-            'total': swap_usage.total,
-            'used': swap_usage.used,
-            'free': swap_usage.free,
+            'total': swap_usage.total / 1024,
+            'used': swap_usage.used / 1024,
+            'free': swap_usage.free / 1024,
         }
     }
 
@@ -404,7 +404,7 @@ def get_top_output(top_info):
             {
                 'pid': metric['pid'],
                 'user': metric['username'],
-                'res': metric['memory_rss'] / 1024,
+                'res': metric['memory_rss'],
                 'status': status,
                 'cpu': metric['cpu_percent'],
                 'mem':
@@ -449,14 +449,14 @@ def get_top_output(top_info):
         cpu_nice='%5.1f' % top_info['cpu']['nice'],
         cpu_idle='%5.1f' % top_info['cpu']['idle'],
         cpu_wait='%5.1f' % top_info['cpu']['iowait'],
-        mem_total='%8d' % (top_info['memory']['total'] / 1024),
-        mem_used='%8d' % (top_info['memory']['used'] / 1024),
-        mem_free='%8d' % (top_info['memory']['free'] / 1024),
-        mem_buffered='%8d' % (top_info['memory']['buffers'] / 1024),
-        mem_cached='%8d' % (top_info['memory']['cached'] / 1024),
-        swap_total='%8d' % (top_info['swap']['total'] / 1024),
-        swap_used='%8d' % (top_info['swap']['used'] / 1024),
-        swap_free='%8d' % (top_info['swap']['free'] / 1024),
+        mem_total='%8d' % top_info['memory']['total'],
+        mem_used='%8d' % top_info['memory']['used'],
+        mem_free='%8d' % top_info['memory']['free'],
+        mem_buffered='%8d' % top_info['memory']['buffers'],
+        mem_cached='%8d' % top_info['memory']['cached'],
+        swap_total='%8d' % top_info['swap']['total'],
+        swap_used='%8d' % top_info['swap']['used'],
+        swap_free='%8d' % top_info['swap']['free'],
         processes=processes,
     )
 
