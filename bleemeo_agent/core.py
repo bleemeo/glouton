@@ -334,7 +334,7 @@ class Core:
             self.is_terminating.set()
 
     def setup_signal(self):
-        """ Make kill (SIGKILL/SIGQUIT) send a KeyboardInterrupt
+        """ Make kill (SIGKILL) send a KeyboardInterrupt
 
             Make SIGHUP trigger a discovery
         """
@@ -351,7 +351,6 @@ class Core:
             )
 
         signal.signal(signal.SIGTERM, handler)
-        signal.signal(signal.SIGQUIT, handler)
         signal.signal(signal.SIGHUP, handler_hup)
 
     def _docker_connect(self):
