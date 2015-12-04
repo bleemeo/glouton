@@ -358,7 +358,7 @@ class Collectd(threading.Thread):
         if name == 'disk_total':
             used = get_metric('disk_used', item)
             value = used + get_metric('disk_free', item)
-            # used_perc could be more that 100% is reserved space is used.
+            # used_perc could be more that 100% if reserved space is used.
             # We limit it to 100% (105% would be confusing).
             used_perc = min(float(used) / value * 100, 100)
 
