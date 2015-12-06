@@ -121,7 +121,8 @@ class BleemeoConnector(threading.Thread):
 
         mqtt_host = self.core.config.get(
             'bleemeo.mqtt.host',
-            '%s.bleemeo.com' % self.account_id)
+            'mqtt.bleemeo.com'
+        )
 
         self.mqtt_client.username_pw_set(
             self.agent_username,
