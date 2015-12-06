@@ -123,6 +123,10 @@ class BleemeoConnector(threading.Thread):
             'bleemeo.mqtt.host',
             'mqtt.bleemeo.com'
         )
+        mqtt_port = self.core.config.get(
+            'bleemeo.mqtt.port',
+            8883,
+        )
 
         self.mqtt_client.username_pw_set(
             self.agent_username,
@@ -133,7 +137,7 @@ class BleemeoConnector(threading.Thread):
             logging.debug('Connecting to MQTT broker at %s', mqtt_host)
             self.mqtt_client.connect(
                 mqtt_host,
-                1883,
+                mqtt_port,
                 60,
             )
         except socket.error:
