@@ -1,0 +1,18 @@
+#!/bin/bash
+
+set -e
+
+
+cd work/bleemeo-agent-*/
+dpkg-buildpackage -S -us -uc
+
+cd ..
+docker run --privileged=true --rm \
+    -v /srv/pbuilder:/srv/pbuilder \
+    -v $(pwd):/srv/workspace -w /srv/workspace \
+    bleemeo/pbuilder pbuilder \
+        build \
+        --basetgz /srv/pbuilder/ubuntu-trusty-amd64-base.tgz \
+        --buildresult /srv/workspace/result \
+        --debbuildopts -sa \
+        bleemeo-agent_*.dsc

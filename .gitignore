@@ -7,3 +7,4 @@ __pycache__
 /state.json
 /generated_values.json
 /etc/agent.conf.d/90-local.conf
+/work
