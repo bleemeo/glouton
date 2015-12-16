@@ -8,7 +8,7 @@ VERSION=0.$(TZ=UTC date +%Y%m%d.%H%M%S)
 mkdir work
 mkdir work/result
 
-git archive --format=tar --output=work/bleemeo-agent_${VERSION}.tar --prefix=bleemeo-agent-${VERSION}/ master
+git archive --format=tar --output=work/bleemeo-agent_${VERSION}.tar --prefix=bleemeo-agent-${VERSION}/ HEAD
 
 cd work
 tar xvf bleemeo-agent_${VERSION}.tar
