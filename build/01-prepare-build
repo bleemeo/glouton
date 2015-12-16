@@ -15,9 +15,13 @@ tar xvf bleemeo-agent_${VERSION}.tar
 
 cd bleemeo-agent-${VERSION}
 rm -f debian/changelog
-DEBEMAIL=jenkins@bleemeo.com DEBFULLNAME="Bleemeo Packaging Team" dch --create \
-    --package bleemeo-agent \
-    --newversion ${VERSION} \
-    --distribution unstable \
-    --urgency low \
-    "Build package based on ${COMMIT_HASH} commit"
+
+docker run --rm -v $(pwd):/srv/workspace -w /srv/workspace \
+    -e DEBEMAIL=jenkins@bleemeo.com -e DEBFULLNAME="Bleemeo Packaging Team" \
+    bleemeo/pbuilder dch \
+        --create \
+        --package bleemeo-agent \
+        --newversion ${VERSION} \
+        --distribution unstable \
+        --urgency low \
+        "Build package based on ${COMMIT_HASH} commit"

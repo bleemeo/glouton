@@ -2,11 +2,10 @@
 
 set -e
 
+cd work
+docker run --rm -v $(pwd):/srv/workspace -w /srv/workspace \
+    bleemeo/pbuilder dpkg-source -b bleemeo-agent-*
 
-cd work/bleemeo-agent-*/
-dpkg-buildpackage -S -us -uc
-
-cd ..
 docker run --privileged=true --rm \
     -v /srv/pbuilder:/srv/pbuilder \
     -v $(pwd):/srv/workspace -w /srv/workspace \
