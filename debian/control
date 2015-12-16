@@ -1,7 +1,7 @@
 Source: bleemeo-agent
 Section: misc
 Priority: extra
-Maintainer: Pierre Fersing <pierre.fersing@bleemeo.com>
+Maintainer: Bleemeo Packaging Team <packaging-team@bleemeo.com>
 Build-Depends: debhelper (>=9),
                dh-exec,
                dh-python,
