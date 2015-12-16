@@ -19,13 +19,13 @@ Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python:Depends},
     adduser,
     collectd,
+    python-paho-mqtt,
     python-psutil (>= 2.0.0~),
 Recommends:
     ca-certificates,
     nagios-plugins,
     python-docker,
     python-influxdb (>= 2.6.0~),
-    python-paho-mqtt,
     sudo,
 Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
