@@ -7,5 +7,8 @@ cd work/result
 dput bleemeo-agent bleemeo-agent_*.changes
 
 REPREPRO_ROOT="/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/"
-docker run --rm -v ${REPREPRO_ROOT}:${REPREPRO_ROOT} -v ${HOME}/.gnupg:/root/.gnupg bleemeo/reprepro reprepro -Vb ${REPREPRO_ROOT} processincoming default
+REPREPRO_DOCKER_CMD="docker run --rm -v ${REPREPRO_ROOT}:${REPREPRO_ROOT} -v ${HOME}/.gnupg:/root/.gnupg bleemeo/reprepro reprepro -Vb ${REPREPRO_ROOT}"
+${REPREPRO_DOCKER_CMD} processincoming default
+${REPREPRO_DOCKER_CMD} copysrc wily trusty bleemeo-agent
+${REPREPRO_DOCKER_CMD} copysrc xenial trusty bleemeo-agent
 
