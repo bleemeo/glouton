@@ -2,7 +2,7 @@
 
 set -e
 
-COMMIT_HASH=$(git rev-parse --short master)
+COMMIT_HASH=$(git rev-parse --short HEAD)
 VERSION=0.$(TZ=UTC date +%Y%m%d.%H%M%S)
 
 mkdir work
