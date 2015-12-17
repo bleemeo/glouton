@@ -108,9 +108,6 @@ def get_facts(core):
         'virtual': virtual,
     }
 
-    if core.bleemeo_connector is not None:
-        facts['account_uuid'] = core.bleemeo_connector.account_id
-
     facts = strip_none(facts)
 
     return facts
