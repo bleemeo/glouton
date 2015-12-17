@@ -21,6 +21,16 @@ LoadPlugin apache
 </Plugin>
 """
 
+MEMCACHED_COLLECTD_CONFIG = """
+LoadPlugin memcached
+<Plugin memcached>
+    <Instance "bleemeo-%(instance)s">
+        Host "%(address)s"
+        Port "%(port)s"
+    </Instance>
+</Plugin>
+"""
+
 MYSQL_COLLECTD_CONFIG = """
 LoadPlugin mysql
 <Plugin mysql>
@@ -159,6 +169,8 @@ class Collectd(threading.Thread):
             service_info['instance'] = instance
             if service_name == 'apache':
                 collectd_config += APACHE_COLLECTD_CONFIG % service_info
+            if service_name == 'memcached':
+                collectd_config += MEMCACHED_COLLECTD_CONFIG % service_info
             if (service_name == 'mysql'
                     and service_info.get('password') is not None):
                 collectd_config += MYSQL_COLLECTD_CONFIG % service_info
@@ -580,6 +592,20 @@ class Collectd(threading.Thread):
                 item = None
 
             service = 'redis'
+        elif (match_dict['plugin'] == 'memcached'
+                and match_dict['plugin_instance'].startswith('bleemeo-')):
+            name = match_dict['type']
+            if match_dict['type_instance']:
+                name += '_' + match_dict['type_instance']
+
+            if not name.startswith('memcached_'):
+                name = 'memcached_' + name
+
+            item = match_dict['plugin_instance'].replace('bleemeo-', '')
+            if item == 'None':
+                item = None
+
+            service = 'memcached'
         elif (match_dict['plugin'] == 'ntpd'
                 and match_dict['type'] == 'time_offset'
                 and match_dict['type_instance'] == 'loop'):

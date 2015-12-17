@@ -56,8 +56,15 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
     },
     '-s ejabberd': {  # beam process
+        'interpreter': 'erlang',
         'service': 'jabber',
         'port': 5222,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    '-s rabbit': {  # beam process
+        'interpreter': 'erlang',
+        'service': 'rabbitmq',
+        'port': 5672,
         'protocol': socket.IPPROTO_TCP,
     },
     'dovecot': {
@@ -142,14 +149,29 @@ KNOWN_PROCESS = {
         'port': 6379,
         'protocol': socket.IPPROTO_TCP,
     },
+    'memcached': {
+        'service': 'memcached',
+        'port': 11211,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'varnishd': {
         'service': 'varnish',
     },
     'org.apache.zookeeper.server.quorum.QuorumPeerMain': {  # java process
+        'interpreter': 'java',
         'service': 'zookeeper',
         'port': 2181,
         'protocol': socket.IPPROTO_TCP,
     },
+    'salt-master': {  # python process
+        'interpreter': 'python',
+        'service': 'salt-master',
+        'port': 4505,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'uwsgi': {
+        'service': 'uwsgi',
+    }
 }
 
 DOCKER_API_VERSION = '1.17'
@@ -176,12 +198,15 @@ def get_service_info(cmdline):
     """ Return service_info from KNOWN_PROCESS matching this command line
     """
     name = os.path.basename(cmdline.split()[0])
-    # For now, special case for java and erlang process.
+    # For now, special case for java, erlang or python process.
     # Need a more general way to manage those case. Every interpreter/VM
     # language are affected.
-    if name == 'java' or name.startswith('beam'):
+    if name in ('java', 'python') or name.startswith('beam'):
         # For them, we search in the command line
         for (key, service_info) in KNOWN_PROCESS.items():
+            # FIXME: we should check that intepreter match the one used.
+            if 'interpreter' not in service_info:
+                continue
             if key in cmdline:
                 return service_info
     else:

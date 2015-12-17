@@ -24,6 +24,11 @@ PROCESS_SERVICE = [
         None,
     ),
     (
+        # Random python process is not a service
+        '/usr/bin/python random_script.py',
+        None,
+    ),
+    (
         # Random erlang process is not a service
         (
             '/usr/lib/erlang/erts-6.2/bin/beam -- -root /usr/lib/erlang '
@@ -85,12 +90,41 @@ PROCESS_SERVICE = [
         'jabber'
     ),
     (
+        (
+            '/usr/lib/erlang/erts-5.10.4/bin/beam -W w -K true -A30 '
+            '-P 1048576 -- -root /usr/lib/erlang -progname erl '
+            '-- -home /var/lib/rabbitmq '
+            '-- -pa /usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../ebin '
+            '-noshell -noinput -s rabbit boot -sname rabbit@trusty '
+            '-boot start_sasl '
+            '-kernel inet_default_connect_options [{nodelay,true}] '
+            '-sasl errlog_type error -sasl sasl_error_logger false '
+            '-rabbit error_logger '
+            '{file,"/var/log/rabbitmq/rabbit@trusty.log"} '
+            '-rabbit sasl_error_logger '
+            '{file,"/var/log/rabbitmq/rabbit@trusty-sasl.log"} '
+            '-rabbit enabled_plugins_file "/etc/rabbitmq/enabled_plugins" '
+            '-rabbit plugins_dir '
+            '"/usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../plugins" '
+            '-rabbit plugins_expand_dir '
+            '"/var/lib/rabbitmq/mnesia/rabbit@trusty-plugins-expand" '
+            '-os_mon start_cpu_sup false -os_mon start_disksup false '
+            '-os_mon start_memsup false '
+            '-mnesia dir "/var/lib/rabbitmq/mnesia/rabbit@trusty"'
+        ),
+        'rabbitmq'
+    ),
+    (
         '/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf',
         'mqtt'
     ),
     (
         '/usr/bin/redis-server 127.0.0.1:6379',
         'redis',
+    ),
+    (
+        '/usr/bin/memcached -m 64 -p 11211 -u memcache -l 127.0.0.1',
+        'memcached'
     ),
     (
         '/usr/sbin/squid3 -N -YC -f /etc/squid3/squid.conf',
@@ -118,6 +152,10 @@ PROCESS_SERVICE = [
             '/etc/zookeeper/conf/zoo.cfg'
         ),
         'zookeeper'
+    ),
+    (
+        '/usr/bin/python /usr/bin/salt-master',
+        'salt-master'
     ),
     (
         '/usr/lib/postfix/master',
@@ -160,6 +198,10 @@ PROCESS_SERVICE = [
     (
         'haproxy -f /usr/local/etc/haproxy/haproxy.cfg',
         'haproxy'
+    ),
+    (
+        'uwsgi --ini /srv/app/deploy/uwsgi.ini',
+        'uwsgi'
     ),
 ]
 
