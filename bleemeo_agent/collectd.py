@@ -567,6 +567,8 @@ class Collectd(threading.Thread):
             if not name.startswith('mysql_'):
                 name = 'mysql_' + name
 
+            name = name.replace('-', '_')
+
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
                 item = None
