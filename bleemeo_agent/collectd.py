@@ -601,6 +601,8 @@ class Collectd(threading.Thread):
             if not name.startswith('memcached_'):
                 name = 'memcached_' + name
 
+            name = name.replace('.', '_')
+
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
                 item = None
