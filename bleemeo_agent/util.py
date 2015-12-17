@@ -88,7 +88,7 @@ def get_facts(core):
     facts = {
         'agent_version': bleemeo_agent.__version__,
         'architecture': architecture,
-        'current_time': datetime.datetime.now().isoformat(),
+        'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
         'domain': domain,
         'fqdn': fqdn,
         'hostname': hostname,
