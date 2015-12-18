@@ -15,6 +15,13 @@ import requests
 import bleemeo_agent
 
 
+# Optional dependencies
+try:
+    import apt
+except ImportError:
+    apt = None
+
+
 # With generate_password, taken from Django project
 # Use the system PRNG if possible
 try:
@@ -86,7 +93,7 @@ def get_facts(core):
         timezone = None
 
     facts = {
-        'agent_version': bleemeo_agent.__version__,
+        'agent_version': get_agent_version(),
         'architecture': architecture,
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
         'domain': domain,
@@ -119,6 +126,18 @@ def strip_none(facts):
     return {
         key: value for (key, value) in facts.items() if value is not None
     }
+
+
+def get_agent_version():
+    if apt is None:
+        return bleemeo_agent.__version__
+
+    cache = apt.Cache()
+    if ('bleemeo-agent' in cache
+            and cache['bleemeo-agent'].installed is not None):
+        return cache['bleemeo-agent'].installed.version
+
+    return bleemeo_agent.__version__
 
 
 def get_uptime():

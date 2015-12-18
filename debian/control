@@ -24,6 +24,7 @@ Depends: ${misc:Depends}, ${python:Depends},
 Recommends:
     ca-certificates,
     nagios-plugins,
+    python-apt,
     python-docker,
     python-influxdb (>= 2.6.0~),
     sudo,
