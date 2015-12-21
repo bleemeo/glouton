@@ -14,6 +14,9 @@ from six.moves import urllib_parse
 import bleemeo_agent
 
 
+MQTT_QUEUE_MAX_SIZE = 500
+
+
 class BleemeoConnector(threading.Thread):
 
     def __init__(self, core):
@@ -21,9 +24,8 @@ class BleemeoConnector(threading.Thread):
         self.core = core
 
         self._metric_queue = queue.Queue()
+        self._mqtt_connected = False
         self._mqtt_queue_size = 0
-        self._mqtt_queue_full_last_warning = 0
-        self._mqtt_queue_full_count_warning = 0
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
         self._last_threshold_update = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
@@ -36,9 +38,11 @@ class BleemeoConnector(threading.Thread):
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
+            self._mqtt_connected = True
             logging.debug('MQTT connection established')
 
     def on_disconnect(self, client, userdata, rc):
+        self._mqtt_connected = False
         logging.debug('MQTT connection lost')
 
     def on_publish(self, client, userdata, mid):
@@ -59,13 +63,17 @@ class BleemeoConnector(threading.Thread):
                 raise StopIteration
             config = self.core.reload_config()
             sleep_delay = min(sleep_delay * 2, 600)
-            self._warn_mqtt_queue_full()
 
         if self.core.state.get('password') is None:
             self.core.state.set(
                 'password', bleemeo_agent.util.generate_password())
 
     def run(self):
+        self.core.scheduler.add_interval_job(
+            self._bleemeo_health_check,
+            seconds=60,
+        )
+
         try:
             self.check_config_requirement()
         except StopIteration:
@@ -96,6 +104,34 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.disconnect()
         self.mqtt_client.loop()
+
+    def _bleemeo_health_check(self):
+        """ Check the Bleemeo connector works correctly. Log any issue found
+        """
+        if self.agent_uuid is None:
+            logging.info('Agent not yet registered')
+
+        if not self._mqtt_connected:
+            logging.info(
+                'Bleemeo connection (MQTT) is currently not established'
+            )
+
+        if self._mqtt_queue_size >= MQTT_QUEUE_MAX_SIZE:
+            logging.warning(
+                'Sending queue to Bleemeo Cloud is full. '
+                'New messages are dropped'
+            )
+        elif self._mqtt_queue_size > 10:
+            logging.info(
+                '%s messages waiting to be sent to Bleemeo Cloud',
+                self._mqtt_queue_size,
+            )
+
+        if self._metric_queue.qsize() > 10:
+            logging.info(
+                '%s metric points blocked due to metric not yet registered',
+                self._metric_queue.qsize(),
+            )
 
     def _mqtt_setup(self):
         self.mqtt_client.will_set(
@@ -198,8 +234,6 @@ class BleemeoConnector(threading.Thread):
                 json.dumps(metrics)
             )
 
-        self._warn_mqtt_queue_full()
-
     def publish_top_info(self, top_info):
         if self.agent_uuid is None:
             return
@@ -210,8 +244,7 @@ class BleemeoConnector(threading.Thread):
         )
 
     def publish(self, topic, message):
-        if self._mqtt_queue_size > 500:
-            self._mqtt_queue_full_count_warning += 1
+        if self._mqtt_queue_size > MQTT_QUEUE_MAX_SIZE:
             return
 
         self.mqtt_client.publish(
@@ -518,17 +551,6 @@ class BleemeoConnector(threading.Thread):
             self.core.state.set('facts_uuid', facts_uuid)
 
         self._last_facts_sent = datetime.datetime.now()
-
-    def _warn_mqtt_queue_full(self):
-        now = time.time()
-        if (self._mqtt_queue_full_count_warning
-                and self._mqtt_queue_full_last_warning < now - 60):
-            logging.warning(
-                'Bleemeo connector: %s message(s) were dropped due to '
-                'overflow of the sending queue',
-                self._mqtt_queue_full_count_warning)
-            self._mqtt_queue_full_last_warning = now
-            self._mqtt_queue_full_count_warning = 0
 
     @property
     def account_id(self):
