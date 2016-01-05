@@ -5,6 +5,7 @@ __pycache__
 /.tox
 /.cache
 /state.json
+/facts.yaml
 /generated_values.json
 /etc/agent.conf.d/90-local.conf
 /work

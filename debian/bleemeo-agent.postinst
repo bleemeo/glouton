@@ -19,6 +19,9 @@ case "$1" in
                 /etc/init.d/collectd restart || exit $?
             fi
         fi
+
+        # Retrive fact that need root privilege
+        bleemeo-agent-gather-facts
         ;;
 esac
 

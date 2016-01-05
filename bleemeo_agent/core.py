@@ -18,6 +18,7 @@ import bleemeo_agent
 import bleemeo_agent.checker
 import bleemeo_agent.collectd
 import bleemeo_agent.config
+import bleemeo_agent.facts
 import bleemeo_agent.util
 import bleemeo_agent.web
 
@@ -693,7 +694,7 @@ class Core:
 
     def update_facts(self):
         """ Update facts """
-        self.last_facts = bleemeo_agent.util.get_facts(self)
+        self.last_facts = bleemeo_agent.facts.get_facts(self)
         self.last_facts_update = datetime.datetime.now()
 
     def send_top_info(self):
