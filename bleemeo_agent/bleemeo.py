@@ -145,7 +145,6 @@ class BleemeoConnector(threading.Thread):
                     'bleemeo.mqtt.cafile',
                     '/etc/ssl/certs/ca-certificates.crt'
                 ),
-                tls_version=ssl.PROTOCOL_TLSv1_2
             )
             self.mqtt_client.tls_insecure_set(
                 self.core.config.get('bleemeo.mqtt.ssl_insecure', False)
