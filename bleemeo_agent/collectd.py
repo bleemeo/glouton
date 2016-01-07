@@ -408,10 +408,15 @@ class Collectd(threading.Thread):
             return
 
         if name in ('mem_total', 'swap_total'):
+            if value == 0:
+                value_perc = 0.0
+            else:
+                value_perc = float(used) / value * 100
+
             self.core.emit_metric({
                 'measurement': name.replace('_total', '_used_perc'),
                 'time': timestamp,
-                'value': float(used) / value * 100,
+                'value': value_perc,
             })
 
         metric = {
