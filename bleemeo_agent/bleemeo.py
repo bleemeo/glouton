@@ -358,61 +358,55 @@ class BleemeoConnector(threading.Thread):
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/service/')
 
-        changed = False
-
-        try:
-            for key, service_info in self.core.discovered_services.items():
-                (service_name, instance) = key
-                entry = {
-                    'address': service_info['address'],
-                }
-                if service_info.get('protocol') is not None:
-                    entry['port'] = service_info['port']
-                    entry['protocol'] = service_info['protocol']
-                if key in self.services_uuid:
-                    entry['uuid'] = self.services_uuid[key]['uuid']
-                    # check for possible update
-                    if self.services_uuid[key] == entry:
-                        # already registered and up-to-date
-                        continue
-                    method = requests.put
-                    service_uuid = self.services_uuid[key]['uuid']
-                    url = registration_url + str(service_uuid) + '/'
-                    expected_code = 200
-                else:
-                    method = requests.post
-                    url = registration_url
-                    expected_code = 201
-
-                payload = entry.copy()
-                payload.update({
-                    'account': self.account_id,
-                    'agent': self.agent_uuid,
-                    'label': service_name,
-                })
-                if instance is not None:
-                    payload['instance'] = instance
-
-                response = method(
-                    url,
-                    data=payload,
-                    auth=(self.agent_username, self.agent_password),
-                    headers={'X-Requested-With': 'XMLHttpRequest'},
-                )
-                if response.status_code != expected_code:
-                    logging.debug(
-                        'Service registration failed. Server response = %s',
-                        response.content
-                    )
+        for key, service_info in self.core.discovered_services.items():
+            (service_name, instance) = key
+            entry = {
+                'address': service_info['address'],
+            }
+            if service_info.get('protocol') is not None:
+                entry['port'] = service_info['port']
+                entry['protocol'] = service_info['protocol']
+            if key in self.services_uuid:
+                entry['uuid'] = self.services_uuid[key]['uuid']
+                # check for possible update
+                if self.services_uuid[key] == entry:
+                    # already registered and up-to-date
                     continue
-                entry['uuid'] = response.json()['id']
-                self.services_uuid[key] = entry
-                changed = True
-        finally:
-            if changed:
-                self.core.state.set_complex_dict(
-                    'services_uuid', self.services_uuid
+                method = requests.put
+                service_uuid = self.services_uuid[key]['uuid']
+                url = registration_url + str(service_uuid) + '/'
+                expected_code = 200
+            else:
+                method = requests.post
+                url = registration_url
+                expected_code = 201
+
+            payload = entry.copy()
+            payload.update({
+                'account': self.account_id,
+                'agent': self.agent_uuid,
+                'label': service_name,
+            })
+            if instance is not None:
+                payload['instance'] = instance
+
+            response = method(
+                url,
+                data=payload,
+                auth=(self.agent_username, self.agent_password),
+                headers={'X-Requested-With': 'XMLHttpRequest'},
+            )
+            if response.status_code != expected_code:
+                logging.debug(
+                    'Service registration failed. Server response = %s',
+                    response.content
                 )
+                continue
+            entry['uuid'] = response.json()['id']
+            self.services_uuid[key] = entry
+            self.core.state.set_complex_dict(
+                'services_uuid', self.services_uuid
+            )
 
     def _register_metric(self):
         """ Check for any unregistered metrics and register them
@@ -421,54 +415,49 @@ class BleemeoConnector(threading.Thread):
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         thresholds = self.core.state.get_complex_dict('thresholds', {})
 
-        changed = False
-
-        try:
-            for metric, metric_uuid in self.metrics_uuid.items():
-                (metric_name, service, item) = metric
-                if metric_uuid is None:
-                    logging.debug('Registering metric %s', metric_name)
-                    payload = {
-                        'agent': self.agent_uuid,
-                        'label': metric_name,
-                    }
-                    if item is not None:
-                        payload['item'] = item
-                    if service is not None:
-                        # When a service is set, item == instance
-                        payload['service'] = (
-                            self.services_uuid[(service, item)]['uuid']
-                        )
-                    response = requests.post(
-                        registration_url,
-                        data=payload,
-                        auth=(self.agent_username, self.agent_password),
-                        headers={'X-Requested-With': 'XMLHttpRequest'},
+        for metric, metric_uuid in self.metrics_uuid.items():
+            (metric_name, service, item) = metric
+            if metric_uuid is None:
+                logging.debug('Registering metric %s', metric_name)
+                payload = {
+                    'agent': self.agent_uuid,
+                    'label': metric_name,
+                }
+                if item is not None:
+                    payload['item'] = item
+                if service is not None:
+                    # When a service is set, item == instance
+                    payload['service'] = (
+                        self.services_uuid[(service, item)]['uuid']
                     )
-                    if response.status_code != 201:
-                        logging.debug(
-                            'Metric registration failed. Server response = %s',
-                            response.content
-                        )
-                        return
-                    data = response.json()
-                    self.metrics_uuid[(metric_name, service, item)] = (
-                        data['id']
-                    )
-                    thresholds[(metric_name, item)] = {
-                        'low_warning': data['threshold_low_warning'],
-                        'low_critical': data['threshold_low_critical'],
-                        'high_warning': data['threshold_high_warning'],
-                        'high_critical': data['threshold_high_critical'],
-                    }
+                response = requests.post(
+                    registration_url,
+                    data=payload,
+                    auth=(self.agent_username, self.agent_password),
+                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                )
+                if response.status_code != 201:
                     logging.debug(
-                        'Metric %s registered with uuid %s',
-                        metric_name,
-                        self.metrics_uuid[(metric_name, service, item)],
+                        'Metric registration failed. Server response = %s',
+                        response.content
                     )
-                    changed = True
-        finally:
-            if changed:
+                    return
+                data = response.json()
+                self.metrics_uuid[(metric_name, service, item)] = (
+                    data['id']
+                )
+                thresholds[(metric_name, item)] = {
+                    'low_warning': data['threshold_low_warning'],
+                    'low_critical': data['threshold_low_critical'],
+                    'high_warning': data['threshold_high_warning'],
+                    'high_critical': data['threshold_high_critical'],
+                }
+                logging.debug(
+                    'Metric %s registered with uuid %s',
+                    metric_name,
+                    self.metrics_uuid[(metric_name, service, item)],
+                )
+
                 self.core.state.set_complex_dict(
                     'metrics_uuid', self.metrics_uuid
                 )
@@ -510,11 +499,10 @@ class BleemeoConnector(threading.Thread):
                         response.status_code
                     )
                     return
+                self.core.state.set('facts_uuid', facts_uuid)
         except:
             logging.debug('Failed to remove old facts.', exc_info=True)
             return
-        finally:
-            self.core.state.set('facts_uuid', facts_uuid)
 
         # then create one agentfact for item in the mapping.
         try:
@@ -543,11 +531,10 @@ class BleemeoConnector(threading.Thread):
                         response.content
                     )
                     return
+                self.core.state.set('facts_uuid', facts_uuid)
         except:
             logging.debug('Failed to send facts.', exc_info=True)
             return
-        finally:
-            self.core.state.set('facts_uuid', facts_uuid)
 
         self._last_facts_sent = datetime.datetime.now()
 
