@@ -13,7 +13,10 @@ Quickstart
 
 If you want to try bleemeo-agent, here are the step to run from a git checkout:
 
-* create a virtualenv.
+* create a virtualenv::
+
+    mkvirtualenv -p /usr/bin/python3 bleemeo-agent
+
 * Install bleemeo-agent with its dependencies::
 
     pip install -r requirements.txt
