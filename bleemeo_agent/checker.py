@@ -197,6 +197,8 @@ class Check:
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
             shlex.split(self.check_command))
 
+        output = output.decode('utf-8', 'ignore')
+
         logging.debug(
             'check %s (on %s): return code is %s for command %s',
             self.service, self.instance, return_code, self.check_command_safe
