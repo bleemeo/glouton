@@ -14,7 +14,7 @@ from six.moves import urllib_parse
 import bleemeo_agent
 
 
-MQTT_QUEUE_MAX_SIZE = 500
+MQTT_QUEUE_MAX_SIZE = 2000
 
 
 class BleemeoConnector(threading.Thread):
