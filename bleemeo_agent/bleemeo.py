@@ -238,6 +238,9 @@ class BleemeoConnector(threading.Thread):
         if self.agent_uuid is None:
             return
 
+        if not self._mqtt_connected:
+            return
+
         self.publish(
             'v1/agent/%s/top_info' % self.agent_uuid,
             json.dumps(top_info)
