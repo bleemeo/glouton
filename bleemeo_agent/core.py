@@ -429,7 +429,7 @@ class Core:
         )
         self.scheduler.add_interval_job(
             self.send_top_info,
-            seconds=3,
+            seconds=10,
         )
         self._schedule_metric_pull()
 
