@@ -39,6 +39,8 @@ class BleemeoConnector(threading.Thread):
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             self._mqtt_connected = True
+            # FIXME: PRODUCT-137 : to be removed when upstream bug is fixed
+            self.mqtt_client._ssl.setblocking(0)
             logging.debug('MQTT connection established')
 
     def on_disconnect(self, client, userdata, rc):
