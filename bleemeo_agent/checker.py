@@ -244,4 +244,10 @@ class Check:
                 'Job for check %s (on %s) was already unscheduled',
                 self.service, self.instance
             )
-        self.core.scheduler.unschedule_job(self.current_job)
+        try:
+            self.core.scheduler.unschedule_job(self.current_job)
+        except KeyError:
+            logging.debug(
+                'Job for check %s (on %s) was already unscheduled',
+                self.service, self.instance
+            )

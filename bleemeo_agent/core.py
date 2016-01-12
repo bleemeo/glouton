@@ -347,9 +347,9 @@ class Core:
         try:
             self.setup_signal()
             self._docker_connect()
-            self.schedule_tasks()
             self.start_threads()
             bleemeo_agent.checker.update_checks(self)
+            self.schedule_tasks()
             try:
                 self.scheduler.start()
             finally:
@@ -398,13 +398,6 @@ class Core:
             self.docker_client = None
 
     def schedule_tasks(self):
-        # If we schedule a job with start_date = now, when scheduler pickup
-        # the job, start_date will be in the past and next run will be
-        # current time + interval. In case of daily job, we don't want this.
-        # With now + 3 seconds, when scheduler pickup the job, start_date
-        # is no in the past and used as next run time.
-        # This assume that scheduler will be started in less than 3 seconds
-        now_scheduler = datetime.datetime.now() + datetime.timedelta(seconds=3)
         self.scheduler.add_interval_job(
             func=bleemeo_agent.checker.periodic_check,
             seconds=3,
@@ -415,12 +408,10 @@ class Core:
         )
         self.scheduler.add_interval_job(
             self.update_facts,
-            start_date=now_scheduler,
             hours=24,
         )
         self._discovery_job = self.scheduler.add_interval_job(
             self.update_discovery,
-            start_date=now_scheduler,
             hours=1,
         )
         self.scheduler.add_interval_job(
@@ -432,6 +423,10 @@ class Core:
             seconds=10,
         )
         self._schedule_metric_pull()
+
+        # Call jobs we want to run immediatly
+        self.update_facts()
+        self.update_discovery()
 
     def start_threads(self):
 
