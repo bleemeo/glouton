@@ -42,6 +42,15 @@ except ImportError:
     bleemeo_agent.influxdb = None
 
 
+# List of event that trigger discovery.
+DOCKER_DISCOVERY_EVENTS = [
+    'create',
+    'start',
+    # die event is sent when container stop (normal stop, OOM, docker kill...)
+    'die',
+    'destroy',
+]
+
 ENVIRON_CONFIG_VARS = [
     ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id'),
     ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key'),
@@ -673,6 +682,10 @@ class Core:
                     # We request discovery in 10 seconds to allow newly created
                     # container to start (e.g. "mysqld" process to start, and
                     # not just the wrapper shell script)
+
+                    if event['status'] not in DOCKER_DISCOVERY_EVENTS:
+                        continue
+
                     now = datetime.datetime.now()
                     self.scheduler.unschedule_job(self._discovery_job)
                     self._discovery_job = self.scheduler.add_interval_job(
