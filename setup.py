@@ -26,6 +26,7 @@ setup(
         'docker': ['docker-py'],
         'influxdb': ['influxdb > 2.6.0'],
         'bleemeo': ['paho-mqtt'],
+        'sentry': ['raven'],
     },
     scripts=(
         'bin/bleemeo-agent',

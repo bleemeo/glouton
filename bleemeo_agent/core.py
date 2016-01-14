@@ -7,6 +7,7 @@ import os
 import signal
 import socket
 import subprocess
+import sys
 import threading
 import time
 
@@ -28,6 +29,12 @@ try:
     import docker
 except ImportError:
     docker = None
+
+# Optional dependencies
+try:
+    import raven
+except ImportError:
+    raven = None
 
 try:
     # May fail because of missing mqtt dependency
@@ -196,10 +203,6 @@ def main():
     try:
         core = Core()
         core.run()
-    except Exception:
-        logging.critical(
-            'Unhandled error occured. Agent will terminate',
-            exc_info=True)
     finally:
         logging.info('Agent stopped')
 
@@ -292,6 +295,7 @@ class Core:
         self.reload_config()
         self._config_logger()
         logging.info('Agent starting...')
+        self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = datetime.datetime(1970, 1, 1)
         self.top_info = None
@@ -305,6 +309,7 @@ class Core:
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
+        self._sentry_setup()
         self.thresholds = self.define_thresholds()
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = self.state.get_complex_dict(
@@ -332,6 +337,23 @@ class Core:
         }
         logger_config.update(self.config.get('logging', {}))
         logging.config.dictConfig(logger_config)
+
+    def _sentry_setup(self):
+        """ Configure Sentry if enabled
+        """
+        dsn = self.config.get('bleemeo.sentry.dsn')
+        if not dsn:
+            return
+
+        if raven is not None:
+            self.sentry_client = raven.Client(
+                dsn,
+                release=bleemeo_agent.facts.get_agent_version(),
+                include_paths=['bleemeo_agent'],
+            )
+            # FIXME: remove when raven-python PR #723 is merged
+            # https://github.com/getsentry/raven-python/pull/723
+            install_thread_hook(self.sentry_client)
 
     def define_thresholds(self):
         self.thresholds = self.config.get('thresholds', {})
@@ -845,3 +867,29 @@ class Core:
         """
         if self.bleemeo_connector is not None:
             return self.bleemeo_connector.agent_uuid
+
+
+def install_thread_hook(raven_self):
+    """
+    Workaround for sys.excepthook thread bug
+    http://bugs.python.org/issue1230540
+
+    PR submitted to raven-python
+    https://github.com/getsentry/raven-python/pull/723
+    """
+    init_old = threading.Thread.__init__
+
+    def init(self, *args, **kwargs):
+        init_old(self, *args, **kwargs)
+        run_old = self.run
+
+        def run_with_except_hook(*args, **kw):
+            try:
+                run_old(*args, **kw)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                raven_self.captureException(exc_info=sys.exc_info())
+                raise
+        self.run = run_with_except_hook
+    threading.Thread.__init__ = init

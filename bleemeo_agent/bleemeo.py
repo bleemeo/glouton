@@ -76,6 +76,9 @@ class BleemeoConnector(threading.Thread):
             seconds=60,
         )
 
+        if self.core.sentry_client and self.agent_uuid:
+            self.core.sentry_client.site = self.agent_uuid
+
         try:
             self.check_config_requirement()
         except StopIteration:
@@ -307,6 +310,9 @@ class BleemeoConnector(threading.Thread):
                 'Registration failed, content (json) = %s',
                 content
             )
+
+        if self.core.sentry_client and self.agent_uuid:
+            self.core.sentry_client.site = self.agent_uuid
 
     def _register_bleemeo_objects(self):
         """ Check for unregistered object with Bleemeo SaaS

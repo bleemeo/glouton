@@ -1,2 +1,2 @@
 # Dependencies are in setup.py's install_requires
--e .[bleemeo,docker,influxdb]
+-e .[bleemeo,docker,influxdb,sentry]
