@@ -35,6 +35,7 @@ class BleemeoConnector(threading.Thread):
         self.services_uuid = self.core.state.get_complex_dict(
             'services_uuid', {}
         )
+        self.metrics_info = {}
 
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
@@ -428,9 +429,26 @@ class BleemeoConnector(threading.Thread):
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         thresholds = self.core.state.get_complex_dict('thresholds', {})
 
-        for metric, metric_uuid in self.metrics_uuid.items():
-            (metric_name, service, item) = metric
+        for metric_key, metric_uuid in self.metrics_uuid.items():
+            if metric_key not in self.metrics_info:
+                # This should only occur when metric were seen on a previous
+                # run (and stored in state.json) but not yet registered.
+                # If the metric still exists, it should be quickly fixed. If
+                # not... we will never register that metric (anyway it doesn't
+                # have any points sent)
+                continue
+            (metric_name, service, item) = metric_key
+            status_of = self.metrics_info[metric_key].get('status_of')
+            from_metric_key = (status_of, service, item)
             if metric_uuid is None:
+                if (status_of is not None
+                        and self.metrics_uuid.get(from_metric_key) is None):
+                    logging.debug(
+                        'Metric %s is status_of unregistered metric %s',
+                        metric_name,
+                        status_of,
+                    )
+                    continue
                 logging.debug('Registering metric %s', metric_name)
                 payload = {
                     'agent': self.agent_uuid,
@@ -443,6 +461,9 @@ class BleemeoConnector(threading.Thread):
                     payload['service'] = (
                         self.services_uuid[(service, item)]['uuid']
                     )
+                if status_of is not None:
+                    payload['status_of'] = self.metrics_uuid[from_metric_key]
+
                 response = requests.post(
                     registration_url,
                     data=payload,
@@ -456,7 +477,7 @@ class BleemeoConnector(threading.Thread):
                     )
                     return
                 data = response.json()
-                self.metrics_uuid[(metric_name, service, item)] = (
+                self.metrics_uuid[metric_key] = (
                     data['id']
                 )
                 thresholds[(metric_name, item)] = {
@@ -468,7 +489,7 @@ class BleemeoConnector(threading.Thread):
                 logging.debug(
                     'Metric %s registered with uuid %s',
                     metric_name,
-                    self.metrics_uuid[(metric_name, service, item)],
+                    self.metrics_uuid[metric_key],
                 )
 
                 self.core.state.set_complex_dict(
@@ -484,6 +505,11 @@ class BleemeoConnector(threading.Thread):
         service = metric.get('service')
         item = metric.get('item')
 
+        if (metric_name, service, item) not in self.metrics_info:
+            self.metrics_info.setdefault(
+                (metric_name, service, item),
+                {'status_of': metric.get('status_of')}
+            )
         if (metric_name, service, item) not in self.metrics_uuid:
             self.metrics_uuid.setdefault((metric_name, service, item), None)
 
