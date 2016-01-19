@@ -91,7 +91,7 @@ def get_virtual_type():
     """ Return what virtualization is used. "physical" if it's bare-metal.
     """
     result = 'physical'
-    vendor_name = get_file_content(os.path.join(DMI_DIR, 'chassis_vendor'))
+    vendor_name = get_file_content(os.path.join(DMI_DIR, 'sys_vendor'))
 
     if vendor_name is not None and 'qemu' in vendor_name.lower():
         result = 'qemu'
