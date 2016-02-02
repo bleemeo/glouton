@@ -40,6 +40,10 @@ class BleemeoConnector(threading.Thread):
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             self._mqtt_connected = True
+            self.publish(
+                'v1/agent/%s/connect' % self.agent_uuid,
+                'connect',
+            )
             # FIXME: PRODUCT-137 : to be removed when upstream bug is fixed
             if self.mqtt_client._ssl is not None:
                 self.mqtt_client._ssl.setblocking(0)
@@ -187,11 +191,6 @@ class BleemeoConnector(threading.Thread):
             pass
 
         self.mqtt_client.loop_start()
-
-        self.publish(
-            'v1/agent/%s/connect' % self.agent_uuid,
-            'connect',
-        )
 
     def _loop(self):
         """ Call as long as agent is running. It's the "main" method for
