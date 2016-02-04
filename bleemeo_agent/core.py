@@ -791,7 +791,7 @@ class Core:
 
         return threshold
 
-    def check_threshold(self, metric):
+    def check_threshold(self, metric):  # noqa
         """ Check if threshold is defined for given metric. If yes, check
             it and add a "status" tag.
 
@@ -841,16 +841,59 @@ class Core:
         else:
             current_status = last_metric.get('status')
 
+        period = 5 * 60
         status = self._check_soft_status(
             metric,
             soft_status,
             current_status,
+            period,
         )
 
-        status_value = {'ok': 0.0, 'warning': 1.0, 'critical': 2.0}[status]
+        if status == 'ok':
+            text = 'current value: %.2f' % metric['value']
+            status_value = 0.0
+        elif status == 'warning':
+            if (threshold.get('low_warning') is not None
+                    and value < threshold.get('low_warning')):
+                text = (
+                    'current value: %.2f. Metric has been below threshold (%.2f) '
+                    'for the last 5 minutes' % (
+                        metric['value'],
+                        threshold.get('low_warning'),
+                    )
+                )
+            else:
+                text = (
+                    'current value: %.2f. Metric has been above threshold (%.2f) '
+                    'for the last 5 minutes' % (
+                        metric['value'],
+                        threshold.get('high_warning'),
+                    )
+                )
+            status_value = 1.0
+        else:
+            if (threshold.get('low_critical') is not None
+                    and value < threshold.get('low_critical')):
+                text = (
+                    'current value: %.2f. Metric has been below threshold (%.2f) '
+                    'for the last 5 minutes' % (
+                        metric['value'],
+                        threshold.get('low_critical'),
+                    )
+                )
+            else:
+                text = (
+                    'current value: %.2f. Metric has been above threshold (%.2f) '
+                    'for the last 5 minutes' % (
+                        metric['value'],
+                        threshold.get('high_critical'),
+                    )
+                )
+            status_value = 1.0
 
         metric = metric.copy()
         metric['status'] = status
+        metric['check_output'] = text
 
         metric_status = metric.copy()
         metric_status['measurement'] = metric['measurement'] + '_status'
@@ -860,14 +903,13 @@ class Core:
 
         return metric
 
-    def _check_soft_status(self, metric, soft_status, current_status):
+    def _check_soft_status(self, metric, soft_status, current_status, period):
         """ Check if soft_status was in error for at least the grace period
-            of the metric (currently hard-coded at 5 minutes).
+            of the metric.
 
             Return the new status
         """
 
-        period = 5 * 60
         key = (metric['measurement'], metric.get('item'))
         (warning_since, critical_since) = self._soft_status_since.get(
             key,
