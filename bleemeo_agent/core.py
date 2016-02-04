@@ -864,11 +864,8 @@ class Core:
         """ Check if soft_status was in error for at least the grace period
             of the metric (currently hard-coded at 5 minutes).
 
-            Return the new status (either soft_status or current_status)
+            Return the new status
         """
-
-        if soft_status == current_status:
-            return current_status
 
         period = 5 * 60
         key = (metric['measurement'], metric.get('item'))
@@ -876,41 +873,46 @@ class Core:
             key,
             (None, None),
         )
-        if soft_status == 'ok':
-            # when soft_status is ok, immediatly switch to ok status
-            if key in self._soft_status_since:
-                del self._soft_status_since[key]
-            return soft_status
 
-        if soft_status == 'warning':
+        if soft_status == 'critical':
+            critical_since = critical_since or metric['time']
+            warning_since = warning_since or metric['time']
+        elif soft_status == 'warning':
             critical_since = None
             warning_since = warning_since or metric['time']
-            soft_status_duration = time.time() - warning_since
-        elif soft_status == 'critical':
-            warning_since = warning_since or metric['time']
-            critical_since = critical_since or metric['time']
-            soft_status_duration = time.time() - critical_since
-
-        if soft_status_duration >= period:
-            status = soft_status
-            if key in self._soft_status_since:
-                del self._soft_status_since[key]
         else:
-            status = current_status
-            self._soft_status_since[key] = (warning_since, critical_since)
+            critical_since = None
+            warning_since = None
 
         warn_duration = warning_since and (time.time() - warning_since) or 0
         crit_duration = critical_since and (time.time() - critical_since) or 0
-        logging.debug(
-            'metric=%s : soft_status=%s, current_status=%s, result=%s. '
-            'warn for %d second / crit for %d second',
-            key,
-            soft_status,
-            current_status,
-            status,
-            warn_duration,
-            crit_duration,
-        )
+
+        if crit_duration >= period:
+            status = 'critical'
+        elif warn_duration >= period:
+            status = 'warning'
+        elif soft_status == 'warning' and current_status == 'critical':
+            # Downgrade status from critical to warning immediately
+            status = 'warning'
+        elif soft_status == 'ok':
+            # Downgrade status to ok immediately
+            status = 'ok'
+        else:
+            status = current_status
+
+        self._soft_status_since[key] = (warning_since, critical_since)
+
+        if soft_status != status or current_status != status:
+            logging.debug(
+                'metric=%s : soft_status=%s, current_status=%s, result=%s. '
+                'warn for %d second / crit for %d second',
+                key,
+                soft_status,
+                current_status,
+                status,
+                warn_duration,
+                crit_duration,
+            )
 
         return status
 
