@@ -850,22 +850,24 @@ class Core:
         )
 
         if status == 'ok':
-            text = 'current value: %.2f' % metric['value']
+            text = 'Current value: %.2f' % metric['value']
             status_value = 0.0
         elif status == 'warning':
             if (threshold.get('low_warning') is not None
                     and value < threshold.get('low_warning')):
                 text = (
-                    'current value: %.2f. Metric has been below threshold (%.2f) '
-                    'for the last 5 minutes' % (
+                    'Current value: %.2f\n'
+                    'Metric has been below threshold (%.2f) '
+                    'for the last 5 minutes.' % (
                         metric['value'],
                         threshold.get('low_warning'),
                     )
                 )
             else:
                 text = (
-                    'current value: %.2f. Metric has been above threshold (%.2f) '
-                    'for the last 5 minutes' % (
+                    'Current value: %.2f\n'
+                    'Metric has been above threshold (%.2f) '
+                    'for the last 5 minutes.' % (
                         metric['value'],
                         threshold.get('high_warning'),
                     )
@@ -875,16 +877,18 @@ class Core:
             if (threshold.get('low_critical') is not None
                     and value < threshold.get('low_critical')):
                 text = (
-                    'current value: %.2f. Metric has been below threshold (%.2f) '
-                    'for the last 5 minutes' % (
+                    'Current value: %.2f\n'
+                    'Metric has been below threshold (%.2f) '
+                    'for the last 5 minutes.' % (
                         metric['value'],
                         threshold.get('low_critical'),
                     )
                 )
             else:
                 text = (
-                    'current value: %.2f. Metric has been above threshold (%.2f) '
-                    'for the last 5 minutes' % (
+                    'Current value: %.2f\n'
+                    'Metric has been above threshold (%.2f) '
+                    'for the last 5 minutes.' % (
                         metric['value'],
                         threshold.get('high_critical'),
                     )
