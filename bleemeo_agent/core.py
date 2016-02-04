@@ -837,15 +837,15 @@ class Core:
         )
 
         if last_metric is None or last_metric.get('status') is None:
-            current_status = soft_status
+            last_status = soft_status
         else:
-            current_status = last_metric.get('status')
+            last_status = last_metric.get('status')
 
         period = 5 * 60
         status = self._check_soft_status(
             metric,
             soft_status,
-            current_status,
+            last_status,
             period,
         )
 
@@ -903,7 +903,7 @@ class Core:
 
         return metric
 
-    def _check_soft_status(self, metric, soft_status, current_status, period):
+    def _check_soft_status(self, metric, soft_status, last_status, period):
         """ Check if soft_status was in error for at least the grace period
             of the metric.
 
@@ -933,24 +933,24 @@ class Core:
             status = 'critical'
         elif warn_duration >= period:
             status = 'warning'
-        elif soft_status == 'warning' and current_status == 'critical':
+        elif soft_status == 'warning' and last_status == 'critical':
             # Downgrade status from critical to warning immediately
             status = 'warning'
         elif soft_status == 'ok':
             # Downgrade status to ok immediately
             status = 'ok'
         else:
-            status = current_status
+            status = last_status
 
         self._soft_status_since[key] = (warning_since, critical_since)
 
-        if soft_status != status or current_status != status:
+        if soft_status != status or last_status != status:
             logging.debug(
-                'metric=%s : soft_status=%s, current_status=%s, result=%s. '
+                'metric=%s : soft_status=%s, last_status=%s, result=%s. '
                 'warn for %d second / crit for %d second',
                 key,
                 soft_status,
-                current_status,
+                last_status,
                 status,
                 warn_duration,
                 crit_duration,
