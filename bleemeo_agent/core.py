@@ -315,6 +315,7 @@ class Core:
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
         )
+        self._soft_status_since = {}
 
     @property
     def container(self):
@@ -809,25 +810,44 @@ class Core:
         if value is None:
             return metric
 
+        # there is a "soft" status (name taken from Nagios), which is a kind
+        # of instant status. As soon as the value cross a threshold, its
+        # soft-status change. But its status only change if soft-status stay
+        # in error for a period of time (5 minutes by default).
+        # Note: as soon as soft-status is OK, status is OK, there is no period
+        # to wait in this case.
+
         if (threshold.get('low_critical') is not None
                 and value < threshold.get('low_critical')):
-            status = 'critical'
-            status_value = 2.0
+            soft_status = 'critical'
         elif (threshold.get('low_warning') is not None
                 and value < threshold.get('low_warning')):
-            status = 'warning'
-            status_value = 1.0
+            soft_status = 'warning'
         elif (threshold.get('high_critical') is not None
                 and value > threshold.get('high_critical')):
-            status = 'critical'
-            status_value = 2.0
+            soft_status = 'critical'
         elif (threshold.get('high_warning') is not None
                 and value > threshold.get('high_warning')):
-            status = 'warning'
-            status_value = 1.0
+            soft_status = 'warning'
         else:
-            status = 'ok'
-            status_value = 0.0
+            soft_status = 'ok'
+
+        last_metric = self.get_last_metric(
+            metric['measurement'], metric.get('item')
+        )
+
+        if last_metric is None or last_metric.get('status') is None:
+            current_status = soft_status
+        else:
+            current_status = last_metric.get('status')
+
+        status = self._check_soft_status(
+            metric,
+            soft_status,
+            current_status,
+        )
+
+        status_value = {'ok': 0.0, 'warning': 1.0, 'critical': 2.0}[status]
 
         metric = metric.copy()
         metric['status'] = status
@@ -839,6 +859,60 @@ class Core:
         self.emit_metric(metric_status)
 
         return metric
+
+    def _check_soft_status(self, metric, soft_status, current_status):
+        """ Check if soft_status was in error for at least the grace period
+            of the metric (currently hard-coded at 5 minutes).
+
+            Return the new status (either soft_status or current_status)
+        """
+
+        if soft_status == current_status:
+            return current_status
+
+        period = 5 * 60
+        key = (metric['measurement'], metric.get('item'))
+        (warning_since, critical_since) = self._soft_status_since.get(
+            key,
+            (None, None),
+        )
+        if soft_status == 'ok':
+            # when soft_status is ok, immediatly switch to ok status
+            if key in self._soft_status_since:
+                del self._soft_status_since[key]
+            return soft_status
+
+        if soft_status == 'warning':
+            critical_since = None
+            warning_since = warning_since or metric['time']
+            soft_status_duration = time.time() - warning_since
+        elif soft_status == 'critical':
+            warning_since = warning_since or metric['time']
+            critical_since = critical_since or metric['time']
+            soft_status_duration = time.time() - critical_since
+
+        if soft_status_duration >= period:
+            status = soft_status
+            if key in self._soft_status_since:
+                del self._soft_status_since[key]
+        else:
+            status = current_status
+            self._soft_status_since[key] = (warning_since, critical_since)
+
+        warn_duration = warning_since and (time.time() - warning_since) or 0
+        crit_duration = critical_since and (time.time() - critical_since) or 0
+        logging.debug(
+            'metric=%s : soft_status=%s, current_status=%s, result=%s. '
+            'warn for %d second / crit for %d second',
+            key,
+            soft_status,
+            current_status,
+            status,
+            warn_duration,
+            crit_duration,
+        )
+
+        return status
 
     def get_last_metric(self, name, item):
         """ Return the last metric matching name and item.
