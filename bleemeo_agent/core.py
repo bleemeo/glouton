@@ -582,7 +582,13 @@ class Core:
             # Also name start with "/". I think it may have mulitple name
             # and/or other "/" with docker-in-docker.
             container_name = container['Names'][0].lstrip('/')
-            for process in self.docker_client.top(container_name)['Processes']:
+            container_process = (
+                self.docker_client.top(container_name)['Processes']
+            )
+            # In some case Docker return None instead of process list. Make
+            # sure container_process is an iterable
+            container_process = container_process or []
+            for process in container_process:
                 # process[1] is the pid as string. It is the PID from the
                 # point-of-view of root pid namespace.
                 pid = int(process[1])
