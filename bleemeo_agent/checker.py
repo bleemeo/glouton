@@ -241,13 +241,7 @@ class Check:
             self.core.scheduler.unschedule_job(self.open_socket_job)
         except KeyError:
             logging.debug(
-                'Job for check %s (on %s) was already unscheduled',
+                'Job open_socket for check %s (on %s) was already unscheduled',
                 self.service, self.instance
             )
-        try:
-            self.core.scheduler.unschedule_job(self.current_job)
-        except KeyError:
-            logging.debug(
-                'Job for check %s (on %s) was already unscheduled',
-                self.service, self.instance
-            )
+        self.core.scheduler.unschedule_job(self.current_job)

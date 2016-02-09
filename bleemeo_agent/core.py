@@ -380,7 +380,6 @@ class Core:
             self.setup_signal()
             self._docker_connect()
             self.start_threads()
-            bleemeo_agent.checker.update_checks(self)
             self.schedule_tasks()
             try:
                 self.scheduler.start()
@@ -458,7 +457,7 @@ class Core:
 
         # Call jobs we want to run immediatly
         self.update_facts()
-        self.update_discovery()
+        self.update_discovery(first_run=True)
 
     def start_threads(self):
 
@@ -527,19 +526,20 @@ class Core:
             if metric['time'] >= cutoff
         }
 
-    def update_discovery(self):
+    def update_discovery(self, first_run=False):
         discovered_running_services = self._run_discovery()
         new_discovered_services = self.discovered_services.copy()
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
 
-        if new_discovered_services != self.discovered_services:
+        if new_discovered_services != self.discovered_services or first_run:
+            if new_discovered_services != self.discovered_services:
+                logging.debug(
+                    'Update configuration after change in discovered services'
+                )
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
-            logging.debug(
-                'Update configuration after change in discovered services'
-            )
             self.collectd_server.update_discovery()
             bleemeo_agent.checker.update_checks(self)
 
