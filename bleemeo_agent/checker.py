@@ -43,6 +43,9 @@ NAGIOS_CHECKS = {
     'smtp': '/usr/lib/nagios/plugins/check_smtp -H %(address)s',
     'squid': '/usr/lib/nagios/plugins/check_http '
              '-H %(address)s -p %(port)s -e HTTP',
+    'varnish': "/usr/lib/nagios/plugins/check_tcp "
+                 "-H %(address)s -p %(port)s -E -s 'ping\n' -e PONG -j "
+                 "-q 'quit\n'",
     'zookeeper': "/usr/lib/nagios/plugins/check_tcp "
                  "-H %(address)s -p %(port)s -E -s 'ruok\n' -e imok",
 

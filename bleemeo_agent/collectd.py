@@ -21,6 +21,21 @@ LoadPlugin apache
 </Plugin>
 """
 
+BIND_COLLECTD_CONFIG = """
+LoadPlugin bind
+<Plugin bind>
+    URL "http://%(address)s:8053"
+    ParseTime       false
+    OpCodes         true
+    QTypes          true
+
+    ServerStats     true
+    ZoneMaintStats  true
+    ResolverStats   false
+    MemoryStats     true
+</Plugin>
+"""
+
 MEMCACHED_COLLECTD_CONFIG = """
 LoadPlugin memcached
 <Plugin memcached>
@@ -43,11 +58,27 @@ LoadPlugin mysql
 </Plugin>
 """
 
+NGINX_COLLECTD_CONFIG = """
+LoadPlugin nginx
+<Plugin nginx>
+    URL "http://%(address)s:%(port)s/nginx_status"
+</Plugin>
+"""
+
 NTPD_COLLECTD_CONFIG = """
 LoadPlugin ntpd
 <Plugin ntpd>
     Host "%(address)s"
     Port "%(port)s"
+</Plugin>
+"""
+
+OPENLDAP_COLLECTD_CONFIG = """
+LoadPlugin openldap
+<Plugin openldap>
+    <Instance "bleemeo-%(instance)s">
+        URL "ldap://%(address)s/"
+    </Instance>
 </Plugin>
 """
 
@@ -97,6 +128,14 @@ LoadPlugin redis
 </Plugin>
 """
 
+VARNISH_COLLECTD_CONFIG = """
+LoadPlugin varnish
+<Plugin "varnish">
+    <Instance "">
+    </Instance>
+</Plugin>
+"""
+
 # https://collectd.org/wiki/index.php/Naming_schema
 # carbon output change "/" in ".".
 # Example of metic name:
@@ -122,6 +161,8 @@ class Collectd(threading.Thread):
         super(Collectd, self).__init__()
 
         self.core = core
+        self.bind_instance = None
+        self.nginx_instance = None
         self.update_discovery()
 
     def run(self):
@@ -159,23 +200,39 @@ class Collectd(threading.Thread):
                 'Continuing with current configuration')
             logging.debug('exception is:', exc_info=True)
 
-    def _get_collectd_config(self):
+    def _get_collectd_config(self):  # noqa
         has_postgres = False
         collectd_config = BASE_COLLECTD_CONFIG
-        for key, service_info in self.core.discovered_services.items():
+
+        sorted_services = sorted(
+            self.core.discovered_services.keys(),
+            # In couple (service_name, instance) replace instance by an empty
+            # string if it's None. Python 3 can not compare None and str.
+            key=lambda x: (x[0], x[1] or ""),
+        )
+        services_type_seen = set()
+        for key in sorted_services:
             (service_name, instance) = key
 
-            service_info = service_info.copy()
+            service_info = self.core.discovered_services[key].copy()
             service_info['instance'] = instance
             if service_name == 'apache':
                 collectd_config += APACHE_COLLECTD_CONFIG % service_info
+            if service_name == 'bind' and 'bind' not in services_type_seen:
+                collectd_config += BIND_COLLECTD_CONFIG % service_info
+                self.bind_instance = instance
             if service_name == 'memcached':
                 collectd_config += MEMCACHED_COLLECTD_CONFIG % service_info
             if (service_name == 'mysql'
                     and service_info.get('password') is not None):
                 collectd_config += MYSQL_COLLECTD_CONFIG % service_info
+            if service_name == 'nginx' and 'nginx' not in services_type_seen:
+                collectd_config += NGINX_COLLECTD_CONFIG % service_info
+                self.nginx_instance = instance
             if service_name == 'ntp':
                 collectd_config += NTPD_COLLECTD_CONFIG % service_info
+            if service_name == 'openldap':
+                collectd_config += OPENLDAP_COLLECTD_CONFIG % service_info
             if (service_name == 'postgresql'
                     and service_info.get('password') is not None):
                 if not has_postgres:
@@ -184,6 +241,13 @@ class Collectd(threading.Thread):
                 collectd_config += POSTGRESQL_COLLECTD_CONFIG % service_info
             if service_name == 'redis':
                 collectd_config += REDIS_COLLECTD_CONFIG % service_info
+            # collectd could only monitor varnish on same host as collectd
+            if (service_name == 'varnish'
+                    and instance is None
+                    and self.core.config.get('collectd.docker_name') is None):
+                collectd_config += VARNISH_COLLECTD_CONFIG % service_info
+
+            services_type_seen.add(service_name)
 
         return collectd_config
 
@@ -622,6 +686,76 @@ class Collectd(threading.Thread):
             service = 'ntp'
             # value is in ms. Convert it to second
             value = value / 1000.
+        elif match_dict['plugin'] == 'bind':
+            service = 'bind'
+            item = self.bind_instance
+            if (match_dict['plugin_instance'] == 'global-qtypes'
+                    and match_dict['type'] == 'dns_qtype'):
+                name = 'bind_query_%s' % match_dict['type_instance']
+            if (match_dict['plugin_instance'] == 'global-opcodes'
+                    and match_dict['type'] == 'dns_opcode'
+                    and match_dict['type_instance'] == 'QUERY'):
+                name = 'bind_requests'
+            else:
+                return
+        elif match_dict['plugin'] == 'nginx':
+            service = 'nginx'
+            name = match_dict['type'].replace('-', '_')
+            item = self.nginx_instance
+            if match_dict['type_instance']:
+                name += '_' + match_dict['type_instance']
+            if not name.startswith('nginx_'):
+                name = 'nginx_' + name
+        elif (match_dict['plugin'] == 'openldap'
+                and match_dict['plugin_instance'].startswith('bleemeo-')):
+            service = 'openldap'
+            item = match_dict['plugin_instance'].replace('bleemeo-', '')
+            if item == 'None':
+                item = None
+            name = 'openldap_' + match_dict['type']
+
+            if match_dict['type_instance']:
+                name = name + '_' + match_dict['type_instance']
+
+            name = name.replace('-', '_')
+
+            if name == 'openldap_total_connections':
+                name = 'openldap_connections_rate'
+            elif name == 'openldap_current_connections':
+                name = 'openldap_connections'
+            elif '_derive_statistics_' in name:
+                name = name.replace('_derive_statistics_', '_')
+            elif '_derive_waiters_' in name:
+                name = name.replace('_derive_waiters_', '_waiters_')
+            elif '_threads_threads_' in name:
+                name = name.replace('_threads_threads_', '_threads_')
+
+        elif match_dict['plugin'] == 'varnish':
+            service = 'varnish'
+            if match_dict['plugin_instance'].endswith('connections'):
+                name = 'connections_' + match_dict['type_instance']
+            elif match_dict['plugin_instance'].endswith('backend'):
+                name = (
+                    'backend_' +
+                    match_dict['type'] +
+                    '_' +
+                    match_dict['type_instance']
+                )
+                if 'backend_backends' in name:
+                    name = name.replace('backend_backends', 'backend')
+            elif match_dict['plugin_instance'].endswith('cache'):
+                name = 'cache_' + match_dict['type_instance']
+            elif match_dict['plugin_instance'].endswith('shm'):
+                name = 'shm_' + match_dict['type_instance']
+            else:
+                return
+
+            name = 'varnish_' + name.replace('-', '_')
+
+            if name == 'varnish_connections_received':
+                name = 'varnish_requests'
+            elif name == 'varnish_backend_htt_requests':
+                name = 'varnish_backend_requests'
         else:
             return
 

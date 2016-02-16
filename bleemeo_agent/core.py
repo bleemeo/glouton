@@ -173,6 +173,8 @@ KNOWN_PROCESS = {
     },
     'varnishd': {
         'service': 'varnish',
+        'port': 6082,
+        'protocol': socket.IPPROTO_TCP,
     },
     'org.apache.zookeeper.server.quorum.QuorumPeerMain': {  # java process
         'interpreter': 'java',
