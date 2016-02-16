@@ -901,7 +901,7 @@ class Core:
                         threshold.get('high_critical'),
                     )
                 )
-            status_value = 1.0
+            status_value = 2.0
 
         metric = metric.copy()
         metric['status'] = status
