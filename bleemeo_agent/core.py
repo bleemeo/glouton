@@ -714,7 +714,11 @@ class Core:
                     # container to start (e.g. "mysqld" process to start, and
                     # not just the wrapper shell script)
 
-                    if event['status'] not in DOCKER_DISCOVERY_EVENTS:
+                    status = event.get('status')
+                    event_type = event.get('Type', 'container')
+
+                    if (status not in DOCKER_DISCOVERY_EVENTS
+                            or event_type != 'container'):
                         continue
 
                     now = datetime.datetime.now()
