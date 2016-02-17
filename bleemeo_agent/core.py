@@ -17,9 +17,9 @@ from six.moves import configparser
 
 import bleemeo_agent
 import bleemeo_agent.checker
-import bleemeo_agent.collectd
 import bleemeo_agent.config
 import bleemeo_agent.facts
+import bleemeo_agent.graphite
 import bleemeo_agent.util
 import bleemeo_agent.web
 
@@ -308,7 +308,7 @@ class Core:
         self.is_terminating = threading.Event()
         self.bleemeo_connector = None
         self.influx_connector = None
-        self.collectd_server = None
+        self.graphite_server = None
         self.docker_client = None
         self.scheduler = apscheduler.scheduler.Scheduler(standalone=True)
         self.last_metrics = {}
@@ -488,8 +488,8 @@ class Core:
                     bleemeo_agent.influxdb.InfluxDBConnector(self))
                 self.influx_connector.start()
 
-        self.collectd_server = bleemeo_agent.collectd.Collectd(self)
-        self.collectd_server.start()
+        self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
+        self.graphite_server.start()
 
         bleemeo_agent.web.start_server(self)
 
@@ -499,7 +499,7 @@ class Core:
             thread.start()
 
     def _gather_metrics(self):
-        """ Gather and send some metric missing from collectd
+        """ Gather and send some metric missing from other sources
 
             Currently only uptime is sent.
         """
@@ -545,7 +545,7 @@ class Core:
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
-            self.collectd_server.update_discovery()
+            self.graphite_server.update_discovery()
             bleemeo_agent.checker.update_checks(self)
 
     def _get_processes_map(self):
