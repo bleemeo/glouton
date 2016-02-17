@@ -5,6 +5,7 @@ import socket
 import ssl
 import threading
 import time
+import zlib
 
 import paho.mqtt.client as mqtt
 import requests
@@ -249,7 +250,7 @@ class BleemeoConnector(threading.Thread):
 
         self.publish(
             'v1/agent/%s/top_info' % self.agent_uuid,
-            json.dumps(top_info)
+            bytearray(zlib.compress(json.dumps(top_info).encode('utf8')))
         )
 
     def publish(self, topic, message):
