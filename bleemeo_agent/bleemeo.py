@@ -286,9 +286,12 @@ class BleemeoConnector(threading.Thread):
         try:
             response = requests.post(
                 registration_url,
-                data=payload,
+                data=json.dumps(payload),
                 auth=('%s@bleemeo.com' % self.account_id, registration_key),
-                headers={'X-Requested-With': 'XMLHttpRequest'},
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-type': 'application/json',
+                },
             )
             if response.status_code == 201:
                 content = response.json()
@@ -406,9 +409,12 @@ class BleemeoConnector(threading.Thread):
 
             response = method(
                 url,
-                data=payload,
+                data=json.dumps(payload),
                 auth=(self.agent_username, self.agent_password),
-                headers={'X-Requested-With': 'XMLHttpRequest'},
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-type': 'application/json',
+                },
             )
             if response.status_code != expected_code:
                 logging.debug(
@@ -466,9 +472,12 @@ class BleemeoConnector(threading.Thread):
 
                 response = requests.post(
                     registration_url,
-                    data=payload,
+                    data=json.dumps(payload),
                     auth=(self.agent_username, self.agent_password),
-                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                    headers={
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-type': 'application/json',
+                    },
                 )
                 if response.status_code != 201:
                     logging.debug(
@@ -553,9 +562,12 @@ class BleemeoConnector(threading.Thread):
                 }
                 response = requests.post(
                     fact_url,
-                    data=payload,
+                    data=json.dumps(payload),
                     auth=(self.agent_username, self.agent_password),
-                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                    headers={
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Content-type': 'application/json',
+                    },
                 )
                 if response.status_code == 201:
                     facts_uuid[fact_name] = response.json()['id']
