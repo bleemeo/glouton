@@ -296,7 +296,10 @@ class Core:
     def __init__(self):
         self.reload_config()
         self._config_logger()
-        logging.info('Agent starting...')
+        logging.info(
+            'Agent starting... (version=%s)',
+            bleemeo_agent.facts.get_agent_version(),
+        )
         self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = datetime.datetime(1970, 1, 1)

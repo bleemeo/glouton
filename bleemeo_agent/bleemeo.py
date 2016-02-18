@@ -48,11 +48,12 @@ class BleemeoConnector(threading.Thread):
             # FIXME: PRODUCT-137 : to be removed when upstream bug is fixed
             if self.mqtt_client._ssl is not None:
                 self.mqtt_client._ssl.setblocking(0)
-            logging.debug('MQTT connection established')
+            logging.info('MQTT connection established')
 
     def on_disconnect(self, client, userdata, rc):
+        if self._mqtt_connected:
+            logging.info('MQTT connection lost')
         self._mqtt_connected = False
-        logging.debug('MQTT connection lost')
 
     def on_publish(self, client, userdata, mid):
         self._mqtt_queue_size -= 1
