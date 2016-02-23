@@ -10,6 +10,7 @@ case "$1" in
         rm -f /var/lib/bleemeo/facts.yaml
         rm -f /etc/bleemeo/agent.conf.d/30-install.conf
         rm -f /etc/collectd/collectd.conf.d/bleemeo-generated.conf
+        rm -f /etc/telegraf/telegraf.d/bleemeo-generated.conf
         if [ -d /var/lib/bleemeo ]; then
             rmdir --ignore-fail-on-non-empty /var/lib/bleemeo
         fi

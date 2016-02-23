@@ -506,11 +506,12 @@ class Core:
         uptime_seconds = bleemeo_agent.util.get_uptime()
         now = time.time()
 
-        self.emit_metric({
-            'measurement': 'uptime',
-            'time': now,
-            'value': uptime_seconds,
-        })
+        if self.graphite_server.metrics_source != 'telegraf':
+            self.emit_metric({
+                'measurement': 'uptime',
+                'time': now,
+                'value': uptime_seconds,
+            })
 
     def _purge_metrics(self):
         """ Remove old metrics from self.last_metrics

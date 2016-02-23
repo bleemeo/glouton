@@ -121,7 +121,7 @@ def run_command_timeout(command, timeout=10):
         )
     except OSError:
         # Most probably : command not found
-        return (127, "Unable to run command")
+        return (127, b"Unable to run command")
     proc_finished = threading.Event()
     killer_thread = threading.Thread(
         target=_kill_proc, args=(proc, proc_finished, timeout))
@@ -384,3 +384,21 @@ def pull_raw_metric(core, name):
             if metric_config.get('item') is not None:
                 metric['item'] = metric_config.get('item')
             core.emit_metric(metric)
+
+
+def docker_restart(docker_client, container_name):
+    """ Restart a Docker container
+    """
+    docker_client.stop(container_name)
+    for _ in range(10):
+        time.sleep(0.2)
+        container_info = docker_client.inspect_container(container_name)
+        running = container_info['State']['Running']
+        if not running:
+            break
+    if running:
+        logging.info(
+            'container "%s" still running... restart may fail',
+            container_name
+        )
+    docker_client.start(container_name)

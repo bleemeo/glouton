@@ -4,6 +4,7 @@ import socket
 import threading
 
 import bleemeo_agent.collectd
+import bleemeo_agent.telegraf
 
 
 class ComputationFail(Exception):
@@ -20,14 +21,21 @@ class GraphiteServer(threading.Thread):
         super(GraphiteServer, self).__init__()
 
         self.core = core
-        self.collectd = bleemeo_agent.collectd.Collectd(self)
+        if self.metrics_source == 'collectd':
+            self.collectd = bleemeo_agent.collectd.Collectd(self)
+        elif self.metrics_source == 'telegraf':
+            self.telegraf = bleemeo_agent.telegraf.Telegraf(self)
         self.update_discovery()
+
+    @property
+    def metrics_source(self):
+        return self.core.config.get('graphite.metrics_source', 'collectd')
 
     def run(self):
         bind_address = self.core.config.get(
-            'graphite_listener.address', '127.0.0.1')
+            'graphite.listener.address', '127.0.0.1')
         bind_port = self.core.config.get(
-            'graphite_listener.port', 2003)
+            'graphite.listener.port', 2003)
         sock_server = socket.socket()
         sock_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock_server.bind((bind_address, bind_port))
@@ -50,7 +58,10 @@ class GraphiteServer(threading.Thread):
         [x.join() for x in clients]
 
     def update_discovery(self):
-        self.collectd.update_discovery()
+        if self.metrics_source == 'collectd':
+            self.collectd.update_discovery()
+        elif self.metrics_source == 'telegraf':
+            self.telegraf.update_discovery()
 
     def process_client(self, sock_client, addr):
         logging.debug('graphite: client connectd from %s', addr)
@@ -61,7 +72,7 @@ class GraphiteServer(threading.Thread):
             sock_client.close()
             logging.debug('graphite: client %s disconnectd', addr)
 
-    def process_client_inner(self, sock_client):
+    def process_client_inner(self, sock_client):  # noqa
         remain = b''
         sock_client.settimeout(1)
         last_timestamp = 0
@@ -85,9 +96,13 @@ class GraphiteServer(threading.Thread):
             del lines[-1]
 
             for line in lines:
-                # inspired from graphite project : lib/carbon/protocols.py
-                metric, value, timestamp = line.split()
-                (timestamp, value) = (float(timestamp), float(value))
+                metric, value, timestamp = line.split(b' ', 2)
+                # telegraf may emit non-float value. For example
+                # uptime_format value looks like "22:30"
+                try:
+                    (timestamp, value) = (float(timestamp), float(value))
+                except ValueError:
+                    continue  # ignore non-float value
 
                 if timestamp - last_timestamp > 1:
                     # Collectd send us the next "wave" of measure.
@@ -97,8 +112,6 @@ class GraphiteServer(threading.Thread):
                 last_timestamp = timestamp
 
                 metric = metric.decode('utf-8')
-                # the first component is the hostname
-                metric = metric.split('.', 1)[1]
 
                 self.emit_metric(
                     metric, timestamp, value, computed_metrics_pending)
@@ -196,6 +209,14 @@ class GraphiteServer(threading.Thread):
         elif name == 'swap_total':
             used = get_metric('swap_used', item)
             value = used + get_metric('swap_free', item)
+        elif name == 'mem_used':
+            total = get_metric('mem_total', None)
+            value = total - get_metric('mem_available', None)
+            self.core.emit_metric({
+                'measurement': 'mem_used_perc',
+                'time': timestamp,
+                'value': value / total * 100.,
+            })
         else:
             logging.debug('Unknown computed metric %s', name)
             return
@@ -229,10 +250,11 @@ class GraphiteServer(threading.Thread):
 
             Nothing is emitted if metric is unknown
         """
-
-        if name.startswith('telegraf.'):
-            pass
-        else:
+        if name.startswith('telegraf.') and self.metrics_source == 'telegraf':
+            self.telegraf.emit_metric(
+                name, timestamp, value, computed_metrics_pending,
+            )
+        elif self.metrics_source == 'collectd':
             self.collectd.emit_metric(
                 name, timestamp, value, computed_metrics_pending
             )
@@ -246,3 +268,29 @@ class GraphiteServer(threading.Thread):
                 return False
 
         return True
+
+    def _disk_path_rename(self, path):
+        """ Rename (and possibly ignore) a disk partition
+
+            In case of collectd running in a container, it's used to show
+            partition as seen by the host, instead of as seen by a container.
+        """
+        ignored_patterns = self.core.config.get('df.path_ignore', [])
+        for pattern in ignored_patterns:
+            if path.startswith(pattern):
+                return None
+
+        mount_point = self.core.config.get('df.host_mount_point')
+        if mount_point is None:
+            return path
+
+        if not path.startswith(mount_point):
+            # partition don't start with mount_point, so it's a parition
+            # which is only inside the container. Ignore it
+            return None
+
+        path = path.replace(mount_point, '')
+        if not path.startswith('/'):
+            path = '/' + path
+
+        return path

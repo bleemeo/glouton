@@ -1,6 +1,8 @@
 #!/usr/bin/dh-exec
 debian/bleemeo-agent.collectd.conf => etc/collectd/collectd.conf.d/bleemeo.conf
 debian/bleemeo-agent.collectd-generated.conf => etc/collectd/collectd.conf.d/bleemeo-generated.conf
+debian/bleemeo-agent.telegraf.conf => etc/telegraf/telegraf.d/bleemeo.conf
+debian/bleemeo-agent.telegraf-generated.conf => etc/telegraf/telegraf.d/bleemeo-generated.conf
 debian/bleemeo-agent.sudoers => etc/sudoers.d/bleemeo
 debian/bleemeo-agent.apt.conf => etc/apt/apt.conf.d/05bleemeo-agent
 debian/bleemeo-agent.conf => etc/bleemeo/agent.conf.d/05-system.conf
