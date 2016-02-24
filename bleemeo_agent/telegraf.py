@@ -36,6 +36,11 @@ REDIS_TELEGRAF_CONFIG = """
   servers = ["tcp://%(address)s:%(port)s"]
 """
 
+ZOOKEEPER_CONFIG = """
+[[inputs.zookeeper]]
+  servers = ["%(address)s:%(port)s"]
+"""
+
 
 class Telegraf:
 
@@ -125,6 +130,8 @@ class Telegraf:
                 telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
             if service_name == 'redis':
                 telegraf_config += REDIS_TELEGRAF_CONFIG % service_info
+            if service_name == 'zookeeper':
+                telegraf_config += ZOOKEEPER_CONFIG % service_info
 
         return telegraf_config
 
@@ -222,7 +229,6 @@ class Telegraf:
             computed_metrics_pending.add(('cpu_other', None, timestamp))
         elif part[-2] == 'disk':
             path = part[-3]
-            fs_type = part[-4]
             path = self.graphite_server._disk_path_rename(path)
             if path is None:
                 return
@@ -460,6 +466,27 @@ class Telegraf:
             elif name in ('redis_uptime', 'redis_pubsub_patterns',
                           'redis_pubsub_channels', 'redis_keyspace_hitrate'):
                 pass
+            else:
+                return
+        elif part[-2] == 'zookeeper':
+            service = 'zookeeper'
+            server_address = part[-3].replace('_', '.')
+            server_port = int(part[-4])
+            try:
+                item = self.get_service_instance(
+                    service, server_address, server_port
+                )
+            except KeyError:
+                return
+
+            name = 'zookeeper_' + part[-1]
+            if name.startswith('zookeeper_packets_'):
+                derive = True
+            elif name in ('zookeeper_ephemerals_count',
+                          'zookeeper_watch_count', 'zookeeper_znode_count'):
+                pass
+            elif name == 'zookeeper_num_alive_connections':
+                name = 'zookeeper_connections'
             else:
                 return
         else:
