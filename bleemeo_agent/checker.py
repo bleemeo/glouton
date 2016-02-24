@@ -187,7 +187,7 @@ class Check:
         """
         # this call can NOT block, it is called when socket is readable
         buffer = self.tcp_socket.recv(65536)
-        if buffer == '':
+        if buffer == b'':
             # this means connection was closed!
             logging.debug(
                 'check %s (on %s) : connection to %s:%s closed',
