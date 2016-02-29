@@ -1,8 +1,6 @@
 import datetime
 import logging
 import random
-import subprocess
-import threading
 import time
 
 import jinja2
@@ -98,47 +96,6 @@ def format_cpu_time(cpu_time):
         return '%s:%.0f' % (minutes, cpu_time % 60)
     else:
         return '%s:%.2f' % (minutes, cpu_time % 60)
-
-
-def run_command_timeout(command, timeout=10):
-    """ Run a command and wait at most timeout seconds
-
-        Both stdout and stderr and captured and returned.
-
-        Returns (return_code, output)
-    """
-    def _kill_proc(proc, wait_event, timeout):
-        """ function used in a separate thread to kill process """
-        if not wait_event.wait(timeout):
-            # event is not set, so process didn't finished itself
-            proc.terminate()
-
-    try:
-        proc = subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-        )
-    except OSError:
-        # Most probably : command not found
-        return (127, b"Unable to run command")
-    proc_finished = threading.Event()
-    killer_thread = threading.Thread(
-        target=_kill_proc, args=(proc, proc_finished, timeout))
-    killer_thread.start()
-
-    (output, _) = proc.communicate()
-    proc_finished.set()
-    killer_thread.join()
-
-    returncode = proc.returncode
-    if returncode == -15:
-        # code -15 means SIGKILL, which is used by _kill_proc thread
-        # to implement timeout.
-        # Change returncode from timeout to a critical status
-        returncode = 2
-
-    return (returncode, output)
 
 
 def clean_cmdline(cmdline):

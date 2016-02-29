@@ -96,6 +96,9 @@ class GraphiteServer(threading.Thread):
             del lines[-1]
 
             for line in lines:
+                if line == b'':
+                    continue
+
                 metric, value, timestamp = line.split(b' ', 2)
                 # telegraf may emit non-float value. For example
                 # uptime_format value looks like "22:30"
