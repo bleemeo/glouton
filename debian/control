@@ -17,7 +17,7 @@ Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
     adduser,
-    collectd,
+    bleemeo-agent-collectd | bleemeo-agent-telegraf | bleemeo-agent-single,
     python3-paho-mqtt,
     python3-psutil (>= 2.0.0~),
 Recommends:
@@ -31,3 +31,37 @@ Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to
  the SaaS platform
+
+Package: bleemeo-agent-collectd
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${python3:Depends},
+    collectd,
+Conflicts: bleemeo-agent-telegraf, bleemeo-agent-single
+Description: Bleemeo agent with collectd
+ Bleemeo is a solution of Monitoring as a Service.
+ This package contains the agent which send metric to
+ the SaaS platform using Collectd.
+
+Package: bleemeo-agent-telegraf
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${python3:Depends},
+    collectd,
+Conflicts: bleemeo-agent-collectd, bleemeo-agent-single
+Description: Bleemeo agent with collectd
+ Bleemeo is a solution of Monitoring as a Service.
+ This package contains the agent which send metric to
+ the SaaS platform using Telegraf.
+
+Package: bleemeo-agent-single
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${python3:Depends},
+    telegraf,
+Conflicts: bleemeo-agent-collectd, bleemeo-agent-telegraf
+Description: Bleemeo agent with collectd
+ Bleemeo is a solution of Monitoring as a Service.
+ This package contains the agent which send metric to
+ the SaaS platform with no dependency on daemon.
+ This package is appropriate for Docker images.

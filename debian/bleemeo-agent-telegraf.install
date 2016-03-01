@@ -1,0 +1,3 @@
+#!/usr/bin/dh-exec
+debian/bleemeo-agent-telegraf.telegraf.conf => etc/telegraf/telegraf.d/bleemeo.conf
+debian/bleemeo-agent-telegraf.telegraf-generated.conf => etc/telegraf/telegraf.d/bleemeo-generated.conf

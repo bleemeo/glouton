@@ -1,0 +1,26 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    configure)
+        if ! getent passwd bleemeo > /dev/null ; then
+            echo 'Adding system-user bleemeo'
+            adduser --system --group --quiet --home "/var/lib/bleemeo" --no-create-home --disabled-login bleemeo
+
+        fi
+        echo 'Setting permissions for user bleemeo'
+        chown bleemeo:bleemeo /etc/collectd/collectd.conf.d/bleemeo-generated.conf
+        # Bleemeo agent modify collectd configuration.
+        if [ -x "/etc/init.d/collectd" ]; then
+            if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+                invoke-rc.d collectd restart || exit $?
+            else
+                /etc/init.d/collectd restart || exit $?
+            fi
+        fi
+
+        ;;
+esac
+
+#DEBHELPER#
