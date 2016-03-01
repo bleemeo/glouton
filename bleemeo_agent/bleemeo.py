@@ -93,7 +93,7 @@ class BleemeoConnector(threading.Thread):
             return
 
         self.core.scheduler.add_interval_job(
-            self._register_bleemeo_objects,
+            self._bleemeo_synchronize,
             start_date=datetime.datetime.now() + datetime.timedelta(seconds=4),
             seconds=15,
         )
@@ -320,8 +320,8 @@ class BleemeoConnector(threading.Thread):
         if self.core.sentry_client and self.agent_uuid:
             self.core.sentry_client.site = self.agent_uuid
 
-    def _register_bleemeo_objects(self):
-        """ Check for unregistered object with Bleemeo SaaS
+    def _bleemeo_synchronize(self):
+        """ Synchronize object between local state and Bleemeo SaaS
         """
         if self.agent_uuid is None:
             self.register()
@@ -329,15 +329,15 @@ class BleemeoConnector(threading.Thread):
         if self.agent_uuid is None:
             return
 
+        now = datetime.datetime.now()
+        if now - self._last_threshold_update > datetime.timedelta(hours=1):
+            self._retrive_threshold()
+
         self._register_services()
         self._register_metric()
 
         if self._last_facts_sent < self.core.last_facts_update:
             self.send_facts()
-
-        now = datetime.datetime.now()
-        if now - self._last_threshold_update > datetime.timedelta(hours=1):
-            self._retrive_threshold()
 
     def _retrive_threshold(self):
         """ Retrieve threshold for all registered metrics
@@ -345,24 +345,28 @@ class BleemeoConnector(threading.Thread):
         logging.debug('Retrieving thresholds')
         thresholds = {}
         base_url = self.bleemeo_base_url
-        metric_base_url = urllib_parse.urljoin(base_url, '/v1/metric/')
-        for (metric, metric_uuid) in self.metrics_uuid.items():
-            (metric_name, service, item) = metric
-            if metric_uuid is None:
-                continue
-            metric_url = metric_base_url + metric_uuid + '/'
-            response = requests.get(
-                metric_url,
-                auth=(self.agent_username, self.agent_password),
-            )
-            if response.status_code == 200:
-                data = response.json()
-                thresholds[(metric_name, item)] = {
-                    'low_warning': data['threshold_low_warning'],
-                    'low_critical': data['threshold_low_critical'],
-                    'high_warning': data['threshold_high_warning'],
-                    'high_critical': data['threshold_high_critical'],
-                }
+        metric_url = urllib_parse.urljoin(base_url, '/v1/metric/')
+        response = requests.get(
+            metric_url,
+            params={'agent': self.agent_uuid},
+            auth=(self.agent_username, self.agent_password),
+        )
+
+        if response.status_code != 200:
+            return
+
+        for data in response.json():
+            item = data['item']
+            if item == '':
+                # API use "" for no item. Agent use None
+                item = None
+
+            thresholds[(data['label'], item)] = {
+                'low_warning': data['threshold_low_warning'],
+                'low_critical': data['threshold_low_critical'],
+                'high_warning': data['threshold_high_warning'],
+                'high_critical': data['threshold_high_critical'],
+            }
 
         self.core.state.set_complex_dict('thresholds', thresholds)
         self.core.define_thresholds()
