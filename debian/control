@@ -38,6 +38,8 @@ Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
     collectd,
 Conflicts: bleemeo-agent-telegraf, bleemeo-agent-single
+Breaks: bleemeo-agent (<<0.20160301.140200)
+Replaces: bleemeo-agent (<<0.20160301.140200)
 Description: Bleemeo agent with collectd
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to
@@ -49,6 +51,8 @@ Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
     telegraf,
 Conflicts: bleemeo-agent-collectd, bleemeo-agent-single
+Breaks: bleemeo-agent (<<0.20160301.140200)
+Replaces: bleemeo-agent (<<0.20160301.140200)
 Description: Bleemeo agent with collectd
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to
