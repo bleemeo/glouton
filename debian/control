@@ -47,7 +47,7 @@ Package: bleemeo-agent-telegraf
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
-    collectd,
+    telegraf,
 Conflicts: bleemeo-agent-collectd, bleemeo-agent-single
 Description: Bleemeo agent with collectd
  Bleemeo is a solution of Monitoring as a Service.
@@ -58,7 +58,6 @@ Package: bleemeo-agent-single
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
-    telegraf,
 Conflicts: bleemeo-agent-collectd, bleemeo-agent-telegraf
 Description: Bleemeo agent with collectd
  Bleemeo is a solution of Monitoring as a Service.
