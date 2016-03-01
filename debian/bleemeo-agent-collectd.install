@@ -1,3 +1,4 @@
 #!/usr/bin/dh-exec
 debian/bleemeo-agent-collectd.collectd.conf => etc/collectd/collectd.conf.d/bleemeo.conf
 debian/bleemeo-agent-collectd.collectd-generated.conf => etc/collectd/collectd.conf.d/bleemeo-generated.conf
+debian/bleemeo-agent-collectd.graphite_metrics_source.conf => etc/bleemeo/agent.conf.d/30-graphite_metrics_source.conf

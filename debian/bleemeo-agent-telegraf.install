@@ -1,3 +1,4 @@
 #!/usr/bin/dh-exec
 debian/bleemeo-agent-telegraf.telegraf.conf => etc/telegraf/telegraf.d/bleemeo.conf
 debian/bleemeo-agent-telegraf.telegraf-generated.conf => etc/telegraf/telegraf.d/bleemeo-generated.conf
+debian/bleemeo-agent-telegraf.graphite_metrics_source.conf => etc/bleemeo/agent.conf.d/30-graphite_metrics_source.conf

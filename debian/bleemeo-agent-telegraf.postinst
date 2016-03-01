@@ -26,6 +26,14 @@ case "$1" in
                 systemctl restart telegraf.service
             fi
         fi
+        # Bleemeo agent modify its configuration.
+        if [ -x "/etc/init.d/bleemeo-agent" ]; then
+            if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+                invoke-rc.d bleemeo-agent restart || exit $?
+            else
+                /etc/init.d/bleemeo-agent restart || exit $?
+            fi
+        fi
         ;;
 esac
 
