@@ -12,6 +12,12 @@ case "$1" in
         echo 'Setting permissions for user bleemeo'
         chown bleemeo:bleemeo /var/lib/bleemeo
 
+        if [ -e /etc/bleemeo/agent.conf.d/30-install.conf ]; then
+            chown bleemeo:bleemeo /etc/bleemeo/agent.conf.d/30-install.conf
+            chmod 0640 /etc/bleemeo/agent.conf.d/30-install.conf
+        fi
+        chown bleemeo:bleemeo /etc/
+
         # Retrive fact that need root privilege
         bleemeo-agent-gather-facts
         ;;
