@@ -17,7 +17,7 @@ Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
     adduser,
-    bleemeo-agent-collectd | bleemeo-agent-telegraf | bleemeo-agent-single,
+    bleemeo-agent-telegraf | bleemeo-agent-collectd | bleemeo-agent-single,
     python3-paho-mqtt,
     python3-psutil (>= 2.0.0~),
 Recommends:
