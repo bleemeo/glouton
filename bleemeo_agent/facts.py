@@ -181,6 +181,7 @@ def get_facts(core):
         'kernel_major_version': kernel_major_version,
         'kernel_release': kernel_release,
         'kernel_version': kernel_version,
+        'metrics_source': core.graphite_server.metrics_source,
         'os_codename': os_codename,
         'os_family': os_information.get('ID_LIKE', None),
         'os_name': os_information.get('NAME', None),
