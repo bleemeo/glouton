@@ -29,7 +29,7 @@ class GraphiteServer(threading.Thread):
 
     @property
     def metrics_source(self):
-        return self.core.config.get('graphite.metrics_source', 'collectd')
+        return self.core.config.get('graphite.metrics_source', 'telegraf')
 
     def run(self):
         bind_address = self.core.config.get(
