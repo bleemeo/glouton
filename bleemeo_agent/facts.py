@@ -147,6 +147,9 @@ def get_facts(core):
         ['uname', '--machine']
     ).decode('utf8').strip()
     fqdn = socket.getfqdn()
+    if fqdn == 'localhost':
+        fqdn = socket.gethostname()
+
     if '.' in fqdn:
         (hostname, domain) = fqdn.split('.', 1)
     else:
