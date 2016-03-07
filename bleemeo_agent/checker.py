@@ -349,7 +349,7 @@ class Check:
         url = urllib_parse.urljoin(base_url, self.check_info.get('url', '/'))
         start = time.time()
         try:
-            response = requests.get(url, timeout=10)
+            response = requests.get(url, timeout=10, allow_redirects=False)
         except requests.exceptions.ConnectTimeout:
             return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
         except requests.exceptions.RequestException:
