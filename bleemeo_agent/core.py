@@ -662,7 +662,7 @@ class Core:
                     ],
                 )
             except subprocess.CalledProcessError:
-                debian_cnf_raw = ''
+                debian_cnf_raw = b''
 
             debian_cnf = configparser.SafeConfigParser()
             debian_cnf.readfp(io.StringIO(debian_cnf_raw.decode('utf-8')))
