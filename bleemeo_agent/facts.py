@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 import shlex
 import socket
@@ -11,9 +12,9 @@ import bleemeo_agent.config
 
 # Optional dependencies
 try:
-    import apt
+    import apt_pkg
 except ImportError:
-    apt = None
+    apt_pkg = None
 
 
 DMI_DIR = '/sys/devices/virtual/dmi/id/'
@@ -30,13 +31,21 @@ def get_file_content(file_name):
 
 
 def get_agent_version():
-    if apt is None:
+    if apt_pkg is None:
         return bleemeo_agent.__version__
 
-    cache = apt.Cache()
+    try:
+        apt_pkg.init()
+        cache = apt_pkg.Cache(progress=None)
+    except:
+        logging.info(
+            'Failed to initialize APT cache to retrieve agent version'
+        )
+        return bleemeo_agent.__version__
+
     if ('bleemeo-agent' in cache
-            and cache['bleemeo-agent'].installed is not None):
-        return cache['bleemeo-agent'].installed.version
+            and cache['bleemeo-agent'].current_ver is not None):
+        return cache['bleemeo-agent'].current_ver.ver_str
 
     return bleemeo_agent.__version__
 
