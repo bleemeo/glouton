@@ -32,7 +32,7 @@ CHECKS_INFO = {
     'apache': {
         'type': 'http',
     },
-    'imap': {
+    'dovecot': {
         'type': 'imap',
     },
     'influxdb': {
@@ -66,7 +66,10 @@ CHECKS_INFO = {
     'nginx': {
         'type': 'http',
     },
-    'smtp': {
+    'postfix': {
+        'type': 'smtp',
+    },
+    'exim': {
         'type': 'smtp',
     },
     'squid': {

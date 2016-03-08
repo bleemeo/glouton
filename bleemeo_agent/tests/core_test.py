@@ -72,7 +72,7 @@ PROCESS_SERVICE = [
     ),
     (
         '/usr/sbin/dovecot -F -c /etc/dovecot/dovecot.conf',
-        'imap',
+        'dovecot',
     ),
     (
         (
@@ -87,7 +87,7 @@ PROCESS_SERVICE = [
             '-sasl sasl_error_logger false -mnesia dir "/var/lib/ejabberd" '
             '-smp disable -noshell -noshell -noinput'
         ),
-        'jabber'
+        'ejabberd'
     ),
     (
         (
@@ -116,7 +116,7 @@ PROCESS_SERVICE = [
     ),
     (
         '/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf',
-        'mqtt'
+        'mosquitto'
     ),
     (
         '/usr/bin/redis-server 127.0.0.1:6379',
@@ -159,7 +159,7 @@ PROCESS_SERVICE = [
     ),
     (
         '/usr/lib/postfix/master',
-        'smtp'
+        'postfix'
     ),
     (
         'nginx: master process /usr/sbin/nginx',
@@ -167,7 +167,7 @@ PROCESS_SERVICE = [
     ),
     (
         '/usr/sbin/exim4 -bd -q30m',
-        'smtp'
+        'exim'
     ),
     (
         '/usr/sbin/freeradius -f',

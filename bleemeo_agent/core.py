@@ -63,6 +63,15 @@ ENVIRON_CONFIG_VARS = [
     ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key'),
 ]
 
+
+# Bleemeo agent changed the name of some service
+SERVICE_RENAME = {
+    'jabber': 'ejabberd',
+    'imap': 'dovecot',
+    'smtp': ['exim', 'postfix'],
+    'mqtt': 'mosquitto',
+}
+
 KNOWN_PROCESS = {
     'asterisk': {
         'service': 'asterisk',
@@ -74,7 +83,7 @@ KNOWN_PROCESS = {
     },
     '-s ejabberd': {  # beam process
         'interpreter': 'erlang',
-        'service': 'jabber',
+        'service': 'ejabberd',
         'port': 5222,
         'protocol': socket.IPPROTO_TCP,
     },
@@ -85,12 +94,12 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
     },
     'dovecot': {
-        'service': 'imap',
+        'service': 'dovecot',
         'port': 143,
         'protocol': socket.IPPROTO_TCP,
     },
     'exim4': {
-        'service': 'smtp',
+        'service': 'exim',
         'port': 25,
         'protocol': socket.IPPROTO_TCP,
     },
@@ -114,7 +123,7 @@ KNOWN_PROCESS = {
         'service': 'libvirt',
     },
     'mosquitto': {
-        'service': 'mqtt',
+        'service': 'mosquitto',
         'port': 1883,
         'protocol': socket.IPPROTO_TCP,
     },
@@ -129,7 +138,7 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
     },
     'master': {  # postfix
-        'service': 'smtp',
+        'service': 'postfix',
         'port': 25,
         'protocol': socket.IPPROTO_TCP,
     },
@@ -534,6 +543,11 @@ class Core:
 
     def update_discovery(self, first_run=False):
         discovered_running_services = self._run_discovery()
+        if first_run:
+            # Should only be needed on first run. In addition to avoid
+            # possible race-condition, do not run this while
+            # Bleemeo._bleemeo_synchronize could run.
+            self._search_old_service(discovered_running_services)
         new_discovered_services = self.discovered_services.copy()
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
@@ -548,6 +562,43 @@ class Core:
                 'discovered_services', self.discovered_services)
             self.graphite_server.update_discovery()
             bleemeo_agent.checker.update_checks(self)
+
+    def _search_old_service(self, running_service):
+        """ Search and rename any service that use an old name
+        """
+        for (service_name, instance) in list(self.discovered_services.keys()):
+            if service_name in SERVICE_RENAME:
+                new_name = SERVICE_RENAME[service_name]
+                if isinstance(new_name, (list, tuple)):
+                    # 2 services shared the same name (e.g. smtp=>postfix/exim)
+                    # Search for the new name in running service
+                    for candidate in new_name:
+                        if (candidate, instance) in running_service:
+                            self._rename_service(
+                                service_name,
+                                candidate,
+                                instance,
+                            )
+                            break
+                else:
+                    self._rename_service(service_name, new_name, instance)
+
+    def _rename_service(self, old_name, new_name, instance):
+        logging.info('Renaming service "%s" to "%s"', old_name, new_name)
+        old_key = (old_name, instance)
+        new_key = (new_name, instance)
+
+        self.discovered_services[new_key] = self.discovered_services[old_key]
+        del self.discovered_services[old_key]
+
+        if old_key in self.bleemeo_connector.services_uuid:
+            self.bleemeo_connector.services_uuid[new_key] = (
+                self.bleemeo_connector.services_uuid[old_key]
+            )
+            del self.bleemeo_connector.services_uuid[old_key]
+            self.state.set_complex_dict(
+                'services_uuid', self.bleemeo_connector.services_uuid
+            )
 
     def _get_processes_map(self):
         """ Return a mapping from PID to name and container in which

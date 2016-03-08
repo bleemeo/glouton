@@ -384,7 +384,11 @@ class BleemeoConnector(threading.Thread):
             (service_name, instance) = key
             entry = {
                 'address': service_info['address'],
+                'label': service_name,
             }
+            if instance is not None:
+                entry['instance'] = instance
+
             if service_info.get('protocol') is not None:
                 entry['port'] = service_info['port']
                 entry['protocol'] = service_info['protocol']
@@ -392,7 +396,6 @@ class BleemeoConnector(threading.Thread):
                 entry['uuid'] = self.services_uuid[key]['uuid']
                 # check for possible update
                 if self.services_uuid[key] == entry:
-                    # already registered and up-to-date
                     continue
                 method = requests.put
                 service_uuid = self.services_uuid[key]['uuid']
@@ -407,10 +410,7 @@ class BleemeoConnector(threading.Thread):
             payload.update({
                 'account': self.account_id,
                 'agent': self.agent_uuid,
-                'label': service_name,
             })
-            if instance is not None:
-                payload['instance'] = instance
 
             response = method(
                 url,
