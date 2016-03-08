@@ -5,6 +5,7 @@ import shlex
 import socket
 import subprocess
 
+import requests
 import yaml
 
 import bleemeo_agent.config
@@ -30,24 +31,43 @@ def get_file_content(file_name):
         return None
 
 
-def get_agent_version():
+def get_package_version(package_name, default=None):
     if apt_pkg is None:
-        return bleemeo_agent.__version__
+        return default
 
     try:
         apt_pkg.init()
         cache = apt_pkg.Cache(progress=None)
     except:
         logging.info(
-            'Failed to initialize APT cache to retrieve agent version'
+            'Failed to initialize APT cache to retrieve package %s version',
+            package_name,
         )
-        return bleemeo_agent.__version__
+        return default
 
-    if ('bleemeo-agent' in cache
-            and cache['bleemeo-agent'].current_ver is not None):
-        return cache['bleemeo-agent'].current_ver.ver_str
+    if (package_name in cache
+            and cache[package_name].current_ver is not None):
+        return cache[package_name].current_ver.ver_str
 
-    return bleemeo_agent.__version__
+    return default
+
+
+def get_agent_version():
+    return get_package_version('bleemeo-agent', bleemeo_agent.__version__)
+
+
+def get_docker_version(core):
+    try:
+        if core.docker_client is not None:
+            return core.docker_client.version()['Version']
+    except (requests.exceptions.RequestException, KeyError):
+        logging.debug('error getting docker verion', exc_info=True)
+
+    package_version = get_package_version('docker-engine')
+    if package_version is None:
+        package_version = get_package_version('docker.io')
+
+    return package_version
 
 
 def read_os_release():
@@ -186,6 +206,7 @@ def get_facts(core):
             os.path.join(DMI_DIR, 'bios_version')
         ),
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
+        'docker_version': get_docker_version(core),
         'domain': domain,
         'fqdn': fqdn,
         'hostname': hostname,
@@ -221,5 +242,5 @@ def strip_empty(facts):
     """
     return {
         key: value for (key, value) in facts.items()
-             if value is not None and value != ''
+        if value is not None and value != ''
     }
