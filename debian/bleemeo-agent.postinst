@@ -16,7 +16,9 @@ case "$1" in
             chown bleemeo:bleemeo /etc/bleemeo/agent.conf.d/30-install.conf
             chmod 0640 /etc/bleemeo/agent.conf.d/30-install.conf
         fi
-        chown bleemeo:bleemeo /etc/
+        # commit eace173 introducted a chown bleemeo:bleemeo by mistake.
+        # revert this issue with. Should be removed when everyone has upgraded.
+        chown root:root /etc/
 
         # Retrive fact that need root privilege
         bleemeo-agent-gather-facts
