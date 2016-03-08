@@ -544,7 +544,7 @@ class BleemeoConnector(threading.Thread):
                     auth=(self.agent_username, self.agent_password),
                     headers={'X-Requested-With': 'XMLHttpRequest'},
                 )
-                if response.status_code == 204:
+                if response.status_code == 204 or response.status_code == 404:
                     del facts_uuid[fact_name]
                 else:
                     logging.debug(
