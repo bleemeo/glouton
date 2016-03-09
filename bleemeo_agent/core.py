@@ -275,6 +275,11 @@ class State:
             self._content[key] = value
             self.save()
 
+    def delete(self, key):
+        with self._write_lock:
+            del self._content[key]
+            self.save()
+
     def set_complex_dict(self, key, value):
         """ Store a dictionary as list in JSON file.
 

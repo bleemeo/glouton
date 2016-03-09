@@ -530,67 +530,69 @@ class BleemeoConnector(threading.Thread):
     def send_facts(self):
         base_url = self.bleemeo_base_url
         fact_url = urllib_parse.urljoin(base_url, '/v1/agentfact/')
-        facts_uuid = self.core.state.get('facts_uuid', {})
 
-        # first delete any already sent facts
-        try:
-            # We use "list" to create a copy of facts_uuid, so
-            # we modify facts_uuid (remove entry) while iterating over it
-            for fact_name, fact_uuid in list(facts_uuid.items()):
+        if self.core.state.get('facts_uuid') is not None:
+            # facts_uuid were used in older version of Agent
+            self.core.state.delete('facts_uuid')
+
+        # Action:
+        # * get list of all old facts
+        # * create new updated facts
+        # * delete old facts
+
+        response = requests.get(
+            fact_url,
+            params={'agent': self.agent_uuid},
+            auth=(self.agent_username, self.agent_password),
+            headers={'X-Requested-With': 'XMLHttpRequest'},
+        )
+        old_facts = response.json()
+
+        # create new facts
+        for fact_name, value in self.core.last_facts.items():
+            payload = {
+                'agent': self.agent_uuid,
+                'key': fact_name,
+                'value': str(value),
+            }
+            response = requests.post(
+                fact_url,
+                data=json.dumps(payload),
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-type': 'application/json',
+                },
+            )
+            if response.status_code == 201:
                 logging.debug(
-                    'Deleting fact %s (uuid=%s)', fact_name, fact_uuid)
-                response = requests.delete(
-                    urllib_parse.urljoin(fact_url, '%s/' % fact_uuid),
-                    auth=(self.agent_username, self.agent_password),
-                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                    'Send fact %s, stored with uuid %s',
+                    fact_name,
+                    response.json()['id'],
                 )
-                if response.status_code == 204 or response.status_code == 404:
-                    del facts_uuid[fact_name]
-                else:
-                    logging.debug(
-                        'Delete failed, excepted code=204, recveived %s',
-                        response.status_code
-                    )
-                    return
-                self.core.state.set('facts_uuid', facts_uuid)
-        except:
-            logging.debug('Failed to remove old facts.', exc_info=True)
-            return
+            else:
+                logging.debug(
+                    'Fact registration failed. Server response = %s',
+                    response.content
+                )
+                return
 
-        # then create one agentfact for item in the mapping.
-        try:
-            for fact_name, value in self.core.last_facts.items():
-                payload = {
-                    'agent': self.agent_uuid,
-                    'key': fact_name,
-                    'value': str(value),
-                }
-                response = requests.post(
-                    fact_url,
-                    data=json.dumps(payload),
-                    auth=(self.agent_username, self.agent_password),
-                    headers={
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Content-type': 'application/json',
-                    },
+        # delete old facts
+        for fact in old_facts:
+            logging.debug(
+                'Deleting fact %s (uuid=%s)', fact['key'], fact['id']
+            )
+            response = requests.delete(
+                urllib_parse.urljoin(fact_url, '%s/' % fact['id']),
+                auth=(self.agent_username, self.agent_password),
+                headers={'X-Requested-With': 'XMLHttpRequest'},
+            )
+            if response.status_code != 204:
+                logging.debug(
+                    'Delete failed, excepted code=204, recveived %s',
+                    response.status_code
                 )
-                if response.status_code == 201:
-                    facts_uuid[fact_name] = response.json()['id']
-                    logging.debug(
-                        'Send fact %s, stored with uuid %s',
-                        fact_name,
-                        facts_uuid[fact_name]
-                    )
-                else:
-                    logging.debug(
-                        'Fact registration failed. Server response = %s',
-                        response.content
-                    )
-                    return
-                self.core.state.set('facts_uuid', facts_uuid)
-        except:
-            logging.debug('Failed to send facts.', exc_info=True)
-            return
+                return
 
         self._last_facts_sent = datetime.datetime.now()
 
