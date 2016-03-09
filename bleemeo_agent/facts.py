@@ -43,6 +43,7 @@ def get_package_version(package_name, default=None):
             'Failed to initialize APT cache to retrieve package %s version',
             package_name,
         )
+        logging.debug('Exception is:', exc_info=True)
         return default
 
     if (package_name in cache
