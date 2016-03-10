@@ -109,11 +109,13 @@ class BleemeoConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             self._loop()
 
-        self.publish(
-            'v1/agent/%s/disconnect' % self.agent_uuid,
-            'disconnect'
-        )
         self.mqtt_client.loop_stop()
+        if self._mqtt_connected:
+            self.publish(
+                'v1/agent/%s/disconnect' % self.agent_uuid,
+                'disconnect'
+            )
+            self.mqtt_client.loop()
 
         self.mqtt_client.disconnect()
         self.mqtt_client.loop()
