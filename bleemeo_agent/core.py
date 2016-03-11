@@ -308,6 +308,7 @@ class State:
 
 class Core:
     def __init__(self):
+        self.started_at = time.time()
         self.reload_config()
         self._config_logger()
         logging.info(
@@ -526,6 +527,10 @@ class Core:
                 'time': now,
                 'value': uptime_seconds,
             })
+
+        metric = self.graphite_server.get_data_received_time()
+        if metric is not None:
+            self.emit_metric(metric, soft_status=False)
 
     def _purge_metrics(self):
         """ Remove old metrics from self.last_metrics
@@ -825,11 +830,11 @@ class Core:
         measurement = metric['measurement']
         self.last_metrics[(measurement, item)] = metric
 
-    def emit_metric(self, metric):
+    def emit_metric(self, metric, soft_status=True):
         """ Sent a metric to all configured output
         """
         if metric.get('status_of') is None:
-            metric = self.check_threshold(metric)
+            metric = self.check_threshold(metric, soft_status)
 
         self._store_last_value(metric)
 
@@ -863,7 +868,7 @@ class Core:
 
         return threshold
 
-    def check_threshold(self, metric):  # noqa
+    def check_threshold(self, metric, with_soft_status):  # noqa
         """ Check if threshold is defined for given metric. If yes, check
             it and add a "status" tag.
 
@@ -914,12 +919,15 @@ class Core:
             last_status = last_metric.get('status')
 
         period = 5 * 60
-        status = self._check_soft_status(
-            metric,
-            soft_status,
-            last_status,
-            period,
-        )
+        if not with_soft_status:
+            status = soft_status
+        else:
+            status = self._check_soft_status(
+                metric,
+                soft_status,
+                last_status,
+                period,
+            )
 
         if status == 'ok':
             text = 'Current value: %.2f' % metric['value']
@@ -927,44 +935,81 @@ class Core:
         elif status == 'warning':
             if (threshold.get('low_warning') is not None
                     and value < threshold.get('low_warning')):
-                text = (
-                    'Current value: %.2f\n'
-                    'Metric has been below threshold (%.2f) '
-                    'for the last 5 minutes.' % (
-                        metric['value'],
-                        threshold.get('low_warning'),
+                if with_soft_status:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric has been below threshold (%.2f) '
+                        'for the last 5 minutes.' % (
+                            metric['value'],
+                            threshold.get('low_warning'),
+                        )
                     )
-                )
+                else:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric is below threshold (%.2f).' % (
+                            metric['value'],
+                            threshold.get('low_warning'),
+                        )
+                    )
             else:
-                text = (
-                    'Current value: %.2f\n'
-                    'Metric has been above threshold (%.2f) '
-                    'for the last 5 minutes.' % (
-                        metric['value'],
-                        threshold.get('high_warning'),
+                if with_soft_status:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric has been above threshold (%.2f) '
+                        'for the last 5 minutes.' % (
+                            metric['value'],
+                            threshold.get('high_warning'),
+                        )
                     )
-                )
+                else:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric is above threshold (%.2f).' % (
+                            metric['value'],
+                            threshold.get('high_warning'),
+                        )
+                    )
             status_value = 1.0
         else:
             if (threshold.get('low_critical') is not None
                     and value < threshold.get('low_critical')):
-                text = (
-                    'Current value: %.2f\n'
-                    'Metric has been below threshold (%.2f) '
-                    'for the last 5 minutes.' % (
-                        metric['value'],
-                        threshold.get('low_critical'),
+                if with_soft_status:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric has been below threshold (%.2f) '
+                        'for the last 5 minutes.' % (
+                            metric['value'],
+                            threshold.get('low_critical'),
+                        )
                     )
-                )
+                else:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric is below threshold (%.2f).' % (
+                            metric['value'],
+                            threshold.get('low_critical'),
+                        )
+                    )
             else:
-                text = (
-                    'Current value: %.2f\n'
-                    'Metric has been above threshold (%.2f) '
-                    'for the last 5 minutes.' % (
-                        metric['value'],
-                        threshold.get('high_critical'),
+                if with_soft_status:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric has been above threshold (%.2f) '
+                        'for the last 5 minutes.' % (
+                            metric['value'],
+                            threshold.get('high_critical'),
+                        )
                     )
-                )
+                else:
+                    text = (
+                        'Current value: %.2f\n'
+                        'Metric is above threshold (%.2f).' % (
+                            metric['value'],
+                            threshold.get('high_critical'),
+                        )
+                    )
+
             status_value = 2.0
 
         metric = metric.copy()

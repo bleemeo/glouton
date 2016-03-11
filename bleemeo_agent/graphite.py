@@ -2,6 +2,7 @@ import logging
 import re
 import socket
 import threading
+import time
 
 import bleemeo_agent.collectd
 import bleemeo_agent.telegraf
@@ -20,6 +21,7 @@ class GraphiteServer(threading.Thread):
     def __init__(self, core):
         super(GraphiteServer, self).__init__()
 
+        self.data_last_seen_at = None
         self.core = core
         if self.metrics_source == 'collectd':
             self.collectd = bleemeo_agent.collectd.Collectd(self)
@@ -62,6 +64,40 @@ class GraphiteServer(threading.Thread):
             self.collectd.update_discovery()
         elif self.metrics_source == 'telegraf':
             self.telegraf.update_discovery()
+
+    def get_data_received_time(self):
+        now = time.time()
+        threshold = self.core.get_threshold('data_received_time')
+        highest_threshold = 0
+        if threshold is not None:
+            if threshold.get('high_critical') is not None:
+                highest_threshold = threshold.get('high_critical')
+            elif threshold.get('high_warning') is not None:
+                highest_threshold = threshold.get('high_warning')
+
+        if self.data_last_seen_at is not None:
+            delay = now - self.data_last_seen_at
+        else:
+            delay = now - self.core.started_at
+
+        # It only emit the metric if:
+        # * either it actually had seen some data (e.g. metric is exact, not
+        #   approximated base on agent start date).
+        # * or no threshold is defined
+        # * or the highest threshold is already crossed
+        # It does this to avoid changing state of this metric after an agent
+        # restart. E.g. collector is dead: status is critical; user restart
+        # agent, status must NOT goes OK, then few minute later critical.
+        if (self.data_last_seen_at is None
+                and threshold is not None
+                and delay < highest_threshold):
+            return None
+
+        return {
+            'measurement': 'data_received_time',
+            'time': now,
+            'value': delay,
+        }
 
     def process_client(self, sock_client, addr):
         logging.debug('graphite: client connectd from %s', addr)
@@ -254,10 +290,12 @@ class GraphiteServer(threading.Thread):
             Nothing is emitted if metric is unknown
         """
         if name.startswith('telegraf.') and self.metrics_source == 'telegraf':
+            self.data_last_seen_at = time.time()
             self.telegraf.emit_metric(
                 name, timestamp, value, computed_metrics_pending,
             )
         elif self.metrics_source == 'collectd':
+            self.data_last_seen_at = time.time()
             self.collectd.emit_metric(
                 name, timestamp, value, computed_metrics_pending
             )

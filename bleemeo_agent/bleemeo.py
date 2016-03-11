@@ -123,6 +123,8 @@ class BleemeoConnector(threading.Thread):
     def _bleemeo_health_check(self):
         """ Check the Bleemeo connector works correctly. Log any issue found
         """
+        now = time.time()
+
         if self.agent_uuid is None:
             logging.info('Agent not yet registered')
 
@@ -146,6 +148,13 @@ class BleemeoConnector(threading.Thread):
             logging.info(
                 '%s metric points blocked due to metric not yet registered',
                 self._metric_queue.qsize(),
+            )
+
+        if (self.core.graphite_server.data_last_seen_at is None or
+                now - self.core.graphite_server.data_last_seen_at > 60):
+            logging.info(
+                'Issue with metrics collector : no metric received from %s',
+                self.core.graphite_server.metrics_source,
             )
 
     def _mqtt_setup(self):
