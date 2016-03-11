@@ -762,13 +762,13 @@ class Core:
         """
         while True:
             try:
-                generator = self.docker_client.events(decode=True)
-            except TypeError:
-                # older version of docker-py does decode=True by default
-                # (and don't have this option)
-                generator = self.docker_client.events()
+                try:
+                    generator = self.docker_client.events(decode=True)
+                except TypeError:
+                    # older version of docker-py does decode=True by default
+                    # (and don't have this option)
+                    generator = self.docker_client.events()
 
-            try:
                 for event in generator:
                     # We request discovery in 10 seconds to allow newly created
                     # container to start (e.g. "mysqld" process to start, and
