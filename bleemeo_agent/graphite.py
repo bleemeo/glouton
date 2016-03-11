@@ -65,9 +65,9 @@ class GraphiteServer(threading.Thread):
         elif self.metrics_source == 'telegraf':
             self.telegraf.update_discovery()
 
-    def get_data_received_time(self):
+    def get_time_elapsed_since_last_data(self):
         now = time.time()
-        threshold = self.core.get_threshold('data_received_time')
+        threshold = self.core.get_threshold('time_elapsed_since_last_data')
         highest_threshold = 0
         if threshold is not None:
             if threshold.get('high_critical') is not None:
@@ -94,7 +94,7 @@ class GraphiteServer(threading.Thread):
             return None
 
         return {
-            'measurement': 'data_received_time',
+            'measurement': 'time_elapsed_since_last_data',
             'time': now,
             'value': delay,
         }

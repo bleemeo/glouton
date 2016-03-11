@@ -528,7 +528,7 @@ class Core:
                 'value': uptime_seconds,
             })
 
-        metric = self.graphite_server.get_data_received_time()
+        metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:
             self.emit_metric(metric, soft_status=False)
 
