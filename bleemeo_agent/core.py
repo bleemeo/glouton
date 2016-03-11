@@ -420,7 +420,16 @@ class Core:
 
         def handler_hup(signum, frame):
             now = datetime.datetime.now()
-            self.scheduler.unschedule_job(self._discovery_job)
+            try:
+                self.scheduler.unschedule_job(self._discovery_job)
+            except KeyError:
+                # Job is not scheduled, cause:
+                # * agent is starting and scheduler has not yet started
+                # * something else (docker watcher ?) is currently rescheduling
+                #   that job
+                # In both case, discovery has just happened or will happened in
+                # close future. Do nothing
+                return
             self._discovery_job = self.scheduler.add_interval_job(
                 self.update_discovery,
                 start_date=now + datetime.timedelta(seconds=1),
@@ -762,7 +771,7 @@ class Core:
         service_info['user'] = user
         service_info['password'] = password
 
-    def _watch_docker_event(self):
+    def _watch_docker_event(self):  # noqa
         """ Watch for docker event and re-run discovery
         """
         while True:
@@ -787,7 +796,16 @@ class Core:
                         continue
 
                     now = datetime.datetime.now()
-                    self.scheduler.unschedule_job(self._discovery_job)
+                    try:
+                        self.scheduler.unschedule_job(self._discovery_job)
+                    except KeyError:
+                        # Job is not scheduled, cause:
+                        # * agent is starting and scheduler has not yet started
+                        # * something else (SIGHUP handler) is currently
+                        #   rescheduling that job
+                        # In both case, discovery has just happened or will
+                        # happened in close future. Do nothing.
+                        return
                     self._discovery_job = self.scheduler.add_interval_job(
                         self.update_discovery,
                         start_date=now + datetime.timedelta(seconds=10),
