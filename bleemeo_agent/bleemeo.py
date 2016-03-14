@@ -451,7 +451,7 @@ class BleemeoConnector(threading.Thread):
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         thresholds = self.core.state.get_complex_dict('thresholds', {})
 
-        for metric_key, metric_uuid in self.metrics_uuid.items():
+        for metric_key, metric_uuid in list(self.metrics_uuid.items()):
             if metric_key not in self.metrics_info:
                 # This should only occur when metric were seen on a previous
                 # run (and stored in state.json) but not yet registered.
