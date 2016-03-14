@@ -568,6 +568,14 @@ class Core:
             # Bleemeo._bleemeo_synchronize could run.
             self._search_old_service(discovered_running_services)
         new_discovered_services = self.discovered_services.copy()
+
+        # Remove container address. If container is still running, address
+        # will be re-added from discovered_running_services.
+        for service_key, service_info in new_discovered_services.items():
+            (service_name, instance) = service_key
+            if instance is not None:
+                service_info['address'] = None
+
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
 

@@ -229,9 +229,16 @@ class Check:
             )
             self.open_socket()
 
-    def run_check(self):
+    def run_check(self):  # noqa
         self.last_run = time.time()
-        if self.check_info['type'] == 'tcp':
+
+        if self.address is None:
+            # Address is None if this check is associated with a stopped
+            # container. In such case none of our test could pass
+            (return_code, output) = (
+                STATUS_CRITICAL, 'Container stopped: connection refused'
+            )
+        elif self.check_info['type'] == 'tcp':
             (return_code, output) = self.check_tcp()
         elif self.check_info['type'] == 'http':
             (return_code, output) = self.check_http()
