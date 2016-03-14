@@ -202,7 +202,7 @@ KNOWN_PROCESS = {
     }
 }
 
-DOCKER_API_VERSION = '1.17'
+DOCKER_API_VERSION = '1.21'
 
 
 def main():
@@ -697,10 +697,7 @@ class Core:
                 if instance is None:
                     address = '127.0.0.1'
                 else:
-                    container_info = self.docker_client.inspect_container(
-                        instance
-                    )
-                    address = container_info['NetworkSettings']['IPAddress']
+                    address = self.get_docker_container_address(instance)
 
                 service_info['address'] = address
                 # some service may need additionnal information, like password
@@ -1124,6 +1121,17 @@ class Core:
         """
         if self.bleemeo_connector is not None:
             return self.bleemeo_connector.agent_uuid
+
+    def get_docker_container_address(self, container_name):
+        container_info = self.docker_client.inspect_container(container_name)
+        if container_info['NetworkSettings']['IPAddress']:
+            return container_info['NetworkSettings']['IPAddress']
+
+        for config in container_info['NetworkSettings']['Networks'].values():
+            if config['IPAddress']:
+                return config['IPAddress']
+
+        return None
 
 
 def install_thread_hook(raven_self):
