@@ -587,8 +587,40 @@ class Core:
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
+            self.services = self.discovered_services.copy()
+            self.services.update(self.get_custom_services())
+
             self.graphite_server.update_discovery()
             bleemeo_agent.checker.update_checks(self)
+
+    def get_custom_services(self):
+        result = {}
+        custom_services_config = self.config.get('service.custom', {})
+        for (name, config) in custom_services_config.items():
+            try:
+                port = int(config['port'])
+            except KeyError:
+                logging.info(
+                    'Bad custom service definition : '
+                    'service "%s" do not have port settings',
+                    name
+                )
+                continue
+            except ValueError:
+                logging.info(
+                    'Bad custom service definition : '
+                    'service "%s" port is "%s" which is not a number',
+                    name,
+                    config['port'],
+                )
+                continue
+            result[(name, None)] = {
+                'address': config.get('address', '127.0.0.1'),
+                'port': port,
+                'protocol': socket.IPPROTO_TCP,
+                'check_type': config.get('check_type', 'tcp'),
+            }
+        return result
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name

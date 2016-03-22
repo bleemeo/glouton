@@ -27,7 +27,6 @@ class GraphiteServer(threading.Thread):
             self.collectd = bleemeo_agent.collectd.Collectd(self)
         elif self.metrics_source == 'telegraf':
             self.telegraf = bleemeo_agent.telegraf.Telegraf(self)
-        self.update_discovery()
 
     @property
     def metrics_source(self):

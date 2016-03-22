@@ -113,10 +113,10 @@ class Telegraf:
     def _get_telegraf_config(self):
         telegraf_config = BASE_TELEGRAF_CONFIG
 
-        for (key, service_info) in self.core.discovered_services.items():
+        for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
 
-            service_info = self.core.discovered_services[key].copy()
+            service_info = self.core.services[key].copy()
             service_info['instance'] = instance
 
             if service_name == 'apache':
@@ -186,7 +186,7 @@ class Telegraf:
         return delta / delta_time
 
     def get_service_instance(self, service, address, port):
-        for (key, service_info) in self.core.discovered_services.items():
+        for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
             if (service_name == service
                     and service_info.get('address') == address

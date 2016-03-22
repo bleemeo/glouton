@@ -391,10 +391,15 @@ class BleemeoConnector(threading.Thread):
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/service/')
 
-        for key, service_info in self.core.discovered_services.items():
+        for key, service_info in self.core.services.items():
             (service_name, instance) = key
+            try:
+                address = socket.gethostbyname(service_info['address'])
+            except socket.gaierror:
+                address = None
+
             entry = {
-                'address': service_info['address'],
+                'address': address,
                 'label': service_name,
             }
             if instance is not None:

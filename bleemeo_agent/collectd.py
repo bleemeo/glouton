@@ -201,7 +201,7 @@ class Collectd:
         collectd_config = BASE_COLLECTD_CONFIG
 
         sorted_services = sorted(
-            self.core.discovered_services.keys(),
+            self.core.services.keys(),
             # In couple (service_name, instance) replace instance by an empty
             # string if it's None. Python 3 can not compare None and str.
             key=lambda x: (x[0], x[1] or ""),
@@ -210,7 +210,7 @@ class Collectd:
         for key in sorted_services:
             (service_name, instance) = key
 
-            service_info = self.core.discovered_services[key].copy()
+            service_info = self.core.services[key].copy()
             service_info['instance'] = instance
             if service_name == 'apache':
                 collectd_config += APACHE_COLLECTD_CONFIG % service_info

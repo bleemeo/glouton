@@ -100,7 +100,7 @@ def update_checks(core):
 
     CHECKS = []
 
-    for key, service_info in core.discovered_services.items():
+    for key, service_info in core.services.items():
         (service_name, instance) = key
         try:
             new_check = Check(
@@ -158,6 +158,9 @@ class Check:
         self.protocol = service_info.get('protocol')
         if self.protocol == socket.IPPROTO_TCP and self.check_info is None:
             self.check_info = {'type': 'tcp'}
+
+        if self.service_info.get('check_type') is not None:
+            self.check_info = {'type': self.service_info['check_type']}
 
         if self.check_info is None:
             raise NotImplementedError("No check for this service")
