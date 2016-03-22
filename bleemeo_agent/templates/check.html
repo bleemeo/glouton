@@ -26,7 +26,7 @@
             {{ check['status'] }}
             </span>
         </td>
-        <td>{{ check['pretty_name'] }}</td>
+        <td>{{ check['pretty_name'] }}</td>
         <td>{{ check['value']|round(1) }}</td>
         <td>
         {% with threshold = check['threshold'] %}
@@ -37,13 +37,13 @@
                     critical below {{ threshold['low_critical'] }}
                 {% endif %}
                 {% if threshold.get('low_warning') is not none %}
-                    and warning below {{ threshold['low_warning'] }}
+                    and warning below {{ threshold['low_warning'] }}
                 {% endif %}
                 {% if threshold.get('high_critical') is not none %}
-                    critical above {{ threshold['high_critical'] }}
+                    critical above {{ threshold['high_critical'] }}
                 {% endif %}
                 {% if threshold.get('high_warning') is not none %}
-                    and warning above {{ threshold['high_warning'] }}
+                    and warning above {{ threshold['high_warning'] }}
                 {% endif %}
             {% endif %}
         {% endwith %}

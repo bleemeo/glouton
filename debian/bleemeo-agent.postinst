@@ -27,24 +27,24 @@ esac
 
 # We build our package on trusty, where debhelper generated something that
 # looks like:
-# 8<--- prerm
-# invoke-rc.d bleemeo-agent stop
+# 8<--- prerm
+# invoke-rc.d bleemeo-agent stop
 # 8<--- postinst
 # invoke-rc.d bleemeo-agent start
 # update-rc.d -f bleemeo-agent remove
 #
 # This is done to avoid starting service 2 time on startup on trusty:
-# * with init.d script
+# * with init.d script
 # * with upstart
 #
 # Buth on xenial (init-system-helpers >= 1.29), invoke-rc.d will NOT start
 # service if the init.d script is not present in /etc/rc5.d/.
-# Since "update-rc.d -f bleemeo-agent remove" remove them from rc5.d, on xenial
+# Since "update-rc.d -f bleemeo-agent remove" remove them from rc5.d, on xenial
 # when package is upgraded, invoke-rc.d will stop it and not restart it.
 #
 # By adding the following update-rc.d, a symlink in rc5.d is added just before
-# call to invoke-rc.d start (therefor agent is started) and removed at the end
-# of postinst (no double start init.d/upstart on trusty).
+# call to invoke-rc.d start (therefor agent is started) and removed at the end
+# of postinst (no double start init.d/upstart on trusty).
 update-rc.d bleemeo-agent defaults >/dev/null
 
 #DEBHELPER#

@@ -11,8 +11,8 @@
         {% endif %}
         Uptime: {{ uptime }}<br/>
         Load: {{ loads }}<br/>
-        <!-- Registration: 1st January 1970 {# TODO #}<br/> -->
-        Last Report: {{ core.last_report.strftime('%c') }}<br/>
+        <!-- Registration: 1st January 1970 {# TODO #}<br/> -->
+        Last Report: {{ core.last_report.strftime('%c') }}<br/>
         <br/>
         {% if core.config.get('tags') %}
         Tags: {{ ', '.join(core.config.get('tags', [])) }}<br/>
@@ -37,12 +37,12 @@
                 </span>
                 {% endif %}
             </span>
-            <div>{{ check_info['count_ok'] }} checks are OK</div>
+            <div>{{ check_info['count_ok'] }} checks are OK</div>
             {% if check_info['count_warning'] %}
-            <div>{{ check_info['count_warning'] }} checks are WARNING</div>
+            <div>{{ check_info['count_warning'] }} checks are WARNING</div>
             {% endif %}
             {% if check_info['count_critical'] %}
-            <div>{{ check_info['count_critical'] }} checks are CRITICAL</div>
+            <div>{{ check_info['count_critical'] }} checks are CRITICAL</div>
             {% endif %}
         </div>
       </a>
@@ -72,10 +72,10 @@
                     Status: {{ disk_metric['status']|capitalize }} <br/>
                     {% endif %}
                     {% if disk_threshold.get('high_warning') %}
-                    Warning: {{ (disk_total_user * disk_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
+                    Warning: {{ (disk_total_user * disk_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
                     {% endif %}
                     {% if disk_threshold.get('high_critical') %}
-                    Critical: {{ (disk_total_user * disk_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
+                    Critical: {{ (disk_total_user * disk_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
                     {% endif %}
                 </div>
             </div>
@@ -104,10 +104,10 @@
                     Status: {{ mem_metric['status']|capitalize }} <br/>
                     {% endif %}
                     {% if mem_threshold.get('high_warning') %}
-                    Warning: {{ (mem_total * mem_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
+                    Warning: {{ (mem_total * mem_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
                     {% endif %}
                     {% if mem_threshold.get('high_critical') %}
-                    Critical: {{ (mem_total * mem_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
+                    Critical: {{ (mem_total * mem_threshold['high_critical'] / 100)|filesizeformat(True) }} <br/>
                     {% endif %}
                 </div>
             </div>
@@ -165,10 +165,10 @@
                     Status: {{ cpu_metric['status']|capitalize }} <br/>
                     {% endif %}
                     {% if cpu_threshold.get('high_warning') %}
-                    Warning : {{ cpu_threshold['high_warning'] }} %<br/>
+                    Warning : {{ cpu_threshold['high_warning'] }} %<br/>
                     {% endif %}
                     {% if cpu_threshold.get('high_critical') %}
-                    Critical : {{ cpu_threshold['high_critical'] }} %<br/>
+                    Critical : {{ cpu_threshold['high_critical'] }} %<br/>
                     {% endif %}
                 </div>
             </div>
