@@ -515,7 +515,8 @@ class Core:
         self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
         self.graphite_server.start()
 
-        bleemeo_agent.web.start_server(self)
+        if self.config.get('web.enabled', True):
+            bleemeo_agent.web.start_server(self)
 
         if self.docker_client is not None:
             thread = threading.Thread(target=self._watch_docker_event)
