@@ -395,7 +395,10 @@ class BleemeoConnector(threading.Thread):
             (service_name, instance) = key
             try:
                 address = socket.gethostbyname(service_info['address'])
-            except socket.gaierror:
+            except (socket.gaierror, TypeError):
+                # gaierror => unable to resolv name
+                # TypeError => service_info['address'] is None (happen when
+                #              service is on a stopped container)
                 address = None
 
             entry = {
