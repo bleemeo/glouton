@@ -2,6 +2,7 @@ import datetime
 import imaplib
 import logging
 import select
+import shlex
 import smtplib
 import socket
 import struct
@@ -9,6 +10,8 @@ import time
 
 import requests
 from six.moves.urllib import parse as urllib_parse
+
+import bleemeo_agent.util
 
 
 # Must match nagios return code
@@ -161,6 +164,10 @@ class Check:
 
         if self.service_info.get('check_type') is not None:
             self.check_info = {'type': self.service_info['check_type']}
+        if self.service_info.get('check_command') is not None:
+            self.check_info['check_command'] = (
+                self.service_info['check_command']
+            )
 
         if self.check_info is None:
             raise NotImplementedError("No check for this service")
@@ -235,12 +242,14 @@ class Check:
     def run_check(self):  # noqa
         self.last_run = time.time()
 
-        if self.address is None:
+        if self.address is None and self.instance is not None:
             # Address is None if this check is associated with a stopped
             # container. In such case none of our test could pass
             (return_code, output) = (
                 STATUS_CRITICAL, 'Container stopped: connection refused'
             )
+        elif self.check_info['type'] == 'nagios':
+            (return_code, output) = self.check_nagios()
         elif self.check_info['type'] == 'tcp':
             (return_code, output) = self.check_tcp()
         elif self.check_info['type'] == 'http':
@@ -300,6 +309,17 @@ class Check:
                 self.service, self.instance
             )
         self.core.scheduler.unschedule_job(self.current_job)
+
+    def check_nagios(self):
+        (return_code, output) = bleemeo_agent.util.run_command_timeout(
+            shlex.split(self.check_info['check_command']),
+        )
+
+        output = output.decode('utf-8', 'ignore').strip()
+        if return_code > STATUS_UNKNOWN or return_code < 0:
+            return_code = STATUS_UNKNOWN
+
+        return (return_code, output)
 
     def check_tcp_recv(self, sock, start):
         received = ''

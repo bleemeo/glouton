@@ -598,28 +598,46 @@ class Core:
         result = {}
         custom_services_config = self.config.get('service.custom', {})
         for (name, config) in custom_services_config.items():
-            try:
-                port = int(config['port'])
-            except KeyError:
+            check_type = config.get('check_type', 'tcp')
+            port = config.get('port', None)
+            if port is not None:
+                address = config.get('address', '127.0.0.1')
+                protocol = socket.IPPROTO_TCP
+                try:
+                    port = int(port)
+                except ValueError:
+                    logging.info(
+                        'Bad custom service definition : '
+                        'service "%s" port is "%s" which is not a number',
+                        name,
+                        config['port'],
+                    )
+                    continue
+            else:
+                address = config.get('address')
+                protocol = None
+
+            if check_type == 'nagios' and 'check_command' not in config:
                 logging.info(
                     'Bad custom service definition : '
-                    'service "%s" do not have port settings',
+                    'service "%s" use type nagios without check_command',
                     name
                 )
                 continue
-            except ValueError:
+            elif check_type != 'nagios' and port is None:
                 logging.info(
                     'Bad custom service definition : '
-                    'service "%s" port is "%s" which is not a number',
-                    name,
-                    config['port'],
+                    'service "%s" dot not have port settings',
+                    name
                 )
                 continue
+
             result[(name, None)] = {
-                'address': config.get('address', '127.0.0.1'),
+                'address': address,
                 'port': port,
-                'protocol': socket.IPPROTO_TCP,
-                'check_type': config.get('check_type', 'tcp'),
+                'protocol': protocol,
+                'check_type': check_type,
+                'check_command': config.get('check_command'),
             }
         return result
 
