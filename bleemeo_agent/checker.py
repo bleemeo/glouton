@@ -66,6 +66,9 @@ CHECKS_INFO = {
         'send': 'version\r\n',
         'expect': 'VERSION',
     },
+    'mongodb': {
+        'type': 'tcp',
+    },
     'nginx': {
         'type': 'http',
     },

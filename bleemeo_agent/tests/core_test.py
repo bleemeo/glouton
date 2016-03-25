@@ -115,6 +115,10 @@ PROCESS_SERVICE = [
         'rabbitmq'
     ),
     (
+        '/usr/bin/mongod --config /etc/mongodb.conf',
+        'mongodb'
+    ),
+    (
         '/usr/sbin/mosquitto -c /etc/mosquitto/mosquitto.conf',
         'mosquitto'
     ),

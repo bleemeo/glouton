@@ -122,6 +122,11 @@ KNOWN_PROCESS = {
     'libvirtd': {
         'service': 'libvirt',
     },
+    'mongod': {
+        'service': 'mongodb',
+        'port': 27017,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'mosquitto': {
         'service': 'mosquitto',
         'port': 1883,

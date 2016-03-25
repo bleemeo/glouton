@@ -21,6 +21,11 @@ MEMCACHED_TELEGRAF_CONFIG = """
   servers = ["%(address)s:%(port)s"]
 """
 
+MONGODB_TELEGRAF_CONFIG = """
+[[inputs.mongodb]]
+  servers = ["%(address)s:%(port)s"]
+"""
+
 MYSQL_TELEGRAF_CONFIG = """
 [[inputs.mysql]]
   servers = ["%(user)s:%(password)s@tcp(%(address)s:%(port)s)/"]
@@ -126,6 +131,8 @@ class Telegraf:
             if (service_name == 'mysql'
                     and service_info.get('password') is not None):
                 telegraf_config += MYSQL_TELEGRAF_CONFIG % service_info
+            if service_name == 'mongodb':
+                telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
             if service_name == 'nginx':
                 telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
             if service_name == 'redis':
@@ -487,6 +494,29 @@ class Telegraf:
                 pass
             elif name == 'zookeeper_num_alive_connections':
                 name = 'zookeeper_connections'
+            else:
+                return
+        elif part[-2] == 'mongodb':
+            service = 'mongodb'
+            (server_address, server_port) = part[-3].split(':')
+            server_address = server_address.replace('_', '.')
+            server_port = int(server_port)
+            try:
+                item = self.get_service_instance(
+                    service, server_address, server_port
+                )
+            except KeyError:
+                return
+
+            name = 'mongodb_' + part[-1]
+            if name in ('mongodb_open_connections', 'mongodb_queued_reads',
+                        'mongodb_queued_writes', 'mongodb_active_reads',
+                        'mongodb_active_writes'):
+                pass
+            elif name == 'mongodb_queries_per_sec':
+                name = 'mongodb_queries'
+            elif name in ('mongodb_net_out_bytes', 'mongodb_net_in_bytes'):
+                derive = True
             else:
                 return
         else:
