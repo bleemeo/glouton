@@ -1,5 +1,6 @@
 import logging
 import re
+import shlex
 import socket
 import threading
 import time
@@ -14,6 +15,28 @@ class ComputationFail(Exception):
 
 class MissingMetric(Exception):
     pass
+
+
+def graphite_split_line(line):
+    """ Split a "graphite" line.
+
+        >>> # 42 is the value, 1000 is the timestamp
+        >>> graphite_split_line(b'metric.name 42 1000')
+        ('metric.name', 42.0, 1000.0)
+    """
+    part = shlex.split(line.decode('utf-8'))
+    timestamp = part[-1]
+    value = part[-2]
+    metric = ' '.join(part[0:-2])
+
+    timestamp = float(timestamp)
+    try:
+        value = float(value)
+    except ValueError:
+        # assume value is a string, like "20 days, 23:26"
+        pass
+
+    return (metric, value, timestamp)
 
 
 class GraphiteServer(threading.Thread):
@@ -134,13 +157,7 @@ class GraphiteServer(threading.Thread):
                 if line == b'':
                     continue
 
-                metric, value, timestamp = line.split(b' ', 2)
-                # telegraf may emit non-float value. For example
-                # uptime_format value looks like "22:30"
-                try:
-                    (timestamp, value) = (float(timestamp), float(value))
-                except ValueError:
-                    continue  # ignore non-float value
+                metric, value, timestamp = graphite_split_line(line)
 
                 if timestamp - last_timestamp > 1:
                     # Collectd send us the next "wave" of measure.
@@ -148,8 +165,6 @@ class GraphiteServer(threading.Thread):
                     # done.
                     self._check_computed_metrics(computed_metrics_pending)
                 last_timestamp = timestamp
-
-                metric = metric.decode('utf-8')
 
                 self.emit_metric(
                     metric, timestamp, value, computed_metrics_pending)
@@ -255,6 +270,14 @@ class GraphiteServer(threading.Thread):
                 'time': timestamp,
                 'value': value / total * 100.,
             })
+        elif name == 'elasticsearch_search_time':
+            total = get_metric('elasticsearch_search_time_total', item)
+            count = get_metric('elasticsearch_search', item)
+            if count == 0:
+                # If not query during the period, the average time
+                # has not meaning. Don't emit it at all.
+                return
+            value = total / count
         else:
             logging.debug('Unknown computed metric %s', name)
             return

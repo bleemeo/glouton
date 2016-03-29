@@ -38,6 +38,9 @@ CHECKS_INFO = {
     'dovecot': {
         'type': 'imap',
     },
+    'elasticsearch': {
+        'type': 'http',
+    },
     'influxdb': {
         'type': 'http',
         'url': '/ping'

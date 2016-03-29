@@ -196,6 +196,12 @@ KNOWN_PROCESS = {
         'port': 2181,
         'protocol': socket.IPPROTO_TCP,
     },
+    'org.elasticsearch.bootstrap.Elasticsearch': {  # java process
+        'interpreter': 'java',
+        'service': 'elasticsearch',
+        'port': 9200,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'salt-master': {  # python process
         'interpreter': 'python',
         'service': 'salt-master',
@@ -909,13 +915,16 @@ class Core:
         measurement = metric['measurement']
         self.last_metrics[(measurement, item)] = metric
 
-    def emit_metric(self, metric, soft_status=True):
+    def emit_metric(self, metric, soft_status=True, no_emit=False):
         """ Sent a metric to all configured output
         """
-        if metric.get('status_of') is None:
+        if metric.get('status_of') is None and not no_emit:
             metric = self.check_threshold(metric, soft_status)
 
         self._store_last_value(metric)
+
+        if no_emit:
+            return
 
         if self.bleemeo_connector is not None:
             self.bleemeo_connector.emit_metric(metric)

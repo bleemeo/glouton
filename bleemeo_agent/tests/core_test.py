@@ -186,6 +186,63 @@ PROCESS_SERVICE = [
         'varnish'
     ),
 
+    # Service from Ubunut 16.04, default config
+    (
+        (
+            '/usr/lib/jvm/java-8-openjdk-amd64/bin/java '
+            '-Xms256m -Xmx1g -Djava.awt.headless=true -XX:+UseParNewGC '
+            '-XX:+UseConcMarkSweepGC -XX:CMSInitiatingOccupancyFraction=75 '
+            '-XX:+UseCMSInitiatingOccupancyOnly '
+            '-XX:+HeapDumpOnOutOfMemoryError -XX:+DisableExplicitGC '
+            '-Dfile.encoding=UTF-8 -Delasticsearch '
+            '-Des.pidfile=/var/run/elasticsearch.pid '
+            '-Des.path.home=/usr/share/elasticsearch '
+            '-cp :/usr/share/java/lucene-sandbox-4.10.4.jar:'
+            '/usr/share/java/sigar.jar:'
+            '/usr/share/java/lucene-analyzers-morfologik-4.10.4.jar:'
+            '/usr/share/java/spatial4j-0.4.1.jar:'
+            '/usr/share/java/lucene-expressions-4.10.4.jar:'
+            '/usr/share/java/lucene-analyzers-uima-4.10.4.jar:'
+            '/usr/share/java/groovy-all-2.x.jar:'
+            '/usr/share/java/lucene-analyzers-kuromoji-4.10.4.jar:'
+            '/usr/share/java/lucene-facet-4.10.4.jar:'
+            '/usr/share/java/jna.jar:'
+            '/usr/share/java/lucene-analyzers-common-4.10.4.jar:'
+            '/usr/share/java/lucene-core-4.10.4.jar:'
+            '/usr/share/java/apache-log4j-extras-1.2.17.jar:'
+            '/usr/share/java/lucene-queries-4.10.4.jar:'
+            '/usr/share/java/lucene-demo-4.10.4.jar:'
+            '/usr/share/java/lucene-suggest-4.10.4.jar:'
+            '/usr/share/java/lucene-analyzers-stempel-4.10.4.jar:'
+            '/usr/share/java/lucene-highlighter-4.10.4.jar:'
+            '/usr/share/java/lucene-memory-4.10.4.jar:'
+            '/usr/share/java/lucene-classification-4.10.4.jar:'
+            '/usr/share/java/lucene-replicator-4.10.4.jar:'
+            '/usr/share/java/lucene-grouping-4.10.4.jar:'
+            '/usr/share/java/log4j-1.2-1.2.17.jar:'
+            '/usr/share/java/lucene-join-4.10.4.jar:'
+            '/usr/share/java/lucene-analyzers-smartcn-4.10.4.jar:'
+            '/usr/share/java/lucene-spatial-4.10.4.jar:'
+            '/usr/share/java/elasticsearch-1.7.3.jar:'
+            '/usr/share/java/lucene-codecs-4.10.4.jar:'
+            '/usr/share/java/lucene-misc-4.10.4.jar:'
+            '/usr/share/java/lucene-queryparser-4.10.4.jar:'
+            '/usr/share/java/lucene-test-framework-4.10.4.jar:'
+            '/usr/share/java/jts.jar:'
+            '/usr/share/java/lucene-benchmark-4.10.4.jar:'
+            '/usr/share/java/lucene-analyzers-icu-4.10.4.jar:'
+            '/usr/share/java/lucene-analyzers-phonetic-4.10.4.jar: '
+            '-Des.default.config=/etc/elasticsearch/elasticsearch.yml '
+            '-Des.default.path.home=/usr/share/elasticsearch '
+            '-Des.default.path.logs=/var/log/elasticsearch '
+            '-Des.default.path.data=/var/lib/elasticsearch '
+            '-Des.default.path.work=/tmp/elasticsearch '
+            '-Des.default.path.conf=/etc/elasticsearch '
+            'org.elasticsearch.bootstrap.Elasticsearch'
+        ),
+        'elasticsearch'
+    ),
+
     # Other command / service
     (
         (
