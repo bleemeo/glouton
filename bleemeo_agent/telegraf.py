@@ -339,6 +339,8 @@ class Telegraf:
                 name = 'uptime'
             elif name == 'system_uptime_format':
                 return
+            elif name == 'system_n_users':
+                name = 'users_logged'
         elif part[-2] == 'apache':
             service = 'apache'
             server_address = part[-3].replace('_', '.')
