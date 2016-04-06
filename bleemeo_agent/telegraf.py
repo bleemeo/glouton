@@ -270,7 +270,7 @@ class Telegraf:
                 })
             computed_metrics_pending.add(('cpu_other', None, timestamp))
         elif part[-2] == 'disk':
-            path = part[-3]
+            path = part[-3].replace('-', '/')
             path = self.graphite_server._disk_path_rename(path)
             if path is None:
                 return
