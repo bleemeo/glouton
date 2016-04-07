@@ -341,6 +341,14 @@ class Telegraf:
                 return
             elif name == 'system_n_users':
                 name = 'users_logged'
+        elif part[-2] == 'processes':
+            if part[-1] in ['blocked', 'running', 'sleeping',
+                            'stopped', 'zombies', 'paging']:
+                name = 'process_status_%s' % part[-1]
+            elif part[-1] == 'total':
+                name = 'process_total'
+            else:
+                return
         elif part[-2] == 'apache':
             service = 'apache'
             server_address = part[-3].replace('_', '.')
