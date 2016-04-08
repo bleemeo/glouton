@@ -465,6 +465,9 @@ class Telegraf:
                 pass
             elif name in ('mysql_queries', 'mysql_slow_queries'):
                 pass
+            elif name == 'mysql_innodb_row_lock_current_waits':
+                derive = False
+                name = 'mysql_innodb_locked_transaction'
             else:
                 return
         elif part[-2] == 'nginx':
