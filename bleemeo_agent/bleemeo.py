@@ -216,7 +216,7 @@ class BleemeoConnector(threading.Thread):
         try:
             while True:
                 metric = self._metric_queue.get(timeout=timeout)
-                timeout = 0  # Only wait for the first get
+                timeout = 0.3  # Long wait only for the first get
                 key = (
                     metric['measurement'],
                     metric.get('service'),
