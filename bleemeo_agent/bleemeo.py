@@ -18,6 +18,39 @@ import bleemeo_agent
 MQTT_QUEUE_MAX_SIZE = 2000
 
 
+def api_iterator(url, params, auth, headers=None):
+    """ Call Bleemeo API on a list endpoints and return a iterator
+        that request all pages
+    """
+    params = params.copy()
+    if 'page_size' not in params:
+        params['page_size'] = 100
+
+    response = requests.get(
+        url,
+        params=params,
+        auth=auth,
+        headers=headers,
+    )
+
+    data = response.json()
+    if isinstance(data, list):
+        # Old API without pagination
+        for item in data:
+            yield item
+
+        return
+
+    for item in data['results']:
+        yield item
+
+    while data['next']:
+        response = requests.get(data['next'], auth=auth)
+        data = response.json()
+        for item in data['results']:
+            yield item
+
+
 class BleemeoConnector(threading.Thread):
 
     def __init__(self, core):
@@ -357,16 +390,13 @@ class BleemeoConnector(threading.Thread):
         thresholds = {}
         base_url = self.bleemeo_base_url
         metric_url = urllib_parse.urljoin(base_url, '/v1/metric/')
-        response = requests.get(
+        metrics = api_iterator(
             metric_url,
             params={'agent': self.agent_uuid},
             auth=(self.agent_username, self.agent_password),
         )
 
-        if response.status_code != 200:
-            return
-
-        for data in response.json():
+        for data in metrics:
             item = data['item']
             if item == '':
                 # API use "" for no item. Agent use None
@@ -559,13 +589,15 @@ class BleemeoConnector(threading.Thread):
         # * create new updated facts
         # * delete old facts
 
-        response = requests.get(
+        old_facts = api_iterator(
             fact_url,
-            params={'agent': self.agent_uuid},
+            params={'agent': self.agent_uuid, 'page_size': 100},
             auth=(self.agent_username, self.agent_password),
             headers={'X-Requested-With': 'XMLHttpRequest'},
         )
-        old_facts = response.json()
+
+        # Do request(s) now. New fact should not be in this list.
+        old_facts = list(old_facts)
 
         # create new facts
         for fact_name, value in self.core.last_facts.items():
