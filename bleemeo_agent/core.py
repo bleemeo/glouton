@@ -728,9 +728,14 @@ class Core:
             # Also name start with "/". I think it may have mulitple name
             # and/or other "/" with docker-in-docker.
             container_name = container['Names'][0].lstrip('/')
-            container_process = (
-                self.docker_client.top(container_name)['Processes']
-            )
+            try:
+                container_process = (
+                    self.docker_client.top(container_name)['Processes']
+                )
+            except docker.errors.APIError:
+                # most probably container is restarting or just stopped
+                continue
+
             # In some case Docker return None instead of process list. Make
             # sure container_process is an iterable
             container_process = container_process or []
