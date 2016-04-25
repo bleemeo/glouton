@@ -447,6 +447,22 @@ class Core:
                 hours=1,
             )
 
+            try:
+                self.scheduler.unschedule_job(self._update_facts_job)
+            except KeyError:
+                # Job is not scheduled, cause:
+                # * agent is starting and scheduler has not yet started
+                # * something else (docker watcher ?) is currently rescheduling
+                #   that job
+                # In both case, facts was just happened or will happened in
+                # close future. Do nothing
+                return
+            self._update_facts_job = self.scheduler.add_interval_job(
+                self.update_facts,
+                start_date=now + datetime.timedelta(seconds=1),
+                hours=24,
+            )
+
         signal.signal(signal.SIGTERM, handler)
         signal.signal(signal.SIGHUP, handler_hup)
 
@@ -477,7 +493,7 @@ class Core:
             self._purge_metrics,
             minutes=5,
         )
-        self.scheduler.add_interval_job(
+        self._update_facts_job = self.scheduler.add_interval_job(
             self.update_facts,
             hours=24,
         )
