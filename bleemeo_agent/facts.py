@@ -117,6 +117,24 @@ def get_primary_address():
     return None
 
 
+def get_external_ip(core):
+    """ Return external IP used by this agent
+    """
+    url = core.config.get(
+        'agent.external_ip_indicator',
+        'https://myip.bleemeo.com'
+    )
+    try:
+        response = requests.get(url, timeout=5)
+    except requests.exceptions.RequestException:
+        return None
+
+    if response.status_code == 200:
+        return response.text
+
+    return None
+
+
 def get_virtual_type():
     """ Return what virtualization is used. "physical" if it's bare-metal.
     """
@@ -209,6 +227,7 @@ def get_facts(core):
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
         'docker_version': get_docker_version(core),
         'domain': domain,
+        'external_ip': get_external_ip(core),
         'fqdn': fqdn,
         'hostname': hostname,
         'kernel': kernel,

@@ -74,9 +74,12 @@ class BleemeoConnector(threading.Thread):
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
             self._mqtt_connected = True
+            msg = {
+                'external_ip': self.core.last_facts.get('external_ip'),
+            }
             self.publish(
                 'v1/agent/%s/connect' % self.agent_uuid,
-                'connect',
+                json.dumps(msg),
             )
             # FIXME: PRODUCT-137 : to be removed when upstream bug is fixed
             if self.mqtt_client._ssl is not None:
@@ -131,9 +134,9 @@ class BleemeoConnector(threading.Thread):
             seconds=15,
         )
 
-        while self.agent_uuid is None:
-            # Waiting for registration
-            self.core.is_terminating.wait(16)
+        while self.agent_uuid is None or not self.core.last_facts:
+            # Waiting for registration and initial facts
+            self.core.is_terminating.wait(1)
             if self.core.is_terminating.is_set():
                 return
 
@@ -146,7 +149,7 @@ class BleemeoConnector(threading.Thread):
         if self._mqtt_connected:
             self.publish(
                 'v1/agent/%s/disconnect' % self.agent_uuid,
-                'disconnect'
+                json.dumps({'disconnect-cause': 'Clean shutdown'}),
             )
             self.mqtt_client.loop()
 
@@ -193,7 +196,7 @@ class BleemeoConnector(threading.Thread):
     def _mqtt_setup(self):
         self.mqtt_client.will_set(
             'v1/agent/%s/disconnect' % self.agent_uuid,
-            'disconnect-will',
+            json.dumps({'disconnect-cause': 'disconnect-will'}),
             1,
         )
         if self.core.config.get('bleemeo.mqtt.ssl', True):
