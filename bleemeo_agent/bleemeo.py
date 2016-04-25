@@ -75,7 +75,7 @@ class BleemeoConnector(threading.Thread):
         if rc == 0:
             self._mqtt_connected = True
             msg = {
-                'external_ip': self.core.last_facts.get('external_ip'),
+                'public_ip': self.core.last_facts.get('public_ip'),
             }
             self.publish(
                 'v1/agent/%s/connect' % self.agent_uuid,

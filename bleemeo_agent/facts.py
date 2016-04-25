@@ -117,11 +117,11 @@ def get_primary_address():
     return None
 
 
-def get_external_ip(core):
-    """ Return external IP used by this agent
+def get_public_ip(core):
+    """ Return public IP used by this agent
     """
     url = core.config.get(
-        'agent.external_ip_indicator',
+        'agent.public_ip_indicator',
         'https://myip.bleemeo.com'
     )
     try:
@@ -228,7 +228,7 @@ def get_facts(core):
         'collectd_version': get_package_version('collectd'),
         'docker_version': get_docker_version(core),
         'domain': domain,
-        'external_ip': get_external_ip(core),
+        'public_ip': get_public_ip(core),
         'fqdn': fqdn,
         'hostname': hostname,
         'kernel': kernel,
