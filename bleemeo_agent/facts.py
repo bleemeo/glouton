@@ -225,6 +225,7 @@ def get_facts(core):
             os.path.join(DMI_DIR, 'bios_version')
         ),
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
+        'collectd_version': get_package_version('collectd'),
         'docker_version': get_docker_version(core),
         'domain': domain,
         'external_ip': get_external_ip(core),
@@ -248,6 +249,7 @@ def get_facts(core):
         'system_vendor': get_file_content(
             os.path.join(DMI_DIR, 'sys_vendor')
         ),
+        'telegraf_version': get_package_version('telegraf'),
         'timezone': get_file_content('/etc/timezone'),
         'virtual': virtual,
     })
