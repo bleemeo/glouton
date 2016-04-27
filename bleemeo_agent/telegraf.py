@@ -45,6 +45,13 @@ NGINX_TELEGRAF_CONFIG = """
   urls = ["http://%(address)s:%(port)s/nginx_status"]
 """
 
+RABBITMQ_TELEGRAF_CONFIG = """
+[[inputs.rabbitmq]]
+  url = "http://%(address)s:%(mgmt_port)s"
+  username = "%(username)s"
+  password = "%(password)s"
+"""
+
 REDIS_TELEGRAF_CONFIG = """
 [[inputs.redis]]
   servers = ["tcp://%(address)s:%(port)s"]
@@ -147,6 +154,11 @@ class Telegraf:
                 telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
             if service_name == 'nginx':
                 telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
+            if service_name == 'rabbitmq':
+                service_info.setdefault('username', 'guest')
+                service_info.setdefault('password', 'guest')
+                service_info.setdefault('mgmt_port', 15672)
+                telegraf_config += RABBITMQ_TELEGRAF_CONFIG % service_info
             if service_name == 'redis':
                 telegraf_config += REDIS_TELEGRAF_CONFIG % service_info
             if service_name == 'zookeeper':
@@ -210,6 +222,12 @@ class Telegraf:
             if (service_name == service
                     and service_info.get('address') == address
                     and service_info.get('port') == port):
+                return instance
+            # RabbitMQ use mgmt port
+            if (service_name == service
+                    and service_name == 'rabbitmq'
+                    and service_info.get('address') == address
+                    and service_info.get('mgmt_port', 15672) == port):
                 return instance
 
         raise KeyError('service not found')
@@ -601,6 +619,44 @@ class Telegraf:
                     computed_metrics_pending.add(
                         ('elasticsearch_search_time', item, timestamp)
                     )
+        elif part[-2] == 'rabbitmq_overview':
+            service = 'rabbitmq'
+
+            item = part[-3]
+            if not item.startswith('http:--'):
+                return  # unknown format
+            item = item[len('http:--'):]
+            (server_address, server_port) = item.split(':')
+            server_address = server_address.replace('_', '.')
+            server_port = int(server_port)
+            try:
+                item = self.get_service_instance(
+                    service, server_address, server_port
+                )
+            except KeyError:
+                return
+
+            if part[-1] == 'messages':
+                name = 'rabbitmq_messages_count'
+            elif part[-1] == 'consumers':
+                name = 'rabbitmq_consumers'
+            elif part[-1] == 'connections':
+                name = 'rabbitmq_connections'
+            elif part[-1] == 'queues':
+                name = 'rabbitmq_queues'
+            elif part[-1] == 'messages_published':
+                derive = True
+                name = 'rabbitmq_messages_published'
+            elif part[-1] == 'messages_delivered':
+                derive = True
+                name = 'rabbitmq_messages_delivered'
+            elif part[-1] == 'messages_acked':
+                derive = True
+                name = 'rabbitmq_messages_acked'
+            elif part[-1] == 'messages_unacked':
+                name = 'rabbitmq_messages_unacked_count'
+            else:
+                return
         else:
             return
 
