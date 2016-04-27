@@ -121,12 +121,12 @@ def update_checks(core):
             CHECKS.append(new_check)
         except NotImplementedError:
             logging.debug(
-                'No check exists for service %s', service_info['service']
+                'No check exists for service %s', service_name,
             )
         except:
             logging.debug(
                 'Failed to initialize check for service %s',
-                service_info['service'],
+                service_name,
                 exc_info=True
             )
 
