@@ -60,6 +60,40 @@ def test_merge_dict():
     assert bleemeo_agent.config.merge_dict(d1, d2) == want
 
 
+def test_merge_list():
+    assert bleemeo_agent.config.merge_dict({'a': []}, {'a': []}) == {'a': []}
+    assert (
+        bleemeo_agent.config.merge_dict({'a': []}, {'a': [1]}) ==
+        {'a': [1]})
+
+    d1 = {
+        'a': [1, 2],
+        'merge_create_duplicate': [1, 2, 3],
+        'sub_dict': {
+            'a': [1, 2],
+            'b': [1, 2],
+        }
+    }
+    d2 = {
+        'a': [3, 4],
+        'merge_create_duplicate': [3, 4],
+        'sub_dict': {
+            'a': [3, 4],
+            'c': [3, 4],
+        }
+    }
+    want = {
+        'a': [1, 2, 3, 4],
+        'merge_create_duplicate': [1, 2, 3, 3, 4],
+        'sub_dict': {
+            'a': [1, 2, 3, 4],
+            'b': [1, 2],
+            'c': [3, 4],
+        }
+    }
+    assert bleemeo_agent.config.merge_dict(d1, d2) == want
+
+
 def test_config_files():
     assert bleemeo_agent.config.config_files(['/does-not-exsits']) == []
     assert bleemeo_agent.config.config_files(
@@ -93,6 +127,13 @@ def test_load_config():
             'main': 1.0,
             'first': 'yes',
         },
+        'merged_list': [
+            'duplicated between main.conf & second.conf',
+            'item from main.conf',
+            'item from first.conf',
+            'item from second.conf',
+            'duplicated between main.conf & second.conf',
+        ],
         'sub_section': {
             'nested': None,
         },

@@ -68,12 +68,18 @@ class Config(dict):
 
 def merge_dict(destination, source):
     """ Merge two dictionary (recursivly). destination is modified
+
+        List are merged by appending source' list to destination' list
     """
     for (key, value) in source.items():
         if (key in destination
                 and isinstance(value, dict)
                 and isinstance(destination[key], dict)):
             destination[key] = merge_dict(destination[key], value)
+        elif (key in destination
+                and isinstance(value, list)
+                and isinstance(destination[key], list)):
+            destination[key].extend(value)
         else:
             destination[key] = value
     return destination

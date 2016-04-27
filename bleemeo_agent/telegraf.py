@@ -37,7 +37,7 @@ MONGODB_TELEGRAF_CONFIG = """
 
 MYSQL_TELEGRAF_CONFIG = """
 [[inputs.mysql]]
-  servers = ["%(user)s:%(password)s@tcp(%(address)s:%(port)s)/"]
+  servers = ["%(username)s:%(password)s@tcp(%(address)s:%(port)s)/"]
 """
 
 NGINX_TELEGRAF_CONFIG = """
@@ -141,6 +141,7 @@ class Telegraf:
                 telegraf_config += MEMCACHED_TELEGRAF_CONFIG % service_info
             if (service_name == 'mysql'
                     and service_info.get('password') is not None):
+                service_info.setdefault('username', 'root')
                 telegraf_config += MYSQL_TELEGRAF_CONFIG % service_info
             if service_name == 'mongodb':
                 telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info

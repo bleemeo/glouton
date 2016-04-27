@@ -1,3 +1,4 @@
+import socket
 
 import bleemeo_agent.core
 
@@ -276,3 +277,80 @@ def test_get_service_info():
             assert False, 'Expected service %s' % service
         else:
             assert result['service'] == service
+
+
+def test_sanitize_service():
+    sanitize_service = bleemeo_agent.core.sanitize_service
+
+    # First check custom services
+    service_info = {}
+    assert sanitize_service('test', service_info, False) is None
+
+    service_info = {'check_type': 'nagios'}
+    assert sanitize_service('test', service_info, False) is None
+
+    service_info = {'port': 'non-numeric'}
+    assert sanitize_service('test', service_info, False) is None
+
+    service_info = {'port': 1234}
+    wanted = {
+        'port': 1234,
+        'address': '127.0.0.1',
+        'protocol': socket.IPPROTO_TCP
+    }
+    assert sanitize_service('test', service_info, False) == wanted
+
+    service_info = {'check_type': 'nagios', 'check_command': 'true'}
+    wanted = service_info
+    assert sanitize_service('test', service_info, False) == wanted
+
+    service_info = {'check_type': 'nagios', 'check_command': 'true', 'port': 1}
+    wanted = {
+        'check_type': 'nagios',
+        'check_command': 'true',
+        'port': 1,
+        'address': '127.0.0.1',
+        'protocol': socket.IPPROTO_TCP
+    }
+    assert sanitize_service('test', service_info, False) == wanted
+
+    # discovered services are allowed to exists without service_info
+    service_info = {}
+    assert sanitize_service('test', service_info, True) == {}
+
+
+def test_apply_service_override():
+
+    services = {
+        ('apache', None): {'placeholder': 'apache'},
+        ('mysql', None): {'placeholder': 'mysql'},
+        ('mysql', 'container-1'): {'placeholder': 'mysql2'},
+        ('memcached', None): {'address': '127.0.0.1', 'placeholder': 'memc'},
+    }
+
+    override = [
+        {'id': 'mysql', 'username': 'user1'},
+        {'id': 'mysql', 'instance': 'container-1', 'username': 'user2'},
+        {'id': 'memcached', 'address': '10.1.1.2'},
+        {'id': 'myservice', 'this-is-a-bad-servcie': 'no port/nagios check'},
+        {'id': 'mywebapp', 'port': 8080, 'check_type': 'http'},
+    ]
+
+    wanted = {
+        ('apache', None): {'placeholder': 'apache'},
+        ('mysql', None): {'placeholder': 'mysql', 'username': 'user1'},
+        ('mysql', 'container-1'): {
+            'placeholder': 'mysql2',
+            'username': 'user2'
+        },
+        ('memcached', None): {'address': '10.1.1.2', 'placeholder': 'memc'},
+        ('mywebapp', None): {
+            'address': '127.0.0.1',
+            'port': 8080,
+            'protocol': socket.IPPROTO_TCP,
+            'check_type': 'http',
+        },
+    }
+
+    bleemeo_agent.core.apply_service_override(services, override)
+    assert services == wanted

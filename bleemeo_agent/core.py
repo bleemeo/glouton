@@ -248,6 +248,68 @@ def get_service_info(cmdline):
         return KNOWN_PROCESS.get(name)
 
 
+def apply_service_override(services, override_config):
+    for service_info in override_config:
+        service_info = service_info.copy()
+        try:
+            service = service_info.pop('id')
+        except KeyError:
+            logging.info('A entry in server.override is invalid')
+            continue
+        try:
+            instance = service_info.pop('instance')
+        except KeyError:
+            instance = None
+
+        key = (service, instance)
+        if key in services:
+            tmp = services[(service, instance)].copy()
+            tmp.update(service_info)
+            service_info = tmp
+
+        service_info = sanitize_service(service, service_info, key in services)
+        if service_info is not None:
+            services[(service, instance)] = service_info
+
+
+def sanitize_service(name, service_info, is_discovered_service):
+    if 'port' in service_info:
+        service_info.setdefault('address', '127.0.0.1')
+        service_info.setdefault('protocol', socket.IPPROTO_TCP)
+        try:
+            service_info['port'] = int(service_info['port'])
+        except ValueError:
+            logging.info(
+                'Bad custom service definition : '
+                'service "%s" port is "%s" which is not a number',
+                name,
+                service_info['port'],
+            )
+            return None
+
+    if (service_info.get('check_type') == 'nagios'
+            and 'check_command' not in service_info):
+        logging.info(
+            'Bad custom service definition : '
+            'service "%s" use type nagios without check_command',
+            name,
+        )
+        return None
+    elif (service_info.get('check_type') != 'nagios'
+            and 'port' not in service_info and not is_discovered_service):
+        # discovered services could exist without port, etc.
+        # It means that no check will be performed but service object will
+        # be created.
+        logging.info(
+            'Bad custom service definition : '
+            'service "%s" dot not have port settings',
+            name,
+        )
+        return None
+
+    return service_info
+
+
 class State:
     """ Persistant store for state of the agent.
 
@@ -616,57 +678,13 @@ class Core:
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
             self.services = self.discovered_services.copy()
-            self.services.update(self.get_custom_services())
+            apply_service_override(
+                self.services,
+                self.config.get('service', [])
+            )
 
             self.graphite_server.update_discovery()
             bleemeo_agent.checker.update_checks(self)
-
-    def get_custom_services(self):
-        result = {}
-        custom_services_config = self.config.get('service.custom', {})
-        for (name, config) in custom_services_config.items():
-            check_type = config.get('check_type', 'tcp')
-            port = config.get('port', None)
-            if port is not None:
-                address = config.get('address', '127.0.0.1')
-                protocol = socket.IPPROTO_TCP
-                try:
-                    port = int(port)
-                except ValueError:
-                    logging.info(
-                        'Bad custom service definition : '
-                        'service "%s" port is "%s" which is not a number',
-                        name,
-                        config['port'],
-                    )
-                    continue
-            else:
-                address = config.get('address')
-                protocol = None
-
-            if check_type == 'nagios' and 'check_command' not in config:
-                logging.info(
-                    'Bad custom service definition : '
-                    'service "%s" use type nagios without check_command',
-                    name
-                )
-                continue
-            elif check_type != 'nagios' and port is None:
-                logging.info(
-                    'Bad custom service definition : '
-                    'service "%s" dot not have port settings',
-                    name
-                )
-                continue
-
-            result[(name, None)] = {
-                'address': address,
-                'port': port,
-                'protocol': protocol,
-                'check_type': check_type,
-                'check_command': config.get('check_command'),
-            }
-        return result
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name
@@ -838,7 +856,7 @@ class Core:
                     mysql_user = 'root'
                     mysql_password = env.replace('MYSQL_ROOT_PASSWORD=', '')
 
-        service_info['user'] = mysql_user
+        service_info['username'] = mysql_user
         service_info['password'] = mysql_password
 
     def _discover_pgsql(self, instance, service_info):
@@ -856,7 +874,7 @@ class Core:
                     password = env.replace('POSTGRES_PASSWORD=', '')
                     user = 'postgres'
 
-        service_info['user'] = user
+        service_info['username'] = user
         service_info['password'] = password
 
     def _watch_docker_event(self):  # noqa

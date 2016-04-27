@@ -50,7 +50,7 @@ LoadPlugin mysql
 <Plugin mysql>
     <Database "bleemeo-%(instance)s">
         Host "%(address)s"
-        User "%(user)s"
+        User "%(username)s"
         Password "%(password)s"
         ConnectTimeout 2
     </Database>
@@ -107,7 +107,7 @@ POSTGRESQL_COLLECTD_CONFIG = r"""
     <Database "postgres">
         Host "%(address)s"
         Port "%(port)s"
-        User "%(user)s"
+        User "%(username)s"
         Password "%(password)s"
         SSLMode "prefer"
         Query "bleemeo-transactions"
@@ -221,6 +221,7 @@ class Collectd:
                 collectd_config += MEMCACHED_COLLECTD_CONFIG % service_info
             if (service_name == 'mysql'
                     and service_info.get('password') is not None):
+                service_info.setdefault('username', 'root')
                 collectd_config += MYSQL_COLLECTD_CONFIG % service_info
             if service_name == 'nginx' and 'nginx' not in services_type_seen:
                 collectd_config += NGINX_COLLECTD_CONFIG % service_info
@@ -234,6 +235,7 @@ class Collectd:
                 if not has_postgres:
                     collectd_config += POSTGRESQL_COMMON_COLLECTD_CONFIG
                     has_postgres = True
+                service_info.setdefault('username', 'postgres')
                 collectd_config += POSTGRESQL_COLLECTD_CONFIG % service_info
             if service_name == 'redis':
                 collectd_config += REDIS_COLLECTD_CONFIG % service_info
