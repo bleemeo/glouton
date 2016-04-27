@@ -73,7 +73,7 @@ def _gather_checks_info():
 
     return {
         'checks': checks,
-        'count_ok':  check_count_ok,
+        'count_ok': check_count_ok,
         'count_warning': check_count_warning,
         'count_critical': check_count_critical,
         'count_total': len(checks),
