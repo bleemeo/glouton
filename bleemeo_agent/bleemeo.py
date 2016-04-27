@@ -428,10 +428,12 @@ class BleemeoConnector(threading.Thread):
             (service_name, instance) = key
             try:
                 address = socket.gethostbyname(service_info['address'])
-            except (socket.gaierror, TypeError):
+            except (socket.gaierror, TypeError, KeyError):
                 # gaierror => unable to resolv name
                 # TypeError => service_info['address'] is None (happen when
                 #              service is on a stopped container)
+                # KeyError => no 'address' in service_info (happen when service
+                #             is a customer defined using Nagios check).
                 address = None
 
             entry = {

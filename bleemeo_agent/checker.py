@@ -160,7 +160,7 @@ class Check:
         self.service = service_name
         self.instance = instance
         self.service_info = service_info
-        self.address = service_info['address']
+        self.address = service_info.get('address')
         self.core = core
 
         self.port = service_info.get('port')
