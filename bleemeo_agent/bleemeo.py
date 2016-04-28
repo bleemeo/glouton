@@ -58,7 +58,7 @@ class BleemeoConnector(threading.Thread):
         self.core = core
 
         self._metric_queue = queue.Queue()
-        self._mqtt_connected = False
+        self.connected = False
         self._mqtt_queue_size = 0
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
         self._last_threshold_update = datetime.datetime(1970, 1, 1)
@@ -71,9 +71,13 @@ class BleemeoConnector(threading.Thread):
         )
         self.metrics_info = {}
 
+        # Make sure this metrics exists and try to be registered
+        self.metrics_uuid.setdefault(('agent_status', None, None), None)
+        self.metrics_info.setdefault(('agent_status', None, None), {})
+
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0:
-            self._mqtt_connected = True
+            self.connected = True
             msg = {
                 'public_ip': self.core.last_facts.get('public_ip'),
             }
@@ -87,9 +91,9 @@ class BleemeoConnector(threading.Thread):
             logging.info('MQTT connection established')
 
     def on_disconnect(self, client, userdata, rc):
-        if self._mqtt_connected:
+        if self.connected:
             logging.info('MQTT connection lost')
-        self._mqtt_connected = False
+        self.connected = False
 
     def on_publish(self, client, userdata, mid):
         self._mqtt_queue_size -= 1
@@ -134,8 +138,7 @@ class BleemeoConnector(threading.Thread):
             seconds=15,
         )
 
-        while self.agent_uuid is None or not self.core.last_facts:
-            # Waiting for registration and initial facts
+        while not self._ready_for_mqtt():
             self.core.is_terminating.wait(1)
             if self.core.is_terminating.is_set():
                 return
@@ -146,7 +149,7 @@ class BleemeoConnector(threading.Thread):
             self._loop()
 
         self.mqtt_client.loop_stop()
-        if self._mqtt_connected:
+        if self.connected:
             self.publish(
                 'v1/agent/%s/disconnect' % self.agent_uuid,
                 json.dumps({'disconnect-cause': 'Clean shutdown'}),
@@ -156,6 +159,20 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.disconnect()
         self.mqtt_client.loop()
 
+    def _ready_for_mqtt(self):
+        """ Check for requirement needed before MQTT connection
+
+            * agent must be registered
+            * it need initial facts
+            * "agent_status" metrics must be registered
+        """
+        agent_status_key = ('agent_status', None, None)
+        return (
+            self.agent_uuid is not None and
+            self.core.last_facts and
+            self.metrics_uuid.get(agent_status_key) is not None
+        )
+
     def _bleemeo_health_check(self):
         """ Check the Bleemeo connector works correctly. Log any issue found
         """
@@ -164,7 +181,7 @@ class BleemeoConnector(threading.Thread):
         if self.agent_uuid is None:
             logging.info('Agent not yet registered')
 
-        if not self._mqtt_connected:
+        if not self.connected:
             logging.info(
                 'Bleemeo connection (MQTT) is currently not established'
             )
@@ -293,7 +310,7 @@ class BleemeoConnector(threading.Thread):
         if self.agent_uuid is None:
             return
 
-        if not self._mqtt_connected:
+        if not self.connected:
             return
 
         self.publish(

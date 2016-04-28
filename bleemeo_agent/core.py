@@ -614,8 +614,6 @@ class Core:
 
     def _gather_metrics(self):
         """ Gather and send some metric missing from other sources
-
-            Currently only uptime is sent.
         """
         uptime_seconds = bleemeo_agent.util.get_uptime()
         now = time.time()
@@ -625,6 +623,13 @@ class Core:
                 'measurement': 'uptime',
                 'time': now,
                 'value': uptime_seconds,
+            })
+
+        if self.bleemeo_connector and self.bleemeo_connector.connected:
+            self.emit_metric({
+                'measurement': 'agent_status',
+                'time': now,
+                'value': 0.0,  # status ok
             })
 
         metric = self.graphite_server.get_time_elapsed_since_last_data()
