@@ -1179,8 +1179,10 @@ class Core:
             critical_since = None
             warning_since = None
 
-        warn_duration = warning_since and (time.time() - warning_since) or 0
-        crit_duration = critical_since and (time.time() - critical_since) or 0
+        warn_duration = warning_since and (metric['time'] - warning_since) or 0
+        crit_duration = (
+            critical_since and (metric['time'] - critical_since) or 0
+        )
 
         if crit_duration >= period:
             status = 'critical'
