@@ -107,7 +107,7 @@ def get_primary_address():
         for (index, word) in enumerate(split_output):
             if word == 'src':
                 return split_output[index+1]
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, OSError):
         # Either "ip" is not found... or you don't have a route to 8.8.8.8
         # (no internet ?).
         # We could try with psutil, but "ip" is present on all recent ditro
