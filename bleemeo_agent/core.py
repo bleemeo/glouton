@@ -14,6 +14,7 @@ import time
 import apscheduler.scheduler
 import psutil
 from six.moves import configparser
+import yaml
 
 import bleemeo_agent
 import bleemeo_agent.checker
@@ -215,13 +216,36 @@ KNOWN_PROCESS = {
 
 DOCKER_API_VERSION = '1.21'
 
+LOGGER_CONFIG = """
+version: 1
+disable_existing_loggers: false
+formatters:
+    simple:
+        format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    syslog:
+        format: "bleemeo-agent[%(process)d]: %(levelname)s - %(message)s"
+handlers:
+    # One of the handler will be removed at runtime
+    console:
+        class: logging.StreamHandler
+        formatter: simple
+    syslog:
+        class: logging.handlers.SysLogHandler
+        address: /dev/log
+        formatter: syslog
+loggers:
+    requests: {level: WARNING}
+    urllib3: {level: WARNING}
+    werkzeug: {level: WARNING}
+    apscheduler: {level: WARNING}
+root:
+    # Level and handlers will be updated at runtime
+    level: INFO
+    handlers: console
+"""
+
 
 def main():
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
-
     try:
         core = Core()
         core.run()
@@ -419,18 +443,27 @@ class Core:
         return self.config.get('container.type', None)
 
     def _config_logger(self):
-        logger_config = {
-            'version': 1,
-            'disable_existing_loggers': False,
-            'loggers': {
-                'requests': {'level': logging.WARNING},
-                'urllib3': {'level': logging.WARNING},
-                'werkzeug': {'level': logging.WARNING},
-                'apscheduler': {'level': logging.WARNING},
-            },
-        }
-        logger_config.update(self.config.get('logging', {}))
-        logging.config.dictConfig(logger_config)
+        output = self.config.get('logging.output', 'console')
+        log_level = self.config.get('logging.level', 'INFO')
+
+        if output == 'syslog':
+            logger_config = yaml.safe_load(LOGGER_CONFIG)
+            del logger_config['handlers']['console']
+            logger_config['root']['handlers'] = ['syslog']
+            logger_config['root']['level'] = log_level
+            try:
+                logging.config.dictConfig(logger_config)
+            except ValueError:
+                # Probably /dev/log that does not exists, for example under
+                # docker container
+                output = 'console'
+
+        if output == 'console':
+            logger_config = yaml.safe_load(LOGGER_CONFIG)
+            del logger_config['handlers']['syslog']
+            logger_config['root']['handlers'] = ['console']
+            logger_config['root']['level'] = log_level
+            logging.config.dictConfig(logger_config)
 
     def _sentry_setup(self):
         """ Configure Sentry if enabled
