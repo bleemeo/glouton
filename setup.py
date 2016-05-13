@@ -16,7 +16,7 @@ setup(
     include_package_data=True,
     install_requires=[
         'apscheduler < 3.0.0',
-        'flask',
+        'jinja2',
         'psutil >= 2.0.0',
         'requests',
         'six',
@@ -27,6 +27,7 @@ setup(
         'influxdb': ['influxdb > 2.6.0'],
         'bleemeo': ['paho-mqtt'],
         'sentry': ['raven'],
+        'web': ['flask']
     },
     scripts=(
         'bin/bleemeo-agent',

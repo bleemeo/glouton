@@ -24,6 +24,7 @@ Recommends:
     ca-certificates,
     python3-apt,
     python3-docker,
+    python3-flask,
     python3-influxdb (>= 2.6.0~),
     python3-raven,
     sudo,

@@ -22,7 +22,6 @@ import bleemeo_agent.config
 import bleemeo_agent.facts
 import bleemeo_agent.graphite
 import bleemeo_agent.util
-import bleemeo_agent.web
 
 
 # Optional dependencies
@@ -49,6 +48,11 @@ try:
 except ImportError:
     bleemeo_agent.influxdb = None
 
+try:
+    # May fail because of missing flask dependency
+    import bleemeo_agent.web
+except ImportError:
+    bleemeo_agent.web = None
 
 # List of event that trigger discovery.
 DOCKER_DISCOVERY_EVENTS = [
@@ -638,7 +642,13 @@ class Core:
         self.graphite_server.start()
 
         if self.config.get('web.enabled', True):
-            bleemeo_agent.web.start_server(self)
+            if bleemeo_agent.web is None:
+                logging.warning(
+                    'Missing dependency (flask), '
+                    'can not start local WebServer'
+                )
+            else:
+                bleemeo_agent.web.start_server(self)
 
         if self.docker_client is not None:
             thread = threading.Thread(target=self._watch_docker_event)
