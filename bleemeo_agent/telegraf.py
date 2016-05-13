@@ -356,10 +356,10 @@ class Telegraf:
             name = 'system_' + part[-1]
             if name == 'system_uptime':
                 name = 'uptime'
-            elif name == 'system_uptime_format':
-                return
             elif name == 'system_n_users':
                 name = 'users_logged'
+            elif name not in ('system_load1', 'system_load5', 'system_load15'):
+                return
         elif part[-2] == 'processes':
             if part[-1] in ['blocked', 'running', 'sleeping',
                             'stopped', 'zombies', 'paging']:
