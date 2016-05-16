@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 import shlex
 import subprocess
 import time
@@ -44,6 +45,11 @@ NGINX_TELEGRAF_CONFIG = """
 [[inputs.nginx]]
   urls = ["http://%(address)s:%(port)s/nginx_status"]
 """
+
+POSTGRESQL_TELEGRAF_CONFIG = """
+[[inputs.postgresql]]
+    address = "host=%(address)s port=%(port)s user=%(username)s password=%(password)s dbname=postgres"
+"""  # noqa
 
 RABBITMQ_TELEGRAF_CONFIG = """
 [[inputs.rabbitmq]]
@@ -154,6 +160,10 @@ class Telegraf:
                 telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
             if service_name == 'nginx':
                 telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
+            if (service_name == 'postgresql'
+                    and service_info.get('password') is not None):
+                service_info.setdefault('username', 'postgres')
+                telegraf_config += POSTGRESQL_TELEGRAF_CONFIG % service_info
             if service_name == 'rabbitmq':
                 service_info.setdefault('username', 'guest')
                 service_info.setdefault('password', 'guest')
@@ -260,6 +270,7 @@ class Telegraf:
 
         item = None
         service = None
+        instance = None
         derive = False
         no_emit = False
 
@@ -373,7 +384,7 @@ class Telegraf:
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -402,7 +413,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -441,7 +452,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -494,7 +505,7 @@ class Telegraf:
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -509,12 +520,52 @@ class Telegraf:
                 derive = True
             elif name == 'nginx_connections_handled':
                 derive = True
+        elif part[-2] == 'postgresql':
+            service = 'postgresql'
+            dbname = part[2]
+
+            if dbname in ('template0', 'template1'):
+                return
+
+            connect_string = part[3]
+            # connect string look like:
+            # "host=172_17_0_4_port=5432_user=bleemeo_user_dbname=postgres"
+            match = re.match(
+                r'^host=(.*)_port=(.*)_user=.*$',
+                connect_string,
+            )
+            if not match:
+                return
+
+            server_address = match.group(1).replace('_', '.')
+            server_port = int(match.group(2))
+            try:
+                instance = self.get_service_instance(
+                    service, server_address, server_port
+                )
+            except KeyError:
+                return
+
+            derive = True
+            if part[-1] == 'xact_commit':
+                name = 'postgresql_commit'
+            elif part[-1] == 'xact_rollback':
+                name = 'postgresql_rollback'
+            elif (part[-1] in ('blks_read', 'blks_hit', 'tup_returned',
+                               'tup_fetched', 'tup_inserted', 'tup_updated',
+                               'tup_deleted', 'temp_files', 'temp_bytes',
+                               'blk_read_time', 'blk_write_time')):
+                name = 'postgresql_' + part[-1]
+            else:
+                return
+
+            item = instance + '_' + dbname
         elif part[-2] == 'redis':
             service = 'redis'
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -549,7 +600,7 @@ class Telegraf:
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -571,7 +622,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -596,7 +647,7 @@ class Telegraf:
             # server_address = part[3].replace('_', '.')
             node_id = part[4]
             try:
-                item = self.get_elasticsearch_instance(node_id)
+                instance = self.get_elasticsearch_instance(node_id)
             except KeyError:
                 return
 
@@ -610,27 +661,27 @@ class Telegraf:
                     name = 'elasticsearch_search'
                     derive = True
                     computed_metrics_pending.add(
-                        ('elasticsearch_search_time', item, timestamp)
+                        ('elasticsearch_search_time', instance, timestamp)
                     )
                 elif part[-1] == 'search_query_time_in_millis':
                     name = 'elasticsearch_search_time_total'
                     derive = True
                     no_emit = True
                     computed_metrics_pending.add(
-                        ('elasticsearch_search_time', item, timestamp)
+                        ('elasticsearch_search_time', instance, timestamp)
                     )
         elif part[-2] == 'rabbitmq_overview':
             service = 'rabbitmq'
 
-            item = part[-3]
-            if not item.startswith('http:--'):
+            tmp = part[-3]
+            if not tmp.startswith('http:--'):
                 return  # unknown format
-            item = item[len('http:--'):]
-            (server_address, server_port) = item.split(':')
+            tmp = item[len('http:--'):]
+            (server_address, server_port) = tmp.split(':')
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                item = self.get_service_instance(
+                instance = self.get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -663,6 +714,9 @@ class Telegraf:
         if name is None:
             return
 
+        if item is None and service is not None:
+            item = instance
+
         if derive:
             value = self.get_derivate(name, item, timestamp, value)
             if value is None:
@@ -674,6 +728,7 @@ class Telegraf:
         }
         if service is not None:
             metric['service'] = service
+            metric['instance'] = instance
         if item is not None:
             metric['item'] = item
 

@@ -286,6 +286,7 @@ class Check:
         }
         if self.instance is not None:
             metric['item'] = self.instance
+            metric['instance'] = self.instance
         self.core.emit_metric(metric)
 
         if return_code != STATUS_OK and self.tcp_socket is not None:

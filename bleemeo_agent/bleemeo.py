@@ -539,9 +539,9 @@ class BleemeoConnector(threading.Thread):
                 if item is not None:
                     payload['item'] = item
                 if service is not None:
-                    # When a service is set, item == instance
+                    instance = self.metrics_info[metric_key]['instance']
                     payload['service'] = (
-                        self.services_uuid[(service, item)]['uuid']
+                        self.services_uuid[(service, instance)]['uuid']
                     )
                 if status_of is not None:
                     payload['status_of'] = self.metrics_uuid[from_metric_key]
@@ -593,7 +593,10 @@ class BleemeoConnector(threading.Thread):
         if (metric_name, service, item) not in self.metrics_info:
             self.metrics_info.setdefault(
                 (metric_name, service, item),
-                {'status_of': metric.get('status_of')}
+                {
+                    'status_of': metric.get('status_of'),
+                    'instance': metric.get('instance'),
+                }
             )
         if (metric_name, service, item) not in self.metrics_uuid:
             self.metrics_uuid.setdefault((metric_name, service, item), None)
