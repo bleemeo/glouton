@@ -6,6 +6,7 @@ import subprocess
 import time
 
 import requests
+from six.moves import urllib_parse
 
 import bleemeo_agent.util
 
@@ -24,6 +25,11 @@ ELASTICSEARCH_TELEGRAF_CONFIG = """
   servers = ["http://%(address)s:%(port)s"]
   local = true
   cluster_health = false
+"""
+
+HAPROXY_TELEGRAF_CONFIG = """
+[[inputs.haproxy]]
+  servers = ["%(stats_url)s"]
 """
 
 MEMCACHED_TELEGRAF_CONFIG = """
@@ -150,6 +156,9 @@ class Telegraf:
                 telegraf_config += APACHE_TELEGRAF_CONFIG % service_info
             if service_name == 'elasticsearch':
                 telegraf_config += ELASTICSEARCH_TELEGRAF_CONFIG % service_info
+            if (service_name == 'haproxy'
+                    and service_info.get('stats_url') is not None):
+                telegraf_config += HAPROXY_TELEGRAF_CONFIG % service_info
             if service_name == 'memcached':
                 telegraf_config += MEMCACHED_TELEGRAF_CONFIG % service_info
             if (service_name == 'mysql'
@@ -239,6 +248,18 @@ class Telegraf:
                     and service_info.get('address') == address
                     and service_info.get('mgmt_port', 15672) == port):
                 return instance
+
+        raise KeyError('service not found')
+
+    def get_haproxy_instance(self, host):
+        for (key, service_info) in self.core.services.items():
+            (service_name, instance) = key
+            if service_name != 'haproxy':
+                continue
+            if 'stats_url' in service_info:
+                tmp = urllib_parse.urlparse(service_info['stats_url'])
+                if host == tmp.hostname:
+                    return instance
 
         raise KeyError('service not found')
 
@@ -407,6 +428,30 @@ class Telegraf:
                 name = name.replace('scboard', 'scoreboard')
             else:
                 return
+        elif part[-2] == 'haproxy':
+            service = 'haproxy'
+            proxy_name = part[2]
+            if part[4] not in ('BACKEND', 'FRONTEND'):
+                return
+            host = part[3].replace('_', '.')
+            try:
+                instance = self.get_haproxy_instance(host)
+            except KeyError:
+                return
+
+            if (part[-1] in ('stot', 'bin', 'bout', 'dreq', 'dresp', 'ereq',
+                             'econ', 'eresp', 'req_tot')):
+                derive = True
+                name = 'haproxy_' + part[-1]
+            elif (part[-1] in ('qcur', 'scur', 'qtime', 'ctime', 'rtime',
+                               'ttime')):
+                name = 'haproxy_' + part[-1]
+            elif part[-1] == 'active_servers':
+                name = 'haproxy_act'
+            else:
+                return
+
+            item = instance + '_' + proxy_name
         elif part[-2] == 'memcached':
             service = 'memcached'
             (server_address, server_port) = part[-3].split(':')
