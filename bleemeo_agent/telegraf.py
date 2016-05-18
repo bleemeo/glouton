@@ -451,7 +451,10 @@ class Telegraf:
             else:
                 return
 
-            item = instance + '_' + proxy_name
+            if instance is None:
+                item = proxy_name
+            else:
+                item = instance + '_' + proxy_name
         elif part[-2] == 'memcached':
             service = 'memcached'
             (server_address, server_port) = part[-3].split(':')
@@ -604,7 +607,10 @@ class Telegraf:
             else:
                 return
 
-            item = instance + '_' + dbname
+            if instance is None:
+                item = dbname
+            else:
+                item = instance + '_' + dbname
         elif part[-2] == 'redis':
             service = 'redis'
             server_address = part[-3].replace('_', '.')
