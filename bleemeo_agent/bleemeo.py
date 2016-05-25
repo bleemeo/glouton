@@ -76,7 +76,7 @@ class BleemeoConnector(threading.Thread):
         self.metrics_info.setdefault(('agent_status', None, None), {})
 
     def on_connect(self, client, userdata, flags, rc):
-        if rc == 0:
+        if rc == 0 and not self.core.is_terminating.is_set():
             self.connected = True
             msg = {
                 'public_ip': self.core.last_facts.get('public_ip'),
@@ -148,16 +148,20 @@ class BleemeoConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             self._loop()
 
-        self.mqtt_client.loop_stop()
         if self.connected:
             self.publish(
                 'v1/agent/%s/disconnect' % self.agent_uuid,
                 json.dumps({'disconnect-cause': 'Clean shutdown'}),
+                force=True
             )
-            self.mqtt_client.loop()
+
+        # Wait up to 5 second for MQTT queue to be empty before disconnecting
+        deadline = time.time() + 5
+        while self._mqtt_queue_size > 0 and time.time() < deadline:
+            time.sleep(0.1)
 
         self.mqtt_client.disconnect()
-        self.mqtt_client.loop()
+        self.mqtt_client.loop_stop()
 
     def _ready_for_mqtt(self):
         """ Check for requirement needed before MQTT connection
@@ -318,15 +322,15 @@ class BleemeoConnector(threading.Thread):
             bytearray(zlib.compress(json.dumps(top_info).encode('utf8')))
         )
 
-    def publish(self, topic, message):
-        if self._mqtt_queue_size > MQTT_QUEUE_MAX_SIZE:
+    def publish(self, topic, message, force=False):
+        if self._mqtt_queue_size > MQTT_QUEUE_MAX_SIZE and not force:
             return
 
+        self._mqtt_queue_size += 1
         self.mqtt_client.publish(
             topic,
             message,
             1)
-        self._mqtt_queue_size += 1
 
     def register(self):
         """ Register the agent to Bleemeo SaaS service
