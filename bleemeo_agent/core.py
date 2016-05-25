@@ -426,7 +426,7 @@ class Core:
         self.influx_connector = None
         self.graphite_server = None
         self.docker_client = None
-        self.scheduler = apscheduler.scheduler.Scheduler(standalone=True)
+        self.scheduler = apscheduler.scheduler.Scheduler()
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
@@ -437,6 +437,8 @@ class Core:
             'discovered_services', {}
         )
         self._soft_status_since = {}
+        self._trigger_discovery = False
+        self._trigger_facts = False
 
     @property
     def container(self):
@@ -513,6 +515,8 @@ class Core:
             self.schedule_tasks()
             try:
                 self.scheduler.start()
+                # Wait forever. Ctrl+C or SIGKILL will abort this wait
+                self.is_terminating.wait()
             finally:
                 self.scheduler.shutdown()
         except KeyboardInterrupt:
@@ -526,41 +530,11 @@ class Core:
             Make SIGHUP trigger a discovery
         """
         def handler(signum, frame):
-            raise KeyboardInterrupt
+            self.is_terminating.set()
 
         def handler_hup(signum, frame):
-            now = datetime.datetime.now()
-            try:
-                self.scheduler.unschedule_job(self._discovery_job)
-            except KeyError:
-                # Job is not scheduled, cause:
-                # * agent is starting and scheduler has not yet started
-                # * something else (docker watcher ?) is currently rescheduling
-                #   that job
-                # In both case, discovery has just happened or will happened in
-                # close future. Do nothing
-                return
-            self._discovery_job = self.scheduler.add_interval_job(
-                self.update_discovery,
-                start_date=now + datetime.timedelta(seconds=1),
-                hours=1,
-            )
-
-            try:
-                self.scheduler.unschedule_job(self._update_facts_job)
-            except KeyError:
-                # Job is not scheduled, cause:
-                # * agent is starting and scheduler has not yet started
-                # * something else (docker watcher ?) is currently rescheduling
-                #   that job
-                # In both case, facts was just happened or will happened in
-                # close future. Do nothing
-                return
-            self._update_facts_job = self.scheduler.add_interval_job(
-                self.update_facts,
-                start_date=now + datetime.timedelta(seconds=1),
-                hours=24,
-            )
+            self._trigger_discovery = True
+            self._trigger_facts = True
 
         signal.signal(signal.SIGTERM, handler)
         signal.signal(signal.SIGHUP, handler_hup)
@@ -606,6 +580,10 @@ class Core:
         )
         self.scheduler.add_interval_job(
             self.send_top_info,
+            seconds=10,
+        )
+        self.scheduler.add_interval_job(
+            self._check_triggers,
             seconds=10,
         )
         self._schedule_metric_pull()
@@ -697,6 +675,25 @@ class Core:
             for ((measurement, item), metric) in self.last_metrics.items()
             if metric['time'] >= cutoff
         }
+
+    def _check_triggers(self):
+        now = datetime.datetime.now()
+        if self._trigger_discovery:
+            self.scheduler.unschedule_job(self._discovery_job)
+            self._discovery_job = self.scheduler.add_interval_job(
+                self.update_discovery,
+                start_date=now + datetime.timedelta(seconds=1),
+                hours=1,
+            )
+            self._trigger_discovery = False
+        if self._trigger_facts:
+            self.scheduler.unschedule_job(self._update_facts_job)
+            self._update_facts_job = self.scheduler.add_interval_job(
+                self.update_facts,
+                start_date=now + datetime.timedelta(seconds=1),
+                hours=24,
+            )
+            self._trigger_facts = False
 
     def update_discovery(self, first_run=False):
         discovered_running_services = self._run_discovery()
@@ -938,10 +935,6 @@ class Core:
                     generator = self.docker_client.events()
 
                 for event in generator:
-                    # We request discovery in 10 seconds to allow newly created
-                    # container to start (e.g. "mysqld" process to start, and
-                    # not just the wrapper shell script)
-
                     status = event.get('status')
                     event_type = event.get('Type', 'container')
 
@@ -949,22 +942,7 @@ class Core:
                             or event_type != 'container'):
                         continue
 
-                    now = datetime.datetime.now()
-                    try:
-                        self.scheduler.unschedule_job(self._discovery_job)
-                    except KeyError:
-                        # Job is not scheduled, cause:
-                        # * agent is starting and scheduler has not yet started
-                        # * something else (SIGHUP handler) is currently
-                        #   rescheduling that job
-                        # In both case, discovery has just happened or will
-                        # happened in close future. Do nothing.
-                        return
-                    self._discovery_job = self.scheduler.add_interval_job(
-                        self.update_discovery,
-                        start_date=now + datetime.timedelta(seconds=10),
-                        hours=1,
-                    )
+                    self._trigger_discovery = True
             except:
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
