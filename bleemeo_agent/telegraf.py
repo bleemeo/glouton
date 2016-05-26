@@ -613,8 +613,16 @@ class Telegraf:
                 item = instance + '_' + dbname
         elif part[-2] == 'redis':
             service = 'redis'
+
+            # Prior to Telegraf 0.13.1, output was
+            # telegraf.$HOSTNAME.$PORT.$SERVER.redis.$METRIC
+            # Telegraf 0.13.1+, output is
+            # telegraf.$HOSTNAME.$PORT.$ROLE.$SERVER.redis.$METRIC
+            #
+            # $PORT is always part[2]
+            # $SERVER is always part[-3]
             server_address = part[-3].replace('_', '.')
-            server_port = int(part[-4])
+            server_port = int(part[2])
             try:
                 instance = self.get_service_instance(
                     service, server_address, server_port
