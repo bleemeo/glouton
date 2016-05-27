@@ -735,7 +735,7 @@ class Telegraf:
             tmp = part[-3]
             if not tmp.startswith('http:--'):
                 return  # unknown format
-            tmp = item[len('http:--'):]
+            tmp = tmp[len('http:--'):]
             (server_address, server_port) = tmp.split(':')
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
