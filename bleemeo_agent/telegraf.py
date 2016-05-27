@@ -251,14 +251,21 @@ class Telegraf:
 
         raise KeyError('service not found')
 
-    def get_haproxy_instance(self, host):
+    def get_haproxy_instance(self, hostport):
+        if ':' in hostport:
+            host, port = hostport.split(':')
+            port = int(port)
+        else:
+            host = hostport
+            port = None
+
         for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
             if service_name != 'haproxy':
                 continue
             if 'stats_url' in service_info:
                 tmp = urllib_parse.urlparse(service_info['stats_url'])
-                if host == tmp.hostname:
+                if host == tmp.hostname and port == tmp.port:
                     return instance
 
         raise KeyError('service not found')
@@ -433,9 +440,9 @@ class Telegraf:
             proxy_name = part[2]
             if part[4] not in ('BACKEND', 'FRONTEND'):
                 return
-            host = part[3].replace('_', '.')
+            hostport = part[3].replace('_', '.')
             try:
-                instance = self.get_haproxy_instance(host)
+                instance = self.get_haproxy_instance(hostport)
             except KeyError:
                 return
 
