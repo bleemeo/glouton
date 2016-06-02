@@ -625,11 +625,18 @@ class Telegraf:
             # telegraf.$HOSTNAME.$PORT.$SERVER.redis.$METRIC
             # Telegraf 0.13.1+, output is
             # telegraf.$HOSTNAME.$PORT.$ROLE.$SERVER.redis.$METRIC
+
+            # Also, for both a $DATABASE may exists just after $HOSTNAME
+            # E.g for 0.13.1:
+            # telegraf.$HOSTNAME.$DATABASE.$PORT.$ROLE.$SERVER.redis.$METRIC
             #
-            # $PORT is always part[2]
+            # $PORT is part[-4] or part[-5]
             # $SERVER is always part[-3]
             server_address = part[-3].replace('_', '.')
-            server_port = int(part[2])
+            if part[-4] in ('master', 'slave'):
+                server_port = int(part[-5])
+            else:
+                server_port = int(part[-4])
             try:
                 instance = self.get_service_instance(
                     service, server_address, server_port
