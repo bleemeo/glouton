@@ -1,3 +1,4 @@
+import copy
 import datetime
 import io
 import json
@@ -563,7 +564,7 @@ class Core:
             seconds=3,
         )
         self.scheduler.add_interval_job(
-            self._purge_metrics,
+            self.purge_metrics,
             minutes=5,
         )
         self._update_facts_job = self.scheduler.add_interval_job(
@@ -657,7 +658,7 @@ class Core:
         if metric is not None:
             self.emit_metric(metric, soft_status=False)
 
-    def _purge_metrics(self):
+    def purge_metrics(self, deleted_metrics=None):
         """ Remove old metrics from self.last_metrics
 
             Some metric may stay in last_metrics unupdated, for example
@@ -665,15 +666,21 @@ class Core:
 
             For this reason, from time to time, scan last_metrics and drop
             any value older than 6 minutes.
+
+            deleted_metrics is a list of couple (measurement, item) of metrics
+            that must be purged regardless of their age.
         """
         now = time.time()
         cutoff = now - 60 * 6
 
+        if deleted_metrics is None:
+            deleted_metrics = []
+
         # XXX: concurrent access with emit_metric.
         self.last_metrics = {
-            (measurement, item): metric
-            for ((measurement, item), metric) in self.last_metrics.items()
-            if metric['time'] >= cutoff
+            key: metric
+            for (key, metric) in self.last_metrics.items()
+            if metric['time'] >= cutoff and key not in deleted_metrics
         }
 
     def _check_triggers(self):
@@ -695,14 +702,19 @@ class Core:
             )
             self._trigger_facts = False
 
-    def update_discovery(self, first_run=False):
+    def update_discovery(self, first_run=False, deleted_services=None):
         discovered_running_services = self._run_discovery()
         if first_run:
             # Should only be needed on first run. In addition to avoid
             # possible race-condition, do not run this while
             # Bleemeo._bleemeo_synchronize could run.
             self._search_old_service(discovered_running_services)
-        new_discovered_services = self.discovered_services.copy()
+        new_discovered_services = copy.deepcopy(self.discovered_services)
+
+        if deleted_services:
+            for key in deleted_services:
+                if key in new_discovered_services:
+                    del new_discovered_services[key]
 
         # Remove container address. If container is still running, address
         # will be re-added from discovered_running_services.

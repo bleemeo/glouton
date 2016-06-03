@@ -61,7 +61,7 @@ class BleemeoConnector(threading.Thread):
         self.connected = False
         self._mqtt_queue_size = 0
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
-        self._last_threshold_update = datetime.datetime(1970, 1, 1)
+        self._last_update = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
         self.metrics_uuid = self.core.state.get_complex_dict(
             'metrics_uuid', {}
@@ -398,8 +398,10 @@ class BleemeoConnector(threading.Thread):
             return
 
         now = datetime.datetime.now()
-        if now - self._last_threshold_update > datetime.timedelta(hours=1):
+        if now - self._last_update > datetime.timedelta(hours=1):
             self._retrive_threshold()
+            self._purge_deleted_services()
+            self._last_update = now
 
         self._register_services()
         self._register_metric()
@@ -409,6 +411,9 @@ class BleemeoConnector(threading.Thread):
 
     def _retrive_threshold(self):
         """ Retrieve threshold for all registered metrics
+
+            Also remove from state any deleted metrics and remove it from
+            core.last_metrics (in memory cache of last value)
         """
         logging.debug('Retrieving thresholds')
         thresholds = {}
@@ -420,7 +425,10 @@ class BleemeoConnector(threading.Thread):
             auth=(self.agent_username, self.agent_password),
         )
 
+        metrics_registered = set()
+
         for data in metrics:
+            metrics_registered.add(data['id'])
             item = data['item']
             if item == '':
                 # API use "" for no item. Agent use None
@@ -433,9 +441,60 @@ class BleemeoConnector(threading.Thread):
                 'high_critical': data['threshold_high_critical'],
             }
 
+        deleted_metrics = []
+        for key in list(self.metrics_uuid.keys()):
+            (metric_name, service_name, item) = key
+            value = self.metrics_uuid[key]
+            if value is None or value in metrics_registered:
+                continue
+
+            del self.metrics_uuid[key]
+            deleted_metrics.append((metric_name, item))
+
+        if deleted_metrics:
+            self.core.state.set_complex_dict('metrics_uuid', self.metrics_uuid)
+            self.core.purge_metrics(deleted_metrics)
+
         self.core.state.set_complex_dict('thresholds', thresholds)
         self.core.define_thresholds()
-        self._last_threshold_update = datetime.datetime.now()
+
+    def _purge_deleted_services(self):
+        """ Remove from state any deleted service
+
+            Also remove them from discovered service.
+        """
+        base_url = self.bleemeo_base_url
+        service_url = urllib_parse.urljoin(base_url, '/v1/service/')
+        services = api_iterator(
+            service_url,
+            params={'agent': self.agent_uuid},
+            auth=(self.agent_username, self.agent_password),
+        )
+
+        services_registred = set()
+        for data in services:
+            services_registred.add(data['id'])
+
+        deleted_services = []
+        for key in list(self.services_uuid.keys()):
+            (service_name, instance) = key
+            entry = self.services_uuid[key]
+            if entry is None or entry['uuid'] in services_registred:
+                continue
+
+            del self.services_uuid[key]
+            deleted_services.append(key)
+
+        self.core.state.set_complex_dict(
+            'services_uuid', self.services_uuid
+        )
+
+        if deleted_services:
+            logging.debug(
+                'API deleted the following services: %s',
+                deleted_services
+            )
+            self.core.update_discovery(deleted_services=deleted_services)
 
     def _register_services(self):
         """ Check for any unregistered services and register them
