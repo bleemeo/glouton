@@ -390,7 +390,7 @@ class Check:
         start = time.time()
         try:
             response = requests.get(url, timeout=10, allow_redirects=False)
-        except requests.exceptions.ConnectTimeout:
+        except requests.exceptions.Timeout:
             return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
         except requests.exceptions.RequestException:
             return (STATUS_CRITICAL, 'Connection refused')
