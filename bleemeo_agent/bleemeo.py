@@ -220,13 +220,19 @@ class BleemeoConnector(threading.Thread):
             json.dumps({'disconnect-cause': 'disconnect-will'}),
             1,
         )
+        if hasattr(ssl, 'PROTOCOL_TLSv1_2'):
+            # Need Python 3.4+ or 2.7.9+
+            tls_version = ssl.PROTOCOL_TLSv1_2
+        else:
+            tls_version = ssl.PROTOCOL_TLSv1
+
         if self.core.config.get('bleemeo.mqtt.ssl', True):
             self.mqtt_client.tls_set(
                 self.core.config.get(
                     'bleemeo.mqtt.cafile',
                     '/etc/ssl/certs/ca-certificates.crt'
                 ),
-                tls_version=ssl.PROTOCOL_TLSv1_2,
+                tls_version=tls_version,
             )
             self.mqtt_client.tls_insecure_set(
                 self.core.config.get('bleemeo.mqtt.ssl_insecure', False)
