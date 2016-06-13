@@ -1,10 +1,12 @@
 import copy
 import datetime
 import io
+import itertools
 import json
 import logging
 import logging.config
 import os
+import re
 import signal
 import socket
 import subprocess
@@ -92,12 +94,14 @@ KNOWN_PROCESS = {
         'service': 'ejabberd',
         'port': 5222,
         'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
     },
     '-s rabbit': {  # beam process
         'interpreter': 'erlang',
         'service': 'rabbitmq',
         'port': 5672,
         'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
     },
     'dovecot': {
         'service': 'dovecot',
@@ -201,12 +205,14 @@ KNOWN_PROCESS = {
         'service': 'zookeeper',
         'port': 2181,
         'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
     },
     'org.elasticsearch.bootstrap.Elasticsearch': {  # java process
         'interpreter': 'java',
         'service': 'elasticsearch',
         'port': 9200,
         'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
     },
     'salt-master': {  # python process
         'interpreter': 'python',
@@ -302,7 +308,7 @@ def apply_service_override(services, override_config):
 
 
 def sanitize_service(name, service_info, is_discovered_service):
-    if 'port' in service_info:
+    if 'port' in service_info and service_info['port'] is not None:
         service_info.setdefault('address', '127.0.0.1')
         service_info.setdefault('protocol', socket.IPPROTO_TCP)
         try:
@@ -440,6 +446,7 @@ class Core:
         self._soft_status_since = {}
         self._trigger_discovery = False
         self._trigger_facts = False
+        self._netstat_output_mtime = time.time()
 
     @property
     def container(self):
@@ -574,6 +581,7 @@ class Core:
         self._discovery_job = self.scheduler.add_interval_job(
             self.update_discovery,
             hours=1,
+            minutes=10,
         )
         self.scheduler.add_interval_job(
             self._gather_metrics,
@@ -691,6 +699,7 @@ class Core:
                 self.update_discovery,
                 start_date=now + datetime.timedelta(seconds=1),
                 hours=1,
+                minutes=10,
             )
             self._trigger_discovery = False
         if self._trigger_facts:
@@ -701,6 +710,17 @@ class Core:
                 hours=24,
             )
             self._trigger_facts = False
+
+        netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
+        try:
+            mtime = os.stat(netstat_file).st_mtime
+        except IOError:
+            mtime = 0
+
+        if mtime > self._netstat_output_mtime:
+            # Trigger discovery if netstat.out changed
+            self._trigger_discovery = True
+            self._netstat_output_mtime = mtime
 
     def update_discovery(self, first_run=False, deleted_services=None):
         discovered_running_services = self._run_discovery()
@@ -841,13 +861,112 @@ class Core:
 
         return processes
 
+    def get_netstat(self):
+        """ Parse netstat output and return a mapping pid => list of listening
+            port/protocol (e.g. 80/tcp, 127/udp)
+        """
+
+        netstat_info = {}
+
+        netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
+        netstat_re = re.compile(
+            r'^(?P<protocol>udp6?|tcp6?)\s+\d+\s+\d+\s+'
+            r'(?P<address>[0-9a-f.:]+):(?P<port>\d+)\s+[0-9a-f.:*]+\s+'
+            r'(LISTEN)?\s+(?P<pid>\d+)/(?P<program>.*)$'
+        )
+        try:
+            with open(netstat_file) as file_obj:
+                for line in file_obj:
+                    match = netstat_re.match(line)
+                    if match is None:
+                        continue
+
+                    protocol = match.group('protocol')
+                    pid = int(match.group('pid'))
+                    address = match.group('address')
+                    port = int(match.group('port'))
+
+                    if protocol in ('tcp6' or 'udp6') and address == '::':
+                        # Assume this socket is IPv4 & IPv6
+                        address = '0.0.0.0'
+                        protocol = protocol[:3]
+                    elif protocol in ('tcp6', 'udp6'):
+                        # No support for IPv6
+                        continue
+
+                    key = '%s/%s' % (port, protocol)
+                    ports = netstat_info.setdefault(pid, {})
+
+                    # If multiple address exists, prefer 127.0.0.1
+                    if key not in ports or address.startswith('127.'):
+                        ports[key] = address
+        except IOError:
+            pass
+
+        return netstat_info
+
+    def _discovery_fill_address_and_ports(
+            self, service_info, instance, ports):
+
+        service_name = service_info['service']
+        if instance is None:
+            default_address = '127.0.0.1'
+        else:
+            default_address = self.get_docker_container_address(instance)
+
+        default_port = service_info.get('port')
+
+        extra_ports = {}
+        old_service_info = self.discovered_services.get(
+            (service_name, instance)
+        )
+        if old_service_info is not None and 'extra_ports' in old_service_info:
+            extra_ports.update(old_service_info['extra_ports'])
+
+        for port_proto, address in ports.items():
+            port = int(port_proto.split('/')[0])
+            if address == '0.0.0.0':
+                address = default_address
+            if service_info.get('ignore_high_port') and port > 32000:
+                continue
+            extra_ports[port_proto] = address
+
+        if default_port is not None and len(extra_ports) > 0:
+            if service_info['protocol'] == socket.IPPROTO_TCP:
+                default_protocol = 'tcp'
+            else:
+                default_protocol = 'udp'
+
+            key = '%s/%s' % (default_port, default_protocol)
+
+            if key in extra_ports:
+                default_address = extra_ports[key]
+            else:
+                # service is NOT listening on default_port but it is listening
+                # on some ports. Don't check default_port and only check
+                # extra_ports
+                default_port = None
+
+        service_info['extra_ports'] = extra_ports
+        service_info['port'] = default_port
+        service_info['address'] = default_address
+
     def _run_discovery(self):
         """ Try to discover some service based on known port/process
         """
         discovered_services = {}
         processes = self._get_processes_map()
 
-        for process in processes.values():
+        netstat_info = self.get_netstat()
+
+        # Process PID present in netstat output before other PID, because
+        # two process may listen on same port (e.g. multiple Apache process)
+        # but netstat only see one of them.
+        for pid in itertools.chain(netstat_info.keys(), processes.keys()):
+            process = processes.get(pid)
+            if process is None:
+                continue
+
             service_info = get_service_info(process['cmdline'])
             if service_info is not None:
                 service_info = service_info.copy()
@@ -860,12 +979,18 @@ class Core:
                     'Discovered service %s on %s',
                     service_name, instance
                 )
-                if instance is None:
-                    address = '127.0.0.1'
-                else:
-                    address = self.get_docker_container_address(instance)
 
-                service_info['address'] = address
+                if instance is None:
+                    ports = netstat_info.get(pid, {})
+                else:
+                    ports = self.get_docker_ports(instance)
+
+                self._discovery_fill_address_and_ports(
+                    service_info,
+                    instance,
+                    ports,
+                )
+
                 # some service may need additionnal information, like password
                 if service_name == 'mysql':
                     self._discover_mysql(instance, service_info)
@@ -1284,6 +1409,18 @@ class Core:
                 return config['IPAddress']
 
         return None
+
+    def get_docker_ports(self, container_name):
+        container_info = self.docker_client.inspect_container(container_name)
+        exposed_ports = container_info['Config'].get('ExposedPorts', {})
+        listening_ports = list(exposed_ports.keys())
+
+        # Address "0.0.0.0" will be replaced by container address in
+        # _discovery_fill_address_and_ports method.
+        ports = {
+            x: '0.0.0.0' for x in listening_ports
+        }
+        return ports
 
 
 def install_thread_hook(raven_self):

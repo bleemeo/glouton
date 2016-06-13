@@ -32,5 +32,6 @@ setup(
     scripts=(
         'bin/bleemeo-agent',
         'bin/bleemeo-agent-gather-facts',
+        'bin/bleemeo-netstat',
     )
 )

@@ -17,8 +17,10 @@ case "$1" in
             chmod 0640 /etc/bleemeo/agent.conf.d/30-install.conf
         fi
 
-        # Retrive fact that need root privilege
+        # Retrive fact that needs root privilege
         bleemeo-agent-gather-facts
+        # Retrive netstat that also needs root privilege
+        bleemeo-netstat
         ;;
 esac
 

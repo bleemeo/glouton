@@ -136,20 +136,20 @@ def periodic_check():
 
         * that all TCP socket are still openned
     """
-    all_sockets = {}
-
     for check in CHECKS:
-        if check.tcp_socket is not None:
-            all_sockets[check.tcp_socket] = check
-
-    (rlist, _, _) = select.select(all_sockets.keys(), [], [], 0)
-    for s in rlist:
-        all_sockets[s].check_socket()
+        check.check_sockets()
 
 
 class Check:
     def __init__(self, core, service_name, instance, service_info):
-        self.check_info = CHECKS_INFO.get(service_name)
+        self.address = service_info.get('address')
+        self.port = service_info.get('port')
+        self.protocol = service_info.get('protocol')
+
+        if self.port is None:
+            self.check_info = None
+        else:
+            self.check_info = CHECKS_INFO.get(service_name)
 
         if (service_info.get('password') is None
                 and service_name in ('mysql', 'postgresql')):
@@ -160,13 +160,9 @@ class Check:
         self.service = service_name
         self.instance = instance
         self.service_info = service_info
-        self.address = service_info.get('address')
         self.core = core
 
-        self.port = service_info.get('port')
-        self.protocol = service_info.get('protocol')
-        if self.protocol == socket.IPPROTO_TCP and self.check_info is None:
-            self.check_info = {'type': 'tcp'}
+        self.extra_ports = self.service_info.get('extra_ports', {})
 
         if self.service_info.get('check_type') is not None:
             self.check_info = {'type': self.service_info['check_type']}
@@ -175,7 +171,7 @@ class Check:
                 self.service_info['check_command']
             )
 
-        if self.check_info is None:
+        if self.check_info is None and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
         logging.debug(
@@ -184,7 +180,8 @@ class Check:
             self.instance,
         )
 
-        self.tcp_socket = None
+        self.tcp_sockets = self._initialize_tcp_sockets()
+
         self.last_run = time.time()
 
         self.current_job = self.core.scheduler.add_interval_job(
@@ -192,30 +189,51 @@ class Check:
             start_date=datetime.datetime.now() + datetime.timedelta(seconds=1),
             seconds=60,
         )
-        self.open_socket_job = None
+        self.open_sockets_job = None
 
-    def open_socket(self):
-        if self.port is None or self.protocol != socket.IPPROTO_TCP:
-            return
+    def _initialize_tcp_sockets(self):
+        tcp_sockets = {}
 
-        if self.tcp_socket is not None:
-            self.tcp_socket.close()
-            self.tcp_socket = None
+        if self.port is not None and self.protocol == socket.IPPROTO_TCP:
+            tcp_sockets[(self.address, self.port)] = None
 
-        self.tcp_socket = socket.socket()
-        self.tcp_socket.settimeout(2)
-        try:
-            self.tcp_socket.connect((self.address, self.port))
-        except socket.error:
-            self.tcp_socket.close()
-            self.tcp_socket = None
+        for port_protocol, address in self.extra_ports.items():
+            if not port_protocol.endswith('/tcp'):
+                continue
 
-        if self.tcp_socket is None:
+            port = int(port_protocol.split('/')[0])
+            if port == self.port:
+                continue
+            tcp_sockets[(address, port)] = None
+
+        return tcp_sockets
+
+    def open_sockets(self):
+        """ Try to open all closed sockets
+        """
+        run_check = False
+
+        for (key, tcp_socket) in self.tcp_sockets.items():
+            (address, port) = key
+
+            if tcp_socket is not None:
+                continue
+
+            tcp_socket = socket.socket()
+            tcp_socket.settimeout(2)
+            try:
+                tcp_socket.connect((address, port))
+                self.tcp_sockets[(address, port)] = tcp_socket
+            except socket.error:
+                tcp_socket.close()
+                logging.debug(
+                    'check %s (on %s): failed to open socket to %s:%s',
+                    self.service, self.instance, address, port
+                )
+                run_check = True
+
+        if run_check:
             # open_socket failed, run check now
-            logging.debug(
-                'check %s (on %s): failed to open socket to %s:%s',
-                self.service, self.instance, self.address, self.port
-            )
             # reschedule job to be run immediately
             self.core.scheduler.unschedule_job(self.current_job)
             self.current_job = self.core.scheduler.add_interval_job(
@@ -227,23 +245,35 @@ class Check:
                 seconds=60,
             )
 
-    def check_socket(self):
-        """ Called when socket is "readable". When a socket is closed,
-            it became "readable".
+    def check_sockets(self):
+        """ Check if some socket are closed
         """
-        # this call can NOT block, it is called when socket is readable
-        try:
-            buffer = self.tcp_socket.recv(65536)
-        except socket.error:
-            buffer = b''
+        try_reopen = False
 
-        if buffer == b'':
-            # this means connection was closed!
-            logging.debug(
-                'check %s (on %s) : connection to %s:%s closed',
-                self.service, self.instance, self.address, self.port
-            )
-            self.open_socket()
+        sockets = {}
+        for key, sock in self.tcp_sockets.items():
+            if sock is not None:
+                sockets[sock] = key
+
+        (rlist, _, _) = select.select(sockets.keys(), [], [], 0)
+        for s in rlist:
+            try:
+                buffer = s.recv(65536)
+            except socket.error:
+                buffer = b''
+
+            if buffer == b'':
+                (address, port) = sockets[s]
+                logging.debug(
+                    'check %s (on %s) : connection to %s:%s closed',
+                    self.service, self.instance, address, port
+                )
+                s.close()
+                self.tcp_sockets[(address, port)] = None
+                try_reopen = True
+
+        if try_reopen:
+            self.open_sockets()
 
     def run_check(self):  # noqa
         self.last_run = time.time()
@@ -254,6 +284,9 @@ class Check:
             (return_code, output) = (
                 STATUS_CRITICAL, 'Container stopped: connection refused'
             )
+        elif self.check_info is None and self.extra_ports:
+            # Only TCP checks for extra_ports will be run
+            (return_code, output) = (STATUS_OK, '')
         elif self.check_info['type'] == 'nagios':
             (return_code, output) = self.check_nagios()
         elif self.check_info['type'] == 'tcp':
@@ -270,6 +303,20 @@ class Check:
             raise NotImplementedError(
                 'Unknown check type %s' % self.check_info['type']
             )
+
+        if ((return_code == STATUS_OK or return_code == STATUS_WARNING)
+                and self.extra_ports):
+            for (address, port) in self.tcp_sockets:
+                if port == self.port:
+                    # self.port is already checked with above check
+                    continue
+                (extra_port_rc, extra_port_output) = self.check_tcp(
+                    address, port)
+                if extra_port_rc != STATUS_OK:
+                    (return_code, output) = (extra_port_rc, extra_port_output)
+                    break
+                if not output and return_code == STATUS_OK:
+                    output = extra_port_output
 
         logging.debug(
             'check %s (on %s): return code is %s (output=%s)',
@@ -289,16 +336,17 @@ class Check:
             metric['instance'] = self.instance
         self.core.emit_metric(metric)
 
-        if return_code != STATUS_OK and self.tcp_socket is not None:
-            self.tcp_socket.close()
-            self.tcp_socket = None
+        if return_code != STATUS_OK:
+            # close all TCP sockets
+            for key, sock in self.tcp_sockets.items():
+                if sock is not None:
+                    sock.close()
+                    self.tcp_sockets[key] = None
 
-        if (return_code == STATUS_OK
-                and self.port is not None
-                and self.protocol == socket.IPPROTO_TCP
-                and self.tcp_socket is None):
-            self.open_socket_job = self.core.scheduler.add_date_job(
-                self.open_socket,
+        if return_code == STATUS_OK and self.tcp_sockets:
+            # Make sure all socket are openned
+            self.open_sockets_job = self.core.scheduler.add_date_job(
+                self.open_sockets,
                 date=(
                     datetime.datetime.now() + datetime.timedelta(seconds=5)
                 ),
@@ -309,13 +357,16 @@ class Check:
         """
         logging.debug('Stoping check %s (on %s)', self.service, self.instance)
         try:
-            self.core.scheduler.unschedule_job(self.open_socket_job)
+            self.core.scheduler.unschedule_job(self.open_sockets_job)
         except KeyError:
             logging.debug(
                 'Job open_socket for check %s (on %s) was already unscheduled',
                 self.service, self.instance
             )
         self.core.scheduler.unschedule_job(self.current_job)
+        for tcp_socket in self.tcp_sockets.values():
+            if tcp_socket is not None:
+                tcp_socket.close()
 
     def check_nagios(self):
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
@@ -355,29 +406,46 @@ class Check:
         end = time.time()
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
-    def check_tcp(self):
+    def check_tcp(self, address=None, port=None):  # noqa
+        if address is not None or port is not None:
+            use_default = False
+        else:
+            address = self.address
+            port = self.port
+            use_default = True
+
         start = time.time()
         sock = socket.socket()
         sock.settimeout(10)
         try:
-            sock.connect((self.address, self.port))
+            sock.connect((address, port))
         except socket.timeout:
-            return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
+            return (
+                STATUS_CRITICAL,
+                'TCP port %d, connection timed out after 10 seconds' % port
+            )
         except socket.error:
-            return (STATUS_CRITICAL, 'Connection refused')
+            return (STATUS_CRITICAL, 'TCP port %d, Connection refused' % port)
 
-        if self.check_info.get('send'):
+        if (self.check_info is not None
+                and self.check_info.get('send')
+                and use_default):
             try:
                 sock.send(self.check_info['send'].encode('utf8'))
             except socket.timeout:
                 return (
                     STATUS_CRITICAL,
-                    'Connection timed out after 10 seconds'
+                    'TCP port %d, connection timed out after 10 seconds' % port
                 )
             except socket.error:
-                return (STATUS_CRITICAL, 'Connection closed too early')
+                return (
+                    STATUS_CRITICAL,
+                    'TCP port %d, connection closed too early' % port
+                )
 
-        if self.check_info.get('expect'):
+        if (self.check_info is not None
+                and self.check_info.get('expect')
+                and use_default):
             return self.check_tcp_recv(sock, start)
 
         sock.close()

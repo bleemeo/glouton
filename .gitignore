@@ -6,6 +6,7 @@ __pycache__
 /.cache
 /state.json
 /facts.yaml
+/netstat.out
 /generated_values.json
 /etc/agent.conf.d/90-local.conf
 /work
