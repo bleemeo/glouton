@@ -361,9 +361,7 @@ class Telegraf:
                 })
         elif part[-2] == 'mem':
             name = 'mem_' + part[-1]
-            if name.endswith('_percent'):
-                name = name.replace('_percent', '_perc')
-            if name == 'mem_used' or name == 'mem_used_perc':
+            if name in ('mem_used', 'mem_used_percent'):
                 # We don't use mem_used of telegraf (which is
                 # mem_total - mem_free)
                 # We prefere the "collectd one" (which is
@@ -371,9 +369,14 @@ class Telegraf:
 
                 # mem_used will be computed as mem_total - mem_available
                 return  # We don't use mem_used of telegraf.
-
-            if name == 'mem_total' or name == 'mem_available':
+            elif name == 'mem_available_percent':
+                name = 'mem_available_perc'
+            elif name in ('mem_buffered', 'mem_cached', 'mem_free'):
+                pass
+            elif name in ('mem_total', 'mem_available'):
                 computed_metrics_pending.add(('mem_used', None, timestamp))
+            else:
+                return
         elif part[-2] == 'net' and part[-3] != 'all':
             item = part[-3]
             if self.graphite_server.network_interface_blacklist(item):
