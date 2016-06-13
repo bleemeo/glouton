@@ -516,6 +516,11 @@ class Core:
             )
 
     def run(self):
+        upgrade_file = self.config.get('agent.upgrade_file', 'upgrade')
+        try:
+            os.unlink(upgrade_file)
+        except IOError:
+            pass
         try:
             self.setup_signal()
             self._docker_connect()

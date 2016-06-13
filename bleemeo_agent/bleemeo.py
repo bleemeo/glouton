@@ -1,6 +1,7 @@
 import datetime
 import json
 import logging
+import os
 import socket
 import ssl
 import threading
@@ -148,7 +149,7 @@ class BleemeoConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             self._loop()
 
-        if self.connected:
+        if self.connected and not self.upgrade_in_progress:
             self.publish(
                 'v1/agent/%s/disconnect' % self.agent_uuid,
                 json.dumps({'disconnect-cause': 'Clean shutdown'}),
@@ -763,3 +764,8 @@ class BleemeoConnector(threading.Thread):
             'bleemeo.api_base',
             'https://api.bleemeo.com/'
         )
+
+    @property
+    def upgrade_in_progress(self):
+        upgrade_file = self.core.config.get('agent.upgrade_file', 'upgrade')
+        return os.path.exists(upgrade_file)

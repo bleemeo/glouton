@@ -28,6 +28,7 @@ case "$1" in
         fi
         # Bleemeo agent modify its configuration.
         if [ -x "/etc/init.d/bleemeo-agent" ]; then
+            touch /var/lib/bleemeo/upgrade
             if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
                 invoke-rc.d bleemeo-agent restart || exit $?
             else
