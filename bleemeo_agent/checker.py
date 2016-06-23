@@ -19,6 +19,9 @@ STATUS_OK = 0
 STATUS_WARNING = 1
 STATUS_CRITICAL = 2
 STATUS_UNKNOWN = 3
+# Special value, means that check could not be run, e.g. due to missing port
+# information
+STATUS_CHECK_NOT_RUN = -1
 
 STATUS_NAME = {
     STATUS_OK: 'ok',
@@ -47,6 +50,9 @@ CHECKS_INFO = {
     },
     'ntp': {
         'type': 'ntp',
+    },
+    'openvpn': {
+        'disable_persistent_socket': True,
     },
     'openldap': {
         'type': 'tcp',
@@ -146,16 +152,16 @@ class Check:
         self.port = service_info.get('port')
         self.protocol = service_info.get('protocol')
 
-        if self.port is None:
-            self.check_info = None
-        else:
-            self.check_info = CHECKS_INFO.get(service_name)
+        self.check_info = CHECKS_INFO.get(service_name, {})
+
+        if self.port is not None and self.protocol == socket.IPPROTO_TCP:
+            self.check_info.setdefault('type', 'tcp')
 
         if (service_info.get('password') is None
                 and service_name in ('mysql', 'postgresql')):
             # For those check, if password is not set the dedicated check
             # will fail.
-            self.check_info = None
+            self.check_info['type'] = 'tcp'
 
         self.service = service_name
         self.instance = instance
@@ -171,7 +177,7 @@ class Check:
                 self.service_info['check_command']
             )
 
-        if self.check_info is None and not self.extra_ports:
+        if not self.check_info and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
         logging.debug(
@@ -211,6 +217,9 @@ class Check:
     def open_sockets(self):
         """ Try to open all closed sockets
         """
+        if self.check_info.get('disable_persistent_socket'):
+            return
+
         run_check = False
 
         for (key, tcp_socket) in self.tcp_sockets.items():
@@ -284,27 +293,22 @@ class Check:
             (return_code, output) = (
                 STATUS_CRITICAL, 'Container stopped: connection refused'
             )
-        elif self.check_info is None and self.extra_ports:
-            # Only TCP checks for extra_ports will be run
-            (return_code, output) = (STATUS_OK, '')
-        elif self.check_info['type'] == 'nagios':
+        elif self.check_info.get('type') == 'nagios':
             (return_code, output) = self.check_nagios()
-        elif self.check_info['type'] == 'tcp':
+        elif self.check_info.get('type') == 'tcp':
             (return_code, output) = self.check_tcp()
-        elif self.check_info['type'] == 'http':
+        elif self.check_info.get('type') == 'http':
             (return_code, output) = self.check_http()
-        elif self.check_info['type'] == 'imap':
+        elif self.check_info.get('type') == 'imap':
             (return_code, output) = self.check_imap()
-        elif self.check_info['type'] == 'smtp':
+        elif self.check_info.get('type') == 'smtp':
             (return_code, output) = self.check_smtp()
-        elif self.check_info['type'] == 'ntp':
+        elif self.check_info.get('type') == 'ntp':
             (return_code, output) = self.check_ntp()
         else:
-            raise NotImplementedError(
-                'Unknown check type %s' % self.check_info['type']
-            )
+            (return_code, output) = (STATUS_CHECK_NOT_RUN, '')
 
-        if ((return_code == STATUS_OK or return_code == STATUS_WARNING)
+        if ((return_code != STATUS_CRITICAL or return_code != STATUS_UNKNOWN)
                 and self.extra_ports):
             for (address, port) in self.tcp_sockets:
                 if port == self.port:
@@ -312,11 +316,19 @@ class Check:
                     continue
                 (extra_port_rc, extra_port_output) = self.check_tcp(
                     address, port)
-                if extra_port_rc != STATUS_OK:
+                if extra_port_rc == STATUS_CRITICAL:
                     (return_code, output) = (extra_port_rc, extra_port_output)
                     break
-                if not output and return_code == STATUS_OK:
+                if return_code == STATUS_CHECK_NOT_RUN:
+                    return_code = extra_port_rc
                     output = extra_port_output
+
+        if return_code == STATUS_CHECK_NOT_RUN:
+            logging.debug(
+                'check %s (on %s): no check available. Not metric sent',
+                self.service, self.instance,
+            )
+            return
 
         logging.debug(
             'check %s (on %s): return code is %s (output=%s)',
@@ -414,6 +426,9 @@ class Check:
             port = self.port
             use_default = True
 
+        if port is None or address is None:
+            return (STATUS_CHECK_NOT_RUN, '')
+
         start = time.time()
         sock = socket.socket()
         sock.settimeout(10)
@@ -453,6 +468,9 @@ class Check:
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
     def check_http(self):
+        if self.port is None or self.address is None:
+            return (STATUS_CHECK_NOT_RUN, '')
+
         base_url = 'http://%s:%s' % (self.address, self.port)
         url = urllib_parse.urljoin(base_url, self.check_info.get('url', '/'))
         start = time.time()
@@ -489,6 +507,9 @@ class Check:
             )
 
     def check_imap(self):
+        if self.port is None or self.address is None:
+            return (STATUS_CHECK_NOT_RUN, '')
+
         start = time.time()
 
         try:
@@ -510,6 +531,9 @@ class Check:
         return (STATUS_OK, 'IMAP OK - %.3f second response time' % (end-start))
 
     def check_smtp(self):
+        if self.port is None or self.address is None:
+            return (STATUS_CHECK_NOT_RUN, '')
+
         start = time.time()
 
         try:
@@ -531,6 +555,9 @@ class Check:
         return (STATUS_OK, 'SMTP OK - %.3f second response time' % (end-start))
 
     def check_ntp(self):
+        if self.port is None or self.address is None:
+            return (STATUS_CHECK_NOT_RUN, '')
+
         # Ntp use 1900-01-01 00:00:00 as epoc.
         # Since Unix use 1970-01-01 as epoc, we have this delta
         NTP_DELTA = 2208988800
