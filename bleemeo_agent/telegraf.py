@@ -346,7 +346,7 @@ class Telegraf:
                     'time': timestamp,
                     'value': 100 - value,
                 })
-            computed_metrics_pending.add(('cpu_other', None, timestamp))
+            computed_metrics_pending.add(('cpu_other', None, None, timestamp))
         elif part[-2] == 'disk':
             path = part[-3].replace('-', '/')
             path = self.graphite_server._disk_path_rename(path)
@@ -394,7 +394,9 @@ class Telegraf:
             elif name in ('mem_buffered', 'mem_cached', 'mem_free'):
                 pass
             elif name in ('mem_total', 'mem_available'):
-                computed_metrics_pending.add(('mem_used', None, timestamp))
+                computed_metrics_pending.add(
+                    ('mem_used', None, None, timestamp)
+                )
             else:
                 return
         elif part[-2] == 'net' and part[-3] != 'all':
@@ -757,14 +759,24 @@ class Telegraf:
                     name = 'elasticsearch_search'
                     derive = True
                     computed_metrics_pending.add(
-                        ('elasticsearch_search_time', instance, timestamp)
+                        (
+                            'elasticsearch_search_time',
+                            instance,
+                            instance,
+                            timestamp
+                        )
                     )
                 elif part[-1] == 'search_query_time_in_millis':
                     name = 'elasticsearch_search_time_total'
                     derive = True
                     no_emit = True
                     computed_metrics_pending.add(
-                        ('elasticsearch_search_time', instance, timestamp)
+                        (
+                            'elasticsearch_search_time',
+                            instance,
+                            instance,
+                            timestamp
+                        )
                     )
         elif part[-2] == 'rabbitmq_overview':
             service = 'rabbitmq'

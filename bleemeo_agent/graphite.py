@@ -191,9 +191,9 @@ class GraphiteServer(threading.Thread):
         """
         processed = set()
         for entry in computed_metrics_pending:
-            (name, item, timestamp) = entry
+            (name, item, instance, timestamp) = entry
             try:
-                self._compute_metric(name, item, timestamp)
+                self._compute_metric(name, item, instance, timestamp)
                 processed.add(entry)
             except ComputationFail:
                 logging.debug(
@@ -209,7 +209,7 @@ class GraphiteServer(threading.Thread):
 
         computed_metrics_pending.difference_update(processed)
 
-    def _compute_metric(self, name, item, timestamp):  # NOQA
+    def _compute_metric(self, name, item, instance, timestamp):  # NOQA
         def get_metric(measurements, searched_item):
             """ Helper that do common task when retriving metrics:
 
@@ -225,6 +225,8 @@ class GraphiteServer(threading.Thread):
             elif metric['time'] > timestamp:
                 raise ComputationFail()
             return metric['value']
+
+        service = None
 
         if name == 'disk_total':
             used = get_metric('disk_used', item)
@@ -271,6 +273,7 @@ class GraphiteServer(threading.Thread):
                 'value': value / total * 100.,
             })
         elif name == 'elasticsearch_search_time':
+            service = 'elasticsearch'
             total = get_metric('elasticsearch_search_time_total', item)
             count = get_metric('elasticsearch_search', item)
             if count == 0:
@@ -301,6 +304,9 @@ class GraphiteServer(threading.Thread):
         }
         if item is not None:
             metric['item'] = item
+        if service is not None:
+            metric['service'] = service
+            metric['instance'] = instance
         self.core.emit_metric(metric)
 
     def emit_metric(self, name, timestamp, value, computed_metrics_pending):

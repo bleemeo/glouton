@@ -76,6 +76,8 @@ class BleemeoConnector(threading.Thread):
         self.metrics_uuid.setdefault(('agent_status', None, None), None)
         self.metrics_info.setdefault(('agent_status', None, None), {})
 
+        self._apply_upgrade()
+
     def on_connect(self, client, userdata, flags, rc):
         if rc == 0 and not self.core.is_terminating.is_set():
             self.connected = True
@@ -163,6 +165,20 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.disconnect()
         self.mqtt_client.loop_stop()
+
+    def _apply_upgrade(self):
+        # PRODUCT-279: elasticsearch_search_time was previously not associated
+        # with the service elasticsearch
+        for key in list(self.metrics_uuid):
+            (metric_name, service, item) = key
+            if metric_name == 'elasticsearch_search_time' and service is None:
+                value = self.metrics_uuid[key]
+                new_key = (metric_name, 'elasticsearch', item)
+                self.metrics_uuid.setdefault(new_key, value)
+                del self.metrics_uuid[key]
+                self.core.state.set_complex_dict(
+                    'metrics_uuid', self.metrics_uuid
+                )
 
     def _ready_for_mqtt(self):
         """ Check for requirement needed before MQTT connection

@@ -305,7 +305,7 @@ class Collectd:
                     'time': timestamp,
                     'value': 100 - value,
                 })
-            computed_metrics_pending.add(('cpu_other', None, timestamp))
+            computed_metrics_pending.add(('cpu_other', None, None, timestamp))
         elif match_dict['type'] == 'df_complex':
             name = 'disk_%s' % match_dict['type_instance']
             path = match_dict['plugin_instance']
@@ -319,7 +319,7 @@ class Collectd:
                 return
 
             item = path
-            computed_metrics_pending.add(('disk_total', item, timestamp))
+            computed_metrics_pending.add(('disk_total', item, None, timestamp))
         elif match_dict['plugin'] == 'disk':
             if match_dict['type_instance'] == 'io_time':
                 name = 'io_time'
@@ -388,7 +388,7 @@ class Collectd:
             name = 'system_load%s' % duration
         elif match_dict['plugin'] == 'memory':
             name = 'mem_%s' % match_dict['type_instance']
-            computed_metrics_pending.add(('mem_total', None, timestamp))
+            computed_metrics_pending.add(('mem_total', None, None, timestamp))
         elif (match_dict['plugin'] == 'processes'
                 and match_dict['type'] == 'fork_rate'):
             name = 'process_fork_rate'
@@ -396,10 +396,10 @@ class Collectd:
                 and match_dict['type'] == 'ps_state'):
             name = 'process_status_%s' % match_dict['type_instance']
             computed_metrics_pending.add(
-                ('process_total', None, timestamp))
+                ('process_total', None, None, timestamp))
         elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
             name = 'swap_%s' % match_dict['type_instance']
-            computed_metrics_pending.add(('swap_total', None, timestamp))
+            computed_metrics_pending.add(('swap_total', None, None, timestamp))
         elif (match_dict['plugin'] == 'swap'
                 and match_dict['type'] == 'swap_io'):
             name = 'swap_%s' % match_dict['type_instance']
