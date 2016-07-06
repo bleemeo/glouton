@@ -308,7 +308,8 @@ class Check:
         else:
             (return_code, output) = (STATUS_CHECK_NOT_RUN, '')
 
-        if ((return_code != STATUS_CRITICAL or return_code != STATUS_UNKNOWN)
+        if (return_code != STATUS_CRITICAL
+                and return_code != STATUS_UNKNOWN
                 and self.extra_ports):
             for (address, port) in self.tcp_sockets:
                 if port == self.port:

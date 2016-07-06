@@ -1409,7 +1409,10 @@ class Core:
         if container_info['NetworkSettings']['IPAddress']:
             return container_info['NetworkSettings']['IPAddress']
 
-        for config in container_info['NetworkSettings']['Networks'].values():
+        for key in container_info['NetworkSettings']['Networks']:
+            if key == 'host':
+                return '127.0.0.1'
+            config = container_info['NetworkSettings']['Networks'][key]
             if config['IPAddress']:
                 return config['IPAddress']
 
