@@ -372,7 +372,7 @@ class State:
                     fd.flush()
                     os.fsync(fd.fileno())
                 os.rename(self.filename + '.tmp', self.filename)
-            except IOError as exc:
+            except OSError as exc:
                 logging.warning('Failed to store file : %s', exc)
 
     def get(self, key, default=None):
@@ -519,7 +519,7 @@ class Core:
         upgrade_file = self.config.get('agent.upgrade_file', 'upgrade')
         try:
             os.unlink(upgrade_file)
-        except IOError:
+        except OSError:
             pass
         try:
             self.setup_signal()
@@ -719,7 +719,7 @@ class Core:
         netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
         try:
             mtime = os.stat(netstat_file).st_mtime
-        except IOError:
+        except OSError:
             mtime = 0
 
         if mtime > self._netstat_output_mtime:
