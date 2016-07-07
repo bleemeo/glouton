@@ -1,3 +1,4 @@
+import argparse
 import copy
 import datetime
 import io
@@ -257,6 +258,28 @@ root:
 
 
 def main():
+    parser = argparse.ArgumentParser(description='Bleemeo agent')
+    parser.add_argument(
+        '--yes-run-as-root',
+        default=False,
+        action='store_true',
+        help='Allows Bleemeo agent to run as root',
+    )
+    args = parser.parse_args()
+
+    if os.getuid() == 0 and not args.yes_run_as_root:
+        print(
+            'Error: trying to run Bleemeo agent as root without'
+            ' "--yes-run-as-root" option.'
+        )
+        print(
+            'If Bleemeo agent is installed using standard method,'
+            ' start it with:'
+        )
+        print('    service bleemeo-agent start')
+        print('')
+        sys.exit(1)
+
     try:
         core = Core()
         core.run()
