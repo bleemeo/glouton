@@ -135,16 +135,43 @@ def get_public_ip(core):
     return None
 
 
-def get_virtual_type():
+def get_virtual_type(privileged_facts):  # noqa
     """ Return what virtualization is used. "physical" if it's bare-metal.
     """
     result = 'physical'
     vendor_name = get_file_content(os.path.join(DMI_DIR, 'sys_vendor'))
+    bios_vendor = get_file_content(os.path.join(DMI_DIR, 'bios_vendor'))
 
-    if vendor_name is not None and 'qemu' in vendor_name.lower():
-        result = 'qemu'
-    elif vendor_name is not None and 'xen' in vendor_name.lower():
+    if vendor_name is None:
+        # OpenVZ don't have DMI sys_vendor file, is it OpenVZ ?
+        if os.path.exists('/proc/user_beancounters'):
+            return 'openvz'
+        return result
+
+    if ('qemu' in vendor_name.lower()
+            or 'bochs' in vendor_name.lower()
+            or 'digitalocean' in vendor_name.lower()):
+        result = 'kvm'
+    elif 'xen' in vendor_name.lower():
         result = 'xen'
+    elif 'innotek' in vendor_name.lower():
+        result = 'virtualbox'
+    elif 'microsoft' in vendor_name.lower():
+        result = 'hyper-v'
+    elif 'google' in vendor_name.lower():
+        result = 'gce'
+    elif 'vmware' in vendor_name.lower():
+        result = 'vmware'
+    elif 'openstack' in vendor_name.lower():
+        # At least OvH seem to use this for its Cloud platform.
+        if bios_vendor is not None and 'bochs' in bios_vendor.lower():
+            result = 'kvm'
+        elif 'vmware' in privileged_facts.get('serial_number', '').lower():
+            # VMware use serial_number like "VMware-42 1d 8c ..."
+            result = 'vmware'
+        else:
+            # unknown hypervisor at this point
+            result = 'openstack'
 
     return result
 
@@ -210,7 +237,7 @@ def get_facts(core):
     ).decode('utf8').strip()
     kernel_version = kernel_release.split('-')[0]
     kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
-    virtual = get_virtual_type()
+    virtual = get_virtual_type(facts)
 
     facts.update({
         'agent_version': get_agent_version(),
