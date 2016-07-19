@@ -695,8 +695,16 @@ class Telegraf:
                 return
         elif part[-2] == 'zookeeper':
             service = 'zookeeper'
-            server_address = part[-3].replace('_', '.')
-            server_port = int(part[-4])
+
+            # Telegraf 1.0.0 added "state" in tag. Which change position of
+            # server_address and server_port.
+
+            # Telegraf <1.0.0, output was:
+            # telegraf.$HOSTNAME.$PORT.$SERVER.zookeeper.$METRIC
+            # Telegraf 1.0.0+, output is:
+            # telegraf.$HOSTNAME.$PORT.$SERVER.$STATE.zookeeper.$METRIC
+            server_address = part[3].replace('_', '.')
+            server_port = int(part[2])
             try:
                 instance = self.get_service_instance(
                     service, server_address, server_port
