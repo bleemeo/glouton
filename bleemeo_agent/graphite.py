@@ -46,6 +46,8 @@ class GraphiteServer(threading.Thread):
 
         self.data_last_seen_at = None
         self.core = core
+        self.listener_up = False
+        self.initialization_done = threading.Event()
         if self.metrics_source == 'collectd':
             self.collectd = bleemeo_agent.collectd.Collectd(self)
         elif self.metrics_source == 'telegraf':
@@ -62,9 +64,20 @@ class GraphiteServer(threading.Thread):
             'graphite.listener.port', 2003)
         sock_server = socket.socket()
         sock_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock_server.bind((bind_address, bind_port))
+        try:
+            sock_server.bind((bind_address, bind_port))
+        except socket.error as exc:
+            logging.error(
+                'Failed to listen on graphite port %s:%s: %s',
+                bind_address, bind_port, exc
+            )
+            self.initialization_done.set()
+            return
+
         sock_server.listen(5)
         sock_server.settimeout(1)
+        self.listener_up = True
+        self.initialization_done.set()
 
         clients = []
         while not self.core.is_terminating.is_set():

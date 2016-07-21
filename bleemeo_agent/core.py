@@ -631,6 +631,14 @@ class Core:
 
     def start_threads(self):
 
+        self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
+        self.graphite_server.start()
+        self.graphite_server.initialization_done.wait(5)
+        if not self.graphite_server.listener_up:
+            logging.error('Graphite listener is not working, stopping agent')
+            self.is_terminating.set()
+            return
+
         if self.config.get('bleemeo.enabled', True):
             if bleemeo_agent.bleemeo is None:
                 logging.warning(
@@ -652,9 +660,6 @@ class Core:
                 self.influx_connector = (
                     bleemeo_agent.influxdb.InfluxDBConnector(self))
                 self.influx_connector.start()
-
-        self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
-        self.graphite_server.start()
 
         if self.config.get('web.enabled', True):
             if bleemeo_agent.web is None:
