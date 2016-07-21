@@ -94,16 +94,28 @@ def load_config(paths=None):
         paths = PATHS
 
     default_config = Config()
+    errors = []
 
     configs = [default_config]
     for filepath in config_files(paths):
-        with open(filepath) as fd:
-            config = yaml.safe_load(fd)
-            # config could be None if file is empty
-            if config is not None:
-                configs.append(config)
+        try:
+            with open(filepath) as fd:
+                config = yaml.safe_load(fd)
 
-    return functools.reduce(merge_dict, configs)
+                # config could be None if file is empty.
+                # config could be non-dict if top-level of file is another YAML
+                # type, like a list or just a string.
+                if config is not None and isinstance(config, dict):
+                    configs.append(config)
+                elif config is not None:
+                    errors.append(
+                        'wrong format for file "%s"' % filepath
+                    )
+
+        except Exception as exc:
+            errors.append(str(exc).replace('\n', ' '))
+
+    return functools.reduce(merge_dict, configs), errors
 
 
 def config_files(paths):

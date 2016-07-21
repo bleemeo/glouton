@@ -113,10 +113,12 @@ def test_config_files():
 
 
 def test_load_config():
-    config = bleemeo_agent.config.load_config([
+    config, errors = bleemeo_agent.config.load_config([
         'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d',
     ])
+
+    assert len(errors) == 0
 
     assert config == {
         'main_conf_loaded': True,

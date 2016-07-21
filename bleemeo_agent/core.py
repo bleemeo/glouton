@@ -395,8 +395,10 @@ class State:
                     fd.flush()
                     os.fsync(fd.fileno())
                 os.rename(self.filename + '.tmp', self.filename)
+                return True
             except OSError as exc:
                 logging.warning('Failed to store file : %s', exc)
+                return False
 
     def get(self, key, default=None):
         return self._content.get(key, default)
@@ -439,13 +441,6 @@ class State:
 
 class Core:
     def __init__(self):
-        self.started_at = time.time()
-        self.reload_config()
-        self._config_logger()
-        logging.info(
-            'Agent starting... (version=%s)',
-            bleemeo_agent.facts.get_agent_version(),
-        )
         self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = datetime.datetime(1970, 1, 1)
@@ -460,16 +455,47 @@ class Core:
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
-        self._sentry_setup()
-        self.thresholds = self.define_thresholds()
         self._discovery_job = None  # scheduled in schedule_tasks
-        self.discovered_services = self.state.get_complex_dict(
-            'discovered_services', {}
-        )
+        self.discovered_services = {}
         self._soft_status_since = {}
         self._trigger_discovery = False
         self._trigger_facts = False
         self._netstat_output_mtime = time.time()
+
+    def _init(self):
+        self.started_at = time.time()
+        errors = self.reload_config()
+        self._config_logger()
+        if errors:
+            logging.error(
+                'Error while loading configuration: %s', '\n'.join(errors)
+            )
+            return False
+
+        state_file = self.config.get('agent.state_file', 'state.json')
+        try:
+            self.state = State(state_file)
+        except (OSError, IOError) as exc:
+            logging.error('Error while loading state file: %s', exc)
+            return False
+        except ValueError as exc:
+            logging.error(
+                'Error while reading state file %s: %s',
+                state_file,
+                exc,
+            )
+            return False
+
+        if not self.state.save():
+            logging.error('State file is not writable, stopping agent')
+            return False
+
+        self._sentry_setup()
+        self.thresholds = self.define_thresholds()
+        self.discovered_services = self.state.get_complex_dict(
+            'discovered_services', {}
+        )
+        return True
 
     @property
     def container(self):
@@ -539,6 +565,13 @@ class Core:
             )
 
     def run(self):
+        if not self._init():
+            return
+
+        logging.info(
+            'Agent starting... (version=%s)',
+            bleemeo_agent.facts.get_agent_version(),
+        )
         upgrade_file = self.config.get('agent.upgrade_file', 'upgrade')
         try:
             os.unlink(upgrade_file)
@@ -1131,17 +1164,13 @@ class Core:
             self.bleemeo_connector.publish_top_info(self.top_info)
 
     def reload_config(self):
-        self.config = bleemeo_agent.config.load_config()
+        (self.config, errors) = bleemeo_agent.config.load_config()
+
         for (env_name, conf_name) in ENVIRON_CONFIG_VARS:
             if env_name in os.environ:
                 self.config.set(conf_name, os.environ[env_name])
 
-        self.state = State(
-            self.config.get(
-                'agent.state_file',
-                'state.json'))
-
-        return self.config
+        return errors
 
     def _store_last_value(self, metric):
         """ Store the metric in self.last_matrics, replacing the previous value
