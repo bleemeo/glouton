@@ -33,5 +33,13 @@ setup(
         'bin/bleemeo-agent',
         'bin/bleemeo-agent-gather-facts',
         'bin/bleemeo-netstat',
-    )
+    ),
+    data_files=[
+        (
+            'lib/bleemeo/',
+            (
+                'debian/bleemeo-dpkg-hook-postinvoke',
+            ),
+        )
+    ],
 )

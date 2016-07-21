@@ -1,0 +1,20 @@
+#!/bin/sh
+
+set -e
+
+bleemeo-netstat 2> /dev/null || true
+
+if systemctl is-active --quiet bleemeo-agent 2>/dev/null; then
+    systemctl reload bleemeo-agent
+fi
+
+if initctl status bleemeo-agent 2> /dev/null | grep -q running; then
+    initctl reload bleemeo-agent
+fi
+
+if adduser --quiet bleemeo docker 2> /dev/null | grep 'Adding user'; then
+    # bleemeo user was added to group docker, restart agent to make new
+    # permission effective.
+    touch /var/lib/bleemeo/upgrade  # avoid disconnect/reconnect notification
+    service bleemeo-agent restart
+fi
