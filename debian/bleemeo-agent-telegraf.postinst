@@ -9,6 +9,7 @@ case "$1" in
             adduser --system --group --quiet --home "/var/lib/bleemeo" --no-create-home --disabled-login bleemeo
 
         fi
+        adduser --quiet telegraf docker 2> /dev/null || true
         echo 'Setting permissions for user bleemeo'
         chown bleemeo:telegraf /etc/telegraf/telegraf.d/bleemeo-generated.conf
         chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf

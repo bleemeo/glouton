@@ -18,3 +18,9 @@ if adduser --quiet bleemeo docker 2> /dev/null | grep 'Adding user'; then
     touch /var/lib/bleemeo/upgrade  # avoid disconnect/reconnect notification
     service bleemeo-agent restart
 fi
+
+if adduser --quiet telegraf docker 2> /dev/null | grep 'Adding user'; then
+    # telegraf user was added to group docker, restart telegraf to make new
+    # permission effective.
+    service telegraf restart
+fi

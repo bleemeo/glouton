@@ -37,6 +37,12 @@ APACHE_TELEGRAF_CONFIG = """
   urls = ["http://%(address)s:%(port)s/server-status?auto"]
 """
 
+DOCKER_TELEGRAF_CONFIG = """
+[[inputs.docker]]
+    perdevice = false
+    total = true
+"""
+
 ELASTICSEARCH_TELEGRAF_CONFIG = """
 [[inputs.elasticsearch]]
   servers = ["http://%(address)s:%(port)s"]
@@ -165,6 +171,9 @@ class Telegraf:
 
         if not self.core.config.get('telegraf.disable_statsd', False):
             telegraf_config += STATSD_TELEGRAF_CONFIG
+
+        if self.core.docker_client is not None:
+            telegraf_config += DOCKER_TELEGRAF_CONFIG
 
         for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
@@ -312,6 +321,23 @@ class Telegraf:
                 return instance
 
         raise KeyError('service not found')
+
+    def docker_container_name(self, name):
+        """ Telegraf replace some char from container_name to "_". This method
+            reverse the changes by matching mangled name with names of existing
+            containers.
+        """
+
+        # Docker (1.11) only allow "_", "." and "-" as special char.
+        # Of those, only "." is replaced by "_"... Therefor the only
+        # ambiguity is to know if "_" in modified name is an "." or an "_".
+
+        for container_name in self.core.docker_containers.keys():
+            tmp = container_name.replace('_', '').replace('.', '')
+            if name.replace('_', '') == tmp:
+                return container_name
+
+        return None
 
     def emit_metric(  # noqa
             self, name, timestamp, value, computed_metrics_pending):
@@ -822,6 +848,69 @@ class Telegraf:
                 name = 'rabbitmq_messages_acked'
             elif part[-1] == 'messages_unacked':
                 name = 'rabbitmq_messages_unacked_count'
+            else:
+                return
+        elif part[-2] == 'docker':
+            if part[3] == 'n_containers':
+                name = 'docker_containers'
+            else:
+                return
+        elif part[-2] == 'docker_container_cpu' and part[5] == 'cpu-total':
+            container_name = self.docker_container_name(part[3])
+            if container_name is None:
+                return
+            item = container_name
+
+            if part[-1] == 'usage_total':
+                name = 'docker_container_cpu'
+                # Docker sends time in nanosecond. Convert it to seconds
+                value = value / 1000000000
+
+                # And return a percentage
+                derive = True
+                value = value * 100
+            else:
+                return
+        elif part[-2] == 'docker_container_mem':
+            container_name = self.docker_container_name(part[3])
+            if container_name is None:
+                return
+            item = container_name
+
+            if part[-1] == 'usage_percent':
+                name = 'docker_container_mem_perc'
+            elif part[-1] == 'usage':
+                name = 'docker_container_mem'
+            else:
+                return
+        elif part[-2] == 'docker_container_net' and part[5] == 'total':
+            container_name = self.docker_container_name(part[3])
+            if container_name is None:
+                return
+            item = container_name
+
+            if part[-1] == 'rx_bytes':
+                name = 'docker_container_net_in'
+                value = value * 8  # Convert bytes => bits
+                derive = True
+            elif part[-1] == 'tx_bytes':
+                name = 'docker_container_net_out'
+                value = value * 8  # Convert bytes => bits
+                derive = True
+            else:
+                return
+        elif part[-2] == 'docker_container_blkio' and part[5] == 'total':
+            container_name = self.docker_container_name(part[3])
+            if container_name is None:
+                return
+            item = container_name
+
+            if part[-1] == 'io_service_bytes_recursive_read':
+                name = 'docker_container_blkio_in'
+                derive = True
+            elif part[-1] == 'io_service_bytes_recursive_write':
+                name = 'docker_container_blkio_out'
+                derive = True
             else:
                 return
         elif (part[2] == 'counter'

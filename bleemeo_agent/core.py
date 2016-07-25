@@ -444,6 +444,7 @@ class Core:
         self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = datetime.datetime(1970, 1, 1)
+        self.last_discovery_update = datetime.datetime(1970, 1, 1)
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -451,6 +452,7 @@ class Core:
         self.influx_connector = None
         self.graphite_server = None
         self.docker_client = None
+        self.docker_containers = {}
         self.scheduler = apscheduler.scheduler.Scheduler()
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
@@ -626,6 +628,24 @@ class Core:
             logging.debug('Docker ping failed. Assume Docker is not used')
             self.docker_client = None
 
+    def _update_docker_info(self):
+        if self.docker_client is None:
+            return
+
+        try:
+            self.docker_client.ping()
+        except:
+            logging.debug('Docker ping failed. Is Docker currently down ?')
+            return
+
+        docker_containers = {}
+        for container in self.docker_client.containers(all=True):
+            inspect = self.docker_client.inspect_container(container['Id'])
+            name = inspect['Name'].lstrip('/')
+            docker_containers[name] = inspect
+
+        self.docker_containers = docker_containers
+
     def schedule_tasks(self):
         self.scheduler.add_interval_job(
             func=bleemeo_agent.checker.periodic_check,
@@ -789,6 +809,7 @@ class Core:
             self._netstat_output_mtime = mtime
 
     def update_discovery(self, first_run=False, deleted_services=None):
+        self._update_docker_info()
         discovered_running_services = self._run_discovery()
         if first_run:
             # Should only be needed on first run. In addition to avoid
@@ -828,6 +849,8 @@ class Core:
 
             self.graphite_server.update_discovery()
             bleemeo_agent.checker.update_checks(self)
+
+        self.last_discovery_update = datetime.datetime.now()
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name
