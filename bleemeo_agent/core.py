@@ -833,7 +833,7 @@ class Core:
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
 
-        if new_discovered_services != self.discovered_services or first_run:
+        if new_discovered_services != self.discovered_services:
             if new_discovered_services != self.discovered_services:
                 logging.debug(
                     'Update configuration after change in discovered services'
@@ -841,14 +841,15 @@ class Core:
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
-            self.services = self.discovered_services.copy()
-            apply_service_override(
-                self.services,
-                self.config.get('service', [])
-            )
 
-            self.graphite_server.update_discovery()
-            bleemeo_agent.checker.update_checks(self)
+        self.services = self.discovered_services.copy()
+        apply_service_override(
+            self.services,
+            self.config.get('service', [])
+        )
+
+        self.graphite_server.update_discovery()
+        bleemeo_agent.checker.update_checks(self)
 
         self.last_discovery_update = datetime.datetime.now()
 
