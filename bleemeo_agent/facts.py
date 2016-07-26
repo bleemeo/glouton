@@ -79,6 +79,22 @@ def get_docker_version(core):
     return (package_version, api_version)
 
 
+def get_telegraf_version():
+    package_version = get_package_version('telegraf')
+    if package_version is None:
+        try:
+            output = subprocess.check_output(['telegraf', '-version'])
+            output = output.decode('utf-8').strip()
+        except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
+            return None
+
+        prefix = 'Telegraf - version '
+        if output.startswith(prefix):
+            package_version = output[len(prefix):]
+
+    return package_version
+
+
 def read_os_release():
     """ Read os-release file and returns its content as dict
 
@@ -293,7 +309,7 @@ def get_facts(core):
         'system_vendor': get_file_content(
             os.path.join(DMI_DIR, 'sys_vendor')
         ),
-        'telegraf_version': get_package_version('telegraf'),
+        'telegraf_version': get_telegraf_version(),
         'timezone': get_file_content('/etc/timezone'),
         'virtual': virtual,
     })

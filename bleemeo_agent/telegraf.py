@@ -1,3 +1,4 @@
+import distutils.version
 import logging
 import os
 import re
@@ -98,6 +99,14 @@ ZOOKEEPER_CONFIG = """
 """
 
 
+def compare_version(current_version, wanted_version):
+    """ Return True if current_version is greater or equal to wanted_version
+    """
+    current_version = distutils.version.LooseVersion(current_version)
+    wanted_version = distutils.version.LooseVersion(wanted_version)
+    return current_version >= wanted_version
+
+
 class Telegraf:
 
     def __init__(self, graphite_server):
@@ -124,6 +133,21 @@ class Telegraf:
             for key, (timestamp, value) in self._raw_value.items()
             if timestamp >= cutoff
         }
+
+    def telegraf_version_gte(self, version):
+        """ Return True if installed Telegraf version is at least given version
+
+            If unable to compare given version with current version, return
+            False (for example fact telegraf_version is absent or any error).
+        """
+        current_version = self.core.last_facts.get('telegraf_version')
+        if current_version is None:
+            return False
+
+        try:
+            return compare_version(current_version, version)
+        except:
+            return False
 
     def update_discovery(self):
         try:
@@ -172,7 +196,8 @@ class Telegraf:
         if not self.core.config.get('telegraf.disable_statsd', False):
             telegraf_config += STATSD_TELEGRAF_CONFIG
 
-        if self.core.docker_client is not None:
+        if (self.core.docker_client is not None
+                and self.telegraf_version_gte('1.0.0')):
             telegraf_config += DOCKER_TELEGRAF_CONFIG
 
         for (key, service_info) in self.core.services.items():
