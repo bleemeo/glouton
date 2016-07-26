@@ -37,7 +37,7 @@ STATSD_TELEGRAF_CONFIG = """
 # Statsd Server
 # To disable Statsd server, add:
 #     telegraf:
-#         disable_statsd: True
+#         statsd_enabled: False
 # in /etc/bleemeo/agent.conf.d/99-local.conf
 [[inputs.statsd]]
   service_address = "127.0.0.1:8125"
@@ -181,7 +181,7 @@ class Telegraf:
     def _get_telegraf_config(self):  # noqa
         telegraf_config = BASE_TELEGRAF_CONFIG
 
-        if not self.core.config.get('telegraf.disable_statsd', False):
+        if self.core.config.get('telegraf.statsd_enabled', True):
             telegraf_config += STATSD_TELEGRAF_CONFIG
 
         for (key, service_info) in self.core.services.items():
@@ -835,16 +835,16 @@ class Telegraf:
             else:
                 return
         elif (part[2] == 'counter'
-                and not self.core.config.get('telegraf.disable_statsd')):
+                and self.core.config.get('telegraf.statsd_enabled', True)):
             # statsd counter
             derive = True
             name = 'statsd_' + part[3]
         elif (part[2] == 'gauge'
-                and not self.core.config.get('telegraf.disable_statsd')):
+                and self.core.config.get('telegraf.statsd_enabled', True)):
             # statsd gauge
             name = 'statsd_' + part[3]
         elif (part[2] == 'timing'
-                and not self.core.config.get('telegraf.disable_statsd')):
+                and self.core.config.get('telegraf.statsd_enabled', True)):
             # statsd timing
             name = 'statsd_' + part[3] + '_' + part[4]
             if part[4] == 'count':
