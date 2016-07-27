@@ -338,6 +338,7 @@ def get_top_output(top_info):
 
 def _get_url(name, metric_config):
     response = None
+    url = metric_config['url']
     args = {
         'verify': metric_config.get('ssl_check', True),
         'timeout': 3.0,
@@ -349,21 +350,28 @@ def _get_url(name, metric_config):
         )
     try:
         response = requests.get(
-            metric_config['url'],
+            url,
             **args
         )
     except requests.exceptions.ConnectionError:
         logging.warning(
-            'Failed to retrive metric %s: failed to establish connection',
-            name)
-    except requests.exceptions.ConnectionError:
+            'Failed to retrieve metric %s: '
+            'failed to establish connection to %s',
+            name,
+            url,
+        )
+    except requests.exceptions.ConnectionError as exc:
         logging.warning(
-            'Failed to retrive metric %s: request timed out',
-            name)
-    except requests.exceptions.RequestException:
+            'Failed to retrieve metric %s: %s',
+            name,
+            exc,
+        )
+    except requests.exceptions.RequestException as exc:
         logging.warning(
-            'Failed to retrive metric %s',
-            name)
+            'Failed to retrieve metric %s: %s',
+            name,
+            exc,
+        )
 
     return response
 
