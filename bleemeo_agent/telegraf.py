@@ -245,12 +245,12 @@ class Telegraf:
 
             if return_code != 0:
                 logging.info(
-                    'Failed to restart telegraf after reconfiguration : %s',
+                    'Failed to restart telegraf after reconfiguration: %s',
                     output
                 )
             else:
                 logging.debug(
-                    'telegraf reconfigured and restarted : %s', output)
+                    'telegraf reconfigured and restarted: %s', output)
 
     def get_derivate(self, name, item, timestamp, value):
         """ Return derivate of a COUNTER (e.g. something that only goes upward)

@@ -292,7 +292,7 @@ class Check:
             if buffer == b'':
                 (address, port) = sockets[s]
                 logging.debug(
-                    'check %s (on %s) : connection to %s:%s closed',
+                    'check %s (on %s): connection to %s:%s closed',
                     self.service, self.instance, address, port
                 )
                 s.close()

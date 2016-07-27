@@ -106,7 +106,7 @@ class BleemeoConnector(threading.Thread):
                 'v1/agent/%s/connect' % self.agent_uuid,
                 json.dumps(msg),
             )
-            # FIXME: PRODUCT-137 : to be removed when upstream bug is fixed
+            # FIXME: PRODUCT-137: to be removed when upstream bug is fixed
             if self.mqtt_client._ssl is not None:
                 self.mqtt_client._ssl.setblocking(0)
             logging.info('MQTT connection established')
@@ -245,7 +245,7 @@ class BleemeoConnector(threading.Thread):
         if (self.core.graphite_server.data_last_seen_at is None or
                 now - self.core.graphite_server.data_last_seen_at > 60):
             logging.info(
-                'Issue with metrics collector : no metric received from %s',
+                'Issue with metrics collector: no metric received from %s',
                 self.core.graphite_server.metrics_source,
             )
 
@@ -414,7 +414,7 @@ class BleemeoConnector(threading.Thread):
             response = None
         except ValueError:
             logging.debug(
-                'Registration failed, response is not a json : %s',
+                'Registration failed, response is not a json: %s',
                 response.content[:100])
 
         if content is not None and 'id' in content:

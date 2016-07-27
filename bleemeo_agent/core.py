@@ -356,7 +356,7 @@ def sanitize_service(name, service_info, is_discovered_service):
             service_info['port'] = int(service_info['port'])
         except ValueError:
             logging.info(
-                'Bad custom service definition : '
+                'Bad custom service definition: '
                 'service "%s" port is "%s" which is not a number',
                 name,
                 service_info['port'],
@@ -366,7 +366,7 @@ def sanitize_service(name, service_info, is_discovered_service):
     if (service_info.get('check_type') == 'nagios'
             and 'check_command' not in service_info):
         logging.info(
-            'Bad custom service definition : '
+            'Bad custom service definition: '
             'service "%s" use type nagios without check_command',
             name,
         )
@@ -377,7 +377,7 @@ def sanitize_service(name, service_info, is_discovered_service):
         # It means that no check will be performed but service object will
         # be created.
         logging.info(
-            'Bad custom service definition : '
+            'Bad custom service definition: '
             'service "%s" dot not have port settings',
             name,
         )
@@ -415,7 +415,7 @@ class State:
                 os.rename(self.filename + '.tmp', self.filename)
                 return True
             except OSError as exc:
-                logging.warning('Failed to store file : %s', exc)
+                logging.warning('Failed to store file: %s', exc)
                 return False
 
     def get(self, key, default=None):
@@ -1439,7 +1439,7 @@ class Core:
 
         if soft_status != status or last_status != status:
             logging.debug(
-                'metric=%s : soft_status=%s, last_status=%s, result=%s. '
+                'metric=%s: soft_status=%s, last_status=%s, result=%s. '
                 'warn for %d second / crit for %d second',
                 key,
                 soft_status,

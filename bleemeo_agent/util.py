@@ -138,7 +138,7 @@ def run_command_timeout(command, timeout=10):
             stderr=subprocess.STDOUT,
         )
     except OSError:
-        # Most probably : command not found
+        # Most probably: command not found
         return (127, b"Unable to run command")
     proc_finished = threading.Event()
     killer_thread = threading.Thread(
@@ -164,7 +164,7 @@ def clean_cmdline(cmdline):
 
         Known problem:
 
-        * new-line : for InfluxDB line-protocol
+        * new-line: for InfluxDB line-protocol
     """
     return cmdline.replace('\r', '\\r').replace('\n', '\\n')
 
@@ -354,11 +354,11 @@ def _get_url(name, metric_config):
         )
     except requests.exceptions.ConnectionError:
         logging.warning(
-            'Failed to retrive metric %s : failed to establish connection',
+            'Failed to retrive metric %s: failed to establish connection',
             name)
     except requests.exceptions.ConnectionError:
         logging.warning(
-            'Failed to retrive metric %s : request timed out',
+            'Failed to retrive metric %s: request timed out',
             name)
     except requests.exceptions.RequestException:
         logging.warning(
@@ -376,12 +376,12 @@ def pull_raw_metric(core, name):
         We expect to have the following configuration key under
         section "metric.pull.$NAME.":
 
-        * url : where to fetch the metric [mandatory]
+        * url: where to fetch the metric [mandatory]
         * item: item to add on your metric [default: None - no item]
-        * interval : retrive the metric every interval seconds [default: 10s]
-        * username : username used for basic authentication [default: no auth]
-        * password : password used for basic authentication [default: ""]
-        * ssl_check : should we check that SSL certificate are valid
+        * interval: retrive the metric every interval seconds [default: 10s]
+        * username: username used for basic authentication [default: no auth]
+        * password: password used for basic authentication [default: ""]
+        * ssl_check: should we check that SSL certificate are valid
           [default: yes]
     """
     metric_config = core.config.get('metric.pull.%s' % name, {})
@@ -397,7 +397,7 @@ def pull_raw_metric(core, name):
             value = float(response.content)
         except ValueError:
             logging.warning(
-                'Failed to retrive metric %s : response it not a number',
+                'Failed to retrive metric %s: response it not a number',
                 name)
 
         if value is not None:
