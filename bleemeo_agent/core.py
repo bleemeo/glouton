@@ -34,7 +34,6 @@ import threading
 import time
 
 import apscheduler.scheduler
-import psutil
 from six.moves import configparser
 import yaml
 
@@ -902,16 +901,9 @@ class Core:
             # The host pid namespace see ALL process.
             # They are added in instance "None" (i.e. running in the host),
             # but if they are running in a docker, they will be updated later
-            for process in psutil.process_iter():
-                # Cmdline may be unavailable (permission issue ?)
-                # When unavailable, depending on psutil version, it returns
-                # either [] or ['']
-                if process.cmdline() and process.cmdline()[0]:
-                    cmdline = ' '.join(process.cmdline())
-                else:
-                    cmdline = process.name()
-                processes[process.pid] = {
-                    'cmdline': cmdline,
+            for process in bleemeo_agent.util.get_top_info()['processes']:
+                processes[process['pid']] = {
+                    'cmdline': process['cmdline'],
                     'instance': None,
                 }
 
