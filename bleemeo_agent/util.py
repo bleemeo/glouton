@@ -26,6 +26,7 @@ import time
 import jinja2
 import psutil
 import requests
+from six.moves import urllib_parse
 
 import bleemeo_agent
 
@@ -337,8 +338,21 @@ def get_top_output(top_info):
 
 
 def _get_url(name, metric_config):
-    response = None
     url = metric_config['url']
+
+    url_parsed = urllib_parse.urlparse(url)
+    if url_parsed.scheme == '' or url_parsed.scheme == 'file':
+        try:
+            with open(url_parsed.path) as fd:
+                return fd.read()
+        except (IOError, OSError) as exc:
+            logging.warning(
+                'Failed to retrive metric %s: %s',
+                name,
+                exc,
+            )
+            return None
+
     args = {
         'verify': metric_config.get('ssl_check', True),
         'timeout': 3.0,
@@ -360,20 +374,23 @@ def _get_url(name, metric_config):
             name,
             url,
         )
+        return None
     except requests.exceptions.ConnectionError as exc:
         logging.warning(
             'Failed to retrieve metric %s: %s',
             name,
             exc,
         )
+        return None
     except requests.exceptions.RequestException as exc:
         logging.warning(
             'Failed to retrieve metric %s: %s',
             name,
             exc,
         )
+        return None
 
-    return response
+    return response.content
 
 
 def pull_raw_metric(core, name):
@@ -402,7 +419,7 @@ def pull_raw_metric(core, name):
     if response is not None:
         value = None
         try:
-            value = float(response.content)
+            value = float(response)
         except ValueError:
             logging.warning(
                 'Failed to retrive metric %s: response it not a number',
