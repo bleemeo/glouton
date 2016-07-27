@@ -962,11 +962,19 @@ class Core:
                     address = match.group('address')
                     port = int(match.group('port'))
 
-                    if protocol in ('tcp6' or 'udp6') and address == '::':
+                    # netstat output may have "tcp6" for IPv4 socket.
+                    # For example elasticsearch output is:
+                    # tcp6       0      0 127.0.0.1:7992          :::*   [...]
+                    if protocol in ('tcp6' or 'udp6'):
                         # Assume this socket is IPv4 & IPv6
-                        address = '0.0.0.0'
                         protocol = protocol[:3]
-                    elif protocol in ('tcp6', 'udp6'):
+
+                    if address == '::':
+                        # "::" is all address in IPv6. Assume the socket
+                        # is IPv4 & IPv6 and since agent supports only IPv4
+                        # convert to all address in IPv4
+                        address = '0.0.0.0'
+                    if ':' in address:
                         # No support for IPv6
                         continue
 
