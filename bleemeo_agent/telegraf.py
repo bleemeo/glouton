@@ -887,7 +887,7 @@ class Telegraf:
             item = container_name
 
             if part[-1] == 'usage_total':
-                name = 'docker_container_cpu'
+                name = 'docker_container_cpu_used'
                 # Docker sends time in nanosecond. Convert it to seconds
                 value = value / 1000000000
 
@@ -903,9 +903,9 @@ class Telegraf:
             item = container_name
 
             if part[-1] == 'usage_percent':
-                name = 'docker_container_mem_perc'
+                name = 'docker_container_mem_used_perc'
             elif part[-1] == 'usage':
-                name = 'docker_container_mem'
+                name = 'docker_container_mem_used'
             else:
                 return
         elif part[-2] == 'docker_container_net' and part[5] == 'total':
@@ -915,11 +915,11 @@ class Telegraf:
             item = container_name
 
             if part[-1] == 'rx_bytes':
-                name = 'docker_container_net_in'
+                name = 'docker_container_net_bits_recv'
                 value = value * 8  # Convert bytes => bits
                 derive = True
             elif part[-1] == 'tx_bytes':
-                name = 'docker_container_net_out'
+                name = 'docker_container_net_bits_sent'
                 value = value * 8  # Convert bytes => bits
                 derive = True
             else:
@@ -931,10 +931,10 @@ class Telegraf:
             item = container_name
 
             if part[-1] == 'io_service_bytes_recursive_read':
-                name = 'docker_container_blkio_in'
+                name = 'docker_container_io_read_bytes'
                 derive = True
             elif part[-1] == 'io_service_bytes_recursive_write':
-                name = 'docker_container_blkio_out'
+                name = 'docker_container_io_write_bytes'
                 derive = True
             else:
                 return
