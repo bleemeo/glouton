@@ -754,6 +754,28 @@ class BleemeoConnector(threading.Thread):
             container_uuid[name] = (new_hash, obj_uuid)
             self.core.state.set('docker_container_uuid', container_uuid)
 
+        deleted_containers = (
+            set(container_uuid) - set(self.core.docker_containers)
+        )
+        for name in deleted_containers:
+            (_, obj_uuid) = container_uuid[name]
+            url = registration_url + obj_uuid + '/'
+            response = requests.delete(
+                url,
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            )
+            if response.status_code not in (204, 404):
+                logging.debug(
+                    'Container deletion failed. Server response = %s',
+                    response.content,
+                )
+                continue
+            del container_uuid[name]
+            self.core.state.set('docker_container_uuid', container_uuid)
+
     def emit_metric(self, metric):
         if self._metric_queue.qsize() < 100000:
             self._metric_queue.put(metric)
