@@ -68,8 +68,14 @@ DOCKER_DISCOVERY_EVENTS = [
 ]
 
 ENVIRON_CONFIG_VARS = [
-    ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id'),
-    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key'),
+    ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id', 'string'),
+    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key', 'string'),
+    ('BLEEMEO_AGENT_API_BASE', 'bleemeo.api_base', 'string'),
+    ('BLEEMEO_AGENT_MQTT_HOST', 'bleemeo.mqtt.host', 'string'),
+    ('BLEEMEO_AGENT_MQTT_PORT', 'bleemeo.mqtt.port', 'int'),
+    ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
+    ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
+    ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
 ]
 
 
@@ -366,6 +372,23 @@ def sanitize_service(name, service_info, is_discovered_service):
         return None
 
     return service_info
+
+
+def convert_type(value_text, value_type):
+    if value_type == 'string':
+        return value_text
+
+    if value_type == 'int':
+        return int(value_text)
+    elif value_type == 'bool':
+        if value_text.lower() in ('true', 'yes', '1'):
+            return True
+        elif value_text.lower() in ('false', 'no', '0'):
+            return False
+        else:
+            raise ValueError('invalid value %r for boolean' % value_text)
+    else:
+        raise NotImplementedError('Unknown type %s' % value_type)
 
 
 class State:
@@ -1190,9 +1213,16 @@ class Core:
     def reload_config(self):
         (self.config, errors) = bleemeo_agent.config.load_config()
 
-        for (env_name, conf_name) in ENVIRON_CONFIG_VARS:
+        for (env_name, conf_name, conf_type) in ENVIRON_CONFIG_VARS:
             if env_name in os.environ:
-                self.config.set(conf_name, os.environ[env_name])
+                try:
+                    value = convert_type(os.environ[env_name], conf_type)
+                except ValueError as exc:
+                    errors.append(
+                        'Bad environ variable %s: %s' % (env_name, exc)
+                    )
+                    continue
+                self.config.set(conf_name, value)
 
         return errors
 
