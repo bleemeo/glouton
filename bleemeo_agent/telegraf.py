@@ -347,19 +347,55 @@ class Telegraf:
 
         raise KeyError('service not found')
 
-    def docker_container_name(self, name):
-        """ Telegraf replace some char from container_name to "_". This method
-            reverse the changes by matching mangled name with names of existing
-            containers.
+    def docker_container_name(self, part):
+        """ Return Docker container name for given graphite line.
+
+            This method does two thing:
+
+            1) Find where the container_name is stored in graphite line
+            2) Find the real name of container_name
+
+            For the 2, when sent over graphite protocol, Telegraf replaces
+            some char from container_name to "_". This method search which
+            container name match the mangled name.
+
+            For the 1, the position on the graphite line of container_name is
+            not the same because Telegraf sent all container labels. This
+            method find where container_name is based on defined labels for
+            each container.
+
+            A container without any labels would only have the following tags:
+
+            host=xenial,container_image=redis,container_name=labeled_redis,
+                container_version=unknown
+
+            That result in graphite line:
+
+            xenial.redis.labeled_redis.unknown
+
+            Here container_name is the 3th position. But if user add a label
+            "a_custom_label=my_value", then the graphite line result in:
+
+            xenial.a_custom_label.redis.labeled_redis.unknown
+
+            The container_name is now 4th position.
+
+            In general case, the container_name position is 3 + number of
+            label keys that are (in lexical order) before "container_name".
         """
 
-        # Docker (1.11) only allow "_", "." and "-" as special char.
-        # Of those, only "." is replaced by "_"... Therefor the only
-        # ambiguity is to know if "_" in modified name is an "." or an "_".
+        for container_name, inspect in self.core.docker_containers.items():
+            labels = inspect.get('Config', {}).get('Labels', {})
+            label_keys_before = [
+                key for (key, value) in labels.items()
+                if key < 'container_name' and value != ''
+            ]
+            position = 3 + len(label_keys_before)
 
-        for container_name in self.core.docker_containers.keys():
-            tmp = container_name.replace('_', '').replace('.', '')
-            if name.replace('_', '') == tmp:
+            # Docker only allow "_", "." and "-" as special char in
+            # container_name. Of those, only "." is replaced by "_"
+            tmp = container_name.replace('.', '_')
+            if len(part) > position and part[position] == tmp:
                 return container_name
 
         return None
@@ -880,12 +916,7 @@ class Telegraf:
                 name = 'docker_containers'
             else:
                 return
-        elif part[-2] == 'docker_container_cpu' and part[5] == 'cpu-total':
-            container_name = self.docker_container_name(part[3])
-            if container_name is None:
-                return
-            item = container_name
-
+        elif part[-2] == 'docker_container_cpu':
             if part[-1] == 'usage_total':
                 name = 'docker_container_cpu_used'
                 # Docker sends time in nanosecond. Convert it to seconds
@@ -896,24 +927,37 @@ class Telegraf:
                 value = value * 100
             else:
                 return
-        elif part[-2] == 'docker_container_mem':
-            container_name = self.docker_container_name(part[3])
+
+            container_name = self.docker_container_name(part)
             if container_name is None:
                 return
             item = container_name
 
+            # Only send metric for cpu=cpu-total
+            # cpu tag is normally at part[-3] position. But any label
+            # after "cpu" will change its place
+            inspect = self.core.docker_containers[container_name]
+            labels = inspect.get('Config', {}).get('Labels', {})
+            label_keys_after = [
+                key for (key, value) in labels.items()
+                if key > 'cpu' and value != ''
+            ]
+            position = 3 + len(label_keys_after)
+            if len(part) <= position or part[-position] != 'cpu-total':
+                return
+        elif part[-2] == 'docker_container_mem':
             if part[-1] == 'usage_percent':
                 name = 'docker_container_mem_used_perc'
             elif part[-1] == 'usage':
                 name = 'docker_container_mem_used'
             else:
                 return
-        elif part[-2] == 'docker_container_net' and part[5] == 'total':
-            container_name = self.docker_container_name(part[3])
+
+            container_name = self.docker_container_name(part)
             if container_name is None:
                 return
             item = container_name
-
+        elif part[-2] == 'docker_container_net':
             if part[-1] == 'rx_bytes':
                 name = 'docker_container_net_bits_recv'
                 value = value * 8  # Convert bytes => bits
@@ -924,12 +968,25 @@ class Telegraf:
                 derive = True
             else:
                 return
-        elif part[-2] == 'docker_container_blkio' and part[5] == 'total':
-            container_name = self.docker_container_name(part[3])
+
+            container_name = self.docker_container_name(part)
             if container_name is None:
                 return
             item = container_name
 
+            # Only send metric for network=total
+            # network tag is normally at part[-3] position. But any label
+            # after "network" will change its place
+            inspect = self.core.docker_containers[container_name]
+            labels = inspect.get('Config', {}).get('Labels', {})
+            label_keys_after = [
+                key for (key, value) in labels.items()
+                if key > 'network' and value != ''
+            ]
+            position = 3 + len(label_keys_after)
+            if len(part) <= position or part[-position] != 'total':
+                return
+        elif part[-2] == 'docker_container_blkio':
             if part[-1] == 'io_service_bytes_recursive_read':
                 name = 'docker_container_io_read_bytes'
                 derive = True
@@ -937,6 +994,24 @@ class Telegraf:
                 name = 'docker_container_io_write_bytes'
                 derive = True
             else:
+                return
+
+            container_name = self.docker_container_name(part)
+            if container_name is None:
+                return
+            item = container_name
+
+            # Only send metric for device=total
+            # device tag is normally at part[-3] position. But any label
+            # after "device" will change its place
+            inspect = self.core.docker_containers[container_name]
+            labels = inspect.get('Config', {}).get('Labels', {})
+            label_keys_after = [
+                key for (key, value) in labels.items()
+                if key > 'device' and value != ''
+            ]
+            position = 3 + len(label_keys_after)
+            if len(part) <= position or part[-position] != 'total':
                 return
         elif (part[2] == 'counter'
                 and not self.core.config.get('telegraf.disable_statsd')):
