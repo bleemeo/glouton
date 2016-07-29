@@ -34,6 +34,7 @@ import threading
 import time
 
 import apscheduler.scheduler
+import six
 from six.moves import configparser
 import yaml
 
@@ -1203,6 +1204,10 @@ class Core:
                     generator = self.docker_client.events()
 
                 for event in generator:
+                    # even older version of docker-py does not support decoding
+                    # at all
+                    if isinstance(event, six.string_types):
+                        event = json.loads(event)
                     status = event.get('status')
                     event_type = event.get('Type', 'container')
 
@@ -1214,6 +1219,7 @@ class Core:
             except:
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
+                logging.debug('Docker event watcher error', exc_info=True)
                 pass
 
             time.sleep(5)
