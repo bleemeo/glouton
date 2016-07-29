@@ -17,6 +17,7 @@
 #
 
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -70,6 +71,18 @@ def api_iterator(url, params, auth, headers=None):
             yield item
 
 
+def convert_docker_date(input_date):
+    """ Take a string representing a date using Docker inspect format and return
+        None if the date is "0001-01-01T00:00:00Z"
+    """
+    if input_date is None:
+        return None
+
+    if input_date == '0001-01-01T00:00:00Z':
+        return None
+    return input_date
+
+
 class BleemeoConnector(threading.Thread):
 
     def __init__(self, core):
@@ -80,6 +93,7 @@ class BleemeoConnector(threading.Thread):
         self.connected = False
         self._mqtt_queue_size = 0
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
+        self._last_discovery_sent = datetime.datetime(1970, 1, 1)
         self._last_update = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
         self.metrics_uuid = self.core.state.get_complex_dict(
@@ -450,6 +464,11 @@ class BleemeoConnector(threading.Thread):
         if self._last_facts_sent < self.core.last_facts_update:
             self.send_facts()
 
+        now = datetime.datetime.now()
+        if self._last_discovery_sent < self.core.last_discovery_update:
+            self._register_containers()
+            self._last_discovery_sent = now
+
     def _retrive_threshold(self):
         """ Retrieve threshold for all registered metrics
 
@@ -686,6 +705,94 @@ class BleemeoConnector(threading.Thread):
                 )
                 self.core.state.set_complex_dict('thresholds', thresholds)
                 self.core.define_thresholds()
+
+    def _register_containers(self):
+        registration_url = urllib_parse.urljoin(
+            self.bleemeo_base_url, '/v1/container/',
+        )
+        container_uuid = self.core.state.get('docker_container_uuid', {})
+
+        for name, inspect in self.core.docker_containers.items():
+            new_hash = hashlib.sha1(
+                json.dumps(inspect, sort_keys=True).encode('utf-8')
+            ).hexdigest()
+            old_hash, obj_uuid = container_uuid.get(name, (None, None))
+
+            if old_hash == new_hash:
+                continue
+
+            if obj_uuid is None:
+                method = requests.post
+                url = registration_url
+            else:
+                method = requests.put
+                url = registration_url + obj_uuid + '/'
+
+            payload = {
+                'host': self.agent_uuid,
+                'name': name,
+                'command': ' '.join(inspect.get('Config', {}).get('Cmd', [])),
+                'docker_status': inspect.get('State', {}).get('Status', ''),
+                'docker_created_at': convert_docker_date(
+                    inspect.get('Created')
+                ),
+                'docker_started_at': convert_docker_date(
+                    inspect.get('State', {}).get('StartedAt')
+                ),
+                'docker_finished_at': convert_docker_date(
+                    inspect.get('State', {}).get('FinishedAt')
+                ),
+                'docker_api_version': self.core.last_facts.get(
+                    'docker_api_version', ''
+                ),
+                'docker_id': inspect.get('Id', ''),
+                'docker_image_id': inspect.get('Image', ''),
+                'docker_image_name':
+                    inspect.get('Config', '').get('Image', ''),
+                'docker_inspect': json.dumps(inspect),
+            }
+
+            response = method(
+                url,
+                data=json.dumps(payload),
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-type': 'application/json',
+                },
+            )
+
+            if response.status_code not in (200, 201):
+                logging.debug(
+                    'Container registration failed. Server response = %s',
+                    response.content
+                )
+                continue
+            obj_uuid = response.json()['id']
+            container_uuid[name] = (new_hash, obj_uuid)
+            self.core.state.set('docker_container_uuid', container_uuid)
+
+        deleted_containers = (
+            set(container_uuid) - set(self.core.docker_containers)
+        )
+        for name in deleted_containers:
+            (_, obj_uuid) = container_uuid[name]
+            url = registration_url + obj_uuid + '/'
+            response = requests.delete(
+                url,
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            )
+            if response.status_code not in (204, 404):
+                logging.debug(
+                    'Container deletion failed. Server response = %s',
+                    response.content,
+                )
+                continue
+            del container_uuid[name]
+            self.core.state.set('docker_container_uuid', container_uuid)
 
     def emit_metric(self, metric):
         if self._metric_queue.qsize() < 100000:

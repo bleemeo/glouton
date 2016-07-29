@@ -76,15 +76,39 @@ def get_agent_version():
 
 
 def get_docker_version(core):
-    try:
-        if core.docker_client is not None:
-            return core.docker_client.version()['Version']
-    except (requests.exceptions.RequestException, KeyError):
-        logging.debug('error getting docker verion', exc_info=True)
+    """ return a couple (docker-engine-version, docker-api-version)
+    """
+    api_version = None
+    package_version = None
 
-    package_version = get_package_version('docker-engine')
+    if core.docker_client is not None:
+        try:
+            versions = core.docker_client.version()
+            api_version = versions.get('ApiVersion')
+            package_version = versions.get('Version')
+            return (package_version, api_version)
+        except requests.exceptions.RequestException:
+            logging.debug('error getting docker verion', exc_info=True)
+
+    package_version = get_package_version('docker-engine', package_version)
     if package_version is None:
-        package_version = get_package_version('docker.io')
+        package_version = get_package_version('docker.io', package_version)
+
+    return (package_version, api_version)
+
+
+def get_telegraf_version():
+    package_version = get_package_version('telegraf')
+    if package_version is None:
+        try:
+            output = subprocess.check_output(['telegraf', '-version'])
+            output = output.decode('utf-8').strip()
+        except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
+            return None
+
+        prefix = 'Telegraf - version '
+        if output.startswith(prefix):
+            package_version = output[len(prefix):]
 
     return package_version
 
@@ -263,6 +287,8 @@ def get_facts(core):
     kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
     virtual = get_virtual_type(facts)
 
+    (docker_version, docker_api_version) = get_docker_version(core)
+
     facts.update({
         'agent_version': get_agent_version(),
         'architecture': architecture,
@@ -277,7 +303,8 @@ def get_facts(core):
         ),
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
         'collectd_version': get_package_version('collectd'),
-        'docker_version': get_docker_version(core),
+        'docker_api_version': docker_api_version,
+        'docker_version': docker_version,
         'domain': domain,
         'public_ip': get_public_ip(core),
         'fqdn': fqdn,
@@ -300,7 +327,7 @@ def get_facts(core):
         'system_vendor': get_file_content(
             os.path.join(DMI_DIR, 'sys_vendor')
         ),
-        'telegraf_version': get_package_version('telegraf'),
+        'telegraf_version': get_telegraf_version(),
         'timezone': get_file_content('/etc/timezone'),
         'virtual': virtual,
     })

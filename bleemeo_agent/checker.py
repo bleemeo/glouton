@@ -123,18 +123,23 @@ CHECKS_INFO = {
 
 
 # global variable with all checks created
-CHECKS = []
+CHECKS = {}
 
 
 def update_checks(core):
     global CHECKS
-    for check in CHECKS:
-        check.stop()
 
-    CHECKS = []
-
+    checks_seen = set()
     for key, service_info in core.services.items():
         (service_name, instance) = key
+        checks_seen.add(key)
+        if key in CHECKS and CHECKS[key].service_info == service_info:
+            # check unchanged
+            continue
+        elif key in CHECKS:
+            CHECKS[key].stop()
+            del CHECKS[key]
+
         try:
             new_check = Check(
                 core,
@@ -142,7 +147,7 @@ def update_checks(core):
                 instance,
                 service_info,
             )
-            CHECKS.append(new_check)
+            CHECKS[key] = new_check
         except NotImplementedError:
             logging.debug(
                 'No check exists for service %s', service_name,
@@ -154,13 +159,18 @@ def update_checks(core):
                 exc_info=True
             )
 
+    deleted_checks = set(CHECKS.keys()) - checks_seen
+    for key in deleted_checks:
+        CHECKS[key].stop()
+        del CHECKS[key]
+
 
 def periodic_check():
     """ Run few periodic check:
 
         * that all TCP socket are still openned
     """
-    for check in CHECKS:
+    for check in CHECKS.values():
         check.check_sockets()
 
 
