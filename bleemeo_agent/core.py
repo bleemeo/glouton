@@ -538,6 +538,8 @@ class Core:
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
         )
+
+        self._apply_upgrade()
         return True
 
     @property
@@ -931,6 +933,14 @@ class Core:
                 'services_uuid', self.bleemeo_connector.services_uuid
             )
 
+    def _apply_upgrade(self):
+        # Bogus test caused "udp6" to be keeps in netstat extra_ports.
+        for service_info in self.discovered_services.values():
+            extra_ports = service_info.get('extra_ports', {})
+            for port_protocol in list(extra_ports):
+                if port_protocol.endswith('/udp6'):
+                    del extra_ports[port_protocol]
+
     def _get_processes_map(self):
         """ Return a mapping from PID to name and container in which
             process is running.
@@ -1013,7 +1023,7 @@ class Core:
                     # netstat output may have "tcp6" for IPv4 socket.
                     # For example elasticsearch output is:
                     # tcp6       0      0 127.0.0.1:7992          :::*   [...]
-                    if protocol in ('tcp6' or 'udp6'):
+                    if protocol in ('tcp6', 'udp6'):
                         # Assume this socket is IPv4 & IPv6
                         protocol = protocol[:3]
 
