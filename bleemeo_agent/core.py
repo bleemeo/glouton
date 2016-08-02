@@ -963,6 +963,7 @@ class Core:
                 processes[process['pid']] = {
                     'cmdline': process['cmdline'],
                     'instance': None,
+                    'exe': process['exe'],
                 }
 
         if self.docker_client is None:
@@ -1112,6 +1113,7 @@ class Core:
             service_info = get_service_info(process['cmdline'])
             if service_info is not None:
                 service_info = service_info.copy()
+                service_info['binary_path'] = process['exe']
                 instance = process['instance']
                 service_name = service_info['service']
                 if (service_name, instance) in discovered_services:
