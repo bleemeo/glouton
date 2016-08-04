@@ -584,7 +584,7 @@ class BleemeoConnector(threading.Thread):
                     for (port_proto, address) in extra_ports.items()
                 ),
                 'label': service_name,
-                'binary_path': service_info.get('binary_path', ''),
+                'exe_path': service_info.get('exe_path', ''),
             }
             if instance is not None:
                 entry['instance'] = instance
