@@ -728,10 +728,14 @@ class BleemeoConnector(threading.Thread):
                 method = requests.put
                 url = registration_url + obj_uuid + '/'
 
+            cmd = inspect.get('Config', {}).get('Cmd', [])
+            if cmd is None:
+                cmd = []
+
             payload = {
                 'host': self.agent_uuid,
                 'name': name,
-                'command': ' '.join(inspect.get('Config', {}).get('Cmd', [])),
+                'command': ' '.join(cmd),
                 'docker_status': inspect.get('State', {}).get('Status', ''),
                 'docker_created_at': convert_docker_date(
                     inspect.get('Created')
