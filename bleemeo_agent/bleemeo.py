@@ -453,9 +453,10 @@ class BleemeoConnector(threading.Thread):
             return
 
         now = datetime.datetime.now()
-        if now - self._last_update > datetime.timedelta(hours=1):
-            self._retrive_threshold()
+        if (now - self._last_update > datetime.timedelta(hours=1)
+                or self.core.last_services_autoremove >= self._last_update):
             self._purge_deleted_services()
+            self._retrive_threshold()
             self._last_update = now
 
         self._register_services()
@@ -519,12 +520,36 @@ class BleemeoConnector(threading.Thread):
         self.core.define_thresholds()
 
     def _purge_deleted_services(self):
-        """ Remove from state any deleted service
+        """ Remove from state any deleted service on API and vice-versa
 
             Also remove them from discovered service.
         """
         base_url = self.bleemeo_base_url
         service_url = urllib_parse.urljoin(base_url, '/v1/service/')
+
+        deleted_services_from_state = (
+            set(self.services_uuid) - set(self.core.services)
+        )
+        for key in deleted_services_from_state:
+            service_uuid = self.services_uuid[key]['uuid']
+            response = requests.delete(
+                service_url + '%s/' % service_uuid,
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            )
+            if response.status_code not in (204, 404):
+                logging.debug(
+                    'Service deletion failed. Server response = %s',
+                    response.content
+                )
+                continue
+            del self.services_uuid[key]
+            self.core.state.set_complex_dict(
+                'services_uuid', self.services_uuid
+            )
+
         services = api_iterator(
             service_url,
             params={'agent': self.agent_uuid},

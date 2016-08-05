@@ -486,6 +486,7 @@ class Core:
         self.last_facts = {}
         self.last_facts_update = datetime.datetime(1970, 1, 1)
         self.last_discovery_update = datetime.datetime(1970, 1, 1)
+        self.last_services_autoremove = datetime.datetime(1970, 1, 1)
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -861,10 +862,11 @@ class Core:
             self._search_old_service(discovered_running_services)
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
-        if deleted_services:
-            for key in deleted_services:
-                if key in new_discovered_services:
-                    del new_discovered_services[key]
+        (new_discovered_services, had_autoremove) = self._purge_services(
+            new_discovered_services,
+            discovered_running_services,
+            deleted_services,
+        )
 
         # Remove container address. If container is still running, address
         # will be re-added from discovered_running_services.
@@ -895,6 +897,44 @@ class Core:
         bleemeo_agent.checker.update_checks(self)
 
         self.last_discovery_update = datetime.datetime.now()
+        if had_autoremove:
+            self.last_services_autoremove = datetime.datetime.now()
+
+    def _purge_services(
+            self, new_discovered_services, running_services, deleted_services):
+        """ Remove deleted_services (service deleted from API) and check
+            for service auto-remove
+        """
+        had_autoremove = False
+
+        if deleted_services is not None:
+            deleted_services = list(deleted_services)
+        else:
+            deleted_services = []
+
+        no_longer_running = (
+            set(new_discovered_services) - set(running_services)
+        )
+        for service_key in no_longer_running:
+            (service_name, instance) = service_key
+            if instance is not None:
+                # Don't process container here
+                continue
+            exe_path = new_discovered_services[service_key].get('exe_path')
+            if instance is None and exe_path and not os.path.exists(exe_path):
+                # Binary for service no longer exists. It has been uninstalled.
+                logging.info(
+                    'Service %s was uninstalled, removing it', service_name
+                )
+                deleted_services.append(service_key)
+                had_autoremove = True
+
+        if deleted_services:
+            for key in deleted_services:
+                if key in new_discovered_services:
+                    del new_discovered_services[key]
+
+        return (new_discovered_services, had_autoremove)
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name
