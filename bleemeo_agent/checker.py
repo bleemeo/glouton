@@ -430,6 +430,11 @@ class Check:
                     STATUS_CRITICAL,
                     'Connection timed out after 10 seconds'
                 )
+            except socket.error:
+                return (
+                    STATUS_CRITICAL,
+                    'Connection closed'
+                )
             if tmp == b'':
                 break
             received += tmp.decode('utf8', 'ignore')
