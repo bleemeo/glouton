@@ -576,9 +576,15 @@ class BleemeoConnector(threading.Thread):
                 #             is a customer defined using Nagios check).
                 address = None
 
+            extra_ports = service_info.get('extra_ports', {})
             entry = {
                 'address': address,
+                'listen_addresses': ','.join(
+                    '%s:%s' % (address, port_proto)
+                    for (port_proto, address) in extra_ports.items()
+                ),
                 'label': service_name,
+                'exe_path': service_info.get('exe_path', ''),
             }
             if instance is not None:
                 entry['instance'] = instance

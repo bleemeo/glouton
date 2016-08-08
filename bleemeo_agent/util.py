@@ -203,6 +203,10 @@ def get_top_info():
                 'status': process.status(),
                 'username': username,
             }
+            try:
+                process_info['exe'] = process.exe()
+            except psutil.AccessDenied:
+                process_info['exe'] = ''
         except psutil.NoSuchProcess:
             continue
 
