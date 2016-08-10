@@ -83,9 +83,19 @@ def convert_docker_date(input_date):
     return input_date
 
 
-def get_listen_addresses(service_info, address):
+def get_listen_addresses(service_info):
     """ Return the listen_addresses for a service_info
     """
+    try:
+        address = socket.gethostbyname(service_info['address'])
+    except (socket.gaierror, TypeError, KeyError):
+        # gaierror => unable to resolv name
+        # TypeError => service_info['address'] is None (happen when
+        #              service is on a stopped container)
+        # KeyError => no 'address' in service_info (happen when service
+        #             is a customer defined using Nagios check).
+        address = None
+
     extra_ports = service_info.get('extra_ports', {}).copy()
     if service_info.get('port') is not None and len(extra_ports) == 0:
         if service_info['protocol'] == socket.IPPROTO_TCP:
@@ -582,29 +592,16 @@ class BleemeoConnector(threading.Thread):
 
         for key, service_info in self.core.services.items():
             (service_name, instance) = key
-            try:
-                address = socket.gethostbyname(service_info['address'])
-            except (socket.gaierror, TypeError, KeyError):
-                # gaierror => unable to resolv name
-                # TypeError => service_info['address'] is None (happen when
-                #              service is on a stopped container)
-                # KeyError => no 'address' in service_info (happen when service
-                #             is a customer defined using Nagios check).
-                address = None
 
             entry = {
-                'address': address,
                 'listen_addresses':
-                    get_listen_addresses(service_info, address),
+                    get_listen_addresses(service_info),
                 'label': service_name,
                 'exe_path': service_info.get('exe_path', ''),
             }
             if instance is not None:
                 entry['instance'] = instance
 
-            if service_info.get('protocol') is not None:
-                entry['port'] = service_info['port']
-                entry['protocol'] = service_info['protocol']
             if key in self.services_uuid:
                 entry['uuid'] = self.services_uuid[key]['uuid']
                 # check for possible update
