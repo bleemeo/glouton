@@ -83,6 +83,22 @@ def convert_docker_date(input_date):
     return input_date
 
 
+def get_listen_addresses(service_info, address):
+    """ Return the listen_addresses for a service_info
+    """
+    extra_ports = service_info.get('extra_ports', {}).copy()
+    if service_info.get('port') is not None and len(extra_ports) == 0:
+        if service_info['protocol'] == socket.IPPROTO_TCP:
+            extra_ports['%s/tcp' % service_info['port']] = address
+        elif service_info['protocol'] == socket.IPPROTO_UDP:
+            extra_ports['%s/udp' % service_info['port']] = address
+
+    return ','.join(
+        '%s:%s' % (address, port_proto)
+        for (port_proto, address) in extra_ports.items()
+    )
+
+
 class BleemeoConnector(threading.Thread):
 
     def __init__(self, core):
@@ -576,13 +592,10 @@ class BleemeoConnector(threading.Thread):
                 #             is a customer defined using Nagios check).
                 address = None
 
-            extra_ports = service_info.get('extra_ports', {})
             entry = {
                 'address': address,
-                'listen_addresses': ','.join(
-                    '%s:%s' % (address, port_proto)
-                    for (port_proto, address) in extra_ports.items()
-                ),
+                'listen_addresses':
+                    get_listen_addresses(service_info, address),
                 'label': service_name,
                 'exe_path': service_info.get('exe_path', ''),
             }
