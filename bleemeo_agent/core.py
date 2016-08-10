@@ -205,6 +205,11 @@ KNOWN_PROCESS = {
         'port': 3128,
         'protocol': socket.IPPROTO_TCP,
     },
+    'squid': {
+        'service': 'squid',
+        'port': 3128,
+        'protocol': socket.IPPROTO_TCP,
+    },
     'postgres': {
         'service': 'postgresql',
         'port': 5432,

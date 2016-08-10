@@ -261,6 +261,10 @@ PROCESS_SERVICE = [
         ),
         'elasticsearch'
     ),
+    (
+        '/usr/sbin/squid -YC -f /etc/squid/squid.conf',
+        'squid'
+    ),
 
     # Other command / service
     (
