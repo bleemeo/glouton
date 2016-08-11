@@ -214,9 +214,16 @@ class Telegraf:
         if self.core.config.get('telegraf.statsd_enabled', True):
             telegraf_config += STATSD_TELEGRAF_CONFIG
 
-        if (self.core.docker_client is not None
-                and self.telegraf_version_gte('1.0.0')):
-            telegraf_config += DOCKER_TELEGRAF_CONFIG
+        if self.core.docker_client is not None:
+            docker_metrics_enabled = self.core.config.get(
+                'telegraf.docker_metrics_enabled', None
+            )
+            if (docker_metrics_enabled
+                    or (
+                        docker_metrics_enabled is None
+                        and self.telegraf_version_gte('1.0.0')
+                    )):
+                telegraf_config += DOCKER_TELEGRAF_CONFIG
 
         for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
