@@ -411,6 +411,8 @@ class Telegraf:
 
         for container_name, inspect in self.core.docker_containers.items():
             labels = inspect.get('Config', {}).get('Labels', {})
+            if labels is None:
+                labels = {}
             label_keys_before = [
                 key for (key, value) in labels.items()
                 if key < 'container_name' and value != ''
@@ -963,6 +965,8 @@ class Telegraf:
             # after "cpu" will change its place
             inspect = self.core.docker_containers[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
+            if labels is None:
+                labels = {}
             label_keys_after = [
                 key for (key, value) in labels.items()
                 if key > 'cpu' and value != ''
@@ -1004,6 +1008,8 @@ class Telegraf:
             # after "network" will change its place
             inspect = self.core.docker_containers[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
+            if labels is None:
+                labels = {}
             label_keys_after = [
                 key for (key, value) in labels.items()
                 if key > 'network' and value != ''
@@ -1031,6 +1037,8 @@ class Telegraf:
             # after "device" will change its place
             inspect = self.core.docker_containers[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
+            if labels is None:
+                labels = {}
             label_keys_after = [
                 key for (key, value) in labels.items()
                 if key > 'device' and value != ''
