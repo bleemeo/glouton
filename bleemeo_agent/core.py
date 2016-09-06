@@ -1105,11 +1105,6 @@ class Core:
         default_port = service_info.get('port')
 
         extra_ports = {}
-        old_service_info = self.discovered_services.get(
-            (service_name, instance)
-        )
-        if old_service_info is not None and 'extra_ports' in old_service_info:
-            extra_ports.update(old_service_info['extra_ports'])
 
         for port_proto, address in ports.items():
             port = int(port_proto.split('/')[0])
@@ -1118,6 +1113,12 @@ class Core:
             if service_info.get('ignore_high_port') and port > 32000:
                 continue
             extra_ports[port_proto] = address
+
+        old_service_info = self.discovered_services.get(
+            (service_name, instance), {}
+        )
+        if len(extra_ports) == 0 and 'extra_ports' in old_service_info:
+            extra_ports.update(old_service_info['extra_ports'])
 
         if default_port is not None and len(extra_ports) > 0:
             if service_info['protocol'] == socket.IPPROTO_TCP:
