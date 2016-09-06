@@ -632,6 +632,8 @@ class Core:
             self.setup_signal()
             self._docker_connect()
             self.start_threads()
+            if self.is_terminating.is_set():
+                return
             self.schedule_tasks()
             try:
                 self.scheduler.start()
