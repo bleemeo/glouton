@@ -51,73 +51,73 @@ STATUS_NAME = {
 
 CHECKS_INFO = {
     'mysql': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'apache': {
-        'type': 'http',
+        'check_type': 'http',
     },
     'dovecot': {
-        'type': 'imap',
+        'check_type': 'imap',
     },
     'elasticsearch': {
-        'type': 'http',
+        'check_type': 'http',
     },
     'influxdb': {
-        'type': 'http',
-        'url': '/ping'
+        'check_type': 'http',
+        'http_path': '/ping'
     },
     'ntp': {
-        'type': 'ntp',
+        'check_type': 'ntp',
     },
     'openvpn': {
         'disable_persistent_socket': True,
     },
     'openldap': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'postgresql': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'rabbitmq': {
-        'type': 'tcp',
-        'send': 'PINGAMQP',
-        'expect': 'AMQP',
+        'check_type': 'tcp',
+        'check_tcp_send': 'PINGAMQP',
+        'check_tcp_expect': 'AMQP',
     },
     'redis': {
-        'type': 'tcp',
-        'send': 'PING\n',
-        'expect': '+PONG',
+        'check_type': 'tcp',
+        'check_tcp_send': 'PING\n',
+        'check_tcp_expect': '+PONG',
     },
     'memcached': {
-        'type': 'tcp',
-        'send': 'version\r\n',
-        'expect': 'VERSION',
+        'check_type': 'tcp',
+        'check_tcp_send': 'version\r\n',
+        'check_tcp_expect': 'VERSION',
     },
     'mongodb': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'nginx': {
-        'type': 'http',
+        'check_type': 'http',
     },
     'postfix': {
-        'type': 'smtp',
+        'check_type': 'smtp',
     },
     'exim': {
-        'type': 'smtp',
+        'check_type': 'smtp',
     },
     'squid': {
-        'type': 'http',
-        '4xx_is_ok': True,
+        'check_type': 'http',
+        'http_4xx_is_ok': True,
     },
     'varnish': {
-        'type': 'tcp',
-        'send': 'ping\n',
-        'expect': 'PONG'
+        'check_type': 'tcp',
+        'check_tcp_send': 'ping\n',
+        'check_tcp_expect': 'PONG'
     },
     'zookeeper': {
-        'type': 'tcp',
-        'send': 'ruok\n',
-        'expect': 'imok',
+        'check_type': 'tcp',
+        'check_tcp_send': 'ruok\n',
+        'check_tcp_expect': 'imok',
     },
 }
 
@@ -180,32 +180,26 @@ class Check:
         self.port = service_info.get('port')
         self.protocol = service_info.get('protocol')
 
-        self.check_info = CHECKS_INFO.get(service_name, {})
+        self.service_info = CHECKS_INFO.get(service_name, {})
 
         if self.port is not None and self.protocol == socket.IPPROTO_TCP:
-            self.check_info.setdefault('type', 'tcp')
+            self.service_info.setdefault('check_type', 'tcp')
+
+        self.service_info.update(service_info)
 
         if (service_info.get('password') is None
                 and service_name in ('mysql', 'postgresql')):
             # For those check, if password is not set the dedicated check
             # will fail.
-            self.check_info['type'] = 'tcp'
+            self.service_info['check_type'] = 'tcp'
 
         self.service = service_name
         self.instance = instance
-        self.service_info = service_info
         self.core = core
 
         self.extra_ports = self.service_info.get('extra_ports', {})
 
-        if self.service_info.get('check_type') is not None:
-            self.check_info = {'type': self.service_info['check_type']}
-        if self.service_info.get('check_command') is not None:
-            self.check_info['check_command'] = (
-                self.service_info['check_command']
-            )
-
-        if not self.check_info and not self.extra_ports:
+        if not self.service_info.get('check_type') and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
         logging.debug(
@@ -245,7 +239,7 @@ class Check:
     def open_sockets(self):
         """ Try to open all closed sockets
         """
-        if self.check_info.get('disable_persistent_socket'):
+        if self.service_info.get('disable_persistent_socket'):
             return
 
         run_check = False
@@ -321,17 +315,17 @@ class Check:
             (return_code, output) = (
                 STATUS_CRITICAL, 'Container stopped: connection refused'
             )
-        elif self.check_info.get('type') == 'nagios':
+        elif self.service_info.get('check_type') == 'nagios':
             (return_code, output) = self.check_nagios()
-        elif self.check_info.get('type') == 'tcp':
+        elif self.service_info.get('check_type') == 'tcp':
             (return_code, output) = self.check_tcp()
-        elif self.check_info.get('type') == 'http':
+        elif self.service_info.get('check_type') == 'http':
             (return_code, output) = self.check_http()
-        elif self.check_info.get('type') == 'imap':
+        elif self.service_info.get('check_type') == 'imap':
             (return_code, output) = self.check_imap()
-        elif self.check_info.get('type') == 'smtp':
+        elif self.service_info.get('check_type') == 'smtp':
             (return_code, output) = self.check_smtp()
-        elif self.check_info.get('type') == 'ntp':
+        elif self.service_info.get('check_type') == 'ntp':
             (return_code, output) = self.check_ntp()
         else:
             (return_code, output) = (STATUS_CHECK_NOT_RUN, '')
@@ -411,7 +405,7 @@ class Check:
 
     def check_nagios(self):
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
-            shlex.split(self.check_info['check_command']),
+            shlex.split(self.service_info['check_command']),
         )
 
         output = output.decode('utf-8', 'ignore').strip()
@@ -422,7 +416,7 @@ class Check:
 
     def check_tcp_recv(self, sock, start):
         received = ''
-        while not self.check_info['expect'] in received:
+        while not self.service_info['check_tcp_expect'] in received:
             try:
                 tmp = sock.recv(4096)
             except socket.timeout:
@@ -439,7 +433,7 @@ class Check:
                 break
             received += tmp.decode('utf8', 'ignore')
 
-        if self.check_info['expect'] not in received:
+        if self.service_info['check_tcp_expect'] not in received:
             if received == '':
                 return (STATUS_CRITICAL, 'No data received from host')
             else:
@@ -476,11 +470,10 @@ class Check:
         except socket.error:
             return (STATUS_CRITICAL, 'TCP port %d, Connection refused' % port)
 
-        if (self.check_info is not None
-                and self.check_info.get('send')
+        if (self.service_info.get('check_tcp_send')
                 and use_default):
             try:
-                sock.send(self.check_info['send'].encode('utf8'))
+                sock.send(self.service_info['check_tcp_send'].encode('utf8'))
             except socket.timeout:
                 return (
                     STATUS_CRITICAL,
@@ -492,8 +485,7 @@ class Check:
                     'TCP port %d, connection closed too early' % port
                 )
 
-        if (self.check_info is not None
-                and self.check_info.get('expect')
+        if (self.service_info.get('check_tcp_expect')
                 and use_default):
             return self.check_tcp_recv(sock, start)
 
@@ -506,7 +498,10 @@ class Check:
             return (STATUS_CHECK_NOT_RUN, '')
 
         base_url = 'http://%s:%s' % (self.address, self.port)
-        url = urllib_parse.urljoin(base_url, self.check_info.get('url', '/'))
+        url = urllib_parse.urljoin(
+            base_url,
+            self.service_info.get('http_path', '/')
+        )
         start = time.time()
         try:
             response = requests.get(url, timeout=10, allow_redirects=False)
@@ -526,7 +521,7 @@ class Check:
                 )
             )
         elif (response.status_code >= 400
-                and not self.check_info.get('4xx_is_ok', False)):
+                and not self.service_info.get('http_4xx_is_ok', False)):
             return (
                 STATUS_WARNING,
                 'HTTP WARN - status_code=%s / %.3f second response time' % (
