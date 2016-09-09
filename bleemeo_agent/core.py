@@ -414,6 +414,36 @@ def convert_type(value_text, value_type):
         raise NotImplementedError('Unknown type %s' % value_type)
 
 
+def disable_https_warning():
+    """
+    Agent does HTTPS requests with verify=False (only for checks, not
+    for communication with Bleemeo Cloud platform).
+    By default requests will emit one warning for EACH request which is
+    too noisy.
+    """
+
+    # urllib3 may be unvendored from requests.packages (at least Debian
+    # does this). Older version of requests don't have requests.packages at
+    # all. Newer version have a stub that makes requests.packages.urllib3 being
+    # urllib3.
+    # Try first to access requests.packages.urllib3 (which should works on
+    # recent Debian version and virtualenv version) and fallback to urllib3
+    # directly.
+    try:
+        import requests.packages.urllib3 as urllib3
+    except ImportError:
+        import urllib3
+
+    try:
+        klass = urllib3.exceptions.InsecureRequestWarning
+    except AttributeError:
+        # urllib3 introduced warning with 1.9. Before InsecureRequestWarning
+        # didn't existed.
+        return
+
+    urllib3.disable_warnings(klass)
+
+
 class State:
     """ Persistant store for state of the agent.
 
@@ -546,6 +576,12 @@ class Core:
         )
 
         self._apply_upgrade()
+
+        # Agent does HTTPS requests with verify=False (only for checks, not
+        # for communication with Bleemeo Cloud platform).
+        # By default requests will emit one warning for EACH request which is
+        # too noisy.
+        disable_https_warning()
         return True
 
     @property

@@ -321,6 +321,8 @@ class Check:
             (return_code, output) = self.check_tcp()
         elif self.service_info.get('check_type') == 'http':
             (return_code, output) = self.check_http()
+        elif self.service_info.get('check_type') == 'https':
+            (return_code, output) = self.check_http(tls=True)
         elif self.service_info.get('check_type') == 'imap':
             (return_code, output) = self.check_imap()
         elif self.service_info.get('check_type') == 'smtp':
@@ -493,18 +495,23 @@ class Check:
         end = time.time()
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
-    def check_http(self):
+    def check_http(self, tls=False):
         if self.port is None or self.address is None:
             return (STATUS_CHECK_NOT_RUN, '')
 
-        base_url = 'http://%s:%s' % (self.address, self.port)
+        if tls:
+            base_url = 'https://%s:%s' % (self.address, self.port)
+        else:
+            base_url = 'http://%s:%s' % (self.address, self.port)
         url = urllib_parse.urljoin(
             base_url,
             self.service_info.get('http_path', '/')
         )
         start = time.time()
         try:
-            response = requests.get(url, timeout=10, allow_redirects=False)
+            response = requests.get(
+                url, timeout=10, allow_redirects=False, verify=False
+            )
         except requests.exceptions.Timeout:
             return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
         except requests.exceptions.RequestException:
