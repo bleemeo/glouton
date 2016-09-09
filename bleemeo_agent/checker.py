@@ -107,7 +107,9 @@ CHECKS_INFO = {
     },
     'squid': {
         'check_type': 'http',
-        'http_4xx_is_ok': True,
+        # Agent does a normal HTTP request, but squid expect a proxy. It expect
+        # squid to reply with a 400 - Bad request.
+        'http_status_code': 400,
     },
     'varnish': {
         'check_type': 'tcp',
@@ -519,7 +521,14 @@ class Check:
 
         end = time.time()
 
-        if response.status_code >= 500:
+        if 'http_status_code' in self.service_info:
+            expected_code = int(self.service_info['http_status_code'])
+        else:
+            expected_code = None
+
+        if (expected_code is None and response.status_code >= 500
+                or (expected_code is not None
+                    and response.status_code != expected_code)):
             return (
                 STATUS_CRITICAL,
                 'HTTP CRITICAL - http_code=%s / %.3f second response time' % (
@@ -527,8 +536,7 @@ class Check:
                     end-start,
                 )
             )
-        elif (response.status_code >= 400
-                and not self.service_info.get('http_4xx_is_ok', False)):
+        elif expected_code is None and response.status_code >= 400:
             return (
                 STATUS_WARNING,
                 'HTTP WARN - status_code=%s / %.3f second response time' % (
