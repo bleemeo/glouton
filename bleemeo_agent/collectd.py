@@ -332,7 +332,7 @@ class Collectd:
                 path = '/'
             else:
                 path = '/' + path.replace('-', '/')
-            path = self.graphite_server._disk_path_rename(path)
+            path = self.graphite_server.disk_path_rename(path)
             if path is None:
                 # this partition is ignored
                 return
