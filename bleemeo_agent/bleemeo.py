@@ -495,16 +495,16 @@ class BleemeoConnector(threading.Thread):
             self._retrive_threshold()
             self._last_update = now
 
+        now = datetime.datetime.now()
+        if self._last_discovery_sent < self.core.last_discovery_update:
+            self._register_containers()
+            self._last_discovery_sent = now
+
         self._register_services()
         self._register_metric()
 
         if self._last_facts_sent < self.core.last_facts_update:
             self.send_facts()
-
-        now = datetime.datetime.now()
-        if self._last_discovery_sent < self.core.last_discovery_update:
-            self._register_containers()
-            self._last_discovery_sent = now
 
     def _retrive_threshold(self):
         """ Retrieve threshold for all registered metrics
@@ -689,6 +689,7 @@ class BleemeoConnector(threading.Thread):
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         thresholds = self.core.state.get_complex_dict('thresholds', {})
+        container_uuid = self.core.state.get('docker_container_uuid', {})
 
         # It can't keep the lock during whole loop, because call to API is slow
         # In addition it may remove entry during the loop.
@@ -745,6 +746,24 @@ class BleemeoConnector(threading.Thread):
                             status_of,
                         )
                         continue
+                if self.metrics_info[metric_key].get('container') is not None:
+                    container_name = self.metrics_info[metric_key]['container']
+                    if container_name not in self.core.docker_containers:
+                        # Container was removed, drop the metrics
+                        del self.metrics_uuid[metric_key]
+                        del self.metrics_info[metric_key]
+                        self.core.state.set_complex_dict(
+                            'metrics_uuid', self.metrics_uuid
+                        )
+                        continue
+
+                    if (container_name not in container_uuid
+                            or container_uuid[container_name][1] is None):
+                        # Container not yet registered
+                        continue
+                    payload['container'] = (
+                        container_uuid[container_name][1]
+                    )
                 logging.debug('Registering metric %s', metric_name)
                 if item is not None:
                     payload['item'] = item
@@ -903,6 +922,7 @@ class BleemeoConnector(threading.Thread):
                     {
                         'status_of': metric.get('status_of'),
                         'instance': metric.get('instance'),
+                        'container': metric.get('container'),
                     }
                 )
 
