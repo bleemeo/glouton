@@ -185,21 +185,21 @@ def get_top_info():
             # Cmdline may be unavailable (permission issue ?)
             # When unavailable, depending on psutil version, it returns
             # either [] or ['']
-            if process.cmdline() and process.cmdline()[0]:
-                cmdline = ' '.join(process.cmdline())
+            cmdline = process.cmdline()
+            if cmdline and cmdline[0]:
+                cmdline = ' '.join(cmdline)
             else:
                 cmdline = process.name()
 
+            cpu_times = process.cpu_times()
             process_info = {
                 'pid': process.pid,
                 'create_time': process.create_time(),
-                'name': process.name(),
                 'cmdline': cmdline,
-                'ppid': process.ppid(),
                 'memory_rss': process.memory_info().rss / 1024,
                 'cpu_percent': process.cpu_percent(),
                 'cpu_times':
-                    process.cpu_times().user + process.cpu_times().system,
+                    cpu_times.user + cpu_times.system,
                 'status': process.status(),
                 'username': username,
             }

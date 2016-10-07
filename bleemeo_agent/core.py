@@ -1197,7 +1197,7 @@ class Core:
             service_info = get_service_info(process['cmdline'])
             if service_info is not None:
                 service_info = service_info.copy()
-                service_info['exe_path'] = process['exe']
+                service_info['exe_path'] = process.get('exe') or ''
                 instance = process['instance']
                 service_name = service_info['service']
                 if (service_name, instance) in discovered_services:
