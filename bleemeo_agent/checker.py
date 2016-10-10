@@ -509,7 +509,6 @@ class Check:
             base_url,
             self.service_info.get('http_path', '/')
         )
-        start = time.time()
         try:
             response = requests.get(
                 url, timeout=10, allow_redirects=False, verify=False
@@ -518,8 +517,6 @@ class Check:
             return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
         except requests.exceptions.RequestException:
             return (STATUS_CRITICAL, 'Connection refused')
-
-        end = time.time()
 
         if 'http_status_code' in self.service_info:
             expected_code = int(self.service_info['http_status_code'])
@@ -531,23 +528,23 @@ class Check:
                     and response.status_code != expected_code)):
             return (
                 STATUS_CRITICAL,
-                'HTTP CRITICAL - http_code=%s / %.3f second response time' % (
+                'HTTP CRITICAL - http_code=%s' % (
                     response.status_code,
-                    end-start,
                 )
             )
         elif expected_code is None and response.status_code >= 400:
             return (
                 STATUS_WARNING,
-                'HTTP WARN - status_code=%s / %.3f second response time' % (
+                'HTTP WARN - status_code=%s' % (
                     response.status_code,
-                    end-start,
                 )
             )
         else:
             return (
                 STATUS_OK,
-                'HTTP OK - %.3f second response time' % (end-start)
+                'HTTP OK - status_code=%s' % (
+                    response.status_code,
+                )
             )
 
     def check_imap(self):
