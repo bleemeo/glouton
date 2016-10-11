@@ -188,14 +188,17 @@ def get_top_info():
             cmdline = process.cmdline()
             if cmdline and cmdline[0]:
                 cmdline = ' '.join(cmdline)
+                name = process.name()
             else:
                 cmdline = process.name()
+                name = cmdline
 
             cpu_times = process.cpu_times()
             process_info = {
                 'pid': process.pid,
                 'create_time': process.create_time(),
                 'cmdline': cmdline,
+                'name': name,
                 'memory_rss': process.memory_info().rss / 1024,
                 'cpu_percent': process.cpu_percent(),
                 'cpu_times':
