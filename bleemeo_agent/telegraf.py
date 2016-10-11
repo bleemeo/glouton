@@ -433,6 +433,7 @@ class Telegraf:
         item = None
         service = None
         instance = None
+        container_name = None
         derive = False
         no_emit = False
 
@@ -1086,5 +1087,7 @@ class Telegraf:
             metric['instance'] = instance
         if item is not None:
             metric['item'] = item
+        if container_name is not None:
+            metric['container'] = container_name
 
         self.core.emit_metric(metric, no_emit=no_emit)
