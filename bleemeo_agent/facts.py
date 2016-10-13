@@ -29,13 +29,6 @@ import yaml
 import bleemeo_agent.config
 
 
-# Optional dependencies
-try:
-    import apt_pkg
-except ImportError:
-    apt_pkg = None
-
-
 DMI_DIR = '/sys/devices/virtual/dmi/id/'
 
 
@@ -50,25 +43,26 @@ def get_file_content(file_name):
 
 
 def get_package_version(package_name, default=None):
-    if apt_pkg is None:
-        return default
-
     try:
-        apt_pkg.init()
-        cache = apt_pkg.Cache(progress=None)
-    except:
-        logging.info(
-            'Failed to initialize APT cache to retrieve package %s version',
-            package_name,
-        )
-        logging.debug('Exception is:', exc_info=True)
+        stdout = subprocess.Popen(
+            ['dpkg', '-l', package_name],
+            stdout=subprocess.PIPE,
+            stderr=open('/dev/null', 'w')
+        ).communicate()[0]
+    except OSError:
+        stdout = b''
+
+    if not stdout:
         return default
 
-    if (package_name in cache
-            and cache[package_name].current_ver is not None):
-        return cache[package_name].current_ver.ver_str
+    last_line = stdout.splitlines()[-1]
+    parts = last_line.split()
+    # dpkg -l output should contains:
+    # state, package_name, version, architechure, description
+    if len(parts) < 5:
+        return default
 
-    return default
+    return parts[2].decode('utf-8')
 
 
 def get_agent_version():
