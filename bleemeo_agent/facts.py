@@ -117,6 +117,8 @@ def read_os_release():
     with open('/etc/os-release') as fd:
         for line in fd:
             line = line.strip()
+            if line == '':
+                continue
             (key, value) = line.split('=', 1)
             # value is a quoted string (single or double quote).
             # Use shlex.split to convert to normal string (handling
