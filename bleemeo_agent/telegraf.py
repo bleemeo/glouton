@@ -267,7 +267,7 @@ class Telegraf:
     def _restart_telegraf(self):
         restart_cmd = self.core.config.get(
             'telegraf.restart_command',
-            'sudo --non-interactive service telegraf restart')
+            'sudo -n service telegraf restart')
         telegraf_container = self.core.config.get('telegraf.docker_name')
         if telegraf_container is not None:
             bleemeo_agent.util.docker_restart(

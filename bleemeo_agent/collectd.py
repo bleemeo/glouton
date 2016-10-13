@@ -271,7 +271,7 @@ class Collectd:
     def _restart_collectd(self):
         restart_cmd = self.core.config.get(
             'collectd.restart_command',
-            'sudo --non-interactive service collectd restart')
+            'sudo -n service collectd restart')
         collectd_container = self.core.config.get('collectd.docker_name')
         if collectd_container is not None:
             bleemeo_agent.util.docker_restart(

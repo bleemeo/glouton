@@ -1363,7 +1363,7 @@ class Core:
             try:
                 debian_cnf_raw = subprocess.check_output(
                     [
-                        'sudo', '--non-interactive',
+                        'sudo', '-n',
                         'cat', '/etc/mysql/debian.cnf'
                     ],
                 )
