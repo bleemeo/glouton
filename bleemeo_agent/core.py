@@ -150,6 +150,7 @@ KNOWN_PROCESS = {
     },
     'haproxy': {
         'service': 'haproxy',
+        'ignore_high_port': True,
     },
     'httpd': {
         'service': 'apache',
