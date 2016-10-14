@@ -25,3 +25,8 @@ docker run --rm -v $(pwd):/srv/workspace -w /srv/workspace \
         --distribution unstable \
         --urgency low \
         "Build package based on ${COMMIT_HASH} commit"
+
+sed -i -e "s/%define version .*$/%define version ${VERSION}/" \
+       -e "s/%define git_commit .*$/%define git_commit ${COMMIT_HASH}/" \
+       -e "s/%define build_date .*$/%define build_date $(TZ=UTC LANG= date +"%a %b %d %Y")/" \
+       bleemeo-agent.spec
