@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 
-import datetime
 import imaplib
 import logging
 import select
@@ -214,10 +213,10 @@ class Check:
 
         self.last_run = time.time()
 
-        self.current_job = self.core.scheduler.add_interval_job(
+        self.current_job = self.core.add_scheduled_job(
             self.run_check,
-            start_date=datetime.datetime.now() + datetime.timedelta(seconds=1),
             seconds=60,
+            next_run_in=0,
         )
         self.open_sockets_job = None
 
@@ -268,15 +267,7 @@ class Check:
         if run_check:
             # open_socket failed, run check now
             # reschedule job to be run immediately
-            self.core.scheduler.unschedule_job(self.current_job)
-            self.current_job = self.core.scheduler.add_interval_job(
-                self.run_check,
-                start_date=(
-                    datetime.datetime.now() +
-                    datetime.timedelta(seconds=1)
-                ),
-                seconds=60,
-            )
+            self.current_job = self.core.trigger_job(self.current_job)
 
     def check_sockets(self):
         """ Check if some socket are closed
@@ -384,25 +375,18 @@ class Check:
 
         if return_code == STATUS_OK and self.tcp_sockets:
             # Make sure all socket are openned
-            self.open_sockets_job = self.core.scheduler.add_date_job(
+            self.open_sockets_job = self.core.add_scheduled_job(
                 self.open_sockets,
-                date=(
-                    datetime.datetime.now() + datetime.timedelta(seconds=5)
-                ),
+                seconds=0,
+                next_run_in=5,
             )
 
     def stop(self):
         """ Unschedule this check
         """
         logging.debug('Stoping check %s (on %s)', self.service, self.instance)
-        try:
-            self.core.scheduler.unschedule_job(self.open_sockets_job)
-        except KeyError:
-            logging.debug(
-                'Job open_socket for check %s (on %s) was already unscheduled',
-                self.service, self.instance
-            )
-        self.core.scheduler.unschedule_job(self.current_job)
+        self.core.unschedule_job(self.open_sockets_job)
+        self.core.unschedule_job(self.current_job)
         for tcp_socket in self.tcp_sockets.values():
             if tcp_socket is not None:
                 tcp_socket.close()

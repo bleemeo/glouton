@@ -33,7 +33,14 @@ import sys
 import threading
 import time
 
-import apscheduler.scheduler
+try:
+    import apscheduler.scheduler
+    APSCHEDULE_IS_3X = False
+except ImportError:
+    import apscheduler.schedulers.background
+    from apscheduler.jobstores.base import JobLookupError
+    APSCHEDULE_IS_3X = True
+
 import six
 from six.moves import configparser
 import yaml
@@ -530,7 +537,12 @@ class Core:
         self.graphite_server = None
         self.docker_client = None
         self.docker_containers = {}
-        self.scheduler = apscheduler.scheduler.Scheduler()
+        if APSCHEDULE_IS_3X:
+            self._scheduler = (
+                apscheduler.schedulers.background.BackgroundScheduler()
+            )
+        else:
+            self._scheduler = apscheduler.scheduler.Scheduler()
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
@@ -632,6 +644,127 @@ class Core:
             # https://github.com/getsentry/raven-python/pull/723
             install_thread_hook(self.sentry_client)
 
+    def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):  # noqa
+        """ Schedule a recuring job using APScheduler
+
+            It's a wrapper to add_job/add_interval_job+add_date_job depending
+            on APScheduler version.
+
+            if seconds is 0 or None, job will run only once based on
+            next_run_in. In this case next_run_in could not be None
+
+            next_run_in if not None, specify a delay for next run (in second).
+            If None, it lets APScheduler choose the next run date.
+
+            If next_run_in is 0, the next_run is scheduled as soon as possible.
+            With APScheduler 3.x it means that next run is scheduled for now.
+            With APScheduler 2.x, it means that next run is scheduled for
+            now + 1 seconds.
+        """
+        options = {}
+        if args is not None:
+            options['args'] = args
+
+        if APSCHEDULE_IS_3X:
+            if seconds is None or seconds == 0:
+                if next_run_in is None:
+                    raise ValueError(
+                        'next_run_in could not be None if seconds is 0'
+                    )
+                options['trigger'] = 'date'
+                options['run_date'] = (
+                    datetime.datetime.now() +
+                    datetime.timedelta(seconds=next_run_in)
+                )
+            else:
+                options['trigger'] = 'interval'
+                options['seconds'] = seconds
+
+                if next_run_in is not None and next_run_in == 0:
+                    options['next_run_time'] = datetime.datetime.now()
+                elif next_run_in is not None:
+                    options['next_run_time'] = (
+                        datetime.datetime.now() +
+                        datetime.timedelta(seconds=next_run_in)
+                    )
+
+            job = self._scheduler.add_job(
+                func,
+                **options
+            )
+        else:
+            if seconds is None or seconds == 0:
+                if next_run_in is None:
+                    raise ValueError(
+                        'next_run_in could not be None if seconds is 0'
+                    )
+                options['date'] = (
+                    datetime.datetime.now() +
+                    datetime.timedelta(seconds=next_run_in)
+                )
+
+                job = self._scheduler.add_date_job(
+                    func,
+                    **options
+                )
+            else:
+                if next_run_in is not None and next_run_in < 1.0:
+                    next_run_in = 1
+
+                if next_run_in is not None:
+                    options['start_date'] = (
+                        datetime.datetime.now() +
+                        datetime.timedelta(seconds=next_run_in)
+                    )
+
+                job = self._scheduler.add_interval_job(
+                    func,
+                    seconds=seconds,
+                    **options
+                )
+
+        return job
+
+    def trigger_job(self, job):
+        """ Trigger a job to run immediately
+
+            In APScheduler 2.x it will trigger the job in 1 seconds.
+
+            In APScheduler 2.x, it will recreate a NEW job. For all version it
+            will return the job that is still valid. Caller must use the
+            returned job e.g.::
+
+            >>> self.the_job = self.trigger_job(self.the_job)
+        """
+        if APSCHEDULE_IS_3X:
+            job.modify(next_run_time=datetime.datetime.now())
+        else:
+            self._scheduler.unschedule_job(job)
+            job = self._scheduler.add_interval_job(
+                job.func,
+                args=job.args,
+                seconds=job.trigger.interval.total_seconds(),
+                start_date=(
+                    datetime.datetime.now() + datetime.timedelta(seconds=1)
+                )
+            )
+        return job
+
+    def unschedule_job(self, job):
+        """ Unschedule and remove a job
+        """
+        if APSCHEDULE_IS_3X:
+            if job:
+                try:
+                    job.remove()
+                except JobLookupError:
+                    pass
+        else:
+            try:
+                self._scheduler.unschedule_job(job)
+            except KeyError:
+                pass
+
     def define_thresholds(self):
         self.thresholds = self.config.get('thresholds', {})
         bleemeo_agent.config.merge_dict(
@@ -645,7 +778,7 @@ class Core:
         """
         for (name, config) in self.config.get('metric.pull', {}).items():
             interval = config.get('interval', 10)
-            self.scheduler.add_interval_job(
+            self.add_scheduled_job(
                 bleemeo_agent.util.pull_raw_metric,
                 args=(self, name),
                 seconds=interval,
@@ -672,11 +805,11 @@ class Core:
                 return
             self.schedule_tasks()
             try:
-                self.scheduler.start()
+                self._scheduler.start()
                 # Wait forever. Ctrl+C or SIGKILL will abort this wait
                 self.is_terminating.wait()
             finally:
-                self.scheduler.shutdown()
+                self._scheduler.shutdown()
         except KeyboardInterrupt:
             pass
         finally:
@@ -734,32 +867,31 @@ class Core:
         self.docker_containers = docker_containers
 
     def schedule_tasks(self):
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             func=bleemeo_agent.checker.periodic_check,
             seconds=3,
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self.purge_metrics,
-            minutes=5,
+            seconds=5 * 60,
         )
-        self._update_facts_job = self.scheduler.add_interval_job(
+        self._update_facts_job = self.add_scheduled_job(
             self.update_facts,
-            hours=24,
+            seconds=24 * 60 * 60,
         )
-        self._discovery_job = self.scheduler.add_interval_job(
+        self._discovery_job = self.add_scheduled_job(
             self.update_discovery,
-            hours=1,
-            minutes=10,
+            seconds=1 * 60 * 60 + 10 * 60,  # 1 hour 10 minutes
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self._gather_metrics,
             seconds=10,
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self.send_top_info,
             seconds=10,
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self._check_triggers,
             seconds=10,
         )
@@ -865,23 +997,11 @@ class Core:
         }
 
     def _check_triggers(self):
-        now = datetime.datetime.now()
         if self._trigger_discovery:
-            self.scheduler.unschedule_job(self._discovery_job)
-            self._discovery_job = self.scheduler.add_interval_job(
-                self.update_discovery,
-                start_date=now + datetime.timedelta(seconds=1),
-                hours=1,
-                minutes=10,
-            )
+            self._discovery_job = self.trigger_job(self._discovery_job)
             self._trigger_discovery = False
         if self._trigger_facts:
-            self.scheduler.unschedule_job(self._update_facts_job)
-            self._update_facts_job = self.scheduler.add_interval_job(
-                self.update_facts,
-                start_date=now + datetime.timedelta(seconds=1),
-                hours=24,
-            )
+            self._update_facts_job = self.trigger_job(self._update_facts_job)
             self._trigger_facts = False
 
         netstat_file = self.config.get('agent.netstat_file', 'netstat.out')

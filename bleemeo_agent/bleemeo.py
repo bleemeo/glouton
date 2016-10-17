@@ -184,7 +184,7 @@ class BleemeoConnector(threading.Thread):
                 'password', bleemeo_agent.util.generate_password())
 
     def run(self):
-        self.core.scheduler.add_interval_job(
+        self.core.add_scheduled_job(
             self._bleemeo_health_check,
             seconds=60,
         )
@@ -197,10 +197,10 @@ class BleemeoConnector(threading.Thread):
         except StopIteration:
             return
 
-        self.core.scheduler.add_interval_job(
+        self.core.add_scheduled_job(
             self._bleemeo_synchronize,
-            start_date=datetime.datetime.now() + datetime.timedelta(seconds=4),
             seconds=15,
+            next_run_in=4,
         )
 
         while not self._ready_for_mqtt():

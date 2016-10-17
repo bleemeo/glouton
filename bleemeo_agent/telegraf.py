@@ -134,9 +134,9 @@ class Telegraf:
         # used to compute derivated values
         self._raw_value = {}
 
-        self.core.scheduler.add_interval_job(
+        self.core.add_scheduled_job(
             self._purge_metrics,
-            minutes=5,
+            seconds=5 * 60,
         )
 
     def _purge_metrics(self):
