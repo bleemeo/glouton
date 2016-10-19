@@ -290,12 +290,12 @@ class Collectd:
 
             if return_code != 0:
                 logging.info(
-                    'Failed to restart collectd after reconfiguration : %s',
+                    'Failed to restart collectd after reconfiguration: %s',
                     output
                 )
             else:
                 logging.debug(
-                    'collectd reconfigured and restarted : %s', output)
+                    'collectd reconfigured and restarted: %s', output)
 
     def emit_metric(  # noqa
             self, name, timestamp, value, computed_metrics_pending):
@@ -332,7 +332,7 @@ class Collectd:
                 path = '/'
             else:
                 path = '/' + path.replace('-', '/')
-            path = self.graphite_server._disk_path_rename(path)
+            path = self.graphite_server.disk_path_rename(path)
             if path is None:
                 # this partition is ignored
                 return

@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 
-import datetime
 import imaplib
 import logging
 import select
@@ -51,90 +50,97 @@ STATUS_NAME = {
 
 CHECKS_INFO = {
     'mysql': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'apache': {
-        'type': 'http',
+        'check_type': 'http',
     },
     'dovecot': {
-        'type': 'imap',
+        'check_type': 'imap',
     },
     'elasticsearch': {
-        'type': 'http',
+        'check_type': 'http',
     },
     'influxdb': {
-        'type': 'http',
-        'url': '/ping'
+        'check_type': 'http',
+        'http_path': '/ping'
     },
     'ntp': {
-        'type': 'ntp',
+        'check_type': 'ntp',
     },
     'openvpn': {
         'disable_persistent_socket': True,
     },
     'openldap': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'postgresql': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'rabbitmq': {
-        'type': 'tcp',
-        'send': 'PINGAMQP',
-        'expect': 'AMQP',
+        'check_type': 'tcp',
+        'check_tcp_send': 'PINGAMQP',
+        'check_tcp_expect': 'AMQP',
     },
     'redis': {
-        'type': 'tcp',
-        'send': 'PING\n',
-        'expect': '+PONG',
+        'check_type': 'tcp',
+        'check_tcp_send': 'PING\n',
+        'check_tcp_expect': '+PONG',
     },
     'memcached': {
-        'type': 'tcp',
-        'send': 'version\r\n',
-        'expect': 'VERSION',
+        'check_type': 'tcp',
+        'check_tcp_send': 'version\r\n',
+        'check_tcp_expect': 'VERSION',
     },
     'mongodb': {
-        'type': 'tcp',
+        'check_type': 'tcp',
     },
     'nginx': {
-        'type': 'http',
+        'check_type': 'http',
     },
     'postfix': {
-        'type': 'smtp',
+        'check_type': 'smtp',
     },
     'exim': {
-        'type': 'smtp',
+        'check_type': 'smtp',
     },
     'squid': {
-        'type': 'http',
-        '4xx_is_ok': True,
+        'check_type': 'http',
+        # Agent does a normal HTTP request, but squid expect a proxy. It expect
+        # squid to reply with a 400 - Bad request.
+        'http_status_code': 400,
     },
     'varnish': {
-        'type': 'tcp',
-        'send': 'ping\n',
-        'expect': 'PONG'
+        'check_type': 'tcp',
+        'check_tcp_send': 'ping\n',
+        'check_tcp_expect': 'PONG'
     },
     'zookeeper': {
-        'type': 'tcp',
-        'send': 'ruok\n',
-        'expect': 'imok',
+        'check_type': 'tcp',
+        'check_tcp_send': 'ruok\n',
+        'check_tcp_expect': 'imok',
     },
 }
 
 
 # global variable with all checks created
-CHECKS = []
+CHECKS = {}
 
 
 def update_checks(core):
     global CHECKS
-    for check in CHECKS:
-        check.stop()
 
-    CHECKS = []
-
+    checks_seen = set()
     for key, service_info in core.services.items():
         (service_name, instance) = key
+        checks_seen.add(key)
+        if key in CHECKS and CHECKS[key].service_info == service_info:
+            # check unchanged
+            continue
+        elif key in CHECKS:
+            CHECKS[key].stop()
+            del CHECKS[key]
+
         try:
             new_check = Check(
                 core,
@@ -142,7 +148,7 @@ def update_checks(core):
                 instance,
                 service_info,
             )
-            CHECKS.append(new_check)
+            CHECKS[key] = new_check
         except NotImplementedError:
             logging.debug(
                 'No check exists for service %s', service_name,
@@ -154,13 +160,18 @@ def update_checks(core):
                 exc_info=True
             )
 
+    deleted_checks = set(CHECKS.keys()) - checks_seen
+    for key in deleted_checks:
+        CHECKS[key].stop()
+        del CHECKS[key]
+
 
 def periodic_check():
     """ Run few periodic check:
 
         * that all TCP socket are still openned
     """
-    for check in CHECKS:
+    for check in CHECKS.values():
         check.check_sockets()
 
 
@@ -170,32 +181,26 @@ class Check:
         self.port = service_info.get('port')
         self.protocol = service_info.get('protocol')
 
-        self.check_info = CHECKS_INFO.get(service_name, {})
+        self.service_info = CHECKS_INFO.get(service_name, {})
 
         if self.port is not None and self.protocol == socket.IPPROTO_TCP:
-            self.check_info.setdefault('type', 'tcp')
+            self.service_info.setdefault('check_type', 'tcp')
+
+        self.service_info.update(service_info)
 
         if (service_info.get('password') is None
                 and service_name in ('mysql', 'postgresql')):
             # For those check, if password is not set the dedicated check
             # will fail.
-            self.check_info['type'] = 'tcp'
+            self.service_info['check_type'] = 'tcp'
 
         self.service = service_name
         self.instance = instance
-        self.service_info = service_info
         self.core = core
 
         self.extra_ports = self.service_info.get('extra_ports', {})
 
-        if self.service_info.get('check_type') is not None:
-            self.check_info = {'type': self.service_info['check_type']}
-        if self.service_info.get('check_command') is not None:
-            self.check_info['check_command'] = (
-                self.service_info['check_command']
-            )
-
-        if not self.check_info and not self.extra_ports:
+        if not self.service_info.get('check_type') and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
         logging.debug(
@@ -208,10 +213,10 @@ class Check:
 
         self.last_run = time.time()
 
-        self.current_job = self.core.scheduler.add_interval_job(
+        self.current_job = self.core.add_scheduled_job(
             self.run_check,
-            start_date=datetime.datetime.now() + datetime.timedelta(seconds=1),
             seconds=60,
+            next_run_in=0,
         )
         self.open_sockets_job = None
 
@@ -235,7 +240,7 @@ class Check:
     def open_sockets(self):
         """ Try to open all closed sockets
         """
-        if self.check_info.get('disable_persistent_socket'):
+        if self.service_info.get('disable_persistent_socket'):
             return
 
         run_check = False
@@ -262,15 +267,7 @@ class Check:
         if run_check:
             # open_socket failed, run check now
             # reschedule job to be run immediately
-            self.core.scheduler.unschedule_job(self.current_job)
-            self.current_job = self.core.scheduler.add_interval_job(
-                self.run_check,
-                start_date=(
-                    datetime.datetime.now() +
-                    datetime.timedelta(seconds=1)
-                ),
-                seconds=60,
-            )
+            self.current_job = self.core.trigger_job(self.current_job)
 
     def check_sockets(self):
         """ Check if some socket are closed
@@ -292,7 +289,7 @@ class Check:
             if buffer == b'':
                 (address, port) = sockets[s]
                 logging.debug(
-                    'check %s (on %s) : connection to %s:%s closed',
+                    'check %s (on %s): connection to %s:%s closed',
                     self.service, self.instance, address, port
                 )
                 s.close()
@@ -311,17 +308,19 @@ class Check:
             (return_code, output) = (
                 STATUS_CRITICAL, 'Container stopped: connection refused'
             )
-        elif self.check_info.get('type') == 'nagios':
+        elif self.service_info.get('check_type') == 'nagios':
             (return_code, output) = self.check_nagios()
-        elif self.check_info.get('type') == 'tcp':
+        elif self.service_info.get('check_type') == 'tcp':
             (return_code, output) = self.check_tcp()
-        elif self.check_info.get('type') == 'http':
+        elif self.service_info.get('check_type') == 'http':
             (return_code, output) = self.check_http()
-        elif self.check_info.get('type') == 'imap':
+        elif self.service_info.get('check_type') == 'https':
+            (return_code, output) = self.check_http(tls=True)
+        elif self.service_info.get('check_type') == 'imap':
             (return_code, output) = self.check_imap()
-        elif self.check_info.get('type') == 'smtp':
+        elif self.service_info.get('check_type') == 'smtp':
             (return_code, output) = self.check_smtp()
-        elif self.check_info.get('type') == 'ntp':
+        elif self.service_info.get('check_type') == 'ntp':
             (return_code, output) = self.check_ntp()
         else:
             (return_code, output) = (STATUS_CHECK_NOT_RUN, '')
@@ -376,32 +375,25 @@ class Check:
 
         if return_code == STATUS_OK and self.tcp_sockets:
             # Make sure all socket are openned
-            self.open_sockets_job = self.core.scheduler.add_date_job(
+            self.open_sockets_job = self.core.add_scheduled_job(
                 self.open_sockets,
-                date=(
-                    datetime.datetime.now() + datetime.timedelta(seconds=5)
-                ),
+                seconds=0,
+                next_run_in=5,
             )
 
     def stop(self):
         """ Unschedule this check
         """
         logging.debug('Stoping check %s (on %s)', self.service, self.instance)
-        try:
-            self.core.scheduler.unschedule_job(self.open_sockets_job)
-        except KeyError:
-            logging.debug(
-                'Job open_socket for check %s (on %s) was already unscheduled',
-                self.service, self.instance
-            )
-        self.core.scheduler.unschedule_job(self.current_job)
+        self.core.unschedule_job(self.open_sockets_job)
+        self.core.unschedule_job(self.current_job)
         for tcp_socket in self.tcp_sockets.values():
             if tcp_socket is not None:
                 tcp_socket.close()
 
     def check_nagios(self):
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
-            shlex.split(self.check_info['check_command']),
+            shlex.split(self.service_info['check_command']),
         )
 
         output = output.decode('utf-8', 'ignore').strip()
@@ -412,7 +404,7 @@ class Check:
 
     def check_tcp_recv(self, sock, start):
         received = ''
-        while not self.check_info['expect'] in received:
+        while not self.service_info['check_tcp_expect'] in received:
             try:
                 tmp = sock.recv(4096)
             except socket.timeout:
@@ -420,11 +412,16 @@ class Check:
                     STATUS_CRITICAL,
                     'Connection timed out after 10 seconds'
                 )
+            except socket.error:
+                return (
+                    STATUS_CRITICAL,
+                    'Connection closed'
+                )
             if tmp == b'':
                 break
             received += tmp.decode('utf8', 'ignore')
 
-        if self.check_info['expect'] not in received:
+        if self.service_info['check_tcp_expect'] not in received:
             if received == '':
                 return (STATUS_CRITICAL, 'No data received from host')
             else:
@@ -461,11 +458,10 @@ class Check:
         except socket.error:
             return (STATUS_CRITICAL, 'TCP port %d, Connection refused' % port)
 
-        if (self.check_info is not None
-                and self.check_info.get('send')
+        if (self.service_info.get('check_tcp_send')
                 and use_default):
             try:
-                sock.send(self.check_info['send'].encode('utf8'))
+                sock.send(self.service_info['check_tcp_send'].encode('utf8'))
             except socket.timeout:
                 return (
                     STATUS_CRITICAL,
@@ -477,8 +473,7 @@ class Check:
                     'TCP port %d, connection closed too early' % port
                 )
 
-        if (self.check_info is not None
-                and self.check_info.get('expect')
+        if (self.service_info.get('check_tcp_expect')
                 and use_default):
             return self.check_tcp_recv(sock, start)
 
@@ -486,43 +481,54 @@ class Check:
         end = time.time()
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
-    def check_http(self):
+    def check_http(self, tls=False):
         if self.port is None or self.address is None:
             return (STATUS_CHECK_NOT_RUN, '')
 
-        base_url = 'http://%s:%s' % (self.address, self.port)
-        url = urllib_parse.urljoin(base_url, self.check_info.get('url', '/'))
-        start = time.time()
+        if tls:
+            base_url = 'https://%s:%s' % (self.address, self.port)
+        else:
+            base_url = 'http://%s:%s' % (self.address, self.port)
+        url = urllib_parse.urljoin(
+            base_url,
+            self.service_info.get('http_path', '/')
+        )
         try:
-            response = requests.get(url, timeout=10, allow_redirects=False)
+            response = requests.get(
+                url, timeout=10, allow_redirects=False, verify=False
+            )
         except requests.exceptions.Timeout:
             return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
         except requests.exceptions.RequestException:
             return (STATUS_CRITICAL, 'Connection refused')
 
-        end = time.time()
+        if 'http_status_code' in self.service_info:
+            expected_code = int(self.service_info['http_status_code'])
+        else:
+            expected_code = None
 
-        if response.status_code >= 500:
+        if (expected_code is None and response.status_code >= 500
+                or (expected_code is not None
+                    and response.status_code != expected_code)):
             return (
                 STATUS_CRITICAL,
-                'HTTP CRITICAL - http_code=%s / %.3f second response time' % (
+                'HTTP CRITICAL - http_code=%s' % (
                     response.status_code,
-                    end-start,
                 )
             )
-        elif (response.status_code >= 400
-                and not self.check_info.get('4xx_is_ok', False)):
+        elif expected_code is None and response.status_code >= 400:
             return (
                 STATUS_WARNING,
-                'HTTP WARN - status_code=%s / %.3f second response time' % (
+                'HTTP WARN - status_code=%s' % (
                     response.status_code,
-                    end-start,
                 )
             )
         else:
             return (
                 STATUS_OK,
-                'HTTP OK - %.3f second response time' % (end-start)
+                'HTTP OK - status_code=%s' % (
+                    response.status_code,
+                )
             )
 
     def check_imap(self):

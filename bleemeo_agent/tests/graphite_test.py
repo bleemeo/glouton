@@ -17,6 +17,7 @@
 #
 
 import bleemeo_agent.graphite
+from bleemeo_agent.graphite import _disk_path_rename
 
 
 def test_graphite_split_line():
@@ -56,3 +57,79 @@ def test_graphite_split_line():
                       )
     assert value == 0.0
     assert timestamp == 1459257790.0
+
+
+def test_disk_path_rename():
+    ignore = [
+        '/media'
+    ]
+    assert _disk_path_rename('/media/usb', None, ignore) is None
+    assert _disk_path_rename('/media', None, ignore) is None
+    assert (
+        _disk_path_rename('/var/lib/docker/overlay', None, ignore) ==
+        '/var/lib/docker/overlay'
+    )
+    assert (
+        _disk_path_rename('/var/lib/docker/overlay2', None, ignore) ==
+        '/var/lib/docker/overlay2'
+    )
+    assert _disk_path_rename('/srv', None, ignore) == '/srv'
+    assert _disk_path_rename('/srv/', None, ignore) == '/srv/'
+
+    ignore = [
+        '/srv'
+    ]
+    assert _disk_path_rename('/media/usb', None, ignore) == '/media/usb'
+    assert _disk_path_rename('/media', None, ignore) == '/media'
+    assert (
+        _disk_path_rename('/var/lib/docker/overlay', None, ignore) ==
+        '/var/lib/docker/overlay'
+    )
+    assert (
+        _disk_path_rename('/var/lib/docker/overlay2', None, ignore) ==
+        '/var/lib/docker/overlay2'
+    )
+    assert _disk_path_rename('/srv', None, ignore) is None
+    assert _disk_path_rename('/srv/', None, ignore) is None
+
+    ignore = [
+        '/srv/'
+    ]
+    assert _disk_path_rename('/media/usb', None, ignore) == '/media/usb'
+    assert _disk_path_rename('/media', None, ignore) == '/media'
+    assert (
+        _disk_path_rename('/var/lib/docker/overlay', None, ignore) ==
+        '/var/lib/docker/overlay'
+    )
+    assert (
+        _disk_path_rename('/var/lib/docker/overlay2', None, ignore) ==
+        '/var/lib/docker/overlay2'
+    )
+    assert _disk_path_rename('/srv', None, ignore) is None
+    assert _disk_path_rename('/srv/', None, ignore) is None
+
+    ignore = [
+        '/var/lib/docker/overlay'
+    ]
+    assert _disk_path_rename('/media/usb', None, ignore) == '/media/usb'
+    assert _disk_path_rename('/media', None, ignore) == '/media'
+    assert _disk_path_rename('/var/lib/docker/overlay', None, ignore) is None
+    assert (
+        _disk_path_rename('/var/lib/docker/overlay2', None, ignore) ==
+        '/var/lib/docker/overlay2'
+    )
+    assert _disk_path_rename('/srv', None, ignore) == '/srv'
+    assert _disk_path_rename('/srv/', None, ignore) == '/srv/'
+
+    ignore = [
+        '/srv'
+    ]
+    assert _disk_path_rename('/', '/hostroot', ignore) is None
+    assert _disk_path_rename('/hostroot', '/hostroot', ignore) == '/'
+    assert _disk_path_rename('/hostroot/', '/hostroot', ignore) == '/'
+    assert _disk_path_rename('/hostroot', '/hostroot/', ignore) == '/'
+    assert _disk_path_rename('/hostroot/srv', '/hostroot', ignore) is None
+    assert (
+        _disk_path_rename('/hostroot/media', '/hostroot', ignore) ==
+        '/media'
+    )

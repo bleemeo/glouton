@@ -26,6 +26,7 @@ import time
 import jinja2
 import psutil
 import requests
+from six.moves import urllib_parse
 
 import bleemeo_agent
 
@@ -138,7 +139,7 @@ def run_command_timeout(command, timeout=10):
             stderr=subprocess.STDOUT,
         )
     except OSError:
-        # Most probably : command not found
+        # Most probably: command not found
         return (127, b"Unable to run command")
     proc_finished = threading.Event()
     killer_thread = threading.Thread(
@@ -164,7 +165,7 @@ def clean_cmdline(cmdline):
 
         Known problem:
 
-        * new-line : for InfluxDB line-protocol
+        * new-line: for InfluxDB line-protocol
     """
     return cmdline.replace('\r', '\\r').replace('\n', '\\n')
 
@@ -184,24 +185,31 @@ def get_top_info():
             # Cmdline may be unavailable (permission issue ?)
             # When unavailable, depending on psutil version, it returns
             # either [] or ['']
-            if process.cmdline() and process.cmdline()[0]:
-                cmdline = ' '.join(process.cmdline())
+            cmdline = process.cmdline()
+            if cmdline and cmdline[0]:
+                cmdline = ' '.join(cmdline)
+                name = process.name()
             else:
                 cmdline = process.name()
+                name = cmdline
 
+            cpu_times = process.cpu_times()
             process_info = {
                 'pid': process.pid,
                 'create_time': process.create_time(),
-                'name': process.name(),
                 'cmdline': cmdline,
-                'ppid': process.ppid(),
+                'name': name,
                 'memory_rss': process.memory_info().rss / 1024,
                 'cpu_percent': process.cpu_percent(),
                 'cpu_times':
-                    process.cpu_times().user + process.cpu_times().system,
+                    cpu_times.user + cpu_times.system,
                 'status': process.status(),
                 'username': username,
             }
+            try:
+                process_info['exe'] = process.exe()
+            except psutil.AccessDenied:
+                process_info['exe'] = ''
         except psutil.NoSuchProcess:
             continue
 
@@ -337,7 +345,21 @@ def get_top_output(top_info):
 
 
 def _get_url(name, metric_config):
-    response = None
+    url = metric_config['url']
+
+    url_parsed = urllib_parse.urlparse(url)
+    if url_parsed.scheme == '' or url_parsed.scheme == 'file':
+        try:
+            with open(url_parsed.path) as fd:
+                return fd.read()
+        except (IOError, OSError) as exc:
+            logging.warning(
+                'Failed to retrive metric %s: %s',
+                name,
+                exc,
+            )
+            return None
+
     args = {
         'verify': metric_config.get('ssl_check', True),
         'timeout': 3.0,
@@ -349,23 +371,33 @@ def _get_url(name, metric_config):
         )
     try:
         response = requests.get(
-            metric_config['url'],
+            url,
             **args
         )
     except requests.exceptions.ConnectionError:
         logging.warning(
-            'Failed to retrive metric %s : failed to establish connection',
-            name)
-    except requests.exceptions.ConnectionError:
+            'Failed to retrieve metric %s: '
+            'failed to establish connection to %s',
+            name,
+            url,
+        )
+        return None
+    except requests.exceptions.ConnectionError as exc:
         logging.warning(
-            'Failed to retrive metric %s : request timed out',
-            name)
-    except requests.exceptions.RequestException:
+            'Failed to retrieve metric %s: %s',
+            name,
+            exc,
+        )
+        return None
+    except requests.exceptions.RequestException as exc:
         logging.warning(
-            'Failed to retrive metric %s',
-            name)
+            'Failed to retrieve metric %s: %s',
+            name,
+            exc,
+        )
+        return None
 
-    return response
+    return response.content
 
 
 def pull_raw_metric(core, name):
@@ -376,12 +408,12 @@ def pull_raw_metric(core, name):
         We expect to have the following configuration key under
         section "metric.pull.$NAME.":
 
-        * url : where to fetch the metric [mandatory]
+        * url: where to fetch the metric [mandatory]
         * item: item to add on your metric [default: None - no item]
-        * interval : retrive the metric every interval seconds [default: 10s]
-        * username : username used for basic authentication [default: no auth]
-        * password : password used for basic authentication [default: ""]
-        * ssl_check : should we check that SSL certificate are valid
+        * interval: retrive the metric every interval seconds [default: 10s]
+        * username: username used for basic authentication [default: no auth]
+        * password: password used for basic authentication [default: ""]
+        * ssl_check: should we check that SSL certificate are valid
           [default: yes]
     """
     metric_config = core.config.get('metric.pull.%s' % name, {})
@@ -394,10 +426,10 @@ def pull_raw_metric(core, name):
     if response is not None:
         value = None
         try:
-            value = float(response.content)
+            value = float(response)
         except ValueError:
             logging.warning(
-                'Failed to retrive metric %s : response it not a number',
+                'Failed to retrive metric %s: response it not a number',
                 name)
 
         if value is not None:

@@ -33,8 +33,15 @@ import sys
 import threading
 import time
 
-import apscheduler.scheduler
-import psutil
+try:
+    import apscheduler.scheduler
+    APSCHEDULE_IS_3X = False
+except ImportError:
+    import apscheduler.schedulers.background
+    from apscheduler.jobstores.base import JobLookupError
+    APSCHEDULE_IS_3X = True
+
+import six
 from six.moves import configparser
 import yaml
 
@@ -86,8 +93,14 @@ DOCKER_DISCOVERY_EVENTS = [
 ]
 
 ENVIRON_CONFIG_VARS = [
-    ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id'),
-    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key'),
+    ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id', 'string'),
+    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key', 'string'),
+    ('BLEEMEO_AGENT_API_BASE', 'bleemeo.api_base', 'string'),
+    ('BLEEMEO_AGENT_MQTT_HOST', 'bleemeo.mqtt.host', 'string'),
+    ('BLEEMEO_AGENT_MQTT_PORT', 'bleemeo.mqtt.port', 'int'),
+    ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
+    ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
+    ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
 ]
 
 
@@ -195,6 +208,11 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
     },
     'squid3': {
+        'service': 'squid',
+        'port': 3128,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'squid': {
         'service': 'squid',
         'port': 3128,
         'protocol': socket.IPPROTO_TCP,
@@ -356,7 +374,7 @@ def sanitize_service(name, service_info, is_discovered_service):
             service_info['port'] = int(service_info['port'])
         except ValueError:
             logging.info(
-                'Bad custom service definition : '
+                'Bad custom service definition: '
                 'service "%s" port is "%s" which is not a number',
                 name,
                 service_info['port'],
@@ -366,7 +384,7 @@ def sanitize_service(name, service_info, is_discovered_service):
     if (service_info.get('check_type') == 'nagios'
             and 'check_command' not in service_info):
         logging.info(
-            'Bad custom service definition : '
+            'Bad custom service definition: '
             'service "%s" use type nagios without check_command',
             name,
         )
@@ -377,13 +395,60 @@ def sanitize_service(name, service_info, is_discovered_service):
         # It means that no check will be performed but service object will
         # be created.
         logging.info(
-            'Bad custom service definition : '
+            'Bad custom service definition: '
             'service "%s" dot not have port settings',
             name,
         )
         return None
 
     return service_info
+
+
+def convert_type(value_text, value_type):
+    if value_type == 'string':
+        return value_text
+
+    if value_type == 'int':
+        return int(value_text)
+    elif value_type == 'bool':
+        if value_text.lower() in ('true', 'yes', '1'):
+            return True
+        elif value_text.lower() in ('false', 'no', '0'):
+            return False
+        else:
+            raise ValueError('invalid value %r for boolean' % value_text)
+    else:
+        raise NotImplementedError('Unknown type %s' % value_type)
+
+
+def disable_https_warning():
+    """
+    Agent does HTTPS requests with verify=False (only for checks, not
+    for communication with Bleemeo Cloud platform).
+    By default requests will emit one warning for EACH request which is
+    too noisy.
+    """
+
+    # urllib3 may be unvendored from requests.packages (at least Debian
+    # does this). Older version of requests don't have requests.packages at
+    # all. Newer version have a stub that makes requests.packages.urllib3 being
+    # urllib3.
+    # Try first to access requests.packages.urllib3 (which should works on
+    # recent Debian version and virtualenv version) and fallback to urllib3
+    # directly.
+    try:
+        import requests.packages.urllib3 as urllib3
+    except ImportError:
+        import urllib3
+
+    try:
+        klass = urllib3.exceptions.InsecureRequestWarning
+    except AttributeError:
+        # urllib3 introduced warning with 1.9. Before InsecureRequestWarning
+        # didn't existed.
+        return
+
+    urllib3.disable_warnings(klass)
 
 
 class State:
@@ -415,7 +480,7 @@ class State:
                 os.rename(self.filename + '.tmp', self.filename)
                 return True
             except OSError as exc:
-                logging.warning('Failed to store file : %s', exc)
+                logging.warning('Failed to store file: %s', exc)
                 return False
 
     def get(self, key, default=None):
@@ -462,6 +527,8 @@ class Core:
         self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = datetime.datetime(1970, 1, 1)
+        self.last_discovery_update = datetime.datetime(1970, 1, 1)
+        self.last_services_autoremove = datetime.datetime(1970, 1, 1)
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -469,7 +536,13 @@ class Core:
         self.influx_connector = None
         self.graphite_server = None
         self.docker_client = None
-        self.scheduler = apscheduler.scheduler.Scheduler()
+        self.docker_containers = {}
+        if APSCHEDULE_IS_3X:
+            self._scheduler = (
+                apscheduler.schedulers.background.BackgroundScheduler()
+            )
+        else:
+            self._scheduler = apscheduler.scheduler.Scheduler()
         self.last_metrics = {}
         self.last_report = datetime.datetime.fromtimestamp(0)
 
@@ -513,6 +586,14 @@ class Core:
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
         )
+
+        self._apply_upgrade()
+
+        # Agent does HTTPS requests with verify=False (only for checks, not
+        # for communication with Bleemeo Cloud platform).
+        # By default requests will emit one warning for EACH request which is
+        # too noisy.
+        disable_https_warning()
         return True
 
     @property
@@ -563,6 +644,127 @@ class Core:
             # https://github.com/getsentry/raven-python/pull/723
             install_thread_hook(self.sentry_client)
 
+    def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):  # noqa
+        """ Schedule a recuring job using APScheduler
+
+            It's a wrapper to add_job/add_interval_job+add_date_job depending
+            on APScheduler version.
+
+            if seconds is 0 or None, job will run only once based on
+            next_run_in. In this case next_run_in could not be None
+
+            next_run_in if not None, specify a delay for next run (in second).
+            If None, it lets APScheduler choose the next run date.
+
+            If next_run_in is 0, the next_run is scheduled as soon as possible.
+            With APScheduler 3.x it means that next run is scheduled for now.
+            With APScheduler 2.x, it means that next run is scheduled for
+            now + 1 seconds.
+        """
+        options = {}
+        if args is not None:
+            options['args'] = args
+
+        if APSCHEDULE_IS_3X:
+            if seconds is None or seconds == 0:
+                if next_run_in is None:
+                    raise ValueError(
+                        'next_run_in could not be None if seconds is 0'
+                    )
+                options['trigger'] = 'date'
+                options['run_date'] = (
+                    datetime.datetime.now() +
+                    datetime.timedelta(seconds=next_run_in)
+                )
+            else:
+                options['trigger'] = 'interval'
+                options['seconds'] = seconds
+
+                if next_run_in is not None and next_run_in == 0:
+                    options['next_run_time'] = datetime.datetime.now()
+                elif next_run_in is not None:
+                    options['next_run_time'] = (
+                        datetime.datetime.now() +
+                        datetime.timedelta(seconds=next_run_in)
+                    )
+
+            job = self._scheduler.add_job(
+                func,
+                **options
+            )
+        else:
+            if seconds is None or seconds == 0:
+                if next_run_in is None:
+                    raise ValueError(
+                        'next_run_in could not be None if seconds is 0'
+                    )
+                options['date'] = (
+                    datetime.datetime.now() +
+                    datetime.timedelta(seconds=next_run_in)
+                )
+
+                job = self._scheduler.add_date_job(
+                    func,
+                    **options
+                )
+            else:
+                if next_run_in is not None and next_run_in < 1.0:
+                    next_run_in = 1
+
+                if next_run_in is not None:
+                    options['start_date'] = (
+                        datetime.datetime.now() +
+                        datetime.timedelta(seconds=next_run_in)
+                    )
+
+                job = self._scheduler.add_interval_job(
+                    func,
+                    seconds=seconds,
+                    **options
+                )
+
+        return job
+
+    def trigger_job(self, job):
+        """ Trigger a job to run immediately
+
+            In APScheduler 2.x it will trigger the job in 1 seconds.
+
+            In APScheduler 2.x, it will recreate a NEW job. For all version it
+            will return the job that is still valid. Caller must use the
+            returned job e.g.::
+
+            >>> self.the_job = self.trigger_job(self.the_job)
+        """
+        if APSCHEDULE_IS_3X:
+            job.modify(next_run_time=datetime.datetime.now())
+        else:
+            self._scheduler.unschedule_job(job)
+            job = self._scheduler.add_interval_job(
+                job.func,
+                args=job.args,
+                seconds=job.trigger.interval.total_seconds(),
+                start_date=(
+                    datetime.datetime.now() + datetime.timedelta(seconds=1)
+                )
+            )
+        return job
+
+    def unschedule_job(self, job):
+        """ Unschedule and remove a job
+        """
+        if APSCHEDULE_IS_3X:
+            if job:
+                try:
+                    job.remove()
+                except JobLookupError:
+                    pass
+        else:
+            try:
+                self._scheduler.unschedule_job(job)
+            except KeyError:
+                pass
+
     def define_thresholds(self):
         self.thresholds = self.config.get('thresholds', {})
         bleemeo_agent.config.merge_dict(
@@ -576,7 +778,7 @@ class Core:
         """
         for (name, config) in self.config.get('metric.pull', {}).items():
             interval = config.get('interval', 10)
-            self.scheduler.add_interval_job(
+            self.add_scheduled_job(
                 bleemeo_agent.util.pull_raw_metric,
                 args=(self, name),
                 seconds=interval,
@@ -599,13 +801,15 @@ class Core:
             self.setup_signal()
             self._docker_connect()
             self.start_threads()
+            if self.is_terminating.is_set():
+                return
             self.schedule_tasks()
             try:
-                self.scheduler.start()
+                self._scheduler.start()
                 # Wait forever. Ctrl+C or SIGKILL will abort this wait
                 self.is_terminating.wait()
             finally:
-                self.scheduler.shutdown()
+                self._scheduler.shutdown()
         except KeyboardInterrupt:
             pass
         finally:
@@ -644,33 +848,50 @@ class Core:
             logging.debug('Docker ping failed. Assume Docker is not used')
             self.docker_client = None
 
+    def _update_docker_info(self):
+        if self.docker_client is None:
+            return
+
+        try:
+            self.docker_client.ping()
+        except:
+            logging.debug('Docker ping failed. Is Docker currently down ?')
+            return
+
+        docker_containers = {}
+        for container in self.docker_client.containers(all=True):
+            inspect = self.docker_client.inspect_container(container['Id'])
+            name = inspect['Name'].lstrip('/')
+            docker_containers[name] = inspect
+
+        self.docker_containers = docker_containers
+
     def schedule_tasks(self):
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             func=bleemeo_agent.checker.periodic_check,
             seconds=3,
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self.purge_metrics,
-            minutes=5,
+            seconds=5 * 60,
         )
-        self._update_facts_job = self.scheduler.add_interval_job(
+        self._update_facts_job = self.add_scheduled_job(
             self.update_facts,
-            hours=24,
+            seconds=24 * 60 * 60,
         )
-        self._discovery_job = self.scheduler.add_interval_job(
+        self._discovery_job = self.add_scheduled_job(
             self.update_discovery,
-            hours=1,
-            minutes=10,
+            seconds=1 * 60 * 60 + 10 * 60,  # 1 hour 10 minutes
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self._gather_metrics,
             seconds=10,
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self.send_top_info,
             seconds=10,
         )
-        self.scheduler.add_interval_job(
+        self.add_scheduled_job(
             self._check_triggers,
             seconds=10,
         )
@@ -776,23 +997,11 @@ class Core:
         }
 
     def _check_triggers(self):
-        now = datetime.datetime.now()
         if self._trigger_discovery:
-            self.scheduler.unschedule_job(self._discovery_job)
-            self._discovery_job = self.scheduler.add_interval_job(
-                self.update_discovery,
-                start_date=now + datetime.timedelta(seconds=1),
-                hours=1,
-                minutes=10,
-            )
+            self._discovery_job = self.trigger_job(self._discovery_job)
             self._trigger_discovery = False
         if self._trigger_facts:
-            self.scheduler.unschedule_job(self._update_facts_job)
-            self._update_facts_job = self.scheduler.add_interval_job(
-                self.update_facts,
-                start_date=now + datetime.timedelta(seconds=1),
-                hours=24,
-            )
+            self._update_facts_job = self.trigger_job(self._update_facts_job)
             self._trigger_facts = False
 
         netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
@@ -807,6 +1016,7 @@ class Core:
             self._netstat_output_mtime = mtime
 
     def update_discovery(self, first_run=False, deleted_services=None):
+        self._update_docker_info()
         discovered_running_services = self._run_discovery()
         if first_run:
             # Should only be needed on first run. In addition to avoid
@@ -815,10 +1025,11 @@ class Core:
             self._search_old_service(discovered_running_services)
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
-        if deleted_services:
-            for key in deleted_services:
-                if key in new_discovered_services:
-                    del new_discovered_services[key]
+        (new_discovered_services, had_autoremove) = self._purge_services(
+            new_discovered_services,
+            discovered_running_services,
+            deleted_services,
+        )
 
         # Remove container address. If container is still running, address
         # will be re-added from discovered_running_services.
@@ -830,7 +1041,7 @@ class Core:
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
 
-        if new_discovered_services != self.discovered_services or first_run:
+        if new_discovered_services != self.discovered_services:
             if new_discovered_services != self.discovered_services:
                 logging.debug(
                     'Update configuration after change in discovered services'
@@ -838,14 +1049,55 @@ class Core:
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
-            self.services = self.discovered_services.copy()
-            apply_service_override(
-                self.services,
-                self.config.get('service', [])
-            )
 
-            self.graphite_server.update_discovery()
-            bleemeo_agent.checker.update_checks(self)
+        self.services = self.discovered_services.copy()
+        apply_service_override(
+            self.services,
+            self.config.get('service', [])
+        )
+
+        self.graphite_server.update_discovery()
+        bleemeo_agent.checker.update_checks(self)
+
+        self.last_discovery_update = datetime.datetime.now()
+        if had_autoremove:
+            self.last_services_autoremove = datetime.datetime.now()
+
+    def _purge_services(
+            self, new_discovered_services, running_services, deleted_services):
+        """ Remove deleted_services (service deleted from API) and check
+            for service auto-remove
+        """
+        had_autoremove = False
+
+        if deleted_services is not None:
+            deleted_services = list(deleted_services)
+        else:
+            deleted_services = []
+
+        no_longer_running = (
+            set(new_discovered_services) - set(running_services)
+        )
+        for service_key in no_longer_running:
+            (service_name, instance) = service_key
+            if instance is not None:
+                # Don't process container here
+                continue
+            exe_path = new_discovered_services[service_key].get('exe_path')
+            if instance is None and exe_path and not os.path.exists(exe_path):
+                # Binary for service no longer exists. It has been uninstalled.
+                logging.info(
+                    'Service %s was uninstalled, removing it', service_name
+                )
+                deleted_services.append(service_key)
+                had_autoremove = True
+
+        if deleted_services:
+            for key in deleted_services:
+                if key in new_discovered_services:
+                    del new_discovered_services[key]
+
+        return (new_discovered_services, had_autoremove)
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name
@@ -884,6 +1136,14 @@ class Core:
                 'services_uuid', self.bleemeo_connector.services_uuid
             )
 
+    def _apply_upgrade(self):
+        # Bogus test caused "udp6" to be keeps in netstat extra_ports.
+        for service_info in self.discovered_services.values():
+            extra_ports = service_info.get('extra_ports', {})
+            for port_protocol in list(extra_ports):
+                if port_protocol.endswith('/udp6'):
+                    del extra_ports[port_protocol]
+
     def _get_processes_map(self):
         """ Return a mapping from PID to name and container in which
             process is running.
@@ -902,17 +1162,11 @@ class Core:
             # The host pid namespace see ALL process.
             # They are added in instance "None" (i.e. running in the host),
             # but if they are running in a docker, they will be updated later
-            for process in psutil.process_iter():
-                # Cmdline may be unavailable (permission issue ?)
-                # When unavailable, depending on psutil version, it returns
-                # either [] or ['']
-                if process.cmdline() and process.cmdline()[0]:
-                    cmdline = ' '.join(process.cmdline())
-                else:
-                    cmdline = process.name()
-                processes[process.pid] = {
-                    'cmdline': cmdline,
+            for process in bleemeo_agent.util.get_top_info()['processes']:
+                processes[process['pid']] = {
+                    'cmdline': process['cmdline'],
                     'instance': None,
+                    'exe': process['exe'],
                 }
 
         if self.docker_client is None:
@@ -970,11 +1224,19 @@ class Core:
                     address = match.group('address')
                     port = int(match.group('port'))
 
-                    if protocol in ('tcp6' or 'udp6') and address == '::':
+                    # netstat output may have "tcp6" for IPv4 socket.
+                    # For example elasticsearch output is:
+                    # tcp6       0      0 127.0.0.1:7992          :::*   [...]
+                    if protocol in ('tcp6', 'udp6'):
                         # Assume this socket is IPv4 & IPv6
-                        address = '0.0.0.0'
                         protocol = protocol[:3]
-                    elif protocol in ('tcp6', 'udp6'):
+
+                    if address == '::':
+                        # "::" is all address in IPv6. Assume the socket
+                        # is IPv4 & IPv6 and since agent supports only IPv4
+                        # convert to all address in IPv4
+                        address = '0.0.0.0'
+                    if ':' in address:
                         # No support for IPv6
                         continue
 
@@ -1001,11 +1263,6 @@ class Core:
         default_port = service_info.get('port')
 
         extra_ports = {}
-        old_service_info = self.discovered_services.get(
-            (service_name, instance)
-        )
-        if old_service_info is not None and 'extra_ports' in old_service_info:
-            extra_ports.update(old_service_info['extra_ports'])
 
         for port_proto, address in ports.items():
             port = int(port_proto.split('/')[0])
@@ -1014,6 +1271,12 @@ class Core:
             if service_info.get('ignore_high_port') and port > 32000:
                 continue
             extra_ports[port_proto] = address
+
+        old_service_info = self.discovered_services.get(
+            (service_name, instance), {}
+        )
+        if len(extra_ports) == 0 and 'extra_ports' in old_service_info:
+            extra_ports.update(old_service_info['extra_ports'])
 
         if default_port is not None and len(extra_ports) > 0:
             if service_info['protocol'] == socket.IPPROTO_TCP:
@@ -1054,6 +1317,7 @@ class Core:
             service_info = get_service_info(process['cmdline'])
             if service_info is not None:
                 service_info = service_info.copy()
+                service_info['exe_path'] = process.get('exe') or ''
                 instance = process['instance']
                 service_name = service_info['service']
                 if (service_name, instance) in discovered_services:
@@ -1156,6 +1420,10 @@ class Core:
                     generator = self.docker_client.events()
 
                 for event in generator:
+                    # even older version of docker-py does not support decoding
+                    # at all
+                    if isinstance(event, six.string_types):
+                        event = json.loads(event)
                     status = event.get('status')
                     event_type = event.get('Type', 'container')
 
@@ -1167,6 +1435,7 @@ class Core:
             except:
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
+                logging.debug('Docker event watcher error', exc_info=True)
                 pass
 
             time.sleep(5)
@@ -1184,9 +1453,16 @@ class Core:
     def reload_config(self):
         (self.config, errors) = bleemeo_agent.config.load_config()
 
-        for (env_name, conf_name) in ENVIRON_CONFIG_VARS:
+        for (env_name, conf_name, conf_type) in ENVIRON_CONFIG_VARS:
             if env_name in os.environ:
-                self.config.set(conf_name, os.environ[env_name])
+                try:
+                    value = convert_type(os.environ[env_name], conf_type)
+                except ValueError as exc:
+                    errors.append(
+                        'Bad environ variable %s: %s' % (env_name, exc)
+                    )
+                    continue
+                self.config.set(conf_name, value)
 
         return errors
 
@@ -1439,7 +1715,7 @@ class Core:
 
         if soft_status != status or last_status != status:
             logging.debug(
-                'metric=%s : soft_status=%s, last_status=%s, result=%s. '
+                'metric=%s: soft_status=%s, last_status=%s, result=%s. '
                 'warn for %d second / crit for %d second',
                 key,
                 soft_status,

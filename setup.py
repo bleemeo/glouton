@@ -15,7 +15,7 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'apscheduler < 3.0.0',
+        'apscheduler',
         'jinja2',
         'psutil >= 2.0.0',
         'requests',

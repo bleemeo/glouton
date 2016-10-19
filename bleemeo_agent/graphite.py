@@ -17,6 +17,7 @@
 #
 
 import logging
+import os
 import re
 import shlex
 import socket
@@ -55,6 +56,30 @@ def graphite_split_line(line):
         pass
 
     return (metric, value, timestamp)
+
+
+def _disk_path_rename(path, mount_point, ignored_patterns):
+    if mount_point is not None:
+        if mount_point.endswith('/'):
+            mount_point = mount_point[:-1]
+
+        if not path.startswith(mount_point):
+            # partition don't start with mount_point, so it's a parition
+            # which is only inside the container. Ignore it
+            return None
+
+        path = path.replace(mount_point, '')
+        if not path.startswith('/'):
+            path = '/' + path
+
+    for pattern in ignored_patterns:
+        if pattern.endswith('/'):
+            pattern = pattern[:-1]
+
+        if path == pattern or path.startswith(pattern + os.sep):
+            return None
+
+    return path
 
 
 class GraphiteServer(threading.Thread):
@@ -369,28 +394,13 @@ class GraphiteServer(threading.Thread):
 
         return True
 
-    def _disk_path_rename(self, path):
+    def disk_path_rename(self, path):
         """ Rename (and possibly ignore) a disk partition
 
             In case of collectd running in a container, it's used to show
             partition as seen by the host, instead of as seen by a container.
         """
-        ignored_patterns = self.core.config.get('df.path_ignore', [])
-        for pattern in ignored_patterns:
-            if path.startswith(pattern):
-                return None
-
         mount_point = self.core.config.get('df.host_mount_point')
-        if mount_point is None:
-            return path
+        ignored_patterns = self.core.config.get('df.path_ignore', [])
 
-        if not path.startswith(mount_point):
-            # partition don't start with mount_point, so it's a parition
-            # which is only inside the container. Ignore it
-            return None
-
-        path = path.replace(mount_point, '')
-        if not path.startswith('/'):
-            path = '/' + path
-
-        return path
+        return _disk_path_rename(path, mount_point, ignored_patterns)

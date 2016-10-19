@@ -17,6 +17,7 @@
 #
 
 import datetime
+import hashlib
 import json
 import logging
 import os
@@ -70,6 +71,44 @@ def api_iterator(url, params, auth, headers=None):
             yield item
 
 
+def convert_docker_date(input_date):
+    """ Take a string representing a date using Docker inspect format and return
+        None if the date is "0001-01-01T00:00:00Z"
+    """
+    if input_date is None:
+        return None
+
+    if input_date == '0001-01-01T00:00:00Z':
+        return None
+    return input_date
+
+
+def get_listen_addresses(service_info):
+    """ Return the listen_addresses for a service_info
+    """
+    try:
+        address = socket.gethostbyname(service_info['address'])
+    except (socket.gaierror, TypeError, KeyError):
+        # gaierror => unable to resolv name
+        # TypeError => service_info['address'] is None (happen when
+        #              service is on a stopped container)
+        # KeyError => no 'address' in service_info (happen when service
+        #             is a customer defined using Nagios check).
+        address = None
+
+    extra_ports = service_info.get('extra_ports', {}).copy()
+    if service_info.get('port') is not None and len(extra_ports) == 0:
+        if service_info['protocol'] == socket.IPPROTO_TCP:
+            extra_ports['%s/tcp' % service_info['port']] = address
+        elif service_info['protocol'] == socket.IPPROTO_UDP:
+            extra_ports['%s/udp' % service_info['port']] = address
+
+    return ','.join(
+        '%s:%s' % (address, port_proto)
+        for (port_proto, address) in extra_ports.items()
+    )
+
+
 class BleemeoConnector(threading.Thread):
 
     def __init__(self, core):
@@ -80,8 +119,13 @@ class BleemeoConnector(threading.Thread):
         self.connected = False
         self._mqtt_queue_size = 0
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
+        self._last_discovery_sent = datetime.datetime(1970, 1, 1)
         self._last_update = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
+
+        # Lock held when modifying self.metrics_uuid or self.services_uuid and
+        # when modification should not occur (e.g. during .items())
+        self.metrics_lock = threading.Lock()
         self.metrics_uuid = self.core.state.get_complex_dict(
             'metrics_uuid', {}
         )
@@ -106,7 +150,7 @@ class BleemeoConnector(threading.Thread):
                 'v1/agent/%s/connect' % self.agent_uuid,
                 json.dumps(msg),
             )
-            # FIXME: PRODUCT-137 : to be removed when upstream bug is fixed
+            # FIXME: PRODUCT-137: to be removed when upstream bug is fixed
             if self.mqtt_client._ssl is not None:
                 self.mqtt_client._ssl.setblocking(0)
             logging.info('MQTT connection established')
@@ -140,7 +184,7 @@ class BleemeoConnector(threading.Thread):
                 'password', bleemeo_agent.util.generate_password())
 
     def run(self):
-        self.core.scheduler.add_interval_job(
+        self.core.add_scheduled_job(
             self._bleemeo_health_check,
             seconds=60,
         )
@@ -153,10 +197,10 @@ class BleemeoConnector(threading.Thread):
         except StopIteration:
             return
 
-        self.core.scheduler.add_interval_job(
+        self.core.add_scheduled_job(
             self._bleemeo_synchronize,
-            start_date=datetime.datetime.now() + datetime.timedelta(seconds=4),
             seconds=15,
+            next_run_in=4,
         )
 
         while not self._ready_for_mqtt():
@@ -187,16 +231,19 @@ class BleemeoConnector(threading.Thread):
     def _apply_upgrade(self):
         # PRODUCT-279: elasticsearch_search_time was previously not associated
         # with the service elasticsearch
-        for key in list(self.metrics_uuid):
-            (metric_name, service, item) = key
-            if metric_name == 'elasticsearch_search_time' and service is None:
-                value = self.metrics_uuid[key]
-                new_key = (metric_name, 'elasticsearch', item)
-                self.metrics_uuid.setdefault(new_key, value)
-                del self.metrics_uuid[key]
-                self.core.state.set_complex_dict(
-                    'metrics_uuid', self.metrics_uuid
-                )
+
+        with self.metrics_lock:
+            for key in list(self.metrics_uuid):
+                (metric_name, service, item) = key
+                if (metric_name == 'elasticsearch_search_time'
+                        and service is None):
+                    value = self.metrics_uuid[key]
+                    new_key = (metric_name, 'elasticsearch', item)
+                    self.metrics_uuid.setdefault(new_key, value)
+                    del self.metrics_uuid[key]
+                    self.core.state.set_complex_dict(
+                        'metrics_uuid', self.metrics_uuid
+                    )
 
     def _ready_for_mqtt(self):
         """ Check for requirement needed before MQTT connection
@@ -245,7 +292,7 @@ class BleemeoConnector(threading.Thread):
         if (self.core.graphite_server.data_last_seen_at is None or
                 now - self.core.graphite_server.data_last_seen_at > 60):
             logging.info(
-                'Issue with metrics collector : no metric received from %s',
+                'Issue with metrics collector: no metric received from %s',
                 self.core.graphite_server.metrics_source,
             )
 
@@ -303,7 +350,7 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.loop_start()
 
-    def _loop(self):
+    def _loop(self):  # noqa
         """ Call as long as agent is running. It's the "main" method for
             Bleemeo connector thread.
         """
@@ -320,7 +367,10 @@ class BleemeoConnector(threading.Thread):
                     metric.get('service'),
                     metric.get('item')
                 )
-                metric_uuid = self.metrics_uuid.get(key)
+                metric_uuid = self.metrics_uuid.get(key, 'deleted')
+                if metric_uuid == 'deleted':
+                    continue
+
                 if metric_uuid is None:
                     # UUID is not available now. Ignore this metric for now
                     self._metric_queue.put(metric)
@@ -414,7 +464,7 @@ class BleemeoConnector(threading.Thread):
             response = None
         except ValueError:
             logging.debug(
-                'Registration failed, response is not a json : %s',
+                'Registration failed, response is not a json: %s',
                 response.content[:100])
 
         if content is not None and 'id' in content:
@@ -439,10 +489,16 @@ class BleemeoConnector(threading.Thread):
             return
 
         now = datetime.datetime.now()
-        if now - self._last_update > datetime.timedelta(hours=1):
-            self._retrive_threshold()
+        if (now - self._last_update > datetime.timedelta(hours=1)
+                or self.core.last_services_autoremove >= self._last_update):
             self._purge_deleted_services()
+            self._retrive_threshold()
             self._last_update = now
+
+        now = datetime.datetime.now()
+        if self._last_discovery_sent < self.core.last_discovery_update:
+            self._register_containers()
+            self._last_discovery_sent = now
 
         self._register_services()
         self._register_metric()
@@ -483,29 +539,58 @@ class BleemeoConnector(threading.Thread):
             }
 
         deleted_metrics = []
-        for key in list(self.metrics_uuid.keys()):
-            (metric_name, service_name, item) = key
-            value = self.metrics_uuid[key]
-            if value is None or value in metrics_registered:
-                continue
+        with self.metrics_lock:
+            for key in list(self.metrics_uuid.keys()):
+                (metric_name, service_name, item) = key
+                value = self.metrics_uuid[key]
+                if value is None or value in metrics_registered:
+                    continue
 
-            del self.metrics_uuid[key]
-            deleted_metrics.append((metric_name, item))
+                del self.metrics_uuid[key]
+                deleted_metrics.append((metric_name, item))
+
+            if deleted_metrics:
+                self.core.state.set_complex_dict(
+                    'metrics_uuid', self.metrics_uuid
+                )
 
         if deleted_metrics:
-            self.core.state.set_complex_dict('metrics_uuid', self.metrics_uuid)
             self.core.purge_metrics(deleted_metrics)
 
         self.core.state.set_complex_dict('thresholds', thresholds)
         self.core.define_thresholds()
 
     def _purge_deleted_services(self):
-        """ Remove from state any deleted service
+        """ Remove from state any deleted service on API and vice-versa
 
             Also remove them from discovered service.
         """
         base_url = self.bleemeo_base_url
         service_url = urllib_parse.urljoin(base_url, '/v1/service/')
+
+        deleted_services_from_state = (
+            set(self.services_uuid) - set(self.core.services)
+        )
+        for key in deleted_services_from_state:
+            service_uuid = self.services_uuid[key]['uuid']
+            response = requests.delete(
+                service_url + '%s/' % service_uuid,
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            )
+            if response.status_code not in (204, 404):
+                logging.debug(
+                    'Service deletion failed. Server response = %s',
+                    response.content
+                )
+                continue
+            del self.services_uuid[key]
+            self.core.state.set_complex_dict(
+                'services_uuid', self.services_uuid
+            )
+
         services = api_iterator(
             service_url,
             params={'agent': self.agent_uuid},
@@ -547,26 +632,16 @@ class BleemeoConnector(threading.Thread):
 
         for key, service_info in self.core.services.items():
             (service_name, instance) = key
-            try:
-                address = socket.gethostbyname(service_info['address'])
-            except (socket.gaierror, TypeError, KeyError):
-                # gaierror => unable to resolv name
-                # TypeError => service_info['address'] is None (happen when
-                #              service is on a stopped container)
-                # KeyError => no 'address' in service_info (happen when service
-                #             is a customer defined using Nagios check).
-                address = None
 
             entry = {
-                'address': address,
+                'listen_addresses':
+                    get_listen_addresses(service_info),
                 'label': service_name,
+                'exe_path': service_info.get('exe_path', ''),
             }
             if instance is not None:
                 entry['instance'] = instance
 
-            if service_info.get('protocol') is not None:
-                entry['port'] = service_info['port']
-                entry['protocol'] = service_info['protocol']
             if key in self.services_uuid:
                 entry['uuid'] = self.services_uuid[key]['uuid']
                 # check for possible update
@@ -608,38 +683,88 @@ class BleemeoConnector(threading.Thread):
                 'services_uuid', self.services_uuid
             )
 
-    def _register_metric(self):
+    def _register_metric(self):  # noqa
         """ Check for any unregistered metrics and register them
         """
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         thresholds = self.core.state.get_complex_dict('thresholds', {})
+        container_uuid = self.core.state.get('docker_container_uuid', {})
 
-        for metric_key, metric_uuid in list(self.metrics_uuid.items()):
-            if metric_key not in self.metrics_info:
-                # This should only occur when metric were seen on a previous
-                # run (and stored in state.json) but not yet registered.
-                # If the metric still exists, it should be quickly fixed. If
-                # not... we will never register that metric (anyway it doesn't
-                # have any points sent)
+        # It can't keep the lock during whole loop, because call to API is slow
+        # In addition it may remove entry during the loop.
+        with self.metrics_lock:
+            list_metrics = list(self.metrics_uuid.items())
+
+        for metric_key, metric_uuid in list_metrics:
+            if metric_uuid is not None:
                 continue
+
             (metric_name, service, item) = metric_key
-            status_of = self.metrics_info[metric_key].get('status_of')
-            from_metric_key = (status_of, service, item)
-            if metric_uuid is None:
-                if (status_of is not None
-                        and self.metrics_uuid.get(from_metric_key) is None):
-                    logging.debug(
-                        'Metric %s is status_of unregistered metric %s',
-                        metric_name,
-                        status_of,
+
+            # Do most CPU-bound action under the lock. It avoid taking and
+            # releasing the lock multiple time.
+            with self.metrics_lock:
+                if metric_key not in self.metrics_info:
+                    # This should only occur when metric was seen on a
+                    # previous run (and stored in state.json), not registered
+                    # and not seen since startup.
+                    #
+                    # Remove the metrics from self.metrics_uuid to purge old
+                    # no longer valid metric. If the metric still exists,
+                    # it will be re-added to self.metrics_uuid quickly.
+                    del self.metrics_uuid[metric_key]
+                    self.core.state.set_complex_dict(
+                        'metrics_uuid', self.metrics_uuid
                     )
                     continue
-                logging.debug('Registering metric %s', metric_name)
+
+                status_of = self.metrics_info[metric_key].get('status_of')
+                from_metric_key = (status_of, service, item)
+
                 payload = {
                     'agent': self.agent_uuid,
                     'label': metric_name,
                 }
+                if status_of is not None:
+                    if from_metric_key not in self.metrics_uuid:
+                        # The status_of metric is deleted, also delete self
+                        del self.metrics_uuid[metric_key]
+                        del self.metrics_info[metric_key]
+                        self.core.state.set_complex_dict(
+                            'metrics_uuid', self.metrics_uuid
+                        )
+                        continue
+
+                    payload['status_of'] = self.metrics_uuid.get(
+                        from_metric_key,
+                    )
+                    if payload['status_of'] is None:
+                        logging.debug(
+                            'Metric %s is status_of unregistered metric %s',
+                            metric_name,
+                            status_of,
+                        )
+                        continue
+                if self.metrics_info[metric_key].get('container') is not None:
+                    container_name = self.metrics_info[metric_key]['container']
+                    if container_name not in self.core.docker_containers:
+                        # Container was removed, drop the metrics
+                        del self.metrics_uuid[metric_key]
+                        del self.metrics_info[metric_key]
+                        self.core.state.set_complex_dict(
+                            'metrics_uuid', self.metrics_uuid
+                        )
+                        continue
+
+                    if (container_name not in container_uuid
+                            or container_uuid[container_name][1] is None):
+                        # Container not yet registered
+                        continue
+                    payload['container'] = (
+                        container_uuid[container_name][1]
+                    )
+                logging.debug('Registering metric %s', metric_name)
                 if item is not None:
                     payload['item'] = item
                 if service is not None:
@@ -647,25 +772,27 @@ class BleemeoConnector(threading.Thread):
                     payload['service'] = (
                         self.services_uuid[(service, instance)]['uuid']
                     )
-                if status_of is not None:
-                    payload['status_of'] = self.metrics_uuid[from_metric_key]
 
-                response = requests.post(
-                    registration_url,
-                    data=json.dumps(payload),
-                    auth=(self.agent_username, self.agent_password),
-                    headers={
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Content-type': 'application/json',
-                    },
+            # This should not be done with self.metrics_lock. It no CPU-bound
+            # and would lock other thread that need this lock.
+            response = requests.post(
+                registration_url,
+                data=json.dumps(payload),
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-type': 'application/json',
+                },
+            )
+            if response.status_code != 201:
+                logging.debug(
+                    'Metric registration failed. Server response = %s',
+                    response.content
                 )
-                if response.status_code != 201:
-                    logging.debug(
-                        'Metric registration failed. Server response = %s',
-                        response.content
-                    )
-                    return
-                data = response.json()
+                return
+            data = response.json()
+
+            with self.metrics_lock:
                 self.metrics_uuid[metric_key] = (
                     data['id']
                 )
@@ -685,7 +812,100 @@ class BleemeoConnector(threading.Thread):
                     'metrics_uuid', self.metrics_uuid
                 )
                 self.core.state.set_complex_dict('thresholds', thresholds)
-                self.core.define_thresholds()
+
+            self.core.define_thresholds()
+
+    def _register_containers(self):
+        registration_url = urllib_parse.urljoin(
+            self.bleemeo_base_url, '/v1/container/',
+        )
+        container_uuid = self.core.state.get('docker_container_uuid', {})
+
+        for name, inspect in self.core.docker_containers.items():
+            new_hash = hashlib.sha1(
+                json.dumps(inspect, sort_keys=True).encode('utf-8')
+            ).hexdigest()
+            old_hash, obj_uuid = container_uuid.get(name, (None, None))
+
+            if old_hash == new_hash:
+                continue
+
+            if obj_uuid is None:
+                method = requests.post
+                url = registration_url
+            else:
+                method = requests.put
+                url = registration_url + obj_uuid + '/'
+
+            cmd = inspect.get('Config', {}).get('Cmd', [])
+            if cmd is None:
+                cmd = []
+
+            payload = {
+                'host': self.agent_uuid,
+                'name': name,
+                'command': ' '.join(cmd),
+                'docker_status': inspect.get('State', {}).get('Status', ''),
+                'docker_created_at': convert_docker_date(
+                    inspect.get('Created')
+                ),
+                'docker_started_at': convert_docker_date(
+                    inspect.get('State', {}).get('StartedAt')
+                ),
+                'docker_finished_at': convert_docker_date(
+                    inspect.get('State', {}).get('FinishedAt')
+                ),
+                'docker_api_version': self.core.last_facts.get(
+                    'docker_api_version', ''
+                ),
+                'docker_id': inspect.get('Id', ''),
+                'docker_image_id': inspect.get('Image', ''),
+                'docker_image_name':
+                    inspect.get('Config', '').get('Image', ''),
+                'docker_inspect': json.dumps(inspect),
+            }
+
+            response = method(
+                url,
+                data=json.dumps(payload),
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'Content-type': 'application/json',
+                },
+            )
+
+            if response.status_code not in (200, 201):
+                logging.debug(
+                    'Container registration failed. Server response = %s',
+                    response.content
+                )
+                continue
+            obj_uuid = response.json()['id']
+            container_uuid[name] = (new_hash, obj_uuid)
+            self.core.state.set('docker_container_uuid', container_uuid)
+
+        deleted_containers = (
+            set(container_uuid) - set(self.core.docker_containers)
+        )
+        for name in deleted_containers:
+            (_, obj_uuid) = container_uuid[name]
+            url = registration_url + obj_uuid + '/'
+            response = requests.delete(
+                url,
+                auth=(self.agent_username, self.agent_password),
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            )
+            if response.status_code not in (204, 404):
+                logging.debug(
+                    'Container deletion failed. Server response = %s',
+                    response.content,
+                )
+                continue
+            del container_uuid[name]
+            self.core.state.set('docker_container_uuid', container_uuid)
 
     def emit_metric(self, metric):
         if self._metric_queue.qsize() < 100000:
@@ -694,16 +914,21 @@ class BleemeoConnector(threading.Thread):
         service = metric.get('service')
         item = metric.get('item')
 
-        if (metric_name, service, item) not in self.metrics_info:
-            self.metrics_info.setdefault(
-                (metric_name, service, item),
-                {
-                    'status_of': metric.get('status_of'),
-                    'instance': metric.get('instance'),
-                }
-            )
-        if (metric_name, service, item) not in self.metrics_uuid:
-            self.metrics_uuid.setdefault((metric_name, service, item), None)
+        with self.metrics_lock:
+            key = (metric_name, service, item)
+            if key not in self.metrics_info:
+                self.metrics_info.setdefault(
+                    key,
+                    {
+                        'status_of': metric.get('status_of'),
+                        'instance': metric.get('instance'),
+                        'container': metric.get('container'),
+                    }
+                )
+
+            self.metrics_info[key]['last_seen'] = time.time()
+            if key not in self.metrics_uuid:
+                self.metrics_uuid.setdefault(key, None)
 
     def send_facts(self):
         base_url = self.bleemeo_base_url
