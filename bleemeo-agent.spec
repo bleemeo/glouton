@@ -62,7 +62,7 @@ the SaaS platform using Telegraf
 
 rm %{buildroot}/usr/lib/bleemeo/bleemeo-dpkg-hook-postinvoke
 
-install -D -p -m 0440 debian/bleemeo-agent.sudoers %{buildroot}%{_sysconfdir}/sudoers.d/bleemeo
+install -D -p -m 0440 rpm/bleemeo-agent.sudoers %{buildroot}%{_sysconfdir}/sudoers.d/bleemeo
 install -D -p -m 0644 debian/bleemeo-agent.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
 install -D -p -m 0644 etc/agent.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf
 install -D -p -m 0644 debian/bleemeo-agent.service %{buildroot}%{_unitdir}/%{name}.service
@@ -133,6 +133,7 @@ chown bleemeo:telegraf /etc/telegraf/telegraf.d/bleemeo-generated.conf
 chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf
 
 # Bleemeo agent modify telegraf configuration.
+touch /var/lib/bleemeo/upgrade
 systemctl restart telegraf.service
 
 # Bleemeo agent telegraf modify its configuration.
