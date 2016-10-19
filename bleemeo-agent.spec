@@ -27,14 +27,14 @@ Requires:       python34-jinja2
 Requires:       python34-six
 Requires:       python34-PyYAML
 Requires:       python34-setuptools
-Requires:       bleemeo-agent-telegraf
+Requires:       bleemeo-agent-collector
 #Recommends not available on centos 7
 #Recommends:     python34-flask
 #Recommends:     python34-influxdb
 #Recommends:     python34-raven
 
 
-License:        Apache
+License:        ASL 2.0
 URL:            https://bleemeo.com
 
 %description
@@ -42,14 +42,46 @@ Bleemeo is a solution of Monitoring as a Service.
 This package contains the agent which send metric to
 the SaaS platform
 
-%package -n bleemeo-agent-telegraf
+%package telegraf
 Summary:        Bleemeo agent with Telegraf
 Requires:       telegraf
+Provides:       bleemeo-agent-collector = %{version}
+Conflicts:      bleemeo-agent-collectd, bleemeo-agent-single
 
-%description -n bleemeo-agent-telegraf
+%description telegraf
 Bleemeo is a solution of Monitoring as a Service.
 This package contains the agent which send metric to
 the SaaS platform using Telegraf
+
+%package collectd
+Summary:        Bleemeo agent with collectd
+Requires:       collectd
+Requires:       collectd-apache
+Requires:       collectd-bind
+Requires:       collectd-mysql
+Requires:       collectd-nginx
+Requires:       collectd-openldap
+Requires:       collectd-postgresql
+Requires:       collectd-redis
+Requires:       collectd-varnish
+Provides:       bleemeo-agent-collector = %{version}
+Conflicts:      bleemeo-agent-telegraf, bleemeo-agent-single
+
+%description collectd
+Bleemeo is a solution of Monitoring as a Service.
+This package contains the agent which send metric to
+the SaaS platform using collectd
+
+%package single
+Summary:        Bleemeo agent for Docker images
+Provides:       bleemeo-agent-collector = %{version}
+Conflicts:      bleemeo-agent-telegraf, bleemeo-agent-collectd
+
+%description single
+Bleemeo is a solution of Monitoring as a Service.
+This package contains the agent which send metric to
+the SaaS platform with no dependency on daemon.
+This package is appropriate for Docker images.
 
 %prep
 %autosetup
@@ -70,22 +102,35 @@ install -D -d -m 0755 %{buildroot}%{_sharedstatedir}/bleemeo
 
 install -D -p -m 0644 debian/bleemeo-agent-telegraf.telegraf.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
 install -D -p -m 0644 debian/bleemeo-agent-telegraf.telegraf-generated.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
-install -D -p -m 0644 debian/bleemeo-agent-telegraf.graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/30-graphite_metrics_source.conf
+install -D -p -m 0644 debian/bleemeo-agent-telegraf.graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
+
+install -D -p -m 0644 debian/bleemeo-agent-collectd.collectd.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo.conf
+install -D -p -m 0644 debian/bleemeo-agent-collectd.collectd-generated.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-generated.conf
+install -D -p -m 0644 rpm/bleemeo-agent-collectd.graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
+
 
 %files
 %{python3_sitelib}/*
 %{_bindir}/bleemeo-agent
 %{_bindir}/bleemeo-agent-gather-facts
 %{_bindir}/bleemeo-netstat
-%{_sysconfdir}/bleemeo
-%{_sysconfdir}/sudoers.d/*
+%config(noreplace) %{_sysconfdir}/bleemeo/agent.conf
+%config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
+%config(noreplace) %{_sysconfdir}/sudoers.d/*
 %{_unitdir}/%{name}.service
 %{_sharedstatedir}/bleemeo
 
-%files -n bleemeo-agent-telegraf
-%{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
-%{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
-%{_sysconfdir}/bleemeo/agent.conf.d/30-graphite_metrics_source.conf
+%files telegraf
+%config(noreplace) %{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
+%config(noreplace) %{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
+%config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
+
+%files collectd
+%config(noreplace) %{_sysconfdir}/collectd.d/bleemeo.conf
+%config(noreplace) %{_sysconfdir}/collectd.d/bleemeo-generated.conf
+%config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
+
+%files single
 
 %pre
 getent group bleemeo >/dev/null || groupadd -r bleemeo
@@ -120,7 +165,7 @@ fi
 %postun
 %systemd_postun_with_restart bleemeo-agent.service
 
-%pre -n bleemeo-agent-telegraf
+%pre telegraf
 getent group bleemeo >/dev/null || groupadd -r bleemeo
 getent passwd bleemeo >/dev/null || \
     useradd -r -g bleemeo -d /var/lib/bleemeo -s /sbin/nologin \
@@ -128,15 +173,35 @@ getent passwd bleemeo >/dev/null || \
 usermod -aG docker bleemeo 2> /dev/null || true
 exit 0
 
-%post -n bleemeo-agent-telegraf
+%post telegraf
 chown bleemeo:telegraf /etc/telegraf/telegraf.d/bleemeo-generated.conf
 chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf
 
 # Bleemeo agent modify telegraf configuration.
-touch /var/lib/bleemeo/upgrade
 systemctl restart telegraf.service
 
 # Bleemeo agent telegraf modify its configuration.
+touch /var/lib/bleemeo/upgrade
+systemctl restart bleemeo-agent.service
+exit 0
+
+%pre collectd
+getent group bleemeo >/dev/null || groupadd -r bleemeo
+getent passwd bleemeo >/dev/null || \
+    useradd -r -g bleemeo -d /var/lib/bleemeo -s /sbin/nologin \
+    -c "Bleemeo agent daemon" bleemeo
+usermod -aG docker bleemeo 2> /dev/null || true
+exit 0
+
+%post collectd
+chown bleemeo:bleemeo /etc/collectd.d/bleemeo-generated.conf
+chmod 0640 /etc/collectd.d/bleemeo-generated.conf
+
+# Bleemeo agent modify telegraf configuration.
+systemctl restart collectd.service
+
+# Bleemeo agent telegraf modify its configuration.
+touch /var/lib/bleemeo/upgrade
 systemctl restart bleemeo-agent.service
 exit 0
 
