@@ -163,7 +163,7 @@ bleemeo-agent-gather-facts
 bleemeo-netstat
 if [ $1 -eq 1 ] ; then
     # Initial installation
-    systemctl enable --now bleemeo-agent.service
+    systemctl enable --quiet --now bleemeo-agent.service
 fi
 
 %preun
@@ -189,11 +189,11 @@ chown bleemeo:telegraf /etc/telegraf/telegraf.d/bleemeo-generated.conf
 chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf
 
 # Bleemeo agent modify telegraf configuration.
-systemctl restart telegraf.service
+systemctl restart telegraf.service 2>/dev/null
 
 # Bleemeo agent telegraf modify its configuration.
 touch /var/lib/bleemeo/upgrade
-systemctl restart bleemeo-agent.service
+systemctl restart bleemeo-agent.service 2>/dev/null
 exit 0
 
 %if %{with collectd}
