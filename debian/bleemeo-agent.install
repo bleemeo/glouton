@@ -1,6 +1,7 @@
 #!/usr/bin/dh-exec
 debian/bleemeo-agent.sudoers => etc/sudoers.d/bleemeo
 debian/bleemeo-agent.apt.conf => etc/apt/apt.conf.d/05bleemeo-agent
-debian/bleemeo-agent.conf => etc/bleemeo/agent.conf.d/05-system.conf
-debian/bleemeo-agent-debian.conf => etc/bleemeo/agent.conf.d/06-debian.conf
+packaging/common/bleemeo-05-system.conf => etc/bleemeo/agent.conf.d/05-system.conf
+debian/bleemeo-agent-debian.conf => etc/bleemeo/agent.conf.d/06-distribution.conf
+debian/bleemeo-dpkg-hook-postinvoke => usr/lib/bleemeo/bleemeo-dpkg-hook-postinvoke
 etc/agent.conf => etc/bleemeo/agent.conf

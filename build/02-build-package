@@ -22,7 +22,7 @@ docker run --rm \
 yum install -y rpm-build
 mkdir -p /root/rpmbuild/SOURCES/ /root/rpmbuild/SPECS/
 cp -v bleemeo-agent_*.tar /root/rpmbuild/SOURCES/
-cp -v bleemeo-agent-*/bleemeo-agent.spec /root/rpmbuild/SPECS/
+cp -v bleemeo-agent-*/packaging/centos/bleemeo-agent.spec /root/rpmbuild/SPECS/
 rpmbuild -bs /root/rpmbuild/SPECS/bleemeo-agent.spec
 cp /root/rpmbuild/SRPMS/bleemeo-agent-*.src.rpm .'
 
