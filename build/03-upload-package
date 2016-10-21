@@ -14,3 +14,10 @@ ${REPREPRO_DOCKER_CMD} copysrc xenial trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc yakkety trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc jessie trusty bleemeo-agent
 
+
+CENTOS7_ROOT="/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/centos/7/main/x86_64"
+CENTOS7_DOCKER_CMD="docker run --rm -v ${CENTOS7_ROOT}:${CENTOS7_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/centos-pkg-builder"
+cp -p *.rpm ${CENTOS7_ROOT}/Packages
+${CENTOS7_DOCKER_CMD} sh -c "repomanage --old ${CENTOS7_ROOT}/Packages | xargs --no-run-if-empty rm"
+${CENTOS7_DOCKER_CMD} rpmsign --addsign ${CENTOS7_ROOT}/Packages/*.rpm
+${CENTOS7_DOCKER_CMD} createrepo ${CENTOS7_ROOT}

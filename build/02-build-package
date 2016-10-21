@@ -18,9 +18,7 @@ docker run --privileged=true --rm \
 
 docker run --rm \
     -v $(pwd):/srv/workspace -w /srv/workspace \
-    centos sh -ec '
-yum install -y rpm-build
-mkdir -p /root/rpmbuild/SOURCES/ /root/rpmbuild/SPECS/
+    bleemeo/centos-pkg-builder sh -ec '
 cp -v bleemeo-agent_*.tar /root/rpmbuild/SOURCES/
 cp -v bleemeo-agent-*/packaging/centos/bleemeo-agent.spec /root/rpmbuild/SPECS/
 rpmbuild -bs /root/rpmbuild/SPECS/bleemeo-agent.spec
@@ -28,7 +26,4 @@ cp /root/rpmbuild/SRPMS/bleemeo-agent-*.src.rpm .'
 
 docker run --rm --privileged \
     -v $(pwd):/srv/workspace -w /srv/workspace \
-    centos sh -ec '
-yum install -y mock
-adduser -g mock mock
-su mock -c "/usr/bin/mock --resultdir ./result bleemeo-agent-*.src.rpm"'
+    bleemeo/centos-pkg-builder su mock -c "/usr/bin/mock --resultdir ./result bleemeo-agent-*.src.rpm"
