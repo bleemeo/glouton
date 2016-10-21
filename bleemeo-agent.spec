@@ -2,6 +2,9 @@
 %define git_commit unknown
 %define build_date Thu Jan 01 1970
 
+# Collectd is disabled for now. It has issue with SELinux
+%bcond_with collectd
+
 %{?systemd_requires}
 
 Name:           bleemeo-agent
@@ -53,6 +56,7 @@ Bleemeo is a solution of Monitoring as a Service.
 This package contains the agent which send metric to
 the SaaS platform using Telegraf
 
+%if %{with collectd}
 %package collectd
 Summary:        Bleemeo agent with collectd
 Requires:       collectd
@@ -71,6 +75,7 @@ Conflicts:      bleemeo-agent-telegraf, bleemeo-agent-single
 Bleemeo is a solution of Monitoring as a Service.
 This package contains the agent which send metric to
 the SaaS platform using collectd
+%endif
 
 %package single
 Summary:        Bleemeo agent for Docker images
@@ -104,11 +109,12 @@ install -D -p -m 0644 debian/bleemeo-agent-telegraf.telegraf.conf %{buildroot}%{
 install -D -p -m 0644 debian/bleemeo-agent-telegraf.telegraf-generated.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
 install -D -p -m 0644 debian/bleemeo-agent-telegraf.graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
 
+%if %{with collectd}
 install -D -p -m 0644 debian/bleemeo-agent-collectd.collectd.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo.conf
 install -D -p -m 0644 rpm/collectd-bleemeo-centos.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-centos.conf
 install -D -p -m 0644 debian/bleemeo-agent-collectd.collectd-generated.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-generated.conf
 install -D -p -m 0644 rpm/bleemeo-agent-collectd.graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
-
+%endif
 
 %files
 %{python3_sitelib}/*
@@ -126,11 +132,13 @@ install -D -p -m 0644 rpm/bleemeo-agent-collectd.graphite_metrics_source.conf %{
 %config(noreplace) %{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
 
+%if %{with collectd}
 %files collectd
 %config(noreplace) %{_sysconfdir}/collectd.d/bleemeo.conf
 %config(noreplace) %{_sysconfdir}/collectd.d/bleemeo-centos.conf
 %config(noreplace) %{_sysconfdir}/collectd.d/bleemeo-generated.conf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
+%endif
 
 %files single
 
@@ -187,6 +195,7 @@ touch /var/lib/bleemeo/upgrade
 systemctl restart bleemeo-agent.service
 exit 0
 
+%if %{with collectd}
 %pre collectd
 getent group bleemeo >/dev/null || groupadd -r bleemeo
 getent passwd bleemeo >/dev/null || \
@@ -206,6 +215,7 @@ systemctl restart collectd.service
 touch /var/lib/bleemeo/upgrade
 systemctl restart bleemeo-agent.service
 exit 0
+%endif
 
 %changelog
 * %{build_date} Bleemeo Packaging Team jenkins@bleemeo.com - %{version}
