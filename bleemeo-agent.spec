@@ -101,6 +101,7 @@ rm %{buildroot}/usr/lib/bleemeo/bleemeo-dpkg-hook-postinvoke
 
 install -D -p -m 0440 rpm/bleemeo-agent.sudoers %{buildroot}%{_sysconfdir}/sudoers.d/bleemeo
 install -D -p -m 0644 debian/bleemeo-agent.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
+install -D -p -m 0644 rpm/bleemeo-agent-centos.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/06-centos.conf
 install -D -p -m 0644 etc/agent.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf
 install -D -p -m 0644 debian/bleemeo-agent.service %{buildroot}%{_unitdir}/%{name}.service
 install -D -d -m 0755 %{buildroot}%{_sharedstatedir}/bleemeo
@@ -123,6 +124,7 @@ install -D -p -m 0644 rpm/bleemeo-agent-collectd.graphite_metrics_source.conf %{
 %{_bindir}/bleemeo-netstat
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
+%config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/06-centos.conf
 %config(noreplace) %{_sysconfdir}/sudoers.d/*
 %{_unitdir}/%{name}.service
 %{_sharedstatedir}/bleemeo
