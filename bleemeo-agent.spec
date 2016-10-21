@@ -105,6 +105,7 @@ install -D -p -m 0644 debian/bleemeo-agent-telegraf.telegraf-generated.conf %{bu
 install -D -p -m 0644 debian/bleemeo-agent-telegraf.graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
 
 install -D -p -m 0644 debian/bleemeo-agent-collectd.collectd.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo.conf
+install -D -p -m 0644 rpm/collectd-bleemeo-centos.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-centos.conf
 install -D -p -m 0644 debian/bleemeo-agent-collectd.collectd-generated.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-generated.conf
 install -D -p -m 0644 rpm/bleemeo-agent-collectd.graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
 
@@ -127,6 +128,7 @@ install -D -p -m 0644 rpm/bleemeo-agent-collectd.graphite_metrics_source.conf %{
 
 %files collectd
 %config(noreplace) %{_sysconfdir}/collectd.d/bleemeo.conf
+%config(noreplace) %{_sysconfdir}/collectd.d/bleemeo-centos.conf
 %config(noreplace) %{_sysconfdir}/collectd.d/bleemeo-generated.conf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
 

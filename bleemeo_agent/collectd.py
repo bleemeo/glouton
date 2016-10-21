@@ -373,7 +373,10 @@ class Collectd:
                 'if_errors': 'err',
                 'if_octets': 'bytes',
                 'if_packets': 'packets',
-            }[match_dict['type']]
+            }.get(match_dict['type'])
+
+            if kind_name is None:
+                return
 
             if match_dict['type_instance'] == 'rx':
                 direction = 'recv'
