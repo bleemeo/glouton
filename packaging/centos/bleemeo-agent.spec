@@ -31,6 +31,7 @@ Requires:       python34-six
 Requires:       python34-PyYAML
 Requires:       python34-setuptools
 Requires:       bleemeo-agent-collector
+Requires:       yum-plugin-post-transaction-actions
 #Recommends not available on centos 7
 #Recommends:     python34-flask
 #Recommends:     python34-influxdb
@@ -103,12 +104,16 @@ install -D -p -m 0644 packaging/centos/bleemeo-06-distribution.conf %{buildroot}
 install -D -p -m 0644 etc/agent.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf
 install -D -p -m 0644 debian/bleemeo-agent.service %{buildroot}%{_unitdir}/%{name}.service
 install -D -d -m 0755 %{buildroot}%{_sharedstatedir}/bleemeo
+install -D -p -m 0755 packaging/common/bleemeo-hook-package-modified %{buildroot}%{_prefix}/lib/bleemeo/bleemeo-hook-package-modified
+install -D -p -m 0644 packaging/centos/bleemeo.action %{buildroot}%{_sysconfdir}/yum/post-actions/bleemeo.action
 
+# -telegraf
 install -D -p -m 0644 packaging/common/telegraf.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
 install -D -p -m 0644 packaging/common/telegraf-generated.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
 install -D -p -m 0644 packaging/common/bleemeo-telegraf-graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
 
 %if %{with collectd}
+# -collectd
 install -D -p -m 0644 packaging/common/collectd.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo.conf
 install -D -p -m 0644 packaging/centos/collectd-bleemeo-centos.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-centos.conf
 install -D -p -m 0644 packaging/common/collectd-generated.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-generated.conf
@@ -125,8 +130,10 @@ install -D -p -m 0644 packaging/centos/bleemeo-collectd.conf %{buildroot}%{_sysc
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/06-distribution.conf
 %config(noreplace) %{_sysconfdir}/sudoers.d/*
+%config(noreplace) %{_sysconfdir}/yum/post-actions/bleemeo.action
 %{_unitdir}/%{name}.service
 %{_sharedstatedir}/bleemeo
+%{_prefix}/lib/bleemeo/
 
 %files telegraf
 %config(noreplace) %{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
@@ -185,6 +192,7 @@ usermod -aG docker bleemeo 2> /dev/null || true
 exit 0
 
 %post telegraf
+usermod -aG docker telegraf 2> /dev/null || true
 chown bleemeo:telegraf /etc/telegraf/telegraf.d/bleemeo-generated.conf
 chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf
 

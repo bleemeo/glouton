@@ -1,4 +1,5 @@
 #!/bin/sh
+# Hook called after some package where installed/upgraded
 
 set -e
 
@@ -12,14 +13,18 @@ if initctl status bleemeo-agent 2> /dev/null | grep -q running; then
     initctl reload bleemeo-agent
 fi
 
-if adduser --quiet bleemeo docker 2> /dev/null | grep 'Adding user'; then
+if id bleemeo 2>/dev/null | grep -vq docker; then
+    usermod -aG docker bleemeo
+
     # bleemeo user was added to group docker, restart agent to make new
     # permission effective.
     touch /var/lib/bleemeo/upgrade  # avoid disconnect/reconnect notification
     service bleemeo-agent restart
 fi
 
-if adduser --quiet telegraf docker 2> /dev/null | grep 'Adding user'; then
+if id telegraf 2>/dev/null | grep -vq docker; then
+    usermod -aG docker telegraf
+
     # telegraf user was added to group docker, restart telegraf to make new
     # permission effective.
     service telegraf restart
