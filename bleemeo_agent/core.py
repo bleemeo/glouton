@@ -525,6 +525,7 @@ class State:
 
 class Core:
     def __init__(self):
+        self.started_at = time.time()
         self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = datetime.datetime(1970, 1, 1)
@@ -850,22 +851,15 @@ class Core:
             self.docker_client = None
 
     def _update_docker_info(self):
+        self.docker_containers = {}
+
         if self.docker_client is None:
             return
 
-        try:
-            self.docker_client.ping()
-        except:
-            logging.debug('Docker ping failed. Is Docker currently down ?')
-            return
-
-        docker_containers = {}
         for container in self.docker_client.containers(all=True):
             inspect = self.docker_client.inspect_container(container['Id'])
             name = inspect['Name'].lstrip('/')
-            docker_containers[name] = inspect
-
-        self.docker_containers = docker_containers
+            self.docker_containers[name] = inspect
 
     def schedule_tasks(self):
         self.add_scheduled_job(
@@ -943,10 +937,9 @@ class Core:
             else:
                 bleemeo_agent.web.start_server(self)
 
-        if self.docker_client is not None:
-            thread = threading.Thread(target=self._watch_docker_event)
-            thread.daemon = True
-            thread.start()
+        thread = threading.Thread(target=self._watch_docker_event)
+        thread.daemon = True
+        thread.start()
 
     def _gather_metrics(self):
         """ Gather and send some metric missing from other sources
@@ -1411,22 +1404,41 @@ class Core:
     def _watch_docker_event(self):  # noqa
         """ Watch for docker event and re-run discovery
         """
+        last_event_at = self.started_at
+
         while True:
+            reconnect_delay = 5
+            while self.docker_client is None:
+                time.sleep(reconnect_delay)
+                self._docker_connect()
+                reconnect_delay = max(60, reconnect_delay * 2)
+
+            try:
+                self.docker_client.ping()
+            except:
+                self.docker_client = None
+                continue
+
             try:
                 try:
-                    generator = self.docker_client.events(decode=True)
+                    generator = self.docker_client.events(
+                        decode=True, since=last_event_at,
+                    )
                 except TypeError:
                     # older version of docker-py does decode=True by default
                     # (and don't have this option)
+                    # Also they don't have since option.
                     generator = self.docker_client.events()
 
                 for event in generator:
                     # even older version of docker-py does not support decoding
                     # at all
                     if isinstance(event, six.string_types):
+
                         event = json.loads(event)
                     status = event.get('status')
                     event_type = event.get('Type', 'container')
+                    last_event_at = event['time']
 
                     if (status not in DOCKER_DISCOVERY_EVENTS
                             or event_type != 'container'):
@@ -1438,8 +1450,6 @@ class Core:
                 # generator will raise an exception.
                 logging.debug('Docker event watcher error', exc_info=True)
                 pass
-
-            time.sleep(5)
 
     def update_facts(self):
         """ Update facts """
