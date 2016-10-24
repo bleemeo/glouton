@@ -121,6 +121,7 @@ class BleemeoConnector(threading.Thread):
         self._last_facts_sent = datetime.datetime(1970, 1, 1)
         self._last_discovery_sent = datetime.datetime(1970, 1, 1)
         self._last_update = datetime.datetime(1970, 1, 1)
+        self.last_containers_removed = datetime.datetime(1970, 1, 1)
         self.mqtt_client = mqtt.Client()
 
         # Lock held when modifying self.metrics_uuid or self.services_uuid and
@@ -490,7 +491,8 @@ class BleemeoConnector(threading.Thread):
 
         now = datetime.datetime.now()
         if (now - self._last_update > datetime.timedelta(hours=1)
-                or self.core.last_services_autoremove >= self._last_update):
+                or self.core.last_services_autoremove >= self._last_update
+                or self.last_containers_removed >= self._last_update):
             self._purge_deleted_services()
             self._retrive_threshold()
             self._last_update = now
@@ -906,6 +908,7 @@ class BleemeoConnector(threading.Thread):
                 continue
             del container_uuid[name]
             self.core.state.set('docker_container_uuid', container_uuid)
+            self.last_containers_removed = datetime.datetime.now()
 
     def emit_metric(self, metric):
         if self._metric_queue.qsize() < 100000:
