@@ -200,7 +200,7 @@ chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf
 systemctl restart telegraf.service 2>/dev/null
 
 # Bleemeo agent telegraf modify its configuration.
-touch /var/lib/bleemeo/upgrade
+touch /var/lib/bleemeo/upgrade 2>/dev/null
 systemctl restart bleemeo-agent.service 2>/dev/null
 exit 0
 
@@ -221,7 +221,7 @@ chmod 0640 /etc/collectd.d/bleemeo-generated.conf
 systemctl restart collectd.service
 
 # Bleemeo agent telegraf modify its configuration.
-touch /var/lib/bleemeo/upgrade
+touch /var/lib/bleemeo/upgrade 2>/dev/null
 systemctl restart bleemeo-agent.service
 exit 0
 %endif
