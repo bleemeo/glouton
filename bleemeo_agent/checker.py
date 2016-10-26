@@ -211,8 +211,6 @@ class Check:
 
         self.tcp_sockets = self._initialize_tcp_sockets()
 
-        self.last_run = time.time()
-
         self.current_job = self.core.add_scheduled_job(
             self.run_check,
             seconds=60,
@@ -300,7 +298,7 @@ class Check:
             self.open_sockets()
 
     def run_check(self):  # noqa
-        self.last_run = time.time()
+        now = time.time()
 
         if self.address is None and self.instance is not None:
             # Address is None if this check is associated with a stopped
@@ -357,7 +355,7 @@ class Check:
             'measurement': '%s_status' % self.service,
             'status': STATUS_NAME[return_code],
             'service': self.service,
-            'time': self.last_run,
+            'time': now,
             'value': float(return_code),
             'check_output': output,
         }
@@ -431,7 +429,7 @@ class Check:
                 )
 
         sock.close()
-        end = time.time()
+        end = bleemeo_agent.util.get_clock()
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
     def check_tcp(self, address=None, port=None):  # noqa
@@ -445,7 +443,7 @@ class Check:
         if port is None or address is None:
             return (STATUS_CHECK_NOT_RUN, '')
 
-        start = time.time()
+        start = bleemeo_agent.util.get_clock()
         sock = socket.socket()
         sock.settimeout(10)
         try:
@@ -478,7 +476,7 @@ class Check:
             return self.check_tcp_recv(sock, start)
 
         sock.close()
-        end = time.time()
+        end = bleemeo_agent.util.get_clock()
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
     def check_http(self, tls=False):
@@ -535,7 +533,7 @@ class Check:
         if self.port is None or self.address is None:
             return (STATUS_CHECK_NOT_RUN, '')
 
-        start = time.time()
+        start = bleemeo_agent.util.get_clock()
 
         try:
             client = IMAP4Timeout(self.address, self.port)
@@ -552,14 +550,14 @@ class Check:
                 'Connection timed out after 10 seconds',
             )
 
-        end = time.time()
+        end = bleemeo_agent.util.get_clock()
         return (STATUS_OK, 'IMAP OK - %.3f second response time' % (end-start))
 
     def check_smtp(self):
         if self.port is None or self.address is None:
             return (STATUS_CHECK_NOT_RUN, '')
 
-        start = time.time()
+        start = bleemeo_agent.util.get_clock()
 
         try:
             client = smtplib.SMTP(self.address, self.port, timeout=10)
@@ -576,7 +574,7 @@ class Check:
                 'Connection timed out after 10 seconds',
             )
 
-        end = time.time()
+        end = bleemeo_agent.util.get_clock()
         return (STATUS_OK, 'SMTP OK - %.3f second response time' % (end-start))
 
     def check_ntp(self):
@@ -587,7 +585,7 @@ class Check:
         # Since Unix use 1970-01-01 as epoc, we have this delta
         NTP_DELTA = 2208988800
 
-        start = time.time()
+        start = bleemeo_agent.util.get_clock()
 
         client = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         client.settimeout(10)
@@ -603,11 +601,11 @@ class Check:
         stratum = unpacked[1]
         server_time = unpacked[11] - NTP_DELTA
 
-        end = time.time()
+        end = bleemeo_agent.util.get_clock()
 
         if stratum == 0 or stratum == 16:
             return (STATUS_CRITICAL, 'NTP server not (yet) synchronized')
-        elif abs(server_time - end) > 10:
+        elif abs(server_time - time.time()) > 10:
             return (STATUS_CRITICAL, 'Local time and NTP time does not match')
         else:
             return (

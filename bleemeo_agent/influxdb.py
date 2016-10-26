@@ -29,6 +29,8 @@ import influxdb.exceptions
 import requests
 from six.moves import queue
 
+import bleemeo_agent.util
+
 
 class InfluxDBConnector(threading.Thread):
 
@@ -168,12 +170,12 @@ class InfluxDBConnector(threading.Thread):
     def _warn_queue_full(self):
         """ Log a warning is metric were dropped
         """
-        now = time.time()
+        clock_now = bleemeo_agent.util.get_clock()
         if (self._queue_full_count_warning
-                and self._queue_full_last_warning < now - 60):
+                and self._queue_full_last_warning < clock_now - 60):
             logging.warning(
                 'InfluxDB connector: %s metric(s) were dropped due to '
                 'overflow of the sending queue',
                 self._queue_full_count_warning)
-            self._queue_full_last_warning = now
+            self._queue_full_last_warning = clock_now
             self._queue_full_count_warning = 0

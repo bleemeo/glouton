@@ -16,7 +16,6 @@
 #   limitations under the License.
 #
 
-import datetime
 import hashlib
 import json
 import logging
@@ -33,6 +32,7 @@ from six.moves import queue
 from six.moves import urllib_parse
 
 import bleemeo_agent
+import bleemeo_agent.util
 
 
 MQTT_QUEUE_MAX_SIZE = 2000
@@ -118,10 +118,10 @@ class BleemeoConnector(threading.Thread):
         self._metric_queue = queue.Queue()
         self.connected = False
         self._mqtt_queue_size = 0
-        self._last_facts_sent = datetime.datetime(1970, 1, 1)
-        self._last_discovery_sent = datetime.datetime(1970, 1, 1)
-        self._last_update = datetime.datetime(1970, 1, 1)
-        self.last_containers_removed = datetime.datetime(1970, 1, 1)
+        self._last_facts_sent = 0
+        self._last_discovery_sent = 0
+        self._last_update = 0
+        self.last_containers_removed = 0
         self.mqtt_client = mqtt.Client()
 
         # Lock held when modifying self.metrics_uuid or self.services_uuid and
@@ -222,8 +222,9 @@ class BleemeoConnector(threading.Thread):
             )
 
         # Wait up to 5 second for MQTT queue to be empty before disconnecting
-        deadline = time.time() + 5
-        while self._mqtt_queue_size > 0 and time.time() < deadline:
+        deadline = bleemeo_agent.util.get_clock() + 5
+        while (self._mqtt_queue_size > 0
+                and bleemeo_agent.util.get_clock() < deadline):
             time.sleep(0.1)
 
         self.mqtt_client.disconnect()
@@ -263,7 +264,7 @@ class BleemeoConnector(threading.Thread):
     def _bleemeo_health_check(self):
         """ Check the Bleemeo connector works correctly. Log any issue found
         """
-        now = time.time()
+        clock_now = bleemeo_agent.util.get_clock()
 
         if self.agent_uuid is None:
             logging.info('Agent not yet registered')
@@ -291,7 +292,7 @@ class BleemeoConnector(threading.Thread):
             )
 
         if (self.core.graphite_server.data_last_seen_at is None or
-                now - self.core.graphite_server.data_last_seen_at > 60):
+                clock_now - self.core.graphite_server.data_last_seen_at > 60):
             logging.info(
                 'Issue with metrics collector: no metric received from %s',
                 self.core.graphite_server.metrics_source,
@@ -489,18 +490,17 @@ class BleemeoConnector(threading.Thread):
         if self.agent_uuid is None:
             return
 
-        now = datetime.datetime.now()
-        if (now - self._last_update > datetime.timedelta(hours=1)
+        clock_now = bleemeo_agent.util.get_clock()
+        if (clock_now - self._last_update > 60 * 60
                 or self.core.last_services_autoremove >= self._last_update
                 or self.last_containers_removed >= self._last_update):
             self._purge_deleted_services()
             self._retrive_threshold()
-            self._last_update = now
+            self._last_update = clock_now
 
-        now = datetime.datetime.now()
         if self._last_discovery_sent < self.core.last_discovery_update:
             self._register_containers()
-            self._last_discovery_sent = now
+            self._last_discovery_sent = clock_now
 
         self._register_services()
         self._register_metric()
@@ -908,7 +908,7 @@ class BleemeoConnector(threading.Thread):
                 continue
             del container_uuid[name]
             self.core.state.set('docker_container_uuid', container_uuid)
-            self.last_containers_removed = datetime.datetime.now()
+            self.last_containers_removed = bleemeo_agent.util.get_clock()
 
     def emit_metric(self, metric):
         if self._metric_queue.qsize() < 100000:
@@ -929,7 +929,6 @@ class BleemeoConnector(threading.Thread):
                     }
                 )
 
-            self.metrics_info[key]['last_seen'] = time.time()
             if key not in self.metrics_uuid:
                 self.metrics_uuid.setdefault(key, None)
 
@@ -1002,7 +1001,7 @@ class BleemeoConnector(threading.Thread):
                 )
                 return
 
-        self._last_facts_sent = datetime.datetime.now()
+        self._last_facts_sent = bleemeo_agent.util.get_clock()
 
     @property
     def account_id(self):

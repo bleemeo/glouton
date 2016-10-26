@@ -26,6 +26,7 @@ import time
 
 import bleemeo_agent.collectd
 import bleemeo_agent.telegraf
+import bleemeo_agent.util
 
 
 class ComputationFail(Exception):
@@ -144,7 +145,7 @@ class GraphiteServer(threading.Thread):
             self.telegraf.update_discovery()
 
     def get_time_elapsed_since_last_data(self):
-        now = time.time()
+        clock_now = bleemeo_agent.util.get_clock()
         threshold = self.core.get_threshold('time_elapsed_since_last_data')
         highest_threshold = 0
         if threshold is not None:
@@ -154,9 +155,9 @@ class GraphiteServer(threading.Thread):
                 highest_threshold = threshold.get('high_warning')
 
         if self.data_last_seen_at is not None:
-            delay = now - self.data_last_seen_at
+            delay = clock_now - self.data_last_seen_at
         else:
-            delay = now - self.core.started_at
+            delay = clock_now - self.core.started_at
 
         # It only emit the metric if:
         # * either it actually had seen some data (e.g. metric is exact, not
@@ -173,7 +174,7 @@ class GraphiteServer(threading.Thread):
 
         return {
             'measurement': 'time_elapsed_since_last_data',
-            'time': now,
+            'time': time.time(),
             'value': delay,
         }
 
@@ -374,12 +375,12 @@ class GraphiteServer(threading.Thread):
             Nothing is emitted if metric is unknown
         """
         if name.startswith('telegraf.') and self.metrics_source == 'telegraf':
-            self.data_last_seen_at = time.time()
+            self.data_last_seen_at = bleemeo_agent.util.get_clock()
             self.telegraf.emit_metric(
                 name, timestamp, value, computed_metrics_pending,
             )
         elif self.metrics_source == 'collectd':
-            self.data_last_seen_at = time.time()
+            self.data_last_seen_at = bleemeo_agent.util.get_clock()
             self.collectd.emit_metric(
                 name, timestamp, value, computed_metrics_pending
             )

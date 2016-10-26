@@ -525,12 +525,11 @@ class State:
 
 class Core:
     def __init__(self):
-        self.started_at = time.time()
         self.sentry_client = None
         self.last_facts = {}
-        self.last_facts_update = datetime.datetime(1970, 1, 1)
-        self.last_discovery_update = datetime.datetime(1970, 1, 1)
-        self.last_services_autoremove = datetime.datetime(1970, 1, 1)
+        self.last_facts_update = 0
+        self.last_discovery_update = 0
+        self.last_services_autoremove = 0
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -553,10 +552,10 @@ class Core:
         self._soft_status_since = {}
         self._trigger_discovery = False
         self._trigger_facts = False
-        self._netstat_output_mtime = time.time()
+        self._netstat_output_mtime = 0
 
     def _init(self):
-        self.started_at = time.time()
+        self.started_at = bleemeo_agent.util.get_clock()
         errors = self.reload_config()
         self._config_logger()
         if errors:
@@ -596,6 +595,14 @@ class Core:
         # By default requests will emit one warning for EACH request which is
         # too noisy.
         disable_https_warning()
+
+        netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
+        try:
+            mtime = os.stat(netstat_file).st_mtime
+        except OSError:
+            mtime = 0
+        self._netstat_output_mtime = mtime
+
         return True
 
     @property
@@ -1004,7 +1011,7 @@ class Core:
         except OSError:
             mtime = 0
 
-        if mtime > self._netstat_output_mtime:
+        if mtime != self._netstat_output_mtime:
             # Trigger discovery if netstat.out changed
             self._trigger_discovery = True
             self._netstat_output_mtime = mtime
@@ -1053,9 +1060,9 @@ class Core:
         self.graphite_server.update_discovery()
         bleemeo_agent.checker.update_checks(self)
 
-        self.last_discovery_update = datetime.datetime.now()
+        self.last_discovery_update = bleemeo_agent.util.get_clock()
         if had_autoremove:
-            self.last_services_autoremove = datetime.datetime.now()
+            self.last_services_autoremove = bleemeo_agent.util.get_clock()
 
     def _purge_services(
             self, new_discovered_services, running_services, deleted_services):
@@ -1404,7 +1411,7 @@ class Core:
     def _watch_docker_event(self):  # noqa
         """ Watch for docker event and re-run discovery
         """
-        last_event_at = self.started_at
+        last_event_at = time.time()
 
         while True:
             reconnect_delay = 5
@@ -1454,7 +1461,7 @@ class Core:
     def update_facts(self):
         """ Update facts """
         self.last_facts = bleemeo_agent.facts.get_facts(self)
-        self.last_facts_update = datetime.datetime.now()
+        self.last_facts_update = bleemeo_agent.util.get_clock()
 
     def send_top_info(self):
         self.top_info = bleemeo_agent.util.get_top_info()
@@ -1501,7 +1508,7 @@ class Core:
             self.influx_connector.emit_metric(metric)
 
     def update_last_report(self):
-        self.last_report = max(datetime.datetime.now(), self.last_report)
+        self.last_report = datetime.datetime.now()
 
     def get_threshold(self, metric_name, item=None):
         """ Get threshold definition for given metric
@@ -1681,7 +1688,7 @@ class Core:
 
         return metric
 
-    def _check_soft_status(self, metric, soft_status, last_status, period):
+    def _check_soft_status(self, metric, soft_status, last_status, period):  # noqa
         """ Check if soft_status was in error for at least the grace period
             of the metric.
 
@@ -1693,6 +1700,14 @@ class Core:
             key,
             (None, None),
         )
+
+        # Make sure time didn't jump backward. If it does jump
+        # backward reset the since timer.
+        now = time.time()
+        if critical_since and critical_since > now:
+            critical_since = None
+        if warning_since and warning_since > now:
+            warning_since = None
 
         if soft_status == 'critical':
             critical_since = critical_since or metric['time']

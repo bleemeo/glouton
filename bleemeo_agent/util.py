@@ -20,6 +20,7 @@ import datetime
 import logging
 import random
 import subprocess
+import sys
 import threading
 import time
 
@@ -68,6 +69,21 @@ def get_loadavg():
         loads = fd.readline().split()[:3]
 
     return [float(x) for x in loads]
+
+
+def get_clock():
+    """ Return a number of second since a unspecified point in time
+
+        If will use CLOCK_MONOTONIC if available or fallback to time.time()
+
+        It's useful to know of some event occurred before/after another one.
+        It could be also useful to run on action every N seconds (note that
+        system suspend might stop that clock).
+    """
+    if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
+        return time.clock_gettime(time.CLOCK_MONOTONIC)
+    else:
+        return time.time()
 
 
 def format_uptime(uptime_seconds):
