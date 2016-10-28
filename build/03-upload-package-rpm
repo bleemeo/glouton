@@ -4,9 +4,15 @@ set -e
 
 cd work/result
 
-CENTOS7_ROOT="/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/centos/7/main/x86_64"
-CENTOS7_DOCKER_CMD="docker run --rm -v ${CENTOS7_ROOT}:${CENTOS7_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/centos-createrepo"
-cp -p *.rpm ${CENTOS7_ROOT}/Packages
-${CENTOS7_DOCKER_CMD} sh -c "repomanage --old ${CENTOS7_ROOT}/Packages | xargs --no-run-if-empty rm"
-${CENTOS7_DOCKER_CMD} rpmsign --addsign ${CENTOS7_ROOT}/Packages/*.rpm
-${CENTOS7_DOCKER_CMD} createrepo ${CENTOS7_ROOT}
+CREATEREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/centos
+CREATEREPO_DOCKER_CMD="docker run --rm -v ${CREATEREPO_ROOT}:${CREATEREPO_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/centos-createrepo"
+
+CENTOS_SUPPORTED_VERSION="7"
+
+for version in ${CENTOS_SUPPORTED_VERSION}
+do
+    cp -p *.rpm ${CREATEREPO_ROOT}/${version}/x86_64/Packages
+    ${CREATEREPO_DOCKER_CMD} sh -c "repomanage --old ${CREATEREPO_ROOT}/${version}/x86_64/Packages | xargs --no-run-if-empty rm -v"
+    ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${version}/x86_64/Packages/*.rpm
+    ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${version}/x86_64
+done
