@@ -13,4 +13,3 @@ ${REPREPRO_DOCKER_CMD} copysrc wily trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc xenial trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc yakkety trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc jessie trusty bleemeo-agent
-

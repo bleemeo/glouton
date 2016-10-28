@@ -96,7 +96,7 @@ NGINX_TELEGRAF_CONFIG = """
 
 POSTGRESQL_TELEGRAF_CONFIG = """
 [[inputs.postgresql]]
-    address = "host=%(address)s port=%(port)s user=%(username)s password=%(password)s dbname=postgres"
+    address = "host=%(address)s port=%(port)s user=%(username)s password=%(password)s dbname=postgres sslmode=disable"
 """  # noqa
 
 RABBITMQ_TELEGRAF_CONFIG = """

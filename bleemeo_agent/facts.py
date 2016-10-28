@@ -42,31 +42,74 @@ def get_file_content(file_name):
         return None
 
 
-def get_package_version(package_name, default=None):
+def get_package_version_dpkg(package_name):
     try:
-        stdout = subprocess.Popen(
+        stdout = subprocess.check_output(
             ['dpkg', '-l', package_name],
-            stdout=subprocess.PIPE,
             stderr=open('/dev/null', 'w')
-        ).communicate()[0]
-    except OSError:
+        )
+    except (OSError, subprocess.CalledProcessError):
         stdout = b''
 
     if not stdout:
-        return default
+        return None
 
     last_line = stdout.splitlines()[-1]
     parts = last_line.split()
     # dpkg -l output should contains:
     # state, package_name, version, architechure, description
     if len(parts) < 5:
-        return default
+        return None
 
     return parts[2].decode('utf-8')
 
 
-def get_agent_version():
-    return get_package_version('bleemeo-agent', bleemeo_agent.__version__)
+def get_package_version_rpm(package_name):
+    try:
+        stdout = subprocess.check_output(
+            ['rpm', '-q', package_name, '--qf', '%{EVR}'],
+            stderr=open('/dev/null', 'w')
+        )
+    except (OSError, subprocess.CalledProcessError):
+        stdout = b''
+
+    if not stdout:
+        return None
+
+    return stdout.decode('utf-8')
+
+
+def get_package_version(package_name, default=None, distribution=None):
+    """ Return the package version.
+
+        If not installed or if unable to find the version, return default.
+
+        If distribution is set to "debian" or "centos", use dpkg or rpm
+        respectivly to find the installed version.
+
+        If distribution is set to None, try both dpkg then rpm.
+    """
+
+    result = None
+    if distribution is None or distribution == 'debian':
+        result = get_package_version_dpkg(package_name)
+        if result is not None:
+            return result
+
+    if distribution is None or distribution == 'centos':
+        result = get_package_version_rpm(package_name)
+        if result is not None:
+            return result
+
+    return default
+
+
+def get_agent_version(core):
+    return get_package_version(
+        'bleemeo-agent',
+        bleemeo_agent.__version__,
+        distribution=core.config.get('distribution'),
+    )
 
 
 def get_docker_version(core):
@@ -84,15 +127,32 @@ def get_docker_version(core):
         except requests.exceptions.RequestException:
             logging.debug('error getting docker verion', exc_info=True)
 
-    package_version = get_package_version('docker-engine', package_version)
+    package_version = get_package_version(
+        'docker-engine',
+        package_version,
+        distribution=core.config.get('distribution'),
+    )
     if package_version is None:
-        package_version = get_package_version('docker.io', package_version)
+        package_version = get_package_version(
+            'docker.io',
+            package_version,
+            distribution=core.config.get('distribution'),
+        )
+    if package_version is None and core.config.get('distribution') == 'centos':
+        package_version = get_package_version(
+            'docker',
+            package_version,
+            distribution=core.config.get('distribution'),
+        )
 
     return (package_version, api_version)
 
 
-def get_telegraf_version():
-    package_version = get_package_version('telegraf')
+def get_telegraf_version(core):
+    package_version = get_package_version(
+        'telegraf',
+        distribution=core.config.get('distribution'),
+    )
     if package_version is None:
         try:
             output = subprocess.check_output(['telegraf', '-version'])
@@ -286,7 +346,7 @@ def get_facts(core):
     (docker_version, docker_api_version) = get_docker_version(core)
 
     facts.update({
-        'agent_version': get_agent_version(),
+        'agent_version': get_agent_version(core),
         'architecture': architecture,
         'bios_released_at': get_file_content(
             os.path.join(DMI_DIR, 'bios_date')
@@ -298,7 +358,9 @@ def get_facts(core):
             os.path.join(DMI_DIR, 'bios_version')
         ),
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
-        'collectd_version': get_package_version('collectd'),
+        'collectd_version': get_package_version(
+            'collectd', distribution=core.config.get('distribution'),
+        ),
         'docker_api_version': docker_api_version,
         'docker_version': docker_version,
         'domain': domain,
@@ -323,7 +385,7 @@ def get_facts(core):
         'system_vendor': get_file_content(
             os.path.join(DMI_DIR, 'sys_vendor')
         ),
-        'telegraf_version': get_telegraf_version(),
+        'telegraf_version': get_telegraf_version(core),
         'timezone': get_file_content('/etc/timezone'),
         'virtual': virtual,
     })

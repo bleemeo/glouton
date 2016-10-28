@@ -799,7 +799,7 @@ class Core:
 
         logging.info(
             'Agent starting... (version=%s)',
-            bleemeo_agent.facts.get_agent_version(),
+            bleemeo_agent.facts.get_agent_version(self),
         )
         upgrade_file = self.config.get('agent.upgrade_file', 'upgrade')
         try:
