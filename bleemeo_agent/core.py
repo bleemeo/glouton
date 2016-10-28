@@ -1418,7 +1418,7 @@ class Core:
             while self.docker_client is None:
                 time.sleep(reconnect_delay)
                 self._docker_connect()
-                reconnect_delay = max(60, reconnect_delay * 2)
+                reconnect_delay = min(60, reconnect_delay * 2)
 
             try:
                 self.docker_client.ping()
