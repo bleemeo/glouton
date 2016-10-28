@@ -13,6 +13,8 @@ cp /root/rpmbuild/SRPMS/bleemeo-agent-*.src.rpm .'
 
 docker run --rm --privileged \
     -v $(pwd):/srv/workspace -w /srv/workspace \
-    bleemeo/centos-pkg-builder su mock -c "/usr/bin/mock --resultdir ./result bleemeo-agent-*.src.rpm"
+    bleemeo/centos-pkg-builder sh -ec '
+su mock -c "/usr/bin/mock --resultdir /tmp/result bleemeo-agent-*.src.rpm"
+cp /tmp/result/*.rpm ./result'
 
 rm -f bleemeo-agent-*.src.rpm
