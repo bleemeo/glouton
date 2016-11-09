@@ -30,3 +30,8 @@ sed -i -e "s/%define version .*$/%define version ${VERSION}/" \
        -e "s/%define git_commit .*$/%define git_commit ${COMMIT_HASH}/" \
        -e "s/%define build_date .*$/%define build_date $(TZ=UTC LANG= date +"%a %b %d %Y")/" \
        packaging/centos/bleemeo-agent.spec
+
+sed -i -e "s/%define version .*$/%define version ${VERSION}/" \
+       -e "s/%define git_commit .*$/%define git_commit ${COMMIT_HASH}/" \
+       -e "s/%define build_date .*$/%define build_date $(TZ=UTC LANG= date +"%a %b %d %Y")/" \
+       packaging/fedora/bleemeo-agent.spec

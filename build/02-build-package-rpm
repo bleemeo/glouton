@@ -14,7 +14,23 @@ cp /root/rpmbuild/SRPMS/bleemeo-agent-*.src.rpm .'
 docker run --rm --privileged \
     -v $(pwd):/srv/workspace -w /srv/workspace \
     bleemeo/centos-pkg-builder sh -ec '
-su mock -c "/usr/bin/mock --resultdir /tmp/result bleemeo-agent-*.src.rpm"
+su mock -c "/usr/bin/mock -r epel-7-x86_64 --resultdir /tmp/result bleemeo-agent-*.src.rpm"
+cp /tmp/result/*.rpm ./result'
+
+rm -f bleemeo-agent-*.src.rpm
+
+docker run --rm \
+    -v $(pwd):/srv/workspace -w /srv/workspace \
+    bleemeo/fedora-pkg-builder sh -ec '
+cp -v bleemeo-agent_*.tar /root/rpmbuild/SOURCES/
+cp -v bleemeo-agent-*/packaging/fedora/bleemeo-agent.spec /root/rpmbuild/SPECS/
+rpmbuild -bs /root/rpmbuild/SPECS/bleemeo-agent.spec
+cp /root/rpmbuild/SRPMS/bleemeo-agent-*.src.rpm .'
+
+docker run --rm --privileged \
+    -v $(pwd):/srv/workspace -w /srv/workspace \
+    bleemeo/fedora-pkg-builder sh -ec '
+su mock -c "/usr/bin/mock -r fedora-24-x86_64 --resultdir /tmp/result bleemeo-agent-*.src.rpm"
 cp /tmp/result/*.rpm ./result'
 
 rm -f bleemeo-agent-*.src.rpm

@@ -11,8 +11,25 @@ CENTOS_SUPPORTED_VERSION="7"
 
 for version in ${CENTOS_SUPPORTED_VERSION}
 do
-    cp -p *.rpm ${CREATEREPO_ROOT}/${version}/x86_64/Packages
+    cp -p *.centos.*.rpm ${CREATEREPO_ROOT}/${version}/x86_64/Packages
     ${CREATEREPO_DOCKER_CMD} sh -c "repomanage --old ${CREATEREPO_ROOT}/${version}/x86_64/Packages | xargs --no-run-if-empty rm -v"
     ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${version}/x86_64/Packages/*.rpm
     ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${version}/x86_64
+done
+
+CREATEREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/fedora
+CREATEREPO_DOCKER_CMD="docker run --rm -v ${CREATEREPO_ROOT}:${CREATEREPO_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/fedora-createrepo"
+
+FEDORA_SUPPORTED_VERSION="24"
+FEDORA_SUPPORTED_ARCH="x86_64 armhfp"
+
+for version in ${FEDORA_SUPPORTED_VERSION}
+do
+    for arch in ${FEDORA_SUPPORTED_ARCH}
+    do
+        cp -p *.fc24.*.rpm ${CREATEREPO_ROOT}/${version}/${arch}/Packages
+        ${CREATEREPO_DOCKER_CMD} sh -c "dnf repomanage --old ${CREATEREPO_ROOT}/${version}/${arch}/Packages | xargs --no-run-if-empty rm -v"
+        ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${version}/${arch}/Packages/*.rpm
+        ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${version}/${arch}
+    done
 done
