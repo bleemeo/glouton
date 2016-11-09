@@ -646,7 +646,7 @@ class Core:
         if raven is not None:
             self.sentry_client = raven.Client(
                 dsn,
-                release=bleemeo_agent.facts.get_agent_version(),
+                release=bleemeo_agent.facts.get_agent_version(self),
                 include_paths=['bleemeo_agent'],
             )
             # FIXME: remove when raven-python PR #723 is merged
