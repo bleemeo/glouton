@@ -392,11 +392,19 @@ class Telegraf:
             A container without any labels would only have the following tags:
 
             host=xenial,container_image=redis,container_name=labeled_redis,
+                container_version=unknown,engine_host=docker-host
+
+            Or with older Telegraf (< 1.1.0):
+
+            host=xenial,container_image=redis,container_name=labeled_redis,
                 container_version=unknown
 
             That result in graphite line:
 
-            xenial.redis.labeled_redis.unknown
+            xenial.redis.labeled_redis.unknown.docker-host
+
+            The version change didn't impact use, as the added
+            tag "engine_host", is always after "container_name".
 
             Here container_name is the 3th position. But if user add a label
             "a_custom_label=my_value", then the graphite line result in:
@@ -940,7 +948,7 @@ class Telegraf:
             else:
                 return
         elif part[-2] == 'docker':
-            if part[3] == 'n_containers':
+            if part[-1] == 'n_containers':
                 name = 'docker_containers'
             else:
                 return
@@ -962,18 +970,18 @@ class Telegraf:
             item = container_name
 
             # Only send metric for cpu=cpu-total
-            # cpu tag is normally at part[-3] position. But any label
-            # after "cpu" will change its place
+            # cpu tag is normally at part[5] position. But any label
+            # before "cpu" will change its place
             inspect = self.core.docker_containers[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
-            label_keys_after = [
+            label_keys_before = [
                 key for (key, value) in labels.items()
-                if key > 'cpu' and value != ''
+                if key < 'cpu' and value != ''
             ]
-            position = 3 + len(label_keys_after)
-            if len(part) <= position or part[-position] != 'cpu-total':
+            position = 5 + len(label_keys_before)
+            if len(part) <= position or part[position] != 'cpu-total':
                 return
         elif part[-2] == 'docker_container_mem':
             if part[-1] == 'usage_percent':
@@ -1007,6 +1015,12 @@ class Telegraf:
             # Only send metric for network=total
             # network tag is normally at part[-3] position. But any label
             # after "network" will change its place
+            # Note: unlike "device" (for blkio) or "container_name" (for
+            # docker_container_name), here we use offset from the end & label
+            # *AFTER*, because Telegraf 1.1.0 introduced a new "engine_host"
+            # tag. For "device" and "container_name", "engine_host" is AFTER.
+            # Here "engine_host" is BEFORE "network". Using this allow same
+            # code for all version of Telegraf.
             inspect = self.core.docker_containers[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
@@ -1034,18 +1048,19 @@ class Telegraf:
             item = container_name
 
             # Only send metric for device=total
-            # device tag is normally at part[-3] position. But any label
-            # after "device" will change its place
+            # device tag is normally at part[5] position. But any label
+            # before "device" will change its place
             inspect = self.core.docker_containers[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
-            label_keys_after = [
+            label_keys_before = [
                 key for (key, value) in labels.items()
-                if key > 'device' and value != ''
+                if key < 'device' and value != ''
             ]
-            position = 3 + len(label_keys_after)
-            if len(part) <= position or part[-position] != 'total':
+            position = 5 + len(label_keys_before)
+            if len(part) <= position or part[position] != 'total':
+                print(part)
                 return
         elif (part[2] == 'counter'
                 and self.core.config.get('telegraf.statsd_enabled', True)):
