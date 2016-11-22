@@ -452,6 +452,39 @@ def disable_https_warning():
     urllib3.disable_warnings(klass)
 
 
+def decode_docker_top(docker_top):
+    """ Return a list of (pid, cmdline) from result for docker_client.top()
+
+        Result of docker_client.top() is not always the same. On boot2docker,
+        on first boot docker will use ps from busybox which output only few
+        column.
+    """
+    result = []
+    container_process = docker_top.get('Processes')
+
+    pid_index = None
+    cmdline_index = None
+    for (index, name) in enumerate(docker_top.get('Titles', [])):
+        if name == 'PID':
+            pid_index = index
+        elif name in ('CMD', 'COMMAND'):
+            cmdline_index = index
+
+    if pid_index is None or cmdline_index is None:
+        return result
+
+    # In some case Docker return None instead of process list. Make
+    # sure container_process is an iterable
+    container_process = container_process or []
+    for process in container_process:
+        # The PID is from the point-of-view of root pid namespace.
+        pid = int(process[pid_index])
+        cmdline = process[cmdline_index]
+        result.append((pid, cmdline))
+
+    return result
+
+
 class State:
     """ Persistant store for state of the agent.
 
@@ -1179,22 +1212,14 @@ class Core:
             # and/or other "/" with docker-in-docker.
             container_name = container['Names'][0].lstrip('/')
             try:
-                container_process = (
-                    self.docker_client.top(container_name)['Processes']
+                docker_top = (
+                    self.docker_client.top(container_name)
                 )
             except docker.errors.APIError:
                 # most probably container is restarting or just stopped
                 continue
 
-            # In some case Docker return None instead of process list. Make
-            # sure container_process is an iterable
-            container_process = container_process or []
-            for process in container_process:
-                # process[1] is the pid as string. It is the PID from the
-                # point-of-view of root pid namespace.
-                pid = int(process[1])
-                # process[7] is command line. e.g. /usr/bin/mysqld param
-                cmdline = process[7]
+            for (pid, cmdline) in decode_docker_top(docker_top):
                 processes.setdefault(pid, {'cmdline': cmdline})
                 processes[pid]['instance'] = container_name
 
