@@ -581,6 +581,7 @@ class Core:
         self.last_report = datetime.datetime.fromtimestamp(0)
 
         self._discovery_job = None  # scheduled in schedule_tasks
+        self._topinfo_job = None
         self.discovered_services = {}
         self._soft_status_since = {}
         self._trigger_discovery = False
@@ -645,6 +646,22 @@ class Core:
             It's None if running outside any container.
         """
         return self.config.get('container.type', None)
+
+    @property
+    def alerting_mode(self):
+        return self.state.get('alerting_mode', False)
+
+    def set_alerting_mode(self, new_value):
+        if new_value == self.alerting_mode:
+            return
+
+        self.state.set('alerting_mode', new_value)
+        self.schedule_topinfo()
+        self._trigger_discovery = True
+        if self.alerting_mode:
+            logging.info('Agent switched to alerting-only mode')
+        else:
+            logging.info('Agent switched to full monitoring mode')
 
     def _config_logger(self):
         output = self.config.get('logging.output', 'console')
@@ -808,7 +825,7 @@ class Core:
                 pass
 
     def define_thresholds(self):
-        self.thresholds = self.config.get('thresholds', {})
+        self.thresholds = copy.deepcopy(self.config.get('thresholds', {}))
         bleemeo_agent.config.merge_dict(
             self.thresholds,
             self.state.get_complex_dict('thresholds', {})
@@ -893,7 +910,7 @@ class Core:
     def _update_docker_info(self):
         self.docker_containers = {}
 
-        if self.docker_client is None:
+        if self.docker_client is None or self.alerting_mode:
             return
 
         for container in self.docker_client.containers(all=True):
@@ -922,10 +939,7 @@ class Core:
             self._gather_metrics,
             seconds=10,
         )
-        self.add_scheduled_job(
-            self.send_top_info,
-            seconds=10,
-        )
+        self.schedule_topinfo()
         self.add_scheduled_job(
             self._check_triggers,
             seconds=10,
@@ -935,6 +949,22 @@ class Core:
         # Call jobs we want to run immediatly
         self.update_facts()
         self.update_discovery(first_run=True)
+
+    def schedule_topinfo(self):
+        if self._topinfo_job is not None:
+            self.unschedule_job(self._topinfo_job)
+            self._topinfo_job = None
+
+        if self.alerting_mode:
+            self._topinfo_job = self.add_scheduled_job(
+                self.send_top_info,
+                seconds=60,
+            )
+        else:
+            self._topinfo_job = self.add_scheduled_job(
+                self.send_top_info,
+                seconds=10,
+            )
 
     def start_threads(self):
 

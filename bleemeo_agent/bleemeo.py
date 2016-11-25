@@ -154,12 +154,31 @@ class BleemeoConnector(threading.Thread):
             # FIXME: PRODUCT-137: to be removed when upstream bug is fixed
             if self.mqtt_client._ssl is not None:
                 self.mqtt_client._ssl.setblocking(0)
+
+            self.mqtt_client.subscribe(
+                'v1/agent/%s/notification' % self.agent_uuid
+            )
             logging.info('MQTT connection established')
 
     def on_disconnect(self, client, userdata, rc):
         if self.connected:
             logging.info('MQTT connection lost')
         self.connected = False
+
+    def on_message(self, client, userdata, msg):
+        notify_topic = 'v1/agent/%s/notification' % self.agent_uuid
+        if msg.topic == notify_topic and len(msg.payload) < 1024 * 64:
+            try:
+                body = json.loads(msg.payload.decode('utf-8'))
+            except Exception as exc:
+                logging.info('Failed to decode message for Bleemeo: %s', exc)
+                return
+
+            if 'message_type' not in body:
+                return
+            if body['message_type'] == 'resync':
+                logging.debug('Got "resync" message from Bleemeo')
+                self._last_update = 0  # trigger an re-sync with Bleemeo
 
     def on_publish(self, client, userdata, mid):
         self._mqtt_queue_size -= 1
@@ -325,6 +344,7 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_disconnect = self.on_disconnect
         self.mqtt_client.on_publish = self.on_publish
+        self.mqtt_client.on_message = self.on_message
 
         mqtt_host = self.core.config.get(
             'bleemeo.mqtt.host',
@@ -425,6 +445,30 @@ class BleemeoConnector(threading.Thread):
             message,
             1)
 
+    def get_agent_api(self):
+        base_url = self.bleemeo_base_url
+        agent_url = urllib_parse.urljoin(base_url, '/v1/agent/')
+        url = agent_url + self.agent_uuid + '/'
+
+        response = requests.get(
+            url,
+            auth=(self.agent_username, self.agent_password),
+            headers={'X-Requested-With': 'XMLHttpRequest'},
+        )
+        if response.status_code == 404:
+            logging.warning(
+                'This agent is not found on Bleemeo Cloud Platform. '
+                'Was it deleted ?'
+            )
+            return None
+        if response.status_code != 200:
+            logging.warning(
+                'Failed to retrive Agent information, API retruned:\n%s',
+                response.content,
+            )
+            return None
+        return response.json()
+
     def register(self):
         """ Register the agent to Bleemeo SaaS service
         """
@@ -494,6 +538,9 @@ class BleemeoConnector(threading.Thread):
         if (clock_now - self._last_update > 60 * 60
                 or self.core.last_services_autoremove >= self._last_update
                 or self.last_containers_removed >= self._last_update):
+            agent = self.get_agent_api()
+            if agent is not None:
+                self.core.set_alerting_mode(agent['alerting_mode'])
             self._purge_deleted_services()
             self._retrive_threshold()
             self._last_update = clock_now
@@ -526,7 +573,21 @@ class BleemeoConnector(threading.Thread):
 
         metrics_registered = set()
 
-        for data in metrics:
+        for data in list(metrics):
+            metric_has_status = data['last_status'] is not None
+            if not self.sent_metric(data['label'], metric_has_status):
+                response = requests.delete(
+                    urllib_parse.urljoin(metric_url, '%s/' % data['id']),
+                    auth=(self.agent_username, self.agent_password),
+                    headers={'X-Requested-With': 'XMLHttpRequest'},
+                )
+                if response.status_code != 204:
+                    logging.debug(
+                        'Metric deletion failed, http code recveived %s',
+                        response.status_code
+                    )
+                    return
+                continue
             metrics_registered.add(data['id'])
             item = data['item']
             if item == '':
@@ -539,6 +600,9 @@ class BleemeoConnector(threading.Thread):
                 'high_warning': data['threshold_high_warning'],
                 'high_critical': data['threshold_high_critical'],
             }
+
+        self.core.state.set_complex_dict('thresholds', thresholds)
+        self.core.define_thresholds()
 
         deleted_metrics = []
         with self.metrics_lock:
@@ -558,9 +622,6 @@ class BleemeoConnector(threading.Thread):
 
         if deleted_metrics:
             self.core.purge_metrics(deleted_metrics)
-
-        self.core.state.set_complex_dict('thresholds', thresholds)
-        self.core.define_thresholds()
 
     def _purge_deleted_services(self):
         """ Remove from state any deleted service on API and vice-versa
@@ -910,10 +971,31 @@ class BleemeoConnector(threading.Thread):
             self.core.state.set('docker_container_uuid', container_uuid)
             self.last_containers_removed = bleemeo_agent.util.get_clock()
 
+    def sent_metric(self, metric_name, metric_has_status):
+        """ Return True if the metric should be sent to Bleemeo Cloud platform
+
+            When in alerting mode, only metric whitelisted or with a status
+            are sent.
+        """
+        if not self.core.alerting_mode:
+            # Always sent metrics if not in alerting mode
+            return True
+
+        if metric_has_status:
+            return True
+
+        if metric_name in self.core.config.get('metric.alerting_metric'):
+            return True
+
+        return False
+
     def emit_metric(self, metric):
+        metric_name = metric['measurement']
+        metric_has_status = metric.get('status') is not None
+        if not self.sent_metric(metric_name, metric_has_status):
+            return
         if self._metric_queue.qsize() < 100000:
             self._metric_queue.put(metric)
-        metric_name = metric['measurement']
         service = metric.get('service')
         item = metric.get('item')
 
