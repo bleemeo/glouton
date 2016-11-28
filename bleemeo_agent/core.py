@@ -560,9 +560,9 @@ class Core:
     def __init__(self):
         self.sentry_client = None
         self.last_facts = {}
-        self.last_facts_update = 0
-        self.last_discovery_update = 0
-        self.last_services_autoremove = 0
+        self.last_facts_update = bleemeo_agent.util.get_clock()
+        self.last_discovery_update = bleemeo_agent.util.get_clock()
+        self.last_services_autoremove = bleemeo_agent.util.get_clock()
         self.top_info = None
 
         self.is_terminating = threading.Event()

@@ -118,10 +118,10 @@ class BleemeoConnector(threading.Thread):
         self._metric_queue = queue.Queue()
         self.connected = False
         self._mqtt_queue_size = 0
-        self._last_facts_sent = 0
-        self._last_discovery_sent = 0
-        self._last_update = 0
-        self.last_containers_removed = 0
+        self._last_facts_sent = None
+        self._last_discovery_sent = None
+        self._last_update = None
+        self.last_containers_removed = bleemeo_agent.util.get_clock()
         self.mqtt_client = mqtt.Client()
 
         # Lock held when modifying self.metrics_uuid or self.services_uuid and
@@ -491,21 +491,24 @@ class BleemeoConnector(threading.Thread):
             return
 
         clock_now = bleemeo_agent.util.get_clock()
-        if (clock_now - self._last_update > 60 * 60
+        if (self._last_update is None
+                or clock_now - self._last_update > 60 * 60
                 or self.core.last_services_autoremove >= self._last_update
                 or self.last_containers_removed >= self._last_update):
             self._purge_deleted_services()
             self._retrive_threshold()
             self._last_update = clock_now
 
-        if self._last_discovery_sent < self.core.last_discovery_update:
+        if (self._last_discovery_sent is None or
+                self._last_discovery_sent < self.core.last_discovery_update):
             self._register_containers()
             self._last_discovery_sent = clock_now
 
         self._register_services()
         self._register_metric()
 
-        if self._last_facts_sent < self.core.last_facts_update:
+        if (self._last_facts_sent is None
+                or self._last_facts_sent < self.core.last_facts_update):
             self.send_facts()
 
     def _retrive_threshold(self):
