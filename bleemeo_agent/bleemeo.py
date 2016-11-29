@@ -176,9 +176,9 @@ class BleemeoConnector(threading.Thread):
 
             if 'message_type' not in body:
                 return
-            if body['message_type'] == 'resync':
-                logging.debug('Got "resync" message from Bleemeo')
-                self._last_update = 0  # trigger an re-sync with Bleemeo
+            if body['message_type'] == 'plan-changed':
+                logging.debug('Got "plan-changed" message from Bleemeo')
+                self._last_update = 0  # trigger an sync with Bleemeo
 
     def on_publish(self, client, userdata, mid):
         self._mqtt_queue_size -= 1
