@@ -923,6 +923,10 @@ class Core:
             seconds=10,
         )
         self.add_scheduled_job(
+            self._gather_metrics_minute,
+            seconds=60,
+        )
+        self.add_scheduled_job(
             self.send_top_info,
             seconds=10,
         )
@@ -1004,6 +1008,52 @@ class Core:
         metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:
             self.emit_metric(metric, soft_status=False)
+
+    def _gather_metrics_minute(self):
+        """ Gather and send every minute some metric missing from other sources
+        """
+        for key in list(self.docker_containers.keys()):
+            result = self.docker_containers.get(key)
+            if (result is not None
+                    and 'Health' in result['State']
+                    and self.docker_client is not None):
+
+                self._docker_health_status(result['Id'])
+
+    def _docker_health_status(self, container_id):
+        """ Send metric for docker container health status
+        """
+        try:
+            result = self.docker_client.inspect_container(container_id)
+        except:
+            return  # most probably container was removed
+
+        name = result['Name'].lstrip('/')
+        self.docker_containers[name] = result
+        if 'Health' not in result['State']:
+            return
+
+        if result['State']['Health'].get('Status') == 'healthy':
+            status = bleemeo_agent.checker.STATUS_OK
+        elif result['State']['Health'].get('Status') == 'unhealthy':
+            status = bleemeo_agent.checker.STATUS_CRITICAL
+        else:
+            status = bleemeo_agent.checker.STATUS_UNKNOWN
+
+        metric = {
+            'measurement': 'docker_container_health_status',
+            'time': time.time(),
+            'value': float(status),
+            'status': bleemeo_agent.checker.STATUS_NAME[status],
+            'item': name,
+            'container': name,
+        }
+
+        logs = result['State']['Health'].get('Log', [])
+        if len(logs):
+            metric['check_output'] = logs[-1].get('Output')
+
+        self.emit_metric(metric)
 
     def purge_metrics(self, deleted_metrics=None):
         """ Remove old metrics from self.last_metrics
@@ -1468,15 +1518,30 @@ class Core:
                     if isinstance(event, six.string_types):
 
                         event = json.loads(event)
-                    status = event.get('status')
+
+                    if 'Action' in event:
+                        action = event['Action']
+                    else:
+                        # status is depractated. Action was introduced with
+                        # Docker 1.10
+                        action = event.get('status')
                     event_type = event.get('Type', 'container')
                     last_event_at = event['time']
 
-                    if (status not in DOCKER_DISCOVERY_EVENTS
-                            or event_type != 'container'):
-                        continue
-
-                    self._trigger_discovery = True
+                    if (action in DOCKER_DISCOVERY_EVENTS
+                            and event_type == 'container'):
+                        self._trigger_discovery = True
+                    elif (action.startswith('health_status:')
+                            and event_type == 'container'):
+                        container_id = event['Actor']['ID']
+                        self._docker_health_status(container_id)
+                        # If an health_status event occure, it means that
+                        # docker container inspect changed.
+                        # Update the discovery date, so BleemeoConnector will
+                        # update the containers info
+                        self.last_discovery_update = (
+                            bleemeo_agent.util.get_clock()
+                        )
             except:
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
