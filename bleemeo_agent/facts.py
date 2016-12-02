@@ -274,6 +274,18 @@ def get_virtual_type(privileged_facts):  # noqa
     return result
 
 
+def system_has_swap():
+    try:
+        # If user has no swap, this file contains only 1 line.
+        with open('/proc/swaps') as fd:
+            line_count = fd.read(65536).count('\n')
+            has_swap = (line_count > 1)
+    except IOError:
+        has_swap = False
+
+    return has_swap
+
+
 def get_facts_root():
     """ Gather facts that need root privilege and write them in yaml file
     """
@@ -382,6 +394,7 @@ def get_facts(core):
         'product_name': get_file_content(
             os.path.join(DMI_DIR, 'product_name')
         ),
+        'swap_present': system_has_swap(),
         'system_vendor': get_file_content(
             os.path.join(DMI_DIR, 'sys_vendor')
         ),

@@ -534,6 +534,8 @@ class Telegraf:
 
             derive = True
         elif part[-2] == 'swap':
+            if not self.core.last_facts.get('swap_present', False):
+                return
             name = 'swap_' + part[-1]
             if name.endswith('_percent'):
                 name = name.replace('_percent', '_perc')

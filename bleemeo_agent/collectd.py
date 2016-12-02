@@ -420,10 +420,14 @@ class Collectd:
             computed_metrics_pending.add(
                 ('process_total', None, None, timestamp))
         elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
+            if not self.core.last_facts.get('swap_present', False):
+                return
             name = 'swap_%s' % match_dict['type_instance']
             computed_metrics_pending.add(('swap_total', None, None, timestamp))
         elif (match_dict['plugin'] == 'swap'
                 and match_dict['type'] == 'swap_io'):
+            if not self.core.last_facts.get('swap_present', False):
+                return
             name = 'swap_%s' % match_dict['type_instance']
         elif match_dict['plugin'] == 'users':
             name = 'users_logged'
