@@ -20,6 +20,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import socket
 import ssl
 import threading
@@ -695,13 +696,23 @@ class BleemeoConnector(threading.Thread):
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         thresholds = self.core.state.get_complex_dict('thresholds', {})
         container_uuid = self.core.state.get('docker_container_uuid', {})
+        registration_error = 0
 
         # It can't keep the lock during whole loop, because call to API is slow
         # In addition it may remove entry during the loop.
         with self.metrics_lock:
             list_metrics = list(self.metrics_uuid.items())
 
+        # If one metric fail to register, it may block other metric that would
+        # register correctly. To reduce this risk, randomize the list, so on
+        # next run (every 15 seconds), the metric that failed to register may
+        # no longer block other.
+        random.shuffle(list_metrics)
+
         for metric_key, metric_uuid in list_metrics:
+            if registration_error > 3:
+                logging.debug('Too many registration error')
+                return
             if metric_uuid is not None:
                 continue
 
@@ -769,14 +780,21 @@ class BleemeoConnector(threading.Thread):
                     payload['container'] = (
                         container_uuid[container_name][1]
                     )
+                if service is not None:
+                    instance = self.metrics_info[metric_key]['instance']
+                    key = (service, instance)
+                    if key not in self.services_uuid:
+                        del self.metrics_uuid[metric_key]
+                        del self.metrics_info[metric_key]
+                        self.core.state.set_complex_dict(
+                            'metrics_uuid', self.metrics_uuid
+                        )
+                        continue
+
+                    payload['service'] = self.services_uuid[key]['uuid']
                 logging.debug('Registering metric %s', metric_name)
                 if item is not None:
                     payload['item'] = item
-                if service is not None:
-                    instance = self.metrics_info[metric_key]['instance']
-                    payload['service'] = (
-                        self.services_uuid[(service, instance)]['uuid']
-                    )
 
             # This should not be done with self.metrics_lock. It no CPU-bound
             # and would lock other thread that need this lock.
@@ -789,7 +807,15 @@ class BleemeoConnector(threading.Thread):
                     'Content-type': 'application/json',
                 },
             )
-            if response.status_code != 201:
+            if 400 <= response.status_code < 500:
+                logging.debug(
+                    'Metric registration failed. '
+                    'Server reported a client error: %s',
+                    response.content
+                )
+                registration_error += 1
+                continue
+            elif response.status_code != 201:
                 logging.debug(
                     'Metric registration failed. Server response = %s',
                     response.content
