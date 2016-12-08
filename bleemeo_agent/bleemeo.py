@@ -155,12 +155,31 @@ class BleemeoConnector(threading.Thread):
             # FIXME: PRODUCT-137: to be removed when upstream bug is fixed
             if self.mqtt_client._ssl is not None:
                 self.mqtt_client._ssl.setblocking(0)
+
+            self.mqtt_client.subscribe(
+                'v1/agent/%s/notification' % self.agent_uuid
+            )
             logging.info('MQTT connection established')
 
     def on_disconnect(self, client, userdata, rc):
         if self.connected:
             logging.info('MQTT connection lost')
         self.connected = False
+
+    def on_message(self, client, userdata, msg):
+        notify_topic = 'v1/agent/%s/notification' % self.agent_uuid
+        if msg.topic == notify_topic and len(msg.payload) < 1024 * 64:
+            try:
+                body = json.loads(msg.payload.decode('utf-8'))
+            except Exception as exc:
+                logging.info('Failed to decode message for Bleemeo: %s', exc)
+                return
+
+            if 'message_type' not in body:
+                return
+            if body['message_type'] == 'threshold-update':
+                logging.debug('Got "threshold-update" message from Bleemeo')
+                self._last_update = 0  # trigger a sync with Bleemeo
 
     def on_publish(self, client, userdata, mid):
         self._mqtt_queue_size -= 1
@@ -325,6 +344,7 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_disconnect = self.on_disconnect
+        self.mqtt_client.on_message = self.on_message
         self.mqtt_client.on_publish = self.on_publish
 
         mqtt_host = self.core.config.get(
@@ -544,6 +564,9 @@ class BleemeoConnector(threading.Thread):
                 'high_critical': data['threshold_high_critical'],
             }
 
+        self.core.state.set_complex_dict('thresholds', thresholds)
+        self.core.define_thresholds()
+
         deleted_metrics = []
         with self.metrics_lock:
             for key in list(self.metrics_uuid.keys()):
@@ -562,9 +585,6 @@ class BleemeoConnector(threading.Thread):
 
         if deleted_metrics:
             self.core.purge_metrics(deleted_metrics)
-
-        self.core.state.set_complex_dict('thresholds', thresholds)
-        self.core.define_thresholds()
 
     def _purge_deleted_services(self):
         """ Remove from state any deleted service on API and vice-versa
