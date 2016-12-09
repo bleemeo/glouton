@@ -892,12 +892,20 @@ class Core:
 
     def _update_docker_info(self):
         self.docker_containers = {}
+        self.docker_containers_ignored = []
 
         if self.docker_client is None:
             return
 
         for container in self.docker_client.containers(all=True):
             inspect = self.docker_client.inspect_container(container['Id'])
+            labels = inspect.get('Config', {}).get('Labels', {})
+            bleemeo_enable = labels.get('bleemeo.enable', '').lower()
+            if bleemeo_enable in ('0', 'off', 'false', 'no'):
+                self.docker_containers_ignored.append(
+                    inspect['Name'].lstrip('/')
+                )
+                continue
             name = inspect['Name'].lstrip('/')
             self.docker_containers[name] = inspect
 
@@ -1398,6 +1406,8 @@ class Core:
                 service_name = service_info['service']
                 if (service_name, instance) in discovered_services:
                     # Service already found
+                    continue
+                if instance in self.docker_containers_ignored:
                     continue
                 logging.debug(
                     'Discovered service %s on %s',
