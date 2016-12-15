@@ -1,5 +1,7 @@
 #!/bin/bash
 
-set -e
+set -ex
+
+docker pull ubuntu:16.04
 
 docker build -t bleemeo/bleemeo-agent .
