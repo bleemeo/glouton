@@ -900,6 +900,8 @@ class Core:
         for container in self.docker_client.containers(all=True):
             inspect = self.docker_client.inspect_container(container['Id'])
             labels = inspect.get('Config', {}).get('Labels', {})
+            if labels is None:
+                labels = {}
             bleemeo_enable = labels.get('bleemeo.enable', '').lower()
             if bleemeo_enable in ('0', 'off', 'false', 'no'):
                 self.docker_containers_ignored.append(
