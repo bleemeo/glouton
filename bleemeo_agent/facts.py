@@ -174,6 +174,8 @@ def read_os_release():
         http://www.freedesktop.org/software/systemd/man/os-release.html
     """
     result = {}
+    if os.name == 'nt':
+        return result
     with open('/etc/os-release') as fd:
         for line in fd:
             line = line.strip()
@@ -334,9 +336,10 @@ def get_facts(core):
         os_codename = None
 
     primary_address = get_primary_address()
-    architecture = subprocess.check_output(
-        ['uname', '--machine']
-    ).decode('utf8').strip()
+    if os.name != 'nt':
+        architecture = subprocess.check_output(
+            ['uname', '--machine']
+        ).decode('utf8').strip()
     fqdn = socket.getfqdn()
     if fqdn == 'localhost':
         fqdn = socket.gethostname()
@@ -345,14 +348,15 @@ def get_facts(core):
         (hostname, domain) = fqdn.split('.', 1)
     else:
         (hostname, domain) = (fqdn, None)
-    kernel = subprocess.check_output(
-        ['uname', '--kernel-name']
-    ).decode('utf8').strip()
-    kernel_release = subprocess.check_output(
-        ['uname', '--kernel-release']
-    ).decode('utf8').strip()
-    kernel_version = kernel_release.split('-')[0]
-    kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
+    if os.name != 'nt':
+        kernel = subprocess.check_output(
+            ['uname', '--kernel-name']
+        ).decode('utf8').strip()
+        kernel_release = subprocess.check_output(
+            ['uname', '--kernel-release']
+        ).decode('utf8').strip()
+        kernel_version = kernel_release.split('-')[0]
+        kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
     virtual = get_virtual_type(facts)
 
     (docker_version, docker_api_version) = get_docker_version(core)

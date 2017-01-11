@@ -304,7 +304,9 @@ def main():
     )
     args = parser.parse_args()
 
-    if os.getuid() == 0 and not args.yes_run_as_root:
+    if os.name == 'nt':
+        pass
+    elif os.getuid() == 0 and not args.yes_run_as_root:
         print(
             'Error: trying to run Bleemeo agent as root without'
             ' "--yes-run-as-root" option.'
@@ -511,6 +513,11 @@ class State:
                     json.dump(self._content, fd)
                     fd.flush()
                     os.fsync(fd.fileno())
+                if os.name == 'nt':
+                    try:
+                        os.remove(self.filename)
+                    except OSError:
+                        pass
                 os.rename(self.filename + '.tmp', self.filename)
                 return True
             except OSError as exc:
@@ -870,7 +877,8 @@ class Core:
             self._trigger_facts = True
 
         signal.signal(signal.SIGTERM, handler)
-        signal.signal(signal.SIGHUP, handler_hup)
+        if os.name != 'nt':
+            signal.signal(signal.SIGHUP, handler_hup)
 
     def _docker_connect(self):
         """ Try to connect to docker remote API

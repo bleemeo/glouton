@@ -18,6 +18,7 @@
 
 import datetime
 import logging
+import os
 import random
 import subprocess
 import sys
@@ -59,12 +60,16 @@ def generate_password(length=10,
 
 
 def get_uptime():
+    if os.name == 'nt':
+        return 0
     with open('/proc/uptime', 'r') as f:
         uptime_seconds = float(f.readline().split()[0])
         return uptime_seconds
 
 
 def get_loadavg():
+    if os.name == 'nt':
+        return [0, 0, 0]
     with open('/proc/loadavg', 'r') as fd:
         loads = fd.readline().split()[:3]
 
@@ -80,7 +85,7 @@ def get_clock():
         It could be also useful to run on action every N seconds (note that
         system suspend might stop that clock).
     """
-    if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
+    if os.name != 'nt' and sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
         return time.clock_gettime(time.CLOCK_MONOTONIC)
     else:
         return time.time()
@@ -194,18 +199,25 @@ def get_top_info():
         try:
             try:
                 username = process.username()
-            except KeyError:
+            except (KeyError, psutil.AccesDenied):
                 # the uid can't be resolved by the system
-                username = str(process.uids().real)
+                if os.name == 'nt':
+                    username = ''
+                else:
+                    username = str(process.uids().real)
 
             # Cmdline may be unavailable (permission issue ?)
             # When unavailable, depending on psutil version, it returns
             # either [] or ['']
-            cmdline = process.cmdline()
-            if cmdline and cmdline[0]:
-                cmdline = ' '.join(cmdline)
-                name = process.name()
-            else:
+            try:
+                cmdline = process.cmdline()
+                if cmdline and cmdline[0]:
+                    cmdline = ' '.join(cmdline)
+                    name = process.name()
+                else:
+                    cmdline = process.name()
+                    name = cmdline
+            except psutil.AccesDenied:
                 cmdline = process.name()
                 name = cmdline
 
@@ -244,17 +256,17 @@ def get_top_info():
         'processes': processes,
         'cpu': {
             'user': cpu_usage.user,
-            'nice': cpu_usage.nice,
+            'nice': cpu_usage.nice if hasattr(cpu_usage, 'nice') else 0.0,
             'system': cpu_usage.system,
             'idle': cpu_usage.idle,
-            'iowait': cpu_usage.iowait,
+            'iowait': cpu_usage.iowait if hasattr(cpu_usage, 'iowait') else 0.0,
         },
         'memory': {
             'total': memory_usage.total / 1024,
             'used': memory_usage.used / 1024,
             'free': memory_usage.free / 1024,
-            'buffers': memory_usage.buffers / 1024,
-            'cached': memory_usage.cached / 1024,
+            'buffers': memory_usage.buffers / 1024 if hasattr(memory_usage, 'buffers') else 0.0,
+            'cached': memory_usage.cached / 1024 if hasattr(memory_usage, 'cached') else 0.0,
         },
         'swap': {
             'total': swap_usage.total / 1024,
