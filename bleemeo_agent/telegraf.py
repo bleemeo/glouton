@@ -488,9 +488,12 @@ class Telegraf:
             if self.graphite_server._ignored_disk(item):
                 return
 
-            value = self.get_derivate(name, item, timestamp, value)
-            if value is None:
-                return
+            if name == 'io_iops_in_progress':
+                name = 'io_in_progress'
+            else:
+                value = self.get_derivate(name, item, timestamp, value)
+                if value is None:
+                    return
 
             if name == 'io_time':
                 self.core.emit_metric({
