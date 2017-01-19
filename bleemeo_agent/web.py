@@ -30,7 +30,7 @@ app_thread = None
 
 @app.route('/')
 def home():
-    loads = bleemeo_agent.util.get_loadavg()
+    loads = bleemeo_agent.util.get_loadavg(app.core)
     check_info = _gather_checks_info()
     top_output = bleemeo_agent.util.get_top_output(app.core.top_info)
     disks_used_perc = [

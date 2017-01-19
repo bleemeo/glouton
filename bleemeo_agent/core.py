@@ -586,7 +586,7 @@ class Core:
         else:
             self._scheduler = apscheduler.scheduler.Scheduler()
         self.last_metrics = {}
-        self.last_report = datetime.datetime.fromtimestamp(0)
+        self.last_report = None
 
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = {}
@@ -1033,14 +1033,14 @@ class Core:
             self.emit_metric({
                 'measurement': 'mem_total',
                 'time': now,
-                'value': self.total_memory_size,
+                'value': float(self.total_memory_size),
             })
             if self.last_facts.get('swap_present', False):
                 self.total_swap_size = psutil.swap_memory().total
                 self.emit_metric({
                     'measurement': 'swap_total',
                     'time': now,
-                    'value': self.total_swap_size,
+                    'value': float(self.total_swap_size),
                 })
 
         metric = self.graphite_server.get_time_elapsed_since_last_data()
@@ -1284,7 +1284,7 @@ class Core:
             # The host pid namespace see ALL process.
             # They are added in instance "None" (i.e. running in the host),
             # but if they are running in a docker, they will be updated later
-            for process in bleemeo_agent.util.get_top_info()['processes']:
+            for process in bleemeo_agent.util.get_top_info(self)['processes']:
                 processes[process['pid']] = {
                     'cmdline': process['cmdline'],
                     'instance': None,
@@ -1594,7 +1594,7 @@ class Core:
         self.last_facts_update = bleemeo_agent.util.get_clock()
 
     def send_top_info(self):
-        self.top_info = bleemeo_agent.util.get_top_info()
+        self.top_info = bleemeo_agent.util.get_top_info(self)
         if self.bleemeo_connector is not None:
             self.bleemeo_connector.publish_top_info(self.top_info)
 

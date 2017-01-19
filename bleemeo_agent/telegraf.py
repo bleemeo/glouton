@@ -715,7 +715,10 @@ class Telegraf:
             name = part[-1]
             if name == 'Percent_Usage':
                 name = 'swap_used_perc'
-                swap_used = self.core.total_swap_size / (value / 100.)
+                if value == 0:
+                    swap_used = 0.0
+                else:
+                    swap_used = self.core.total_swap_size / (value / 100.)
                 self.core.emit_metric({
                     'measurement': 'swap_used',
                     'time': timestamp,

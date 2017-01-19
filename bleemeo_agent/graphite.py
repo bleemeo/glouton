@@ -307,7 +307,7 @@ class GraphiteServer(threading.Thread):
                 'item': item,
                 'value': used_perc,
             })
-        elif name == 'disk_total' and os.name:
+        elif name == 'disk_total' and os.name == 'nt':
             used_perc = get_metric('disk_used_perc', item)
             free = get_metric('disk_free', item)
             free_perc = 100 - used_perc

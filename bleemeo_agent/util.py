@@ -60,20 +60,17 @@ def generate_password(length=10,
 
 
 def get_uptime():
-    if os.name == 'nt':
-        return 0
-    with open('/proc/uptime', 'r') as f:
-        uptime_seconds = float(f.readline().split()[0])
-        return uptime_seconds
+    boot_time = psutil.boot_time()
+    now = time.time()
+    return now - boot_time
 
 
-def get_loadavg():
-    if os.name == 'nt':
-        return [0, 0, 0]
-    with open('/proc/loadavg', 'r') as fd:
-        loads = fd.readline().split()[:3]
+def get_loadavg(core):
+    system_load1 = core.get_last_metric_value('system_load1', None, 0.0)
+    system_load5 = core.get_last_metric_value('system_load5', None, 0.0)
+    system_load15 = core.get_last_metric_value('system_load15', None, 0.0)
 
-    return [float(x) for x in loads]
+    return [system_load1, system_load5, system_load15]
 
 
 def get_clock():
@@ -85,8 +82,8 @@ def get_clock():
         It could be also useful to run on action every N seconds (note that
         system suspend might stop that clock).
     """
-    if os.name != 'nt' and sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
-        return time.clock_gettime(time.CLOCK_MONOTONIC)
+    if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
+        return time.monotonic()
     else:
         return time.time()
 
@@ -191,15 +188,20 @@ def clean_cmdline(cmdline):
     return cmdline.replace('\r', '\\r').replace('\n', '\\n')
 
 
-def get_top_info():
+def get_top_info(core):
     """ Return informations needed to build a "top" view.
     """
     processes = []
     for process in psutil.process_iter():
         try:
+            if process.pid == 0:
+                # PID 0 on Windows use it for "System Idle Process".
+                # PID 0 is not used Linux don't use it.
+                # Other system are currently not supported.
+                continue
             try:
                 username = process.username()
-            except (KeyError, psutil.AccesDenied):
+            except (KeyError, psutil.AccessDenied):
                 # the uid can't be resolved by the system
                 if os.name == 'nt':
                     username = ''
@@ -217,7 +219,7 @@ def get_top_info():
                 else:
                     cmdline = process.name()
                     name = cmdline
-            except psutil.AccesDenied:
+            except psutil.AccessDenied:
                 cmdline = process.name()
                 name = cmdline
 
@@ -251,7 +253,7 @@ def get_top_info():
     result = {
         'time': now,
         'uptime': get_uptime(),
-        'loads': get_loadavg(),
+        'loads': get_loadavg(core),
         'users': len(psutil.users()),
         'processes': processes,
         'cpu': {
