@@ -41,6 +41,7 @@ except ImportError:
     from apscheduler.jobstores.base import JobLookupError
     APSCHEDULE_IS_3X = True
 
+import psutil
 import six
 from six.moves import configparser
 import yaml
@@ -594,6 +595,11 @@ class Core:
         self._trigger_facts = False
         self._netstat_output_mtime = 0
 
+        # This is needed on Windows to compute mem_*_perc and mem_total
+        self.total_memory_size = psutil.virtual_memory().total
+        # This is needed on Windows to compute swap_used and swap_total:
+        self.total_swap_size = psutil.swap_memory().total
+
     def _init(self):
         self.started_at = bleemeo_agent.util.get_clock()
         errors = self.reload_config()
@@ -1022,6 +1028,20 @@ class Core:
                 'time': now,
                 'value': 0.0,  # status ok
             })
+
+        if os.name == 'nt':
+            self.emit_metric({
+                'measurement': 'mem_total',
+                'time': now,
+                'value': self.total_memory_size,
+            })
+            if self.last_facts.get('swap_present', False):
+                self.total_swap_size = psutil.swap_memory().total
+                self.emit_metric({
+                    'measurement': 'swap_total',
+                    'time': now,
+                    'value': self.total_swap_size,
+                })
 
         metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:

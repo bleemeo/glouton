@@ -24,6 +24,8 @@ import socket
 import threading
 import time
 
+import psutil
+
 import bleemeo_agent.collectd
 import bleemeo_agent.telegraf
 import bleemeo_agent.util
@@ -247,10 +249,11 @@ class GraphiteServer(threading.Thread):
             Item is something like "sda", "sdb" or "eth0", "eth1".
         """
         processed = set()
+        new_item = set()
         for entry in computed_metrics_pending:
             (name, item, instance, timestamp) = entry
             try:
-                self._compute_metric(name, item, instance, timestamp)
+                self._compute_metric(name, item, instance, timestamp, new_item)
                 processed.add(entry)
             except ComputationFail:
                 logging.debug(
@@ -265,8 +268,11 @@ class GraphiteServer(threading.Thread):
                 pass
 
         computed_metrics_pending.difference_update(processed)
+        if new_item:
+            computed_metrics_pending.update(new_item)
+            self._check_computed_metrics(computed_metrics_pending)
 
-    def _compute_metric(self, name, item, instance, timestamp):  # NOQA
+    def _compute_metric(self, name, item, instance, timestamp, new_item):  # NOQA
         def get_metric(measurements, searched_item):
             """ Helper that do common task when retriving metrics:
 
@@ -285,7 +291,7 @@ class GraphiteServer(threading.Thread):
 
         service = None
 
-        if name == 'disk_total':
+        if name == 'disk_total' and os.name != 'nt':
             used = get_metric('disk_used', item)
             value = used + get_metric('disk_free', item)
             # used_perc could be more that 100% if reserved space is used.
@@ -301,6 +307,19 @@ class GraphiteServer(threading.Thread):
                 'item': item,
                 'value': used_perc,
             })
+        elif name == 'disk_total' and os.name:
+            used_perc = get_metric('disk_used_perc', item)
+            free = get_metric('disk_free', item)
+            free_perc = 100 - used_perc
+            disk_total = free / (free_perc / 100.0)
+            disk_used = disk_total * (used_perc / 100.0)
+            value = disk_total
+            self.core.emit_metric({
+                'measurement': 'disk_used',
+                'time': timestamp,
+                'item': item,
+                'value': disk_used,
+            })
         elif name == 'cpu_other':
             value = get_metric('cpu_used', None)
             value -= get_metric('cpu_user', None)
@@ -310,6 +329,20 @@ class GraphiteServer(threading.Thread):
             value = used
             for sub_type in ('buffered', 'cached', 'free'):
                 value += get_metric('mem_%s' % sub_type, item)
+        elif name == 'mem_free':
+            used = get_metric('mem_used', item)
+            cached = get_metric('mem_cached', item)
+            value = self.core.total_memory_size - used - cached
+        elif name == 'mem_cached':
+            value = 0
+            for sub_type in (
+                    'Standby_Cache_Reserve_Bytes',
+                    'Standby_Cache_Normal_Priority_Bytes',
+                    'Standby_Cache_Core_Bytes'):
+                value += get_metric(sub_type, item)
+            new_item.add(
+                ('mem_free', None, None, timestamp)
+            )
         elif name == 'process_total':
             types = [
                 'blocked', 'paging', 'running', 'sleeping',
@@ -329,6 +362,21 @@ class GraphiteServer(threading.Thread):
                 'time': timestamp,
                 'value': value / total * 100.,
             })
+        elif name == 'system_load1':
+            # Unix load represent the number of running and runnable tasks
+            # which include task waiting for disk IO.
+
+            # To re-create the value on Windows:
+            # Number of running task will be number of CPU core * CPU usage
+            # Number of runnable tasks will be "Processor Queue Length", but
+            # this probably does not include task waiting for disk IO.
+
+            cpu_used = get_metric('cpu_used', None)
+            runq = get_metric('Processor_Queue_Length', None)
+            core_count = psutil.cpu_count()
+            if core_count is None:
+                core_count = 1
+            value = core_count * (cpu_used / 100.) + runq
         elif name == 'elasticsearch_search_time':
             service = 'elasticsearch'
             total = get_metric('elasticsearch_search_time_total', item)
