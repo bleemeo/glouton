@@ -848,8 +848,12 @@ class Core:
             self.schedule_tasks()
             try:
                 self._scheduler.start()
-                # Wait forever. Ctrl+C or SIGKILL will abort this wait
-                self.is_terminating.wait()
+                # This loop is break by KeyboardInterrupt (ctrl+c or SIGTERM).
+                # It wait with a timeout because under Windows the wait() is
+                # uninterruptible. Using a 500ms wait allow to process
+                # signal every 500ms.
+                while not self.is_terminating.is_set():
+                    self.is_terminating.wait(0.5)
             finally:
                 self._scheduler.shutdown()
         except KeyboardInterrupt:
