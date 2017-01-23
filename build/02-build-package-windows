@@ -1,0 +1,39 @@
+#!/bin/bash
+
+set -e
+
+cd work/bleemeo-agent-*
+
+virtualenv -p /usr/bin/python3 ../pynsist
+../pynsist/bin/pip install -r requirements.txt
+
+# markupsafe have some optional speedup compiled. Since it does not provide
+# wheel and we are not under Windows, remove the speedup and include pure-Python
+# version
+rm ../pynsist/lib/python3.?/site-packages/markupsafe/*.so
+
+# Some package (APScheduler at least) require information from *.dist-info that
+# are not included by pynsist. Add them manually.
+mkdir packaging/windows/pynsist_pkgs/
+cp -a ../pynsist/lib/python3.?/site-packages/*-*.dist-info packaging/windows/pynsist_pkgs/
+
+# TODO: fix how telegraf is retrieved
+cp -a /home/pierref/dev/src/github.com/influxdata/telegraf/build/windows/amd64/telegraf.exe ..
+
+../pynsist/bin/pip install wmi
+
+# We currently use lastest version of pynsist as it fill the version
+# installed in the Windows registry.
+# To use released version, use:
+#../pynsist/bin/pip install pynsist
+
+# Since pynsist don't use classic packaging, we need flirt to install it
+../pynsist/bin/pip install flit
+../pynsist/bin/flit installfrom github:takluyver/pynsist
+
+../pynsist/bin/pynsist packaging/windows/installer.cfg
+
+rm -fr packaging/windows/pynsist_pkgs/
+
+mkdir -p ../result
+mv ../nsis/bleemeo-agent_*.exe ../result

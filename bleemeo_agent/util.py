@@ -188,7 +188,7 @@ def clean_cmdline(cmdline):
     return cmdline.replace('\r', '\\r').replace('\n', '\\n')
 
 
-def get_top_info(core):
+def get_top_info(core):  # noqa
     """ Return informations needed to build a "top" view.
     """
     processes = []

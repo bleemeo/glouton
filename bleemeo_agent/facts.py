@@ -28,10 +28,12 @@ import psutil
 import requests
 import yaml
 
-if os.name == 'nt':
-    import wmi
-
 import bleemeo_agent.config
+
+if os.name == 'nt':
+    import pythoncom
+    import winreg
+    import wmi
 
 
 DMI_DIR = '/sys/devices/virtual/dmi/id/'
@@ -89,11 +91,26 @@ def get_package_version(package_name, default=None, distribution=None):
 
         If not installed or if unable to find the version, return default.
 
-        If distribution is set to "debian" or "centos", use dpkg or rpm
-        respectivly to find the installed version.
+        For Windows, distribution is ignored and it use registry.
+
+        For non-Windows, if distribution is set to "debian" or "centos", use
+        dpkg or rpm respectivly to find the installed version.
 
         If distribution is set to None, try both dpkg then rpm.
     """
+
+    if os.name == 'nt':
+        key_path = (
+            r'Software\Microsoft\Windows\CurrentVersion\Uninstall\%s' %
+            package_name
+        )
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                result = winreg.QueryValueEx(key, "DisplayVersion")[0]
+        except FileNotFoundError:
+            return default
+
+        return result
 
     result = None
     if distribution is None or distribution == 'debian':
@@ -392,6 +409,10 @@ def get_facts(core):  # noqa
             ),
         })
     else:
+        # To use WMI, each thread must call pythoncom.CoInitializeEx() at
+        # least once.
+        pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+
         wmi_connection = wmi.WMI()
         result = wmi_connection.Win32_ComputerSystem()
         if len(result):

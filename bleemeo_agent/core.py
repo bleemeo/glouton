@@ -283,6 +283,13 @@ handlers:
         class: logging.handlers.SysLogHandler
         address: /dev/log
         formatter: syslog
+    file:
+        class: logging.handlers.TimedRotatingFileHandler
+        filename: /noexistant/path/to/be/remplaced
+        when: midnight
+        interval: 1
+        backupCount: 7
+        formatter: simple
 loggers:
     requests: {level: WARNING}
     urllib3: {level: WARNING}
@@ -296,6 +303,11 @@ root:
 
 
 def main():
+    if os.name == 'nt':
+        import bleemeo_agent.windows
+        bleemeo_agent.windows.windows_main()
+        sys.exit(0)
+
     parser = argparse.ArgumentParser(description='Bleemeo agent')
     parser.add_argument(
         '--yes-run-as-root',
@@ -305,9 +317,7 @@ def main():
     )
     args = parser.parse_args()
 
-    if os.name == 'nt':
-        pass
-    elif os.getuid() == 0 and not args.yes_run_as_root:
+    if os.getuid() == 0 and not args.yes_run_as_root:
         print(
             'Error: trying to run Bleemeo agent as root without'
             ' "--yes-run-as-root" option.'
@@ -565,7 +575,9 @@ class State:
 
 
 class Core:
-    def __init__(self):
+    def __init__(self, run_as_windows_service=False):
+        self.run_as_windows_service = run_as_windows_service
+
         self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = bleemeo_agent.util.get_clock()
@@ -666,6 +678,7 @@ class Core:
         if output == 'syslog':
             logger_config = yaml.safe_load(LOGGER_CONFIG)
             del logger_config['handlers']['console']
+            del logger_config['handlers']['file']
             logger_config['root']['handlers'] = ['syslog']
             logger_config['root']['level'] = log_level
             try:
@@ -675,9 +688,24 @@ class Core:
                 # docker container
                 output = 'console'
 
+        if output == 'file':
+            logger_config = yaml.safe_load(LOGGER_CONFIG)
+            del logger_config['handlers']['console']
+            del logger_config['handlers']['syslog']
+            logger_config['root']['handlers'] = ['file']
+            logger_config['root']['level'] = log_level
+            logger_config['handlers']['file']['filename'] = self.config.get(
+                'logging.output_file'
+            )
+            try:
+                logging.config.dictConfig(logger_config)
+            except ValueError:
+                output = 'console'
+
         if output == 'console':
             logger_config = yaml.safe_load(LOGGER_CONFIG)
             del logger_config['handlers']['syslog']
+            del logger_config['handlers']['file']
             logger_config['root']['handlers'] = ['console']
             logger_config['root']['level'] = log_level
             logging.config.dictConfig(logger_config)
@@ -869,6 +897,11 @@ class Core:
             pass
         finally:
             self.is_terminating.set()
+            self.graphite_server.join()
+            if self.bleemeo_connector is not None:
+                self.bleemeo_connector.join()
+            if self.influx_connector is not None:
+                self.influx_connector.join()
 
     def setup_signal(self):
         """ Make kill (SIGKILL) send a KeyboardInterrupt
@@ -882,7 +915,9 @@ class Core:
             self._trigger_discovery = True
             self._trigger_facts = True
 
-        signal.signal(signal.SIGTERM, handler)
+        if not self.run_as_windows_service:
+            # Windows service don't use signal to shutdown
+            signal.signal(signal.SIGTERM, handler)
         if os.name != 'nt':
             signal.signal(signal.SIGHUP, handler_hup)
 
