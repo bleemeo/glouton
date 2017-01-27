@@ -2,25 +2,32 @@
 
 set -e
 
-cd work/bleemeo-agent-*
+cd work
 
-virtualenv -p /usr/bin/python3 ../pynsist
-../pynsist/bin/pip install -r requirements.txt
+cleanup() {
+    # Some files are written by Docker and therefor owned by root. We must
+    # remove them as root.
+    docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder rm -fr /srv/data/venv_pynsist /srv/data/nsis
+}
+trap cleanup EXIT
+
+docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder virtualenv -p /usr/bin/python3 /srv/data/venv_pynsist
+docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder sh -c 'cd bleemeo-agent-* && /srv/data/venv_pynsist/bin/pip install .[bleemeo,sentry,web]'
 
 # markupsafe have some optional speedup compiled. Since it does not provide
 # wheel and we are not under Windows, remove the speedup and include pure-Python
 # version
-rm ../pynsist/lib/python3.?/site-packages/markupsafe/*.so
+docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder sh -c 'rm /srv/data/venv_pynsist/lib/python3.?/site-packages/markupsafe/*.so'
 
 # Some package (APScheduler at least) require information from *.dist-info that
 # are not included by pynsist. Add them manually.
-mkdir packaging/windows/pynsist_pkgs/
-cp -a ../pynsist/lib/python3.?/site-packages/*-*.dist-info packaging/windows/pynsist_pkgs/
+(cd bleemeo-agent-*; mkdir packaging/windows/pynsist_pkgs/)
+cp -a venv_pynsist/lib/python3.?/site-packages/*-*.dist-info bleemeo-agent-*/packaging/windows/pynsist_pkgs/
 
 # TODO: fix how telegraf is retrieved
-cp -a /home/pierref/dev/src/github.com/influxdata/telegraf/build/windows/amd64/telegraf.exe ..
+cp -a /home/pierref/dev/src/github.com/influxdata/telegraf/build/windows/amd64/telegraf.exe .
 
-../pynsist/bin/pip install wmi
+docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/pip install wmi
 
 # We currently use lastest version of pynsist as it fill the version
 # installed in the Windows registry.
@@ -28,12 +35,12 @@ cp -a /home/pierref/dev/src/github.com/influxdata/telegraf/build/windows/amd64/t
 #../pynsist/bin/pip install pynsist
 
 # Since pynsist don't use classic packaging, we need flirt to install it
-../pynsist/bin/pip install flit
-../pynsist/bin/flit installfrom github:takluyver/pynsist
+docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/pip install flit
+docker run --rm -v $(pwd):/srv/data -e FLIT_ROOT_INSTALL=1 bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/flit installfrom github:takluyver/pynsist
 
-../pynsist/bin/pynsist packaging/windows/installer.cfg
+docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/pynsist bleemeo-agent-*/packaging/windows/installer.cfg
 
-rm -fr packaging/windows/pynsist_pkgs/
+rm -fr bleemeo-agent-*/packaging/windows/pynsist_pkgs/
 
-mkdir -p ../result
-mv ../nsis/bleemeo-agent_*.exe ../result
+mkdir -p result
+cp -a nsis/bleemeo-agent_*.exe result
