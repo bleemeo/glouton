@@ -61,13 +61,13 @@ Function informationPage
     ${NSD_CreateLabel} 0 0 100% 12u "Enter your account ID"
     Pop $0
 
-    ${NSD_CreateText} 0 13u 100% 12u ""
+    ${NSD_CreateText} 0 13u 100% 12u $AccountIDValue
     Pop $AccountIDTextBox
 
     ${NSD_CreateLabel} 0 27u 100% 12u "Enter your registration key"
     Pop $0
 
-    ${NSD_CreateText} 0 40u 100% 12u ""
+    ${NSD_CreateText} 0 40u 100% 12u $RegistrationKeyValue
     Pop $RegistrationKeyTextBox
 
     nsDialogs::Show
@@ -76,6 +76,17 @@ FunctionEnd
 Function informationPageLeave
     ${NSD_GetText} $AccountIDTextBox $AccountIDValue
     ${NSD_GetText} $RegistrationKeyTextBox $RegistrationKeyValue
+FunctionEnd
+
+
+!include FileFunc.nsh
+!insertmacro GetParameters
+!insertmacro GetOptions
+Function .onInit
+    ${GetParameters} $R0
+    ClearErrors
+    ${GetOptions} $R0 /ACCOUNT= $AccountIDValue
+    ${GetOptions} $R0 /REGKEY= $RegistrationKeyValue
 FunctionEnd
 
 [% endblock sections %]
