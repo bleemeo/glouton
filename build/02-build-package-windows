@@ -24,8 +24,9 @@ docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder sh -c 'rm /srv/data/venv
 (cd bleemeo-agent-*; mkdir packaging/windows/pynsist_pkgs/)
 cp -a venv_pynsist/lib/python3.?/site-packages/*-*.dist-info bleemeo-agent-*/packaging/windows/pynsist_pkgs/
 
-# TODO: fix how telegraf is retrieved
-cp -a /home/pierref/dev/src/github.com/influxdata/telegraf/build/windows/amd64/telegraf.exe .
+mkdir telegraf
+wget -O telegraf/telegraf.zip https://dl.influxdata.com/telegraf/nightlies/telegraf-nightly_windows_amd64.zip
+docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder unzip telegraf/telegraf.zip
 
 docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/pip install wmi
 
