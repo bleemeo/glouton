@@ -7,7 +7,7 @@ cd work
 cleanup() {
     # Some files are written by Docker and therefor owned by root. We must
     # remove them as root.
-    docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder rm -fr /srv/data/venv_pynsist /srv/data/nsis
+    docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder rm -fr venv_pynsist bleemeo-agent-*/nsis
 }
 trap cleanup EXIT
 
@@ -44,4 +44,4 @@ docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder /srv/data/v
 rm -fr bleemeo-agent-*/packaging/windows/pynsist_pkgs/
 
 mkdir -p result
-cp -a nsis/bleemeo-agent_*.exe result
+cp -a bleemeo-agent-*/nsis/bleemeo-agent_*.exe result

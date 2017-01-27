@@ -1,9 +1,16 @@
 [% extends "pyapp_msvcrt.nsi" %]
 
-# Add our custom page after the welcome page.
-# Also add a confirmation on uninstall.
-# This need to be synchronized with pyapp.nsi from pynsist
-[% block ui_pages %]
+# Rewrite modernui block to support the following change:
+# * Add our custom page after the welcome page (to ask account id and registration key)
+# * Add a confirmation on uninstall.
+# * Change the installer icon.
+[% block modernui %]
+!include "MUI2.nsh"
+!define MUI_ABORTWARNING
+!define MUI_ICON ${PRODUCT_ICON}
+!define MUI_UNICON ${PRODUCT_ICON}
+!define MUI_WELCOMEFINISHPAGE_BITMAP ../packaging/windows/bleemeo_logo.bmp
+
 !insertmacro MUI_PAGE_WELCOME
 Page custom informationPage informationPageLeave
 !insertmacro MUI_PAGE_DIRECTORY
@@ -12,9 +19,14 @@ Page custom informationPage informationPageLeave
 
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
-[% endblock ui_pages %]
+
+!insertmacro MUI_LANGUAGE "English"
+[% endblock modernui %]
 
 [% block sections %]
+Name "Bleemeo Agent"
+
+
 Var AccountIDTextBox
 Var RegistrationKeyTextBox
 Var AccountIDValue
