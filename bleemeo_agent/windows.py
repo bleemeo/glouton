@@ -312,6 +312,9 @@ class BleemeoAgentService(win32serviceutil.ServiceFramework):
 
         try:
             self.core.run()
+        except:
+            logging.error('Unhandled error:', exc_info=True)
+            raise
         finally:
             logging.info('Agent stopped')
 
