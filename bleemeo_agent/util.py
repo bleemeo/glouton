@@ -489,3 +489,24 @@ def docker_restart(docker_client, container_name):
             container_name
         )
     docker_client.start(container_name)
+
+
+def windows_instdir():
+    """ Return Windows installation directory
+    """
+    bleemeo_package_dir = os.path.dirname(__file__)
+    # bleemeo_agent package is located at $INSTDIR\pkgs\bleemeo_agent
+    install_dir = os.path.dirname(os.path.dirname(bleemeo_package_dir))
+    return install_dir
+
+
+def windows_telegraf_path(default="telegraf"):
+    """ Return path to telegraf. If not found, return default
+    """
+    # On Windows, when installed, telegraf is located as $INSTDIR\telegraf.exe
+    instdir = windows_instdir()
+    telegraf = os.path.join(instdir, "telegraf.exe")
+    if os.path.exists(telegraf):
+        return telegraf
+    else:
+        return default

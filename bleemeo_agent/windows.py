@@ -28,6 +28,7 @@ import win32service
 import win32serviceutil
 
 import bleemeo_agent.core
+import bleemeo_agent.util
 
 
 def windows_main():
@@ -121,10 +122,7 @@ def windows_preremove(args):
         result.stdout.decode('utf8'),
     )
 
-    bleemeo_package_dir = os.path.dirname(__file__)
-    # bleemeo_agent package is located at $INSTDIR\pkgs\bleemeo_agent
-    install_dir = os.path.dirname(os.path.dirname(bleemeo_package_dir))
-    telegraf_binary = os.path.join(install_dir, 'telegraf.exe')
+    telegraf_binary = bleemeo_agent.util.windows_telegraf_path()
     result = subprocess.run(
         [
             telegraf_binary,
@@ -221,15 +219,11 @@ bleemeo:
     registration_key: %s
 """ % (args.account, args.registration), file=fd)
 
-    bleemeo_package_dir = os.path.dirname(__file__)
-    # bleemeo_agent package is located at $INSTDIR\pkgs\bleemeo_agent
-    install_dir = os.path.dirname(os.path.dirname(bleemeo_package_dir))
-
     os.makedirs(
         r'C:\ProgramData\Bleemeo\etc\telegraf\telegraf.d', exist_ok=True
     )
 
-    telegraf_binary = os.path.join(install_dir, 'telegraf.exe')
+    telegraf_binary = bleemeo_agent.util.windows_telegraf_path()
     result = subprocess.run(
         [
             telegraf_binary,

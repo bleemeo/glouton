@@ -20,6 +20,7 @@ import datetime
 import logging
 import os
 import platform
+import re
 import shlex
 import socket
 import subprocess
@@ -29,6 +30,7 @@ import requests
 import yaml
 
 import bleemeo_agent.config
+import bleemeo_agent.util
 
 if os.name == 'nt':
     import pythoncom
@@ -176,15 +178,24 @@ def get_telegraf_version(core):
         distribution=core.config.get('distribution'),
     )
     if package_version is None:
+        telegraf = 'telegraf'
+        if os.name == 'nt':
+            telegraf = bleemeo_agent.util.windows_telegraf_path(telegraf)
         try:
-            output = subprocess.check_output(['telegraf', '-version'])
+            output = subprocess.check_output([telegraf, '-version'])
             output = output.decode('utf-8').strip()
         except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
             return None
 
+        # output is either "Telegraf - version 1.0.0"
+        # or "Telegraf v1.2.0 (git: release-1.2 b2c[...])"
         prefix = 'Telegraf - version '
         if output.startswith(prefix):
             package_version = output[len(prefix):]
+
+        match = re.match(r'Telegraf v([^ ]+) \(git: .*\)', output)
+        if match:
+            package_version = match.group(1)
 
     return package_version
 
