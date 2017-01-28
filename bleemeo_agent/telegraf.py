@@ -563,12 +563,15 @@ class Telegraf:
             if item == '_Total':
                 return
 
-            # Item looks like "0_C:", "1_D:". Remove the number_ from item
+            # Item looks like "0_C:", "1_D:" or "0_C:_D:" (multiple partition
+            # on one disk). Remove the number_ from item and take the smaller
+            # letter.
             if '_' in item:
-                number, item_new = item.split('_', 2)
+                item_part = item.split('_')
+                number = item_part[0]
                 try:
                     int(number)
-                    item = item_new
+                    item = sorted(item_part[1:])[0]
                 except ValueError:
                     pass
 

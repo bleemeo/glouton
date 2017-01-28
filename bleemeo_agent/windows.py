@@ -24,6 +24,7 @@ import subprocess
 import sys
 
 import servicemanager
+import win32console
 import win32service
 import win32serviceutil
 
@@ -106,6 +107,17 @@ def windows_installer_logger():
     )
 
 
+def decode_console_output(data):
+    """ Decode output from a console program.
+
+        Windows don't use UTF-8 for console output, but something like cp850.
+    """
+    try:
+        return data.decode('cp%s' % win32console.GetConsoleCP())
+    except:
+        return data.decode('utf-8', errors='ignore')
+
+
 def windows_preremove(args):
     """ Stop and remove Windows service for Bleemoe agent and Telegraf
     """
@@ -119,7 +131,7 @@ def windows_preremove(args):
     logging.info(
         'Stopping telegraf service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
 
     telegraf_binary = bleemeo_agent.util.windows_telegraf_path()
@@ -139,7 +151,7 @@ def windows_preremove(args):
     logging.info(
         'Uninstallating telegraf service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
 
     result = subprocess.run(
@@ -150,7 +162,7 @@ def windows_preremove(args):
     logging.info(
         'Stopping bleemeo-agent service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
     result = subprocess.run(
         [
@@ -164,7 +176,7 @@ def windows_preremove(args):
     logging.info(
         'Uninstallating bleemeo-agent service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
     logging.info('##### Pre-remove ended')
 
@@ -185,7 +197,7 @@ def windows_preinstall(args):
     logging.info(
         'Stopping telegraf service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
     result = subprocess.run(
         ["net", "stop", "bleemeo-agent"],
@@ -195,7 +207,7 @@ def windows_preinstall(args):
     logging.info(
         'Stopping bleemeo-agent service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
     logging.info('#### Pre-install ended')
 
@@ -240,7 +252,7 @@ bleemeo:
     logging.info(
         'Installating telegraf service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
     result = subprocess.run(
         ["net", "start", "telegraf"],
@@ -250,7 +262,7 @@ bleemeo:
     logging.info(
         'Starting telegraf service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
     result = subprocess.run(
         [
@@ -266,7 +278,7 @@ bleemeo:
     logging.info(
         'Installating bleemeo-agent service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
     result = subprocess.run(
         ["net", "start", "bleemeo-agent"],
@@ -276,7 +288,7 @@ bleemeo:
     logging.info(
         'Starting bleemeo-agent service returned %d:\n%s',
         result.returncode,
-        result.stdout.decode('utf8'),
+        decode_console_output(result.stdout),
     )
 
     # User running bleemeo-agent don't have permission to delete this file.
