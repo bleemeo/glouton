@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -e
+
+cd work/result
+
+WINDOWSREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/windows
+
+cp -p bleemeo-agent_*.exe ${WINDOWSREPO_ROOT}/
+
+# Remove older version of installer, keep only latest version
+ls --reverse ${WINDOWSREPO_ROOT}/bleemeo-agent_*.exe | tail -n +2 | xargs --no-run-if-empty rm -v
