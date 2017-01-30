@@ -331,11 +331,19 @@ class BleemeoConnector(threading.Thread):
             tls_version = ssl.PROTOCOL_TLSv1
 
         if self.core.config.get('bleemeo.mqtt.ssl', True):
+            cafile = self.core.config.get(
+                'bleemeo.mqtt.cafile',
+                '/etc/ssl/certs/ca-certificates.crt'
+            )
+            if '$INSTDIR' in cafile and os.name == 'nt':
+                # Under Windows, $INSTDIR is remplaced by installation
+                # directory
+                cafile = cafile.replace(
+                    '$INSTDIR',
+                    bleemeo_agent.util.windows_instdir()
+                )
             self.mqtt_client.tls_set(
-                self.core.config.get(
-                    'bleemeo.mqtt.cafile',
-                    '/etc/ssl/certs/ca-certificates.crt'
-                ),
+                cafile,
                 tls_version=tls_version,
             )
             self.mqtt_client.tls_insecure_set(
