@@ -470,6 +470,34 @@ class Telegraf:
                     'value': 100 - value,
                 })
             computed_metrics_pending.add(('cpu_other', None, None, timestamp))
+        elif part[-2] == 'win_cpu':
+            if part[2] != '_Total':
+                return
+
+            name = part[-1]
+            if name == 'Percent_Idle_Time':
+                name = 'cpu_idle'
+            elif name == 'Percent_Interrupt_Time':
+                name = 'cpu_interrupt'
+            elif name == 'Percent_User_Time':
+                name = 'cpu_user'
+            elif name == 'Percent_Privileged_Time':
+                name = 'cpu_system'
+            elif name == 'Percent_DPC_Time':
+                name = 'cpu_softirq'
+            else:
+                return
+
+            if name == 'cpu_idle':
+                self.core.emit_metric({
+                    'measurement': 'cpu_used',
+                    'time': timestamp,
+                    'value': 100 - value,
+                })
+                computed_metrics_pending.add(
+                    ('system_load1', None, None, timestamp)
+                )
+            computed_metrics_pending.add(('cpu_other', None, None, timestamp))
         elif part[-2] == 'disk':
             path = part[-3].replace('-', '/')
             path = self.graphite_server.disk_path_rename(path)
@@ -480,6 +508,33 @@ class Telegraf:
             name = 'disk_' + part[-1]
             if name == 'disk_used_percent':
                 name = 'disk_used_perc'
+        elif part[-2] == 'win_disk':
+            item = part[2]
+            name = part[-1]
+            if item == '_Total':
+                return
+
+            # For Windows, assimilate disk (which are also named "C:", "D:"...
+            # and (mounted) partition like C:
+            if self.graphite_server._ignored_disk(item):
+                return
+
+            if name == 'Percent_Free_Space':
+                name = 'disk_used_perc'
+                value = 100 - value
+
+                # when disk_total is processed, disk_used is also emitted
+                computed_metrics_pending.add(
+                    ('disk_total', item, None, timestamp)
+                )
+            elif name == 'Free_Megabytes':
+                name = 'disk_free'
+                value = value * 1024 * 1024
+                computed_metrics_pending.add(
+                    ('disk_total', item, None, timestamp)
+                )
+            else:
+                return
         elif part[-2] == 'diskio':
             item = part[2]
             name = part[-1]
@@ -505,6 +560,58 @@ class Telegraf:
                     'time': timestamp,
                     'item': item,
                 })
+        elif part[-2] == 'win_diskio':
+            item = part[2]
+            name = part[-1]
+            if item == '_Total':
+                return
+
+            # Item looks like "0_C:", "1_D:" or "0_C:_D:" (multiple partition
+            # on one disk). Remove the number_ from item and take the smaller
+            # letter.
+            if '_' in item:
+                item_part = item.split('_')
+                number = item_part[0]
+                try:
+                    int(number)
+                    item = sorted(item_part[1:])[0]
+                except ValueError:
+                    pass
+
+            if self.graphite_server._ignored_disk(item):
+                return
+
+            if name == 'Disk_Read_Bytes_persec':
+                name = 'io_read_bytes'
+            elif name == 'Disk_Write_Bytes_persec':
+                name = 'io_write_bytes'
+            elif name == 'Current_Disk_Queue_Length':
+                name = 'io_in_progress'
+            elif name == 'Disk_Reads_persec':
+                name = 'io_reads'
+            elif name == 'Disk_Writes_persec':
+                name = 'io_writes'
+            elif name == 'Percent_Disk_Time':
+                name = 'io_utilization'
+                self.core.emit_metric({
+                    'measurement': 'io_time',
+                    # io_time is a number of ms spent doing IO (per seconds)
+                    # utilization is 100% when we spent 1000ms during one
+                    # second
+                    'value': value * 1000. / 100.,
+                    'time': timestamp,
+                    'item': item,
+                })
+            elif name == 'Percent_Disk_Read_Time':
+                name = 'io_read_time'
+                # Like io_time/io_utilization
+                value = value * 1000. / 100.
+            elif name == 'Percent_Disk_Write_Time':
+                name = 'io_write_time'
+                # Like io_time/io_utilization
+                value = value * 1000. / 100.
+            else:
+                return
         elif part[-2] == 'mem':
             name = 'mem_' + part[-1]
             if name in ('mem_used', 'mem_used_percent'):
@@ -525,6 +632,39 @@ class Telegraf:
                 )
             else:
                 return
+        elif part[-2] == 'win_mem':
+            name = part[-1]
+            if name == 'Available_Bytes':
+                name = 'mem_available'
+                self.core.emit_metric({
+                    'measurement': 'mem_available_perc',
+                    'time': timestamp,
+                    'value': value * 100. / self.core.total_memory_size,
+                })
+                mem_used = self.core.total_memory_size - value
+                self.core.emit_metric({
+                    'measurement': 'mem_used',
+                    'time': timestamp,
+                    'value': mem_used,
+                })
+                self.core.emit_metric({
+                    'measurement': 'mem_used_perc',
+                    'time': timestamp,
+                    'value': mem_used * 100. / self.core.total_memory_size,
+                })
+                computed_metrics_pending.add(
+                    ('mem_free', None, None, timestamp)
+                )
+            elif name in (
+                    'Standby_Cache_Reserve_Bytes',
+                    'Standby_Cache_Normal_Priority_Bytes',
+                    'Standby_Cache_Core_Bytes'):
+                no_emit = True
+                computed_metrics_pending.add(
+                    ('mem_cached', None, None, timestamp)
+                )
+            else:
+                return
         elif part[-2] == 'net' and part[-3] != 'all':
             item = part[-3]
             if self.graphite_server.network_interface_blacklist(item):
@@ -536,6 +676,36 @@ class Telegraf:
                 value = value * 8
 
             derive = True
+        elif part[-2] == 'win_net':
+            item = part[2]
+            name = part[-1]
+            if self.graphite_server.network_interface_blacklist(item):
+                return
+
+            if name == 'Bytes_Sent_persec':
+                name = 'net_bits_sent'
+                value = value * 8
+            elif name == 'Bytes_Received_persec':
+                name = 'net_bits_recv'
+                value = value * 8
+            elif name == 'Packets_Sent_persec':
+                name = 'net_packets_sent'
+            elif name == 'Packets_Received_persec':
+                name = 'net_packets_recv'
+            elif name == 'Packets_Received_Discarded':
+                derive = True
+                name = 'net_drop_in'
+            elif name == 'Packets_Outbound_Discarded':
+                derive = True
+                name = 'net_drop_out'
+            elif name == 'Packets_Received_Errors':
+                derive = True
+                name = 'net_err_in'
+            elif name == 'Packets_Outbound_Errors':
+                derive = True
+                name = 'net_err_out'
+            else:
+                return
         elif part[-2] == 'swap':
             if not self.core.last_facts.get('swap_present', False):
                 return
@@ -544,6 +714,27 @@ class Telegraf:
                 name = name.replace('_percent', '_perc')
             if name in ('swap_in', 'swap_out'):
                 derive = True
+        elif part[-2] == 'win_swap':
+            if not self.core.last_facts.get('swap_present', False):
+                return
+
+            name = part[-1]
+            if name == 'Percent_Usage':
+                name = 'swap_used_perc'
+                if value == 0:
+                    swap_used = 0.0
+                else:
+                    swap_used = self.core.total_swap_size / (value / 100.)
+                self.core.emit_metric({
+                    'measurement': 'swap_used',
+                    'time': timestamp,
+                    'value': swap_used,
+                })
+                self.core.emit_metric({
+                    'measurement': 'swap_free',
+                    'time': timestamp,
+                    'value': self.core.total_swap_size - swap_used,
+                })
         elif part[-2] == 'system':
             name = 'system_' + part[-1]
             if name == 'system_uptime':
@@ -551,6 +742,17 @@ class Telegraf:
             elif name == 'system_n_users':
                 name = 'users_logged'
             elif name not in ('system_load1', 'system_load5', 'system_load15'):
+                return
+        elif part[-2] == 'win_system':
+            name = part[-1]
+            if name == 'System_Up_Time':
+                name = 'uptime'
+            elif name == 'Processor_Queue_Length':
+                no_emit = True
+                computed_metrics_pending.add(
+                    ('system_load1', None, None, timestamp)
+                )
+            else:
                 return
         elif part[-2] == 'processes':
             if part[-1] in ['blocked', 'running', 'sleeping',

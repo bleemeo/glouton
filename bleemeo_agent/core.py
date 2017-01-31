@@ -41,6 +41,7 @@ except ImportError:
     from apscheduler.jobstores.base import JobLookupError
     APSCHEDULE_IS_3X = True
 
+import psutil
 import six
 from six.moves import configparser
 import yaml
@@ -282,6 +283,13 @@ handlers:
         class: logging.handlers.SysLogHandler
         address: /dev/log
         formatter: syslog
+    file:
+        class: logging.handlers.TimedRotatingFileHandler
+        filename: /noexistant/path/to/be/remplaced
+        when: midnight
+        interval: 1
+        backupCount: 7
+        formatter: simple
 loggers:
     requests: {level: WARNING}
     urllib3: {level: WARNING}
@@ -295,6 +303,11 @@ root:
 
 
 def main():
+    if os.name == 'nt':
+        import bleemeo_agent.windows
+        bleemeo_agent.windows.windows_main()
+        sys.exit(0)
+
     parser = argparse.ArgumentParser(description='Bleemeo agent')
     parser.add_argument(
         '--yes-run-as-root',
@@ -511,6 +524,11 @@ class State:
                     json.dump(self._content, fd)
                     fd.flush()
                     os.fsync(fd.fileno())
+                if os.name == 'nt':
+                    try:
+                        os.remove(self.filename)
+                    except OSError:
+                        pass
                 os.rename(self.filename + '.tmp', self.filename)
                 return True
             except OSError as exc:
@@ -557,7 +575,9 @@ class State:
 
 
 class Core:
-    def __init__(self):
+    def __init__(self, run_as_windows_service=False):
+        self.run_as_windows_service = run_as_windows_service
+
         self.sentry_client = None
         self.last_facts = {}
         self.last_facts_update = bleemeo_agent.util.get_clock()
@@ -578,7 +598,7 @@ class Core:
         else:
             self._scheduler = apscheduler.scheduler.Scheduler()
         self.last_metrics = {}
-        self.last_report = datetime.datetime.fromtimestamp(0)
+        self.last_report = None
 
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = {}
@@ -586,6 +606,11 @@ class Core:
         self._trigger_discovery = False
         self._trigger_facts = False
         self._netstat_output_mtime = 0
+
+        # This is needed on Windows to compute mem_*_perc and mem_total
+        self.total_memory_size = psutil.virtual_memory().total
+        # This is needed on Windows to compute swap_used and swap_total:
+        self.total_swap_size = psutil.swap_memory().total
 
     def _init(self):
         self.started_at = bleemeo_agent.util.get_clock()
@@ -653,6 +678,7 @@ class Core:
         if output == 'syslog':
             logger_config = yaml.safe_load(LOGGER_CONFIG)
             del logger_config['handlers']['console']
+            del logger_config['handlers']['file']
             logger_config['root']['handlers'] = ['syslog']
             logger_config['root']['level'] = log_level
             try:
@@ -662,9 +688,24 @@ class Core:
                 # docker container
                 output = 'console'
 
+        if output == 'file':
+            logger_config = yaml.safe_load(LOGGER_CONFIG)
+            del logger_config['handlers']['console']
+            del logger_config['handlers']['syslog']
+            logger_config['root']['handlers'] = ['file']
+            logger_config['root']['level'] = log_level
+            logger_config['handlers']['file']['filename'] = self.config.get(
+                'logging.output_file'
+            )
+            try:
+                logging.config.dictConfig(logger_config)
+            except ValueError:
+                output = 'console'
+
         if output == 'console':
             logger_config = yaml.safe_load(LOGGER_CONFIG)
             del logger_config['handlers']['syslog']
+            del logger_config['handlers']['file']
             logger_config['root']['handlers'] = ['console']
             logger_config['root']['level'] = log_level
             logging.config.dictConfig(logger_config)
@@ -860,6 +901,11 @@ class Core:
             pass
         finally:
             self.is_terminating.set()
+            self.graphite_server.join()
+            if self.bleemeo_connector is not None:
+                self.bleemeo_connector.join()
+            if self.influx_connector is not None:
+                self.influx_connector.join()
 
     def setup_signal(self):
         """ Make kill (SIGKILL) send a KeyboardInterrupt
@@ -873,8 +919,11 @@ class Core:
             self._trigger_discovery = True
             self._trigger_facts = True
 
-        signal.signal(signal.SIGTERM, handler)
-        signal.signal(signal.SIGHUP, handler_hup)
+        if not self.run_as_windows_service:
+            # Windows service don't use signal to shutdown
+            signal.signal(signal.SIGTERM, handler)
+        if os.name != 'nt':
+            signal.signal(signal.SIGHUP, handler_hup)
 
     def _docker_connect(self):
         """ Try to connect to docker remote API
@@ -1018,6 +1067,20 @@ class Core:
                 'time': now,
                 'value': 0.0,  # status ok
             })
+
+        if os.name == 'nt':
+            self.emit_metric({
+                'measurement': 'mem_total',
+                'time': now,
+                'value': float(self.total_memory_size),
+            })
+            if self.last_facts.get('swap_present', False):
+                self.total_swap_size = psutil.swap_memory().total
+                self.emit_metric({
+                    'measurement': 'swap_total',
+                    'time': now,
+                    'value': float(self.total_swap_size),
+                })
 
         metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:
@@ -1260,7 +1323,7 @@ class Core:
             # The host pid namespace see ALL process.
             # They are added in instance "None" (i.e. running in the host),
             # but if they are running in a docker, they will be updated later
-            for process in bleemeo_agent.util.get_top_info()['processes']:
+            for process in bleemeo_agent.util.get_top_info(self)['processes']:
                 processes[process['pid']] = {
                     'cmdline': process['cmdline'],
                     'instance': None,
@@ -1570,7 +1633,7 @@ class Core:
         self.last_facts_update = bleemeo_agent.util.get_clock()
 
     def send_top_info(self):
-        self.top_info = bleemeo_agent.util.get_top_info()
+        self.top_info = bleemeo_agent.util.get_top_info(self)
         if self.bleemeo_connector is not None:
             self.bleemeo_connector.publish_top_info(self.top_info)
 
