@@ -26,6 +26,7 @@ import logging
 import logging.config
 import os
 import re
+import shlex
 import signal
 import socket
 import subprocess
@@ -340,11 +341,26 @@ def main():
 def get_service_info(cmdline):
     """ Return service_info from KNOWN_PROCESS matching this command line
     """
-    name = os.path.basename(cmdline.split()[0])
+    name = os.path.basename(shlex.split(cmdline)[0])
+
+    if os.name == 'nt':
+        name = name.lower()
+
+    # On Windows, remove the .exe if present
+    if os.name == 'nt' and name.endswith('.exe'):
+        name = name[:-len('.exe')]
+
+    # We have some process (example redis: "redis-server *6379") for which
+    # name contains space. Currently only case are redis and nginx, for both
+    # we only want the first word. All currently supported service don't have
+    # space in the expected name, so we can safely always take the first words.
+    name = name.split()[0]
+
     # For now, special case for java, erlang or python process.
     # Need a more general way to manage those case. Every interpreter/VM
     # language are affected.
-    if name in ('java', 'python') or name.startswith('beam'):
+
+    if name in ('java', 'python', 'erl') or name.startswith('beam'):
         # For them, we search in the command line
         for (key, service_info) in KNOWN_PROCESS.items():
             # FIXME: we should check that intepreter match the one used.

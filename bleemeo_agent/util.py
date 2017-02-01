@@ -20,6 +20,7 @@ import datetime
 import logging
 import os
 import random
+import shlex
 import subprocess
 import sys
 import threading
@@ -214,7 +215,7 @@ def get_top_info(core):  # noqa
             try:
                 cmdline = process.cmdline()
                 if cmdline and cmdline[0]:
-                    cmdline = ' '.join(cmdline)
+                    cmdline = ' '.join(shlex.quote(x) for x in cmdline)
                     name = process.name()
                 else:
                     cmdline = process.name()

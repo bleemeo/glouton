@@ -277,7 +277,10 @@ class Check:
             if sock is not None:
                 sockets[sock] = key
 
-        (rlist, _, _) = select.select(sockets.keys(), [], [], 0)
+        if len(sockets) > 0:
+            (rlist, _, _) = select.select(sockets.keys(), [], [], 0)
+        else:
+            rlist = []
         for s in rlist:
             try:
                 buffer = s.recv(65536)
