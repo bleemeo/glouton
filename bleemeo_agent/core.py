@@ -1418,6 +1418,39 @@ class Core:
         except IOError:
             pass
 
+        # also use psutil to fill current information, but due to privilege
+        # this may be very limited.
+        for conn in psutil.net_connections():
+            if conn.pid is None:
+                continue
+            if conn.status != psutil.CONN_LISTEN:
+                continue
+
+            (address, port) = conn.laddr
+
+            if address == '::':
+                # "::" is all address in IPv6. Assume the socket
+                # is IPv4 & IPv6 and since agent supports only IPv4
+                # convert to all address in IPv4
+                address = '0.0.0.0'
+            if ':' in address:
+                # No support for IPv6
+                continue
+
+            if conn.type == socket.SOCK_STREAM:
+                protocol = 'tcp'
+            elif conn.type == socket.SOCK_DGRAM:
+                protocol = 'udp'
+            else:
+                continue
+
+            key = '%s/%s' % (port, protocol)
+            ports = netstat_info.setdefault(conn.pid, {})
+
+            # If multiple address exists, prefer 127.0.0.1
+            if key not in ports or address.startswith('127.'):
+                ports[key] = address
+
         return netstat_info
 
     def _discovery_fill_address_and_ports(
