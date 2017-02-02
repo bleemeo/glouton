@@ -208,7 +208,7 @@ class Telegraf:
 
         self._restart_telegraf()
 
-    def _get_telegraf_config(self):  # noqa
+    def _get_telegraf_config(self):
         telegraf_config = BASE_TELEGRAF_CONFIG
 
         if self.core.config.get('telegraf.statsd_enabled', True):
@@ -435,7 +435,7 @@ class Telegraf:
 
         return None
 
-    def emit_metric(  # noqa
+    def emit_metric(
             self, name, timestamp, value, computed_metrics_pending):
 
         item = None

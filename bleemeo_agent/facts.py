@@ -266,7 +266,7 @@ def get_public_ip(core):
     return None
 
 
-def get_virtual_type(facts):  # noqa
+def get_virtual_type(facts):
     """ Return what virtualization is used. "physical" if it's bare-metal.
     """
     result = 'physical'
@@ -337,7 +337,7 @@ def get_facts_root():
     return facts
 
 
-def get_facts(core):  # noqa
+def get_facts(core):
     """ Return facts/grains/information about current machine.
 
         Returned facts are informations like hostname, OS type/version, etc

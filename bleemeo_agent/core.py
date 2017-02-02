@@ -743,7 +743,7 @@ class Core:
             # https://github.com/getsentry/raven-python/pull/723
             install_thread_hook(self.sentry_client)
 
-    def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):  # noqa
+    def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):
         """ Schedule a recuring job using APScheduler
 
             It's a wrapper to add_job/add_interval_job+add_date_job depending
@@ -1611,7 +1611,7 @@ class Core:
         service_info['username'] = user
         service_info['password'] = password
 
-    def _watch_docker_event(self):  # noqa
+    def _watch_docker_event(self):
         """ Watch for docker event and re-run discovery
         """
         last_event_at = time.time()
@@ -1750,7 +1750,7 @@ class Core:
 
         return threshold
 
-    def check_threshold(self, metric, with_soft_status):  # noqa
+    def check_threshold(self, metric, with_soft_status):
         """ Check if threshold is defined for given metric. If yes, check
             it and add a "status" tag.
 
@@ -1906,7 +1906,7 @@ class Core:
 
         return metric
 
-    def _check_soft_status(self, metric, soft_status, last_status, period):  # noqa
+    def _check_soft_status(self, metric, soft_status, last_status, period):
         """ Check if soft_status was in error for at least the grace period
             of the metric.
 

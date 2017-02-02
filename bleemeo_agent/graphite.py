@@ -189,7 +189,7 @@ class GraphiteServer(threading.Thread):
             sock_client.close()
             logging.debug('graphite: client %s disconnectd', addr)
 
-    def process_client_inner(self, sock_client):  # noqa
+    def process_client_inner(self, sock_client):
         remain = b''
         sock_client.settimeout(1)
         last_timestamp = 0

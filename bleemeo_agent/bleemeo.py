@@ -381,7 +381,7 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.loop_start()
 
-    def _loop(self):  # noqa
+    def _loop(self):
         """ Call as long as agent is running. It's the "main" method for
             Bleemeo connector thread.
         """
@@ -717,7 +717,7 @@ class BleemeoConnector(threading.Thread):
                 'services_uuid', self.services_uuid
             )
 
-    def _register_metric(self):  # noqa
+    def _register_metric(self):
         """ Check for any unregistered metrics and register them
         """
         base_url = self.bleemeo_base_url

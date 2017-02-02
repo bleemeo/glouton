@@ -300,7 +300,7 @@ class Check:
         if try_reopen:
             self.open_sockets()
 
-    def run_check(self):  # noqa
+    def run_check(self):
         now = time.time()
 
         if self.address is None and self.instance is not None:
@@ -435,7 +435,7 @@ class Check:
         end = bleemeo_agent.util.get_clock()
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
-    def check_tcp(self, address=None, port=None):  # noqa
+    def check_tcp(self, address=None, port=None):
         if address is not None or port is not None:
             use_default = False
         else:

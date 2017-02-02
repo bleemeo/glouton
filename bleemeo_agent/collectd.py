@@ -215,7 +215,7 @@ class Collectd:
 
         self._restart_collectd()
 
-    def _get_collectd_config(self):  # noqa
+    def _get_collectd_config(self):
         has_postgres = False
         collectd_config = BASE_COLLECTD_CONFIG
 
@@ -297,7 +297,7 @@ class Collectd:
                 logging.debug(
                     'collectd reconfigured and restarted: %s', output)
 
-    def emit_metric(  # noqa
+    def emit_metric(
             self, name, timestamp, value, computed_metrics_pending):
         """ Rename a metric and pass it to core
 
