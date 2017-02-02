@@ -235,7 +235,28 @@ bleemeo:
         r'C:\ProgramData\Bleemeo\etc\telegraf\telegraf.d', exist_ok=True
     )
 
+    # Uninstall telegraf service just before re-installing it. This is
+    # needed to update service information (for example the -config-directory
+    # value)
     telegraf_binary = bleemeo_agent.util.windows_telegraf_path()
+    result = subprocess.run(
+        [
+            telegraf_binary,
+            '-config',
+            r'C:\ProgramData\Bleemeo\etc\telegraf\telegraf.conf',
+            '-config-directory',
+            r'C:\ProgramData\Bleemeo\etc\telegraf\telegraf.d',
+            '--service',
+            'uninstall'
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+    )
+    logging.info(
+        'Uninstallating telegraf service returned %d:\n%s',
+        result.returncode,
+        decode_console_output(result.stdout),
+    )
     result = subprocess.run(
         [
             telegraf_binary,
