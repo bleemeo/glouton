@@ -39,6 +39,12 @@ import bleemeo_agent.util
 MQTT_QUEUE_MAX_SIZE = 2000
 
 
+class ApiError(Exception):
+    def __init__(self, response):
+        super(Exception, self).__init__()
+        self.response = response
+
+
 def api_iterator(url, params, auth, headers=None):
     """ Call Bleemeo API on a list endpoints and return a iterator
         that request all pages
@@ -54,6 +60,9 @@ def api_iterator(url, params, auth, headers=None):
         headers=headers,
     )
 
+    if response.status_code != 200:
+        raise ApiError(response)
+
     data = response.json()
     if isinstance(data, list):
         # Old API without pagination
@@ -67,6 +76,10 @@ def api_iterator(url, params, auth, headers=None):
 
     while data['next']:
         response = requests.get(data['next'], auth=auth)
+
+        if response.status_code != 200:
+            raise ApiError(response)
+
         data = response.json()
         for item in data['results']:
             yield item
@@ -524,8 +537,20 @@ class BleemeoConnector(threading.Thread):
                 or clock_now - self._last_update > 60 * 60
                 or self.core.last_services_autoremove >= self._last_update
                 or self.last_containers_removed >= self._last_update):
-            self._purge_deleted_services()
-            self._retrive_threshold()
+            try:
+                self._purge_deleted_services()
+            except ApiError as exc:
+                logging.info(
+                    'Unable to synchronize services. API responded: %s',
+                    exc.response.content,
+                )
+            try:
+                self._retrive_threshold()
+            except ApiError as exc:
+                logging.info(
+                    'Unable to synchronize metrics. API responded: %s',
+                    exc.response.content,
+                )
             self._last_update = clock_now
 
         if (self._last_discovery_sent is None or
@@ -538,7 +563,13 @@ class BleemeoConnector(threading.Thread):
 
         if (self._last_facts_sent is None
                 or self._last_facts_sent < self.core.last_facts_update):
-            self.send_facts()
+            try:
+                self.send_facts()
+            except ApiError as exc:
+                logging.info(
+                    'Unable to synchronize facts. API responded: %s',
+                    exc.response.content,
+                )
 
     def _retrive_threshold(self):
         """ Retrieve threshold for all registered metrics
