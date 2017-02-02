@@ -259,17 +259,17 @@ def get_top_info(core):
         'processes': processes,
         'cpu': {
             'user': cpu_usage.user,
-            'nice': cpu_usage.nice if hasattr(cpu_usage, 'nice') else 0.0,
+            'nice': getattr(cpu_usage, 'nice', 0.0),
             'system': cpu_usage.system,
             'idle': cpu_usage.idle,
-            'iowait': cpu_usage.iowait if hasattr(cpu_usage, 'iowait') else 0.0,
+            'iowait': getattr(cpu_usage, 'iowait', 0.0),
         },
         'memory': {
             'total': memory_usage.total / 1024,
             'used': memory_usage.used / 1024,
             'free': memory_usage.free / 1024,
-            'buffers': memory_usage.buffers / 1024 if hasattr(memory_usage, 'buffers') else 0.0,
-            'cached': memory_usage.cached / 1024 if hasattr(memory_usage, 'cached') else 0.0,
+            'buffers': getattr(memory_usage, 'buffers', 0.0) / 1024,
+            'cached': getattr(memory_usage, 'cached', 0.0) / 1024,
         },
         'swap': {
             'total': swap_usage.total / 1024,
