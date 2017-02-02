@@ -25,6 +25,7 @@ import sys
 
 import servicemanager
 import win32console
+import win32security
 import win32service
 import win32serviceutil
 
@@ -275,6 +276,50 @@ bleemeo:
         result.returncode,
         decode_console_output(result.stdout),
     )
+
+    # Allow Local service to stop/start telegraf service
+    hscm = win32service.OpenSCManager(
+        None,
+        None,
+        win32service.SC_MANAGER_ALL_ACCESS
+    )
+    try:
+        hs = win32service.OpenService(
+            hscm, "telegraf", win32service.SERVICE_ALL_ACCESS
+        )
+        try:
+            sid = win32security.LookupAccountName(
+                None,
+                r"NT AUTHORITY\LocalService",
+            )[0]
+            sec_descriptor = win32service.QueryServiceObjectSecurity(
+                hs,
+                win32security.DACL_SECURITY_INFORMATION
+            )
+            sec_dacl = sec_descriptor.GetSecurityDescriptorDacl()
+            sec_dacl.AddAccessAllowedAce(
+                win32security.ACL_REVISION,
+                win32service.SERVICE_START | win32service.SERVICE_STOP,
+                sid
+            )
+            sec_descriptor.SetSecurityDescriptorDacl(1, sec_dacl, 0)
+            win32service.SetServiceObjectSecurity(
+                hs,
+                win32security.DACL_SECURITY_INFORMATION,
+                sec_descriptor,
+            )
+        except:
+            logging.info(
+                'Failed to change permission on Telegraf service',
+                exc_info=True,
+            )
+        finally:
+            win32service.CloseServiceHandle(hs)
+    except:
+        logging.info('Failed to find Telegraf service', exc_info=True)
+    finally:
+        win32service.CloseServiceHandle(hscm)
+
     result = subprocess.run(
         ["net", "start", "telegraf"],
         stdout=subprocess.PIPE,
