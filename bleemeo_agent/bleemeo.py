@@ -199,10 +199,9 @@ class BleemeoConnector(threading.Thread):
         self.core.update_last_report()
 
     def check_config_requirement(self):
-        config = self.core.config
         sleep_delay = 10
-        while (config.get('bleemeo.account_id') is None
-                or config.get('bleemeo.registration_key') is None):
+        while (self.core.config.get('bleemeo.account_id') is None
+                or self.core.config.get('bleemeo.registration_key') is None):
             logging.warning(
                 'bleemeo.account_id and/or '
                 'bleemeo.registration_key is undefine. '
@@ -210,7 +209,7 @@ class BleemeoConnector(threading.Thread):
             self.core.is_terminating.wait(sleep_delay)
             if self.core.is_terminating.is_set():
                 raise StopIteration
-            config = self.core.reload_config()
+            self.core.reload_config()
             sleep_delay = min(sleep_delay * 2, 600)
 
         if self.core.state.get('password') is None:
