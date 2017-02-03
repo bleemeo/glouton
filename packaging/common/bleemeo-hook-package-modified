@@ -13,19 +13,21 @@ if initctl status bleemeo-agent 2> /dev/null | grep -q running; then
     initctl reload bleemeo-agent
 fi
 
-if id bleemeo 2>/dev/null | grep -vq docker; then
-    usermod -aG docker bleemeo
+if grep '^docker:' /etc/group 2> /dev/null > /dev/null; then
+    if id bleemeo 2>/dev/null | grep -vq docker; then
+        usermod -aG docker bleemeo
 
-    # bleemeo user was added to group docker, restart agent to make new
-    # permission effective.
-    touch /var/lib/bleemeo/upgrade  # avoid disconnect/reconnect notification
-    service bleemeo-agent restart
-fi
+        # bleemeo user was added to group docker, restart agent to make new
+        # permission effective.
+        touch /var/lib/bleemeo/upgrade  # avoid disconnect/reconnect notification
+        service bleemeo-agent restart
+    fi
 
-if id telegraf 2>/dev/null | grep -vq docker; then
-    usermod -aG docker telegraf
+    if id telegraf 2>/dev/null | grep -vq docker; then
+        usermod -aG docker telegraf
 
-    # telegraf user was added to group docker, restart telegraf to make new
-    # permission effective.
-    service telegraf restart
+        # telegraf user was added to group docker, restart telegraf to make new
+        # permission effective.
+        service telegraf restart
+    fi
 fi
