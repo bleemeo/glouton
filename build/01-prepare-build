@@ -5,6 +5,8 @@ set -e
 COMMIT_HASH=$(git rev-parse --short HEAD)
 VERSION=0.$(TZ=UTC date +%Y%m%d.%H%M%S)
 
+echo ${VERSION} > VERSION
+
 mkdir work
 mkdir work/result
 
@@ -38,3 +40,4 @@ sed -i -e "s/%define version .*$/%define version ${VERSION}/" \
 
 sed -i -e "s/^version=0.1$/version=${VERSION}/" \
        packaging/windows/installer.cfg
+
