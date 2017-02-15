@@ -103,6 +103,8 @@ ENVIRON_CONFIG_VARS = [
     ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
     ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
     ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
+    ('BLEEMEO_AGENT_TELEGRAF_CONFIG_FILE', 'telegraf.config_file', 'string'),
+    ('BLEEMEO_AGENT_TELEGRAF_DOCKER_NAME', 'telegraf.docker_name', 'string'),
 ]
 
 
