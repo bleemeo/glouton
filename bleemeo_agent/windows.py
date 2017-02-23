@@ -33,6 +33,22 @@ import bleemeo_agent.core
 import bleemeo_agent.util
 
 
+def run_process(cmd):
+    """ Run a command and return a couple (return_code, output)
+
+        Return code is -127 is command could not be started
+    """
+    try:
+        result = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+        )
+        return (result.returncode, decode_console_output(result.stdout))
+    except OSError:
+        return (-127, "Failed to start command")
+
+
 def windows_main():
     # Windows script may be called for 4 different reason:
     # * post/pre install/remove script
@@ -124,19 +140,17 @@ def windows_preremove(args):
     """
     windows_installer_logger()
     logging.info('##### Pre-remove started')
-    result = subprocess.run(
+    (return_code, output) = run_process(
         ["net", "stop", "telegraf"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Stopping telegraf service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
 
     telegraf_binary = bleemeo_agent.util.windows_telegraf_path()
-    result = subprocess.run(
+    (return_code, output) = run_process(
         [
             telegraf_binary,
             '-config',
@@ -146,38 +160,32 @@ def windows_preremove(args):
             '--service',
             'uninstall'
         ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Uninstallating telegraf service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
 
-    result = subprocess.run(
+    (return_code, output) = run_process(
         ["net", "stop", "bleemeo-agent"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Stopping bleemeo-agent service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
-    result = subprocess.run(
+    (return_code, output) = run_process(
         [
             sys.executable,
             sys.argv[0],
             'remove',
         ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Uninstallating bleemeo-agent service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
     logging.info('##### Pre-remove ended')
 
@@ -190,25 +198,21 @@ def windows_preinstall(args):
 
     pathlib.Path(r'C:\ProgramData\Bleemeo\upgrade').touch()
 
-    result = subprocess.run(
+    (return_code, output) = run_process(
         ["net", "stop", "telegraf"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Stopping telegraf service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
-    result = subprocess.run(
+    (return_code, output) = run_process(
         ["net", "stop", "bleemeo-agent"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Stopping bleemeo-agent service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
     logging.info('#### Pre-install ended')
 
@@ -240,7 +244,7 @@ bleemeo:
     # needed to update service information (for example the -config-directory
     # value)
     telegraf_binary = bleemeo_agent.util.windows_telegraf_path()
-    result = subprocess.run(
+    (return_code, output) = run_process(
         [
             telegraf_binary,
             '-config',
@@ -250,15 +254,13 @@ bleemeo:
             '--service',
             'uninstall'
         ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Uninstallating telegraf service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
-    result = subprocess.run(
+    (return_code, output) = run_process(
         [
             telegraf_binary,
             '-config',
@@ -268,13 +270,11 @@ bleemeo:
             '--service',
             'install'
         ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Installating telegraf service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
 
     # Allow Local service to stop/start telegraf service
@@ -320,17 +320,15 @@ bleemeo:
     finally:
         win32service.CloseServiceHandle(hscm)
 
-    result = subprocess.run(
+    (return_code, output) = run_process(
         ["net", "start", "telegraf"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Starting telegraf service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
-    result = subprocess.run(
+    (return_code, output) = run_process(
         [
             sys.executable,
             sys.argv[0],
@@ -338,23 +336,19 @@ bleemeo:
             '--startup', 'auto',
             'install',
         ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Installating bleemeo-agent service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
-    result = subprocess.run(
+    (return_code, output) = run_process(
         ["net", "start", "bleemeo-agent"],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
     )
     logging.info(
         'Starting bleemeo-agent service returned %d:\n%s',
-        result.returncode,
-        decode_console_output(result.stdout),
+        return_code,
+        output,
     )
 
     # User running bleemeo-agent don't have permission to delete this file.

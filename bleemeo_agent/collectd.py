@@ -284,7 +284,7 @@ class Collectd:
                     stderr=subprocess.STDOUT,
                 )
                 return_code = 0
-            except subprocess.CalledProcessError as exception:
+            except (subprocess.CalledProcessError, OSError) as exception:
                 output = exception.output
                 return_code = exception.returncode
 

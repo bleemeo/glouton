@@ -1573,7 +1573,7 @@ class Core:
                         'cat', '/etc/mysql/debian.cnf'
                     ],
                 )
-            except subprocess.CalledProcessError:
+            except (subprocess.CalledProcessError, OSError):
                 debian_cnf_raw = b''
 
             debian_cnf = configparser.SafeConfigParser()
