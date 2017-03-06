@@ -550,6 +550,7 @@ class BleemeoConnector(threading.Thread):
                     'Unable to synchronize metrics. API responded: %s',
                     exc.response.content,
                 )
+            self._update_tags()
             self._last_update = clock_now
 
         if (self._last_discovery_sent is None or
@@ -685,6 +686,61 @@ class BleemeoConnector(threading.Thread):
                 deleted_services
             )
             self.core.update_discovery(deleted_services=deleted_services)
+
+    def _update_tags(self):
+        """ Synchronize tags with Bleemeo API
+        """
+        current_tags = set(self.core.config.get('tags', []))
+        old_tags = set(self.core.state.get('tags_uuid', {}))
+
+        if current_tags == old_tags:
+            return
+
+        response = requests.get(
+            urllib_parse.urljoin(
+                self.bleemeo_base_url, '/v1/agent/%s/' % self.agent_uuid
+            ),
+            params={'fields': 'tags'},
+            auth=(self.agent_username, self.agent_password),
+            headers={
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        )
+        if response.status_code != 200:
+            logging.debug(
+                'Fetching current agent tags failed: %s',
+                response.content
+            )
+            return
+
+        current_api_tags = set(x['name'] for x in response.json()['tags'])
+
+        deleted_tags = (old_tags - current_tags)
+        tags = (current_api_tags - deleted_tags).union(current_tags)
+
+        response = requests.patch(
+            urllib_parse.urljoin(
+                self.bleemeo_base_url, '/v1/agent/%s/' % self.agent_uuid
+            ),
+            data=json.dumps({'tags': [{'name': x} for x in tags]}),
+            auth=(self.agent_username, self.agent_password),
+            headers={
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-type': 'application/json',
+            },
+        )
+        if response.status_code > 400:
+            logging.debug(
+                'Updating current agent tags failed: %s',
+                response.content
+            )
+            return
+
+        tags_uuid = {}
+        for tag in response.json()['tags']:
+            if tag['name'] in current_tags:
+                tags_uuid[tag['name']] = tag['id']
+        self.core.state.set('tags_uuid', tags_uuid)
 
     def _register_services(self):
         """ Check for any unregistered services and register them
