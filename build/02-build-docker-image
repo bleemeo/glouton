@@ -1,0 +1,10 @@
+#!/bin/bash
+
+set -ex
+
+docker pull ubuntu:16.04
+
+VERSION=`cat VERSION`
+
+docker build -t bleemeo/bleemeo-agent:${VERSION} .
+docker tag bleemeo/bleemeo-agent:${VERSION} bleemeo/bleemeo-agent:latest

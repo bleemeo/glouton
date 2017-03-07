@@ -26,6 +26,7 @@ import logging
 import logging.config
 import os
 import re
+import shlex
 import signal
 import socket
 import subprocess
@@ -41,6 +42,7 @@ except ImportError:
     from apscheduler.jobstores.base import JobLookupError
     APSCHEDULE_IS_3X = True
 
+import psutil
 import six
 from six.moves import configparser
 import yaml
@@ -101,6 +103,8 @@ ENVIRON_CONFIG_VARS = [
     ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
     ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
     ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
+    ('BLEEMEO_AGENT_TELEGRAF_CONFIG_FILE', 'telegraf.config_file', 'string'),
+    ('BLEEMEO_AGENT_TELEGRAF_DOCKER_NAME', 'telegraf.docker_name', 'string'),
 ]
 
 
@@ -282,6 +286,13 @@ handlers:
         class: logging.handlers.SysLogHandler
         address: /dev/log
         formatter: syslog
+    file:
+        class: logging.handlers.TimedRotatingFileHandler
+        filename: /noexistant/path/to/be/remplaced
+        when: midnight
+        interval: 1
+        backupCount: 7
+        formatter: simple
 loggers:
     requests: {level: WARNING}
     urllib3: {level: WARNING}
@@ -295,6 +306,11 @@ root:
 
 
 def main():
+    if os.name == 'nt':
+        import bleemeo_agent.windows
+        bleemeo_agent.windows.windows_main()
+        sys.exit(0)
+
     parser = argparse.ArgumentParser(description='Bleemeo agent')
     parser.add_argument(
         '--yes-run-as-root',
@@ -327,11 +343,26 @@ def main():
 def get_service_info(cmdline):
     """ Return service_info from KNOWN_PROCESS matching this command line
     """
-    name = os.path.basename(cmdline.split()[0])
+    name = os.path.basename(shlex.split(cmdline)[0])
+
+    if os.name == 'nt':
+        name = name.lower()
+
+    # On Windows, remove the .exe if present
+    if os.name == 'nt' and name.endswith('.exe'):
+        name = name[:-len('.exe')]
+
+    # We have some process (example redis: "redis-server *6379") for which
+    # name contains space. Currently only case are redis and nginx, for both
+    # we only want the first word. All currently supported service don't have
+    # space in the expected name, so we can safely always take the first words.
+    name = name.split()[0]
+
     # For now, special case for java, erlang or python process.
     # Need a more general way to manage those case. Every interpreter/VM
     # language are affected.
-    if name in ('java', 'python') or name.startswith('beam'):
+
+    if name in ('java', 'python', 'erl') or name.startswith('beam'):
         # For them, we search in the command line
         for (key, service_info) in KNOWN_PROCESS.items():
             # FIXME: we should check that intepreter match the one used.
@@ -511,6 +542,11 @@ class State:
                     json.dump(self._content, fd)
                     fd.flush()
                     os.fsync(fd.fileno())
+                if os.name == 'nt':
+                    try:
+                        os.remove(self.filename)
+                    except OSError:
+                        pass
                 os.rename(self.filename + '.tmp', self.filename)
                 return True
             except OSError as exc:
@@ -557,12 +593,14 @@ class State:
 
 
 class Core:
-    def __init__(self):
+    def __init__(self, run_as_windows_service=False):
+        self.run_as_windows_service = run_as_windows_service
+
         self.sentry_client = None
         self.last_facts = {}
-        self.last_facts_update = 0
-        self.last_discovery_update = 0
-        self.last_services_autoremove = 0
+        self.last_facts_update = bleemeo_agent.util.get_clock()
+        self.last_discovery_update = bleemeo_agent.util.get_clock()
+        self.last_services_autoremove = bleemeo_agent.util.get_clock()
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -578,7 +616,7 @@ class Core:
         else:
             self._scheduler = apscheduler.scheduler.Scheduler()
         self.last_metrics = {}
-        self.last_report = datetime.datetime.fromtimestamp(0)
+        self.last_report = None
 
         self._discovery_job = None  # scheduled in schedule_tasks
         self._topinfo_job = None
@@ -587,6 +625,11 @@ class Core:
         self._trigger_discovery = False
         self._trigger_facts = False
         self._netstat_output_mtime = 0
+
+        # This is needed on Windows to compute mem_*_perc and mem_total
+        self.total_memory_size = psutil.virtual_memory().total
+        # This is needed on Windows to compute swap_used and swap_total:
+        self.total_swap_size = psutil.swap_memory().total
 
     def _init(self):
         self.started_at = bleemeo_agent.util.get_clock()
@@ -670,6 +713,7 @@ class Core:
         if output == 'syslog':
             logger_config = yaml.safe_load(LOGGER_CONFIG)
             del logger_config['handlers']['console']
+            del logger_config['handlers']['file']
             logger_config['root']['handlers'] = ['syslog']
             logger_config['root']['level'] = log_level
             try:
@@ -679,9 +723,24 @@ class Core:
                 # docker container
                 output = 'console'
 
+        if output == 'file':
+            logger_config = yaml.safe_load(LOGGER_CONFIG)
+            del logger_config['handlers']['console']
+            del logger_config['handlers']['syslog']
+            logger_config['root']['handlers'] = ['file']
+            logger_config['root']['level'] = log_level
+            logger_config['handlers']['file']['filename'] = self.config.get(
+                'logging.output_file'
+            )
+            try:
+                logging.config.dictConfig(logger_config)
+            except ValueError:
+                output = 'console'
+
         if output == 'console':
             logger_config = yaml.safe_load(LOGGER_CONFIG)
             del logger_config['handlers']['syslog']
+            del logger_config['handlers']['file']
             logger_config['root']['handlers'] = ['console']
             logger_config['root']['level'] = log_level
             logging.config.dictConfig(logger_config)
@@ -703,7 +762,7 @@ class Core:
             # https://github.com/getsentry/raven-python/pull/723
             install_thread_hook(self.sentry_client)
 
-    def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):  # noqa
+    def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):
         """ Schedule a recuring job using APScheduler
 
             It's a wrapper to add_job/add_interval_job+add_date_job depending
@@ -865,14 +924,23 @@ class Core:
             self.schedule_tasks()
             try:
                 self._scheduler.start()
-                # Wait forever. Ctrl+C or SIGKILL will abort this wait
-                self.is_terminating.wait()
+                # This loop is break by KeyboardInterrupt (ctrl+c or SIGTERM).
+                # It wait with a timeout because under Windows the wait() is
+                # uninterruptible. Using a 500ms wait allow to process
+                # signal every 500ms.
+                while not self.is_terminating.is_set():
+                    self.is_terminating.wait(0.5)
             finally:
                 self._scheduler.shutdown()
         except KeyboardInterrupt:
             pass
         finally:
             self.is_terminating.set()
+            self.graphite_server.join()
+            if self.bleemeo_connector is not None:
+                self.bleemeo_connector.join()
+            if self.influx_connector is not None:
+                self.influx_connector.join()
 
     def setup_signal(self):
         """ Make kill (SIGKILL) send a KeyboardInterrupt
@@ -886,8 +954,11 @@ class Core:
             self._trigger_discovery = True
             self._trigger_facts = True
 
-        signal.signal(signal.SIGTERM, handler)
-        signal.signal(signal.SIGHUP, handler_hup)
+        if not self.run_as_windows_service:
+            # Windows service don't use signal to shutdown
+            signal.signal(signal.SIGTERM, handler)
+        if os.name != 'nt':
+            signal.signal(signal.SIGHUP, handler_hup)
 
     def _docker_connect(self):
         """ Try to connect to docker remote API
@@ -909,12 +980,22 @@ class Core:
 
     def _update_docker_info(self):
         self.docker_containers = {}
+        self.docker_containers_ignored = []
 
         if self.docker_client is None or self.alerting_mode:
             return
 
         for container in self.docker_client.containers(all=True):
             inspect = self.docker_client.inspect_container(container['Id'])
+            labels = inspect.get('Config', {}).get('Labels', {})
+            if labels is None:
+                labels = {}
+            bleemeo_enable = labels.get('bleemeo.enable', '').lower()
+            if bleemeo_enable in ('0', 'off', 'false', 'no'):
+                self.docker_containers_ignored.append(
+                    inspect['Name'].lstrip('/')
+                )
+                continue
             name = inspect['Name'].lstrip('/')
             self.docker_containers[name] = inspect
 
@@ -940,6 +1021,10 @@ class Core:
             seconds=10,
         )
         self.schedule_topinfo()
+        self.add_scheduled_job(
+            self._gather_metrics_minute,
+            seconds=60,
+        )
         self.add_scheduled_job(
             self._check_triggers,
             seconds=10,
@@ -1031,9 +1116,69 @@ class Core:
                 'value': 0.0,  # status ok
             })
 
+        if os.name == 'nt':
+            self.emit_metric({
+                'measurement': 'mem_total',
+                'time': now,
+                'value': float(self.total_memory_size),
+            })
+            if self.last_facts.get('swap_present', False):
+                self.total_swap_size = psutil.swap_memory().total
+                self.emit_metric({
+                    'measurement': 'swap_total',
+                    'time': now,
+                    'value': float(self.total_swap_size),
+                })
+
         metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:
             self.emit_metric(metric, soft_status=False)
+
+    def _gather_metrics_minute(self):
+        """ Gather and send every minute some metric missing from other sources
+        """
+        for key in list(self.docker_containers.keys()):
+            result = self.docker_containers.get(key)
+            if (result is not None
+                    and 'Health' in result['State']
+                    and self.docker_client is not None):
+
+                self._docker_health_status(result['Id'])
+
+    def _docker_health_status(self, container_id):
+        """ Send metric for docker container health status
+        """
+        try:
+            result = self.docker_client.inspect_container(container_id)
+        except:
+            return  # most probably container was removed
+
+        name = result['Name'].lstrip('/')
+        self.docker_containers[name] = result
+        if 'Health' not in result['State']:
+            return
+
+        if result['State']['Health'].get('Status') == 'healthy':
+            status = bleemeo_agent.checker.STATUS_OK
+        elif result['State']['Health'].get('Status') == 'unhealthy':
+            status = bleemeo_agent.checker.STATUS_CRITICAL
+        else:
+            status = bleemeo_agent.checker.STATUS_UNKNOWN
+
+        metric = {
+            'measurement': 'docker_container_health_status',
+            'time': time.time(),
+            'value': float(status),
+            'status': bleemeo_agent.checker.STATUS_NAME[status],
+            'item': name,
+            'container': name,
+        }
+
+        logs = result['State']['Health'].get('Log', [])
+        if len(logs):
+            metric['check_output'] = logs[-1].get('Output')
+
+        self.emit_metric(metric)
 
     def purge_metrics(self, deleted_metrics=None):
         """ Remove old metrics from self.last_metrics
@@ -1226,7 +1371,7 @@ class Core:
             # The host pid namespace see ALL process.
             # They are added in instance "None" (i.e. running in the host),
             # but if they are running in a docker, they will be updated later
-            for process in bleemeo_agent.util.get_top_info()['processes']:
+            for process in bleemeo_agent.util.get_top_info(self)['processes']:
                 processes[process['pid']] = {
                     'cmdline': process['cmdline'],
                     'instance': None,
@@ -1305,6 +1450,39 @@ class Core:
         except IOError:
             pass
 
+        # also use psutil to fill current information, but due to privilege
+        # this may be very limited.
+        for conn in psutil.net_connections():
+            if conn.pid is None:
+                continue
+            if conn.status != psutil.CONN_LISTEN:
+                continue
+
+            (address, port) = conn.laddr
+
+            if address == '::':
+                # "::" is all address in IPv6. Assume the socket
+                # is IPv4 & IPv6 and since agent supports only IPv4
+                # convert to all address in IPv4
+                address = '0.0.0.0'
+            if ':' in address:
+                # No support for IPv6
+                continue
+
+            if conn.type == socket.SOCK_STREAM:
+                protocol = 'tcp'
+            elif conn.type == socket.SOCK_DGRAM:
+                protocol = 'udp'
+            else:
+                continue
+
+            key = '%s/%s' % (port, protocol)
+            ports = netstat_info.setdefault(conn.pid, {})
+
+            # If multiple address exists, prefer 127.0.0.1
+            if key not in ports or address.startswith('127.'):
+                ports[key] = address
+
         return netstat_info
 
     def _discovery_fill_address_and_ports(
@@ -1379,6 +1557,8 @@ class Core:
                 if (service_name, instance) in discovered_services:
                     # Service already found
                     continue
+                if instance in self.docker_containers_ignored:
+                    continue
                 logging.debug(
                     'Discovered service %s on %s',
                     service_name, instance
@@ -1423,7 +1603,7 @@ class Core:
                         'cat', '/etc/mysql/debian.cnf'
                     ],
                 )
-            except subprocess.CalledProcessError:
+            except (subprocess.CalledProcessError, OSError):
                 debian_cnf_raw = b''
 
             debian_cnf = configparser.SafeConfigParser()
@@ -1463,7 +1643,7 @@ class Core:
         service_info['username'] = user
         service_info['password'] = password
 
-    def _watch_docker_event(self):  # noqa
+    def _watch_docker_event(self):
         """ Watch for docker event and re-run discovery
         """
         last_event_at = time.time()
@@ -1498,15 +1678,30 @@ class Core:
                     if isinstance(event, six.string_types):
 
                         event = json.loads(event)
-                    status = event.get('status')
+
+                    if 'Action' in event:
+                        action = event['Action']
+                    else:
+                        # status is depractated. Action was introduced with
+                        # Docker 1.10
+                        action = event.get('status')
                     event_type = event.get('Type', 'container')
                     last_event_at = event['time']
 
-                    if (status not in DOCKER_DISCOVERY_EVENTS
-                            or event_type != 'container'):
-                        continue
-
-                    self._trigger_discovery = True
+                    if (action in DOCKER_DISCOVERY_EVENTS
+                            and event_type == 'container'):
+                        self._trigger_discovery = True
+                    elif (action.startswith('health_status:')
+                            and event_type == 'container'):
+                        container_id = event['Actor']['ID']
+                        self._docker_health_status(container_id)
+                        # If an health_status event occure, it means that
+                        # docker container inspect changed.
+                        # Update the discovery date, so BleemeoConnector will
+                        # update the containers info
+                        self.last_discovery_update = (
+                            bleemeo_agent.util.get_clock()
+                        )
             except:
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
@@ -1519,7 +1714,7 @@ class Core:
         self.last_facts_update = bleemeo_agent.util.get_clock()
 
     def send_top_info(self):
-        self.top_info = bleemeo_agent.util.get_top_info()
+        self.top_info = bleemeo_agent.util.get_top_info(self)
         if self.bleemeo_connector is not None:
             self.bleemeo_connector.publish_top_info(self.top_info)
 
@@ -1587,7 +1782,7 @@ class Core:
 
         return threshold
 
-    def check_threshold(self, metric, with_soft_status):  # noqa
+    def check_threshold(self, metric, with_soft_status):
         """ Check if threshold is defined for given metric. If yes, check
             it and add a "status" tag.
 
@@ -1743,7 +1938,7 @@ class Core:
 
         return metric
 
-    def _check_soft_status(self, metric, soft_status, last_status, period):  # noqa
+    def _check_soft_status(self, metric, soft_status, last_status, period):
         """ Check if soft_status was in error for at least the grace period
             of the metric.
 

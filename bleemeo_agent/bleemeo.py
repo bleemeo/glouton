@@ -20,6 +20,7 @@ import hashlib
 import json
 import logging
 import os
+import random
 import socket
 import ssl
 import threading
@@ -38,6 +39,12 @@ import bleemeo_agent.util
 MQTT_QUEUE_MAX_SIZE = 2000
 
 
+class ApiError(Exception):
+    def __init__(self, response):
+        super(Exception, self).__init__()
+        self.response = response
+
+
 def api_iterator(url, params, auth, headers=None):
     """ Call Bleemeo API on a list endpoints and return a iterator
         that request all pages
@@ -53,6 +60,9 @@ def api_iterator(url, params, auth, headers=None):
         headers=headers,
     )
 
+    if response.status_code != 200:
+        raise ApiError(response)
+
     data = response.json()
     if isinstance(data, list):
         # Old API without pagination
@@ -66,6 +76,10 @@ def api_iterator(url, params, auth, headers=None):
 
     while data['next']:
         response = requests.get(data['next'], auth=auth)
+
+        if response.status_code != 200:
+            raise ApiError(response)
+
         data = response.json()
         for item in data['results']:
             yield item
@@ -118,10 +132,10 @@ class BleemeoConnector(threading.Thread):
         self._metric_queue = queue.Queue()
         self.connected = False
         self._mqtt_queue_size = 0
-        self._last_facts_sent = 0
-        self._last_discovery_sent = 0
-        self._last_update = 0
-        self.last_containers_removed = 0
+        self._last_facts_sent = None
+        self._last_discovery_sent = None
+        self._last_update = None
+        self.last_containers_removed = bleemeo_agent.util.get_clock()
         self.mqtt_client = mqtt.Client()
 
         # Lock held when modifying self.metrics_uuid or self.services_uuid and
@@ -176,6 +190,9 @@ class BleemeoConnector(threading.Thread):
 
             if 'message_type' not in body:
                 return
+            if body['message_type'] == 'threshold-update':
+                logging.debug('Got "threshold-update" message from Bleemeo')
+                self._last_update = 0  # trigger a sync with Bleemeo
             if body['message_type'] == 'plan-changed':
                 logging.debug('Got "plan-changed" message from Bleemeo')
                 self._last_update = 0  # trigger an sync with Bleemeo
@@ -185,10 +202,9 @@ class BleemeoConnector(threading.Thread):
         self.core.update_last_report()
 
     def check_config_requirement(self):
-        config = self.core.config
         sleep_delay = 10
-        while (config.get('bleemeo.account_id') is None
-                or config.get('bleemeo.registration_key') is None):
+        while (self.core.config.get('bleemeo.account_id') is None
+                or self.core.config.get('bleemeo.registration_key') is None):
             logging.warning(
                 'bleemeo.account_id and/or '
                 'bleemeo.registration_key is undefine. '
@@ -196,7 +212,7 @@ class BleemeoConnector(threading.Thread):
             self.core.is_terminating.wait(sleep_delay)
             if self.core.is_terminating.is_set():
                 raise StopIteration
-            config = self.core.reload_config()
+            self.core.reload_config()
             sleep_delay = min(sleep_delay * 2, 600)
 
         if self.core.state.get('password') is None:
@@ -330,11 +346,19 @@ class BleemeoConnector(threading.Thread):
             tls_version = ssl.PROTOCOL_TLSv1
 
         if self.core.config.get('bleemeo.mqtt.ssl', True):
+            cafile = self.core.config.get(
+                'bleemeo.mqtt.cafile',
+                '/etc/ssl/certs/ca-certificates.crt'
+            )
+            if '$INSTDIR' in cafile and os.name == 'nt':
+                # Under Windows, $INSTDIR is remplaced by installation
+                # directory
+                cafile = cafile.replace(
+                    '$INSTDIR',
+                    bleemeo_agent.util.windows_instdir()
+                )
             self.mqtt_client.tls_set(
-                self.core.config.get(
-                    'bleemeo.mqtt.cafile',
-                    '/etc/ssl/certs/ca-certificates.crt'
-                ),
+                cafile,
                 tls_version=tls_version,
             )
             self.mqtt_client.tls_insecure_set(
@@ -343,8 +367,8 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.on_connect = self.on_connect
         self.mqtt_client.on_disconnect = self.on_disconnect
-        self.mqtt_client.on_publish = self.on_publish
         self.mqtt_client.on_message = self.on_message
+        self.mqtt_client.on_publish = self.on_publish
 
         mqtt_host = self.core.config.get(
             'bleemeo.mqtt.host',
@@ -372,7 +396,7 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.loop_start()
 
-    def _loop(self):  # noqa
+    def _loop(self):
         """ Call as long as agent is running. It's the "main" method for
             Bleemeo connector thread.
         """
@@ -535,25 +559,47 @@ class BleemeoConnector(threading.Thread):
             return
 
         clock_now = bleemeo_agent.util.get_clock()
-        if (clock_now - self._last_update > 60 * 60
+        if (self._last_update is None
+                or clock_now - self._last_update > 60 * 60
                 or self.core.last_services_autoremove >= self._last_update
                 or self.last_containers_removed >= self._last_update):
             agent = self.get_agent_api()
             if agent is not None:
                 self.core.set_alerting_mode(agent['alerting_mode'])
-            self._purge_deleted_services()
-            self._retrive_threshold()
+            try:
+                self._purge_deleted_services()
+            except ApiError as exc:
+                logging.info(
+                    'Unable to synchronize services. API responded: %s',
+                    exc.response.content,
+                )
+            try:
+                self._retrive_threshold()
+            except ApiError as exc:
+                logging.info(
+                    'Unable to synchronize metrics. API responded: %s',
+                    exc.response.content,
+                )
+            self._update_tags()
             self._last_update = clock_now
 
-        if self._last_discovery_sent < self.core.last_discovery_update:
+        if (self._last_discovery_sent is None or
+                self._last_discovery_sent < self.core.last_discovery_update):
             self._register_containers()
             self._last_discovery_sent = clock_now
 
         self._register_services()
         self._register_metric()
 
-        if self._last_facts_sent < self.core.last_facts_update:
-            self.send_facts()
+        if (self._last_facts_sent is None
+                or self._last_facts_sent < self.core.last_facts_update):
+            try:
+                self.send_facts()
+            except ApiError as exc:
+                logging.info(
+                    'Unable to synchronize facts. API responded: %s',
+                    exc.response.content,
+                )
 
     def _retrive_threshold(self):
         """ Retrieve threshold for all registered metrics
@@ -685,6 +731,61 @@ class BleemeoConnector(threading.Thread):
             )
             self.core.update_discovery(deleted_services=deleted_services)
 
+    def _update_tags(self):
+        """ Synchronize tags with Bleemeo API
+        """
+        current_tags = set(self.core.config.get('tags', []))
+        old_tags = set(self.core.state.get('tags_uuid', {}))
+
+        if current_tags == old_tags:
+            return
+
+        response = requests.get(
+            urllib_parse.urljoin(
+                self.bleemeo_base_url, '/v1/agent/%s/' % self.agent_uuid
+            ),
+            params={'fields': 'tags'},
+            auth=(self.agent_username, self.agent_password),
+            headers={
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+        )
+        if response.status_code != 200:
+            logging.debug(
+                'Fetching current agent tags failed: %s',
+                response.content
+            )
+            return
+
+        current_api_tags = set(x['name'] for x in response.json()['tags'])
+
+        deleted_tags = (old_tags - current_tags)
+        tags = (current_api_tags - deleted_tags).union(current_tags)
+
+        response = requests.patch(
+            urllib_parse.urljoin(
+                self.bleemeo_base_url, '/v1/agent/%s/' % self.agent_uuid
+            ),
+            data=json.dumps({'tags': [{'name': x} for x in tags]}),
+            auth=(self.agent_username, self.agent_password),
+            headers={
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-type': 'application/json',
+            },
+        )
+        if response.status_code > 400:
+            logging.debug(
+                'Updating current agent tags failed: %s',
+                response.content
+            )
+            return
+
+        tags_uuid = {}
+        for tag in response.json()['tags']:
+            if tag['name'] in current_tags:
+                tags_uuid[tag['name']] = tag['id']
+        self.core.state.set('tags_uuid', tags_uuid)
+
     def _register_services(self):
         """ Check for any unregistered services and register them
 
@@ -746,20 +847,30 @@ class BleemeoConnector(threading.Thread):
                 'services_uuid', self.services_uuid
             )
 
-    def _register_metric(self):  # noqa
+    def _register_metric(self):
         """ Check for any unregistered metrics and register them
         """
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         thresholds = self.core.state.get_complex_dict('thresholds', {})
         container_uuid = self.core.state.get('docker_container_uuid', {})
+        registration_error = 0
 
         # It can't keep the lock during whole loop, because call to API is slow
         # In addition it may remove entry during the loop.
         with self.metrics_lock:
             list_metrics = list(self.metrics_uuid.items())
 
+        # If one metric fail to register, it may block other metric that would
+        # register correctly. To reduce this risk, randomize the list, so on
+        # next run (every 15 seconds), the metric that failed to register may
+        # no longer block other.
+        random.shuffle(list_metrics)
+
         for metric_key, metric_uuid in list_metrics:
+            if registration_error > 3:
+                logging.debug('Too many registration error')
+                return
             if metric_uuid is not None:
                 continue
 
@@ -827,14 +938,21 @@ class BleemeoConnector(threading.Thread):
                     payload['container'] = (
                         container_uuid[container_name][1]
                     )
+                if service is not None:
+                    instance = self.metrics_info[metric_key]['instance']
+                    key = (service, instance)
+                    if key not in self.services_uuid:
+                        del self.metrics_uuid[metric_key]
+                        del self.metrics_info[metric_key]
+                        self.core.state.set_complex_dict(
+                            'metrics_uuid', self.metrics_uuid
+                        )
+                        continue
+
+                    payload['service'] = self.services_uuid[key]['uuid']
                 logging.debug('Registering metric %s', metric_name)
                 if item is not None:
                     payload['item'] = item
-                if service is not None:
-                    instance = self.metrics_info[metric_key]['instance']
-                    payload['service'] = (
-                        self.services_uuid[(service, instance)]['uuid']
-                    )
 
             # This should not be done with self.metrics_lock. It no CPU-bound
             # and would lock other thread that need this lock.
@@ -847,7 +965,15 @@ class BleemeoConnector(threading.Thread):
                     'Content-type': 'application/json',
                 },
             )
-            if response.status_code != 201:
+            if 400 <= response.status_code < 500:
+                logging.debug(
+                    'Metric registration failed. '
+                    'Server reported a client error: %s',
+                    response.content
+                )
+                registration_error += 1
+                continue
+            elif response.status_code != 201:
                 logging.debug(
                     'Metric registration failed. Server response = %s',
                     response.content

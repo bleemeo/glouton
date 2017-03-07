@@ -16,7 +16,7 @@
 #   limitations under the License.
 #
 
-"""
+r"""
 Load configuration (in yaml) from a "conf.d" folder.
 
 Path to configuration are hardcoded, in this order:
@@ -26,6 +26,12 @@ Path to configuration are hardcoded, in this order:
 * etc/agent.conf
 * etc/agent.conf.d/*.conf
 
+Under Windows, paths are:
+
+* C:\ProgramData\Bleemeo\etc\agent.conf
+* C:\ProgramData\Bleemeo\etc\agent.conf.d
+* etc\agent.conf
+* etc\agent.conf.d\*.conf
 """
 
 
@@ -41,6 +47,14 @@ PATHS = [
     '/etc/bleemeo/agent.conf.d',
     'etc/agent.conf',
     'etc/agent.conf.d'
+]
+
+
+WINDOWS_PATHS = [
+    r'C:\ProgramData\Bleemeo\etc\agent.conf',
+    r'C:\ProgramData\Bleemeo\etc\agent.conf.d',
+    r'etc\agent.conf',
+    r'etc\agent.conf.d',
 ]
 
 
@@ -108,7 +122,9 @@ def load_config(paths=None):
 
         If paths is not provided, use default value (PATH, see doc from module)
     """
-    if paths is None:
+    if paths is None and os.name == 'nt':
+        paths = WINDOWS_PATHS
+    elif paths is None:
         paths = PATHS
 
     default_config = Config()

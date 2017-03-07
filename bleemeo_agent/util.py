@@ -18,7 +18,9 @@
 
 import datetime
 import logging
+import os
 import random
+import shlex
 import subprocess
 import sys
 import threading
@@ -59,16 +61,17 @@ def generate_password(length=10,
 
 
 def get_uptime():
-    with open('/proc/uptime', 'r') as f:
-        uptime_seconds = float(f.readline().split()[0])
-        return uptime_seconds
+    boot_time = psutil.boot_time()
+    now = time.time()
+    return now - boot_time
 
 
-def get_loadavg():
-    with open('/proc/loadavg', 'r') as fd:
-        loads = fd.readline().split()[:3]
+def get_loadavg(core):
+    system_load1 = core.get_last_metric_value('system_load1', None, 0.0)
+    system_load5 = core.get_last_metric_value('system_load5', None, 0.0)
+    system_load15 = core.get_last_metric_value('system_load15', None, 0.0)
 
-    return [float(x) for x in loads]
+    return [system_load1, system_load5, system_load15]
 
 
 def get_clock():
@@ -81,7 +84,7 @@ def get_clock():
         system suspend might stop that clock).
     """
     if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
-        return time.clock_gettime(time.CLOCK_MONOTONIC)
+        return time.monotonic()
     else:
         return time.time()
 
@@ -186,26 +189,38 @@ def clean_cmdline(cmdline):
     return cmdline.replace('\r', '\\r').replace('\n', '\\n')
 
 
-def get_top_info():
+def get_top_info(core):
     """ Return informations needed to build a "top" view.
     """
     processes = []
     for process in psutil.process_iter():
         try:
+            if process.pid == 0:
+                # PID 0 on Windows use it for "System Idle Process".
+                # PID 0 is not used Linux don't use it.
+                # Other system are currently not supported.
+                continue
             try:
                 username = process.username()
-            except KeyError:
+            except (KeyError, psutil.AccessDenied):
                 # the uid can't be resolved by the system
-                username = str(process.uids().real)
+                if os.name == 'nt':
+                    username = ''
+                else:
+                    username = str(process.uids().real)
 
             # Cmdline may be unavailable (permission issue ?)
             # When unavailable, depending on psutil version, it returns
             # either [] or ['']
-            cmdline = process.cmdline()
-            if cmdline and cmdline[0]:
-                cmdline = ' '.join(cmdline)
-                name = process.name()
-            else:
+            try:
+                cmdline = process.cmdline()
+                if cmdline and cmdline[0]:
+                    cmdline = ' '.join(shlex.quote(x) for x in cmdline)
+                    name = process.name()
+                else:
+                    cmdline = process.name()
+                    name = cmdline
+            except psutil.AccessDenied:
                 cmdline = process.name()
                 name = cmdline
 
@@ -239,22 +254,22 @@ def get_top_info():
     result = {
         'time': now,
         'uptime': get_uptime(),
-        'loads': get_loadavg(),
+        'loads': get_loadavg(core),
         'users': len(psutil.users()),
         'processes': processes,
         'cpu': {
             'user': cpu_usage.user,
-            'nice': cpu_usage.nice,
+            'nice': getattr(cpu_usage, 'nice', 0.0),
             'system': cpu_usage.system,
             'idle': cpu_usage.idle,
-            'iowait': cpu_usage.iowait,
+            'iowait': getattr(cpu_usage, 'iowait', 0.0),
         },
         'memory': {
             'total': memory_usage.total / 1024,
             'used': memory_usage.used / 1024,
             'free': memory_usage.free / 1024,
-            'buffers': memory_usage.buffers / 1024,
-            'cached': memory_usage.cached / 1024,
+            'buffers': getattr(memory_usage, 'buffers', 0.0) / 1024,
+            'cached': getattr(memory_usage, 'cached', 0.0) / 1024,
         },
         'swap': {
             'total': swap_usage.total / 1024,
@@ -475,3 +490,24 @@ def docker_restart(docker_client, container_name):
             container_name
         )
     docker_client.start(container_name)
+
+
+def windows_instdir():
+    """ Return Windows installation directory
+    """
+    bleemeo_package_dir = os.path.dirname(__file__)
+    # bleemeo_agent package is located at $INSTDIR\pkgs\bleemeo_agent
+    install_dir = os.path.dirname(os.path.dirname(bleemeo_package_dir))
+    return install_dir
+
+
+def windows_telegraf_path(default="telegraf"):
+    """ Return path to telegraf. If not found, return default
+    """
+    # On Windows, when installed, telegraf is located as $INSTDIR\telegraf.exe
+    instdir = windows_instdir()
+    telegraf = os.path.join(instdir, "telegraf.exe")
+    if os.path.exists(telegraf):
+        return telegraf
+    else:
+        return default

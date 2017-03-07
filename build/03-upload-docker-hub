@@ -1,0 +1,5 @@
+#!/bin/bash
+
+set -e
+
+docker push bleemeo/bleemeo-agent

@@ -19,14 +19,23 @@
 import datetime
 import logging
 import os
+import platform
+import re
 import shlex
 import socket
 import subprocess
 
+import psutil
 import requests
 import yaml
 
 import bleemeo_agent.config
+import bleemeo_agent.util
+
+if os.name == 'nt':
+    import pythoncom
+    import winreg
+    import wmi
 
 
 DMI_DIR = '/sys/devices/virtual/dmi/id/'
@@ -84,11 +93,26 @@ def get_package_version(package_name, default=None, distribution=None):
 
         If not installed or if unable to find the version, return default.
 
-        If distribution is set to "debian" or "centos", use dpkg or rpm
-        respectivly to find the installed version.
+        For Windows, distribution is ignored and it use registry.
+
+        For non-Windows, if distribution is set to "debian" or "centos", use
+        dpkg or rpm respectivly to find the installed version.
 
         If distribution is set to None, try both dpkg then rpm.
     """
+
+    if os.name == 'nt':
+        key_path = (
+            r'Software\Microsoft\Windows\CurrentVersion\Uninstall\%s' %
+            package_name
+        )
+        try:
+            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, key_path) as key:
+                result = winreg.QueryValueEx(key, "DisplayVersion")[0]
+        except FileNotFoundError:
+            return default
+
+        return result
 
     result = None
     if distribution is None or distribution == 'debian':
@@ -154,15 +178,24 @@ def get_telegraf_version(core):
         distribution=core.config.get('distribution'),
     )
     if package_version is None:
+        telegraf = 'telegraf'
+        if os.name == 'nt':
+            telegraf = bleemeo_agent.util.windows_telegraf_path(telegraf)
         try:
-            output = subprocess.check_output(['telegraf', '-version'])
+            output = subprocess.check_output([telegraf, '-version'])
             output = output.decode('utf-8').strip()
         except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
             return None
 
+        # output is either "Telegraf - version 1.0.0"
+        # or "Telegraf v1.2.0 (git: release-1.2 b2c[...])"
         prefix = 'Telegraf - version '
         if output.startswith(prefix):
             package_version = output[len(prefix):]
+
+        match = re.match(r'Telegraf v([^ ]+) \(git: .*\)', output)
+        if match:
+            package_version = match.group(1)
 
     return package_version
 
@@ -233,12 +266,12 @@ def get_public_ip(core):
     return None
 
 
-def get_virtual_type(privileged_facts):  # noqa
+def get_virtual_type(facts):
     """ Return what virtualization is used. "physical" if it's bare-metal.
     """
     result = 'physical'
-    vendor_name = get_file_content(os.path.join(DMI_DIR, 'sys_vendor'))
-    bios_vendor = get_file_content(os.path.join(DMI_DIR, 'bios_vendor'))
+    vendor_name = facts.get('system_vendor')
+    bios_vendor = facts.get('bios_vendor')
 
     if vendor_name is None:
         # OpenVZ don't have DMI sys_vendor file, is it OpenVZ ?
@@ -264,7 +297,7 @@ def get_virtual_type(privileged_facts):  # noqa
         # At least OvH seem to use this for its Cloud platform.
         if bios_vendor is not None and 'bochs' in bios_vendor.lower():
             result = 'kvm'
-        elif 'vmware' in privileged_facts.get('serial_number', '').lower():
+        elif 'vmware' in facts.get('serial_number', '').lower():
             # VMware use serial_number like "VMware-42 1d 8c ..."
             result = 'vmware'
         else:
@@ -272,6 +305,10 @@ def get_virtual_type(privileged_facts):  # noqa
             result = 'openstack'
 
     return result
+
+
+def system_has_swap():
+    return psutil.swap_memory().total > 0
 
 
 def get_facts_root():
@@ -313,18 +350,29 @@ def get_facts(core):
     except IOError:
         facts = {}
 
-    os_information = read_os_release()
-    try:
-        os_codename = subprocess.check_output(
-            ['lsb_release', '--codename', '--short']
-        ).decode('utf8').strip()
-    except OSError:
-        os_codename = None
+    if os.name != 'nt':
+        os_information = read_os_release()
+        try:
+            os_codename = subprocess.check_output(
+                ['lsb_release', '--codename', '--short']
+            ).decode('utf8').strip()
+        except OSError:
+            os_codename = None
+        facts.update({
+            'os_codename': os_codename,
+            'os_family': os_information.get('ID_LIKE', None),
+            'os_name': os_information.get('NAME', None),
+            'os_pretty_name': os_information.get('PRETTY_NAME', None),
+            'os_version': os_information.get('VERSION_ID', None),
+            'os_version_long': os_information.get('VERSION', None),
+        })
+    else:
+        facts.update({
+            'os_version': platform.win32_ver()[0],
+        })
 
     primary_address = get_primary_address()
-    architecture = subprocess.check_output(
-        ['uname', '--machine']
-    ).decode('utf8').strip()
+    architecture = platform.machine()
     fqdn = socket.getfqdn()
     if fqdn == 'localhost':
         fqdn = socket.gethostname()
@@ -333,14 +381,68 @@ def get_facts(core):
         (hostname, domain) = fqdn.split('.', 1)
     else:
         (hostname, domain) = (fqdn, None)
-    kernel = subprocess.check_output(
-        ['uname', '--kernel-name']
-    ).decode('utf8').strip()
-    kernel_release = subprocess.check_output(
-        ['uname', '--kernel-release']
-    ).decode('utf8').strip()
-    kernel_version = kernel_release.split('-')[0]
-    kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
+    if os.name != 'nt':
+        kernel = subprocess.check_output(
+            ['uname', '--kernel-name']
+        ).decode('utf8').strip()
+        kernel_release = subprocess.check_output(
+            ['uname', '--kernel-release']
+        ).decode('utf8').strip()
+        kernel_version = kernel_release.split('-')[0]
+        kernel_major_version = '.'.join(kernel_release.split('.')[0:2])
+        facts.update({
+            'kernel': kernel,
+            'kernel_major_version': kernel_major_version,
+            'kernel_release': kernel_release,
+            'kernel_version': kernel_version,
+        })
+    else:
+        facts.update({
+            'kernel': 'Windows',
+        })
+
+    if os.name != 'nt':
+        facts.update({
+            'bios_released_at': get_file_content(
+                os.path.join(DMI_DIR, 'bios_date')
+            ),
+            'bios_vendor': get_file_content(
+                os.path.join(DMI_DIR, 'bios_vendor')
+            ),
+            'bios_version': get_file_content(
+                os.path.join(DMI_DIR, 'bios_version')
+            ),
+            'product_name': get_file_content(
+                os.path.join(DMI_DIR, 'product_name')
+            ),
+            'system_vendor': get_file_content(
+                os.path.join(DMI_DIR, 'sys_vendor')
+            ),
+        })
+    else:
+        # To use WMI, each thread must call pythoncom.CoInitializeEx() at
+        # least once.
+        pythoncom.CoInitializeEx(pythoncom.COINIT_APARTMENTTHREADED)
+
+        wmi_connection = wmi.WMI()
+        result = wmi_connection.Win32_ComputerSystem()
+        if len(result):
+            system_info = result[0]
+            facts.update({
+                'product_name': system_info.Model.strip(),
+                'system_vendor': system_info.Manufacturer.strip(),
+            })
+
+        result = wmi_connection.Win32_SystemBIOS()
+        if len(result):
+            bios_info = result[0].PartComponent
+            facts.update({
+                'bios_released_at': bios_info.ReleaseDate.strip(),
+                'bios_vendor': bios_info.Manufacturer.strip(),
+                'bios_version': bios_info.Version.strip(),
+                'serial_number': bios_info.SerialNumber.strip(),
+            })
+
     virtual = get_virtual_type(facts)
 
     (docker_version, docker_api_version) = get_docker_version(core)
@@ -348,15 +450,6 @@ def get_facts(core):
     facts.update({
         'agent_version': get_agent_version(core),
         'architecture': architecture,
-        'bios_released_at': get_file_content(
-            os.path.join(DMI_DIR, 'bios_date')
-        ),
-        'bios_vendor': get_file_content(
-            os.path.join(DMI_DIR, 'bios_vendor')
-        ),
-        'bios_version': get_file_content(
-            os.path.join(DMI_DIR, 'bios_version')
-        ),
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
         'collectd_version': get_package_version(
             'collectd', distribution=core.config.get('distribution'),
@@ -367,24 +460,9 @@ def get_facts(core):
         'public_ip': get_public_ip(core),
         'fqdn': fqdn,
         'hostname': hostname,
-        'kernel': kernel,
-        'kernel_major_version': kernel_major_version,
-        'kernel_release': kernel_release,
-        'kernel_version': kernel_version,
         'metrics_source': core.graphite_server.metrics_source,
-        'os_codename': os_codename,
-        'os_family': os_information.get('ID_LIKE', None),
-        'os_name': os_information.get('NAME', None),
-        'os_pretty_name': os_information.get('PRETTY_NAME', None),
-        'os_version': os_information.get('VERSION_ID', None),
-        'os_version_long': os_information.get('VERSION', None),
         'primary_address': primary_address,
-        'product_name': get_file_content(
-            os.path.join(DMI_DIR, 'product_name')
-        ),
-        'system_vendor': get_file_content(
-            os.path.join(DMI_DIR, 'sys_vendor')
-        ),
+        'swap_present': system_has_swap(),
         'telegraf_version': get_telegraf_version(core),
         'timezone': get_file_content('/etc/timezone'),
         'virtual': virtual,

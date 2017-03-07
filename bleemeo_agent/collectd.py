@@ -215,7 +215,7 @@ class Collectd:
 
         self._restart_collectd()
 
-    def _get_collectd_config(self):  # noqa
+    def _get_collectd_config(self):
         has_postgres = False
         collectd_config = BASE_COLLECTD_CONFIG
 
@@ -284,7 +284,7 @@ class Collectd:
                     stderr=subprocess.STDOUT,
                 )
                 return_code = 0
-            except subprocess.CalledProcessError as exception:
+            except (subprocess.CalledProcessError, OSError) as exception:
                 output = exception.output
                 return_code = exception.returncode
 
@@ -297,7 +297,7 @@ class Collectd:
                 logging.debug(
                     'collectd reconfigured and restarted: %s', output)
 
-    def emit_metric(  # noqa
+    def emit_metric(
             self, name, timestamp, value, computed_metrics_pending):
         """ Rename a metric and pass it to core
 
@@ -420,10 +420,14 @@ class Collectd:
             computed_metrics_pending.add(
                 ('process_total', None, None, timestamp))
         elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
+            if not self.core.last_facts.get('swap_present', False):
+                return
             name = 'swap_%s' % match_dict['type_instance']
             computed_metrics_pending.add(('swap_total', None, None, timestamp))
         elif (match_dict['plugin'] == 'swap'
                 and match_dict['type'] == 'swap_io'):
+            if not self.core.last_facts.get('swap_present', False):
+                return
             name = 'swap_%s' % match_dict['type_instance']
         elif match_dict['plugin'] == 'users':
             name = 'users_logged'

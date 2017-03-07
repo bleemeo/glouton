@@ -45,7 +45,7 @@ class InfluxDBConnector(threading.Thread):
         self._queue = queue.Queue(5000)
 
         # Used to avoid "flooding" logs about dropped messages
-        self._queue_full_last_warning = 0
+        self._queue_full_last_warning = None
         self._queue_full_count_warning = 0
 
     def _do_connect(self):
@@ -172,7 +172,9 @@ class InfluxDBConnector(threading.Thread):
         """
         clock_now = bleemeo_agent.util.get_clock()
         if (self._queue_full_count_warning
-                and self._queue_full_last_warning < clock_now - 60):
+                and (
+                    self._queue_full_last_warning is None
+                    or self._queue_full_last_warning < clock_now - 60)):
             logging.warning(
                 'InfluxDB connector: %s metric(s) were dropped due to '
                 'overflow of the sending queue',
