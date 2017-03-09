@@ -690,21 +690,42 @@ class Core:
         """
         return self.config.get('container.type', None)
 
-    @property
-    def alerting_mode(self):
-        return self.state.get('alerting_mode', False)
-
-    def set_alerting_mode(self, new_value):
-        if new_value == self.alerting_mode:
+    def set_topinfo_frequency(self, frequency):
+        if frequency == self.state.get('config.topinfo_frequency', 10):
             return
 
-        self.state.set('alerting_mode', new_value)
+        self.state.set('config.topinfo_frequency', frequency)
         self.schedule_topinfo()
+        logging.debug(
+            'Changed topinfo frequency to every %d second', frequency,
+        )
+
+    def set_docker_enabled(self, enabled):
+        if enabled == self.state.get('config.docker_enabled', True):
+            return
+
+        self.state.set('config.docker_enabled', enabled)
         self._trigger_discovery = True
-        if self.alerting_mode:
-            logging.info('Agent switched to alerting-only mode')
+        if enabled:
+            logging.debug('Enabled Docker support')
         else:
-            logging.info('Agent switched to full monitoring mode')
+            logging.debug('Disabled Docker support')
+
+    def set_metrics_whitelist(self, metrics_list):
+        sorted_list = sorted(metrics_list)
+        if sorted_list == self.state.get('config.metrics_whitelist', []):
+            return
+
+        self.state.set('config.metrics_whitelist', sorted_list)
+        self._trigger_discovery = True
+
+        if len(sorted_list) == 0:
+            logging.debug('Disabled metrics filtering, all metrics are sent')
+        else:
+            logging.debug(
+                'Enabled metrics filtering, whitelist: %s',
+                sorted_list,
+            )
 
     def _config_logger(self):
         output = self.config.get('logging.output', 'console')
@@ -982,7 +1003,8 @@ class Core:
         self.docker_containers = {}
         self.docker_containers_ignored = []
 
-        if self.docker_client is None or self.alerting_mode:
+        if (self.docker_client is None or
+                not self.state.get('config.docker_enabled', True)):
             return
 
         for container in self.docker_client.containers(all=True):
@@ -1040,16 +1062,10 @@ class Core:
             self.unschedule_job(self._topinfo_job)
             self._topinfo_job = None
 
-        if self.alerting_mode:
-            self._topinfo_job = self.add_scheduled_job(
-                self.send_top_info,
-                seconds=60,
-            )
-        else:
-            self._topinfo_job = self.add_scheduled_job(
-                self.send_top_info,
-                seconds=10,
-            )
+        self._topinfo_job = self.add_scheduled_job(
+            self.send_top_info,
+            seconds=self.state.get('config.topinfo_frequency', 10),
+        )
 
     def start_threads(self):
 

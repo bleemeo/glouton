@@ -193,8 +193,8 @@ class BleemeoConnector(threading.Thread):
             if body['message_type'] == 'threshold-update':
                 logging.debug('Got "threshold-update" message from Bleemeo')
                 self._last_update = 0  # trigger a sync with Bleemeo
-            if body['message_type'] == 'plan-changed':
-                logging.debug('Got "plan-changed" message from Bleemeo')
+            if body['message_type'] == 'config-changed':
+                logging.debug('Got "config-changed" message from Bleemeo')
                 self._last_update = 0  # trigger an sync with Bleemeo
 
     def on_publish(self, client, userdata, mid):
@@ -469,28 +469,40 @@ class BleemeoConnector(threading.Thread):
             message,
             1)
 
-    def get_agent_api(self):
-        base_url = self.bleemeo_base_url
-        agent_url = urllib_parse.urljoin(base_url, '/v1/agent/')
-        url = agent_url + self.agent_uuid + '/'
-
+    def get_agent_config(self):
         response = requests.get(
-            url,
+            urllib_parse.urljoin(
+                self.bleemeo_base_url, '/v1/agent/%s/' % self.agent_uuid
+            ),
+            params={'fields': 'current_config'},
             auth=(self.agent_username, self.agent_password),
             headers={'X-Requested-With': 'XMLHttpRequest'},
         )
-        if response.status_code == 404:
-            logging.warning(
-                'This agent is not found on Bleemeo Cloud Platform. '
-                'Was it deleted ?'
-            )
-            return None
         if response.status_code != 200:
             logging.warning(
-                'Failed to retrive Agent information, API retruned:\n%s',
+                'Failed to retrive Agent information: %s',
                 response.content,
             )
             return None
+
+        config_uuid = response.json().get('current_config')
+        if config_uuid is None:
+            return None
+
+        response = requests.get(
+            urllib_parse.urljoin(
+                self.bleemeo_base_url, '/v1/config/%s/' % config_uuid,
+            ),
+            auth=(self.agent_username, self.agent_password),
+            headers={'X-Requested-With': 'XMLHttpRequest'},
+        )
+        if response.status_code != 200:
+            logging.warning(
+                'Failed to retrive Config information: %s',
+                response.content,
+            )
+            return None
+
         return response.json()
 
     def register(self):
@@ -511,6 +523,12 @@ class BleemeoConnector(threading.Thread):
             'display_name': name,
             'fqdn': name,
         }
+
+        initial_config_name = self.core.config.get(
+            'bleemeo.initial_config_name'
+        )
+        if initial_config_name:
+            payload['initial_config_name'] = initial_config_name
 
         content = None
         try:
@@ -563,9 +581,20 @@ class BleemeoConnector(threading.Thread):
                 or clock_now - self._last_update > 60 * 60
                 or self.core.last_services_autoremove >= self._last_update
                 or self.last_containers_removed >= self._last_update):
-            agent = self.get_agent_api()
-            if agent is not None:
-                self.core.set_alerting_mode(agent['alerting_mode'])
+
+            config = self.get_agent_config()
+            if config is not None:
+                self.core.set_topinfo_frequency(config['topinfo_frequency'])
+                self.core.set_docker_enabled(config['docker_enabled'])
+                if config['metrics_whitelist']:
+                    self.core.set_metrics_whitelist(
+                        config['metrics_whitelist'].split(',')
+                    )
+                else:
+                    self.core.set_metrics_whitelist([])
+                if config['name'] != self.core.state.get('config.name'):
+                    logging.info('Changed to configuration %s', config['name'])
+                    self.core.state.set('config.name', config['name'])
             try:
                 self._purge_deleted_services()
             except ApiError as exc:
@@ -619,21 +648,7 @@ class BleemeoConnector(threading.Thread):
 
         metrics_registered = set()
 
-        for data in list(metrics):
-            metric_has_status = data['last_status'] is not None
-            if not self.sent_metric(data['label'], metric_has_status):
-                response = requests.delete(
-                    urllib_parse.urljoin(metric_url, '%s/' % data['id']),
-                    auth=(self.agent_username, self.agent_password),
-                    headers={'X-Requested-With': 'XMLHttpRequest'},
-                )
-                if response.status_code != 204:
-                    logging.debug(
-                        'Metric deletion failed, http code recveived %s',
-                        response.status_code
-                    )
-                    return
-                continue
+        for data in metrics:
             metrics_registered.add(data['id'])
             item = data['item']
             if item == '':
@@ -893,6 +908,17 @@ class BleemeoConnector(threading.Thread):
                     )
                     continue
 
+                metric_has_status = self.metrics_info[metric_key].get(
+                    'has_status', False
+                )
+                if not self.sent_metric(metric_name, metric_has_status):
+                    del self.metrics_uuid[metric_key]
+                    del self.metrics_info[metric_key]
+                    self.core.state.set_complex_dict(
+                        'metrics_uuid', self.metrics_uuid
+                    )
+                    continue
+
                 status_of = self.metrics_info[metric_key].get('status_of')
                 from_metric_key = (status_of, service, item)
 
@@ -1099,18 +1125,16 @@ class BleemeoConnector(threading.Thread):
 
     def sent_metric(self, metric_name, metric_has_status):
         """ Return True if the metric should be sent to Bleemeo Cloud platform
-
-            When in alerting mode, only metric whitelisted or with a status
-            are sent.
         """
-        if not self.core.alerting_mode:
-            # Always sent metrics if not in alerting mode
+        whitelist = self.core.state.get('config.metrics_whitelist', [])
+        if len(whitelist) == 0:
+            # Always sent metrics if whitelist is empty
             return True
 
         if metric_has_status:
             return True
 
-        if metric_name in self.core.config.get('metric.alerting_metric'):
+        if metric_name in whitelist:
             return True
 
         return False
@@ -1134,6 +1158,7 @@ class BleemeoConnector(threading.Thread):
                         'status_of': metric.get('status_of'),
                         'instance': metric.get('instance'),
                         'container': metric.get('container'),
+                        'has_status': metric_has_status,
                     }
                 )
 
