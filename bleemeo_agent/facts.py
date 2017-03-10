@@ -256,7 +256,11 @@ def get_public_ip(core):
         'https://myip.bleemeo.com'
     )
     try:
-        response = requests.get(url, timeout=5)
+        response = requests.get(
+            url,
+            timeout=5,
+            headers={'User-Agent': core.http_user_agent},
+        )
     except requests.exceptions.RequestException:
         return None
 

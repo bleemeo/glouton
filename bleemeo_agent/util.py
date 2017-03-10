@@ -375,7 +375,7 @@ def get_top_output(top_info):
     )
 
 
-def _get_url(name, metric_config):
+def _get_url(core, name, metric_config):
     url = metric_config['url']
 
     url_parsed = urllib_parse.urlparse(url)
@@ -394,6 +394,7 @@ def _get_url(name, metric_config):
     args = {
         'verify': metric_config.get('ssl_check', True),
         'timeout': 3.0,
+        'headers': {'User-Agent': core.http_user_agent},
     }
     if metric_config.get('username') is not None:
         args['auth'] = (
@@ -453,7 +454,7 @@ def pull_raw_metric(core, name):
         logging.warning('Missing URL for metric %s. Ignoring it', name)
         return
 
-    response = _get_url(name, metric_config)
+    response = _get_url(core, name, metric_config)
     if response is not None:
         value = None
         try:

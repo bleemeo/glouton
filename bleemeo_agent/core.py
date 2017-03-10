@@ -630,6 +630,8 @@ class Core:
         # This is needed on Windows to compute swap_used and swap_total:
         self.total_swap_size = psutil.swap_memory().total
 
+        self.http_user_agent = None
+
     def _init(self):
         self.started_at = bleemeo_agent.util.get_clock()
         errors = self.reload_config()
@@ -678,6 +680,10 @@ class Core:
         except OSError:
             mtime = 0
         self._netstat_output_mtime = mtime
+
+        self.http_user_agent = (
+            'Bleemeo Agent %s' % bleemeo_agent.facts.get_agent_version(self)
+        )
 
         return True
 

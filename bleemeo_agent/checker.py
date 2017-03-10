@@ -496,7 +496,11 @@ class Check:
         )
         try:
             response = requests.get(
-                url, timeout=10, allow_redirects=False, verify=False
+                url,
+                timeout=10,
+                allow_redirects=False,
+                verify=False,
+                headers={'User-Agent': self.core.http_user_agent},
             )
         except requests.exceptions.Timeout:
             return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')

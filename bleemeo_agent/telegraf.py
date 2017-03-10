@@ -358,7 +358,8 @@ class Telegraf:
                 try:
                     response = requests.get(
                         'http://%(address)s:%(port)s/_nodes/_local/'
-                        % service_info
+                        % service_info,
+                        headers={'User-Agent': self.core.http_user_agent},
                     )
                     data = response.json()
                     this_node_id = list(data['nodes'].keys())[0]

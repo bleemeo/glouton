@@ -75,7 +75,7 @@ def api_iterator(url, params, auth, headers=None):
         yield item
 
     while data['next']:
-        response = requests.get(data['next'], auth=auth)
+        response = requests.get(data['next'], auth=auth, headers=headers)
 
         if response.status_code != 200:
             raise ApiError(response)
@@ -494,6 +494,7 @@ class BleemeoConnector(threading.Thread):
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
+                    'User-Agent': self.core.http_user_agent,
                 },
             )
             if response.status_code == 201:
@@ -585,6 +586,7 @@ class BleemeoConnector(threading.Thread):
             metric_url,
             params={'agent': self.agent_uuid},
             auth=(self.agent_username, self.agent_password),
+            headers={'User-Agent': self.core.http_user_agent},
         )
 
         metrics_registered = set()
@@ -643,6 +645,7 @@ class BleemeoConnector(threading.Thread):
                 auth=(self.agent_username, self.agent_password),
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
+                    'User-Agent': self.core.http_user_agent,
                 },
             )
             if response.status_code not in (204, 404):
@@ -660,6 +663,7 @@ class BleemeoConnector(threading.Thread):
             service_url,
             params={'agent': self.agent_uuid},
             auth=(self.agent_username, self.agent_password),
+            headers={'User-Agent': self.core.http_user_agent},
         )
 
         services_registred = set()
@@ -704,6 +708,7 @@ class BleemeoConnector(threading.Thread):
             auth=(self.agent_username, self.agent_password),
             headers={
                 'X-Requested-With': 'XMLHttpRequest',
+                'User-Agent': self.core.http_user_agent,
             },
         )
         if response.status_code != 200:
@@ -727,6 +732,7 @@ class BleemeoConnector(threading.Thread):
             headers={
                 'X-Requested-With': 'XMLHttpRequest',
                 'Content-type': 'application/json',
+                'User-Agent': self.core.http_user_agent,
             },
         )
         if response.status_code > 400:
@@ -789,6 +795,7 @@ class BleemeoConnector(threading.Thread):
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
+                    'User-Agent': self.core.http_user_agent,
                 },
             )
             if response.status_code != expected_code:
@@ -919,6 +926,7 @@ class BleemeoConnector(threading.Thread):
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
+                    'User-Agent': self.core.http_user_agent,
                 },
             )
             if 400 <= response.status_code < 500:
@@ -1017,6 +1025,7 @@ class BleemeoConnector(threading.Thread):
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
+                    'User-Agent': self.core.http_user_agent,
                 },
             )
 
@@ -1041,6 +1050,7 @@ class BleemeoConnector(threading.Thread):
                 auth=(self.agent_username, self.agent_password),
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
+                    'User-Agent': self.core.http_user_agent,
                 },
             )
             if response.status_code not in (204, 404):
@@ -1092,7 +1102,10 @@ class BleemeoConnector(threading.Thread):
             fact_url,
             params={'agent': self.agent_uuid, 'page_size': 100},
             auth=(self.agent_username, self.agent_password),
-            headers={'X-Requested-With': 'XMLHttpRequest'},
+            headers={
+                'X-Requested-With': 'XMLHttpRequest',
+                'User-Agent': self.core.http_user_agent,
+            },
         )
 
         # Do request(s) now. New fact should not be in this list.
@@ -1112,6 +1125,7 @@ class BleemeoConnector(threading.Thread):
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
+                    'User-Agent': self.core.http_user_agent,
                 },
             )
             if response.status_code == 201:
@@ -1135,7 +1149,10 @@ class BleemeoConnector(threading.Thread):
             response = requests.delete(
                 urllib_parse.urljoin(fact_url, '%s/' % fact['id']),
                 auth=(self.agent_username, self.agent_password),
-                headers={'X-Requested-With': 'XMLHttpRequest'},
+                headers={
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'User-Agent': self.core.http_user_agent,
+                },
             )
             if response.status_code != 204:
                 logging.debug(
