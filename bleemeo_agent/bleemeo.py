@@ -605,8 +605,7 @@ class BleemeoConnector(threading.Thread):
                 'high_critical': data['threshold_high_critical'],
             }
 
-        self.core.state.set_complex_dict('thresholds', thresholds)
-        self.core.define_thresholds()
+        self.core.update_thresholds(thresholds)
 
         deleted_metrics = []
         with self.metrics_lock:
@@ -964,9 +963,8 @@ class BleemeoConnector(threading.Thread):
                 self.core.state.set_complex_dict(
                     'metrics_uuid', self.metrics_uuid
                 )
-                self.core.state.set_complex_dict('thresholds', thresholds)
 
-            self.core.define_thresholds()
+            self.core.update_thresholds(thresholds)
 
     def _register_containers(self):
         registration_url = urllib_parse.urljoin(

@@ -623,6 +623,7 @@ class Core:
         self._soft_status_since = {}
         self._trigger_discovery = False
         self._trigger_facts = False
+        self._trigger_updates_count = False
         self._netstat_output_mtime = 0
 
         # This is needed on Windows to compute mem_*_perc and mem_total
@@ -661,7 +662,11 @@ class Core:
             return False
 
         self._sentry_setup()
-        self.thresholds = self.define_thresholds()
+        self.thresholds = copy.deepcopy(self.config.get('thresholds', {}))
+        bleemeo_agent.config.merge_dict(
+            self.thresholds,
+            self.state.get_complex_dict('thresholds', {}),
+        )
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
         )
@@ -872,12 +877,36 @@ class Core:
             except KeyError:
                 pass
 
-    def define_thresholds(self):
-        self.thresholds = self.config.get('thresholds', {})
+    def update_thresholds(self, state_threshold):
+        """ Update threshold definition
+
+            Threshold has two sources:
+
+            * threshold from configuration
+            * threshold from Bleemeo Cloud platform (stored in state)
+
+            This method update definition for the later one. It will
+            store the input thresholds in the state, merge the two sources
+            and returns the result.
+        """
+
+        self.state.set_complex_dict('thresholds', state_threshold)
+
+        old_thresholds = self.thresholds
+
+        new_thresholds = copy.deepcopy(self.config.get('thresholds', {}))
         bleemeo_agent.config.merge_dict(
-            self.thresholds,
-            self.state.get_complex_dict('thresholds', {})
+            new_thresholds,
+            state_threshold,
         )
+        self.thresholds = new_thresholds
+
+        for update_name in ('system_pending_updates',
+                            'system_pending_security_updates'):
+            if (self.get_threshold(update_name, thresholds=old_thresholds) !=
+                    self.get_threshold(update_name)):
+                self._trigger_updates_count = True
+
         return self.thresholds
 
     def _schedule_metric_pull(self):
@@ -941,6 +970,7 @@ class Core:
 
         def handler_hup(signum, frame):
             self._trigger_discovery = True
+            self._trigger_updates_count = True
             self._trigger_facts = True
 
         if not self.run_as_windows_service:
@@ -1012,6 +1042,11 @@ class Core:
         self.add_scheduled_job(
             self._gather_metrics_minute,
             seconds=60,
+        )
+        self._gather_update_metrics_job = self.add_scheduled_job(
+            self._gather_update_metrics,
+            seconds=3600,
+            next_run_in=15,
         )
         self.add_scheduled_job(
             self.send_top_info,
@@ -1121,6 +1156,32 @@ class Core:
 
                 self._docker_health_status(result['Id'])
 
+    def _gather_update_metrics(self):
+        """ Gather and send metrics from system updates
+        """
+        now = time.time()
+        (pending_update, pending_security_update) = (
+            bleemeo_agent.util.get_pending_update(self)
+        )
+        if pending_update is not None:
+            self.emit_metric(
+                {
+                    'measurement': 'system_pending_updates',
+                    'time': now,
+                    'value': float(pending_update),
+                },
+                soft_status=False,
+            )
+        if pending_security_update is not None:
+            self.emit_metric(
+                {
+                    'measurement': 'system_pending_security_updates',
+                    'time': now,
+                    'value': float(pending_security_update),
+                },
+                soft_status=False,
+            )
+
     def _docker_health_status(self, container_id):
         """ Send metric for docker container health status
         """
@@ -1185,6 +1246,11 @@ class Core:
         if self._trigger_discovery:
             self._discovery_job = self.trigger_job(self._discovery_job)
             self._trigger_discovery = False
+        if self._trigger_updates_count:
+            self._gather_update_metrics_job = self.trigger_job(
+                self._gather_update_metrics_job
+            )
+            self._trigger_updates_count = False
         if self._trigger_facts:
             self._update_facts_job = self.trigger_job(self._update_facts_job)
             self._trigger_facts = False
@@ -1736,12 +1802,18 @@ class Core:
     def update_last_report(self):
         self.last_report = datetime.datetime.now()
 
-    def get_threshold(self, metric_name, item=None):
+    def get_threshold(self, metric_name, item=None, thresholds=None):
         """ Get threshold definition for given metric
 
             Return None if no threshold is defined
+
+            If thresholds is not None, use it as definition of thresholds.
+            If it's None, use self.thresholds
         """
-        threshold = self.thresholds.get((metric_name, item))
+        if thresholds is None:
+            threshold = self.thresholds.get((metric_name, item))
+        else:
+            threshold = thresholds.get((metric_name, item))
 
         if threshold is None:
             threshold = self.thresholds.get(metric_name)

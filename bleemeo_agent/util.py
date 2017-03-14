@@ -20,6 +20,7 @@ import datetime
 import logging
 import os
 import random
+import re
 import shlex
 import subprocess
 import sys
@@ -187,6 +188,185 @@ def clean_cmdline(cmdline):
         * new-line: for InfluxDB line-protocol
     """
     return cmdline.replace('\r', '\\r').replace('\n', '\\n')
+
+
+def get_pending_update(core):
+    """ Returns the number of pending update for this system
+
+        It return a couple (update_count, security_update_count).
+        update_count include any security update.
+
+        Both counter could be None. It means that this method could
+        not retrieve the value.
+    """
+    # If running inside a Docker container, it can't run commands
+    if core.container is not None:
+        updates_files = os.path.join(
+            core.config.get('df.host_mount_point', '/does-no-exists'),
+            'var/lib/update-notifier/updates-available',
+        )
+        update_count = None
+        security_count = None
+        try:
+            fp = open(updates_files)
+        except (OSError, IOError):
+            # File does not exists or permission denied
+            return (None, None)
+        else:
+            with fp:
+                data = fp.read()
+            match = re.search(
+                r'^(\d+) packages can be updated.$',
+                data,
+                re.MULTILINE,
+            )
+            if match:
+                update_count = int(match.group(1))
+
+            match = re.search(
+                r'^(\d+) updates are security updates.$',
+                data,
+                re.MULTILINE,
+            )
+            if match:
+                security_count = int(match.group(1))
+        return (update_count, security_count)
+
+    # At the point, agent is not running inside a container, it can
+    # use commands
+
+    env = os.environ.copy()
+    if 'LANG' in env:
+        del env['LANG']
+
+    try:
+        proc = subprocess.Popen(
+            ['/usr/lib/update-notifier/apt-check'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        (output, _) = proc.communicate()
+        (a, b) = output.split(b';')
+        return (int(a), int(b))
+    except (OSError, ValueError):
+        pass
+
+    try:
+        proc = subprocess.Popen(
+            [
+                'apt-get',
+                '--simulate',
+                '-o', 'Debug::NoLocking=true',
+                '--quiet', '--quiet',
+                'dist-upgrade',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        update_count = 0
+        security_count = 0
+        security_re = re.compile(
+            b'[^\\(]*\\(.* (Debian-Security|Ubuntu:[^/]*/[^-]*-security)'
+        )
+        (output, _) = proc.communicate()
+        for line in output.splitlines():
+            if not line.startswith(b'Inst'):
+                continue
+            update_count += 1
+            if security_re.match(line):
+                security_count += 1
+
+        return (update_count, security_count)
+    except OSError:
+        pass
+
+    try:
+        proc = subprocess.Popen(
+            [
+                'dnf',
+                '--cacheonly',
+                '--quiet',
+                'updateinfo',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        (output, _) = proc.communicate()
+
+        update_count = 0
+        security_count = 0
+
+        match = re.search(
+            b'^\\s+(\\d+) Security notice\\(s\\)$',
+            output,
+            re.MULTILINE,
+        )
+        if match is not None:
+            security_count = int(match.group(1))
+
+        results = re.findall(
+            b'^\\s+(\\d+) \\w+ notice\\(s\\)$',
+            output,
+            re.MULTILINE,
+        )
+        update_count = sum(int(x) for x in results)
+        return (update_count, security_count)
+    except OSError:
+        pass
+
+    try:
+        proc = subprocess.Popen(
+            [
+                'yum',
+                '--cacheonly',
+                '--quiet',
+                'list', 'updates',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        (output, _) = proc.communicate()
+
+        update_count = 0
+        for line in output.splitlines():
+            if line == b'Updated Packages':
+                continue
+            # yum list could add newline when package name is too long,
+            # in this case the next line with version will start with
+            # few whitespace.
+            if line.startswith(b' '):
+                continue
+            update_count += 1
+
+        proc = subprocess.Popen(
+            [
+                'yum',
+                '--cacheonly',
+                '--quiet',
+                '--security',
+                'list', 'updates',
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            env=env,
+        )
+        (output, _) = proc.communicate()
+
+        security_count = 0
+        for line in output.splitlines():
+            if line == b'Updated Packages':
+                continue
+            security_count += 1
+
+        return (update_count, security_count)
+    except OSError:
+        pass
+
+    return (None, None)
 
 
 def get_top_info(core):
