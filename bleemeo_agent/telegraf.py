@@ -125,6 +125,25 @@ def compare_version(current_version, wanted_version):
     return current_version >= wanted_version
 
 
+def services_sorted(services_items):
+    """ Sort core.services.items() result
+
+        Result is sorted by service name, then by instances
+    """
+    def sort_key(item):
+        """ Return a comparable couple (service_name, instance_name)
+
+            This is needed because instance could be None, and None is
+            not comparable to a string in Python 3
+        """
+        ((service_name, instance), _) = item
+
+        instance_name = '' if instance is None else instance
+        return (service_name, instance_name)
+
+    return sorted(services_items, key=sort_key)
+
+
 class Telegraf:
 
     def __init__(self, graphite_server):
@@ -225,7 +244,7 @@ class Telegraf:
                     )):
                 telegraf_config += DOCKER_TELEGRAF_CONFIG
 
-        for (key, service_info) in self.core.services.items():
+        for (key, service_info) in services_sorted(self.core.services.items()):
             (service_name, instance) = key
 
             service_info = self.core.services[key].copy()
