@@ -208,28 +208,29 @@ def get_pending_update(core):
         update_count = None
         security_count = None
         try:
-            fp = open(updates_files)
+            fp = open(updates_files, 'rb')
         except (OSError, IOError):
             # File does not exists or permission denied
             return (None, None)
         else:
             with fp:
-                data = fp.read()
-            match = re.search(
-                r'^(\d+) packages can be updated.$',
-                data,
-                re.MULTILINE,
-            )
-            if match:
-                update_count = int(match.group(1))
+                data = fp.read().decode('utf-8')
 
-            match = re.search(
-                r'^(\d+) updates are security updates.$',
-                data,
-                re.MULTILINE,
-            )
-            if match:
-                security_count = int(match.group(1))
+            first_match = True
+            for line in data.splitlines():
+                # The RE can't contain exact string like
+                # "(\d+) packages can be updated" because this
+                # string get localized.
+                match = re.search(
+                    r'^(\d+) [\w\s]+.$',
+                    line,
+                )
+                if match and first_match:
+                    update_count = int(match.group(1))
+                    first_match = False
+                elif match:
+                    security_count = int(match.group(1))
+
         return (update_count, security_count)
 
     # At the point, agent is not running inside a container, it can
