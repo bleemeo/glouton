@@ -477,6 +477,9 @@ def get_facts(core):
         'domain': domain,
         'public_ip': get_public_ip(core),
         'fqdn': fqdn,
+        'installation_format': core.config.get(
+            'agent.installation_format', 'manual'
+        ),
         'hostname': hostname,
         'metrics_source': core.graphite_server.metrics_source,
         'primary_address': primary_address,
