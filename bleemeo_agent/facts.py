@@ -200,24 +200,35 @@ def get_telegraf_version(core):
     return package_version
 
 
-def read_os_release():
+def read_os_release(core):
     """ Read os-release file and returns its content as dict
 
         os-relase is a FreeDesktop standard:
         http://www.freedesktop.org/software/systemd/man/os-release.html
     """
     result = {}
-    with open('/etc/os-release') as fd:
-        for line in fd:
-            line = line.strip()
-            if line == '':
-                continue
-            (key, value) = line.split('=', 1)
-            # value is a quoted string (single or double quote).
-            # Use shlex.split to convert to normal string (handling
-            # correctly if the string contains escaped quote)
-            value = shlex.split(value)[0]
-            result[key] = value
+    file_path = '/etc/os-release'
+    if core.container is not None:
+        mount_point = core.config.get('df.host_mount_point')
+        if mount_point is not None:
+            file_path = mount_point + file_path
+        else:
+            return result
+
+    try:
+        with open(file_path) as fd:
+            for line in fd:
+                line = line.strip()
+                if line == '':
+                    continue
+                (key, value) = line.split('=', 1)
+                # value is a quoted string (single or double quote).
+                # Use shlex.split to convert to normal string (handling
+                # correctly if the string contains escaped quote)
+                value = shlex.split(value)[0]
+                result[key] = value
+    except (IOError, OSError):
+        pass
     return result
 
 
@@ -355,21 +366,24 @@ def get_facts(core):
         facts = {}
 
     if os.name != 'nt':
-        os_information = read_os_release()
-        try:
-            os_codename = subprocess.check_output(
-                ['lsb_release', '--codename', '--short']
-            ).decode('utf8').strip()
-        except OSError:
-            os_codename = None
+        os_information = read_os_release(core)
         facts.update({
-            'os_codename': os_codename,
             'os_family': os_information.get('ID_LIKE', None),
             'os_name': os_information.get('NAME', None),
             'os_pretty_name': os_information.get('PRETTY_NAME', None),
             'os_version': os_information.get('VERSION_ID', None),
             'os_version_long': os_information.get('VERSION', None),
         })
+        if core.container is None:
+            try:
+                os_codename = subprocess.check_output(
+                    ['lsb_release', '--codename', '--short']
+                ).decode('utf8').strip()
+            except OSError:
+                os_codename = None
+            facts.update({
+                'os_codename': os_codename,
+            })
     else:
         facts.update({
             'os_version': platform.win32_ver()[0],
