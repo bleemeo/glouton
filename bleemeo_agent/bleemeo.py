@@ -497,28 +497,29 @@ class BleemeoConnector(threading.Thread):
                     'User-Agent': self.core.http_user_agent,
                 },
             )
-            if response.status_code == 201:
-                content = response.json()
-            else:
-                logging.debug(
-                    'Registration failed, content = %s',
-                    response.content
-                )
+            content = response.json()
         except requests.exceptions.RequestException:
             response = None
         except ValueError:
-            logging.debug(
-                'Registration failed, response is not a json: %s',
-                response.content[:100])
+            pass  # unable to decode JSON
 
-        if content is not None and 'id' in content:
+        if (response is not None
+                and response.status_code == 201
+                and content is not None
+                and 'id' in content):
             self.core.state.set('agent_uuid', content['id'])
             logging.debug('Regisration successfull')
         elif content is not None:
-            logging.debug(
-                'Registration failed, content (json) = %s',
+            logging.info(
+                'Registration failed: %s',
                 content
             )
+        elif response is not None:
+            logging.debug(
+                'Registration failed, response is not a json: %s',
+                response.content[:100])
+        else:
+            logging.debug('Registration failed, unable to connect to API')
 
         if self.core.sentry_client and self.agent_uuid:
             self.core.sentry_client.site = self.agent_uuid
