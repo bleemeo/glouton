@@ -386,6 +386,15 @@ class GraphiteServer(threading.Thread):
                 # has not meaning. Don't emit it at all.
                 return
             value = total / count
+        elif name.startswith('prometheus_'):
+            name = name[len('prometheus_'):]
+            count = get_metric(name + '_count', item)
+            total = get_metric(name + '_sum', item)
+            if count == 0:
+                # If no item during the period, the average has
+                # no meaning. Don't emit the metric at all.
+                return
+            value = total / count
         else:
             logging.debug('Unknown computed metric %s', name)
             return

@@ -99,6 +99,12 @@ POSTGRESQL_TELEGRAF_CONFIG = """
     address = "host=%(address)s port=%(port)s user=%(username)s password=%(password)s dbname=postgres sslmode=disable"
 """  # noqa
 
+PROMETHEUS_TELEGRAF_CONFIG = """
+[[inputs.prometheus]]
+  urls = ["%(url)s"]
+  name_prefix = "prometheus_%(prefix)s_"
+"""
+
 RABBITMQ_TELEGRAF_CONFIG = """
 [[inputs.rabbitmq]]
   url = "http://%(address)s:%(mgmt_port)s"
@@ -142,6 +148,24 @@ def services_sorted(services_items):
         return (service_name, instance_name)
 
     return sorted(services_items, key=sort_key)
+
+
+def telegraf_replace(value):
+    """ telegraf replace some char before sending to graphite.
+
+        This function do the same transformation
+    """
+    return (
+        value
+        .replace('/', '-')
+        .replace('@', '-')
+        .replace('*', '-')
+        .replace(' ', '_')
+        .replace('..', '.')
+        .replace('\\', '')
+        .replace(')', '_')
+        .replace('(', '_')
+    )
 
 
 class Telegraf:
@@ -281,6 +305,14 @@ class Telegraf:
             if service_name == 'zookeeper':
                 telegraf_config += ZOOKEEPER_CONFIG % service_info
 
+        prometheus_config = self.core.config.get('metric.prometheus', {})
+        for name in sorted(prometheus_config):
+            exporter_config = prometheus_config[name]
+            telegraf_config += PROMETHEUS_TELEGRAF_CONFIG % {
+                'url': exporter_config['url'],
+                'prefix': name,
+            }
+
         return telegraf_config
 
     def _restart_telegraf(self):
@@ -391,6 +423,17 @@ class Telegraf:
                 return instance
 
         raise KeyError('service not found')
+
+    def get_prometheus_exporter_name(self, metric_name, part):
+        """ Return the config of the Prometheus exporter
+        """
+        prometheus_configs = self.core.config.get('metric.prometheus', {})
+        for name, config in prometheus_configs.items():
+            url_mangled = telegraf_replace(config['url'])
+            if (metric_name.startswith('%s_' % name)
+                    and url_mangled in part):
+                return name
+        raise KeyError('prometheus config not found')
 
     def docker_container_name(self, part):
         """ Return Docker container name for given graphite line.
@@ -1288,6 +1331,63 @@ class Telegraf:
             position = 5 + len(label_keys_before)
             if len(part) <= position or part[position] != 'total':
                 print(part)
+                return
+        elif part[-2].startswith('prometheus_'):
+            name = part[-2][len('prometheus_'):]
+            try:
+                prometheus_name = self.get_prometheus_exporter_name(name, part)
+            except KeyError:
+                logging.debug(
+                    'Unknown prometheus exporter.'
+                    ' Is it configured in Bleemeo agent ?'
+                    ' And telegraf restarted after last telegraf'
+                    ' config update ?'
+                )
+                return
+            exporter_config = (
+                self.core.config.get('metric.prometheus')[prometheus_name]
+            )
+
+            # tags will contains:
+            # * url
+            # * all prometheus label
+            # Remove host and url, keep other in item
+            url_mangled = telegraf_replace(exporter_config['url'])
+            item_part = []
+            for x in part[2:-2]:
+                if x != url_mangled:
+                    item_part.append(x)
+            item = '-'.join(item_part)
+            if part[-1] == 'counter':
+                if name.endswith('_total'):
+                    # Agent don't send a total, but a derivate.
+                    name = name[:-len('_total')]
+                derive = True
+            elif part[-1] == 'gauge':
+                pass
+            elif part[-1] == 'sum':
+                derive = True
+                no_emit = True
+                computed_metrics_pending.add(
+                    ('prometheus_' + name, item, None, timestamp)
+                )
+                name = name + '_sum'
+            elif part[-1] == 'count':
+                derive = True
+                no_emit = True
+                computed_metrics_pending.add(
+                    ('prometheus_' + name, item, None, timestamp)
+                )
+                name = name + '_count'
+            elif part[-1] in ('5', '0', '1'):
+                # This is used by quantile and histogram. (0 is in
+                # fact 0.1, 0.25...)
+                # Agent don't process them on use only sum and count.
+                return
+            else:
+                logging.debug(
+                    'Unknown Prometheus metric: %s_%s', name, part[-1],
+                )
                 return
         elif (part[2] == 'counter'
                 and self.core.config.get('telegraf.statsd_enabled', True)):

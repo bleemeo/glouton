@@ -635,13 +635,17 @@ class Core:
 
     def _init(self):
         self.started_at = bleemeo_agent.util.get_clock()
-        errors = self.reload_config()
+        (errors, warnings) = self.reload_config()
         self._config_logger()
         if errors:
             logging.error(
                 'Error while loading configuration: %s', '\n'.join(errors)
             )
             return False
+        if warnings:
+            logging.warning(
+                'Warning while loading configuration: %s', '\n'.join(warnings)
+            )
 
         state_file = self.config.get('agent.state_file', 'state.json')
         try:
@@ -1762,6 +1766,7 @@ class Core:
 
     def reload_config(self):
         (self.config, errors) = bleemeo_agent.config.load_config()
+        warnings = []
 
         for (env_name, conf_name, conf_type) in ENVIRON_CONFIG_VARS:
             if env_name in os.environ:
@@ -1774,7 +1779,17 @@ class Core:
                     continue
                 self.config.set(conf_name, value)
 
-        return errors
+        metric_prometheus = self.config.get('metric.prometheus', {})
+        for name in list(metric_prometheus):
+            if 'url' not in metric_prometheus[name]:
+                warnings.append(
+                    'Missing URL for prometheus exporter "%s". Ignoring it' % (
+                        name,
+                    )
+                )
+                del metric_prometheus[name]
+
+        return (errors, warnings)
 
     def _store_last_value(self, metric):
         """ Store the metric in self.last_matrics, replacing the previous value
