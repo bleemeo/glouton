@@ -841,10 +841,11 @@ class Core:
 
         return job
 
-    def trigger_job(self, job):
-        """ Trigger a job to run immediately
+    def trigger_job(self, job, delay=0):
+        """ Trigger a job to run immediately (or in delay seconds)
 
-            In APScheduler 2.x it will trigger the job in 1 seconds.
+            In APScheduler 2.x it will trigger the job no sooner that
+            in 1 seconds.
 
             In APScheduler 2.x, it will recreate a NEW job. For all version it
             will return the job that is still valid. Caller must use the
@@ -853,15 +854,19 @@ class Core:
             >>> self.the_job = self.trigger_job(self.the_job)
         """
         if APSCHEDULE_IS_3X:
-            job.modify(next_run_time=datetime.datetime.now())
+            job.modify(next_run_time=(
+                datetime.datetime.now() + datetime.timedelta(seconds=delay)
+            ))
         else:
             self._scheduler.unschedule_job(job)
+            if delay < 1:
+                delay = 1
             job = self._scheduler.add_interval_job(
                 job.func,
                 args=job.args,
                 seconds=job.trigger.interval.total_seconds(),
                 start_date=(
-                    datetime.datetime.now() + datetime.timedelta(seconds=1)
+                    datetime.datetime.now() + datetime.timedelta(seconds=delay)
                 )
             )
         return job
@@ -1288,10 +1293,13 @@ class Core:
 
         # Remove container address. If container is still running, address
         # will be re-added from discovered_running_services.
+        # Also mark it as inactive. Also if still existing (stopped or running)
+        # it will be mark as still active from discovered_running_services.
         for service_key, service_info in new_discovered_services.items():
             (service_name, instance) = service_key
             if instance is not None:
                 service_info['address'] = None
+                service_info['inactive'] = True
 
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
@@ -1614,6 +1622,12 @@ class Core:
                     ports = netstat_info.get(pid, {})
                 else:
                     ports = self.get_docker_ports(instance)
+                    docker_inspect = self.docker_containers[instance]
+                    service_info['inactive'] = False
+                    labels = docker_inspect.get('Config', {}).get('Labels', {})
+                    if labels is None:
+                        labels = {}
+                    service_info['stack'] = labels.get('bleemeo.stack', '')
 
                 self._discovery_fill_address_and_ports(
                     service_info,

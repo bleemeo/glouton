@@ -764,6 +764,8 @@ class BleemeoConnector(threading.Thread):
                     get_listen_addresses(service_info),
                 'label': service_name,
                 'exe_path': service_info.get('exe_path', ''),
+                'stack': service_info.get('stack', ''),
+                'inactive': service_info.get('inactive', False),
             }
             if instance is not None:
                 entry['instance'] = instance
