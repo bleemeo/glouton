@@ -913,8 +913,12 @@ class BleemeoConnector(threading.Thread):
                         continue
 
                     payload['service'] = self.services_uuid[key]['uuid']
-                logging.debug('Registering metric %s', metric_name)
-                if item is not None:
+                if item is None:
+                    logging.debug('Registering metric %s', metric_name)
+                else:
+                    logging.debug(
+                        'Registering metric %s, item=%s', metric_name, item
+                    )
                     payload['item'] = item
 
             # This should not be done with self.metrics_lock. It no CPU-bound

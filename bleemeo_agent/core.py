@@ -609,6 +609,7 @@ class Core:
         self.graphite_server = None
         self.docker_client = None
         self.docker_containers = {}
+        self.docker_networks = {}
         if APSCHEDULE_IS_3X:
             self._scheduler = (
                 apscheduler.schedulers.background.BackgroundScheduler()
@@ -1003,6 +1004,7 @@ class Core:
 
     def _update_docker_info(self):
         self.docker_containers = {}
+        self.docker_networks = {}
         self.docker_containers_ignored = []
 
         if self.docker_client is None:
@@ -1021,6 +1023,18 @@ class Core:
                 continue
             name = inspect['Name'].lstrip('/')
             self.docker_containers[name] = inspect
+
+        for network in self.docker_client.networks():
+            if 'Name' not in network:
+                continue
+            name = network['Name']
+            if name == 'docker_gwbridge':
+                # For this network, the list of containers is needed. This
+                # is not returned on listing, and require direct inspection of
+                # the network
+                network = self.docker_client.inspect_network(name)
+
+            self.docker_networks[name] = network
 
     def schedule_tasks(self):
         self.add_scheduled_job(
@@ -2095,18 +2109,53 @@ class Core:
             return self.bleemeo_connector.agent_uuid
 
     def get_docker_container_address(self, container_name):
+        """ Return address where the container may be reachable from host
+
+            This may not be possible. This could return None or an IP only
+            accessible from an overlay network.
+
+            Possible source (in order of preference):
+
+            * config.NetworkSettings.IPAddress: only present for container
+              in the default network named "bridge"
+            * 127.0.0.1 if the container is in host network
+            * the IP address from the first network with driver == bridge
+            * the IP address of this container in the docker_gwbridge
+            * the IP address from the first network
+        """
         container_info = self.docker_client.inspect_container(container_name)
+        container_id = container_info.get('Id')
+
         if container_info['NetworkSettings']['IPAddress']:
             return container_info['NetworkSettings']['IPAddress']
+
+        address_first_network = None
 
         for key in container_info['NetworkSettings']['Networks']:
             if key == 'host':
                 return '127.0.0.1'
+            driver = self.docker_networks.get(key, {}).get('Driver', 'unknown')
             config = container_info['NetworkSettings']['Networks'][key]
             if config['IPAddress']:
-                return config['IPAddress']
+                if driver == 'bridge':
+                    return config['IPAddress']
+                elif address_first_network is None:
+                    address_first_network = config['IPAddress']
 
-        return None
+        docker_gwbridge = (
+            self.docker_networks
+            .get('docker_gwbridge', {})
+            .get('Containers', {})
+        )
+        if container_id in docker_gwbridge:
+            address_with_netmask = (
+                docker_gwbridge[container_id].get('IPv4Address', '')
+            )
+            address = address_with_netmask.split('/')[0]
+            if address:
+                return address
+
+        return address_first_network
 
     def get_docker_ports(self, container_name):
         container_info = self.docker_client.inspect_container(container_name)
