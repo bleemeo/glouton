@@ -268,13 +268,8 @@ class Check:
 
         if run_check:
             # open_socket failed, run check now
-            # reschedule job to be run in 12 seconds.
-            # 10 seconds because _check_triggers run every 10 seconds and
-            # it may mark a service as inactive. 2 additional seconds for
-            # safty margin.
-            self.current_job = self.core.trigger_job(
-                self.current_job, delay=12
-            )
+            # reschedule job to be run immediately
+            self.current_job = self.core.trigger_job(self.current_job)
 
     def check_sockets(self):
         """ Check if some socket are closed

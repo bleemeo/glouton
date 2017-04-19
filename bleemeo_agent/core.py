@@ -841,11 +841,10 @@ class Core:
 
         return job
 
-    def trigger_job(self, job, delay=0):
-        """ Trigger a job to run immediately (or in delay seconds)
+    def trigger_job(self, job):
+        """ Trigger a job to run immediately
 
-            In APScheduler 2.x it will trigger the job no sooner that
-            in 1 seconds.
+            In APScheduler 2.x it will trigger the job in 1 seconds.
 
             In APScheduler 2.x, it will recreate a NEW job. For all version it
             will return the job that is still valid. Caller must use the
@@ -854,19 +853,15 @@ class Core:
             >>> self.the_job = self.trigger_job(self.the_job)
         """
         if APSCHEDULE_IS_3X:
-            job.modify(next_run_time=(
-                datetime.datetime.now() + datetime.timedelta(seconds=delay)
-            ))
+            job.modify(next_run_time=datetime.datetime.now())
         else:
             self._scheduler.unschedule_job(job)
-            if delay < 1:
-                delay = 1
             job = self._scheduler.add_interval_job(
                 job.func,
                 args=job.args,
                 seconds=job.trigger.interval.total_seconds(),
                 start_date=(
-                    datetime.datetime.now() + datetime.timedelta(seconds=delay)
+                    datetime.datetime.now() + datetime.timedelta(seconds=1)
                 )
             )
         return job
