@@ -141,7 +141,7 @@ def update_checks(core):
             CHECKS[key].stop()
             del CHECKS[key]
 
-        if service_info.get('inactive'):
+        if not service_info.get('active', True):
             # If the service is inactive, no check should be performed
             continue
 

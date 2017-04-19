@@ -1299,7 +1299,7 @@ class Core:
             (service_name, instance) = service_key
             if instance is not None:
                 service_info['address'] = None
-                service_info['inactive'] = True
+                service_info['active'] = False
 
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
@@ -1618,12 +1618,13 @@ class Core:
                     service_name, instance
                 )
 
+                service_info['active'] = True
+
                 if instance is None:
                     ports = netstat_info.get(pid, {})
                 else:
                     ports = self.get_docker_ports(instance)
                     docker_inspect = self.docker_containers[instance]
-                    service_info['inactive'] = False
                     labels = docker_inspect.get('Config', {}).get('Labels', {})
                     if labels is None:
                         labels = {}
