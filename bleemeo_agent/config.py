@@ -97,6 +97,21 @@ class Config(dict):
             current = current[path]
         current[last_name] = value
 
+    def delete(self, name, separator='.'):
+        """ If name name contains separator ("." by default), it will search
+            in sub-dict.
+
+            Example, delete("category.value") will result in
+            del self['category']['value'].
+            It does NOT delete empty parent.
+        """
+        current = self
+        splitted_name = name.split(separator)
+        (paths, last_name) = (splitted_name[:-1], splitted_name[-1])
+        for path in paths:
+            current = current[path]
+        del current[last_name]
+
 
 def merge_dict(destination, source):
     """ Merge two dictionary (recursivly). destination is modified

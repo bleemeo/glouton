@@ -38,10 +38,11 @@ STATSD_TELEGRAF_CONFIG = """
 # Statsd Server
 # To disable Statsd server, add:
 #     telegraf:
-#         statsd_enabled: False
+#         statsd:
+#             enabled: False
 # in /etc/bleemeo/agent.conf.d/99-local.conf
 [[inputs.statsd]]
-  service_address = "127.0.0.1:8125"
+  service_address = "%(address)s:%(port)s"
   delete_gauges = false
   delete_counters = false
   delete_timings = true
@@ -254,8 +255,15 @@ class Telegraf:
     def _get_telegraf_config(self):
         telegraf_config = BASE_TELEGRAF_CONFIG
 
-        if self.core.config.get('telegraf.statsd_enabled', True):
-            telegraf_config += STATSD_TELEGRAF_CONFIG
+        if self.core.config.get('telegraf.statsd.enabled', True):
+            telegraf_config += STATSD_TELEGRAF_CONFIG % {
+                'address': self.core.config.get(
+                    'telegraf.statsd.address', '127.0.0.1',
+                ),
+                'port': self.core.config.get(
+                    'telegraf.statsd.port', '8125',
+                ),
+            }
 
         if self.core.docker_client is not None:
             docker_metrics_enabled = self.core.config.get(
@@ -1390,16 +1398,16 @@ class Telegraf:
                 )
                 return
         elif (part[2] == 'counter'
-                and self.core.config.get('telegraf.statsd_enabled', True)):
+                and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd counter
             derive = True
             name = 'statsd_' + part[3]
         elif (part[2] == 'gauge'
-                and self.core.config.get('telegraf.statsd_enabled', True)):
+                and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd gauge
             name = 'statsd_' + part[3]
         elif (part[2] == 'timing'
-                and self.core.config.get('telegraf.statsd_enabled', True)):
+                and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd timing
             name = 'statsd_' + part[3] + '_' + part[4]
             if part[4] == 'count':

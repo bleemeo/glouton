@@ -1803,6 +1803,22 @@ class Core:
                 )
                 del metric_prometheus[name]
 
+        deprecated_config = [
+            ('telegraf.statsd_enabled', 'telegraf.statsd.enabled'),
+        ]
+        for (deprecated_key, new_key) in deprecated_config:
+            value = self.config.get(deprecated_key)
+            if value is not None:
+                warnings.append(
+                    'Configuration "%s" is deprecated and replaced by "%s"' % (
+                        deprecated_key,
+                        new_key,
+                    )
+                )
+                if self.config.get(new_key) is None:
+                    self.config.set(new_key, value)
+                self.config.delete(deprecated_key)
+
         return (errors, warnings)
 
     def _store_last_value(self, metric):
