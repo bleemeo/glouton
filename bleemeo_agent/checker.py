@@ -307,6 +307,11 @@ class Check:
     def run_check(self):
         now = time.time()
 
+        key = (self.service, self.instance)
+        if (key not in self.core.services
+                or not self.core.services[key].get('active', True)):
+            return
+
         if self.address is None and self.instance is not None:
             # Address is None if this check is associated with a stopped
             # container. In such case none of our test could pass

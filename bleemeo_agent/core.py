@@ -1624,6 +1624,7 @@ class Core:
                     if labels is None:
                         labels = {}
                     service_info['stack'] = labels.get('bleemeo.stack', '')
+                    service_info['container_id'] = docker_inspect.get('Id')
 
                 self._discovery_fill_address_and_ports(
                     service_info,
@@ -1729,40 +1730,57 @@ class Core:
                     generator = self.docker_client.events()
 
                 for event in generator:
-                    # even older version of docker-py does not support decoding
-                    # at all
-                    if isinstance(event, six.string_types):
-
-                        event = json.loads(event)
-
-                    if 'Action' in event:
-                        action = event['Action']
-                    else:
-                        # status is depractated. Action was introduced with
-                        # Docker 1.10
-                        action = event.get('status')
-                    event_type = event.get('Type', 'container')
                     last_event_at = event['time']
-
-                    if (action in DOCKER_DISCOVERY_EVENTS
-                            and event_type == 'container'):
-                        self._trigger_discovery = True
-                    elif (action.startswith('health_status:')
-                            and event_type == 'container'):
-                        container_id = event['Actor']['ID']
-                        self._docker_health_status(container_id)
-                        # If an health_status event occure, it means that
-                        # docker container inspect changed.
-                        # Update the discovery date, so BleemeoConnector will
-                        # update the containers info
-                        self.last_discovery_update = (
-                            bleemeo_agent.util.get_clock()
-                        )
+                    self._process_docker_event(event)
             except:
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
                 logging.debug('Docker event watcher error', exc_info=True)
                 pass
+
+    def _process_docker_event(self, event):
+        # even older version of docker-py does not support decoding
+        # at all
+        if isinstance(event, six.string_types):
+            event = json.loads(event)
+
+        if 'Action' in event:
+            action = event['Action']
+        else:
+            # status is depractated. Action was introduced with
+            # Docker 1.10
+            action = event.get('status')
+        event_type = event.get('Type', 'container')
+
+        if 'Actor' in event:
+            actor_id = event['Actor'].get('ID')
+        else:
+            # id is deprecated. Actor was introduced with
+            # Docker 1.10
+            actor_id = event.get('id')
+
+        if (action in DOCKER_DISCOVERY_EVENTS
+                and event_type == 'container'):
+            self._trigger_discovery = True
+            if action == 'destroy':
+                # Mark immediately any service from this container
+                # as inactive. It avoid that a service check detect
+                # the service as down before the discovery was run.
+                for service_info in self.services.values():
+                    if ('container_id' in service_info
+                            and service_info['container_id'] == actor_id):
+                        service_info['active'] = False
+
+        elif (action.startswith('health_status:')
+                and event_type == 'container'):
+            self._docker_health_status(actor_id)
+            # If an health_status event occure, it means that
+            # docker container inspect changed.
+            # Update the discovery date, so BleemeoConnector will
+            # update the containers info
+            self.last_discovery_update = (
+                bleemeo_agent.util.get_clock()
+            )
 
     def update_facts(self):
         """ Update facts """
