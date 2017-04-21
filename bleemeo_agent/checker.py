@@ -141,6 +141,10 @@ def update_checks(core):
             CHECKS[key].stop()
             del CHECKS[key]
 
+        if not service_info.get('active', True):
+            # If the service is inactive, no check should be performed
+            continue
+
         try:
             new_check = Check(
                 core,
@@ -302,6 +306,11 @@ class Check:
 
     def run_check(self):
         now = time.time()
+
+        key = (self.service, self.instance)
+        if (key not in self.core.services
+                or not self.core.services[key].get('active', True)):
+            return
 
         if self.address is None and self.instance is not None:
             # Address is None if this check is associated with a stopped
