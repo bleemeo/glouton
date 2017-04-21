@@ -1024,6 +1024,11 @@ class Core:
             name = inspect['Name'].lstrip('/')
             self.docker_containers[name] = inspect
 
+        if not hasattr(self.docker_client, 'networks'):
+            return
+        if not hasattr(self.docker_client, 'inspect_network'):
+            return
+
         for network in self.docker_client.networks():
             if 'Name' not in network:
                 continue
@@ -1744,6 +1749,11 @@ class Core:
                     generator = self.docker_client.events()
 
                 for event in generator:
+                    # even older version of docker-py does not support decoding
+                    # at all
+                    if isinstance(event, six.string_types):
+                        event = json.loads(event)
+
                     last_event_at = event['time']
                     self._process_docker_event(event)
             except:
@@ -1753,10 +1763,6 @@ class Core:
                 pass
 
     def _process_docker_event(self, event):
-        # even older version of docker-py does not support decoding
-        # at all
-        if isinstance(event, six.string_types):
-            event = json.loads(event)
 
         if 'Action' in event:
             action = event['Action']
