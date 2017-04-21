@@ -279,6 +279,15 @@ class BleemeoConnector(threading.Thread):
                         'metrics_uuid', self.metrics_uuid
                     )
 
+        # PRODUCT-537 added a "active" flag to service. It's default value is
+        # True, set that default on service without active flag.
+        # This will avoid updating all service when that flag goes from
+        # undefine (so using default is True) to defined as True.
+        # It also added a "stack" field with default value as ""
+        for service_info in self.services_uuid.values():
+            service_info.setdefault('active', True)
+            service_info.setdefault('stack', '')
+
     def _ready_for_mqtt(self):
         """ Check for requirement needed before MQTT connection
 
