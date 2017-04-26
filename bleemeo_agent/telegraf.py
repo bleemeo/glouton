@@ -1146,7 +1146,7 @@ class Telegraf:
                 derive = True
             else:
                 return
-        elif part[2] == 'elasticsearch':
+        elif part[-2].startswith('elasticsearch_'):
             service = 'elasticsearch'
             # It can't rely only on part[3] (node_host), because this is the
             # host as think by ES (usually the "public" IP of the node). But
