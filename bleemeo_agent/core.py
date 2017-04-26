@@ -1714,7 +1714,10 @@ class Core:
                 # env has the form "VARIABLE=value"
                 if env.startswith('POSTGRES_PASSWORD='):
                     password = env.replace('POSTGRES_PASSWORD=', '')
-                    user = 'postgres'
+                    if user is None:
+                        user = 'postgres'
+                elif env.startswith('POSTGRES_USER='):
+                    user = env.replace('POSTGRES_USER=', '')
 
         service_info['username'] = user
         service_info['password'] = password
