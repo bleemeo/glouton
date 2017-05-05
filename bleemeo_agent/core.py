@@ -1327,11 +1327,12 @@ class Core:
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
 
-        self.services = self.discovered_services.copy()
+        self.services = copy.deepcopy(self.discovered_services)
         apply_service_override(
             self.services,
             self.config.get('service', [])
         )
+        self.apply_service_defaults()
 
         self.graphite_server.update_discovery()
         bleemeo_agent.checker.update_checks(self)
@@ -1339,6 +1340,15 @@ class Core:
         self.last_discovery_update = bleemeo_agent.util.get_clock()
         if had_autoremove:
             self.last_services_autoremove = bleemeo_agent.util.get_clock()
+
+    def apply_service_defaults(self):
+        """ Apply defaults to services.
+
+            Currently only "stack" is set.
+        """
+        for service_info in self.services.values():
+            if service_info.get('stack', None) is None:
+                service_info['stack'] = self.config.get('stack', '')
 
     def _purge_services(
             self, new_discovered_services, running_services, deleted_services):
@@ -1642,7 +1652,7 @@ class Core:
                     labels = docker_inspect.get('Config', {}).get('Labels', {})
                     if labels is None:
                         labels = {}
-                    service_info['stack'] = labels.get('bleemeo.stack', '')
+                    service_info['stack'] = labels.get('bleemeo.stack', None)
                     service_info['container_id'] = docker_inspect.get('Id')
 
                 self._discovery_fill_address_and_ports(
