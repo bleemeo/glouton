@@ -600,7 +600,6 @@ class Core:
         self.last_facts = {}
         self.last_facts_update = bleemeo_agent.util.get_clock()
         self.last_discovery_update = bleemeo_agent.util.get_clock()
-        self.last_services_autoremove = bleemeo_agent.util.get_clock()
         self.top_info = None
 
         self.is_terminating = threading.Event()
@@ -1299,7 +1298,7 @@ class Core:
             self._search_old_service(discovered_running_services)
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
-        (new_discovered_services, had_autoremove) = self._purge_services(
+        new_discovered_services = self._purge_services(
             new_discovered_services,
             discovered_running_services,
             deleted_services,
@@ -1338,8 +1337,6 @@ class Core:
         bleemeo_agent.checker.update_checks(self)
 
         self.last_discovery_update = bleemeo_agent.util.get_clock()
-        if had_autoremove:
-            self.last_services_autoremove = bleemeo_agent.util.get_clock()
 
     def apply_service_defaults(self):
         """ Apply defaults to services.
@@ -1353,10 +1350,8 @@ class Core:
     def _purge_services(
             self, new_discovered_services, running_services, deleted_services):
         """ Remove deleted_services (service deleted from API) and check
-            for service auto-remove
+            for uninstalled service (to mark them inactive).
         """
-        had_autoremove = False
-
         if deleted_services is not None:
             deleted_services = list(deleted_services)
         else:
@@ -1373,18 +1368,18 @@ class Core:
             exe_path = new_discovered_services[service_key].get('exe_path')
             if instance is None and exe_path and not os.path.exists(exe_path):
                 # Binary for service no longer exists. It has been uninstalled.
+                new_discovered_services[service_key]['active'] = False
                 logging.info(
-                    'Service %s was uninstalled, removing it', service_name
+                    'Service %s was uninstalled, marking it as inactive',
+                    service_name,
                 )
-                deleted_services.append(service_key)
-                had_autoremove = True
 
         if deleted_services:
             for key in deleted_services:
                 if key in new_discovered_services:
                     del new_discovered_services[key]
 
-        return (new_discovered_services, had_autoremove)
+        return new_discovered_services
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name

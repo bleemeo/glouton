@@ -545,7 +545,6 @@ class BleemeoConnector(threading.Thread):
         clock_now = bleemeo_agent.util.get_clock()
         if (self._last_update is None
                 or clock_now - self._last_update > 60 * 60
-                or self.core.last_services_autoremove >= self._last_update
                 or self.last_containers_removed >= self._last_update):
             try:
                 self._purge_deleted_services()
