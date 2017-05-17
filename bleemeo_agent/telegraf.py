@@ -166,6 +166,7 @@ def telegraf_replace(value):
         .replace('\\', '')
         .replace(')', '_')
         .replace('(', '_')
+        .replace('.', '_')
     )
 
 
