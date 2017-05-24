@@ -208,7 +208,7 @@ KNOWN_PROCESS = {
         'service': 'openvpn',
     },
     'php-fpm:': {
-        'service': 'php-fpm',
+        'service': 'phpfpm',
     },
     'slapd': {
         'service': 'openldap',

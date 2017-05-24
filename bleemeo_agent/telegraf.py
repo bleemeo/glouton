@@ -311,7 +311,7 @@ class Telegraf:
                 telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
             if service_name == 'nginx':
                 telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
-            if (service_name == 'php-fpm'
+            if (service_name == 'phpfpm'
                     and (
                         service_info.get('stats_url') is not None
                         or service_info.get('port') is not None
@@ -1435,8 +1435,8 @@ class Telegraf:
                 )
                 return
         elif part[-2] == 'phpfpm':
-            service = 'php-fpm'
-            if ('php-fpm', part[2]) in self.core.services:
+            service = 'phpfpm'
+            if ('phpfpm', part[2]) in self.core.services:
                 instance = part[2]
 
             name = 'phpfpm_' + part[-1]
