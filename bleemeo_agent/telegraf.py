@@ -95,6 +95,12 @@ NGINX_TELEGRAF_CONFIG = """
   urls = ["http://%(address)s:%(port)s/nginx_status"]
 """
 
+PHPFPM_TELEGRAF_CONFIG = """
+[[inputs.phpfpm]]
+    urls = ["%(stats_url)s"]
+    %(tags)s
+"""  # noqa
+
 POSTGRESQL_TELEGRAF_CONFIG = """
 [[inputs.postgresql]]
     address = "host=%(address)s port=%(port)s user=%(username)s password=%(password)s dbname=postgres sslmode=disable"
@@ -305,6 +311,31 @@ class Telegraf:
                 telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
             if service_name == 'nginx':
                 telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
+            if (service_name == 'php-fpm'
+                    and (
+                        service_info.get('stats_url') is not None
+                        or service_info.get('port') is not None
+                        or len(service_info.get('extra_ports')) > 0)):
+                copy_info = service_info.copy()
+                port = service_info.get('port')
+                if port is None:
+                    port_proto = next(iter(service_info['extra_ports']))
+                    port = port_proto.split('/')[0]
+                copy_info.setdefault(
+                    'stats_url',
+                    'fcgi://%s:%s/status' % (
+                        service_info.get('address'),
+                        port,
+                    )
+                )
+                if instance:
+                    copy_info['tags'] = (
+                        '[inputs.phpfpm.tags]\n        instance = "%s"' %
+                        instance
+                    )
+                else:
+                    copy_info['tags'] = ""
+                telegraf_config += PHPFPM_TELEGRAF_CONFIG % copy_info
             if (service_name == 'postgresql'
                     and service_info.get('password') is not None):
                 service_info.setdefault('username', 'postgres')
@@ -1403,6 +1434,15 @@ class Telegraf:
                     'Unknown Prometheus metric: %s_%s', name, part[-1],
                 )
                 return
+        elif part[-2] == 'phpfpm':
+            service = 'php-fpm'
+            if ('php-fpm', part[2]) in self.core.services:
+                instance = part[2]
+
+            name = 'phpfpm_' + part[-1]
+
+            if name in {'phpfpm_accepted_conn', 'phpfpm_slow_requests'}:
+                derive = True
         elif (part[2] == 'counter'
                 and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd counter

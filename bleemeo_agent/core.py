@@ -207,6 +207,9 @@ KNOWN_PROCESS = {
     'openvpn': {
         'service': 'openvpn',
     },
+    'php-fpm:': {
+        'service': 'php-fpm',
+    },
     'slapd': {
         'service': 'openldap',
         'port': 389,
@@ -352,10 +355,10 @@ def get_service_info(cmdline):
     if os.name == 'nt' and name.endswith('.exe'):
         name = name[:-len('.exe')]
 
-    # We have some process (example redis: "redis-server *6379") for which
-    # name contains space. Currently only case are redis and nginx, for both
-    # we only want the first word. All currently supported service don't have
-    # space in the expected name, so we can safely always take the first words.
+    # Some process alter their name to add information. Redis, nginx
+    # or php-fpm do this (example for Redis: "redis-server *:6379").
+    # All currently supported service don't have space in the expected name,
+    # so we can safely always take the first words.
     name = name.split()[0]
 
     # For now, special case for java, erlang or python process.
