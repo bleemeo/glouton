@@ -289,7 +289,7 @@ class Telegraf:
             service_info = self.core.services[key].copy()
             service_info['instance'] = instance
 
-            if service_info['address'] is None and instance is not None:
+            if service_info.get('address') is None and instance is not None:
                 # Address is None if this check is associated with a stopped
                 # container. In such case, no metrics could be gathered.
                 continue
