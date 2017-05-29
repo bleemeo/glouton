@@ -284,6 +284,8 @@ class Telegraf:
                 telegraf_config += DOCKER_TELEGRAF_CONFIG
 
         for (key, service_info) in services_sorted(self.core.services.items()):
+            if not service_info.get('active', True):
+                continue
             (service_name, instance) = key
 
             service_info = self.core.services[key].copy()

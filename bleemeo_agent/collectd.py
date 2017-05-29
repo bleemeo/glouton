@@ -231,6 +231,10 @@ class Collectd:
 
             service_info = self.core.services[key].copy()
             service_info['instance'] = instance
+
+            if not service_info.get('active', True):
+                continue
+
             if service_name == 'apache':
                 collectd_config += APACHE_COLLECTD_CONFIG % service_info
             if service_name == 'bind' and 'bind' not in services_type_seen:
