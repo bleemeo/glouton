@@ -31,13 +31,13 @@ from bleemeo_agent.telegraf import services_sorted
 JMX_METRICS = {
     'java': [
         {
-            'name': 'jvm_heap_usage',
+            'name': 'jvm_heap_used',
             'mbean': 'java.lang:type=Memory',
             'attribute': 'HeapMemoryUsage',
             'path': 'used',
         },
         {
-            'name': 'jvm_non_heap_usage',
+            'name': 'jvm_non_heap_used',
             'mbean': 'java.lang:type=Memory',
             'attribute': 'NonHeapMemoryUsage',
             'path': 'used',
@@ -70,7 +70,7 @@ JMX_METRICS = {
     ],
     'cassandra': [
         {
-            'name': 'read_request',
+            'name': 'read_requests',
             'mbean':
                 'org.apache.cassandra.metrics:'
                 'type=ClientRequest,scope=Read,name=Latency',
@@ -87,7 +87,7 @@ JMX_METRICS = {
             'derive': True,
         },
         {
-            'name': 'write_request',
+            'name': 'write_requests',
             'mbean':
                 'org.apache.cassandra.metrics:'
                 'type=ClientRequest,scope=Write,name=Latency',
