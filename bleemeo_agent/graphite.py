@@ -27,6 +27,7 @@ import time
 import psutil
 
 import bleemeo_agent.collectd
+import bleemeo_agent.jmxtrans
 import bleemeo_agent.telegraf
 import bleemeo_agent.util
 
@@ -99,6 +100,11 @@ class GraphiteServer(threading.Thread):
         elif self.metrics_source == 'telegraf':
             self.telegraf = bleemeo_agent.telegraf.Telegraf(self)
 
+        if self.core.config.get('jmx.enabled', True):
+            self.jmxtrans = bleemeo_agent.jmxtrans.Jmxtrans(self)
+        else:
+            self.jmxtrans = None
+
     @property
     def metrics_source(self):
         return self.core.config.get('graphite.metrics_source', 'telegraf')
@@ -145,6 +151,9 @@ class GraphiteServer(threading.Thread):
             self.collectd.update_discovery()
         elif self.metrics_source == 'telegraf':
             self.telegraf.update_discovery()
+
+        if self.jmxtrans is not None:
+            self.jmxtrans.update_discovery()
 
     def get_time_elapsed_since_last_data(self):
         clock_now = bleemeo_agent.util.get_clock()
@@ -436,6 +445,11 @@ class GraphiteServer(threading.Thread):
             self.telegraf.emit_metric(
                 name, timestamp, value, computed_metrics_pending,
             )
+        elif name.startswith('jmxtrans.'):
+            if self.jmxtrans is not None:
+                self.jmxtrans.emit_metric(
+                    name, timestamp, value, computed_metrics_pending,
+                )
         elif self.metrics_source == 'collectd':
             self.data_last_seen_at = bleemeo_agent.util.get_clock()
             self.collectd.emit_metric(

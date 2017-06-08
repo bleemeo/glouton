@@ -425,7 +425,8 @@ def sanitize_service(name, service_info, is_discovered_service):
         )
         return None
     elif (service_info.get('check_type') != 'nagios'
-            and 'port' not in service_info and not is_discovered_service):
+            and 'port' not in service_info and not is_discovered_service
+            and 'jmx_port' not in service_info):
         # discovered services could exist without port, etc.
         # It means that no check will be performed but service object will
         # be created.
@@ -1847,6 +1848,74 @@ class Core:
                     )
                 )
                 del metric_prometheus[name]
+
+        valid_services = []
+        for service in self.config.get('service', []):
+            if 'id' not in service:
+                warnings.append(
+                    'Ignoring invalid service entry without id'
+                )
+                continue
+            valid_services.append(service)
+
+            name = service['id']
+            if 'instance' in service:
+                name = '%s (%s)' % (name, service['instance'])
+
+            if 'jmx_metrics' in service and 'jmx_port' not in service:
+                warnings.append(
+                    'Service %s: jmx_metrics require jmx_port' % (
+                        name,
+                    )
+                )
+                del service['jmx_metrics']
+            elif 'jmx_username' in service and 'jmx_password' not in service:
+                warnings.append(
+                    'Service %s: jmx_username is set without jmx_password' % (
+                        name,
+                    )
+                )
+                del service['jmx_metrics']
+            elif 'jmx_username' not in service and 'jmx_password' in service:
+                warnings.append(
+                    'Service %s: jmx_password is set without jmx_username' % (
+                        name,
+                    )
+                )
+                del service['jmx_metrics']
+            elif 'jmx_metrics' in service:
+                valid_metrics = []
+                jmx_mandatory_option = set((
+                    'name',
+                    'mbean',
+                    'attribute',
+                ))
+                for jmx_metric in service['jmx_metrics']:
+                    missing_option = (
+                        jmx_mandatory_option - set(jmx_metric.keys())
+                    )
+                    if len(missing_option) > 0 and 'name' in jmx_metric:
+                        warnings.append(
+                            'Service %s has an invalid jmx_metrics "%s":'
+                            ' missing %s option(s)' % (
+                                name,
+                                jmx_metric['name'],
+                                ', '.join(missing_option),
+                            )
+                        )
+                    elif len(missing_option) > 0:
+                        warnings.append(
+                            'Service %s has an invalid jmx_metrics:'
+                            ' missing %s option(s)' % (
+                                name,
+                                ', '.join(missing_option),
+                            )
+                        )
+                    else:
+                        valid_metrics.append(jmx_metric)
+                service['jmx_metrics'] = valid_metrics
+
+        self.config.set('service', valid_services)
 
         deprecated_config = [
             ('telegraf.statsd_enabled', 'telegraf.statsd.enabled'),
