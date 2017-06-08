@@ -259,6 +259,13 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
+    'org.apache.cassandra.service.CassandraDaemon': {  # java process
+        'interpreter': 'java',
+        'service': 'cassandra',
+        'port': 9042,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
     'salt-master': {  # python process
         'interpreter': 'python',
         'service': 'salt-master',
@@ -1337,6 +1344,20 @@ class Core:
         )
         self.apply_service_defaults()
 
+        for (key, service) in self.services.items():
+            (service_name, instance) = key
+            if instance is None:
+                name = service_name
+            else:
+                name = '%s (%s)' % (service_name, instance)
+
+            if 'jmx_metrics' in service and 'jmx_port' not in service:
+                logging.warinig(
+                    'Service %s: jmx_metrics require jmx_port',
+                    name,
+                )
+                del service['jmx_metrics']
+
         self.graphite_server.update_discovery()
         bleemeo_agent.checker.update_checks(self)
 
@@ -1666,6 +1687,9 @@ class Core:
                 if service_name == 'postgresql':
                     self._discover_pgsql(instance, service_info)
 
+                if service_info.get('interpreter') == 'java':
+                    self._guess_jmx_config(service_name, service_info, process)
+
                 discovered_services[(service_name, instance)] = service_info
 
         logging.debug(
@@ -1730,6 +1754,32 @@ class Core:
 
         service_info['username'] = user
         service_info['password'] = password
+
+    def _guess_jmx_config(self, instance, service_info, process):
+        """ Guess if remote JMX is available for this process
+        """
+        jmx_options = [
+            '-Dcom.sun.management.jmxremote.port=',
+            '-Dcassandra.jmx.remote.port=',
+        ]
+        if service_info['address'] == '127.0.0.1':
+            jmx_options.extend([
+                '-Dcassandra.jmx.local.port=',
+            ])
+
+        for opt in jmx_options:
+            try:
+                index = process['cmdline'].find(opt)
+            except ValueError:
+                continue
+
+            value = process['cmdline'][index + len(opt):].split()[0]
+            try:
+                jmx_port = int(value)
+            except ValueError:
+                continue
+
+            service_info['jmx_port'] = jmx_port
 
     def _watch_docker_event(self):
         """ Watch for docker event and re-run discovery
@@ -1862,14 +1912,7 @@ class Core:
             if 'instance' in service:
                 name = '%s (%s)' % (name, service['instance'])
 
-            if 'jmx_metrics' in service and 'jmx_port' not in service:
-                warnings.append(
-                    'Service %s: jmx_metrics require jmx_port' % (
-                        name,
-                    )
-                )
-                del service['jmx_metrics']
-            elif 'jmx_username' in service and 'jmx_password' not in service:
+            if 'jmx_username' in service and 'jmx_password' not in service:
                 warnings.append(
                     'Service %s: jmx_username is set without jmx_password' % (
                         name,
