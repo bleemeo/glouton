@@ -428,6 +428,16 @@ class Jmxtrans:
         # Don't simply use open. This file must have limited permission
         # since it may contains password
         open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-        fileno = os.open(config_path, open_flags, 0o600)
+        try:
+            fileno = os.open(config_path, open_flags, 0o600)
+        except OSError:
+            if not os.path.exists(config_path):
+                logging.debug(
+                    'Failed to write jmxtrans configuration.'
+                    ' Target file does not exists,'
+                    ' bleemeo-agent-jmx is installed ?'
+                )
+                return
+            raise
         with os.fdopen(fileno, 'w') as fd:
             fd.write(config)
