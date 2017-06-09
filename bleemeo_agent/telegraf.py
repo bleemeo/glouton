@@ -452,6 +452,10 @@ class Telegraf:
             (service_name, instance) = key
             if service_name != 'elasticsearch':
                 continue
+            if not service_info.get('active', True):
+                continue
+            if service_info.get('address') is None:
+                continue
             if 'es_node_id' not in service_info:
                 try:
                     response = requests.get(
@@ -462,6 +466,7 @@ class Telegraf:
                     data = response.json()
                     this_node_id = list(data['nodes'].keys())[0]
                 except (requests.RequestException, ValueError):
+                    logging.debug('Error while fetching es_node_is', exc_info=True)
                     continue
 
                 service_info['es_node_id'] = this_node_id
