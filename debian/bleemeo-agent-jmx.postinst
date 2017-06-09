@@ -1,0 +1,23 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    configure)
+        if [ -e /var/lib/jmxtrans/bleemeo-generated.json ]; then
+            chown bleemeo:jmxtrans /var/lib/jmxtrans/bleemeo-generated.json
+            chmod 0640 /var/lib/jmxtrans/bleemeo-generated.json
+        fi
+
+        # ask agent to update bleemeo-generated.json
+        if [ -x "/etc/init.d/bleemeo-agent" ]; then
+            if [ -x "`which invoke-rc.d 2>/dev/null`" ]; then
+                invoke-rc.d bleemeo-agent reload || exit $?
+            else
+                /etc/init.d/bleemeo-agent reload || exit $?
+            fi
+        fi
+        ;;
+esac
+
+#DEBHELPER#

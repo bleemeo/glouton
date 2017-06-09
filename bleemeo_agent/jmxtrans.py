@@ -387,7 +387,7 @@ class Jmxtrans:
 
         with self.lock:
             self.sum_metrics = sum_metrics
-        return json.dumps(config)
+        return json.dumps(config, sort_keys=True)
 
     def purge_metrics(self):
         """ Remove old metrics from self._raw_value

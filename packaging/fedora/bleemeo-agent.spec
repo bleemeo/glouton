@@ -92,6 +92,18 @@ This package contains the agent which send metric to
 the SaaS platform with no dependency on daemon.
 This package is appropriate for Docker images.
 
+%package jmx
+Summary:        Bleemeo agent plugin for JMX
+Requires:       bleemeo-agent
+Requires:       jmxtrans
+
+%description jmx
+Bleemeo is a solution of Monitoring as a Service.
+This package contains the agent which send metric to
+the SaaS platform.
+This package contains part needed to monitor JMX
+metrics.
+
 %prep
 %autosetup
 
@@ -124,6 +136,9 @@ install -D -p -m 0644 packaging/common/bleemeo-collectd-graphite_metrics_source.
 install -D -p -m 0644 packaging/centos/bleemeo-collectd.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/35-collectd.conf
 %endif
 
+# -jmx
+install -D -p -m 0640 packaging/common/jmxtrans-bleemeo-generated.json %{buildroot}%{_sharedstatedir}/jmxtrans/bleemeo-generated.json
+
 %files
 %{python3_sitelib}/*
 %{_bindir}/bleemeo-agent
@@ -152,6 +167,9 @@ install -D -p -m 0644 packaging/centos/bleemeo-collectd.conf %{buildroot}%{_sysc
 %endif
 
 %files single
+
+%files jmx
+%{_sharedstatedir}/jmxtrans/bleemeo-generated.json
 
 %pre
 getent group bleemeo >/dev/null || groupadd -r bleemeo
@@ -228,6 +246,10 @@ touch /var/lib/bleemeo/upgrade 2>/dev/null
 systemctl restart bleemeo-agent.service
 exit 0
 %endif
+
+%post jmx
+chown bleemeo:jmxtrans /var/lib/jmxtrans/bleemeo-generated.json
+chmod 0640 /var/lib/jmxtrans/bleemeo-generated.json
 
 %changelog
 * %{build_date} Bleemeo Packaging Team jenkins@bleemeo.com - %{version}
