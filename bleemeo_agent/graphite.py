@@ -47,10 +47,19 @@ def graphite_split_line(line):
         >>> graphite_split_line(b'metric.name 42 1000')
         ('metric.name', 42.0, 1000.0)
     """
-    part = shlex.split(line.decode('utf-8'))
-    timestamp = part[-1]
-    value = part[-2]
-    metric = ' '.join(part[0:-2])
+    line = line.decode('utf-8')
+
+    # graphite line looks like "METRIC VALUE TIMESTAMP"
+    # Usually metric, value and timestamp do not contains space (see tests case
+    # for example with space).
+    # Use faster method when they don't contain space
+    if line.count(' ') == 2:
+        (metric, value, timestamp) = line.split(' ')
+    else:
+        part = shlex.split(line)
+        timestamp = part[-1]
+        value = part[-2]
+        metric = ' '.join(part[0:-2])
 
     timestamp = float(timestamp)
     try:
