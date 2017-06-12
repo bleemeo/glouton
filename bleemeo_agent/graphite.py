@@ -404,6 +404,23 @@ class GraphiteServer(threading.Thread):
                 # has not meaning. Don't emit it at all.
                 return
             value = total / count
+        elif name == 'elasticsearch_jvm_gc':
+            service = 'elasticsearch'
+            gc_old = get_metric('elasticsearch_jvm_gc_old', item)
+            gc_young = get_metric('elasticsearch_jvm_gc_young', item)
+            value = gc_old + gc_young
+        elif name == 'elasticsearch_jvm_gc_time':
+            service = 'elasticsearch'
+            gc_old = get_metric('elasticsearch_jvm_gc_time_old', item)
+            gc_young = get_metric('elasticsearch_jvm_gc_time_young', item)
+            value = gc_old + gc_young
+
+            self.core.emit_metric({
+                'measurement': 'elasticsearch_jvm_gc_utilization',
+                'time': timestamp,
+                'item': item,
+                'value': value / 10.,  # convert ms/s in %
+            })
         elif name.startswith('prometheus_'):
             name = name[len('prometheus_'):]
             count = get_metric(name + '_count', item)

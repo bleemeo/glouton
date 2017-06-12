@@ -466,7 +466,9 @@ class Telegraf:
                     data = response.json()
                     this_node_id = list(data['nodes'].keys())[0]
                 except (requests.RequestException, ValueError):
-                    logging.debug('Error while fetching es_node_is', exc_info=True)
+                    logging.debug(
+                        'Error while fetching es_node_is', exc_info=True
+                    )
                     continue
 
                 service_info['es_node_id'] = this_node_id
@@ -1226,6 +1228,60 @@ class Telegraf:
                     computed_metrics_pending.add(
                         (
                             'elasticsearch_search_time',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+            elif part[-2] == 'elasticsearch_jvm':
+                if part[-1] == 'mem_heap_used_in_bytes':
+                    name = 'elasticsearch_jvm_heap_used'
+                elif part[-1] == 'mem_non_heap_used_in_bytes':
+                    name = 'elasticsearch_jvm_non_heap_used'
+                elif part[-1] == 'gc_collectors_old_collection_count':
+                    name = 'elasticsearch_jvm_gc_old'
+                    no_emit = True
+                    derive = True
+                    computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+                elif part[-1] == 'gc_collectors_young_collection_count':
+                    name = 'elasticsearch_jvm_gc_young'
+                    no_emit = True
+                    derive = True
+                    computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+                elif part[-1] == 'gc_collectors_old_collection_time_in_millis':
+                    name = 'elasticsearch_jvm_gc_time_old'
+                    no_emit = True
+                    derive = True
+                    computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc_time',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+                elif part[-1] == (
+                        'gc_collectors_young_collection_time_in_millis'):
+                    name = 'elasticsearch_jvm_gc_time_young'
+                    no_emit = True
+                    derive = True
+                    computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc_time',
                             instance,
                             instance,
                             timestamp
