@@ -75,7 +75,10 @@ Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
     bleemeo-agent,
-    jmxtrans
+    jmxtrans,
+# Use pre-depends to force installation and configuration of
+# JRE before jmxtrans
+Pre-Depends: default-jre-headless | java6-runtime-headless
 Description: Bleemeo agent plugin for JMX
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to
