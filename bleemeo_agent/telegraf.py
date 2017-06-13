@@ -296,23 +296,9 @@ class Telegraf:
                 # container. In such case, no metrics could be gathered.
                 continue
 
-            if service_name == 'apache':
-                telegraf_config += APACHE_TELEGRAF_CONFIG % service_info
-            if service_name == 'elasticsearch':
-                telegraf_config += ELASTICSEARCH_TELEGRAF_CONFIG % service_info
             if (service_name == 'haproxy'
                     and service_info.get('stats_url') is not None):
                 telegraf_config += HAPROXY_TELEGRAF_CONFIG % service_info
-            if service_name == 'memcached':
-                telegraf_config += MEMCACHED_TELEGRAF_CONFIG % service_info
-            if (service_name == 'mysql'
-                    and service_info.get('password') is not None):
-                service_info.setdefault('username', 'root')
-                telegraf_config += MYSQL_TELEGRAF_CONFIG % service_info
-            if service_name == 'mongodb':
-                telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
-            if service_name == 'nginx':
-                telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
             if (service_name == 'phpfpm'
                     and (
                         service_info.get('stats_url') is not None
@@ -323,6 +309,10 @@ class Telegraf:
                 if port is None:
                     port_proto = next(iter(service_info['extra_ports']))
                     port = port_proto.split('/')[0]
+                if ('stats_url' not in copy_info
+                        and service_info.get('address') is None):
+                    continue
+
                 copy_info.setdefault(
                     'stats_url',
                     'fcgi://%s:%s/status' % (
@@ -338,15 +328,39 @@ class Telegraf:
                 else:
                     copy_info['tags'] = ""
                 telegraf_config += PHPFPM_TELEGRAF_CONFIG % copy_info
-            if (service_name == 'postgresql'
-                    and service_info.get('password') is not None):
-                service_info.setdefault('username', 'postgres')
-                telegraf_config += POSTGRESQL_TELEGRAF_CONFIG % service_info
+
+            # All next services require an address.
+            if service_info.get('address') is None:
+                continue
+
             if service_name == 'rabbitmq':
                 service_info.setdefault('username', 'guest')
                 service_info.setdefault('password', 'guest')
                 service_info.setdefault('mgmt_port', 15672)
                 telegraf_config += RABBITMQ_TELEGRAF_CONFIG % service_info
+
+            # All next services require a port.
+            if service_info.get('port') is None:
+                continue
+
+            if service_name == 'apache':
+                telegraf_config += APACHE_TELEGRAF_CONFIG % service_info
+            if service_name == 'elasticsearch':
+                telegraf_config += ELASTICSEARCH_TELEGRAF_CONFIG % service_info
+            if service_name == 'memcached':
+                telegraf_config += MEMCACHED_TELEGRAF_CONFIG % service_info
+            if (service_name == 'mysql'
+                    and service_info.get('password') is not None):
+                service_info.setdefault('username', 'root')
+                telegraf_config += MYSQL_TELEGRAF_CONFIG % service_info
+            if service_name == 'mongodb':
+                telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
+            if service_name == 'nginx':
+                telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
+            if (service_name == 'postgresql'
+                    and service_info.get('password') is not None):
+                service_info.setdefault('username', 'postgres')
+                telegraf_config += POSTGRESQL_TELEGRAF_CONFIG % service_info
             if service_name == 'redis':
                 telegraf_config += REDIS_TELEGRAF_CONFIG % service_info
             if service_name == 'zookeeper':
@@ -455,6 +469,8 @@ class Telegraf:
             if not service_info.get('active', True):
                 continue
             if service_info.get('address') is None:
+                continue
+            if service_info.get('port') is None:
                 continue
             if 'es_node_id' not in service_info:
                 try:
