@@ -136,6 +136,7 @@ class Jmxtrans:
         self._raw_value = {}
 
         self._sum_value = {}
+        self._ratio_value = {}
 
         self.last_timestamp = 0
         self.lock = threading.Lock()
@@ -241,15 +242,21 @@ class Jmxtrans:
                 item = instance
                 with self.lock:
                     self._sum_value.setdefault(
-                        (new_name, instance, service_name), []
-                    ).append(new_value)
+                        (new_name, instance, service_name), (jmx_metric, [])
+                    )[1].append(new_value)
+                continue
+            elif jmx_metric.get('ratio') is not None:
+                key = (new_name, instance, service_name)
+                with self.lock:
+                    self._ratio_value[key] = (jmx_metric, new_value)
                 continue
 
             self.core.emit_metric(metric)
 
     def flush(self, timestamp):
         # self.lock is acquired by caller
-        for (name, item, service_name), values in self._sum_value.items():
+        for key, (jmx_metric, values) in self._sum_value.items():
+            (name, item, service_name) = key
             metric = {
                 'measurement': name,
                 'time': timestamp,
@@ -261,8 +268,40 @@ class Jmxtrans:
             if item is not None:
                 metric['item'] = item
 
-            self.core.emit_metric(metric)
+            if jmx_metric.get('ratio') is not None:
+                self._ratio_value[key] = (jmx_metric, sum(values))
+            else:
+                self.core.emit_metric(metric)
         self._sum_value = {}
+
+        for key, (jmx_metric, value) in self._ratio_value.items():
+            (name, item, service_name) = key
+            divisor_metric = self.core.get_last_metric(
+                '%s_%s' % (service_name, jmx_metric['ratio']), item
+            )
+            if (divisor_metric is None
+                    or divisor_metric['time'] != timestamp):
+                logging.debug(
+                    'Failed to compute ratio metric %s (%s) at time %s',
+                    name,
+                    item,
+                    timestamp,
+                )
+            elif divisor_metric['value'] != 0:
+                metric = {
+                    'measurement': name,
+                    'time': timestamp,
+                    'value': value / divisor_metric['value'],
+                    'service': service_name,
+                    'instance': item,
+                }
+
+                if item is not None:
+                    metric['item'] = item
+
+                self.core.emit_metric(metric)
+
+        self._ratio_value = {}
 
     def get_derivate(self, name, item, timestamp, value):
         """ Return derivate of a COUNTER (e.g. something that only goes upward)
