@@ -384,7 +384,7 @@ def get_service_info(cmdline):
         return KNOWN_PROCESS.get(name)
 
 
-def apply_service_override(services, override_config):
+def apply_service_override(services, override_config, core):
     for service_info in override_config:
         service_info = service_info.copy()
         try:
@@ -403,14 +403,24 @@ def apply_service_override(services, override_config):
             tmp.update(service_info)
             service_info = tmp
 
-        service_info = sanitize_service(service, service_info, key in services)
+        service_info = sanitize_service(
+            service, instance, service_info, key in services, core,
+        )
         if service_info is not None:
             services[(service, instance)] = service_info
 
 
-def sanitize_service(name, service_info, is_discovered_service):
+def sanitize_service(
+        name, instance, service_info, is_discovered_service, core):
     if 'port' in service_info and service_info['port'] is not None:
-        service_info.setdefault('address', '127.0.0.1')
+        if instance is None:
+            service_info.setdefault('address', '127.0.0.1')
+        elif 'address' not in service_info:
+            service_info.setdefault(
+                'address',
+                core.get_docker_container_address(instance)
+            )
+
         service_info.setdefault('protocol', socket.IPPROTO_TCP)
         try:
             service_info['port'] = int(service_info['port'])
@@ -1340,7 +1350,8 @@ class Core:
         self.services = copy.deepcopy(self.discovered_services)
         apply_service_override(
             self.services,
-            self.config.get('service', [])
+            self.config.get('service', []),
+            self,
         )
         self.apply_service_defaults()
 
@@ -2296,7 +2307,16 @@ class Core:
             * the IP address of this container in the docker_gwbridge
             * the IP address from the first network
         """
-        container_info = self.docker_client.inspect_container(container_name)
+        if docker is None:
+            return None
+
+        try:
+            container_info = self.docker_client.inspect_container(
+                container_name,
+            )
+        except docker.errors.APIError:
+            return None
+
         container_id = container_info.get('Id')
 
         if container_info['NetworkSettings']['IPAddress']:
