@@ -641,6 +641,7 @@ class Core:
 
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = {}
+        self.services = {}
         self._soft_status_since = {}
         self._trigger_discovery = False
         self._trigger_facts = False

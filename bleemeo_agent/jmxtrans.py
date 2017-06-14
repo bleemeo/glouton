@@ -22,10 +22,10 @@ import hashlib
 import json
 import logging
 import os
-import threading
 import time
 
 from bleemeo_agent.telegraf import services_sorted
+import bleemeo_agent.util
 
 
 JMX_METRICS = {
@@ -122,13 +122,24 @@ JMX_METRICS = {
 }
 
 
+def update_discovery(core):
+    try:
+        write_config(core)
+    except:
+        logging.warning(
+            'Failed to write jmxtrans configuration. '
+            'Continuing with current configuration'
+        )
+        logging.debug('exception is:', exc_info=True)
+
+
 class Jmxtrans:
     """ Configure and process graphite data from jmxtrans
     """
 
-    def __init__(self, graphite_server):
-        self.core = graphite_server.core
-        self.graphite_server = graphite_server
+    def __init__(self, graphite_client):
+        self.core = graphite_client.core
+        self.graphite_client = graphite_client
 
         self.last_timestamp = 0
 
@@ -139,28 +150,21 @@ class Jmxtrans:
         self._ratio_value = {}
 
         self.last_timestamp = 0
-        self.lock = threading.Lock()
 
-        self.core.add_scheduled_job(
-            self.purge_metrics,
-            seconds=5 * 60,
-        )
+        self.last_purge = bleemeo_agent.util.get_clock()
 
-    def update_discovery(self):
-        try:
-            self.write_config()
-        except:
-            logging.warning(
-                'Failed to write jmxtrans configuration. '
-                'Continuing with current configuration'
-            )
-            logging.debug('exception is:', exc_info=True)
+    def close(self):
+        self.flush(self.last_timestamp)
 
-    def emit_metric(self, name, timestamp, value, computed_metrics_pending):
-        with self.lock:
-            if abs(timestamp - self.last_timestamp) > 1:
-                self.flush(self.last_timestamp)
-            self.last_timestamp = timestamp
+    def emit_metric(self, name, timestamp, value):
+        if timestamp - self.last_timestamp > 1:
+            self.flush(self.last_timestamp)
+        self.last_timestamp = timestamp
+
+        clock = bleemeo_agent.util.get_clock()
+        if clock - self.last_purge > 60:
+            self.purge_metrics()
+            self.last_purge = clock
 
         # Example of name: jmxtrans.f5[...]d6.20[...]7b.HeapMemoryUsage_used
         part = name.split('.')
@@ -215,10 +219,9 @@ class Jmxtrans:
                 item = instance
 
             if jmx_metric.get('derive'):
-                with self.lock:
-                    new_value = self.get_derivate(
-                        new_name, item, timestamp, value
-                    )
+                new_value = self.get_derivate(
+                    new_name, item, timestamp, value
+                )
                 if new_value is None:
                     continue
             else:
@@ -240,21 +243,23 @@ class Jmxtrans:
 
             if jmx_metric.get('sum', False):
                 item = instance
-                with self.lock:
-                    self._sum_value.setdefault(
-                        (new_name, instance, service_name), (jmx_metric, [])
-                    )[1].append(new_value)
+                self._sum_value.setdefault(
+                    (new_name, instance, service_name), (jmx_metric, [])
+                )[1].append(new_value)
                 continue
             elif jmx_metric.get('ratio') is not None:
                 key = (new_name, instance, service_name)
-                with self.lock:
-                    self._ratio_value[key] = (jmx_metric, new_value)
+                self._ratio_value[key] = (jmx_metric, new_value)
                 continue
 
             self.core.emit_metric(metric)
 
+    def packet_finish(self):
+        """ Called when graphite_client finished processing one TCP packet
+        """
+        pass
+
     def flush(self, timestamp):
-        # self.lock is acquired by caller
         for key, (jmx_metric, values) in self._sum_value.items():
             (name, item, service_name) = key
             metric = {
@@ -339,144 +344,136 @@ class Jmxtrans:
 
         raise KeyError('service not found')
 
-    def get_jmxtrans_config(self, empty=False):
-        config = {
-            'servers': []
-        }
-        sum_metrics = set()
-
-        if empty:
-            return json.dumps(config)
-
-        output_config = {
-            "@class":
-                "com.googlecode.jmxtrans.model.output.GraphiteWriterFactory",
-            "rootPrefix": "jmxtrans",
-            "port": self.core.config.get(
-                'graphite.listener.port', 2003
-            ),
-            "host": self.core.config.get(
-                'graphite.listener.address', '127.0.0.1'
-            ),
-            "flushStrategy": "timeBased",
-            "flushDelayInSeconds": 10,
-        }
-        if output_config['host'] == '0.0.0.0':
-            output_config['host'] = '127.0.0.1'
-
-        for (key, service_info) in services_sorted(self.core.services.items()):
-            if not service_info.get('active', True):
-                continue
-
-            (service_name, instance) = key
-            if service_info.get('address') is None and instance is not None:
-                # Address is None if this check is associated with a stopped
-                # container. In such case, no metrics could be gathered.
-                continue
-
-            if 'jmx_port' in service_info and 'address' in service_info:
-                jmx_port = service_info['jmx_port']
-
-                md5_service = hashlib.md5(service_name.encode('utf-8'))
-                if instance is not None:
-                    md5_service.update(instance.encode('utf-8'))
-
-                server = {
-                    'host': service_info['address'],
-                    'alias': md5_service.hexdigest(),
-                    'port': jmx_port,
-                    'queries': [],
-                    'outputWriters': [output_config],
-                    'runPeriodSeconds': 10,
-                }
-
-                if 'jmx_username' in service_info:
-                    server['username'] = service_info['jmx_username']
-                    server['password'] = service_info['jmx_password']
-
-                jmx_metrics = list(service_info.get('jmx_metrics', []))
-                jmx_metrics.extend(JMX_METRICS['java'])
-                jmx_metrics.extend(JMX_METRICS.get(service_name, []))
-
-                for jmx_metric in jmx_metrics:
-                    query = {
-                        "obj": jmx_metric['mbean'],
-                        "outputWriters": [],
-                        "resultAlias": hashlib.md5(
-                            jmx_metric['mbean'].encode('utf-8')
-                        ).hexdigest(),
-                    }
-                    attr = jmx_metric.get("attribute", "")
-                    if attr:
-                        query['attr'] = attr.split(',')
-
-                    if 'typeNames' in jmx_metric:
-                        query['typeNames'] = (
-                            jmx_metric['typeNames'].split(',')
-                        )
-
-                    if jmx_metric.get('sum', False):
-                        metric_name = '%s_%s' % (
-                            service_name, jmx_metric['name'],
-                        )
-                        sum_metrics.add((metric_name, instance))
-
-                    server['queries'].append(query)
-                config['servers'].append(server)
-
-        with self.lock:
-            self.sum_metrics = sum_metrics
-        return json.dumps(config, sort_keys=True)
-
     def purge_metrics(self):
         """ Remove old metrics from self._raw_value
         """
         now = time.time()
         cutoff = now - 60 * 6
 
-        with self.lock:
-            self._raw_value = {
-                key: (timestamp, value)
-                for key, (timestamp, value) in self._raw_value.items()
-                if timestamp >= cutoff
+        self._raw_value = {
+            key: (timestamp, value)
+            for key, (timestamp, value) in self._raw_value.items()
+            if timestamp >= cutoff
+        }
+
+
+def get_jmxtrans_config(core, empty=False):
+    config = {
+        'servers': []
+    }
+
+    if empty:
+        return json.dumps(config)
+
+    output_config = {
+        "@class":
+            "com.googlecode.jmxtrans.model.output.GraphiteWriterFactory",
+        "rootPrefix": "jmxtrans",
+        "port": core.config.get(
+            'graphite.listener.port', 2003
+        ),
+        "host": core.config.get(
+            'graphite.listener.address', '127.0.0.1'
+        ),
+        "flushStrategy": "timeBased",
+        "flushDelayInSeconds": 10,
+    }
+    if output_config['host'] == '0.0.0.0':
+        output_config['host'] = '127.0.0.1'
+
+    for (key, service_info) in services_sorted(core.services.items()):
+        if not service_info.get('active', True):
+            continue
+
+        (service_name, instance) = key
+        if service_info.get('address') is None and instance is not None:
+            # Address is None if this check is associated with a stopped
+            # container. In such case, no metrics could be gathered.
+            continue
+
+        if 'jmx_port' in service_info and 'address' in service_info:
+            jmx_port = service_info['jmx_port']
+
+            md5_service = hashlib.md5(service_name.encode('utf-8'))
+            if instance is not None:
+                md5_service.update(instance.encode('utf-8'))
+
+            server = {
+                'host': service_info['address'],
+                'alias': md5_service.hexdigest(),
+                'port': jmx_port,
+                'queries': [],
+                'outputWriters': [output_config],
+                'runPeriodSeconds': 10,
             }
 
-    def write_config(self):
-        config = self.get_jmxtrans_config()
+            if 'jmx_username' in service_info:
+                server['username'] = service_info['jmx_username']
+                server['password'] = service_info['jmx_password']
 
-        config_path = self.core.config.get(
-            'jmxtrans.config_file',
-            '/var/lib/jmxtrans/bleemeo-generated.json',
-        )
+            jmx_metrics = list(service_info.get('jmx_metrics', []))
+            jmx_metrics.extend(JMX_METRICS['java'])
+            jmx_metrics.extend(JMX_METRICS.get(service_name, []))
 
-        if os.path.exists(config_path):
-            with open(config_path) as fd:
-                current_content = fd.read()
+            for jmx_metric in jmx_metrics:
+                query = {
+                    "obj": jmx_metric['mbean'],
+                    "outputWriters": [],
+                    "resultAlias": hashlib.md5(
+                        jmx_metric['mbean'].encode('utf-8')
+                    ).hexdigest(),
+                }
+                attr = jmx_metric.get("attribute", "")
+                if attr:
+                    query['attr'] = attr.split(',')
 
-            if config == current_content:
-                logging.debug('jmxtrans already configured')
-                return
+                if 'typeNames' in jmx_metric:
+                    query['typeNames'] = (
+                        jmx_metric['typeNames'].split(',')
+                    )
 
-        if (config == '{}' == self.get_jmxtrans_config(empty=True)
-                and not os.path.exists(config_path)):
-            logging.debug(
-                'jmxtrans generated config would be empty, skip writing it'
-            )
+                server['queries'].append(query)
+            config['servers'].append(server)
+
+    return json.dumps(config, sort_keys=True)
+
+
+def write_config(core):
+    config = get_jmxtrans_config(core)
+
+    config_path = core.config.get(
+        'jmxtrans.config_file',
+        '/var/lib/jmxtrans/bleemeo-generated.json',
+    )
+
+    if os.path.exists(config_path):
+        with open(config_path) as fd:
+            current_content = fd.read()
+
+        if config == current_content:
+            logging.debug('jmxtrans already configured')
             return
 
-        # Don't simply use open. This file must have limited permission
-        # since it may contains password
-        open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-        try:
-            fileno = os.open(config_path, open_flags, 0o600)
-        except OSError:
-            if not os.path.exists(config_path):
-                logging.debug(
-                    'Failed to write jmxtrans configuration.'
-                    ' Target file does not exists,'
-                    ' bleemeo-agent-jmx is installed ?'
-                )
-                return
-            raise
-        with os.fdopen(fileno, 'w') as fd:
-            fd.write(config)
+    if (config == '{}' == get_jmxtrans_config(core, empty=True)
+            and not os.path.exists(config_path)):
+        logging.debug(
+            'jmxtrans generated config would be empty, skip writing it'
+        )
+        return
+
+    # Don't simply use open. This file must have limited permission
+    # since it may contains password
+    open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    try:
+        fileno = os.open(config_path, open_flags, 0o600)
+    except OSError:
+        if not os.path.exists(config_path):
+            logging.debug(
+                'Failed to write jmxtrans configuration.'
+                ' Target file does not exists,'
+                ' bleemeo-agent-jmx is installed ?'
+            )
+            return
+        raise
+    with os.fdopen(fileno, 'w') as fd:
+        fd.write(config)
