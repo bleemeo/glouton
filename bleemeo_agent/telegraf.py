@@ -1518,12 +1518,16 @@ class Telegraf:
             gc_young = get_metric('elasticsearch_jvm_gc_time_young', item)
             value = gc_old + gc_young
 
-            self.core.emit_metric({
+            metric = {
                 'measurement': 'elasticsearch_jvm_gc_utilization',
                 'time': timestamp,
-                'item': item,
+                'service': service,
                 'value': value / 10.,  # convert ms/s in %
-            })
+            }
+            if item is not None:
+                metric['item'] = item
+
+            self.core.emit_metric(metric)
         elif name.startswith('prometheus_'):
             name = name[len('prometheus_'):]
             count = get_metric(name + '_count', item)
