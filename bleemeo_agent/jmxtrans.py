@@ -158,7 +158,7 @@ class Jmxtrans:
         self.flush(self.last_timestamp)
 
     def emit_metric(self, name, timestamp, value):
-        if timestamp - self.last_timestamp > 1:
+        if abs(timestamp - self.last_timestamp) > 1:
             self.flush(self.last_timestamp)
         self.last_timestamp = timestamp
 
@@ -276,18 +276,23 @@ class Jmxtrans:
             divisor = self._values_cache.get((divisor_name, item))
 
             new_value = None
-            if divisor is None or divisor[0] != timestamp:
+            if divisor is None or abs(divisor[0] - timestamp) > 1:
                 logging.debug(
                     'Failed to compute ratio metric %s (%s) at time %s',
                     name,
                     item,
                     timestamp,
                 )
-            elif divisor_metric['value'] != 0:
+            elif divisor[1] == 0:
+                new_value = 0.0
+            else:
+                new_value = value / divisor[1]
+
+            if new_value is not None:
                 metric = {
                     'measurement': name,
                     'time': timestamp,
-                    'value': value / divisor_metric['value'],
+                    'value': new_value,
                     'service': service_name,
                     'instance': item,
                 }
