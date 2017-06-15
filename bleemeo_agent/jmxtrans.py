@@ -17,7 +17,6 @@
 #
 
 
-import functools
 import hashlib
 import json
 import logging
@@ -124,7 +123,7 @@ JMX_METRICS = {
 
 def update_discovery(core):
     try:
-        write_config(core)
+        current_config.write_config(core)
     except:
         logging.warning(
             'Failed to write jmxtrans configuration. '
@@ -148,6 +147,8 @@ class Jmxtrans:
 
         self._sum_value = {}
         self._ratio_value = {}
+
+        self._values_cache = {}
 
         self.last_timestamp = 0
 
@@ -182,33 +183,18 @@ class Jmxtrans:
             return
 
         try:
-            key = self.get_service(md5_service)
-            service = self.core.services[key]
+            (service_name, instance) = current_config.to_service[md5_service]
         except KeyError:
             logging.debug('Service not found for %s', name)
             return
 
-        (service_name, instance) = key
-
-        jmx_metrics = list(service.get('jmx_metrics', []))
-        jmx_metrics.extend(JMX_METRICS['java'])
-        jmx_metrics.extend(JMX_METRICS.get(service_name, []))
+        metric_key = (md5_service, md5_mbean, attr)
+        try:
+            jmx_metrics = current_config.to_metric[metric_key]
+        except KeyError:
+            return
 
         for jmx_metric in jmx_metrics:
-            md5_mbean2 = hashlib.md5(
-                jmx_metric['mbean'].encode('utf-8')
-            ).hexdigest()
-            if md5_mbean != md5_mbean2:
-                continue
-
-            config_attr = jmx_metric['attribute']
-            config_path = jmx_metric.get('path')
-            if config_path is not None:
-                config_attr = '%s_%s' % (config_attr, config_path)
-
-            if attr != config_attr:
-                continue
-
             new_name = '%s_%s' % (service_name, jmx_metric['name'])
 
             if instance is not None and type_names is not None:
@@ -252,6 +238,9 @@ class Jmxtrans:
                 self._ratio_value[key] = (jmx_metric, new_value)
                 continue
 
+            if new_name in current_config.divisors:
+                self._values_cache[(new_name, item)] = (timestamp, new_value)
+
             self.core.emit_metric(metric)
 
     def packet_finish(self):
@@ -276,16 +265,18 @@ class Jmxtrans:
             if jmx_metric.get('ratio') is not None:
                 self._ratio_value[key] = (jmx_metric, sum(values))
             else:
+                if name in current_config.divisors:
+                    self._values_cache[(name, item)] = (timestamp, sum(values))
                 self.core.emit_metric(metric)
         self._sum_value = {}
 
         for key, (jmx_metric, value) in self._ratio_value.items():
             (name, item, service_name) = key
-            divisor_metric = self.core.get_last_metric(
-                '%s_%s' % (service_name, jmx_metric['ratio']), item
-            )
-            if (divisor_metric is None
-                    or divisor_metric['time'] != timestamp):
+            divisor_name = "%s_%s" % (service_name, jmx_metric['ratio'])
+            divisor = self._values_cache.get((divisor_name, item))
+
+            new_value = None
+            if divisor is None or divisor[0] != timestamp:
                 logging.debug(
                     'Failed to compute ratio metric %s (%s) at time %s',
                     name,
@@ -330,20 +321,6 @@ class Jmxtrans:
 
         return delta / delta_time
 
-    @functools.lru_cache()
-    def get_service(self, digest):
-        for key in self.core.services:
-            (service_name, instance) = key
-
-            md5_service = hashlib.md5(service_name.encode('utf-8'))
-            if instance is not None:
-                md5_service.update(instance.encode('utf-8'))
-
-            if md5_service.hexdigest() == digest:
-                return key
-
-        raise KeyError('service not found')
-
     def purge_metrics(self):
         """ Remove old metrics from self._raw_value
         """
@@ -356,124 +333,175 @@ class Jmxtrans:
             if timestamp >= cutoff
         }
 
+        self._values_cache = {
+            key: (timestamp, value)
+            for key, (timestamp, value) in self._values_cache.items()
+            if timestamp >= cutoff
+        }
 
-def get_jmxtrans_config(core, empty=False):
-    config = {
-        'servers': []
-    }
 
-    if empty:
-        return json.dumps(config)
+class JmxConfig:
 
-    output_config = {
-        "@class":
-            "com.googlecode.jmxtrans.model.output.GraphiteWriterFactory",
-        "rootPrefix": "jmxtrans",
-        "port": core.config.get(
-            'graphite.listener.port', 2003
-        ),
-        "host": core.config.get(
-            'graphite.listener.address', '127.0.0.1'
-        ),
-        "flushStrategy": "timeBased",
-        "flushDelayInSeconds": 10,
-    }
-    if output_config['host'] == '0.0.0.0':
-        output_config['host'] = '127.0.0.1'
+    def __init__(self, core):
+        self.core = core
 
-    for (key, service_info) in services_sorted(core.services.items()):
-        if not service_info.get('active', True):
-            continue
+        # map md5_service to (service_name, instance)
+        self.to_service = {}
 
-        (service_name, instance) = key
-        if service_info.get('address') is None and instance is not None:
-            # Address is None if this check is associated with a stopped
-            # container. In such case, no metrics could be gathered.
-            continue
+        # map (md5_service, md5_bean, attr) to a list of jmx_metrics
+        self.to_metric = {}
 
-        if 'jmx_port' in service_info and 'address' in service_info:
-            jmx_port = service_info['jmx_port']
+        # list of divisor for a ratio
+        self.divisors = set()
 
-            md5_service = hashlib.md5(service_name.encode('utf-8'))
-            if instance is not None:
-                md5_service.update(instance.encode('utf-8'))
+    def get_jmxtrans_config(self, empty=False):
+        config = {
+            'servers': []
+        }
 
-            server = {
-                'host': service_info['address'],
-                'alias': md5_service.hexdigest(),
-                'port': jmx_port,
-                'queries': [],
-                'outputWriters': [output_config],
-                'runPeriodSeconds': 10,
-            }
+        to_service = {}
+        to_metric = {}
+        divisors = set()
 
-            if 'jmx_username' in service_info:
-                server['username'] = service_info['jmx_username']
-                server['password'] = service_info['jmx_password']
+        if empty:
+            return json.dumps(config)
 
-            jmx_metrics = list(service_info.get('jmx_metrics', []))
-            jmx_metrics.extend(JMX_METRICS['java'])
-            jmx_metrics.extend(JMX_METRICS.get(service_name, []))
+        output_config = {
+            "@class":
+                "com.googlecode.jmxtrans.model.output.GraphiteWriterFactory",
+            "rootPrefix": "jmxtrans",
+            "port": self.core.config.get(
+                'graphite.listener.port', 2003
+            ),
+            "host": self.core.config.get(
+                'graphite.listener.address', '127.0.0.1'
+            ),
+            "flushStrategy": "timeBased",
+            "flushDelayInSeconds": 10,
+        }
+        if output_config['host'] == '0.0.0.0':
+            output_config['host'] = '127.0.0.1'
 
-            for jmx_metric in jmx_metrics:
-                query = {
-                    "obj": jmx_metric['mbean'],
-                    "outputWriters": [],
-                    "resultAlias": hashlib.md5(
-                        jmx_metric['mbean'].encode('utf-8')
-                    ).hexdigest(),
+        for (key, service_info) in services_sorted(self.core.services.items()):
+            if not service_info.get('active', True):
+                continue
+
+            (service_name, instance) = key
+            if service_info.get('address') is None and instance is not None:
+                # Address is None if this check is associated with a stopped
+                # container. In such case, no metrics could be gathered.
+                continue
+
+            if 'jmx_port' in service_info and 'address' in service_info:
+                jmx_port = service_info['jmx_port']
+
+                md5_service = hashlib.md5(service_name.encode('utf-8'))
+                if instance is not None:
+                    md5_service.update(instance.encode('utf-8'))
+                md5_service = md5_service.hexdigest()
+
+                to_service[md5_service] = (service_name, instance)
+
+                server = {
+                    'host': service_info['address'],
+                    'alias': md5_service,
+                    'port': jmx_port,
+                    'queries': [],
+                    'outputWriters': [output_config],
+                    'runPeriodSeconds': 10,
                 }
-                attr = jmx_metric.get("attribute", "")
-                if attr:
-                    query['attr'] = attr.split(',')
 
-                if 'typeNames' in jmx_metric:
-                    query['typeNames'] = (
-                        jmx_metric['typeNames'].split(',')
-                    )
+                if 'jmx_username' in service_info:
+                    server['username'] = service_info['jmx_username']
+                    server['password'] = service_info['jmx_password']
 
-                server['queries'].append(query)
-            config['servers'].append(server)
+                jmx_metrics = list(service_info.get('jmx_metrics', []))
+                jmx_metrics.extend(JMX_METRICS['java'])
+                jmx_metrics.extend(JMX_METRICS.get(service_name, []))
 
-    return json.dumps(config, sort_keys=True)
+                for jmx_metric in jmx_metrics:
+                    if 'path' in jmx_metric:
+                        attr = '%s_%s' % (
+                            jmx_metric['attribute'], jmx_metric['path'],
+                        )
+                    else:
+                        attr = jmx_metric['attribute']
 
+                    md5_mbean = hashlib.md5(
+                        jmx_metric['mbean'].encode('utf-8')
+                    ).hexdigest()
 
-def write_config(core):
-    config = get_jmxtrans_config(core)
+                    metric_key = (md5_service, md5_mbean, attr)
+                    to_metric.setdefault(metric_key, []).append(jmx_metric)
 
-    config_path = core.config.get(
-        'jmxtrans.config_file',
-        '/var/lib/jmxtrans/bleemeo-generated.json',
-    )
+                    if 'ratio' in jmx_metric:
+                        divisors.add(
+                            "%s_%s" % (service_name, jmx_metric['ratio'])
+                        )
 
-    if os.path.exists(config_path):
-        with open(config_path) as fd:
-            current_content = fd.read()
+                    query = {
+                        "obj": jmx_metric['mbean'],
+                        "outputWriters": [],
+                        "resultAlias": md5_mbean,
+                    }
+                    query['attr'] = [jmx_metric['attribute']]
 
-        if config == current_content:
-            logging.debug('jmxtrans already configured')
-            return
+                    if 'typeNames' in jmx_metric:
+                        query['typeNames'] = (
+                            jmx_metric['typeNames'].split(',')
+                        )
 
-    if (config == '{}' == get_jmxtrans_config(core, empty=True)
-            and not os.path.exists(config_path)):
-        logging.debug(
-            'jmxtrans generated config would be empty, skip writing it'
+                    server['queries'].append(query)
+                config['servers'].append(server)
+
+        self.to_metric = to_metric
+        self.to_service = to_service
+        self.divisors = divisors
+
+        return json.dumps(config, sort_keys=True)
+
+    def write_config(self, core):
+        if self.core is None:
+            self.core = core
+
+        config = self.get_jmxtrans_config()
+
+        config_path = self.core.config.get(
+            'jmxtrans.config_file',
+            '/var/lib/jmxtrans/bleemeo-generated.json',
         )
-        return
 
-    # Don't simply use open. This file must have limited permission
-    # since it may contains password
-    open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-    try:
-        fileno = os.open(config_path, open_flags, 0o600)
-    except OSError:
-        if not os.path.exists(config_path):
+        if os.path.exists(config_path):
+            with open(config_path) as fd:
+                current_content = fd.read()
+
+            if config == current_content:
+                logging.debug('jmxtrans already configured')
+                return
+
+        if (config == '{}' == self.get_jmxtrans_config(empty=True)
+                and not os.path.exists(config_path)):
             logging.debug(
-                'Failed to write jmxtrans configuration.'
-                ' Target file does not exists,'
-                ' bleemeo-agent-jmx is installed ?'
+                'jmxtrans generated config would be empty, skip writing it'
             )
             return
-        raise
-    with os.fdopen(fileno, 'w') as fd:
-        fd.write(config)
+
+        # Don't simply use open. This file must have limited permission
+        # since it may contains password
+        open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        try:
+            fileno = os.open(config_path, open_flags, 0o600)
+        except OSError:
+            if not os.path.exists(config_path):
+                logging.debug(
+                    'Failed to write jmxtrans configuration.'
+                    ' Target file does not exists,'
+                    ' bleemeo-agent-jmx is installed ?'
+                )
+                return
+            raise
+        with os.fdopen(fileno, 'w') as fd:
+            fd.write(config)
+
+
+current_config = JmxConfig(None)
