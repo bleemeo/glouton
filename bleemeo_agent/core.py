@@ -280,6 +280,14 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
+    'org.apache.catalina.startup.Bootstrap': {
+        'interpreter': 'java',
+        'cmdline_must_match': 'confluence',
+        'service': 'confluence',
+        'port': 7990,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
     'salt-master': {  # python process
         'interpreter': 'python',
         'service': 'salt-master',
@@ -392,7 +400,9 @@ def get_service_info(cmdline):
             # FIXME: we should check that intepreter match the one used.
             if 'interpreter' not in service_info:
                 continue
-            if key in cmdline:
+            if (key in cmdline and
+                    ('cmdline_must_match' not in service_info
+                     or service_info['cmdline_must_match'] in cmdline)):
                 return service_info
     else:
         return KNOWN_PROCESS.get(name)

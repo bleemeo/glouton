@@ -209,6 +209,50 @@ JMX_METRICS = {
             'attribute': 'Value',
         },
     ],
+    'confluence': [
+        {
+            'name': 'last_index_time',
+            'mbean': 'Confluence:name=IndexingStatistics',
+            'attribute': 'LastElapsedMilliseconds',
+        },
+        {
+            'name': 'queued_index_tasks',
+            'mbean': 'Confluence:name=IndexingStatistics',
+            'attribute': 'TaskQueueLength',
+        },
+        {
+            'name': 'db_query_time',
+            'mbean': 'Confluence:name=SystemInformation',
+            'attribute': 'DatabaseExampleLatency',
+        },
+        {
+            'name': 'queued_mails',
+            'mbean': 'Confluence:name=MailTaskQueue',
+            'attribute': 'TasksSize',
+        },
+        {
+            'name': 'queued_error_mails',
+            'mbean': 'Confluence:name=MailTaskQueue',
+            'attribute': 'ErrorQueueSize',
+        },
+        {
+            'name': 'requests',
+            'mbean': 'Standalone:type=GlobalRequestProcessor,name=*',
+            'attribute': 'requestCount',
+            'typeNames': 'name',
+            'sum': True,
+            'derive': True,
+        },
+        {
+            'name': 'request_time',
+            'mbean': 'Standalone:type=GlobalRequestProcessor,name=*',
+            'attribute': 'processingTime',
+            'typeNames': 'name',
+            'ratio': 'requests',
+            'sum': True,
+            'derive': True,
+        },
+    ],
 }
 
 
