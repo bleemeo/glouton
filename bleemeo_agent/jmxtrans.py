@@ -67,6 +67,97 @@ JMX_METRICS = {
             'scale': 0.1,  # time is in ms/s. Convert in %
         },
     ],
+    'bitbucket': [
+        {
+            'name': 'events',
+            'mbean':
+                'com.atlassian.bitbucket.thread-pools:name=EventThreadPool',
+            'attribute': 'CompletedTaskCount',
+            'derive': True,
+        },
+        {
+            'name': 'io_tasks',
+            'mbean':
+                'com.atlassian.bitbucket.thread-pools:name=IoPumpThreadPool',
+            'attribute': 'CompletedTaskCount',
+            'derive': True,
+        },
+        {
+            'name': 'tasks',
+            'mbean':
+                'com.atlassian.bitbucket.thread-pools'
+                ':name=ScheduledThreadPool',
+            'attribute': 'CompletedTaskCount',
+            'derive': True,
+        },
+        {
+            'name': 'pulls',
+            'mbean': 'com.atlassian.bitbucket:name=ScmStatistics',
+            'attribute': 'Pulls',
+            'derive': True,
+        },
+        {
+            'name': 'pushes',
+            'mbean': 'com.atlassian.bitbucket:name=ScmStatistics',
+            'attribute': 'Pushes',
+            'derive': True,
+        },
+        {
+            'name': 'queued_scm_clients',
+            'mbean': 'com.atlassian.bitbucket:name=HostingTickets',
+            'attribute': 'QueuedRequests',
+        },
+        {
+            'name': 'queued_scm_commands',
+            'mbean': 'com.atlassian.bitbucket:name=CommandTickets',
+            'attribute': 'QueuedRequests',
+        },
+        {
+            'name': 'queued_events',
+            'mbean': 'com.atlassian.bitbucket:name=EventStatistics',
+            'attribute': 'QueueLength',
+        },
+        {
+            'name': 'ssh_connections',
+            'mbean': 'com.atlassian.bitbucket:name=SshSessions',
+            'attribute': 'SessionCreatedCount',
+            'derive': True,
+        },
+        {
+            'name': 'requests',
+            'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
+            'attribute': 'requestCount',
+            'typeNames': 'name',
+            'sum': True,
+            'derive': True,
+        },
+        {
+            'name': 'request_time',
+            'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
+            'attribute': 'processingTime',
+            'typeNames': 'name',
+            'ratio': 'requests',
+            'sum': True,
+            'derive': True,
+        },
+        {
+            'name': 'requests',
+            'mbean': 'Tomcat:type=GlobalRequestProcessor,name=*',
+            'attribute': 'requestCount',
+            'typeNames': 'name',
+            'sum': True,
+            'derive': True,
+        },
+        {
+            'name': 'request_time',
+            'mbean': 'Tomcat:type=GlobalRequestProcessor,name=*',
+            'attribute': 'processingTime',
+            'typeNames': 'name',
+            'ratio': 'requests',
+            'sum': True,
+            'derive': True,
+        },
+    ],
     'cassandra': [
         {
             'name': 'read_requests',

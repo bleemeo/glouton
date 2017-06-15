@@ -266,6 +266,20 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
+    'com.atlassian.stash.internal.catalina.startup.Bootstrap': {
+        'interpreter': 'java',
+        'service': 'bitbucket',
+        'port': 7990,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    'com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher': {
+        'interpreter': 'java',
+        'service': 'bitbucket',
+        'port': 7990,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
     'salt-master': {  # python process
         'interpreter': 'python',
         'service': 'salt-master',
