@@ -47,7 +47,7 @@ JMX_METRICS = {
             'attribute': 'CollectionCount',
             'derive': True,
             'sum': True,
-            'typeNames': 'name',
+            'typeNames': ['name'],
         },
         {
             'name': 'jvm_gc_time',
@@ -55,7 +55,7 @@ JMX_METRICS = {
             'attribute': 'CollectionTime',
             'derive': True,
             'sum': True,
-            'typeNames': 'name',
+            'typeNames': ['name'],
         },
         {
             'name': 'jvm_gc_utilization',
@@ -63,7 +63,7 @@ JMX_METRICS = {
             'attribute': 'CollectionTime',
             'derive': True,
             'sum': True,
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'scale': 0.1,  # time is in ms/s. Convert in %
         },
     ],
@@ -127,7 +127,7 @@ JMX_METRICS = {
             'name': 'requests',
             'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
             'attribute': 'requestCount',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'sum': True,
             'derive': True,
         },
@@ -135,7 +135,7 @@ JMX_METRICS = {
             'name': 'request_time',
             'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
             'attribute': 'processingTime',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'ratio': 'requests',
             'sum': True,
             'derive': True,
@@ -144,7 +144,7 @@ JMX_METRICS = {
             'name': 'requests',
             'mbean': 'Tomcat:type=GlobalRequestProcessor,name=*',
             'attribute': 'requestCount',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'sum': True,
             'derive': True,
         },
@@ -152,7 +152,7 @@ JMX_METRICS = {
             'name': 'request_time',
             'mbean': 'Tomcat:type=GlobalRequestProcessor,name=*',
             'attribute': 'processingTime',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'ratio': 'requests',
             'sum': True,
             'derive': True,
@@ -197,7 +197,7 @@ JMX_METRICS = {
             'name': 'bloom_filter_false_ratio',
             'mbean':
                 'org.apache.cassandra.metrics:'
-                'type=Type,name=BloomFilterFalseRatio',
+                'type=Table,name=BloomFilterFalseRatio',
             'attribute': 'Value',
             'scale': 100,  # convert from ratio (0 to 1) to percent
         },
@@ -239,7 +239,7 @@ JMX_METRICS = {
             'name': 'requests',
             'mbean': 'Standalone:type=GlobalRequestProcessor,name=*',
             'attribute': 'requestCount',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'sum': True,
             'derive': True,
         },
@@ -247,7 +247,7 @@ JMX_METRICS = {
             'name': 'request_time',
             'mbean': 'Standalone:type=GlobalRequestProcessor,name=*',
             'attribute': 'processingTime',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'ratio': 'requests',
             'sum': True,
             'derive': True,
@@ -258,7 +258,7 @@ JMX_METRICS = {
             'name': 'requests',
             'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
             'attribute': 'requestCount',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'sum': True,
             'derive': True,
         },
@@ -266,13 +266,76 @@ JMX_METRICS = {
             'name': 'request_time',
             'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
             'attribute': 'processingTime',
-            'typeNames': 'name',
+            'typeNames': ['name'],
             'ratio': 'requests',
             'sum': True,
             'derive': True,
         },
     ],
 }
+
+
+CASSANDRA_JMX_DETAILED_TABLE = [
+    {
+        'name': 'bloom_filter_false_ratio',
+        'mbean':
+            'org.apache.cassandra.metrics:'
+            'type=Table,keyspace={keyspace},scope={table},'
+            'name=BloomFilterFalseRatio',
+        'attribute': 'Value',
+        'typeNames': ['keyspace', 'scope'],
+        'scale': 100,  # convert from ratio (0 to 1) to percent
+    },
+    {
+        'name': 'sstable',
+        'mbean':
+            'org.apache.cassandra.metrics:'
+            'type=Table,keyspace={keyspace},scope={table},'
+            'name=LiveSSTableCount',
+        'attribute': 'Value',
+        'typeNames': ['keyspace', 'scope'],
+    },
+    {
+        'name': 'read_time',
+        'mbean':
+            'org.apache.cassandra.metrics:'
+            'type=Table,keyspace={keyspace},scope={table},'
+            'name=ReadTotalLatency',
+        'attribute': 'Count',
+        'derive': True,
+        'typeNames': ['keyspace', 'scope'],
+    },
+    {
+        'name': 'read_requests',
+        'mbean':
+            'org.apache.cassandra.metrics:'
+            'type=Table,keyspace={keyspace},scope={table},'
+            'name=ReadLatency',
+        'attribute': 'Count',
+        'derive': True,
+        'typeNames': ['keyspace', 'scope'],
+    },
+    {
+        'name': 'write_time',
+        'mbean':
+            'org.apache.cassandra.metrics:'
+            'type=Table,keyspace={keyspace},scope={table},'
+            'name=WriteTotalLatency',
+        'attribute': 'Count',
+        'derive': True,
+        'typeNames': ['keyspace', 'scope'],
+    },
+    {
+        'name': 'write_requests',
+        'mbean':
+            'org.apache.cassandra.metrics:'
+            'type=Table,keyspace={keyspace},scope={table},'
+            'name=WriteLatency',
+        'attribute': 'Count',
+        'derive': True,
+        'typeNames': ['keyspace', 'scope'],
+    },
+]
 
 
 def update_discovery(core):
@@ -513,6 +576,25 @@ class JmxConfig:
         # list of divisor for a ratio
         self.divisors = set()
 
+    def get_jmx_metrics(self, service_name, service_info):
+        jmx_metrics = list(service_info.get('jmx_metrics', []))
+        jmx_metrics.extend(JMX_METRICS['java'])
+        jmx_metrics.extend(JMX_METRICS.get(service_name, []))
+
+        if service_name == 'cassandra':
+            for name in service_info.get('cassandra_detailed_tables', []):
+                if '.' not in name:
+                    continue
+                keyspace, table = name.split('.', maxsplit=1)
+                for jmx_metric in CASSANDRA_JMX_DETAILED_TABLE:
+                    jmx_metric = jmx_metric.copy()
+                    jmx_metric['mbean'] = jmx_metric['mbean'].format(
+                        keyspace=keyspace, table=table,
+                    )
+                    jmx_metrics.append(jmx_metric)
+
+        return jmx_metrics
+
     def get_jmxtrans_config(self, empty=False):
         config = {
             'servers': []
@@ -574,9 +656,7 @@ class JmxConfig:
                     server['username'] = service_info['jmx_username']
                     server['password'] = service_info['jmx_password']
 
-                jmx_metrics = list(service_info.get('jmx_metrics', []))
-                jmx_metrics.extend(JMX_METRICS['java'])
-                jmx_metrics.extend(JMX_METRICS.get(service_name, []))
+                jmx_metrics = self.get_jmx_metrics(service_name, service_info)
 
                 for jmx_metric in jmx_metrics:
                     if 'path' in jmx_metric:
@@ -606,9 +686,7 @@ class JmxConfig:
                     query['attr'] = [jmx_metric['attribute']]
 
                     if 'typeNames' in jmx_metric:
-                        query['typeNames'] = (
-                            jmx_metric['typeNames'].split(',')
-                        )
+                        query['typeNames'] = jmx_metric['typeNames']
 
                     server['queries'].append(query)
                 config['servers'].append(server)
