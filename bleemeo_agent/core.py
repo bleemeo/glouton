@@ -125,20 +125,6 @@ KNOWN_PROCESS = {
         'port': 80,
         'protocol': socket.IPPROTO_TCP,
     },
-    '-s ejabberd': {  # beam process
-        'interpreter': 'erlang',
-        'service': 'ejabberd',
-        'port': 5222,
-        'protocol': socket.IPPROTO_TCP,
-        'ignore_high_port': True,
-    },
-    '-s rabbit': {  # beam process
-        'interpreter': 'erlang',
-        'service': 'rabbitmq',
-        'port': 5672,
-        'protocol': socket.IPPROTO_TCP,
-        'ignore_high_port': True,
-    },
     'dovecot': {
         'service': 'dovecot',
         'port': 143,
@@ -245,59 +231,110 @@ KNOWN_PROCESS = {
         'port': 6082,
         'protocol': socket.IPPROTO_TCP,
     },
-    'org.apache.zookeeper.server.quorum.QuorumPeerMain': {  # java process
+    'uwsgi': {
+        'service': 'uwsgi',
+    }
+}
+
+KNOWN_INTEPRETED_PROCESS = [
+    {
+        'cmdline_must_contains': ['-s ejabberd'],
+        'interpreter': 'erlang',
+        'service': 'ejabberd',
+        'port': 5222,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': ['-s rabbit'],
+        'interpreter': 'erlang',
+        'service': 'rabbitmq',
+        'port': 5672,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': [
+            'org.apache.zookeeper.server.quorum.QuorumPeerMain',
+        ],
         'interpreter': 'java',
         'service': 'zookeeper',
         'port': 2181,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'org.elasticsearch.bootstrap.Elasticsearch': {  # java process
+    {
+        'cmdline_must_contains': [
+            'org.elasticsearch.bootstrap.Elasticsearch',
+        ],
         'interpreter': 'java',
         'service': 'elasticsearch',
         'port': 9200,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'org.apache.cassandra.service.CassandraDaemon': {  # java process
+    {
+        'cmdline_must_contains': [
+            'org.apache.cassandra.service.CassandraDaemon',
+        ],
         'interpreter': 'java',
         'service': 'cassandra',
         'port': 9042,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'com.atlassian.stash.internal.catalina.startup.Bootstrap': {
+    {
+        'cmdline_must_contains': [
+            'com.atlassian.stash.internal.catalina.startup.Bootstrap',
+        ],
         'interpreter': 'java',
         'service': 'bitbucket',
         'port': 7990,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher': {
+    {
+        'cmdline_must_contains': [
+            'com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher'
+        ],
         'interpreter': 'java',
         'service': 'bitbucket',
         'port': 7990,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'org.apache.catalina.startup.Bootstrap': {
+    {
+        'cmdline_must_contains': [
+            'org.apache.catalina.startup.Bootstrap',
+            'jira',
+        ],
         'interpreter': 'java',
-        'cmdline_must_match': 'confluence',
+        'service': 'jira',
+        'port': 8080,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': [
+            'org.apache.catalina.startup.Bootstrap',
+            'confluence',
+        ],
+        'interpreter': 'java',
         'service': 'confluence',
         'port': 7990,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'salt-master': {  # python process
+    {  # python process
+        'cmdline_must_contains': [
+            'salt-master',
+        ],
         'interpreter': 'python',
         'service': 'salt-master',
         'port': 4505,
         'protocol': socket.IPPROTO_TCP,
     },
-    'uwsgi': {
-        'service': 'uwsgi',
-    }
-}
+]
 
 DOCKER_API_VERSION = '1.21'
 
@@ -396,13 +433,12 @@ def get_service_info(cmdline):
 
     if name in ('java', 'python', 'erl') or name.startswith('beam'):
         # For them, we search in the command line
-        for (key, service_info) in KNOWN_PROCESS.items():
+        for service_info in KNOWN_INTEPRETED_PROCESS:
             # FIXME: we should check that intepreter match the one used.
-            if 'interpreter' not in service_info:
-                continue
-            if (key in cmdline and
-                    ('cmdline_must_match' not in service_info
-                     or service_info['cmdline_must_match'] in cmdline)):
+            match = all(
+                key in cmdline for key in service_info['cmdline_must_contains']
+            )
+            if match:
                 return service_info
     else:
         return KNOWN_PROCESS.get(name)

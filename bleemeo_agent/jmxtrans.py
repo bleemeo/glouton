@@ -253,6 +253,25 @@ JMX_METRICS = {
             'derive': True,
         },
     ],
+    'jira': [
+        {
+            'name': 'requests',
+            'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
+            'attribute': 'requestCount',
+            'typeNames': 'name',
+            'sum': True,
+            'derive': True,
+        },
+        {
+            'name': 'request_time',
+            'mbean': 'Catalina:type=GlobalRequestProcessor,name=*',
+            'attribute': 'processingTime',
+            'typeNames': 'name',
+            'ratio': 'requests',
+            'sum': True,
+            'derive': True,
+        },
+    ],
 }
 
 
