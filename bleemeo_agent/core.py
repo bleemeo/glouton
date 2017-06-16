@@ -321,7 +321,7 @@ KNOWN_INTEPRETED_PROCESS = [
         ],
         'interpreter': 'java',
         'service': 'confluence',
-        'port': 7990,
+        'port': 8090,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
