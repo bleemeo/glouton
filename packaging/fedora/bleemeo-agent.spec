@@ -250,6 +250,11 @@ exit 0
 %post jmx
 chown bleemeo:jmxtrans /var/lib/jmxtrans/bleemeo-generated.json
 chmod 0640 /var/lib/jmxtrans/bleemeo-generated.json
+/etc/init.d/jmxtrans start || true
+# This should not be needed, as agent should be reload after *any*
+# package installation. But currently this is not working on Fedora
+systemctl reload bleemeo-agent.service || true
+
 
 %changelog
 * %{build_date} Bleemeo Packaging Team jenkins@bleemeo.com - %{version}

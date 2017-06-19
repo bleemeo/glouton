@@ -247,6 +247,7 @@ exit 0
 %post jmx
 chown bleemeo:jmxtrans /var/lib/jmxtrans/bleemeo-generated.json
 chmod 0640 /var/lib/jmxtrans/bleemeo-generated.json
+/etc/init.d/jmxtrans start || true
 
 %changelog
 * %{build_date} Bleemeo Packaging Team jenkins@bleemeo.com - %{version}
