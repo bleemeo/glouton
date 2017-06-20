@@ -166,7 +166,8 @@ class BleemeoConnector(threading.Thread):
                 json.dumps(msg),
             )
             # FIXME: PRODUCT-137: to be removed when upstream bug is fixed
-            if self.mqtt_client._ssl is not None:
+            if (self.mqtt_client._ssl is not None
+                    and not isinstance(self.mqtt_client._ssl, bool)):
                 self.mqtt_client._ssl.setblocking(0)
 
             self.mqtt_client.subscribe(
