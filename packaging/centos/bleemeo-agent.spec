@@ -118,6 +118,7 @@ install -D -p -m 0644 debian/bleemeo-agent.service %{buildroot}%{_unitdir}/%{nam
 install -D -d -m 0755 %{buildroot}%{_sharedstatedir}/bleemeo
 install -D -p -m 0755 packaging/common/bleemeo-hook-package-modified %{buildroot}%{_prefix}/lib/bleemeo/bleemeo-hook-package-modified
 install -D -p -m 0644 packaging/centos/bleemeo.action %{buildroot}%{_sysconfdir}/yum/post-actions/bleemeo.action
+install -D -p -m 0755 debian/bleemeo-agent.cron.hourly %{buildroot}%{_sysconfdir}/cron.hourly/bleemeo-agent
 
 # -telegraf
 install -D -p -m 0644 packaging/common/telegraf.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
@@ -135,6 +136,7 @@ install -D -p -m 0644 packaging/centos/bleemeo-collectd.conf %{buildroot}%{_sysc
 
 # -jmx
 install -D -p -m 0640 packaging/common/jmxtrans-bleemeo-generated.json %{buildroot}%{_sharedstatedir}/jmxtrans/bleemeo-generated.json
+install -D -p -m 0755 debian/bleemeo-agent-jmx.cron.daily %{buildroot}%{_sysconfdir}/cron.daily/bleemeo-agent-jmx
 
 %files
 %{python3_sitelib}/*
@@ -146,6 +148,7 @@ install -D -p -m 0640 packaging/common/jmxtrans-bleemeo-generated.json %{buildro
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/06-distribution.conf
 %config(noreplace) %{_sysconfdir}/sudoers.d/*
 %config(noreplace) %{_sysconfdir}/yum/post-actions/bleemeo.action
+%config(noreplace) %{_sysconfdir}/cron.hourly/bleemeo-agent
 %{_unitdir}/%{name}.service
 %{_sharedstatedir}/bleemeo
 %{_prefix}/lib/bleemeo/
@@ -167,6 +170,7 @@ install -D -p -m 0640 packaging/common/jmxtrans-bleemeo-generated.json %{buildro
 
 %files jmx
 %{_sharedstatedir}/jmxtrans/bleemeo-generated.json
+%config(noreplace) %{_sysconfdir}/cron.daily/bleemeo-agent-jmx
 
 %pre
 getent group bleemeo >/dev/null || groupadd -r bleemeo
