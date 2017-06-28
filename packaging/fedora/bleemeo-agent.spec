@@ -138,6 +138,7 @@ install -D -p -m 0644 packaging/centos/bleemeo-collectd.conf %{buildroot}%{_sysc
 %endif
 
 # -jmx
+install -D -p -m 0644 packaging/centos/bleemeo-agent-jmx.service %{buildroot}%{_unitdir}/%{name}-jmx.service
 install -D -p -m 0640 packaging/common/jmxtrans-bleemeo-generated.json %{buildroot}%{_sharedstatedir}/jmxtrans/bleemeo-generated.json
 install -D -p -m 0755 debian/bleemeo-agent-jmx.cron.daily %{buildroot}%{_sysconfdir}/cron.daily/bleemeo-agent-jmx
 
@@ -174,6 +175,7 @@ install -D -p -m 0755 debian/bleemeo-agent-jmx.cron.daily %{buildroot}%{_sysconf
 %files jmx
 %{_sharedstatedir}/jmxtrans/bleemeo-generated.json
 %config(noreplace) %{_sysconfdir}/cron.daily/bleemeo-agent-jmx
+%{_unitdir}/%{name}-jmx.service
 
 %pre
 getent group bleemeo >/dev/null || groupadd -r bleemeo
@@ -254,6 +256,10 @@ exit 0
 %post jmx
 chown bleemeo:jmxtrans /var/lib/jmxtrans/bleemeo-generated.json
 chmod 0640 /var/lib/jmxtrans/bleemeo-generated.json
+if [ $1 -eq 1 ] ; then
+    # Initial installation
+    systemctl enable --quiet --now bleemeo-agent-jmx.service
+fi
 /etc/init.d/jmxtrans start || true
 # This should not be needed, as agent should be reload after *any*
 # package installation. But currently this is not working on Fedora

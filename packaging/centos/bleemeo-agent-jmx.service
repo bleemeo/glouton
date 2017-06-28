@@ -1,0 +1,13 @@
+[Unit]
+Description=Bleemeo agent JMX
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=-/bin/mkdir /var/run/jmxtrans
+ExecStart=-/bin/chown jmxtrans:jmxtrans /var/run/jmxtrans
+ExecStart=-/etc/init.d/jmxtrans start
+User=root
+
+[Install]
+WantedBy=multi-user.target
