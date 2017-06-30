@@ -304,15 +304,17 @@ def test_get_service_info():
 def test_sanitize_service():
     sanitize_service = bleemeo_agent.core.sanitize_service
 
+    core = None
+
     # First check custom services
     service_info = {}
-    assert sanitize_service('test', service_info, False) is None
+    assert sanitize_service('test', None, service_info, False, core) is None
 
     service_info = {'check_type': 'nagios'}
-    assert sanitize_service('test', service_info, False) is None
+    assert sanitize_service('test', None, service_info, False, core) is None
 
     service_info = {'port': 'non-numeric'}
-    assert sanitize_service('test', service_info, False) is None
+    assert sanitize_service('test', None, service_info, False, core) is None
 
     service_info = {'port': 1234}
     wanted = {
@@ -320,11 +322,11 @@ def test_sanitize_service():
         'address': '127.0.0.1',
         'protocol': socket.IPPROTO_TCP
     }
-    assert sanitize_service('test', service_info, False) == wanted
+    assert sanitize_service('test', None, service_info, False, core) == wanted
 
     service_info = {'check_type': 'nagios', 'check_command': 'true'}
     wanted = service_info
-    assert sanitize_service('test', service_info, False) == wanted
+    assert sanitize_service('test', None, service_info, False, core) == wanted
 
     service_info = {'check_type': 'nagios', 'check_command': 'true', 'port': 1}
     wanted = {
@@ -334,14 +336,15 @@ def test_sanitize_service():
         'address': '127.0.0.1',
         'protocol': socket.IPPROTO_TCP
     }
-    assert sanitize_service('test', service_info, False) == wanted
+    assert sanitize_service('test', None, service_info, False, core) == wanted
 
     # discovered services are allowed to exists without service_info
     service_info = {}
-    assert sanitize_service('test', service_info, True) == {}
+    assert sanitize_service('test', None, service_info, True, core) == {}
 
 
 def test_apply_service_override():
+    core = None
 
     services = {
         ('apache', None): {'placeholder': 'apache'},
@@ -374,7 +377,7 @@ def test_apply_service_override():
         },
     }
 
-    bleemeo_agent.core.apply_service_override(services, override)
+    bleemeo_agent.core.apply_service_override(services, override, core)
     assert services == wanted
 
 

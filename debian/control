@@ -69,3 +69,19 @@ Description: Bleemeo agent with collectd
  This package contains the agent which send metric to
  the SaaS platform with no dependency on daemon.
  This package is appropriate for Docker images.
+
+Package: bleemeo-agent-jmx
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${python3:Depends},
+    bleemeo-agent,
+    jmxtrans,
+# Use pre-depends to force installation and configuration of
+# JRE before jmxtrans
+Pre-Depends: default-jre-headless | java6-runtime-headless
+Description: Bleemeo agent plugin for JMX
+ Bleemeo is a solution of Monitoring as a Service.
+ This package contains the agent which send metric to
+ the SaaS platform.
+ This package contains part needed to monitor JMX
+ metrics.

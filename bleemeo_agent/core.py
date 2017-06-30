@@ -125,20 +125,6 @@ KNOWN_PROCESS = {
         'port': 80,
         'protocol': socket.IPPROTO_TCP,
     },
-    '-s ejabberd': {  # beam process
-        'interpreter': 'erlang',
-        'service': 'ejabberd',
-        'port': 5222,
-        'protocol': socket.IPPROTO_TCP,
-        'ignore_high_port': True,
-    },
-    '-s rabbit': {  # beam process
-        'interpreter': 'erlang',
-        'service': 'rabbitmq',
-        'port': 5672,
-        'protocol': socket.IPPROTO_TCP,
-        'ignore_high_port': True,
-    },
     'dovecot': {
         'service': 'dovecot',
         'port': 143,
@@ -245,30 +231,110 @@ KNOWN_PROCESS = {
         'port': 6082,
         'protocol': socket.IPPROTO_TCP,
     },
-    'org.apache.zookeeper.server.quorum.QuorumPeerMain': {  # java process
+    'uwsgi': {
+        'service': 'uwsgi',
+    }
+}
+
+KNOWN_INTEPRETED_PROCESS = [
+    {
+        'cmdline_must_contains': ['-s ejabberd'],
+        'interpreter': 'erlang',
+        'service': 'ejabberd',
+        'port': 5222,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': ['-s rabbit'],
+        'interpreter': 'erlang',
+        'service': 'rabbitmq',
+        'port': 5672,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': [
+            'org.apache.zookeeper.server.quorum.QuorumPeerMain',
+        ],
         'interpreter': 'java',
         'service': 'zookeeper',
         'port': 2181,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'org.elasticsearch.bootstrap.Elasticsearch': {  # java process
+    {
+        'cmdline_must_contains': [
+            'org.elasticsearch.bootstrap.Elasticsearch',
+        ],
         'interpreter': 'java',
         'service': 'elasticsearch',
         'port': 9200,
         'protocol': socket.IPPROTO_TCP,
         'ignore_high_port': True,
     },
-    'salt-master': {  # python process
+    {
+        'cmdline_must_contains': [
+            'org.apache.cassandra.service.CassandraDaemon',
+        ],
+        'interpreter': 'java',
+        'service': 'cassandra',
+        'port': 9042,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': [
+            'com.atlassian.stash.internal.catalina.startup.Bootstrap',
+        ],
+        'interpreter': 'java',
+        'service': 'bitbucket',
+        'port': 7990,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': [
+            'com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher'
+        ],
+        'interpreter': 'java',
+        'service': 'bitbucket',
+        'port': 7990,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': [
+            'org.apache.catalina.startup.Bootstrap',
+            'jira',
+        ],
+        'interpreter': 'java',
+        'service': 'jira',
+        'port': 8080,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {
+        'cmdline_must_contains': [
+            'org.apache.catalina.startup.Bootstrap',
+            'confluence',
+        ],
+        'interpreter': 'java',
+        'service': 'confluence',
+        'port': 8090,
+        'protocol': socket.IPPROTO_TCP,
+        'ignore_high_port': True,
+    },
+    {  # python process
+        'cmdline_must_contains': [
+            'salt-master',
+        ],
         'interpreter': 'python',
         'service': 'salt-master',
         'port': 4505,
         'protocol': socket.IPPROTO_TCP,
     },
-    'uwsgi': {
-        'service': 'uwsgi',
-    }
-}
+]
 
 DOCKER_API_VERSION = '1.21'
 
@@ -367,17 +433,18 @@ def get_service_info(cmdline):
 
     if name in ('java', 'python', 'erl') or name.startswith('beam'):
         # For them, we search in the command line
-        for (key, service_info) in KNOWN_PROCESS.items():
+        for service_info in KNOWN_INTEPRETED_PROCESS:
             # FIXME: we should check that intepreter match the one used.
-            if 'interpreter' not in service_info:
-                continue
-            if key in cmdline:
+            match = all(
+                key in cmdline for key in service_info['cmdline_must_contains']
+            )
+            if match:
                 return service_info
     else:
         return KNOWN_PROCESS.get(name)
 
 
-def apply_service_override(services, override_config):
+def apply_service_override(services, override_config, core):
     for service_info in override_config:
         service_info = service_info.copy()
         try:
@@ -396,14 +463,24 @@ def apply_service_override(services, override_config):
             tmp.update(service_info)
             service_info = tmp
 
-        service_info = sanitize_service(service, service_info, key in services)
+        service_info = sanitize_service(
+            service, instance, service_info, key in services, core,
+        )
         if service_info is not None:
             services[(service, instance)] = service_info
 
 
-def sanitize_service(name, service_info, is_discovered_service):
+def sanitize_service(
+        name, instance, service_info, is_discovered_service, core):
     if 'port' in service_info and service_info['port'] is not None:
-        service_info.setdefault('address', '127.0.0.1')
+        if instance is None:
+            service_info.setdefault('address', '127.0.0.1')
+        elif 'address' not in service_info:
+            service_info.setdefault(
+                'address',
+                core.get_docker_container_address(instance)
+            )
+
         service_info.setdefault('protocol', socket.IPPROTO_TCP)
         try:
             service_info['port'] = int(service_info['port'])
@@ -425,7 +502,8 @@ def sanitize_service(name, service_info, is_discovered_service):
         )
         return None
     elif (service_info.get('check_type') != 'nagios'
-            and 'port' not in service_info and not is_discovered_service):
+            and 'port' not in service_info and not is_discovered_service
+            and 'jmx_port' not in service_info):
         # discovered services could exist without port, etc.
         # It means that no check will be performed but service object will
         # be created.
@@ -623,6 +701,7 @@ class Core:
 
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = {}
+        self.services = {}
         self._soft_status_since = {}
         self._trigger_discovery = False
         self._trigger_facts = False
@@ -1332,9 +1411,24 @@ class Core:
         self.services = copy.deepcopy(self.discovered_services)
         apply_service_override(
             self.services,
-            self.config.get('service', [])
+            self.config.get('service', []),
+            self,
         )
         self.apply_service_defaults()
+
+        for (key, service) in self.services.items():
+            (service_name, instance) = key
+            if instance is None:
+                name = service_name
+            else:
+                name = '%s (%s)' % (service_name, instance)
+
+            if 'jmx_metrics' in service and 'jmx_port' not in service:
+                logging.warinig(
+                    'Service %s: jmx_metrics require jmx_port',
+                    name,
+                )
+                del service['jmx_metrics']
 
         self.graphite_server.update_discovery()
         bleemeo_agent.checker.update_checks(self)
@@ -1668,6 +1762,9 @@ class Core:
                 if service_name == 'postgresql':
                     self._discover_pgsql(instance, service_info)
 
+                if service_info.get('interpreter') == 'java':
+                    self._guess_jmx_config(service_name, service_info, process)
+
                 discovered_services[(service_name, instance)] = service_info
 
         logging.debug(
@@ -1732,6 +1829,32 @@ class Core:
 
         service_info['username'] = user
         service_info['password'] = password
+
+    def _guess_jmx_config(self, instance, service_info, process):
+        """ Guess if remote JMX is available for this process
+        """
+        jmx_options = [
+            '-Dcom.sun.management.jmxremote.port=',
+            '-Dcassandra.jmx.remote.port=',
+        ]
+        if service_info['address'] == '127.0.0.1':
+            jmx_options.extend([
+                '-Dcassandra.jmx.local.port=',
+            ])
+
+        for opt in jmx_options:
+            try:
+                index = process['cmdline'].find(opt)
+            except ValueError:
+                continue
+
+            value = process['cmdline'][index + len(opt):].split()[0]
+            try:
+                jmx_port = int(value)
+            except ValueError:
+                continue
+
+            service_info['jmx_port'] = jmx_port
 
     def _watch_docker_event(self):
         """ Watch for docker event and re-run discovery
@@ -1850,6 +1973,67 @@ class Core:
                     )
                 )
                 del metric_prometheus[name]
+
+        valid_services = []
+        for service in self.config.get('service', []):
+            if 'id' not in service:
+                warnings.append(
+                    'Ignoring invalid service entry without id'
+                )
+                continue
+            valid_services.append(service)
+
+            name = service['id']
+            if 'instance' in service:
+                name = '%s (%s)' % (name, service['instance'])
+
+            if 'jmx_username' in service and 'jmx_password' not in service:
+                warnings.append(
+                    'Service %s: jmx_username is set without jmx_password' % (
+                        name,
+                    )
+                )
+                del service['jmx_metrics']
+            elif 'jmx_username' not in service and 'jmx_password' in service:
+                warnings.append(
+                    'Service %s: jmx_password is set without jmx_username' % (
+                        name,
+                    )
+                )
+                del service['jmx_metrics']
+            elif 'jmx_metrics' in service:
+                valid_metrics = []
+                jmx_mandatory_option = set((
+                    'name',
+                    'mbean',
+                    'attribute',
+                ))
+                for jmx_metric in service['jmx_metrics']:
+                    missing_option = (
+                        jmx_mandatory_option - set(jmx_metric.keys())
+                    )
+                    if len(missing_option) > 0 and 'name' in jmx_metric:
+                        warnings.append(
+                            'Service %s has an invalid jmx_metrics "%s":'
+                            ' missing %s option(s)' % (
+                                name,
+                                jmx_metric['name'],
+                                ', '.join(missing_option),
+                            )
+                        )
+                    elif len(missing_option) > 0:
+                        warnings.append(
+                            'Service %s has an invalid jmx_metrics:'
+                            ' missing %s option(s)' % (
+                                name,
+                                ', '.join(missing_option),
+                            )
+                        )
+                    else:
+                        valid_metrics.append(jmx_metric)
+                service['jmx_metrics'] = valid_metrics
+
+        self.config.set('service', valid_services)
 
         deprecated_config = [
             ('telegraf.statsd_enabled', 'telegraf.statsd.enabled'),
@@ -2187,7 +2371,16 @@ class Core:
             * the IP address of this container in the docker_gwbridge
             * the IP address from the first network
         """
-        container_info = self.docker_client.inspect_container(container_name)
+        if docker is None:
+            return None
+
+        try:
+            container_info = self.docker_client.inspect_container(
+                container_name,
+            )
+        except docker.errors.APIError:
+            return None
+
         container_id = container_info.get('Id')
 
         if container_info['NetworkSettings']['IPAddress']:
