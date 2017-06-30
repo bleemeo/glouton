@@ -15,3 +15,4 @@ ${REPREPRO_DOCKER_CMD} copysrc yakkety trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc zesty trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc artful trusty bleemeo-agent
 ${REPREPRO_DOCKER_CMD} copysrc jessie trusty bleemeo-agent
+${REPREPRO_DOCKER_CMD} copysrc stretch trusty bleemeo-agent

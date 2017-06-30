@@ -292,6 +292,8 @@ class Telegraf:
                 continue
             if service_info.get('address') is None:
                 continue
+            if service_info.get('port') is None:
+                continue
             if 'es_node_id' not in service_info:
                 try:
                     response = requests.get(
