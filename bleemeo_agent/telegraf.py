@@ -300,6 +300,7 @@ class Telegraf:
                         'http://%(address)s:%(port)s/_nodes/_local/'
                         % service_info,
                         headers={'User-Agent': self.core.http_user_agent},
+                        timeout=10.0,
                     )
                     data = response.json()
                     this_node_id = list(data['nodes'].keys())[0]

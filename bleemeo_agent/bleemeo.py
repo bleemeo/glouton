@@ -37,6 +37,7 @@ import bleemeo_agent.util
 
 
 MQTT_QUEUE_MAX_SIZE = 2000
+REQUESTS_TIMEOUT = 15.0
 
 
 class ApiError(Exception):
@@ -58,6 +59,7 @@ def api_iterator(url, params, auth, headers=None):
         params=params,
         auth=auth,
         headers=headers,
+        timeout=REQUESTS_TIMEOUT,
     )
 
     if response.status_code != 200:
@@ -75,7 +77,9 @@ def api_iterator(url, params, auth, headers=None):
         yield item
 
     while data['next']:
-        response = requests.get(data['next'], auth=auth, headers=headers)
+        response = requests.get(
+            data['next'], auth=auth, headers=headers, timeout=REQUESTS_TIMEOUT,
+        )
 
         if response.status_code != 200:
             raise ApiError(response)
@@ -506,6 +510,7 @@ class BleemeoConnector(threading.Thread):
                     'Content-type': 'application/json',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
             content = response.json()
         except requests.exceptions.RequestException:
@@ -656,6 +661,7 @@ class BleemeoConnector(threading.Thread):
                     'X-Requested-With': 'XMLHttpRequest',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
             if response.status_code not in (204, 404):
                 logging.debug(
@@ -719,6 +725,7 @@ class BleemeoConnector(threading.Thread):
                 'X-Requested-With': 'XMLHttpRequest',
                 'User-Agent': self.core.http_user_agent,
             },
+            timeout=REQUESTS_TIMEOUT,
         )
         if response.status_code != 200:
             logging.debug(
@@ -743,6 +750,7 @@ class BleemeoConnector(threading.Thread):
                 'Content-type': 'application/json',
                 'User-Agent': self.core.http_user_agent,
             },
+            timeout=REQUESTS_TIMEOUT,
         )
         if response.status_code > 400:
             logging.debug(
@@ -808,6 +816,7 @@ class BleemeoConnector(threading.Thread):
                     'Content-type': 'application/json',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
             if response.status_code != expected_code:
                 logging.debug(
@@ -943,6 +952,7 @@ class BleemeoConnector(threading.Thread):
                     'Content-type': 'application/json',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
             if 400 <= response.status_code < 500:
                 logging.debug(
@@ -1041,6 +1051,7 @@ class BleemeoConnector(threading.Thread):
                     'Content-type': 'application/json',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
 
             if response.status_code not in (200, 201):
@@ -1066,6 +1077,7 @@ class BleemeoConnector(threading.Thread):
                     'X-Requested-With': 'XMLHttpRequest',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
             if response.status_code not in (204, 404):
                 logging.debug(
@@ -1141,6 +1153,7 @@ class BleemeoConnector(threading.Thread):
                     'Content-type': 'application/json',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
             if response.status_code == 201:
                 logging.debug(
@@ -1167,6 +1180,7 @@ class BleemeoConnector(threading.Thread):
                     'X-Requested-With': 'XMLHttpRequest',
                     'User-Agent': self.core.http_user_agent,
                 },
+                timeout=REQUESTS_TIMEOUT,
             )
             if response.status_code != 204:
                 logging.debug(
