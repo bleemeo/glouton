@@ -430,7 +430,11 @@ class BleemeoConnector(threading.Thread):
 
                 if metric_uuid is None:
                     # UUID is not available now. Ignore this metric for now
-                    self._metric_queue.put(metric)
+                    if time.time() - metric['time'] > 7200:
+                        continue
+                    else:
+                        self._metric_queue.put(metric)
+
                     if repush_metric is metric:
                         # It has looped, the first re-pushed metric was
                         # re-read.
@@ -1090,8 +1094,10 @@ class BleemeoConnector(threading.Thread):
             self.last_containers_removed = bleemeo_agent.util.get_clock()
 
     def emit_metric(self, metric):
-        if self._metric_queue.qsize() < 100000:
-            self._metric_queue.put(metric)
+        if self._metric_queue.qsize() > 100000:
+            # Remove one message to make room.
+            self._metric_queue.get_nowait()
+        self._metric_queue.put(metric)
         metric_name = metric['measurement']
         service = metric.get('service')
         item = metric.get('item')
