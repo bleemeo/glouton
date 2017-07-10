@@ -31,7 +31,6 @@ Requires:       python3-six
 Requires:       python3-PyYAML
 Requires:       python3-setuptools
 Requires:       bleemeo-agent-collector
-Requires:       yum-plugin-post-transaction-actions
 # This should be a requires of python3-tzlocal
 # https://bugzilla.redhat.com/show_bug.cgi?id=1393397
 Requires:       python3-pytz
@@ -120,8 +119,8 @@ install -D -p -m 0644 etc/agent.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.co
 install -D -p -m 0644 debian/bleemeo-agent.service %{buildroot}%{_unitdir}/%{name}.service
 install -D -d -m 0755 %{buildroot}%{_sharedstatedir}/bleemeo
 install -D -p -m 0755 packaging/common/bleemeo-hook-package-modified %{buildroot}%{_prefix}/lib/bleemeo/bleemeo-hook-package-modified
-install -D -p -m 0644 packaging/centos/bleemeo.action %{buildroot}%{_sysconfdir}/yum/post-actions/bleemeo.action
 install -D -p -m 0755 debian/bleemeo-agent.cron.hourly %{buildroot}%{_sysconfdir}/cron.hourly/bleemeo-agent
+install -D -p -m 0644 packaging/fedora/bleemeo-dnf-plugin.py %{buildroot}%{python3_sitelib}/dnf-plugins/bleemeo.py
 
 # -telegraf
 install -D -p -m 0644 packaging/common/telegraf.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
@@ -151,7 +150,6 @@ install -D -p -m 0755 debian/bleemeo-agent-jmx.cron.daily %{buildroot}%{_sysconf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/06-distribution.conf
 %config(noreplace) %{_sysconfdir}/sudoers.d/*
-%config(noreplace) %{_sysconfdir}/yum/post-actions/bleemeo.action
 %config(noreplace) %{_sysconfdir}/cron.hourly/bleemeo-agent
 %{_unitdir}/%{name}.service
 %{_sharedstatedir}/bleemeo
@@ -261,9 +259,6 @@ if [ $1 -eq 1 ] ; then
     systemctl enable --quiet --now bleemeo-agent-jmx.service
 fi
 /etc/init.d/jmxtrans start || true
-# This should not be needed, as agent should be reload after *any*
-# package installation. But currently this is not working on Fedora
-systemctl reload bleemeo-agent.service || true
 
 
 %changelog
