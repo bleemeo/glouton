@@ -260,6 +260,9 @@ class GraphiteClient(threading.Thread):
                     continue
 
                 metric, value, timestamp = graphite_split_line(line)
+                if not metric.isprintable():
+                    continue
+
                 self.emit_metric(metric, timestamp, value)
 
             if self.client_decoder is not None:
