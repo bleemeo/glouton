@@ -1086,7 +1086,7 @@ class Core:
     def _update_docker_info(self):
         self.docker_containers = {}
         self.docker_networks = {}
-        self.docker_containers_ignored = []
+        self.docker_containers_ignored = {}
 
         if self.docker_client is None:
             return
@@ -1098,7 +1098,7 @@ class Core:
                 labels = {}
             bleemeo_enable = labels.get('bleemeo.enable', '').lower()
             if bleemeo_enable in ('0', 'off', 'false', 'no'):
-                self.docker_containers_ignored.append(
+                self.docker_containers_ignored[container['Id']] = (
                     inspect['Name'].lstrip('/')
                 )
                 continue
@@ -1730,7 +1730,7 @@ class Core:
                 if (service_name, instance) in discovered_services:
                     # Service already found
                     continue
-                if instance in self.docker_containers_ignored:
+                if instance in self.docker_containers_ignored.values():
                     continue
                 logging.debug(
                     'Discovered service %s on %s',
@@ -1915,6 +1915,9 @@ class Core:
             # id is deprecated. Actor was introduced with
             # Docker 1.10
             actor_id = event.get('id')
+
+        if actor_id in self.docker_containers_ignored.keys():
+            return
 
         if (action in DOCKER_DISCOVERY_EVENTS
                 and event_type == 'container'):
