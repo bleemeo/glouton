@@ -1299,7 +1299,10 @@ class Core:
         if 'Health' not in result['State']:
             return
 
-        if result['State']['Health'].get('Status') == 'healthy':
+        docker_status = result.get('State', {}).get('Status', 'running')
+        if docker_status != 'running':
+            status = bleemeo_agent.checker.STATUS_CRITICAL
+        elif result['State']['Health'].get('Status') == 'healthy':
             status = bleemeo_agent.checker.STATUS_OK
         elif result['State']['Health'].get('Status') == 'unhealthy':
             status = bleemeo_agent.checker.STATUS_CRITICAL
@@ -1316,7 +1319,9 @@ class Core:
         }
 
         logs = result['State']['Health'].get('Log', [])
-        if len(logs):
+        if docker_status != 'running':
+            metric['check_output'] = 'Container stopped'
+        elif len(logs):
             metric['check_output'] = logs[-1].get('Output')
 
         self.emit_metric(metric)
