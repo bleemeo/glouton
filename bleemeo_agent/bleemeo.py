@@ -361,7 +361,7 @@ class BleemeoConnector(threading.Thread):
                 'bleemeo.mqtt.cafile',
                 '/etc/ssl/certs/ca-certificates.crt'
             )
-            if '$INSTDIR' in cafile and os.name == 'nt':
+            if cafile is not None and '$INSTDIR' in cafile and os.name == 'nt':
                 # Under Windows, $INSTDIR is remplaced by installation
                 # directory
                 cafile = cafile.replace(
