@@ -12,7 +12,7 @@ cleanup() {
 trap cleanup EXIT
 
 docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder virtualenv -p /usr/bin/python3 /srv/data/venv_pynsist
-docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder sh -c 'cd bleemeo-agent-* && /srv/data/venv_pynsist/bin/pip install requests==2.15.1 .[bleemeo,sentry,web]'
+docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder sh -c 'cd bleemeo-agent-* && /srv/data/venv_pynsist/bin/pip install .[bleemeo,sentry,web]'
 
 # markupsafe have some optional speedup compiled. Since it does not provide
 # wheel and we are not under Windows, remove the speedup and include pure-Python
@@ -25,10 +25,10 @@ docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder sh -c 'rm /srv/data/venv
 cp -a venv_pynsist/lib/python3.?/site-packages/*-*.dist-info bleemeo-agent-*/packaging/windows/pynsist_pkgs/
 
 mkdir telegraf
-wget -O telegraf/telegraf.zip https://dl.influxdata.com/telegraf/releases/telegraf-1.3.0_windows_amd64.zip
+wget -O telegraf/telegraf.zip https://dl.influxdata.com/telegraf/releases/telegraf-1.3.3_windows_amd64.zip
 docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder unzip telegraf/telegraf.zip
 
-docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/pip install wmi pynsist==1.10
+docker run --rm -v $(pwd):/srv/data bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/pip install wmi pynsist
 docker run --rm -v $(pwd):/srv/data -w /srv/data bleemeo/nsisbuilder /srv/data/venv_pynsist/bin/pynsist bleemeo-agent-*/packaging/windows/installer.cfg
 
 rm -fr bleemeo-agent-*/packaging/windows/pynsist_pkgs/
