@@ -689,6 +689,7 @@ class Core:
         self.graphite_server = None
         self.docker_client = None
         self.docker_containers = {}
+        self.docker_containers_ignored = {}
         self.docker_networks = {}
         if APSCHEDULE_IS_3X:
             self._scheduler = (
