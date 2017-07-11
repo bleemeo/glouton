@@ -1478,6 +1478,20 @@ class Telegraf:
             value = get_metric('cpu_used', None)
             value -= get_metric('cpu_user', None)
             value -= get_metric('cpu_system', None)
+        elif name == 'mem_free' and os.name == 'nt':
+            used = get_metric('mem_used', item)
+            cached = get_metric('mem_cached', item)
+            value = self.core.total_memory_size - used - cached
+        elif name == 'mem_cached' and os.name == 'nt':
+            value = 0
+            for sub_type in (
+                    'Standby_Cache_Reserve_Bytes',
+                    'Standby_Cache_Normal_Priority_Bytes',
+                    'Standby_Cache_Core_Bytes'):
+                value += get_metric(sub_type, item)
+            new_item.add(
+                ('mem_free', None, None, timestamp)
+            )
         elif name == 'mem_used':
             total = get_metric('mem_total', None)
             value = total - get_metric('mem_available', None)
