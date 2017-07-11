@@ -1075,9 +1075,14 @@ class Core:
             )
             return
 
-        self.docker_client = docker.Client(
-            version=DOCKER_API_VERSION,
-        )
+        if hasattr(docker, 'APIClient'):
+            self.docker_client = docker.APIClient(
+                version=DOCKER_API_VERSION,
+            )
+        else:
+            self.docker_client = docker.Client(
+                version=DOCKER_API_VERSION,
+            )
         try:
             self.docker_client.ping()
         except:

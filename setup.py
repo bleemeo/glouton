@@ -23,7 +23,7 @@ setup(
         'pyyaml',
     ],
     extras_require={
-        'docker': ['docker-py'],
+        'docker': ['docker'],
         'influxdb': ['influxdb > 2.6.0'],
         'bleemeo': ['paho-mqtt'],
         'sentry': ['raven'],
