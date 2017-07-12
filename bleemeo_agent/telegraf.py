@@ -91,6 +91,11 @@ MYSQL_TELEGRAF_CONFIG = """
   servers = ["%(username)s:%(password)s@tcp(%(address)s:%(port)s)/"]
 """
 
+# Additional configuration if Telegraf >= 1.3.0
+MYSQL_TELEGRAF_CONFIG_1_3 = """
+  gather_innodb_metrics = true
+"""
+
 NGINX_TELEGRAF_CONFIG = """
 [[inputs.nginx]]
   urls = ["http://%(address)s:%(port)s/nginx_status"]
@@ -823,7 +828,7 @@ class Telegraf:
                 derive = True
             elif name != 'memcached_uptime':
                 return
-        elif part[-2] == 'mysql':
+        elif part[-2] in ('mysql', 'mysql_innodb'):
             service = 'mysql'
             (server_address, server_port) = part[-3].split(':')
             server_address = server_address.replace('_', '.')
@@ -835,7 +840,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = 'mysql_' + part[-1]
+            name = part[-2] + '_' + part[-1]
             derive = True
             if name.startswith('mysql_qcache_'):
                 name = name.replace('qcache', 'cache_result_qcache')
@@ -875,6 +880,9 @@ class Telegraf:
             elif name == 'mysql_innodb_row_lock_current_waits':
                 derive = False
                 name = 'mysql_innodb_locked_transaction'
+            elif name == 'mysql_innodb_trx_rseg_history_len':
+                derive = False
+                name = 'mysql_innodb_history_list_len'
             else:
                 return
         elif part[-2] == 'nginx':
@@ -1665,6 +1673,8 @@ def _get_telegraf_config(core):
                 and service_info.get('password') is not None):
             service_info.setdefault('username', 'root')
             telegraf_config += MYSQL_TELEGRAF_CONFIG % service_info
+            if telegraf_version_gte(core, '1.3.0'):
+                telegraf_config += MYSQL_TELEGRAF_CONFIG_1_3
         if service_name == 'mongodb':
             telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
         if service_name == 'nginx':
