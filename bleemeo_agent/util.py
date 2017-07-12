@@ -396,7 +396,13 @@ def get_top_info(core):
             try:
                 cmdline = process.cmdline()
                 if cmdline and cmdline[0]:
-                    cmdline = ' '.join(shlex.quote(x) for x in cmdline)
+                    # shlex.quote is needed if the program path has space in
+                    # the name. This is usually true under Windows but Windows
+                    # has shlex.quote (Python 3.3+).
+                    if hasattr(shlex, 'quote'):
+                        cmdline = ' '.join(shlex.quote(x) for x in cmdline)
+                    else:
+                        cmdline = ' '.join(cmdline)
                     name = process.name()
                 else:
                     cmdline = process.name()

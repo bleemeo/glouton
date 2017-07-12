@@ -585,7 +585,7 @@ class JmxConfig:
             for name in service_info.get('cassandra_detailed_tables', []):
                 if '.' not in name:
                     continue
-                keyspace, table = name.split('.', maxsplit=1)
+                keyspace, table = name.split('.', 1)
                 for jmx_metric in CASSANDRA_JMX_DETAILED_TABLE:
                     jmx_metric = jmx_metric.copy()
                     jmx_metric['mbean'] = jmx_metric['mbean'].format(
