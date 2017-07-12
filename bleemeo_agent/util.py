@@ -459,6 +459,10 @@ def get_top_info(core):
         }
     }
 
+    if psutil.version_info < (4, 4):
+        result['memory']['used'] -= result['memory']['buffers']
+        result['memory']['used'] -= result['memory']['cached']
+
     return result
 
 
