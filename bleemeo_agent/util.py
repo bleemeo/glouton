@@ -444,6 +444,11 @@ def get_top_info(core):
             'system': cpu_usage.system,
             'idle': cpu_usage.idle,
             'iowait': getattr(cpu_usage, 'iowait', 0.0),
+            'guest': getattr(cpu_usage, 'guest', None),
+            'guest_nice': getattr(cpu_usage, 'guest_nice', None),
+            'irq': getattr(cpu_usage, 'irq', None),
+            'softirq': getattr(cpu_usage, 'softirq', None),
+            'steal': getattr(cpu_usage, 'steal', None),
         },
         'memory': {
             'total': memory_usage.total / 1024,
