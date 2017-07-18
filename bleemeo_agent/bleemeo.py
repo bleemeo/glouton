@@ -564,7 +564,7 @@ class BleemeoConnector(threading.Thread):
                     exc.response.content,
                 )
             try:
-                self._retrive_threshold()
+                self._synchronize_metrics()
             except ApiError as exc:
                 logging.info(
                     'Unable to synchronize metrics. API responded: %s',
@@ -591,19 +591,31 @@ class BleemeoConnector(threading.Thread):
                     exc.response.content,
                 )
 
-    def _retrive_threshold(self):
-        """ Retrieve threshold for all registered metrics
+    def _synchronize_metrics(self):
+        """ Synchronize registered metrics with Bleemeo SaaS
 
-            Also remove from state any deleted metrics and remove it from
-            core.last_metrics (in memory cache of last value)
+            This method does not register metric (see self._register_metric).
+
+            It does:
+
+            * Retrieve thresholds
+            * Retrieve unit
+            * Delete from local state any deleted metrics
         """
-        logging.debug('Retrieving thresholds')
+        logging.debug('Synchronize metrics')
         thresholds = {}
+        unit = {}
         base_url = self.bleemeo_base_url
         metric_url = urllib_parse.urljoin(base_url, '/v1/metric/')
         metrics = api_iterator(
             metric_url,
-            params={'agent': self.agent_uuid},
+            params={
+                'agent': self.agent_uuid,
+                'fields':
+                    'id,item,label,unit,unit_text'
+                    ',threshold_low_warning,threshold_low_critical'
+                    ',threshold_high_warning,threshold_high_critical',
+            },
             auth=(self.agent_username, self.agent_password),
             headers={'User-Agent': self.core.http_user_agent},
         )
@@ -624,7 +636,12 @@ class BleemeoConnector(threading.Thread):
                 'high_critical': data['threshold_high_critical'],
             }
 
+            unit[(data['label'], item)] = (
+                data.get('unit'), data.get('unit_text'),
+            )
+
         self.core.update_thresholds(thresholds)
+        self.core._metrics_unit = unit
 
         deleted_metrics = []
         with self.metrics_lock:
@@ -995,6 +1012,9 @@ class BleemeoConnector(threading.Thread):
                 )
 
             self.core.update_thresholds(thresholds)
+            self.core._metrics_unit[(metric_name, item)] = (
+                data.get('unit'), data.get('unit_text')
+            )
 
     def _register_containers(self):
         registration_url = urllib_parse.urljoin(

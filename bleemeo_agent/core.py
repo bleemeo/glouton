@@ -374,6 +374,11 @@ root:
 """
 
 
+UNIT_UNIT = 0
+UNIT_BYTE = 2
+UNIT_BIT = 3
+
+
 def main():
     if os.name == 'nt':
         import bleemeo_agent.windows
@@ -597,6 +602,39 @@ def decode_docker_top(docker_top):
     return result
 
 
+def format_value(value, unit, unit_text):
+    """ Format a value for human
+
+        >>> format_value(4096, UNIT_BYTE, 'Byte')
+        ... "4.0 KBytes"
+
+        unit is a number (like UNIT_BYTE). unit_text is used if unit is an
+        unknown number.
+
+        If unit or unit_text is None, do not format value.
+    """
+    if unit is None or unit_text is None or unit == UNIT_UNIT:
+        return '%.2f' % value
+
+    if unit == UNIT_BYTE or unit == UNIT_BIT:
+        scale = ['', 'K', 'M', 'G', 'T', 'P', 'E']
+        current_scale = scale.pop(0)
+        while value > 1024:
+            current_scale = scale.pop(0)
+            value = value / 1024
+
+        return '%.2f %s%ss' % (
+            value,
+            current_scale,
+            unit_text,
+        )
+
+    return '%.2f %s' % (
+        value,
+        unit_text,
+    )
+
+
 class State:
     """ Persistant store for state of the agent.
 
@@ -704,6 +742,7 @@ class Core:
         self.discovered_services = {}
         self.services = {}
         self._soft_status_since = {}
+        self._metrics_unit = {}
         self._trigger_discovery = False
         self._trigger_facts = False
         self._trigger_updates_count = False
@@ -2190,6 +2229,7 @@ class Core:
 
         if status == 'ok':
             status_value = 0.0
+            threshold_value = None
         elif status == 'warning':
             if (threshold.get('low_warning') is not None
                     and value < threshold.get('low_warning')):
@@ -2210,21 +2250,28 @@ class Core:
 
             status_value = 2.0
 
-        text = 'Current value: %.2f' % metric['value']
+        (unit, unit_text) = self._metrics_unit.get(
+            (metric['measurement'], metric.get('item'))
+        )
+
+        text = 'Current value: %s' % format_value(
+            metric['value'], unit, unit_text
+        )
+
         if status != 'ok':
             if with_soft_status:
                 text += (
-                    '\nMetric has been %s threshold (%.2f)'
+                    '\nMetric has been %s threshold (%s)'
                     ' for the last 5 minutes' % (
                         above_below,
-                        threshold_value,
+                        format_value(threshold_value, unit, unit_text),
                     )
                 )
             else:
                 text += (
-                    '\nMetric is %s threshold (%.2f)' % (
+                    '\nMetric is %s threshold (%s)' % (
                         above_below,
-                        threshold_value,
+                        format_value(threshold_value, unit, unit_text),
                     )
                 )
 
