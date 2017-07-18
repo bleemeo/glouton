@@ -2233,19 +2233,15 @@ class Core:
         elif status == 'warning':
             if (threshold.get('low_warning') is not None
                     and value < threshold.get('low_warning')):
-                above_below = 'below'
                 threshold_value = threshold.get('low_warning')
             else:
-                above_below = 'above'
                 threshold_value = threshold.get('high_warning')
             status_value = 1.0
         else:
             if (threshold.get('low_critical') is not None
                     and value < threshold.get('low_critical')):
-                above_below = 'below'
                 threshold_value = threshold.get('low_critical')
             else:
-                above_below = 'above'
                 threshold_value = threshold.get('high_critical')
 
             status_value = 2.0
@@ -2261,16 +2257,14 @@ class Core:
         if status != 'ok':
             if with_soft_status:
                 text += (
-                    '\nMetric has been %s threshold (%s)'
-                    ' for the last 5 minutes' % (
-                        above_below,
+                    ' threshold (%s) exceeded'
+                    ' over last 5 minutes' % (
                         format_value(threshold_value, unit, unit_text),
                     )
                 )
             else:
                 text += (
-                    '\nMetric is %s threshold (%s)' % (
-                        above_below,
+                    ' threshold (%s) exceeded' % (
                         format_value(threshold_value, unit, unit_text),
                     )
                 )
