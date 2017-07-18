@@ -749,7 +749,10 @@ class Core:
             return False
 
         self._sentry_setup()
-        self.thresholds = copy.deepcopy(self.config.get('thresholds', {}))
+        self.thresholds = {
+            (label, None): value
+            for (label, value) in self.config.get('thresholds', {}).items()
+        }
         bleemeo_agent.config.merge_dict(
             self.thresholds,
             self.state.get_complex_dict('thresholds', {}),
@@ -981,7 +984,10 @@ class Core:
 
         old_thresholds = self.thresholds
 
-        new_thresholds = copy.deepcopy(self.config.get('thresholds', {}))
+        new_thresholds = {
+            (label, None): value
+            for (label, value) in self.config.get('thresholds', {}).items()
+        }
         bleemeo_agent.config.merge_dict(
             new_thresholds,
             state_threshold,
