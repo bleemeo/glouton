@@ -51,11 +51,15 @@ def get_file_content(file_name):
         return None
 
 
-def get_url_content(url, timeout=5.0):
+def get_url_content(core, url, timeout=5.0):
     """ Get URL content. If error occur or status is not 200 return None
     """
     try:
-        response = requests.get(url, timeout=timeout)
+        response = requests.get(
+            url,
+            timeout=timeout,
+            headers={'User-Agent': core.http_user_agent},
+        )
         if response.status_code != 200:
             return None
         return response.text
@@ -244,9 +248,10 @@ def read_os_release(core):
     return result
 
 
-def get_aws_facts():
+def get_aws_facts(core):
     facts = {}
     facts['aws_ami_id'] = get_url_content(
+        core,
         'http://169.254.169.254/latest/meta-data/ami-id',
     )
     # If first request fail, don't try other one, it's probably not an
@@ -255,31 +260,37 @@ def get_aws_facts():
         return facts
 
     facts['aws_instance_id'] = get_url_content(
+        core,
         'http://169.254.169.254/latest/meta-data/instance-id',
     )
     facts['aws_instance_type'] = get_url_content(
+        core,
         'http://169.254.169.254/latest/meta-data/instance-type',
     )
     facts['aws_local_hostname'] = get_url_content(
+        core,
         'http://169.254.169.254/latest/meta-data/local-hostname',
     )
     facts['aws_security_groups'] = get_url_content(
+        core,
         'http://169.254.169.254/latest/meta-data/security-groups',
     )
     facts['aws_public_ipv4'] = get_url_content(
+        core,
         'http://169.254.169.254/latest/meta-data/public-ipv4',
     )
     facts['aws_placement'] = get_url_content(
+        core,
         'http://169.254.169.254/latest/meta-data/placement/availability-zone',
     )
 
     base_url = (
         'http://169.254.169.254/latest/meta-data/network/interfaces/macs/'
     )
-    macs = get_url_content(base_url)
+    macs = get_url_content(core, base_url)
     if macs is not None:
         result = [
-            get_url_content(base_url + x + 'vpc-id')
+            get_url_content(core, base_url + x + 'vpc-id')
             for x in macs.splitlines()
         ]
         result = [x for x in result if x is not None]
@@ -287,7 +298,7 @@ def get_aws_facts():
             facts['aws_vpc_id'] = ','.join(result)
 
         result = [
-            get_url_content(base_url + x + 'vpc-ipv4-cidr-block')
+            get_url_content(core, base_url + x + 'vpc-ipv4-cidr-block')
             for x in macs.splitlines()
         ]
         result = [x for x in result if x is not None]
@@ -331,7 +342,7 @@ def get_public_ip(core):
         'agent.public_ip_indicator',
         'https://myip.bleemeo.com'
     )
-    return get_url_content(url)
+    return get_url_content(core, url)
 
 
 def get_virtual_type(facts):
@@ -517,7 +528,7 @@ def get_facts(core):
     virtual = get_virtual_type(facts)
 
     if 'amazon' in facts.get('bios_version', '').lower():
-        facts.update(get_aws_facts())
+        facts.update(get_aws_facts(core))
 
     (docker_version, docker_api_version) = get_docker_version(core)
 
