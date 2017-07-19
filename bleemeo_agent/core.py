@@ -619,7 +619,7 @@ def format_value(value, unit, unit_text):
     if unit == UNIT_BYTE or unit == UNIT_BIT:
         scale = ['', 'K', 'M', 'G', 'T', 'P', 'E']
         current_scale = scale.pop(0)
-        while value > 1024:
+        while abs(value) >= 1024 and len(scale) > 0:
             current_scale = scale.pop(0)
             value = value / 1024
 

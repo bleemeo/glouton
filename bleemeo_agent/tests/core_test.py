@@ -437,3 +437,42 @@ def test_decode_docker_top():
         # result[0][0] is a PID, e.g. a number
         int(result[0][0])
         assert result[0][1].startswith('python3')
+
+
+def test_format_value():
+    assert bleemeo_agent.core.format_value(0., None, None) == '0.00'
+    assert bleemeo_agent.core.format_value(
+        0., bleemeo_agent.core.UNIT_UNIT, 'No unit'
+    ) == '0.00'
+
+    # 42 is an unknown UNIT_*
+    assert bleemeo_agent.core.format_value(
+        0., 42, '%'
+    ) == '0.00 %'
+    # 42 is an unknown UNIT_*
+    assert bleemeo_agent.core.format_value(
+        0., 42, 'thing'
+    ) == '0.00 thing'
+
+    assert bleemeo_agent.core.format_value(
+        0., bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '0.00 Bytes'
+    assert bleemeo_agent.core.format_value(
+        1024., bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1.00 KBytes'
+    assert bleemeo_agent.core.format_value(
+        2**30, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1.00 GBytes'
+    assert bleemeo_agent.core.format_value(
+        2**60, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1.00 EBytes'
+    assert bleemeo_agent.core.format_value(
+        2**70, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1024.00 EBytes'
+
+    assert bleemeo_agent.core.format_value(
+        -1024., bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '-1.00 KBytes'
+    assert bleemeo_agent.core.format_value(
+        -2**30, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '-1.00 GBytes'
