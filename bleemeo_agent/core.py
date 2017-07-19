@@ -2247,7 +2247,8 @@ class Core:
             status_value = 2.0
 
         (unit, unit_text) = self._metrics_unit.get(
-            (metric['measurement'], metric.get('item'))
+            (metric['measurement'], metric.get('item')),
+            (None, None),
         )
 
         text = 'Current value: %s' % format_value(
