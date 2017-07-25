@@ -527,7 +527,8 @@ def get_facts(core):
 
     virtual = get_virtual_type(facts)
 
-    if 'amazon' in facts.get('bios_version', '').lower():
+    if (facts.get('bios_version') is not None
+            and 'amazon' in facts.get('bios_version').lower()):
         facts.update(get_aws_facts(core))
 
     (docker_version, docker_api_version) = get_docker_version(core)
