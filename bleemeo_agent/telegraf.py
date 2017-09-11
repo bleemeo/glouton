@@ -55,8 +55,14 @@ STATSD_TELEGRAF_CONFIG = """
 
 APACHE_TELEGRAF_CONFIG = """
 [[inputs.apache]]
-  urls = ["http://%(address)s:%(port)s/server-status?auto"]
+  urls = ["%(status_url)s"]
 """
+
+# Additional configuration if Telegraf >= 1.2.0
+APACHE_TELEGRAF_CONFIG_1_2 = """
+  insecure_skip_verify = true
+"""
+
 
 DOCKER_TELEGRAF_CONFIG = """
 [[inputs.docker]]
@@ -99,6 +105,11 @@ MYSQL_TELEGRAF_CONFIG_1_3 = """
 NGINX_TELEGRAF_CONFIG = """
 [[inputs.nginx]]
   urls = ["http://%(address)s:%(port)s/nginx_status"]
+"""
+
+# Additional configuration if Telegraf >= 1.4.0
+NGINX_TELEGRAF_CONFIG_1_4 = """
+  insecure_skip_verify = true
 """
 
 PHPFPM_TELEGRAF_CONFIG = """
@@ -1666,7 +1677,15 @@ def _get_telegraf_config(core):
             continue
 
         if service_name == 'apache':
+            if service_info.get('port') == 80:
+                status_url = 'http://%(address)s/server-status?auto'
+            else:
+                status_url = 'http://%(address)s:%(port)s/server-status?auto'
+            service_info = service_info.copy()
+            service_info.setdefault('status_url', status_url % service_info)
             telegraf_config += APACHE_TELEGRAF_CONFIG % service_info
+            if telegraf_version_gte(core, '1.2.0'):
+                telegraf_config += APACHE_TELEGRAF_CONFIG_1_2
         if service_name == 'elasticsearch':
             telegraf_config += ELASTICSEARCH_TELEGRAF_CONFIG % service_info
         if service_name == 'memcached':
@@ -1681,6 +1700,8 @@ def _get_telegraf_config(core):
             telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
         if service_name == 'nginx':
             telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
+            if telegraf_version_gte(core, '1.4.0'):
+                telegraf_config += NGINX_TELEGRAF_CONFIG_1_4
         if (service_name == 'postgresql'
                 and service_info.get('password') is not None):
             service_info.setdefault('username', 'postgres')
