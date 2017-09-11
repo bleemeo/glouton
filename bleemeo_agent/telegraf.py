@@ -514,6 +514,8 @@ class Telegraf:
                 name = 'io_' + name
             if self.graphite_server._ignored_disk(item):
                 return
+            if name == 'io_weighted_io_time':
+                return
 
             if name == 'io_iops_in_progress':
                 name = 'io_in_progress'
