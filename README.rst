@@ -8,10 +8,17 @@ an InfluxDB database directly or a secure connection (MQTT over SSL) to
 Bleemeo Cloud platform.
 
 
-Quickstart
-----------
+Install
+-------
+
+Install Bleemeo-agent::
+
+    pip install bleemeo-agent
 
 If you want to use the Bleemeo Cloud solution see https://docs.bleemeo.com/agent/install-agent/.
+
+Test and Develop
+----------------
 
 If you want to test and or develop on bleemeo-agent, here are the step to run from a git checkout:
 
@@ -21,7 +28,8 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
 
 * Install bleemeo-agent with its dependencies::
 
-    pip install -r requirements.txt
+    pip install -U setuptools
+    python setup.py install # install/develop
 
 * Install telegraf and configure it::
 
