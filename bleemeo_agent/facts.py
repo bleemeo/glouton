@@ -413,8 +413,6 @@ def get_facts_root():
     with open(facts_file, 'w') as file_obj:
         yaml.safe_dump(facts, file_obj, default_flow_style=False)
 
-    return facts
-
 
 def get_facts(core):
     """ Return facts/grains/information about current machine.

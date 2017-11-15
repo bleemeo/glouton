@@ -6,7 +6,7 @@ Build-Depends: debhelper (>=9),
                dh-exec,
                dh-python,
                dh-systemd,
-               python3-setuptools,
+               python3-setuptools (>=30.3.0),
                python3-all
 Standards-Version: 3.9.5
 Homepage: https://bleemeo.com
@@ -19,6 +19,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
     adduser,
     bleemeo-agent-telegraf | bleemeo-agent-collectd | bleemeo-agent-single,
     python3-paho-mqtt,
+    python3-pkg-resources,
     python3-psutil (>= 2.0.0~),
     net-tools,
 Recommends:

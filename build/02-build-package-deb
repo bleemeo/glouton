@@ -11,7 +11,7 @@ docker run --privileged=true --rm \
     -v $(pwd):/srv/workspace -w /srv/workspace \
     bleemeo/pbuilder pbuilder \
         build \
-        --basetgz /srv/pbuilder/ubuntu-trusty-amd64-base.tgz \
+        --basetgz /srv/pbuilder/ubuntu-trusty-amd64-bleemeo-agent.tgz \
         --buildresult /srv/workspace/result \
         --debbuildopts -sa \
         bleemeo-agent_*.dsc

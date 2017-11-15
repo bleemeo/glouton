@@ -3,36 +3,29 @@
 set -e
 
 cd work
+# CentOS copy file (unlike Fedora) because file must be owned by root
+# Fedora - or more recent version of rpmbuild - no longer does this check.
 docker run --rm \
     -v $(pwd):/srv/workspace -w /srv/workspace \
-    bleemeo/centos-pkg-builder sh -ec '
+    bleemeo/centos-pkg-builder sh -ec "
 cp -v bleemeo-agent_*.tar /root/rpmbuild/SOURCES/
 cp -v bleemeo-agent-*/packaging/centos/bleemeo-agent.spec /root/rpmbuild/SPECS/
-rpmbuild -bs /root/rpmbuild/SPECS/bleemeo-agent.spec
-cp /root/rpmbuild/SRPMS/bleemeo-agent-*.src.rpm .'
+rpmbuild --define 'dist .el7.centos' --define '_srcrpmdir ./' -bs /root/rpmbuild/SPECS/bleemeo-agent.spec
+"
 
 docker run --rm --privileged \
     -v $(pwd):/srv/workspace -w /srv/workspace \
     -v /srv/mock:/var/cache/mock \
-    bleemeo/centos-pkg-builder sh -ec '
-su mock -c "/usr/bin/mock -r epel-7-x86_64 --resultdir /tmp/result bleemeo-agent-*.src.rpm"
-cp /tmp/result/*.rpm ./result'
-
-rm -f bleemeo-agent-*.src.rpm
+    bleemeo/centos-pkg-builder \
+    mockchain -r epel-7-x86_64 --tmp_prefix tmpbuild -m --resultdir=./result -a 'https://packages.bleemeo.com/bleemeo-agent/centos/$releasever/$basearch/' bleemeo-agent-*el7.centos.src.rpm
 
 docker run --rm \
     -v $(pwd):/srv/workspace -w /srv/workspace \
-    bleemeo/fedora-pkg-builder sh -ec '
-cp -v bleemeo-agent_*.tar /root/rpmbuild/SOURCES/
-cp -v bleemeo-agent-*/packaging/fedora/bleemeo-agent.spec /root/rpmbuild/SPECS/
-rpmbuild -bs /root/rpmbuild/SPECS/bleemeo-agent.spec
-cp /root/rpmbuild/SRPMS/bleemeo-agent-*.src.rpm .'
+    bleemeo/fedora-pkg-builder \
+    rpmbuild --define 'dist .fc24' --define '_sourcedir ./' --define '_srcrpmdir ./' -bs bleemeo-agent-*/packaging/fedora/bleemeo-agent.spec
 
 docker run --rm --privileged \
     -v /srv/mock:/var/cache/mock \
     -v $(pwd):/srv/workspace -w /srv/workspace \
-    bleemeo/fedora-pkg-builder sh -ec '
-su mock -c "/usr/bin/mock -r fedora-24-x86_64 --resultdir /tmp/result bleemeo-agent-*.src.rpm"
-cp /tmp/result/*.rpm ./result'
-
-rm -f bleemeo-agent-*.src.rpm
+    bleemeo/fedora-pkg-builder \
+    mockchain -r fedora-24-x86_64 --tmp_prefix tmpbuild -m --resultdir=./result -a 'https://packages.bleemeo.com/bleemeo-agent/fedora/$releasever/$basearch/' bleemeo-agent-*.fc24.src.rpm

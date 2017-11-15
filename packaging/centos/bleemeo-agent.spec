@@ -14,7 +14,7 @@ Summary:        Bleemeo agent
 
 Source0:        bleemeo-agent_%{version}.tar
 BuildArch:      noarch
-BuildRequires:  python34-devel, python34-setuptools
+BuildRequires:  python34-devel, python34-setuptools >= 30.3.0
 BuildRequires:  systemd
 
 Requires(pre):  shadow-utils
