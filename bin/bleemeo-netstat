@@ -2,5 +2,5 @@
 
 # creates file not wolrd-readable
 umask 0006
-netstat -tulnp > /var/lib/bleemeo/netstat.out
+netstat -lnp > /var/lib/bleemeo/netstat.out
 chown bleemeo:bleemeo /var/lib/bleemeo/netstat.out

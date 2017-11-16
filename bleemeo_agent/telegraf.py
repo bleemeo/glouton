@@ -1636,12 +1636,14 @@ def _get_telegraf_config(core):
                 and (
                     service_info.get('stats_url') is not None
                     or service_info.get('port') is not None
-                    or len(service_info.get('extra_ports')) > 0)):
+                    or len(service_info.get('netstat_ports')) > 0)):
             copy_info = service_info.copy()
             port = service_info.get('port')
-            if port is None:
-                port_proto = next(iter(service_info['extra_ports']))
-                port = port_proto.split('/')[0]
+            for port_proto in service_info.get('netstat_ports', {}):
+                if port is not None:
+                    break
+                if port_proto.endswith('/tcp'):
+                    port = port_proto.split('/')[0]
             if ('stats_url' not in copy_info
                     and service_info.get('address') is None):
                 continue

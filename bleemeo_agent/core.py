@@ -1579,6 +1579,15 @@ class Core:
                 if port_protocol.endswith('/udp6'):
                     del extra_ports[port_protocol]
 
+            # extra_ports is renamed in netstat_ports with compatible content
+            # new netstat_ports contains more information (unix socket & port
+            # above 32000).
+            if 'extra_ports' in service_info:
+                service_info.setdefault(
+                    'netstat_ports', service_info['extra_ports'],
+                )
+                del service_info['extra_ports']
+
     def _get_processes_map(self):
         """ Return a mapping from PID to name and container in which
             process is running.
@@ -1639,17 +1648,28 @@ class Core:
             r'(?P<address>[0-9a-f.:]+):(?P<port>\d+)\s+[0-9a-f.:*]+\s+'
             r'(LISTEN)?\s+(?P<pid>\d+)/(?P<program>.*)$'
         )
+        netstat_unix_re = re.compile(
+            r'^(?P<protocol>unix)\s+\d+\s+\[\s+(ACC |W |N )+\s*\]\s+'
+            r'(DGRAM|STREAM)\s+LISTENING\s+(\d+\s+)?'
+            r'(?P<pid>\d+)/(?P<program>.*)\s+(?P<address>.+)$'
+        )
         try:
             with open(netstat_file) as file_obj:
                 for line in file_obj:
                     match = netstat_re.match(line)
+                    if match is None:
+                        match = netstat_unix_re.match(line)
                     if match is None:
                         continue
 
                     protocol = match.group('protocol')
                     pid = int(match.group('pid'))
                     address = match.group('address')
-                    port = int(match.group('port'))
+
+                    if protocol == 'unix':
+                        port = 0
+                    else:
+                        port = int(match.group('port'))
 
                     # netstat output may have "tcp6" for IPv4 socket.
                     # For example elasticsearch output is:
@@ -1658,19 +1678,26 @@ class Core:
                         # Assume this socket is IPv4 & IPv6
                         protocol = protocol[:3]
 
-                    if address == '::':
+                    if address == '::' and protocol != 'unix':
                         # "::" is all address in IPv6. Assume the socket
                         # is IPv4 & IPv6 and since agent supports only IPv4
                         # convert to all address in IPv4
                         address = '0.0.0.0'
-                    if ':' in address:
+                    if ':' in address and protocol != 'unix':
                         # No support for IPv6
                         continue
 
-                    key = '%s/%s' % (port, protocol)
+                    if protocol == 'unix':
+                        key = protocol
+                    else:
+                        key = '%s/%s' % (port, protocol)
                     ports = netstat_info.setdefault(pid, {})
 
-                    # If multiple address exists, prefer 127.0.0.1
+                    # FIXME: if multiple unix socket exists, only the
+                    # first is kept. Not a issue today since we don't use
+                    # addresses of unix socket.
+
+                    # If multiple IP address exists, prefer 127.0.0.1
                     if key not in ports or address.startswith('127.'):
                         ports[key] = address
         except IOError:
@@ -1725,23 +1752,20 @@ class Core:
 
         default_port = service_info.get('port')
 
-        extra_ports = {}
+        netstat_ports = {}
 
         for port_proto, address in ports.items():
-            port = int(port_proto.split('/')[0])
             if address == '0.0.0.0':
                 address = default_address
-            if service_info.get('ignore_high_port') and port > 32000:
-                continue
-            extra_ports[port_proto] = address
+            netstat_ports[port_proto] = address
 
         old_service_info = self.discovered_services.get(
             (service_name, instance), {}
         )
-        if len(extra_ports) == 0 and 'extra_ports' in old_service_info:
-            extra_ports.update(old_service_info['extra_ports'])
+        if len(netstat_ports) == 0 and 'netstat_ports' in old_service_info:
+            netstat_ports = old_service_info['netstat_ports'].copy()
 
-        if default_port is not None and len(extra_ports) > 0:
+        if default_port is not None and len(netstat_ports) > 0:
             if service_info['protocol'] == socket.IPPROTO_TCP:
                 default_protocol = 'tcp'
             else:
@@ -1749,15 +1773,15 @@ class Core:
 
             key = '%s/%s' % (default_port, default_protocol)
 
-            if key in extra_ports:
-                default_address = extra_ports[key]
+            if key in netstat_ports:
+                default_address = netstat_ports[key]
             else:
                 # service is NOT listening on default_port but it is listening
                 # on some ports. Don't check default_port and only check
-                # extra_ports
+                # netstat_ports
                 default_port = None
 
-        service_info['extra_ports'] = extra_ports
+        service_info['netstat_ports'] = netstat_ports
         service_info['port'] = default_port
         service_info['address'] = default_address
 

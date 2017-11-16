@@ -114,16 +114,24 @@ def get_listen_addresses(service_info):
         #             is a customer defined using Nagios check).
         address = None
 
-    extra_ports = service_info.get('extra_ports', {}).copy()
-    if service_info.get('port') is not None and len(extra_ports) == 0:
+    netstat_ports = {}
+    for port_proto, address in service_info.get('netstat_ports', {}).items():
+        if port_proto == 'unix':
+            continue
+        port = int(port_proto.split('/')[0])
+        if service_info.get('ignore_high_port') and port > 32000:
+            continue
+        netstat_ports[port_proto] = address
+
+    if service_info.get('port') is not None and len(netstat_ports) == 0:
         if service_info['protocol'] == socket.IPPROTO_TCP:
-            extra_ports['%s/tcp' % service_info['port']] = address
+            netstat_ports['%s/tcp' % service_info['port']] = address
         elif service_info['protocol'] == socket.IPPROTO_UDP:
-            extra_ports['%s/udp' % service_info['port']] = address
+            netstat_ports['%s/udp' % service_info['port']] = address
 
     return ','.join(
         '%s:%s' % (address, port_proto)
-        for (port_proto, address) in extra_ports.items()
+        for (port_proto, address) in netstat_ports.items()
     )
 
 

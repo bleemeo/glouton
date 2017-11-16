@@ -202,7 +202,7 @@ class Check:
         self.instance = instance
         self.core = core
 
-        self.extra_ports = self.service_info.get('extra_ports', {})
+        self.extra_ports = self.service_info.get('netstat_ports', {})
 
         if not self.service_info.get('check_type') and not self.extra_ports:
             raise NotImplementedError("No check for this service")
@@ -234,6 +234,8 @@ class Check:
 
             port = int(port_protocol.split('/')[0])
             if port == self.port:
+                continue
+            if self.service_info.get('ignore_high_port') and port > 32000:
                 continue
             tcp_sockets[(address, port)] = None
 
@@ -338,6 +340,10 @@ class Check:
         if (return_code != STATUS_CRITICAL
                 and return_code != STATUS_UNKNOWN
                 and self.extra_ports):
+            if (return_code == STATUS_CHECK_NOT_RUN
+                    and set(self.extra_ports.keys()) == {'unix'}):
+                return_code = STATUS_OK
+
             for (address, port) in self.tcp_sockets:
                 if port == self.port:
                     # self.port is already checked with above check
