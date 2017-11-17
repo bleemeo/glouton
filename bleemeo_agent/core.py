@@ -1130,7 +1130,7 @@ class Core:
             )
         try:
             self.docker_client.ping()
-        except:
+        except Exception:
             logging.debug('Docker ping failed. Assume Docker is not used')
             self.docker_client = None
 
@@ -1342,7 +1342,7 @@ class Core:
         """
         try:
             result = self.docker_client.inspect_container(container_id)
-        except:
+        except Exception:
             return  # most probably container was removed
 
         name = result['Name'].lstrip('/')
@@ -1950,7 +1950,7 @@ class Core:
 
             try:
                 self.docker_client.ping()
-            except:
+            except Exception:
                 self.docker_client = None
                 continue
 
@@ -1973,7 +1973,7 @@ class Core:
 
                     last_event_at = event['time']
                     self._process_docker_event(event)
-            except:
+            except Exception:
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
                 logging.debug('Docker event watcher error', exc_info=True)
@@ -2489,7 +2489,7 @@ def install_thread_hook(raven_self):
                 run_old(*args, **kw)
             except (KeyboardInterrupt, SystemExit):
                 raise
-            except:
+            except Exception:
                 raven_self.captureException(exc_info=sys.exc_info())
                 raise
         self.run = run_with_except_hook

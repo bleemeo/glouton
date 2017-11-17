@@ -341,7 +341,7 @@ CASSANDRA_JMX_DETAILED_TABLE = [
 def update_discovery(core):
     try:
         current_config.write_config(core)
-    except:
+    except Exception:
         logging.warning(
             'Failed to write jmxtrans configuration. '
             'Continuing with current configuration'

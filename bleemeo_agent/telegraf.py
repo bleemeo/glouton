@@ -204,7 +204,7 @@ def telegraf_replace(value):
 def update_discovery(core):
     try:
         _write_config(core)
-    except:
+    except Exception:
         logging.warning(
             'Failed to write telegraf configuration. '
             'Continuing with current configuration')
@@ -1766,7 +1766,7 @@ def telegraf_version_gte(core, version):
 
     try:
         return compare_version(current_version, version)
-    except:
+    except Exception:
         return False
 
 

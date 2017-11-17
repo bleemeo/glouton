@@ -157,7 +157,7 @@ def update_checks(core):
             logging.debug(
                 'No check exists for service %s', service_name,
             )
-        except:
+        except Exception:
             logging.debug(
                 'Failed to initialize check for service %s',
                 service_name,

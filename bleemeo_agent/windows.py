@@ -131,7 +131,7 @@ def decode_console_output(data):
     """
     try:
         return data.decode('cp%s' % win32console.GetConsoleCP())
-    except:
+    except Exception:
         return data.decode('utf-8', errors='ignore')
 
 
@@ -308,14 +308,14 @@ bleemeo:
                 win32security.DACL_SECURITY_INFORMATION,
                 sec_descriptor,
             )
-        except:
+        except Exception:
             logging.info(
                 'Failed to change permission on Telegraf service',
                 exc_info=True,
             )
         finally:
             win32service.CloseServiceHandle(hs)
-    except:
+    except Exception:
         logging.info('Failed to find Telegraf service', exc_info=True)
     finally:
         win32service.CloseServiceHandle(hscm)
@@ -384,7 +384,7 @@ class BleemeoAgentService(win32serviceutil.ServiceFramework):
 
         try:
             self.core.run()
-        except:
+        except Exception:
             logging.error('Unhandled error:', exc_info=True)
             raise
         finally:

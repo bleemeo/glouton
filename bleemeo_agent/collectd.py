@@ -176,7 +176,7 @@ class MissingMetric(Exception):
 def update_discovery(core):
     try:
         _write_config(core)
-    except:
+    except Exception:
         logging.warning(
             'Failed to write collectd configuration. '
             'Continuing with current configuration')
