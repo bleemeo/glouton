@@ -160,31 +160,37 @@ LoadPlugin varnish
 # cpu.percent-idle
 # df-var-lib.df_complex-free
 # disk-sda.disk_octets.read
-collectd_regex = re.compile(
+COLLECTD_REGEX = re.compile(
     r'(?P<plugin>[^-.]+)(-(?P<plugin_instance>[^.]+))?\.'
     r'(?P<type>[^.-]+)([.-](?P<type_instance>.+))?')
 
 
 class ComputationFail(Exception):
+    """ Exceptions raised when computed metrics failed to be computed and
+        should not be retried
+    """
     pass
 
 
 class MissingMetric(Exception):
+    """ Exceptions raised when a metric needed for a computed metrics is
+        not (yet) present. The computed metrics should be retried later.
+    """
     pass
 
 
 def update_discovery(core):
     try:
         _write_config(core)
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         logging.warning(
             'Failed to write collectd configuration. '
             'Continuing with current configuration')
         logging.debug('exception is:', exc_info=True)
 
 
-bind_instance = None
-nginx_instance = None
+BIND_INSTANCE = None
+NGINX_INSTANCE = None
 
 
 class Collectd:
@@ -201,6 +207,9 @@ class Collectd:
         self._check_computed_metrics()
 
     def emit_metric(self, name, timestamp, value):
+        # pylint: disable=too-many-return-statements
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
         """ Rename a metric and pass it to core
 
             If the metric is used to compute a derrived metric, add it to
@@ -216,7 +225,7 @@ class Collectd:
 
         # the first component is the hostname
         name = name.split('.', 1)[1]
-        match = collectd_regex.match(name)
+        match = COLLECTD_REGEX.match(name)
         if match is None:
             return
         match_dict = match.groupdict()
@@ -268,7 +277,7 @@ class Collectd:
                 name = 'io_%s%s' % (match_dict['type_instance'], kind_name)
 
             item = match_dict['plugin_instance']
-            if self.graphite_server._ignored_disk(item):
+            if self.graphite_server.ignored_disk(item):
                 return
             if name == 'io_time':
                 self.core.emit_metric({
@@ -326,10 +335,10 @@ class Collectd:
                 ('mem_total', None, None, timestamp)
             )
         elif (match_dict['plugin'] == 'processes'
-                and match_dict['type'] == 'fork_rate'):
+              and match_dict['type'] == 'fork_rate'):
             name = 'process_fork_rate'
         elif (match_dict['plugin'] == 'processes'
-                and match_dict['type'] == 'ps_state'):
+              and match_dict['type'] == 'ps_state'):
             name = 'process_status_%s' % match_dict['type_instance']
             self.computed_metrics_pending.add(
                 ('process_total', None, None, timestamp))
@@ -341,14 +350,14 @@ class Collectd:
                 ('swap_total', None, None, timestamp)
             )
         elif (match_dict['plugin'] == 'swap'
-                and match_dict['type'] == 'swap_io'):
+              and match_dict['type'] == 'swap_io'):
             if not self.core.last_facts.get('swap_present', False):
                 return
             name = 'swap_%s' % match_dict['type_instance']
         elif match_dict['plugin'] == 'users':
             name = 'users_logged'
         elif (match_dict['plugin'] == 'apache'
-                and match_dict['plugin_instance'].startswith('bleemeo-')):
+              and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = match_dict['type']
             if match_dict['type_instance']:
                 name += '_' + match_dict['type_instance']
@@ -358,7 +367,7 @@ class Collectd:
                 item = None
             service = 'apache'
         elif (match_dict['plugin'] == 'mysql'
-                and match_dict['plugin_instance'].startswith('bleemeo-')):
+              and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = match_dict['type']
             if match_dict['type_instance']:
                 name += '_' + match_dict['type_instance']
@@ -374,14 +383,14 @@ class Collectd:
 
             service = 'mysql'
         elif (match_dict['plugin'] == 'postgresql'
-                and match_dict['plugin_instance'].startswith('bleemeo-')):
+              and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = 'postgresql_' + match_dict['type_instance']
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
                 item = None
             service = 'postgresql'
         elif (match_dict['plugin'] == 'redis'
-                and match_dict['plugin_instance'].startswith('bleemeo-')):
+              and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = match_dict['type']
             if match_dict['type_instance']:
                 name += '_' + match_dict['type_instance']
@@ -394,7 +403,7 @@ class Collectd:
 
             service = 'redis'
         elif (match_dict['plugin'] == 'memcached'
-                and match_dict['plugin_instance'].startswith('bleemeo-')):
+              and match_dict['plugin_instance'].startswith('bleemeo-')):
             name = match_dict['type']
             if match_dict['type_instance']:
                 name += '_' + match_dict['type_instance']
@@ -410,15 +419,15 @@ class Collectd:
 
             service = 'memcached'
         elif (match_dict['plugin'] == 'ntpd'
-                and match_dict['type'] == 'time_offset'
-                and match_dict['type_instance'] == 'loop'):
+              and match_dict['type'] == 'time_offset'
+              and match_dict['type_instance'] == 'loop'):
             name = 'ntp_time_offset'
             service = 'ntp'
             # value is in ms. Convert it to second
             value = value / 1000.
         elif match_dict['plugin'] == 'bind':
             service = 'bind'
-            item = bind_instance
+            item = BIND_INSTANCE
             if (match_dict['plugin_instance'] == 'global-qtypes'
                     and match_dict['type'] == 'dns_qtype'):
                 name = 'bind_query_%s' % match_dict['type_instance']
@@ -431,13 +440,13 @@ class Collectd:
         elif match_dict['plugin'] == 'nginx':
             service = 'nginx'
             name = match_dict['type'].replace('-', '_')
-            item = nginx_instance
+            item = NGINX_INSTANCE
             if match_dict['type_instance']:
                 name += '_' + match_dict['type_instance']
             if not name.startswith('nginx_'):
                 name = 'nginx_' + name
         elif (match_dict['plugin'] == 'openldap'
-                and match_dict['plugin_instance'].startswith('bleemeo-')):
+              and match_dict['plugin_instance'].startswith('bleemeo-')):
             service = 'openldap'
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
@@ -519,11 +528,10 @@ class Collectd:
             Item is something like "sda", "sdb" or "eth0", "eth1".
         """
         processed = set()
-        new_item = set()
         for entry in self.computed_metrics_pending:
             (name, item, instance, timestamp) = entry
             try:
-                self._compute_metric(name, item, instance, timestamp, new_item)
+                self._compute_metric(name, item, instance, timestamp)
                 processed.add(entry)
             except ComputationFail:
                 logging.debug(
@@ -538,11 +546,9 @@ class Collectd:
                 pass
 
         self.computed_metrics_pending.difference_update(processed)
-        if new_item:
-            self.computed_metrics_pending.update(new_item)
-            self._check_computed_metrics()
 
-    def _compute_metric(self, name, item, instance, timestamp, new_item):  # NOQA
+    def _compute_metric(self, name, item, instance, timestamp):
+        # pylint: disable=too-many-branches
         def get_metric(measurements, searched_item):
             """ Helper that do common task when retriving metrics:
 
@@ -635,8 +641,8 @@ def _write_config(core):
     )
 
     if os.path.exists(collectd_config_path):
-        with open(collectd_config_path) as fd:
-            current_content = fd.read()
+        with open(collectd_config_path) as config_file:
+            current_content = config_file.read()
 
         if collectd_config == current_content:
             logging.debug('collectd already configured')
@@ -653,15 +659,17 @@ def _write_config(core):
     # since it may contains password
     open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
     fileno = os.open(collectd_config_path, open_flags, 0o600)
-    with os.fdopen(fileno, 'w') as fd:
-        fd.write(collectd_config)
+    with os.fdopen(fileno, 'w') as config_file:
+        config_file.write(collectd_config)
 
     _restart_collectd(core)
 
 
 def _get_collectd_config(core):
-    global bind_instance
-    global nginx_instance
+    # pylint: disable=too-many-branches
+    # pylint: disable=global-statement
+    global BIND_INSTANCE
+    global NGINX_INSTANCE
 
     has_postgres = False
     collectd_config = BASE_COLLECTD_CONFIG
@@ -686,7 +694,7 @@ def _get_collectd_config(core):
             collectd_config += APACHE_COLLECTD_CONFIG % service_info
         if service_name == 'bind' and 'bind' not in services_type_seen:
             collectd_config += BIND_COLLECTD_CONFIG % service_info
-            bind_instance = instance
+            BIND_INSTANCE = instance
         if service_name == 'memcached':
             collectd_config += MEMCACHED_COLLECTD_CONFIG % service_info
         if (service_name == 'mysql'
@@ -695,7 +703,7 @@ def _get_collectd_config(core):
             collectd_config += MYSQL_COLLECTD_CONFIG % service_info
         if service_name == 'nginx' and 'nginx' not in services_type_seen:
             collectd_config += NGINX_COLLECTD_CONFIG % service_info
-            nginx_instance = instance
+            NGINX_INSTANCE = instance
         if service_name == 'ntp':
             collectd_config += NTPD_COLLECTD_CONFIG % service_info
         if service_name == 'openldap':

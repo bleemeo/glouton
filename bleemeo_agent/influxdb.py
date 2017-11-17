@@ -108,7 +108,7 @@ class InfluxDBConnector(threading.Thread):
         except queue.Empty:
             pass
 
-        if len(metrics) == 0:
+        if not metrics:
             return
 
         try:

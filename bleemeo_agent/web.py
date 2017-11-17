@@ -24,8 +24,8 @@ import jinja2.filters
 import bleemeo_agent.checker
 
 
-app = flask.Flask(__name__)
-app_thread = None
+app = flask.Flask(__name__)  # pylint: disable=invalid-name
+app_thread = None  # pylint: disable=invalid-name
 
 
 @app.route('/')
@@ -121,7 +121,7 @@ def filter_netsizeformat(value):
 
 
 def start_server(core):
-    global app_thread
+    global app_thread  # pylint: disable=global-statement,invalid-name
 
     bind_address = core.config.get(
         'web.listener.address', '127.0.0.1')

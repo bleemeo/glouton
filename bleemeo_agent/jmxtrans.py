@@ -340,8 +340,8 @@ CASSANDRA_JMX_DETAILED_TABLE = [
 
 def update_discovery(core):
     try:
-        current_config.write_config(core)
-    except Exception:
+        _CURRENT_CONFIG.write_config(core)
+    except Exception:  # pylint: disable=broad-except
         logging.warning(
             'Failed to write jmxtrans configuration. '
             'Continuing with current configuration'
@@ -352,6 +352,7 @@ def update_discovery(core):
 class Jmxtrans:
     """ Configure and process graphite data from jmxtrans
     """
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, graphite_client):
         self.core = graphite_client.core
@@ -375,6 +376,9 @@ class Jmxtrans:
         self.flush(self.last_timestamp)
 
     def emit_metric(self, name, timestamp, value):
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
         if abs(timestamp - self.last_timestamp) > 1:
             self.flush(self.last_timestamp)
         self.last_timestamp = timestamp
@@ -400,14 +404,14 @@ class Jmxtrans:
             return
 
         try:
-            (service_name, instance) = current_config.to_service[md5_service]
+            (service_name, instance) = _CURRENT_CONFIG.to_service[md5_service]
         except KeyError:
             logging.debug('Service not found for %s', name)
             return
 
         metric_key = (md5_service, md5_mbean, attr)
         try:
-            jmx_metrics = current_config.to_metric[metric_key]
+            jmx_metrics = _CURRENT_CONFIG.to_metric[metric_key]
         except KeyError:
             return
 
@@ -455,7 +459,7 @@ class Jmxtrans:
                 self._ratio_value[key] = (jmx_metric, new_value)
                 continue
 
-            if new_name in current_config.divisors:
+            if new_name in _CURRENT_CONFIG.divisors:
                 self._values_cache[(new_name, item)] = (timestamp, new_value)
 
             self.core.emit_metric(metric)
@@ -482,7 +486,7 @@ class Jmxtrans:
             if jmx_metric.get('ratio') is not None:
                 self._ratio_value[key] = (jmx_metric, sum(values))
             else:
-                if name in current_config.divisors:
+                if name in _CURRENT_CONFIG.divisors:
                     self._values_cache[(name, item)] = (timestamp, sum(values))
                 self.core.emit_metric(metric)
         self._sum_value = {}
@@ -576,26 +580,9 @@ class JmxConfig:
         # list of divisor for a ratio
         self.divisors = set()
 
-    def get_jmx_metrics(self, service_name, service_info):
-        jmx_metrics = list(service_info.get('jmx_metrics', []))
-        jmx_metrics.extend(JMX_METRICS['java'])
-        jmx_metrics.extend(JMX_METRICS.get(service_name, []))
-
-        if service_name == 'cassandra':
-            for name in service_info.get('cassandra_detailed_tables', []):
-                if '.' not in name:
-                    continue
-                keyspace, table = name.split('.', 1)
-                for jmx_metric in CASSANDRA_JMX_DETAILED_TABLE:
-                    jmx_metric = jmx_metric.copy()
-                    jmx_metric['mbean'] = jmx_metric['mbean'].format(
-                        keyspace=keyspace, table=table,
-                    )
-                    jmx_metrics.append(jmx_metric)
-
-        return jmx_metrics
-
     def get_jmxtrans_config(self, empty=False):
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-branches
         config = {
             'servers': []
         }
@@ -656,7 +643,7 @@ class JmxConfig:
                     server['username'] = service_info['jmx_username']
                     server['password'] = service_info['jmx_password']
 
-                jmx_metrics = self.get_jmx_metrics(service_name, service_info)
+                jmx_metrics = _get_jmx_metrics(service_name, service_info)
 
                 for jmx_metric in jmx_metrics:
                     if 'path' in jmx_metric:
@@ -709,8 +696,8 @@ class JmxConfig:
         )
 
         if os.path.exists(config_path):
-            with open(config_path) as fd:
-                current_content = fd.read()
+            with open(config_path) as config_file:
+                current_content = config_file.read()
 
             if config == current_content:
                 logging.debug('jmxtrans already configured')
@@ -737,8 +724,28 @@ class JmxConfig:
                 )
                 return
             raise
-        with os.fdopen(fileno, 'w') as fd:
-            fd.write(config)
+        with os.fdopen(fileno, 'w') as config_file:
+            config_file.write(config)
 
 
-current_config = JmxConfig(None)
+def _get_jmx_metrics(service_name, service_info):
+    jmx_metrics = list(service_info.get('jmx_metrics', []))
+    jmx_metrics.extend(JMX_METRICS['java'])
+    jmx_metrics.extend(JMX_METRICS.get(service_name, []))
+
+    if service_name == 'cassandra':
+        for name in service_info.get('cassandra_detailed_tables', []):
+            if '.' not in name:
+                continue
+            keyspace, table = name.split('.', 1)
+            for jmx_metric in CASSANDRA_JMX_DETAILED_TABLE:
+                jmx_metric = jmx_metric.copy()
+                jmx_metric['mbean'] = jmx_metric['mbean'].format(
+                    keyspace=keyspace, table=table,
+                )
+                jmx_metrics.append(jmx_metric)
+
+    return jmx_metrics
+
+
+_CURRENT_CONFIG = JmxConfig(None)

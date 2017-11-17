@@ -15,8 +15,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+# pylint: disable=too-many-lines
 
-import distutils.version
+import distutils.version  # pylint: disable=import-error,no-name-in-module
 import logging
 import os
 import re
@@ -148,16 +149,23 @@ ZOOKEEPER_CONFIG = """
 
 
 class ComputationFail(Exception):
+    """ Exceptions raised when computed metrics failed to be computed and
+        should not be retried
+    """
     pass
 
 
 class MissingMetric(Exception):
+    """ Exceptions raised when a metric needed for a computed metrics is
+        not (yet) present. The computed metrics should be retried later.
+    """
     pass
 
 
 def compare_version(current_version, wanted_version):
     """ Return True if current_version is greater or equal to wanted_version
     """
+    # pylint: disable=no-member
     current_version = distutils.version.LooseVersion(current_version)
     wanted_version = distutils.version.LooseVersion(wanted_version)
     return current_version >= wanted_version
@@ -204,7 +212,7 @@ def telegraf_replace(value):
 def update_discovery(core):
     try:
         _write_config(core)
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         logging.warning(
             'Failed to write telegraf configuration. '
             'Continuing with current configuration')
@@ -264,7 +272,7 @@ class Telegraf:
 
         return delta / delta_time
 
-    def get_service_instance(self, service, address, port):
+    def _get_service_instance(self, service, address, port):
         for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
             if (service_name == service
@@ -280,7 +288,7 @@ class Telegraf:
 
         raise KeyError('service not found')
 
-    def get_haproxy_instance(self, hostport):
+    def _get_haproxy_instance(self, hostport):
         if ':' in hostport:
             host, port = hostport.split(':')
             port = int(port)
@@ -299,7 +307,7 @@ class Telegraf:
 
         raise KeyError('service not found')
 
-    def get_elasticsearch_instance(self, node_id):
+    def _get_elasticsearch_instance(self, node_id):
         for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
             if service_name != 'elasticsearch':
@@ -411,6 +419,18 @@ class Telegraf:
         self._check_computed_metrics()
 
     def emit_metric(self, name, timestamp, value):
+        # pylint: disable=too-many-statements
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-return-statements
+        # pylint: disable=too-many-locals
+        """ Rename a metric and pass it to core
+
+            If the metric is used to compute a derrived metric, add it to
+            computed_metrics_pending.
+
+            Nothing is emitted if metric is unknown
+            More that one metrics could be emitted to core
+        """
         self.graphite_server.data_last_seen_at = bleemeo_agent.util.get_clock()
 
         if timestamp - self.last_timestamp > 1:
@@ -499,7 +519,7 @@ class Telegraf:
 
             # For Windows, assimilate disk (which are also named "C:", "D:"...
             # and (mounted) partition like C:
-            if self.graphite_server._ignored_disk(item):
+            if self.graphite_server.ignored_disk(item):
                 return
 
             if name == 'Percent_Free_Space':
@@ -523,7 +543,7 @@ class Telegraf:
             name = part[-1]
             if not name.startswith('io_'):
                 name = 'io_' + name
-            if self.graphite_server._ignored_disk(item):
+            if self.graphite_server.ignored_disk(item):
                 return
             if name == 'io_weighted_io_time':
                 return
@@ -563,7 +583,7 @@ class Telegraf:
                 except ValueError:
                     pass
 
-            if self.graphite_server._ignored_disk(item):
+            if self.graphite_server.ignored_disk(item):
                 return
 
             if name == 'Disk_Read_Bytes_persec':
@@ -752,7 +772,7 @@ class Telegraf:
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -782,7 +802,7 @@ class Telegraf:
                 return
             hostport = part[3].replace('_', '.')
             try:
-                instance = self.get_haproxy_instance(hostport)
+                instance = self._get_haproxy_instance(hostport)
             except KeyError:
                 return
 
@@ -808,7 +828,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -847,7 +867,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -866,7 +886,7 @@ class Telegraf:
                     name = 'mysql_cache_blocksize_qcache'
                     derive = False
                 elif (name == 'mysql_cache_result_qcache_free_blocks'
-                        or name == 'mysql_cache_result_qcache_free_memory'):
+                      or name == 'mysql_cache_result_qcache_free_memory'):
                     name = name.replace(
                         'mysql_cache_result_qcache_', 'mysql_cache_')
                     derive = False
@@ -881,7 +901,6 @@ class Telegraf:
             elif name.startswith('mysql_threads_'):
                 # Other mysql_threads_* name are fine. Accept them unchanged
                 derive = False
-                pass
             elif name.startswith('mysql_commands_'):
                 # mysql_commands_* name are fine. Accept them unchanged
                 pass
@@ -903,7 +922,7 @@ class Telegraf:
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -938,7 +957,7 @@ class Telegraf:
             server_address = match.group(1).replace('_', '.')
             server_port = int(match.group(2))
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -981,7 +1000,7 @@ class Telegraf:
             else:
                 server_port = int(part[-4])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1024,7 +1043,7 @@ class Telegraf:
             server_address = part[3].replace('_', '.')
             server_port = int(part[2])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1046,7 +1065,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1071,7 +1090,7 @@ class Telegraf:
             # server_address = part[3].replace('_', '.')
             node_id = part[4]
             try:
-                instance = self.get_elasticsearch_instance(node_id)
+                instance = self._get_elasticsearch_instance(node_id)
             except KeyError:
                 return
 
@@ -1169,7 +1188,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1333,9 +1352,9 @@ class Telegraf:
             # Remove host and url, keep other in item
             url_mangled = telegraf_replace(exporter_config['url'])
             item_part = []
-            for x in part[2:-2]:
-                if x != url_mangled:
-                    item_part.append(x)
+            for i in part[2:-2]:
+                if i != url_mangled:
+                    item_part.append(i)
             item = '-'.join(item_part)
             if part[-1] == 'counter':
                 if name.endswith('_total'):
@@ -1378,16 +1397,16 @@ class Telegraf:
             if name in {'phpfpm_accepted_conn', 'phpfpm_slow_requests'}:
                 derive = True
         elif (part[2] == 'counter'
-                and self.core.config.get('telegraf.statsd.enabled', True)):
+              and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd counter
             derive = True
             name = 'statsd_' + part[3]
         elif (part[2] == 'gauge'
-                and self.core.config.get('telegraf.statsd.enabled', True)):
+              and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd gauge
             name = 'statsd_' + part[3]
         elif (part[2] == 'timing'
-                and self.core.config.get('telegraf.statsd.enabled', True)):
+              and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd timing
             name = 'statsd_' + part[3] + '_' + part[4]
             if part[4] == 'count':
@@ -1463,7 +1482,11 @@ class Telegraf:
             self.computed_metrics_pending.update(new_item)
             self._check_computed_metrics()
 
-    def _compute_metric(self, name, item, instance, timestamp, new_item):  # NOQA
+    def _compute_metric(self, name, item, instance, timestamp, new_item):
+        # pylint: disable=too-many-statements
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-arguments
         def get_metric(measurements, searched_item):
             """ Helper that do common task when retriving metrics:
 
@@ -1593,6 +1616,8 @@ class Telegraf:
 
 
 def _get_telegraf_config(core):
+    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-branches
     telegraf_config = BASE_TELEGRAF_CONFIG
 
     if core.config.get('telegraf.statsd.enabled', True):
@@ -1636,7 +1661,7 @@ def _get_telegraf_config(core):
                 and (
                     service_info.get('stats_url') is not None
                     or service_info.get('port') is not None
-                    or len(service_info.get('netstat_ports')) > 0)):
+                    or service_info.get('netstat_ports'))):
             copy_info = service_info.copy()
             port = service_info.get('port')
             for port_proto in service_info.get('netstat_ports', {}):
@@ -1766,7 +1791,7 @@ def telegraf_version_gte(core, version):
 
     try:
         return compare_version(current_version, version)
-    except Exception:
+    except Exception:  # pylint: disable=broad-except
         return False
 
 
@@ -1779,8 +1804,8 @@ def _write_config(core):
     )
 
     if os.path.exists(telegraf_config_path):
-        with open(telegraf_config_path) as fd:
-            current_content = fd.read()
+        with open(telegraf_config_path) as config_file:
+            current_content = config_file.read()
 
         if telegraf_config == current_content:
             logging.debug('telegraf already configured')
@@ -1797,7 +1822,7 @@ def _write_config(core):
     # since it may contains password
     open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
     fileno = os.open(telegraf_config_path, open_flags, 0o600)
-    with os.fdopen(fileno, 'w') as fd:
-        fd.write(telegraf_config)
+    with os.fdopen(fileno, 'w') as config_file:
+        config_file.write(telegraf_config)
 
     _restart_telegraf(core)

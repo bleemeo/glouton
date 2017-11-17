@@ -302,7 +302,7 @@ def test_get_service_info():
 
 
 def test_sanitize_service():
-    sanitize_service = bleemeo_agent.core.sanitize_service
+    sanitize_service = bleemeo_agent.core._sanitize_service
 
     core = None
 
@@ -377,7 +377,7 @@ def test_apply_service_override():
         },
     }
 
-    bleemeo_agent.core.apply_service_override(services, override, core)
+    bleemeo_agent.core._apply_service_override(services, override, core)
     assert services == wanted
 
 

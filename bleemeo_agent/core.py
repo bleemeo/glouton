@@ -15,6 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+# pylint: disable=too-many-lines
 
 import argparse
 import copy
@@ -54,19 +55,7 @@ import bleemeo_agent.facts
 import bleemeo_agent.graphite
 import bleemeo_agent.util
 
-
 # Optional dependencies
-try:
-    import docker
-except ImportError:
-    docker = None
-
-# Optional dependencies
-try:
-    import raven
-except ImportError:
-    raven = None
-
 try:
     # May fail because of missing mqtt dependency
     import bleemeo_agent.bleemeo
@@ -84,6 +73,17 @@ try:
     import bleemeo_agent.web
 except ImportError:
     bleemeo_agent.web = None
+
+try:
+    import docker
+except ImportError:
+    docker = None
+
+# Optional dependencies
+try:
+    import raven
+except ImportError:
+    raven = None
 
 # List of event that trigger discovery.
 DOCKER_DISCOVERY_EVENTS = [
@@ -381,7 +381,7 @@ UNIT_BIT = 3
 
 def main():
     if os.name == 'nt':
-        import bleemeo_agent.windows
+        import bleemeo_agent.windows  # pylint: disable=redefined-outer-name
         bleemeo_agent.windows.windows_main()
         sys.exit(0)
 
@@ -449,7 +449,7 @@ def get_service_info(cmdline):
         return KNOWN_PROCESS.get(name)
 
 
-def apply_service_override(services, override_config, core):
+def _apply_service_override(services, override_config, core):
     for service_info in override_config:
         service_info = service_info.copy()
         try:
@@ -468,14 +468,14 @@ def apply_service_override(services, override_config, core):
             tmp.update(service_info)
             service_info = tmp
 
-        service_info = sanitize_service(
+        service_info = _sanitize_service(
             service, instance, service_info, key in services, core,
         )
         if service_info is not None:
             services[(service, instance)] = service_info
 
 
-def sanitize_service(
+def _sanitize_service(
         name, instance, service_info, is_discovered_service, core):
     if 'port' in service_info and service_info['port'] is not None:
         if instance is None:
@@ -507,8 +507,8 @@ def sanitize_service(
         )
         return None
     elif (service_info.get('check_type') != 'nagios'
-            and 'port' not in service_info and not is_discovered_service
-            and 'jmx_port' not in service_info):
+          and 'port' not in service_info and not is_discovered_service
+          and 'jmx_port' not in service_info):
         # discovered services could exist without port, etc.
         # It means that no check will be performed but service object will
         # be created.
@@ -522,7 +522,79 @@ def sanitize_service(
     return service_info
 
 
+def _purge_services(
+        new_discovered_services, running_services, deleted_services):
+    """ Remove deleted_services (service deleted from API) and check
+        for uninstalled service (to mark them inactive).
+    """
+    if deleted_services is not None:
+        deleted_services = list(deleted_services)
+    else:
+        deleted_services = []
+
+    no_longer_running = (
+        set(new_discovered_services) - set(running_services)
+    )
+    for service_key in no_longer_running:
+        (service_name, instance) = service_key
+        if instance is not None:
+            # Don't process container here
+            continue
+        exe_path = new_discovered_services[service_key].get('exe_path')
+        if instance is None and exe_path and not os.path.exists(exe_path):
+            # Binary for service no longer exists. It has been uninstalled.
+            new_discovered_services[service_key]['active'] = False
+            logging.info(
+                'Service %s was uninstalled, marking it as inactive',
+                service_name,
+            )
+
+    if deleted_services:
+        for key in deleted_services:
+            if key in new_discovered_services:
+                del new_discovered_services[key]
+
+    return new_discovered_services
+
+
+def _guess_jmx_config(service_info, process):
+    """ Guess if remote JMX is available for this process
+    """
+    jmx_options = [
+        '-Dcom.sun.management.jmxremote.port=',
+        '-Dcassandra.jmx.remote.port=',
+    ]
+    if service_info['address'] == '127.0.0.1':
+        jmx_options.extend([
+            '-Dcassandra.jmx.local.port=',
+        ])
+
+    for opt in jmx_options:
+        try:
+            index = process['cmdline'].find(opt)
+        except ValueError:
+            continue
+
+        value = process['cmdline'][index + len(opt):].split()[0]
+        try:
+            jmx_port = int(value)
+        except ValueError:
+            continue
+
+        service_info['jmx_port'] = jmx_port
+
+
 def convert_type(value_text, value_type):
+    """ Convert string value to given value_type
+
+        Usefull for parameter from environment that must be case to Python type
+
+        Supported value_type:
+
+        * string: no convertion
+        * int: int() from Python
+        * bool: case-insensitive; "true", "yes", "1" => True
+    """
     if value_type == 'string':
         return value_text
 
@@ -619,7 +691,7 @@ def format_value(value, unit, unit_text):
     if unit == UNIT_BYTE or unit == UNIT_BIT:
         scale = ['', 'K', 'M', 'G', 'T', 'P', 'E']
         current_scale = scale.pop(0)
-        while abs(value) >= 1024 and len(scale) > 0:
+        while abs(value) >= 1024 and scale:
             current_scale = scale.pop(0)
             value = value / 1024
 
@@ -648,8 +720,8 @@ class State:
 
     def reload(self):
         if os.path.exists(self.filename):
-            with open(self.filename) as fd:
-                self._content = json.load(fd)
+            with open(self.filename) as state_file:
+                self._content = json.load(state_file)
 
     def save(self):
         with self._write_lock:
@@ -657,10 +729,10 @@ class State:
                 # Don't simply use open. This file must have limited permission
                 open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
                 fileno = os.open(self.filename + '.tmp', open_flags, 0o600)
-                with os.fdopen(fileno, 'w') as fd:
-                    json.dump(self._content, fd)
-                    fd.flush()
-                    os.fsync(fd.fileno())
+                with os.fdopen(fileno, 'w') as state_file:
+                    json.dump(self._content, state_file)
+                    state_file.flush()
+                    os.fsync(state_file.fileno())
                 if os.name == 'nt':
                     try:
                         os.remove(self.filename)
@@ -693,8 +765,8 @@ class State:
             value (e.g. metric_name, item_tag).
         """
         json_value = []
-        for k, v in value.items():
-            json_value.append([k, v])
+        for sub_key, sub_value in value.items():
+            json_value.append([sub_key, sub_value])
         self.set(key, json_value)
 
     def get_complex_dict(self, key, default=None):
@@ -706,12 +778,14 @@ class State:
 
         value = {}
         for row in json_value:
-            (k, v) = row
-            value[tuple(k)] = v
+            (sub_key, sub_value) = row
+            value[tuple(sub_key)] = sub_value
         return value
 
 
 class Core:
+    # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-public-methods
     def __init__(self, run_as_windows_service=False):
         self.run_as_windows_service = run_as_windows_service
 
@@ -734,7 +808,7 @@ class Core:
                 apscheduler.schedulers.background.BackgroundScheduler()
             )
         else:
-            self._scheduler = apscheduler.scheduler.Scheduler()
+            self._scheduler = apscheduler.scheduler.Scheduler()  # noqa pylint: disable=no-member
         self.last_metrics = {}
         self.last_report = None
 
@@ -742,7 +816,7 @@ class Core:
         self.discovered_services = {}
         self.services = {}
         self._soft_status_since = {}
-        self._metrics_unit = {}
+        self.metrics_unit = {}
         self._trigger_discovery = False
         self._trigger_facts = False
         self._trigger_updates_count = False
@@ -754,6 +828,12 @@ class Core:
         self.total_swap_size = psutil.swap_memory().total
 
         self.http_user_agent = None
+        self.started_at = None
+        self.state = None
+        self.thresholds = {}
+        self._update_facts_job = None
+        self._gather_update_metrics_job = None
+        self.config = None
 
     def _init(self):
         self.started_at = bleemeo_agent.util.get_clock()
@@ -1097,10 +1177,10 @@ class Core:
 
             Make SIGHUP trigger a discovery
         """
-        def handler(signum, frame):
+        def handler(_signum, _frame):
             self.is_terminating.set()
 
-        def handler_hup(signum, frame):
+        def handler_hup(_signum, _frame):
             self._trigger_discovery = True
             self._trigger_updates_count = True
             self._trigger_facts = True
@@ -1125,12 +1205,12 @@ class Core:
                 version=DOCKER_API_VERSION,
             )
         else:
-            self.docker_client = docker.Client(
+            self.docker_client = docker.Client(  # pylint: disable=no-member
                 version=DOCKER_API_VERSION,
             )
         try:
             self.docker_client.ping()
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             logging.debug('Docker ping failed. Assume Docker is not used')
             self.docker_client = None
 
@@ -1342,7 +1422,7 @@ class Core:
         """
         try:
             result = self.docker_client.inspect_container(container_id)
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             return  # most probably container was removed
 
         name = result['Name'].lstrip('/')
@@ -1372,7 +1452,7 @@ class Core:
         logs = result['State']['Health'].get('Log', [])
         if docker_status != 'running':
             metric['check_output'] = 'Container stopped'
-        elif len(logs):
+        elif logs:
             metric['check_output'] = logs[-1].get('Output')
 
         self.emit_metric(metric)
@@ -1436,7 +1516,7 @@ class Core:
             self._search_old_service(discovered_running_services)
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
-        new_discovered_services = self._purge_services(
+        new_discovered_services = _purge_services(
             new_discovered_services,
             discovered_running_services,
             deleted_services,
@@ -1465,7 +1545,7 @@ class Core:
                 'discovered_services', self.discovered_services)
 
         self.services = copy.deepcopy(self.discovered_services)
-        apply_service_override(
+        _apply_service_override(
             self.services,
             self.config.get('service', []),
             self,
@@ -1480,7 +1560,7 @@ class Core:
                 name = '%s (%s)' % (service_name, instance)
 
             if 'jmx_metrics' in service and 'jmx_port' not in service:
-                logging.warinig(
+                logging.warning(
                     'Service %s: jmx_metrics require jmx_port',
                     name,
                 )
@@ -1499,40 +1579,6 @@ class Core:
         for service_info in self.services.values():
             if service_info.get('stack', None) is None:
                 service_info['stack'] = self.config.get('stack', '')
-
-    def _purge_services(
-            self, new_discovered_services, running_services, deleted_services):
-        """ Remove deleted_services (service deleted from API) and check
-            for uninstalled service (to mark them inactive).
-        """
-        if deleted_services is not None:
-            deleted_services = list(deleted_services)
-        else:
-            deleted_services = []
-
-        no_longer_running = (
-            set(new_discovered_services) - set(running_services)
-        )
-        for service_key in no_longer_running:
-            (service_name, instance) = service_key
-            if instance is not None:
-                # Don't process container here
-                continue
-            exe_path = new_discovered_services[service_key].get('exe_path')
-            if instance is None and exe_path and not os.path.exists(exe_path):
-                # Binary for service no longer exists. It has been uninstalled.
-                new_discovered_services[service_key]['active'] = False
-                logging.info(
-                    'Service %s was uninstalled, marking it as inactive',
-                    service_name,
-                )
-
-        if deleted_services:
-            for key in deleted_services:
-                if key in new_discovered_services:
-                    del new_discovered_services[key]
-
-        return new_discovered_services
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name
@@ -1636,6 +1682,8 @@ class Core:
         return processes
 
     def get_netstat(self):
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
         """ Parse netstat output and return a mapping pid => list of listening
             port/protocol (e.g. 80/tcp, 127/udp)
         """
@@ -1762,10 +1810,10 @@ class Core:
         old_service_info = self.discovered_services.get(
             (service_name, instance), {}
         )
-        if len(netstat_ports) == 0 and 'netstat_ports' in old_service_info:
+        if not netstat_ports and 'netstat_ports' in old_service_info:
             netstat_ports = old_service_info['netstat_ports'].copy()
 
-        if default_port is not None and len(netstat_ports) > 0:
+        if default_port is not None and netstat_ports:
             if service_info['protocol'] == socket.IPPROTO_TCP:
                 default_protocol = 'tcp'
             else:
@@ -1843,7 +1891,7 @@ class Core:
                     self._discover_pgsql(instance, service_info)
 
                 if service_info.get('interpreter') == 'java':
-                    self._guess_jmx_config(service_name, service_info, process)
+                    _guess_jmx_config(service_info, process)
 
                 discovered_services[(service_name, instance)] = service_info
 
@@ -1871,7 +1919,7 @@ class Core:
                 debian_cnf_raw = b''
 
             debian_cnf = configparser.SafeConfigParser()
-            debian_cnf.readfp(io.StringIO(debian_cnf_raw.decode('utf-8')))
+            debian_cnf.read_file(io.StringIO(debian_cnf_raw.decode('utf-8')))
             try:
                 mysql_user = debian_cnf.get('client', 'user')
                 mysql_password = debian_cnf.get('client', 'password')
@@ -1910,32 +1958,6 @@ class Core:
         service_info['username'] = user
         service_info['password'] = password
 
-    def _guess_jmx_config(self, instance, service_info, process):
-        """ Guess if remote JMX is available for this process
-        """
-        jmx_options = [
-            '-Dcom.sun.management.jmxremote.port=',
-            '-Dcassandra.jmx.remote.port=',
-        ]
-        if service_info['address'] == '127.0.0.1':
-            jmx_options.extend([
-                '-Dcassandra.jmx.local.port=',
-            ])
-
-        for opt in jmx_options:
-            try:
-                index = process['cmdline'].find(opt)
-            except ValueError:
-                continue
-
-            value = process['cmdline'][index + len(opt):].split()[0]
-            try:
-                jmx_port = int(value)
-            except ValueError:
-                continue
-
-            service_info['jmx_port'] = jmx_port
-
     def _watch_docker_event(self):
         """ Watch for docker event and re-run discovery
         """
@@ -1950,7 +1972,7 @@ class Core:
 
             try:
                 self.docker_client.ping()
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 self.docker_client = None
                 continue
 
@@ -1973,11 +1995,10 @@ class Core:
 
                     last_event_at = event['time']
                     self._process_docker_event(event)
-            except Exception:
+            except Exception:  # pylint: disable=broad-except
                 # When docker restart, it breaks the connection and the
                 # generator will raise an exception.
                 logging.debug('Docker event watcher error', exc_info=True)
-                pass
 
     def _process_docker_event(self, event):
 
@@ -2012,7 +2033,7 @@ class Core:
                         service_info['active'] = False
 
         elif (action.startswith('health_status:')
-                and event_type == 'container'):
+              and event_type == 'container'):
             self._docker_health_status(actor_id)
             # If an health_status event occure, it means that
             # docker container inspect changed.
@@ -2033,6 +2054,8 @@ class Core:
             self.bleemeo_connector.publish_top_info(self.top_info)
 
     def reload_config(self):
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-locals
         (self.config, errors) = bleemeo_agent.config.load_config()
         warnings = []
 
@@ -2095,7 +2118,7 @@ class Core:
                     missing_option = (
                         jmx_mandatory_option - set(jmx_metric.keys())
                     )
-                    if len(missing_option) > 0 and 'name' in jmx_metric:
+                    if missing_option and 'name' in jmx_metric:
                         warnings.append(
                             'Service %s has an invalid jmx_metrics "%s":'
                             ' missing %s option(s)' % (
@@ -2104,7 +2127,7 @@ class Core:
                                 ', '.join(missing_option),
                             )
                         )
-                    elif len(missing_option) > 0:
+                    elif missing_option:
                         warnings.append(
                             'Service %s has an invalid jmx_metrics:'
                             ' missing %s option(s)' % (
@@ -2191,6 +2214,9 @@ class Core:
         return threshold
 
     def check_threshold(self, metric, with_soft_status):
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-statements
         """ Check if threshold is defined for given metric. If yes, check
             it and add a "status" tag.
 
@@ -2220,13 +2246,13 @@ class Core:
                 and value < threshold.get('low_critical')):
             soft_status = 'critical'
         elif (threshold.get('low_warning') is not None
-                and value < threshold.get('low_warning')):
+              and value < threshold.get('low_warning')):
             soft_status = 'warning'
         elif (threshold.get('high_critical') is not None
-                and value > threshold.get('high_critical')):
+              and value > threshold.get('high_critical')):
             soft_status = 'critical'
         elif (threshold.get('high_warning') is not None
-                and value > threshold.get('high_warning')):
+              and value > threshold.get('high_warning')):
             soft_status = 'warning'
         else:
             soft_status = 'ok'
@@ -2270,7 +2296,7 @@ class Core:
 
             status_value = 2.0
 
-        (unit, unit_text) = self._metrics_unit.get(
+        (unit, unit_text) = self.metrics_unit.get(
             (metric['measurement'], metric.get('item')),
             (None, None),
         )
@@ -2337,9 +2363,11 @@ class Core:
             critical_since = None
             warning_since = None
 
-        warn_duration = warning_since and (metric['time'] - warning_since) or 0
+        warn_duration = (
+            (metric['time'] - warning_since) if warning_since else 0
+        )
         crit_duration = (
-            critical_since and (metric['time'] - critical_since) or 0
+            (metric['time'] - critical_since) if critical_since else 0
         )
 
         if crit_duration >= period:
@@ -2386,8 +2414,7 @@ class Core:
         metric = self.get_last_metric(name, item)
         if metric is not None:
             return metric['value']
-        else:
-            return default
+        return default
 
     @property
     def agent_uuid(self):
@@ -2400,6 +2427,7 @@ class Core:
             return self.bleemeo_connector.agent_uuid
 
     def get_docker_container_address(self, container_name):
+        # pylint: disable=too-many-return-statements
         """ Return address where the container may be reachable from host
 
             This may not be possible. This could return None or an IP only

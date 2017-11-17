@@ -97,10 +97,14 @@ class GraphiteServer(threading.Thread):
 
     @property
     def metrics_source(self):
+        """ Return the current metrics source (collectd or telegraf)
+        """
         return self.core.config.get('graphite.metrics_source', 'telegraf')
 
     @property
     def jmx_enabled(self):
+        """ Returns True if JMX collector is enabled
+        """
         return self.core.config.get('jmx.enabled', True)
 
     def run(self):
@@ -137,9 +141,13 @@ class GraphiteServer(threading.Thread):
                 pass
 
         sock_server.close()
-        [x.join() for x in clients]
+
+        for client in clients:
+            client.join()
 
     def update_discovery(self):
+        """ Update configuration after a service discovery was run
+        """
         if self.metrics_source == 'collectd':
             bleemeo_agent.collectd.update_discovery(self.core)
         elif self.metrics_source == 'telegraf':
@@ -149,6 +157,11 @@ class GraphiteServer(threading.Thread):
             bleemeo_agent.jmxtrans.update_discovery(self.core)
 
     def get_time_elapsed_since_last_data(self):
+        # pylint: disable=invalid-name
+        """ Returns a metric "time_elapsed_since_last_data" which
+            is the number of seconds since the last metric received
+            by any graphite clients.
+        """
         clock_now = bleemeo_agent.util.get_clock()
         threshold = self.core.get_threshold('time_elapsed_since_last_data')
         highest_threshold = 0
@@ -183,12 +196,14 @@ class GraphiteServer(threading.Thread):
         }
 
     def network_interface_blacklist(self, if_name):
+        """ Returns True if the given interface is blacklisted
+        """
         for pattern in self.core.config.get('network_interface_blacklist', []):
             if if_name.startswith(pattern):
                 return True
         return False
 
-    def _ignored_disk(self, disk):
+    def ignored_disk(self, disk):
         """ Tell if disk should be monitored. It avoid monitoring sda1 or
             dm-1
         """
@@ -227,14 +242,14 @@ class GraphiteClient(threading.Thread):
         logging.debug('graphite: client connected from %s', self.addr)
 
         try:
-            self.process_client()
+            self._process_client()
         finally:
             self.socket.close()
             logging.debug('graphite: client %s disconnectd', self.addr)
             if self.client_decoder is not None:
                 self.client_decoder.close()
 
-    def process_client(self):
+    def _process_client(self):
         remain = b''
         self.socket.settimeout(1)
         while not self.core.is_terminating.is_set():
@@ -283,7 +298,7 @@ class GraphiteClient(threading.Thread):
             elif name.startswith('jmxtrans.') and self.server.jmx_enabled:
                 self.client_decoder = bleemeo_agent.jmxtrans.Jmxtrans(self)
             elif (not name.startswith('telegraf.')
-                    and not name.startswith('jmxtrans.')):
+                  and not name.startswith('jmxtrans.')):
                 self.client_decoder = bleemeo_agent.collectd.Collectd(self)
             else:
                 return

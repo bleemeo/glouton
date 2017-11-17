@@ -15,6 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+# pylint: disable=too-many-lines
 
 import hashlib
 import json
@@ -42,7 +43,7 @@ REQUESTS_TIMEOUT = 15.0
 
 class ApiError(Exception):
     def __init__(self, response):
-        super(Exception, self).__init__()
+        super(ApiError, self).__init__()
         self.response = response
 
 
@@ -123,7 +124,7 @@ def get_listen_addresses(service_info):
             continue
         netstat_ports[port_proto] = address
 
-    if service_info.get('port') is not None and len(netstat_ports) == 0:
+    if service_info.get('port') is not None and not netstat_ports:
         if service_info['protocol'] == socket.IPPROTO_TCP:
             netstat_ports['%s/tcp' % service_info['port']] = address
         elif service_info['protocol'] == socket.IPPROTO_UDP:
@@ -136,6 +137,7 @@ def get_listen_addresses(service_info):
 
 
 class BleemeoConnector(threading.Thread):
+    # pylint: disable=too-many-instance-attributes
 
     def __init__(self, core):
         super(BleemeoConnector, self).__init__()
@@ -167,8 +169,8 @@ class BleemeoConnector(threading.Thread):
 
         self._apply_upgrade()
 
-    def on_connect(self, client, userdata, flags, rc):
-        if rc == 0 and not self.core.is_terminating.is_set():
+    def on_connect(self, _client, _userdata, _flags, result_code):
+        if result_code == 0 and not self.core.is_terminating.is_set():
             self.connected = True
             msg = {
                 'public_ip': self.core.last_facts.get('public_ip'),
@@ -178,8 +180,10 @@ class BleemeoConnector(threading.Thread):
                 json.dumps(msg),
             )
             # FIXME: PRODUCT-137: to be removed when upstream bug is fixed
+            # pylint: disable=protected-access
             if (self.mqtt_client._ssl is not None
                     and not isinstance(self.mqtt_client._ssl, bool)):
+                # pylint: disable=no-member
                 self.mqtt_client._ssl.setblocking(0)
 
             self.mqtt_client.subscribe(
@@ -187,17 +191,17 @@ class BleemeoConnector(threading.Thread):
             )
             logging.info('MQTT connection established')
 
-    def on_disconnect(self, client, userdata, rc):
+    def on_disconnect(self, _client, _userdata, _result_code):
         if self.connected:
             logging.info('MQTT connection lost')
         self.connected = False
 
-    def on_message(self, client, userdata, msg):
+    def on_message(self, _client, _userdata, msg):
         notify_topic = 'v1/agent/%s/notification' % self.agent_uuid
         if msg.topic == notify_topic and len(msg.payload) < 1024 * 64:
             try:
                 body = json.loads(msg.payload.decode('utf-8'))
-            except Exception as exc:
+            except Exception as exc:  # pylint: disable=broad-except
                 logging.info('Failed to decode message for Bleemeo: %s', exc)
                 return
 
@@ -207,14 +211,14 @@ class BleemeoConnector(threading.Thread):
                 logging.debug('Got "threshold-update" message from Bleemeo')
                 self._last_update = 0  # trigger a sync with Bleemeo
 
-    def on_publish(self, client, userdata, mid):
+    def on_publish(self, _client, _userdata, _mid):
         self._mqtt_queue_size -= 1
         self.core.update_last_report()
 
     def check_config_requirement(self):
         sleep_delay = 10
         while (self.core.config.get('bleemeo.account_id') is None
-                or self.core.config.get('bleemeo.registration_key') is None):
+               or self.core.config.get('bleemeo.registration_key') is None):
             logging.warning(
                 'bleemeo.account_id and/or '
                 'bleemeo.registration_key is undefine. '
@@ -269,7 +273,7 @@ class BleemeoConnector(threading.Thread):
         # Wait up to 5 second for MQTT queue to be empty before disconnecting
         deadline = bleemeo_agent.util.get_clock() + 5
         while (self._mqtt_queue_size > 0
-                and bleemeo_agent.util.get_clock() < deadline):
+               and bleemeo_agent.util.get_clock() < deadline):
             time.sleep(0.1)
 
         self.mqtt_client.disconnect()
@@ -464,7 +468,7 @@ class BleemeoConnector(threading.Thread):
         except queue.Empty:
             pass
 
-        if len(metrics) != 0:
+        if metrics:
             self.publish(
                 'v1/agent/%s/data' % self.agent_uuid,
                 json.dumps(metrics)
@@ -649,12 +653,12 @@ class BleemeoConnector(threading.Thread):
             )
 
         self.core.update_thresholds(thresholds)
-        self.core._metrics_unit = unit
+        self.core.metrics_unit = unit
 
         deleted_metrics = []
         with self.metrics_lock:
             for key in list(self.metrics_uuid.keys()):
-                (metric_name, service_name, item) = key
+                (metric_name, _service_name, item) = key
                 value = self.metrics_uuid[key]
                 if value is None or value in metrics_registered:
                     continue
@@ -716,7 +720,6 @@ class BleemeoConnector(threading.Thread):
 
         deleted_services = []
         for key in list(self.services_uuid.keys()):
-            (service_name, instance) = key
             entry = self.services_uuid[key]
             if entry is None or entry['uuid'] in services_registred:
                 continue
@@ -860,6 +863,9 @@ class BleemeoConnector(threading.Thread):
             )
 
     def _register_metric(self):
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
         """ Check for any unregistered metrics and register them
         """
         base_url = self.bleemeo_base_url
@@ -1020,7 +1026,7 @@ class BleemeoConnector(threading.Thread):
                 )
 
             self.core.update_thresholds(thresholds)
-            self.core._metrics_unit[(metric_name, item)] = (
+            self.core.metrics_unit[(metric_name, item)] = (
                 data.get('unit'), data.get('unit_text')
             )
 

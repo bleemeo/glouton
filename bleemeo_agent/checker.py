@@ -25,6 +25,7 @@ import socket
 import struct
 import time
 
+# pylint: disable=import-error
 import requests
 from six.moves.urllib import parse as urllib_parse
 
@@ -128,7 +129,7 @@ CHECKS = {}
 
 
 def update_checks(core):
-    global CHECKS
+    global CHECKS  # pylint: disable=global-statement
 
     checks_seen = set()
     for key, service_info in core.services.items():
@@ -157,7 +158,7 @@ def update_checks(core):
             logging.debug(
                 'No check exists for service %s', service_name,
             )
-        except Exception:
+        except Exception:  # pylint: disable=broad-except
             logging.debug(
                 'Failed to initialize check for service %s',
                 service_name,
@@ -180,6 +181,7 @@ def periodic_check():
 
 
 class Check:
+    # pylint: disable=too-many-instance-attributes
     def __init__(self, core, service_name, instance, service_info):
         self.address = service_info.get('address')
         self.port = service_info.get('port')
@@ -283,23 +285,23 @@ class Check:
             if sock is not None:
                 sockets[sock] = key
 
-        if len(sockets) > 0:
+        if sockets:
             (rlist, _, _) = select.select(sockets.keys(), [], [], 0)
         else:
             rlist = []
-        for s in rlist:
+        for sock in rlist:
             try:
-                buffer = s.recv(65536)
+                buffer = sock.recv(65536)
             except socket.error:
                 buffer = b''
 
             if buffer == b'':
-                (address, port) = sockets[s]
+                (address, port) = sockets[sock]
                 logging.debug(
                     'check %s (on %s): connection to %s:%s closed',
                     self.service, self.instance, address, port
                 )
-                s.close()
+                sock.close()
                 self.tcp_sockets[(address, port)] = None
                 try_reopen = True
 
@@ -307,6 +309,7 @@ class Check:
             self.open_sockets()
 
     def run_check(self):
+        # pylint: disable=too-many-branches
         now = time.time()
 
         key = (self.service, self.instance)
@@ -440,17 +443,17 @@ class Check:
         if self.service_info['check_tcp_expect'] not in received:
             if received == '':
                 return (STATUS_CRITICAL, 'No data received from host')
-            else:
-                return (
-                    STATUS_CRITICAL,
-                    'Unexpected response: %s' % received
-                )
+            return (
+                STATUS_CRITICAL,
+                'Unexpected response: %s' % received
+            )
 
         sock.close()
         end = bleemeo_agent.util.get_clock()
         return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
 
     def check_tcp(self, address=None, port=None):
+        # pylint: disable=too-many-return-statements
         if address is not None or port is not None:
             use_default = False
         else:
@@ -536,20 +539,19 @@ class Check:
                     response.status_code,
                 )
             )
-        elif expected_code is None and response.status_code >= 400:
+        if expected_code is None and response.status_code >= 400:
             return (
                 STATUS_WARNING,
                 'HTTP WARN - status_code=%s' % (
                     response.status_code,
                 )
             )
-        else:
-            return (
-                STATUS_OK,
-                'HTTP OK - status_code=%s' % (
-                    response.status_code,
-                )
+        return (
+            STATUS_OK,
+            'HTTP OK - status_code=%s' % (
+                response.status_code,
             )
+        )
 
     def check_imap(self):
         if self.port is None or self.address is None:
@@ -605,7 +607,7 @@ class Check:
 
         # Ntp use 1900-01-01 00:00:00 as epoc.
         # Since Unix use 1970-01-01 as epoc, we have this delta
-        NTP_DELTA = 2208988800
+        ntp_delta = 2208988800
 
         start = bleemeo_agent.util.get_clock()
 
@@ -615,24 +617,23 @@ class Check:
         msg = b'\x1b' + 47 * b'\0'
         try:
             client.sendto(msg, (self.address, self.port))
-            msg, address = client.recvfrom(1024)
+            msg, _address = client.recvfrom(1024)
         except socket.timeout:
             return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
 
         unpacked = struct.unpack("!BBBB11I", msg)
         stratum = unpacked[1]
-        server_time = unpacked[11] - NTP_DELTA
+        server_time = unpacked[11] - ntp_delta
 
         end = bleemeo_agent.util.get_clock()
 
         if stratum == 0 or stratum == 16:
             return (STATUS_CRITICAL, 'NTP server not (yet) synchronized')
-        elif abs(server_time - time.time()) > 10:
+        if abs(server_time - time.time()) > 10:
             return (STATUS_CRITICAL, 'Local time and NTP time does not match')
-        else:
-            return (
-                STATUS_OK, 'NTP OK - %.3f second response time' % (end-start)
-            )
+        return (
+            STATUS_OK, 'NTP OK - %.3f second response time' % (end-start)
+        )
 
 
 class IMAP4Timeout(imaplib.IMAP4):

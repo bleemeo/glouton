@@ -15,6 +15,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+"""
+Module to gather facts about the server (OS familly/version, CPU type, ...)
+"""
 
 import datetime
 import logging
@@ -33,6 +36,7 @@ import bleemeo_agent.config
 import bleemeo_agent.util
 
 if os.name == 'nt':
+    # pylint: disable=import-error
     import pythoncom
     import winreg
     import wmi
@@ -67,7 +71,7 @@ def get_url_content(core, url, timeout=5.0):
         return None
 
 
-def get_package_version_dpkg(package_name):
+def _get_package_version_dpkg(package_name):
     try:
         stdout = subprocess.check_output(
             ['dpkg', '-l', package_name],
@@ -89,7 +93,7 @@ def get_package_version_dpkg(package_name):
     return parts[2].decode('utf-8')
 
 
-def get_package_version_rpm(package_name):
+def _get_package_version_rpm(package_name):
     try:
         stdout = subprocess.check_output(
             ['rpm', '-q', package_name, '--qf', '%{EVR}'],
@@ -132,12 +136,12 @@ def get_package_version(package_name, default=None, distribution=None):
 
     result = None
     if distribution is None or distribution == 'debian':
-        result = get_package_version_dpkg(package_name)
+        result = _get_package_version_dpkg(package_name)
         if result is not None:
             return result
 
     if distribution is None or distribution == 'centos':
-        result = get_package_version_rpm(package_name)
+        result = _get_package_version_rpm(package_name)
         if result is not None:
             return result
 
@@ -145,6 +149,10 @@ def get_package_version(package_name, default=None, distribution=None):
 
 
 def get_agent_version(core):
+    """ Returns the version of Bleemeo agent
+
+        Use system package tools (dpkg/rpm) to query the installed version.
+    """
     return get_package_version(
         'bleemeo-agent',
         bleemeo_agent.__version__,
@@ -188,7 +196,7 @@ def get_docker_version(core):
     return (package_version, api_version)
 
 
-def get_telegraf_version(core):
+def _get_telegraf_version(core):
     package_version = get_package_version(
         'telegraf',
         distribution=core.config.get('distribution'),
@@ -232,8 +240,8 @@ def read_os_release(core):
             return result
 
     try:
-        with open(file_path) as fd:
-            for line in fd:
+        with open(file_path) as os_release_file:
+            for line in os_release_file:
                 line = line.strip()
                 if line == '':
                     continue
@@ -248,7 +256,7 @@ def read_os_release(core):
     return result
 
 
-def get_aws_facts(core):
+def _get_aws_facts(core):
     facts = {}
     facts['aws_ami_id'] = get_url_content(
         core,
@@ -294,7 +302,7 @@ def get_aws_facts(core):
             for x in macs.splitlines()
         ]
         result = [x for x in result if x is not None]
-        if len(result) > 0:
+        if result:
             facts['aws_vpc_id'] = ','.join(result)
 
         result = [
@@ -302,7 +310,7 @@ def get_aws_facts(core):
             for x in macs.splitlines()
         ]
         result = [x for x in result if x is not None]
-        if len(result) > 0:
+        if result:
             facts['aws_vpc_ipv4_cidr_block'] = ','.join(result)
 
     return facts
@@ -386,7 +394,7 @@ def get_virtual_type(facts):
     return result
 
 
-def system_has_swap():
+def _system_has_swap():
     return psutil.swap_memory().total > 0
 
 
@@ -415,6 +423,9 @@ def get_facts_root():
 
 
 def get_facts(core):
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-statements
     """ Return facts/grains/information about current machine.
 
         Returned facts are informations like hostname, OS type/version, etc
@@ -506,7 +517,7 @@ def get_facts(core):
 
         wmi_connection = wmi.WMI()
         result = wmi_connection.Win32_ComputerSystem()
-        if len(result):
+        if result:
             system_info = result[0]
             facts.update({
                 'product_name': system_info.Model.strip(),
@@ -514,7 +525,7 @@ def get_facts(core):
             })
 
         result = wmi_connection.Win32_SystemBIOS()
-        if len(result):
+        if result:
             bios_info = result[0].PartComponent
             facts.update({
                 'bios_released_at': bios_info.ReleaseDate.strip(),
@@ -527,7 +538,7 @@ def get_facts(core):
 
     if (facts.get('bios_version') is not None
             and 'amazon' in facts.get('bios_version').lower()):
-        facts.update(get_aws_facts(core))
+        facts.update(_get_aws_facts(core))
 
     (docker_version, docker_api_version) = get_docker_version(core)
 
@@ -549,8 +560,8 @@ def get_facts(core):
         'hostname': hostname,
         'metrics_source': core.graphite_server.metrics_source,
         'primary_address': primary_address,
-        'swap_present': system_has_swap(),
-        'telegraf_version': get_telegraf_version(core),
+        'swap_present': _system_has_swap(),
+        'telegraf_version': _get_telegraf_version(core),
         'timezone': get_file_content('/etc/timezone'),
         'virtual': virtual,
     })

@@ -124,8 +124,8 @@ def merge_dict(destination, source):
                 and isinstance(destination[key], dict)):
             destination[key] = merge_dict(destination[key], value)
         elif (key in destination
-                and isinstance(value, list)
-                and isinstance(destination[key], list)):
+              and isinstance(value, list)
+              and isinstance(destination[key], list)):
             destination[key].extend(value)
         else:
             destination[key] = value
@@ -148,8 +148,8 @@ def load_config(paths=None):
     configs = [default_config]
     for filepath in config_files(paths):
         try:
-            with open(filepath) as fd:
-                config = yaml.safe_load(fd)
+            with open(filepath) as config_file:
+                config = yaml.safe_load(config_file)
 
                 # config could be None if file is empty.
                 # config could be non-dict if top-level of file is another YAML
@@ -161,7 +161,7 @@ def load_config(paths=None):
                         'wrong format for file "%s"' % filepath
                     )
 
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             errors.append(str(exc).replace('\n', ' '))
 
     return functools.reduce(merge_dict, configs), errors

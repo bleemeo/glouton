@@ -38,13 +38,11 @@ import bleemeo_agent
 # With generate_password, taken from Django project
 # Use the system PRNG if possible
 try:
-    random = random.SystemRandom()
-    using_sysrandom = True
+    random = random.SystemRandom()  # pylint: disable=invalid-name
 except NotImplementedError:
     import warnings
     warnings.warn('A secure pseudo-random number generator is not available '
                   'on your system. Falling back to Mersenne Twister.')
-    using_sysrandom = False
 
 
 # Taken from Django project
@@ -62,12 +60,16 @@ def generate_password(length=10,
 
 
 def get_uptime():
+    """ Return system uptime in seconds
+    """
     boot_time = psutil.boot_time()
     now = time.time()
     return now - boot_time
 
 
 def get_loadavg(core):
+    """ Return system load average for last minutes, 5 minutes, 15 minutes
+    """
     system_load1 = core.get_last_metric_value('system_load1', None, 0.0)
     system_load5 = core.get_last_metric_value('system_load5', None, 0.0)
     system_load15 = core.get_last_metric_value('system_load15', None, 0.0)
@@ -86,8 +88,7 @@ def get_clock():
     """
     if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
         return time.monotonic()
-    else:
-        return time.time()
+    return time.time()
 
 
 def format_uptime(uptime_seconds):
@@ -135,8 +136,7 @@ def format_cpu_time(cpu_time):
     minutes = int(cpu_time / 60)
     if minutes > 999:
         return '%s:%.0f' % (minutes, cpu_time % 60)
-    else:
-        return '%s:%.2f' % (minutes, cpu_time % 60)
+    return '%s:%.2f' % (minutes, cpu_time % 60)
 
 
 def run_command_timeout(command, timeout=10):
@@ -191,6 +191,10 @@ def clean_cmdline(cmdline):
 
 
 def get_pending_update(core):
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-return-statements
+    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-statements
     """ Returns the number of pending update for this system
 
         It return a couple (update_count, security_update_count).
@@ -201,20 +205,20 @@ def get_pending_update(core):
     """
     # If running inside a Docker container, it can't run commands
     if core.container is not None:
-        updates_files = os.path.join(
+        updates_file_name = os.path.join(
             core.config.get('df.host_mount_point', '/does-no-exists'),
             'var/lib/update-notifier/updates-available',
         )
         update_count = None
         security_count = None
         try:
-            fp = open(updates_files, 'rb')
+            update_file = open(updates_file_name, 'rb')
         except (OSError, IOError):
             # File does not exists or permission denied
             return (None, None)
         else:
-            with fp:
-                data = fp.read().decode('utf-8')
+            with update_file:
+                data = update_file.read().decode('utf-8')
 
             first_match = True
             for line in data.splitlines():
@@ -248,8 +252,8 @@ def get_pending_update(core):
             env=env,
         )
         (output, _) = proc.communicate()
-        (a, b) = output.split(b';')
-        return (int(a), int(b))
+        (update_count, security_count) = output.split(b';')
+        return (int(update_count), int(security_count))
     except (OSError, ValueError):
         pass
 
@@ -506,7 +510,7 @@ def get_top_output(top_info):
         }.get(metric['status'], '?')
         processes.append(
             ('%(pid)5s %(user)-9.9s %(res)6d %(status)s '
-                '%(cpu)5.1f %(mem)4.1f %(time)9s %(cmd)s') %
+             '%(cpu)5.1f %(mem)4.1f %(time)9s %(cmd)s') %
             {
                 'pid': metric['pid'],
                 'user': metric['username'],
@@ -573,8 +577,8 @@ def _get_url(core, name, metric_config):
     url_parsed = urllib_parse.urlparse(url)
     if url_parsed.scheme == '' or url_parsed.scheme == 'file':
         try:
-            with open(url_parsed.path) as fd:
-                return fd.read()
+            with open(url_parsed.path) as file_obj:
+                return file_obj.read()
         except (IOError, OSError) as exc:
             logging.warning(
                 'Failed to retrive metric %s: %s',
@@ -598,19 +602,13 @@ def _get_url(core, name, metric_config):
             url,
             **args
         )
-    except requests.exceptions.ConnectionError:
-        logging.warning(
-            'Failed to retrieve metric %s: '
-            'failed to establish connection to %s',
-            name,
-            url,
-        )
-        return None
     except requests.exceptions.ConnectionError as exc:
         logging.warning(
-            'Failed to retrieve metric %s: %s',
+            'Failed to retrieve metric %s: '
+            'failed to establish connection to %s: %s',
             name,
-            exc,
+            url,
+            exc
         )
         return None
     except requests.exceptions.RequestException as exc:
@@ -702,5 +700,4 @@ def windows_telegraf_path(default="telegraf"):
     telegraf = os.path.join(instdir, "telegraf.exe")
     if os.path.exists(telegraf):
         return telegraf
-    else:
-        return default
+    return default
