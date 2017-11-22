@@ -17,6 +17,7 @@
 #
 
 import datetime
+import json
 import logging
 import os
 import random
@@ -70,9 +71,9 @@ def get_uptime():
 def get_loadavg(core):
     """ Return system load average for last minutes, 5 minutes, 15 minutes
     """
-    system_load1 = core.get_last_metric_value('system_load1', None, 0.0)
-    system_load5 = core.get_last_metric_value('system_load5', None, 0.0)
-    system_load15 = core.get_last_metric_value('system_load15', None, 0.0)
+    system_load1 = core.get_last_metric_value('system_load1', '', 0.0)
+    system_load5 = core.get_last_metric_value('system_load5', '', 0.0)
+    system_load15 = core.get_last_metric_value('system_load15', '', 0.0)
 
     return [system_load1, system_load5, system_load15]
 
@@ -631,7 +632,7 @@ def pull_raw_metric(core, name):
         section "metric.pull.$NAME.":
 
         * url: where to fetch the metric [mandatory]
-        * item: item to add on your metric [default: None - no item]
+        * item: item to add on your metric [default: '' - no item]
         * interval: retrive the metric every interval seconds [default: 10s]
         * username: username used for basic authentication [default: no auth]
         * password: password used for basic authentication [default: ""]
@@ -660,8 +661,8 @@ def pull_raw_metric(core, name):
                 'measurement': name,
                 'value': value,
             }
-            if metric_config.get('item') is not None:
-                metric['item'] = metric_config.get('item')
+            if metric_config.get('item', ''):
+                metric['item'] = metric_config.get('item', '')
             core.emit_metric(metric)
 
 
@@ -701,3 +702,11 @@ def windows_telegraf_path(default="telegraf"):
     if os.path.exists(telegraf):
         return telegraf
     return default
+
+
+class JSONEncoder(json.JSONEncoder):
+
+    def default(self, o):  # pylint: disable=method-hidden
+        if isinstance(o, set):
+            return list(o)
+        return super().default(o)

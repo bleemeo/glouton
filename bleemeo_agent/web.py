@@ -74,11 +74,12 @@ def _gather_checks_info():
             else:
                 check_count_critical += 1
             threshold = app.core.get_threshold(
-                metric['measurement'], metric.get('item'),
+                metric['measurement'], metric.get('item', ''),
             )
 
             pretty_name = metric['measurement']
-            if metric.get('item') is not None:
+            assert metric.get('item', '') is not None
+            if metric.get('item', ''):
                 pretty_name = '%s for %s' % (pretty_name, metric['item'])
             checks.append({
                 'name': metric['measurement'],

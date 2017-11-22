@@ -23,7 +23,6 @@ import logging
 import os
 import time
 
-from bleemeo_agent.telegraf import services_sorted
 import bleemeo_agent.util
 
 
@@ -418,12 +417,14 @@ class Jmxtrans:
         for jmx_metric in jmx_metrics:
             new_name = '%s_%s' % (service_name, jmx_metric['name'])
 
+            assert instance is not None
             if instance is not None and type_names is not None:
                 item = instance + '_' + type_names
             elif type_names is not None:
                 item = type_names
             else:
                 item = instance
+            assert item is not None
 
             if jmx_metric.get('derive'):
                 new_value = self.get_derivate(
@@ -445,7 +446,7 @@ class Jmxtrans:
                 'instance': instance,
             }
 
-            if item is not None:
+            if item:
                 metric['item'] = item
 
             if jmx_metric.get('sum', False):
@@ -480,7 +481,7 @@ class Jmxtrans:
                 'instance': item,
             }
 
-            if item is not None:
+            if item:
                 metric['item'] = item
 
             if jmx_metric.get('ratio') is not None:
@@ -518,7 +519,8 @@ class Jmxtrans:
                     'instance': item,
                 }
 
-                if item is not None:
+                assert item is not None
+                if item:
                     metric['item'] = item
 
                 self.core.emit_metric(metric)
@@ -528,6 +530,7 @@ class Jmxtrans:
     def get_derivate(self, name, item, timestamp, value):
         """ Return derivate of a COUNTER (e.g. something that only goes upward)
         """
+        assert item is not None
         # self.lock is acquired by caller
         (old_timestamp, old_value) = self._raw_value.get(
             (name, item), (None, None)
@@ -610,7 +613,7 @@ class JmxConfig:
         if output_config['host'] == '0.0.0.0':
             output_config['host'] = '127.0.0.1'
 
-        for (key, service_info) in services_sorted(self.core.services.items()):
+        for (key, service_info) in sorted(self.core.services.items()):
             if not service_info.get('active', True):
                 continue
 

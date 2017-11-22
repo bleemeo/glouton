@@ -230,7 +230,7 @@ class Collectd:
             return
         match_dict = match.groupdict()
 
-        item = None
+        item = ''
         service = None
 
         if match_dict['plugin'] == 'cpu':
@@ -242,7 +242,7 @@ class Collectd:
                     'value': 100 - value,
                 })
             self.computed_metrics_pending.add(
-                ('cpu_other', None, None, timestamp)
+                ('cpu_other', '', '', timestamp)
             )
         elif match_dict['type'] == 'df_complex':
             name = 'disk_%s' % match_dict['type_instance']
@@ -258,7 +258,7 @@ class Collectd:
 
             item = path
             self.computed_metrics_pending.add(
-                ('disk_total', item, None, timestamp)
+                ('disk_total', item, '', timestamp)
             )
         elif match_dict['plugin'] == 'disk':
             if match_dict['type_instance'] == 'io_time':
@@ -332,7 +332,7 @@ class Collectd:
         elif match_dict['plugin'] == 'memory':
             name = 'mem_%s' % match_dict['type_instance']
             self.computed_metrics_pending.add(
-                ('mem_total', None, None, timestamp)
+                ('mem_total', '', '', timestamp)
             )
         elif (match_dict['plugin'] == 'processes'
               and match_dict['type'] == 'fork_rate'):
@@ -341,13 +341,13 @@ class Collectd:
               and match_dict['type'] == 'ps_state'):
             name = 'process_status_%s' % match_dict['type_instance']
             self.computed_metrics_pending.add(
-                ('process_total', None, None, timestamp))
+                ('process_total', '', '', timestamp))
         elif match_dict['plugin'] == 'swap' and match_dict['type'] == 'swap':
             if not self.core.last_facts.get('swap_present', False):
                 return
             name = 'swap_%s' % match_dict['type_instance']
             self.computed_metrics_pending.add(
-                ('swap_total', None, None, timestamp)
+                ('swap_total', '', '', timestamp)
             )
         elif (match_dict['plugin'] == 'swap'
               and match_dict['type'] == 'swap_io'):
@@ -364,7 +364,7 @@ class Collectd:
 
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
-                item = None
+                item = ''
             service = 'apache'
         elif (match_dict['plugin'] == 'mysql'
               and match_dict['plugin_instance'].startswith('bleemeo-')):
@@ -379,7 +379,7 @@ class Collectd:
 
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
-                item = None
+                item = ''
 
             service = 'mysql'
         elif (match_dict['plugin'] == 'postgresql'
@@ -387,7 +387,7 @@ class Collectd:
             name = 'postgresql_' + match_dict['type_instance']
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
-                item = None
+                item = ''
             service = 'postgresql'
         elif (match_dict['plugin'] == 'redis'
               and match_dict['plugin_instance'].startswith('bleemeo-')):
@@ -399,7 +399,7 @@ class Collectd:
 
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
-                item = None
+                item = ''
 
             service = 'redis'
         elif (match_dict['plugin'] == 'memcached'
@@ -415,7 +415,7 @@ class Collectd:
 
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
-                item = None
+                item = ''
 
             service = 'memcached'
         elif (match_dict['plugin'] == 'ntpd'
@@ -450,7 +450,7 @@ class Collectd:
             service = 'openldap'
             item = match_dict['plugin_instance'].replace('bleemeo-', '')
             if item == 'None':
-                item = None
+                item = ''
             name = 'openldap_' + match_dict['type']
 
             if match_dict['type_instance']:
@@ -505,7 +505,7 @@ class Collectd:
         }
         if service is not None:
             metric['service'] = service
-        if item is not None:
+        if item:
             metric['item'] = item
 
         self.core.emit_metric(metric)
@@ -530,6 +530,8 @@ class Collectd:
         processed = set()
         for entry in self.computed_metrics_pending:
             (name, item, instance, timestamp) = entry
+            assert item is not None
+            assert instance is not None
             try:
                 self._compute_metric(name, item, instance, timestamp)
                 processed.add(entry)
@@ -558,6 +560,7 @@ class Collectd:
                   to compute, raise ComputationFail. We will never be
                   able to compute the requested value.
             """
+            assert searched_item is not None
             metric = self.core.get_last_metric(measurements, searched_item)
             if metric is None or metric['time'] < timestamp:
                 raise MissingMetric()
@@ -565,6 +568,7 @@ class Collectd:
                 raise ComputationFail()
             return metric['value']
 
+        assert item is not None
         service = None
 
         if name == 'disk_total':
@@ -584,9 +588,9 @@ class Collectd:
                 'value': used_perc,
             })
         elif name == 'cpu_other':
-            value = get_metric('cpu_used', None)
-            value -= get_metric('cpu_user', None)
-            value -= get_metric('cpu_system', None)
+            value = get_metric('cpu_used', '')
+            value -= get_metric('cpu_user', '')
+            value -= get_metric('cpu_system', '')
         elif name == 'mem_total':
             used = get_metric('mem_used', item)
             value = used
@@ -624,7 +628,7 @@ class Collectd:
             'time': timestamp,
             'value': value,
         }
-        if item is not None:
+        if item:
             metric['item'] = item
         if service is not None:
             metric['service'] = service
@@ -719,7 +723,7 @@ def _get_collectd_config(core):
             collectd_config += REDIS_COLLECTD_CONFIG % service_info
         # collectd could only monitor varnish on same host as collectd
         if (service_name == 'varnish'
-                and instance is None
+                and not instance
                 and core.config.get('collectd.docker_name') is None):
             collectd_config += VARNISH_COLLECTD_CONFIG % service_info
 

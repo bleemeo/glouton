@@ -308,13 +308,13 @@ def test_sanitize_service():
 
     # First check custom services
     service_info = {}
-    assert sanitize_service('test', None, service_info, False, core) is None
+    assert sanitize_service('test', '', service_info, False, core) is None
 
     service_info = {'check_type': 'nagios'}
-    assert sanitize_service('test', None, service_info, False, core) is None
+    assert sanitize_service('test', '', service_info, False, core) is None
 
     service_info = {'port': 'non-numeric'}
-    assert sanitize_service('test', None, service_info, False, core) is None
+    assert sanitize_service('test', '', service_info, False, core) is None
 
     service_info = {'port': 1234}
     wanted = {
@@ -322,11 +322,11 @@ def test_sanitize_service():
         'address': '127.0.0.1',
         'protocol': socket.IPPROTO_TCP
     }
-    assert sanitize_service('test', None, service_info, False, core) == wanted
+    assert sanitize_service('test', '', service_info, False, core) == wanted
 
     service_info = {'check_type': 'nagios', 'check_command': 'true'}
     wanted = service_info
-    assert sanitize_service('test', None, service_info, False, core) == wanted
+    assert sanitize_service('test', '', service_info, False, core) == wanted
 
     service_info = {'check_type': 'nagios', 'check_command': 'true', 'port': 1}
     wanted = {
@@ -336,21 +336,21 @@ def test_sanitize_service():
         'address': '127.0.0.1',
         'protocol': socket.IPPROTO_TCP
     }
-    assert sanitize_service('test', None, service_info, False, core) == wanted
+    assert sanitize_service('test', '', service_info, False, core) == wanted
 
     # discovered services are allowed to exists without service_info
     service_info = {}
-    assert sanitize_service('test', None, service_info, True, core) == {}
+    assert sanitize_service('test', '', service_info, True, core) == {}
 
 
 def test_apply_service_override():
     core = None
 
     services = {
-        ('apache', None): {'placeholder': 'apache'},
-        ('mysql', None): {'placeholder': 'mysql'},
+        ('apache', ''): {'placeholder': 'apache'},
+        ('mysql', ''): {'placeholder': 'mysql'},
         ('mysql', 'container-1'): {'placeholder': 'mysql2'},
-        ('memcached', None): {'address': '127.0.0.1', 'placeholder': 'memc'},
+        ('memcached', ''): {'address': '127.0.0.1', 'placeholder': 'memc'},
     }
 
     override = [
@@ -362,14 +362,14 @@ def test_apply_service_override():
     ]
 
     wanted = {
-        ('apache', None): {'placeholder': 'apache'},
-        ('mysql', None): {'placeholder': 'mysql', 'username': 'user1'},
+        ('apache', ''): {'placeholder': 'apache'},
+        ('mysql', ''): {'placeholder': 'mysql', 'username': 'user1'},
         ('mysql', 'container-1'): {
             'placeholder': 'mysql2',
             'username': 'user2'
         },
-        ('memcached', None): {'address': '10.1.1.2', 'placeholder': 'memc'},
-        ('mywebapp', None): {
+        ('memcached', ''): {'address': '10.1.1.2', 'placeholder': 'memc'},
+        ('mywebapp', ''): {
             'address': '127.0.0.1',
             'port': 8080,
             'protocol': socket.IPPROTO_TCP,

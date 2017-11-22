@@ -149,7 +149,7 @@ class InfluxDBConnector(threading.Thread):
             },
         }
 
-        if metric.get('item') is not None:
+        if metric.get('item'):
             influx_metric['tags']['item'] = metric['item']
         if metric.get('status') is not None:
             influx_metric['tags']['status'] = metric['status']

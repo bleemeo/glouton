@@ -460,7 +460,9 @@ def _apply_service_override(services, override_config, core):
         try:
             instance = service_info.pop('instance')
         except KeyError:
-            instance = None
+            instance = ''
+
+        assert instance is not None
 
         key = (service, instance)
         if key in services:
@@ -477,8 +479,9 @@ def _apply_service_override(services, override_config, core):
 
 def _sanitize_service(
         name, instance, service_info, is_discovered_service, core):
+    assert instance is not None
     if 'port' in service_info and service_info['port'] is not None:
-        if instance is None:
+        if not instance:
             service_info.setdefault('address', '127.0.0.1')
         elif 'address' not in service_info:
             service_info.setdefault(
@@ -537,11 +540,11 @@ def _purge_services(
     )
     for service_key in no_longer_running:
         (service_name, instance) = service_key
-        if instance is not None:
+        if instance:
             # Don't process container here
             continue
         exe_path = new_discovered_services[service_key].get('exe_path')
-        if instance is None and exe_path and not os.path.exists(exe_path):
+        if not instance and exe_path and not os.path.exists(exe_path):
             # Binary for service no longer exists. It has been uninstalled.
             new_discovered_services[service_key]['active'] = False
             logging.info(
@@ -715,13 +718,16 @@ class State:
     def __init__(self, filename):
         self.filename = filename
         self._content = {}
-        self.reload()
         self._write_lock = threading.RLock()
+        self.reload()
 
     def reload(self):
-        if os.path.exists(self.filename):
-            with open(self.filename) as state_file:
-                self._content = json.load(state_file)
+        with self._write_lock:
+            if os.path.exists(self.filename):
+                with open(self.filename) as state_file:
+                    self._content = json.load(state_file)
+            else:
+                self._content = {}
 
     def save(self):
         with self._write_lock:
@@ -730,7 +736,11 @@ class State:
                 open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
                 fileno = os.open(self.filename + '.tmp', open_flags, 0o600)
                 with os.fdopen(fileno, 'w') as state_file:
-                    json.dump(self._content, state_file)
+                    json.dump(
+                        self._content,
+                        state_file,
+                        cls=bleemeo_agent.util.JSONEncoder,
+                    )
                     state_file.flush()
                     os.fsync(state_file.fileno())
                 if os.name == 'nt':
@@ -869,13 +879,9 @@ class Core:
 
         self._sentry_setup()
         self.thresholds = {
-            (label, None): value
+            (label, ''): value
             for (label, value) in self.config.get('thresholds', {}).items()
         }
-        bleemeo_agent.config.merge_dict(
-            self.thresholds,
-            self.state.get_complex_dict('thresholds', {}),
-        )
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
         )
@@ -1099,12 +1105,10 @@ class Core:
             and returns the result.
         """
 
-        self.state.set_complex_dict('thresholds', state_threshold)
-
         old_thresholds = self.thresholds
 
         new_thresholds = {
-            (label, None): value
+            (label, ''): value
             for (label, value) in self.config.get('thresholds', {}).items()
         }
         bleemeo_agent.config.merge_dict(
@@ -1133,6 +1137,7 @@ class Core:
             )
 
     def run(self):
+        # pylint: disable=too-many-branches
         if not self._init():
             return
 
@@ -1148,10 +1153,32 @@ class Core:
         try:
             self.setup_signal()
             self._docker_connect()
+
+            self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
+            if self.config.get('bleemeo.enabled', True):
+                if bleemeo_agent.bleemeo is None:
+                    logging.warning(
+                        'Missing dependency (paho-mqtt), '
+                        'can not start Bleemeo connector'
+                    )
+                else:
+                    self.bleemeo_connector = (
+                        bleemeo_agent.bleemeo.BleemeoConnector(self)
+                    )
+            if self.config.get('influxdb.enabled', False):
+                if bleemeo_agent.influxdb is None:
+                    logging.warning(
+                        'Missing dependency (influxdb), '
+                        'can not start InfluxDB connector'
+                    )
+                else:
+                    self.influx_connector = (
+                        bleemeo_agent.influxdb.InfluxDBConnector(self))
+
+            self.schedule_tasks()
             self.start_threads()
             if self.is_terminating.is_set():
                 return
-            self.schedule_tasks()
             try:
                 self._scheduler.start()
                 # This loop is break by KeyboardInterrupt (ctrl+c or SIGTERM).
@@ -1184,6 +1211,8 @@ class Core:
             self._trigger_discovery = True
             self._trigger_updates_count = True
             self._trigger_facts = True
+            if self.bleemeo_connector:
+                self.bleemeo_connector.trigger_full_sync = True
 
         if not self.run_as_windows_service:
             # Windows service don't use signal to shutdown
@@ -1298,8 +1327,6 @@ class Core:
         self.update_discovery(first_run=True)
 
     def start_threads(self):
-
-        self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
         self.graphite_server.start()
         self.graphite_server.initialization_done.wait(5)
         if not self.graphite_server.listener_up:
@@ -1307,27 +1334,11 @@ class Core:
             self.is_terminating.set()
             return
 
-        if self.config.get('bleemeo.enabled', True):
-            if bleemeo_agent.bleemeo is None:
-                logging.warning(
-                    'Missing dependency (paho-mqtt), '
-                    'can not start Bleemeo connector'
-                )
-            else:
-                self.bleemeo_connector = (
-                    bleemeo_agent.bleemeo.BleemeoConnector(self))
-                self.bleemeo_connector.start()
+        if self.bleemeo_connector:
+            self.bleemeo_connector.start()
 
-        if self.config.get('influxdb.enabled', False):
-            if bleemeo_agent.influxdb is None:
-                logging.warning(
-                    'Missing dependency (influxdb), '
-                    'can not start InfluxDB connector'
-                )
-            else:
-                self.influx_connector = (
-                    bleemeo_agent.influxdb.InfluxDBConnector(self))
-                self.influx_connector.start()
+        if self.influx_connector:
+            self.influx_connector.start()
 
         if self.config.get('web.enabled', True):
             if bleemeo_agent.web is None:
@@ -1440,6 +1451,7 @@ class Core:
         else:
             status = bleemeo_agent.checker.STATUS_UNKNOWN
 
+        assert name is not None
         metric = {
             'measurement': 'docker_container_health_status',
             'time': time.time(),
@@ -1528,7 +1540,8 @@ class Core:
         # it will be mark as still active from discovered_running_services.
         for service_key, service_info in new_discovered_services.items():
             (service_name, instance) = service_key
-            if instance is not None:
+            assert instance is not None
+            if instance:
                 service_info['address'] = None
                 service_info['active'] = False
 
@@ -1554,7 +1567,7 @@ class Core:
 
         for (key, service) in self.services.items():
             (service_name, instance) = key
-            if instance is None:
+            if not instance:
                 name = service_name
             else:
                 name = '%s (%s)' % (service_name, instance)
@@ -1634,6 +1647,13 @@ class Core:
                 )
                 del service_info['extra_ports']
 
+        # absence of item is now '' instead of None (like Bleemeo API)
+        self.discovered_services = {
+            (service_name, item if item else ''): value
+            for ((service_name, item), value)
+            in self.discovered_services.items()
+        }
+
     def _get_processes_map(self):
         """ Return a mapping from PID to name and container in which
             process is running.
@@ -1655,7 +1675,7 @@ class Core:
             for process in bleemeo_agent.util.get_top_info(self)['processes']:
                 processes[process['pid']] = {
                     'cmdline': process['cmdline'],
-                    'instance': None,
+                    'instance': '',
                     'exe': process['exe'],
                 }
 
@@ -1792,8 +1812,9 @@ class Core:
     def _discovery_fill_address_and_ports(
             self, service_info, instance, ports):
 
+        assert instance is not None
         service_name = service_info['service']
-        if instance is None:
+        if not instance:
             default_address = '127.0.0.1'
         else:
             default_address = self.get_docker_container_address(instance)
@@ -1867,7 +1888,8 @@ class Core:
 
                 service_info['active'] = True
 
-                if instance is None:
+                assert instance is not None
+                if not instance:
                     ports = netstat_info.get(pid, {})
                 else:
                     ports = self.get_docker_ports(instance)
@@ -1906,7 +1928,8 @@ class Core:
         mysql_user = None
         mysql_password = None
 
-        if instance is None:
+        assert instance is not None
+        if not instance:
             # grab maintenace password from debian.cnf
             try:
                 debian_cnf_raw = subprocess.check_output(
@@ -1943,7 +1966,8 @@ class Core:
         user = None
         password = None
 
-        if instance is not None:
+        assert instance is not None
+        if instance:
             # Only know to extract user/password from Docker container
             container_info = self.docker_client.inspect_container(instance)
             for env in container_info['Config']['Env']:
@@ -2162,7 +2186,8 @@ class Core:
     def _store_last_value(self, metric):
         """ Store the metric in self.last_matrics, replacing the previous value
         """
-        item = metric.get('item')
+        item = metric.get('item', '')
+        assert item is not None
         measurement = metric['measurement']
         self.last_metrics[(measurement, item)] = metric
 
@@ -2171,6 +2196,10 @@ class Core:
         """
         if metric.get('status_of') is None and not no_emit:
             metric = self.check_threshold(metric, soft_status)
+
+        assert metric.get('item', '') is not None
+        assert metric.get('instance', '') is not None
+        assert metric.get('container', '') is not None
 
         self._store_last_value(metric)
 
@@ -2185,7 +2214,7 @@ class Core:
     def update_last_report(self):
         self.last_report = datetime.datetime.now()
 
-    def get_threshold(self, metric_name, item=None, thresholds=None):
+    def get_threshold(self, metric_name, item='', thresholds=None):
         """ Get threshold definition for given metric
 
             Return None if no threshold is defined
@@ -2193,6 +2222,8 @@ class Core:
             If thresholds is not None, use it as definition of thresholds.
             If it's None, use self.thresholds
         """
+
+        assert item is not None
         if thresholds is None:
             threshold = self.thresholds.get((metric_name, item))
         else:
@@ -2225,7 +2256,7 @@ class Core:
             and unknown respectively.
         """
         threshold = self.get_threshold(
-            metric['measurement'], metric.get('item')
+            metric['measurement'], metric.get('item', '')
         )
 
         if threshold is None:
@@ -2258,7 +2289,7 @@ class Core:
             soft_status = 'ok'
 
         last_metric = self.get_last_metric(
-            metric['measurement'], metric.get('item')
+            metric['measurement'], metric.get('item', '')
         )
 
         if last_metric is None or last_metric.get('status') is None:
@@ -2296,8 +2327,10 @@ class Core:
 
             status_value = 2.0
 
+        for (_, i) in self.metrics_unit:
+            assert i is not None
         (unit, unit_text) = self.metrics_unit.get(
-            (metric['measurement'], metric.get('item')),
+            (metric['measurement'], metric.get('item', '')),
             (None, None),
         )
 
@@ -2339,11 +2372,13 @@ class Core:
             Return the new status
         """
 
-        key = (metric['measurement'], metric.get('item'))
+        key = (metric['measurement'], metric.get('item', ''))
         (warning_since, critical_since) = self._soft_status_since.get(
             key,
             (None, None),
         )
+        for (_, i) in self._soft_status_since:
+            assert i is not None
 
         # Make sure time didn't jump backward. If it does jump
         # backward reset the since timer.
@@ -2404,6 +2439,7 @@ class Core:
 
             None is returned if the metric is not found
         """
+        assert item is not None
         return self.last_metrics.get((name, item), None)
 
     def get_last_metric_value(self, name, item, default=None):
@@ -2411,6 +2447,7 @@ class Core:
 
             Return default if metric is not found.
         """
+        assert item is not None
         metric = self.get_last_metric(name, item)
         if metric is not None:
             return metric['value']

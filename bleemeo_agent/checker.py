@@ -187,32 +187,37 @@ class Check:
         self.port = service_info.get('port')
         self.protocol = service_info.get('protocol')
 
-        self.service_info = CHECKS_INFO.get(service_name, {})
+        self.check_info = CHECKS_INFO.get(service_name, {})
 
         if self.port is not None and self.protocol == socket.IPPROTO_TCP:
-            self.service_info.setdefault('check_type', 'tcp')
+            self.check_info.setdefault('check_type', 'tcp')
 
-        self.service_info.update(service_info)
+        self.service_info = service_info
+        self.check_info.update(service_info)
 
-        if (service_info.get('password') is None
+        if (self.check_info.get('password') is None
                 and service_name in ('mysql', 'postgresql')):
             # For those check, if password is not set the dedicated check
             # will fail.
-            self.service_info['check_type'] = 'tcp'
+            self.check_info['check_type'] = 'tcp'
 
         self.service = service_name
         self.instance = instance
         self.core = core
 
-        self.extra_ports = self.service_info.get('netstat_ports', {})
+        self.extra_ports = self.check_info.get('netstat_ports', {})
+        if self.instance:
+            self.display_name = '%s (on %s)' % (self.service, self.instance)
+        else:
+            self.display_name = '%s' % self.service
 
-        if not self.service_info.get('check_type') and not self.extra_ports:
+        if not self.check_info.get('check_type') and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
+        assert self.instance is not None
         logging.debug(
-            'Created new check for service %s (on %s)',
-            self.service,
-            self.instance,
+            'Created new check for service %s',
+            self.display_name
         )
 
         self.tcp_sockets = self._initialize_tcp_sockets()
@@ -237,7 +242,7 @@ class Check:
             port = int(port_protocol.split('/')[0])
             if port == self.port:
                 continue
-            if self.service_info.get('ignore_high_port') and port > 32000:
+            if self.check_info.get('ignore_high_port') and port > 32000:
                 continue
             tcp_sockets[(address, port)] = None
 
@@ -246,7 +251,7 @@ class Check:
     def open_sockets(self):
         """ Try to open all closed sockets
         """
-        if self.service_info.get('disable_persistent_socket'):
+        if self.check_info.get('disable_persistent_socket'):
             return
 
         run_check = False
@@ -265,8 +270,8 @@ class Check:
             except socket.error:
                 tcp_socket.close()
                 logging.debug(
-                    'check %s (on %s): failed to open socket to %s:%s',
-                    self.service, self.instance, address, port
+                    'check %s: failed to open socket to %s:%s',
+                    self.display_name, address, port
                 )
                 run_check = True
 
@@ -298,8 +303,8 @@ class Check:
             if buffer == b'':
                 (address, port) = sockets[sock]
                 logging.debug(
-                    'check %s (on %s): connection to %s:%s closed',
-                    self.service, self.instance, address, port
+                    'check %s: connection to %s:%s closed',
+                    self.display_name, address, port
                 )
                 sock.close()
                 self.tcp_sockets[(address, port)] = None
@@ -310,6 +315,7 @@ class Check:
 
     def run_check(self):
         # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
         now = time.time()
 
         key = (self.service, self.instance)
@@ -323,19 +329,19 @@ class Check:
             (return_code, output) = (
                 STATUS_CRITICAL, 'Container stopped: connection refused'
             )
-        elif self.service_info.get('check_type') == 'nagios':
+        elif self.check_info.get('check_type') == 'nagios':
             (return_code, output) = self.check_nagios()
-        elif self.service_info.get('check_type') == 'tcp':
+        elif self.check_info.get('check_type') == 'tcp':
             (return_code, output) = self.check_tcp()
-        elif self.service_info.get('check_type') == 'http':
+        elif self.check_info.get('check_type') == 'http':
             (return_code, output) = self.check_http()
-        elif self.service_info.get('check_type') == 'https':
+        elif self.check_info.get('check_type') == 'https':
             (return_code, output) = self.check_http(tls=True)
-        elif self.service_info.get('check_type') == 'imap':
+        elif self.check_info.get('check_type') == 'imap':
             (return_code, output) = self.check_imap()
-        elif self.service_info.get('check_type') == 'smtp':
+        elif self.check_info.get('check_type') == 'smtp':
             (return_code, output) = self.check_smtp()
-        elif self.service_info.get('check_type') == 'ntp':
+        elif self.check_info.get('check_type') == 'ntp':
             (return_code, output) = self.check_ntp()
         else:
             (return_code, output) = (STATUS_CHECK_NOT_RUN, '')
@@ -362,15 +368,21 @@ class Check:
 
         if return_code == STATUS_CHECK_NOT_RUN:
             logging.debug(
-                'check %s (on %s): no check available. Not metric sent',
-                self.service, self.instance,
+                'check %s: no check available. Not metric sent',
+                self.display_name,
             )
             return
 
-        logging.debug(
-            'check %s (on %s): return code is %s (output=%s)',
-            self.service, self.instance, return_code, output,
-        )
+        if self.instance:
+            logging.debug(
+                'check %s: return code is %s (output=%s)',
+                self.display_name, return_code, output,
+            )
+        else:
+            logging.debug(
+                'check %s: return code is %s (output=%s)',
+                self.service, return_code, output,
+            )
 
         metric = {
             'measurement': '%s_status' % self.service,
@@ -380,7 +392,8 @@ class Check:
             'value': float(return_code),
             'check_output': output,
         }
-        if self.instance is not None:
+        assert self.instance is not None
+        if self.instance:
             metric['item'] = self.instance
             metric['instance'] = self.instance
         self.core.emit_metric(metric)
@@ -403,7 +416,7 @@ class Check:
     def stop(self):
         """ Unschedule this check
         """
-        logging.debug('Stoping check %s (on %s)', self.service, self.instance)
+        logging.debug('Stoping check %s', self.display_name)
         self.core.unschedule_job(self.open_sockets_job)
         self.core.unschedule_job(self.current_job)
         for tcp_socket in self.tcp_sockets.values():
@@ -412,7 +425,7 @@ class Check:
 
     def check_nagios(self):
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
-            shlex.split(self.service_info['check_command']),
+            shlex.split(self.check_info['check_command']),
         )
 
         output = output.decode('utf-8', 'ignore').strip()
@@ -423,7 +436,7 @@ class Check:
 
     def check_tcp_recv(self, sock, start):
         received = ''
-        while not self.service_info['check_tcp_expect'] in received:
+        while not self.check_info['check_tcp_expect'] in received:
             try:
                 tmp = sock.recv(4096)
             except socket.timeout:
@@ -440,7 +453,7 @@ class Check:
                 break
             received += tmp.decode('utf8', 'ignore')
 
-        if self.service_info['check_tcp_expect'] not in received:
+        if self.check_info['check_tcp_expect'] not in received:
             if received == '':
                 return (STATUS_CRITICAL, 'No data received from host')
             return (
@@ -477,10 +490,10 @@ class Check:
         except socket.error:
             return (STATUS_CRITICAL, 'TCP port %d, Connection refused' % port)
 
-        if (self.service_info.get('check_tcp_send')
+        if (self.check_info.get('check_tcp_send')
                 and use_default):
             try:
-                sock.send(self.service_info['check_tcp_send'].encode('utf8'))
+                sock.send(self.check_info['check_tcp_send'].encode('utf8'))
             except socket.timeout:
                 return (
                     STATUS_CRITICAL,
@@ -492,7 +505,7 @@ class Check:
                     'TCP port %d, connection closed too early' % port
                 )
 
-        if (self.service_info.get('check_tcp_expect')
+        if (self.check_info.get('check_tcp_expect')
                 and use_default):
             return self.check_tcp_recv(sock, start)
 
@@ -510,7 +523,7 @@ class Check:
             base_url = 'http://%s:%s' % (self.address, self.port)
         url = urllib_parse.urljoin(
             base_url,
-            self.service_info.get('http_path', '/')
+            self.check_info.get('http_path', '/')
         )
         try:
             response = requests.get(
@@ -525,8 +538,8 @@ class Check:
         except requests.exceptions.RequestException:
             return (STATUS_CRITICAL, 'Connection refused')
 
-        if 'http_status_code' in self.service_info:
-            expected_code = int(self.service_info['http_status_code'])
+        if 'http_status_code' in self.check_info:
+            expected_code = int(self.check_info['http_status_code'])
         else:
             expected_code = None
 

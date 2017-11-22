@@ -171,25 +171,6 @@ def compare_version(current_version, wanted_version):
     return current_version >= wanted_version
 
 
-def services_sorted(services_items):
-    """ Sort core.services.items() result
-
-        Result is sorted by service name, then by instances
-    """
-    def sort_key(item):
-        """ Return a comparable couple (service_name, instance_name)
-
-            This is needed because instance could be None, and None is
-            not comparable to a string in Python 3
-        """
-        ((service_name, instance), _) = item
-
-        instance_name = '' if instance is None else instance
-        return (service_name, instance_name)
-
-    return sorted(services_items, key=sort_key)
-
-
 def telegraf_replace(value):
     """ telegraf replace some char before sending to graphite.
 
@@ -254,6 +235,7 @@ class Telegraf:
     def get_derivate(self, name, item, timestamp, value):
         """ Return derivate of a COUNTER (e.g. something that only goes upward)
         """
+        assert item is not None
         (old_timestamp, old_value) = self._raw_value.get(
             (name, item), (None, None)
         )
@@ -437,10 +419,10 @@ class Telegraf:
             self._check_computed_metrics()
         self.last_timestamp = timestamp
 
-        item = None
+        item = ''
         service = None
-        instance = None
-        container_name = None
+        instance = ''
+        container_name = ''
         derive = False
         no_emit = False
 
@@ -469,7 +451,7 @@ class Telegraf:
                     'value': 100 - value,
                 })
             self.computed_metrics_pending.add(
-                ('cpu_other', None, None, timestamp)
+                ('cpu_other', '', '', timestamp)
             )
         elif part[-2] == 'win_cpu':
             if part[2] != '_Total':
@@ -496,10 +478,10 @@ class Telegraf:
                     'value': 100 - value,
                 })
                 self.computed_metrics_pending.add(
-                    ('system_load1', None, None, timestamp)
+                    ('system_load1', '', '', timestamp)
                 )
             self.computed_metrics_pending.add(
-                ('cpu_other', None, None, timestamp)
+                ('cpu_other', '', '', timestamp)
             )
         elif part[-2] == 'disk':
             path = part[-3].replace('-', '/')
@@ -633,7 +615,7 @@ class Telegraf:
                 pass
             elif name in ('mem_total', 'mem_available'):
                 self.computed_metrics_pending.add(
-                    ('mem_used', None, None, timestamp)
+                    ('mem_used', '', '', timestamp)
                 )
             else:
                 return
@@ -658,7 +640,7 @@ class Telegraf:
                     'value': mem_used * 100. / self.core.total_memory_size,
                 })
                 self.computed_metrics_pending.add(
-                    ('mem_free', None, None, timestamp)
+                    ('mem_free', '', '', timestamp)
                 )
             elif name in (
                     'Standby_Cache_Reserve_Bytes',
@@ -666,7 +648,7 @@ class Telegraf:
                     'Standby_Cache_Core_Bytes'):
                 no_emit = True
                 self.computed_metrics_pending.add(
-                    ('mem_cached', None, None, timestamp)
+                    ('mem_cached', '', '', timestamp)
                 )
             else:
                 return
@@ -755,7 +737,7 @@ class Telegraf:
             elif name == 'Processor_Queue_Length':
                 no_emit = True
                 self.computed_metrics_pending.add(
-                    ('system_load1', None, None, timestamp)
+                    ('system_load1', '', '', timestamp)
                 )
             else:
                 return
@@ -818,7 +800,8 @@ class Telegraf:
             else:
                 return
 
-            if instance is None:
+            assert instance is not None
+            if not instance:
                 item = proxy_name
             else:
                 item = instance + '_' + proxy_name
@@ -976,7 +959,8 @@ class Telegraf:
             else:
                 return
 
-            if instance is None:
+            assert instance is not None
+            if not instance:
                 item = dbname
             else:
                 item = instance + '_' + dbname
@@ -1419,7 +1403,8 @@ class Telegraf:
         if name is None:
             return
 
-        if item is None and service is not None:
+        assert item is not None
+        if not item and service:
             item = instance
 
         if derive:
@@ -1434,7 +1419,7 @@ class Telegraf:
         if service is not None:
             metric['service'] = service
             metric['instance'] = instance
-        if item is not None:
+        if item:
             metric['item'] = item
         if container_name is not None:
             metric['container'] = container_name
@@ -1462,6 +1447,8 @@ class Telegraf:
         new_item = set()
         for entry in self.computed_metrics_pending:
             (name, item, instance, timestamp) = entry
+            assert item is not None
+            assert instance is not None
             try:
                 self._compute_metric(name, item, instance, timestamp, new_item)
                 processed.add(entry)
@@ -1496,6 +1483,7 @@ class Telegraf:
                   to compute, raise ComputationFail. We will never be
                   able to compute the requested value.
             """
+            assert searched_item is not None
             metric = self.core.get_last_metric(measurements, searched_item)
             if metric is None or metric['time'] < timestamp:
                 raise MissingMetric()
@@ -1503,6 +1491,7 @@ class Telegraf:
                 raise ComputationFail()
             return metric['value']
 
+        assert item is not None
         service = None
 
         if name == 'disk_total' and os.name == 'nt':
@@ -1519,9 +1508,9 @@ class Telegraf:
                 'value': disk_used,
             })
         elif name == 'cpu_other':
-            value = get_metric('cpu_used', None)
-            value -= get_metric('cpu_user', None)
-            value -= get_metric('cpu_system', None)
+            value = get_metric('cpu_used', '')
+            value -= get_metric('cpu_user', '')
+            value -= get_metric('cpu_system', '')
         elif name == 'mem_free' and os.name == 'nt':
             used = get_metric('mem_used', item)
             cached = get_metric('mem_cached', item)
@@ -1534,11 +1523,11 @@ class Telegraf:
                     'Standby_Cache_Core_Bytes'):
                 value += get_metric(sub_type, item)
             new_item.add(
-                ('mem_free', None, None, timestamp)
+                ('mem_free', '', None, timestamp)
             )
         elif name == 'mem_used':
-            total = get_metric('mem_total', None)
-            value = total - get_metric('mem_available', None)
+            total = get_metric('mem_total', '')
+            value = total - get_metric('mem_available', '')
             self.core.emit_metric({
                 'measurement': 'mem_used_perc',
                 'time': timestamp,
@@ -1553,8 +1542,8 @@ class Telegraf:
             # Number of runnable tasks will be "Processor Queue Length", but
             # this probably does not include task waiting for disk IO.
 
-            cpu_used = get_metric('cpu_used', None)
-            runq = get_metric('Processor_Queue_Length', None)
+            cpu_used = get_metric('cpu_used', '')
+            runq = get_metric('Processor_Queue_Length', '')
             core_count = psutil.cpu_count()
             if core_count is None:
                 core_count = 1
@@ -1585,7 +1574,7 @@ class Telegraf:
                 'service': service,
                 'value': value / 10.,  # convert ms/s in %
             }
-            if item is not None:
+            if item:
                 metric['item'] = item
 
             self.core.emit_metric(metric)
@@ -1607,7 +1596,7 @@ class Telegraf:
             'time': timestamp,
             'value': value,
         }
-        if item is not None:
+        if item:
             metric['item'] = item
         if service is not None:
             metric['service'] = service
@@ -1641,15 +1630,16 @@ def _get_telegraf_config(core):
                 )):
             telegraf_config += DOCKER_TELEGRAF_CONFIG
 
-    for (key, service_info) in services_sorted(core.services.items()):
+    for (key, service_info) in sorted(core.services.items()):
         if not service_info.get('active', True):
             continue
         (service_name, instance) = key
+        assert instance is not None
 
         service_info = core.services[key].copy()
         service_info['instance'] = instance
 
-        if service_info.get('address') is None and instance is not None:
+        if service_info.get('address') is None and instance:
             # Address is None if this check is associated with a stopped
             # container. In such case, no metrics could be gathered.
             continue
