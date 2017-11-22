@@ -91,47 +91,105 @@ class ApiError(Exception):
         self.response = response
 
 
-def api_iterator(url, params, auth, headers=None):
-    """ Call Bleemeo API on a list endpoints and return a iterator
-        that request all pages
+class BleemeoAPI:
+    """ class to handle communication with Bleemeo API
     """
-    params = params.copy()
-    if 'page_size' not in params:
-        params['page_size'] = 100
 
-    response = requests.get(
-        url,
-        params=params,
-        auth=auth,
-        headers=headers,
-        timeout=REQUESTS_TIMEOUT,
-    )
+    def __init__(self, base_url, auth, user_agent):
+        self.auth = auth
+        self.user_agent = user_agent
+        self.base_url = base_url
+        self.requests_session = requests.Session()
+        self._jwt_token = None
 
-    if response.status_code != 200:
-        raise ApiError(response)
-
-    data = response.json()
-    if isinstance(data, list):
-        # Old API without pagination
-        for item in data:
-            yield item
-
-        return
-
-    for item in data['results']:
-        yield item
-
-    while data['next']:
-        response = requests.get(
-            data['next'], auth=auth, headers=headers, timeout=REQUESTS_TIMEOUT,
+    def _get_jwt(self):
+        url = urllib_parse.urljoin(self.base_url, 'v1/jwt-auth/')
+        response = self.requests_session.post(
+            url,
+            headers={
+                'X-Requested-With': 'XMLHttpRequest',
+                'Content-type': 'application/json',
+            },
+            data=json.dumps({
+                'username': self.auth[0],
+                'password': self.auth[1],
+            }),
+            timeout=10,
         )
-
         if response.status_code != 200:
-            raise ApiError(response)
+            logging.debug(
+                'Failed to retrieve JWT, status=%s, content=%s',
+                response.status_code,
+                response.text,
+            )
+            return None
+        return response.json()['token']
 
-        data = response.json()
-        for item in data['results']:
-            yield item
+    def api_call(self, url, method='get', params=None, data=None):
+        headers = {
+            'X-Requested-With': 'XMLHttpRequest',
+            'User-Agent': self.user_agent,
+        }
+        if data:
+            headers['Content-type'] = 'application/json'
+
+        url = urllib_parse.urljoin(self.base_url, url)
+
+        first_call = True
+        while True:
+            if self._jwt_token is None:
+                self._jwt_token = self._get_jwt()
+            headers['Authorization'] = 'JWT %s' % self._jwt_token
+            response = self.requests_session.request(
+                method=method,
+                url=url,
+                headers=headers,
+                params=params,
+                data=data,
+                timeout=REQUESTS_TIMEOUT,
+            )
+            if response.status_code == 401 and first_call:
+                # If authentication failed for the first call,
+                # retry immediatly
+                logging.debug('JWT token expired, retry authentication')
+                self._jwt_token = None
+                first_call = False
+                continue
+            first_call = False
+
+            return response
+
+    def api_iterator(self, url, params=None):
+        """ Call Bleemeo API on a list endpoints and return a iterator
+            that request all pages
+        """
+        if params is None:
+            params = {}
+        else:
+            params = params.copy()
+
+        if 'page_size' not in params:
+            params['page_size'] = 100
+
+        data = {'next': url}
+        while data['next']:
+            response = self.api_call(
+                data['next'],
+                params=params,
+            )
+
+            if response.status_code == 404:
+                break
+
+            if response.status_code != 200:
+                raise ApiError(response)
+
+            # After first call, params are present in URL data['next']
+            params = None
+
+            data = response.json()
+            for item in data['results']:
+                yield item
 
 
 def convert_docker_date(input_date):
@@ -793,6 +851,8 @@ class BleemeoConnector(threading.Thread):
         last_sync = 0
         bleemeo_cache = self._bleemeo_cache.copy()
 
+        bleemeo_api = None
+
         last_metrics_count = 0
 
         while not self.core.is_terminating.is_set():
@@ -802,6 +862,13 @@ class BleemeoConnector(threading.Thread):
             if self.agent_uuid is None:
                 self.core.is_terminating.wait(15)
                 continue
+
+            if bleemeo_api is None:
+                bleemeo_api = BleemeoAPI(
+                    self.bleemeo_base_url,
+                    (self.agent_username, self.agent_password),
+                    self.core.http_user_agent,
+                )
 
             if self.trigger_full_sync:
                 next_full_sync = 0
@@ -824,7 +891,7 @@ class BleemeoConnector(threading.Thread):
                         next_full_sync <= clock_now or
                         last_sync <= self.last_containers_removed
                     )
-                    self._sync_services(bleemeo_cache, full)
+                    self._sync_services(bleemeo_cache, bleemeo_api, full)
                     # Metrics registration may need services to be synced.
                     # For a pass of metric registrations
                     metrics_sync = True
@@ -841,7 +908,7 @@ class BleemeoConnector(threading.Thread):
                     last_sync <= self.core.last_discovery_update):
                 try:
                     full = (next_full_sync <= clock_now)
-                    self._sync_containers(bleemeo_cache, full)
+                    self._sync_containers(bleemeo_cache, bleemeo_api, full)
                     # Metrics registration may need containers to be synced.
                     # For a pass of metric registrations
                     metrics_sync = True
@@ -864,7 +931,7 @@ class BleemeoConnector(threading.Thread):
                         next_full_sync <= clock_now or
                         last_sync <= self.last_containers_removed
                     )
-                    self._sync_metrics(bleemeo_cache, full)
+                    self._sync_metrics(bleemeo_cache, bleemeo_api, full)
                     last_metrics_count = metrics_count
                     sync_run = True
                 except ApiError as exc:
@@ -878,7 +945,7 @@ class BleemeoConnector(threading.Thread):
             if (next_full_sync < clock_now or
                     last_sync < self.core.last_facts_update):
                 try:
-                    self._sync_facts(bleemeo_cache)
+                    self._sync_facts(bleemeo_cache, bleemeo_api)
                     sync_run = True
                 except ApiError as exc:
                     logging.info(
@@ -890,7 +957,7 @@ class BleemeoConnector(threading.Thread):
 
             if next_full_sync < clock_now:
                 try:
-                    self._sync_tags(bleemeo_cache)
+                    self._sync_tags(bleemeo_cache, bleemeo_api)
                     sync_run = True
                 except ApiError as exc:
                     logging.info(
@@ -917,18 +984,18 @@ class BleemeoConnector(threading.Thread):
 
             self.core.is_terminating.wait(15)
 
-    def _sync_metrics(self, bleemeo_cache, full=True):
+    def _sync_metrics(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
         """ Synchronize metrics with Bleemeo SaaS
         """
         logging.debug('Synchronize metrics (full=%s)', full)
-        metric_url = urllib_parse.urljoin(self.bleemeo_base_url, '/v1/metric/')
+        metric_url = 'v1/metric/'
 
         # Step 1: refresh cache from API
         if full:
-            api_metrics = api_iterator(
+            api_metrics = bleemeo_api.api_iterator(
                 metric_url,
                 params={
                     'agent': self.agent_uuid,
@@ -938,8 +1005,6 @@ class BleemeoConnector(threading.Thread):
                         ',threshold_high_warning,threshold_high_critical'
                         ',service,container,status_of',
                 },
-                auth=(self.agent_username, self.agent_password),
-                headers={'User-Agent': self.core.http_user_agent},
             )
 
             old_metrics = bleemeo_cache.metrics
@@ -1037,8 +1102,9 @@ class BleemeoConnector(threading.Thread):
             if reg_req.item:
                 payload['item'] = reg_req.item
 
-            response = requests.post(
+            response = bleemeo_api.api_call(
                 metric_url,
+                method='post',
                 data=json.dumps(payload),
                 params={
                     'fields': 'id,label,item,service,container,'
@@ -1046,13 +1112,6 @@ class BleemeoConnector(threading.Thread):
                               'threshold_high_warning,threshold_high_critical,'
                               'unit,unit_text,agent,status_of,service',
                 },
-                auth=(self.agent_username, self.agent_password),
-                headers={
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-type': 'application/json',
-                    'User-Agent': self.core.http_user_agent,
-                },
-                timeout=REQUESTS_TIMEOUT,
             )
             if 400 <= response.status_code < 500:
                 logging.debug(
@@ -1123,27 +1182,24 @@ class BleemeoConnector(threading.Thread):
         if last_error is not None:
             raise last_error  # pylint: disable=raising-bad-type
 
-    def _sync_services(self, bleemeo_cache, full=True):
+    def _sync_services(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
         """ Synchronize services with Bleemeo SaaS
         """
         logging.debug('Synchronize services (full=%s)', full)
-        base_url = self.bleemeo_base_url
-        service_url = urllib_parse.urljoin(base_url, '/v1/service/')
+        service_url = 'v1/service/'
 
         # Step 1: refresh cache from API
         if full:
-            api_services = api_iterator(
+            api_services = bleemeo_api.api_iterator(
                 service_url,
                 params={
                     'agent': self.agent_uuid,
                     'fields': 'id,label,instance,listen_addresses,exe_path,'
                               'stack,active',
                 },
-                auth=(self.agent_username, self.agent_password),
-                headers={'User-Agent': self.core.http_user_agent},
             )
 
             old_services = bleemeo_cache.services
@@ -1205,12 +1261,12 @@ class BleemeoConnector(threading.Thread):
                 payload['instance'] = instance
 
             if service is not None:
-                method = requests.put
+                method = 'put'
                 action_text = 'updated'
                 url = service_url + str(service.uuid) + '/'
                 expected_code = 200
             else:
-                method = requests.post
+                method = 'post'
                 action_text = 'registrered'
                 url = service_url
                 expected_code = 201
@@ -1220,20 +1276,14 @@ class BleemeoConnector(threading.Thread):
                 'agent': self.agent_uuid,
             })
 
-            response = method(
+            response = bleemeo_api.api_call(
                 url,
+                method,
                 data=json.dumps(payload),
-                auth=(self.agent_username, self.agent_password),
                 params={
                     'fields': 'id,listen_addresses,label,exe_path,stack'
                               ',active,instance,account,agent'
                 },
-                headers={
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-type': 'application/json',
-                    'User-Agent': self.core.http_user_agent,
-                },
-                timeout=REQUESTS_TIMEOUT,
             )
             if response.status_code != expected_code:
                 raise ApiError(response.content)
@@ -1285,14 +1335,9 @@ class BleemeoConnector(threading.Thread):
         deleted_services_from_state = set(bleemeo_cache.services) - local_uuids
         for service_uuid in deleted_services_from_state:
             service = bleemeo_cache.services[service_uuid]
-            response = requests.delete(
+            response = bleemeo_api.api_call(
                 service_url + '%s/' % service_uuid,
-                auth=(self.agent_username, self.agent_password),
-                headers={
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'User-Agent': self.core.http_user_agent,
-                },
-                timeout=REQUESTS_TIMEOUT,
+                'delete',
             )
             if response.status_code not in (204, 404):
                 logging.debug(
@@ -1318,25 +1363,17 @@ class BleemeoConnector(threading.Thread):
                     service.label,
                 )
 
-    def _sync_tags(self, bleemeo_cache):
+    def _sync_tags(self, bleemeo_cache, bleemeo_api):
         """ Synchronize tags with Bleemeo API
         """
         logging.debug('Synchronize tags')
         tags = set(self.core.config.get('tags', []))
 
-        response = requests.patch(
-            urllib_parse.urljoin(
-                self.bleemeo_base_url, '/v1/agent/%s/' % self.agent_uuid
-            ),
+        response = bleemeo_api.api_call(
+            'v1/agent/%s/' % self.agent_uuid,
+            'patch',
             params={'fields': 'tags'},
             data=json.dumps({'tags': [{'name': x} for x in tags]}),
-            auth=(self.agent_username, self.agent_password),
-            headers={
-                'X-Requested-With': 'XMLHttpRequest',
-                'Content-type': 'application/json',
-                'User-Agent': self.core.http_user_agent,
-            },
-            timeout=REQUESTS_TIMEOUT,
         )
         if response.status_code > 400:
             raise ApiError(response)
@@ -1346,25 +1383,21 @@ class BleemeoConnector(threading.Thread):
             if not tag['is_automatic']:
                 bleemeo_cache.tags.append(tag['name'])
 
-    def _sync_containers(self, bleemeo_cache, full=True):
+    def _sync_containers(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-statements
         logging.debug('Synchronize containers (full=%s)', full)
-        container_url = urllib_parse.urljoin(
-            self.bleemeo_base_url, '/v1/container/',
-        )
+        container_url = 'v1/container/'
 
         # Step 1: refresh cache from API
         if full:
-            api_containers = api_iterator(
+            api_containers = bleemeo_api.api_iterator(
                 container_url,
                 params={
                     'agent': self.agent_uuid,
                     'fields': 'id,name,docker_inspect'
                 },
-                auth=(self.agent_username, self.agent_password),
-                headers={'User-Agent': self.core.http_user_agent},
             )
 
             bleemeo_cache.containers = {}
@@ -1396,11 +1429,11 @@ class BleemeoConnector(threading.Thread):
                 continue
 
             if container is None:
-                method = requests.post
+                method = 'post'
                 action_text = 'registered'
                 url = container_url
             else:
-                method = requests.put
+                method = 'put'
                 action_text = 'updated'
                 url = container_url + container.uuid + '/'
 
@@ -1432,17 +1465,11 @@ class BleemeoConnector(threading.Thread):
                 'docker_inspect': json.dumps(inspect),
             }
 
-            response = method(
+            response = bleemeo_api.api_call(
                 url,
+                method,
                 data=json.dumps(payload),
-                auth=(self.agent_username, self.agent_password),
                 params={'fields': ','.join(['id'] + list(payload.keys()))},
-                headers={
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-type': 'application/json',
-                    'User-Agent': self.core.http_user_agent,
-                },
-                timeout=REQUESTS_TIMEOUT,
             )
 
             if response.status_code not in (200, 201):
@@ -1475,14 +1502,9 @@ class BleemeoConnector(threading.Thread):
         for container_uuid in deleted_containers_from_state:
             container = bleemeo_cache.containers[container_uuid]
             url = container_url + container_uuid + '/'
-            response = requests.delete(
+            response = bleemeo_api.api_call(
                 url,
-                auth=(self.agent_username, self.agent_password),
-                headers={
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'User-Agent': self.core.http_user_agent,
-                },
-                timeout=REQUESTS_TIMEOUT,
+                'delete',
             )
             if response.status_code not in (204, 404):
                 logging.debug(
@@ -1507,25 +1529,19 @@ class BleemeoConnector(threading.Thread):
                     if value.container_name not in deleted_container_names
                 }
 
-    def _sync_facts(self, bleemeo_cache):
+    def _sync_facts(self, bleemeo_cache, bleemeo_api):
         # pylint: disable=too-many-locals
         logging.debug('Synchronize facts')
-        base_url = self.bleemeo_base_url
-        fact_url = urllib_parse.urljoin(base_url, '/v1/agentfact/')
+        fact_url = 'v1/agentfact/'
 
         if self.core.state.get('facts_uuid') is not None:
             # facts_uuid were used in older version of Agent
             self.core.state.delete('facts_uuid')
 
         # Step 1: refresh cache from API
-        api_facts = api_iterator(
+        api_facts = bleemeo_api.api_iterator(
             fact_url,
             params={'agent': self.agent_uuid, 'page_size': 100},
-            auth=(self.agent_username, self.agent_password),
-            headers={
-                'X-Requested-With': 'XMLHttpRequest',
-                'User-Agent': self.core.http_user_agent,
-            },
         )
 
         bleemeo_cache.facts = {}
@@ -1558,16 +1574,10 @@ class BleemeoConnector(threading.Thread):
                 'key': fact_name,
                 'value': str(value),
             }
-            response = requests.post(
+            response = bleemeo_api.api_call(
                 fact_url,
+                'post',
                 data=json.dumps(payload),
-                auth=(self.agent_username, self.agent_password),
-                headers={
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Content-type': 'application/json',
-                    'User-Agent': self.core.http_user_agent,
-                },
-                timeout=REQUESTS_TIMEOUT,
             )
             if response.status_code == 201:
                 logging.debug(
@@ -1601,14 +1611,9 @@ class BleemeoConnector(threading.Thread):
         deleted_facts_from_state = set(bleemeo_cache.facts) - local_uuids
         for fact_uuid in deleted_facts_from_state:
             fact = bleemeo_cache.facts[fact_uuid]
-            response = requests.delete(
+            response = bleemeo_api.api_call(
                 urllib_parse.urljoin(fact_url, '%s/' % fact_uuid),
-                auth=(self.agent_username, self.agent_password),
-                headers={
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'User-Agent': self.core.http_user_agent,
-                },
-                timeout=REQUESTS_TIMEOUT,
+                'delete',
             )
             if response.status_code != 204:
                 raise ApiError(response.content)
@@ -1661,8 +1666,7 @@ class BleemeoConnector(threading.Thread):
     @property
     def bleemeo_base_url(self):
         return self.core.config.get(
-            'bleemeo.api_base',
-            'https://api.bleemeo.com/'
+            'bleemeo.api_base', 'https://api.bleemeo.com/',
         )
 
     @property
