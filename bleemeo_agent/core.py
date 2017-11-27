@@ -462,8 +462,6 @@ def _apply_service_override(services, override_config, core):
         except KeyError:
             instance = ''
 
-        assert instance is not None
-
         key = (service, instance)
         if key in services:
             tmp = services[(service, instance)].copy()
@@ -479,7 +477,6 @@ def _apply_service_override(services, override_config, core):
 
 def _sanitize_service(
         name, instance, service_info, is_discovered_service, core):
-    assert instance is not None
     if 'port' in service_info and service_info['port'] is not None:
         if not instance:
             service_info.setdefault('address', '127.0.0.1')
@@ -1451,7 +1448,6 @@ class Core:
         else:
             status = bleemeo_agent.checker.STATUS_UNKNOWN
 
-        assert name is not None
         metric = {
             'measurement': 'docker_container_health_status',
             'time': time.time(),
@@ -1540,7 +1536,6 @@ class Core:
         # it will be mark as still active from discovered_running_services.
         for service_key, service_info in new_discovered_services.items():
             (service_name, instance) = service_key
-            assert instance is not None
             if instance:
                 service_info['address'] = None
                 service_info['active'] = False
@@ -1812,7 +1807,6 @@ class Core:
     def _discovery_fill_address_and_ports(
             self, service_info, instance, ports):
 
-        assert instance is not None
         service_name = service_info['service']
         if not instance:
             default_address = '127.0.0.1'
@@ -1888,7 +1882,6 @@ class Core:
 
                 service_info['active'] = True
 
-                assert instance is not None
                 if not instance:
                     ports = netstat_info.get(pid, {})
                 else:
@@ -1928,7 +1921,6 @@ class Core:
         mysql_user = None
         mysql_password = None
 
-        assert instance is not None
         if not instance:
             # grab maintenace password from debian.cnf
             try:
@@ -1966,7 +1958,6 @@ class Core:
         user = None
         password = None
 
-        assert instance is not None
         if instance:
             # Only know to extract user/password from Docker container
             container_info = self.docker_client.inspect_container(instance)
@@ -2187,7 +2178,6 @@ class Core:
         """ Store the metric in self.last_matrics, replacing the previous value
         """
         item = metric.get('item', '')
-        assert item is not None
         measurement = metric['measurement']
         self.last_metrics[(measurement, item)] = metric
 
@@ -2196,10 +2186,6 @@ class Core:
         """
         if metric.get('status_of') is None and not no_emit:
             metric = self.check_threshold(metric, soft_status)
-
-        assert metric.get('item', '') is not None
-        assert metric.get('instance', '') is not None
-        assert metric.get('container', '') is not None
 
         self._store_last_value(metric)
 
@@ -2223,7 +2209,6 @@ class Core:
             If it's None, use self.thresholds
         """
 
-        assert item is not None
         if thresholds is None:
             threshold = self.thresholds.get((metric_name, item))
         else:
@@ -2327,8 +2312,6 @@ class Core:
 
             status_value = 2.0
 
-        for (_, i) in self.metrics_unit:
-            assert i is not None
         (unit, unit_text) = self.metrics_unit.get(
             (metric['measurement'], metric.get('item', '')),
             (None, None),
@@ -2377,8 +2360,6 @@ class Core:
             key,
             (None, None),
         )
-        for (_, i) in self._soft_status_since:
-            assert i is not None
 
         # Make sure time didn't jump backward. If it does jump
         # backward reset the since timer.
@@ -2439,7 +2420,6 @@ class Core:
 
             None is returned if the metric is not found
         """
-        assert item is not None
         return self.last_metrics.get((name, item), None)
 
     def get_last_metric_value(self, name, item, default=None):
@@ -2447,7 +2427,6 @@ class Core:
 
             Return default if metric is not found.
         """
-        assert item is not None
         metric = self.get_last_metric(name, item)
         if metric is not None:
             return metric['value']

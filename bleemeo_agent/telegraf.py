@@ -235,7 +235,6 @@ class Telegraf:
     def get_derivate(self, name, item, timestamp, value):
         """ Return derivate of a COUNTER (e.g. something that only goes upward)
         """
-        assert item is not None
         (old_timestamp, old_value) = self._raw_value.get(
             (name, item), (None, None)
         )
@@ -800,7 +799,6 @@ class Telegraf:
             else:
                 return
 
-            assert instance is not None
             if not instance:
                 item = proxy_name
             else:
@@ -959,7 +957,6 @@ class Telegraf:
             else:
                 return
 
-            assert instance is not None
             if not instance:
                 item = dbname
             else:
@@ -1403,7 +1400,6 @@ class Telegraf:
         if name is None:
             return
 
-        assert item is not None
         if not item and service:
             item = instance
 
@@ -1447,8 +1443,6 @@ class Telegraf:
         new_item = set()
         for entry in self.computed_metrics_pending:
             (name, item, instance, timestamp) = entry
-            assert item is not None
-            assert instance is not None
             try:
                 self._compute_metric(name, item, instance, timestamp, new_item)
                 processed.add(entry)
@@ -1483,7 +1477,6 @@ class Telegraf:
                   to compute, raise ComputationFail. We will never be
                   able to compute the requested value.
             """
-            assert searched_item is not None
             metric = self.core.get_last_metric(measurements, searched_item)
             if metric is None or metric['time'] < timestamp:
                 raise MissingMetric()
@@ -1491,7 +1484,6 @@ class Telegraf:
                 raise ComputationFail()
             return metric['value']
 
-        assert item is not None
         service = None
 
         if name == 'disk_total' and os.name == 'nt':
@@ -1634,7 +1626,6 @@ def _get_telegraf_config(core):
         if not service_info.get('active', True):
             continue
         (service_name, instance) = key
-        assert instance is not None
 
         service_info = core.services[key].copy()
         service_info['instance'] = instance

@@ -1092,7 +1092,6 @@ class BleemeoConnector(threading.Thread):
                     continue
                 payload['container'] = container.uuid
             if reg_req.service_label:
-                assert reg_req.container_name is not None
                 key = (reg_req.service_label, reg_req.instance)
                 service = bleemeo_cache.services_by_labelinstance.get(key)
                 if service is None:

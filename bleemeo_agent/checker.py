@@ -214,7 +214,6 @@ class Check:
         if not self.check_info.get('check_type') and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
-        assert self.instance is not None
         logging.debug(
             'Created new check for service %s',
             self.display_name
@@ -392,7 +391,6 @@ class Check:
             'value': float(return_code),
             'check_output': output,
         }
-        assert self.instance is not None
         if self.instance:
             metric['item'] = self.instance
             metric['instance'] = self.instance

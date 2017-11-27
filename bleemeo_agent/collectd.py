@@ -530,8 +530,6 @@ class Collectd:
         processed = set()
         for entry in self.computed_metrics_pending:
             (name, item, instance, timestamp) = entry
-            assert item is not None
-            assert instance is not None
             try:
                 self._compute_metric(name, item, instance, timestamp)
                 processed.add(entry)
@@ -560,7 +558,6 @@ class Collectd:
                   to compute, raise ComputationFail. We will never be
                   able to compute the requested value.
             """
-            assert searched_item is not None
             metric = self.core.get_last_metric(measurements, searched_item)
             if metric is None or metric['time'] < timestamp:
                 raise MissingMetric()
@@ -568,7 +565,6 @@ class Collectd:
                 raise ComputationFail()
             return metric['value']
 
-        assert item is not None
         service = None
 
         if name == 'disk_total':

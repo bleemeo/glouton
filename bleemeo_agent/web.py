@@ -78,7 +78,6 @@ def _gather_checks_info():
             )
 
             pretty_name = metric['measurement']
-            assert metric.get('item', '') is not None
             if metric.get('item', ''):
                 pretty_name = '%s for %s' % (pretty_name, metric['item'])
             checks.append({

@@ -417,14 +417,12 @@ class Jmxtrans:
         for jmx_metric in jmx_metrics:
             new_name = '%s_%s' % (service_name, jmx_metric['name'])
 
-            assert instance is not None
             if instance is not None and type_names is not None:
                 item = instance + '_' + type_names
             elif type_names is not None:
                 item = type_names
             else:
                 item = instance
-            assert item is not None
 
             if jmx_metric.get('derive'):
                 new_value = self.get_derivate(
@@ -519,7 +517,6 @@ class Jmxtrans:
                     'instance': item,
                 }
 
-                assert item is not None
                 if item:
                     metric['item'] = item
 
@@ -530,7 +527,6 @@ class Jmxtrans:
     def get_derivate(self, name, item, timestamp, value):
         """ Return derivate of a COUNTER (e.g. something that only goes upward)
         """
-        assert item is not None
         # self.lock is acquired by caller
         (old_timestamp, old_value) = self._raw_value.get(
             (name, item), (None, None)
