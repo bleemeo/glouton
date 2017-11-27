@@ -20,6 +20,7 @@
 import argparse
 import copy
 import datetime
+import fnmatch
 import io
 import itertools
 import json
@@ -1565,6 +1566,9 @@ class Core:
                 )
                 del service['jmx_metrics']
 
+            if self._service_ignore_check(service_name, instance):
+                service['ignore_check'] = True
+
         if new_discovered_services != self.discovered_services:
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
@@ -1584,6 +1588,23 @@ class Core:
         for service_info in services.values():
             if service_info.get('stack', None) is None:
                 service_info['stack'] = self.config.get('stack', '')
+
+    def _service_ignore_check(self, service_name, instance):
+        """ Return True if the check for given service should be ignored
+        """
+        service_check_ignore = self.config.get('service_ignore_check', [])
+        for item in service_check_ignore:
+            if isinstance(item, dict):
+                ignore_name = item['id']
+                ignore_instance = item.get('instance', '')
+            else:
+                ignore_name = item
+                ignore_instance = '*'
+            if service_name != ignore_name:
+                continue
+            if fnmatch.fnmatch(instance, ignore_instance):
+                return True
+        return False
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name

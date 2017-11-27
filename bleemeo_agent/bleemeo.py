@@ -1162,7 +1162,38 @@ class BleemeoConnector(threading.Thread):
                 )
 
         # Step 4: delete object present in API by not in local
-        # Not done for metrics. Agent never delete metrics
+        # Only metric $SERVICE_NAME_status from service with ignore_check=True
+        # are deleted
+        for (key, service_info) in self.core.services.items():
+            if not service_info.get('ignore_check', False):
+                continue
+            (service_name, instance) = key
+            metric = bleemeo_cache.metrics_by_labelitem.get(
+                ('%s_status' % service_name, instance)
+            )
+            if metric is None:
+                continue
+
+            response = bleemeo_api.api_call(
+                metric_url + '%s/' % metric.uuid,
+                'delete',
+            )
+            if response.status_code == 403:
+                logging.debug(
+                    "Metric deletion failed for %s. Skip metrics deletion",
+                    key,
+                )
+                break
+            elif response.status_code not in (204, 404):
+                raise ApiError(response)
+            if metric.item:
+                logging.debug(
+                    'Metric %s (%s) deleted', metric.label, metric.item,
+                )
+            else:
+                logging.debug(
+                    'Metric %s deleted', metric.label,
+                )
 
         self.core.update_thresholds(bleemeo_cache.get_core_thresholds())
         self.core.metrics_unit = bleemeo_cache.get_core_units()
