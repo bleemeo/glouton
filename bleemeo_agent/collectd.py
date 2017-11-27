@@ -689,6 +689,8 @@ def _get_collectd_config(core):
 
         if not service_info.get('active', True):
             continue
+        if service_info.get('ignore_metrics', False):
+            continue
 
         if service_name == 'apache':
             collectd_config += APACHE_COLLECTD_CONFIG % service_info

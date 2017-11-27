@@ -1625,6 +1625,8 @@ def _get_telegraf_config(core):
     for (key, service_info) in sorted(core.services.items()):
         if not service_info.get('active', True):
             continue
+        if service_info.get('ignore_metrics', False):
+            continue
         (service_name, instance) = key
 
         service_info = core.services[key].copy()
