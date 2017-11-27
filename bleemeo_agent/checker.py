@@ -322,7 +322,7 @@ class Check:
                 or not self.core.services[key].get('active', True)):
             return
 
-        if self.address is None and self.instance is not None:
+        if self.address is None and self.instance:
             # Address is None if this check is associated with a stopped
             # container. In such case none of our test could pass
             (return_code, output) = (
