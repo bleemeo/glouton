@@ -18,6 +18,7 @@
 # pylint: disable=too-many-lines
 
 import argparse
+import collections
 import copy
 import datetime
 import io
@@ -378,6 +379,14 @@ UNIT_UNIT = 0
 UNIT_BYTE = 2
 UNIT_BIT = 3
 
+MetricSoftStatusState = collections.namedtuple('MetricSoftStatusState', (
+    'label',
+    'item',
+    'last_status',
+    'warning_since',
+    'critical_since',
+))
+
 
 def main():
     if os.name == 'nt':
@@ -678,7 +687,7 @@ def format_value(value, unit, unit_text):
     """ Format a value for human
 
         >>> format_value(4096, UNIT_BYTE, 'Byte')
-        ... "4.0 KBytes"
+        '4.00 KBytes'
 
         unit is a number (like UNIT_BYTE). unit_text is used if unit is an
         unknown number.
@@ -704,6 +713,115 @@ def format_value(value, unit, unit_text):
     return '%.2f %s' % (
         value,
         unit_text,
+    )
+
+
+def format_duration(value):
+    """ Format a duration (in seconds) for human
+
+        >>> format_duration(300)
+        '5 minutes'
+
+        >>> format_duration(86400)
+        '1 day'
+
+        >>> format_duration(86500)
+        '1 day'
+
+        >>> format_duration(86300)
+        '1 day'
+
+        >>> format_duration(89)
+        '1 minute'
+
+        >>> format_duration(91)
+        '2 minutes'
+
+        >>> format_duration(0)
+        ''
+    """
+    if value <= 0:
+        return ""
+
+    units = [
+        (1, "second"),
+        (60, "minute"),
+        (60, "hour"),
+        (24, "day"),
+    ]
+
+    current_unit = ""
+    for (scale, unit_name) in units:
+        if round(value / scale) >= 1:
+            value = value / scale
+            current_unit = unit_name
+        else:
+            break
+
+    value = round(value)
+    if value > 1:
+        current_unit += 's'
+    return '%d %s' % (value, current_unit)
+
+
+def _check_soft_status(softstatus_state, metric, soft_status, period, now):
+    if softstatus_state is None:
+        softstatus_state = MetricSoftStatusState(
+            metric['measurement'],
+            metric.get('item', ''),
+            soft_status,
+            None,
+            None,
+        )
+
+    critical_since = softstatus_state.critical_since
+    warning_since = softstatus_state.warning_since
+    # Make sure time didn't jump backward. If it does jump
+    # backward reset the since timer.
+    if critical_since and critical_since > now:
+        critical_since = None
+    if warning_since and warning_since > now:
+        warning_since = None
+
+    if soft_status == 'critical':
+        critical_since = critical_since or metric['time']
+        warning_since = warning_since or metric['time']
+    elif soft_status == 'warning':
+        critical_since = None
+        warning_since = warning_since or metric['time']
+    else:
+        critical_since = None
+        warning_since = None
+
+    warn_duration = (
+        (metric['time'] - warning_since) if warning_since else 0
+    )
+    crit_duration = (
+        (metric['time'] - critical_since) if critical_since else 0
+    )
+
+    if period == 0:
+        status = soft_status
+    elif crit_duration >= period:
+        status = 'critical'
+    elif warn_duration >= period:
+        status = 'warning'
+    elif (soft_status == 'warning'
+          and softstatus_state.last_status == 'critical'):
+        # Downgrade status from critical to warning immediately
+        status = 'warning'
+    elif soft_status == 'ok':
+        # Downgrade status to ok immediately
+        status = 'ok'
+    else:
+        status = softstatus_state.last_status
+
+    return MetricSoftStatusState(
+        softstatus_state.label,
+        softstatus_state.item,
+        status,
+        warning_since,
+        critical_since,
     )
 
 
@@ -790,6 +908,50 @@ class State:
         return value
 
 
+class Cache:
+    """ In-memory cache backed with state file.
+
+        It store information that could be lost but may (temporary) reduce
+        functionality if lost.
+
+        For example soft_status state is stored in the cache. Losing them means
+        that status may change too fast and not honour the grace period.
+    """
+    CACHE_VERSION = 1
+
+    def __init__(self, state, skip_load=False):
+        self._state = state
+        self.softstatus_by_labelitem = {}
+
+        if not skip_load:
+            self._reload()
+
+    def copy(self):
+        new = Cache(self._state, skip_load=True)
+        new.softstatus_by_labelitem = self.softstatus_by_labelitem.copy()
+        return new
+
+    def _reload(self):
+        cache = self._state.get('_core_cache')
+        if cache is None:
+            return
+        if cache['version'] > self.CACHE_VERSION:
+            return
+
+        self.softstatus_by_labelitem = {}
+        for value in cache['softstatus']:
+            softstatus = MetricSoftStatusState(*value)
+            key = (softstatus.label, softstatus.item)
+            self.softstatus_by_labelitem[key] = softstatus
+
+    def save(self):
+        cache = {
+            'version': self.CACHE_VERSION,
+            'softstatus': list(self.softstatus_by_labelitem.values()),
+        }
+        self._state.set('_core_cache', cache)
+
+
 class Core:
     # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-public-methods
@@ -822,7 +984,6 @@ class Core:
         self._discovery_job = None  # scheduled in schedule_tasks
         self.discovered_services = {}
         self.services = {}
-        self._soft_status_since = {}
         self.metrics_unit = {}
         self._trigger_discovery = False
         self._trigger_facts = False
@@ -837,6 +998,7 @@ class Core:
         self.http_user_agent = None
         self.started_at = None
         self.state = None
+        self.cache = None
         self.thresholds = {}
         self._update_facts_job = None
         self._gather_update_metrics_job = None
@@ -901,6 +1063,8 @@ class Core:
         self.http_user_agent = (
             'Bleemeo Agent %s' % bleemeo_agent.facts.get_agent_version(self)
         )
+
+        self.cache = Cache(self.state)
 
         return True
 
@@ -1058,7 +1222,7 @@ class Core:
             will return the job that is still valid. Caller must use the
             returned job e.g.::
 
-            >>> self.the_job = self.trigger_job(self.the_job)
+            >>> self.the_job = self.trigger_job(self.the_job)  # doctest: +SKIP
         """
         if APSCHEDULE_IS_3X:
             job.modify(next_run_time=datetime.datetime.now())
@@ -1191,6 +1355,7 @@ class Core:
         finally:
             self.is_terminating.set()
             self.graphite_server.join()
+            self.cache.save()
             if self.bleemeo_connector is not None:
                 self.bleemeo_connector.join()
             if self.influx_connector is not None:
@@ -1317,6 +1482,10 @@ class Core:
             self._check_triggers,
             seconds=10,
         )
+        self.add_scheduled_job(
+            self.cache.save,
+            seconds=10 * 60,
+        )
         self._schedule_metric_pull()
 
         # Call jobs we want to run immediatly
@@ -1386,7 +1555,7 @@ class Core:
 
         metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:
-            self.emit_metric(metric, soft_status=False)
+            self.emit_metric(metric)
 
     def _gather_metrics_minute(self):
         """ Gather and send every minute some metric missing from other sources
@@ -1413,7 +1582,6 @@ class Core:
                     'time': now,
                     'value': float(pending_update),
                 },
-                soft_status=False,
             )
         if pending_security_update is not None:
             self.emit_metric(
@@ -1422,7 +1590,6 @@ class Core:
                     'time': now,
                     'value': float(pending_security_update),
                 },
-                soft_status=False,
             )
 
     def _docker_health_status(self, container_id):
@@ -2181,11 +2348,11 @@ class Core:
         measurement = metric['measurement']
         self.last_metrics[(measurement, item)] = metric
 
-    def emit_metric(self, metric, soft_status=True, no_emit=False):
+    def emit_metric(self, metric, no_emit=False):
         """ Sent a metric to all configured output
         """
         if metric.get('status_of') is None and not no_emit:
-            metric = self.check_threshold(metric, soft_status)
+            metric = self.check_threshold(metric)
 
         self._store_last_value(metric)
 
@@ -2229,7 +2396,7 @@ class Core:
 
         return threshold
 
-    def check_threshold(self, metric, with_soft_status):
+    def check_threshold(self, metric):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-statements
@@ -2273,25 +2440,12 @@ class Core:
         else:
             soft_status = 'ok'
 
-        last_metric = self.get_last_metric(
-            metric['measurement'], metric.get('item', '')
+        period = self._get_softstatus_period(metric['measurement'])
+        status = self._check_soft_status(
+            metric,
+            soft_status,
+            period,
         )
-
-        if last_metric is None or last_metric.get('status') is None:
-            last_status = soft_status
-        else:
-            last_status = last_metric.get('status')
-
-        period = 5 * 60
-        if not with_soft_status:
-            status = soft_status
-        else:
-            status = self._check_soft_status(
-                metric,
-                soft_status,
-                last_status,
-                period,
-            )
 
         if status == 'ok':
             status_value = 0.0
@@ -2322,11 +2476,12 @@ class Core:
         )
 
         if status != 'ok':
-            if with_soft_status:
+            if period:
                 text += (
                     ' threshold (%s) exceeded'
-                    ' over last 5 minutes' % (
+                    ' over last %s' % (
                         format_value(threshold_value, unit, unit_text),
+                        format_duration(period),
                     )
                 )
             else:
@@ -2348,72 +2503,31 @@ class Core:
 
         return metric
 
-    def _check_soft_status(self, metric, soft_status, last_status, period):
+    def _check_soft_status(self, metric, soft_status, period):
         """ Check if soft_status was in error for at least the grace period
             of the metric.
 
             Return the new status
         """
-
         key = (metric['measurement'], metric.get('item', ''))
-        (warning_since, critical_since) = self._soft_status_since.get(
-            key,
-            (None, None),
+        softstatus_state = self.cache.softstatus_by_labelitem.get(key)
+
+        new_softstatus_state = _check_soft_status(
+            softstatus_state,
+            metric,
+            soft_status,
+            period,
+            time.time(),
         )
+        self.cache.softstatus_by_labelitem[key] = new_softstatus_state
+        return new_softstatus_state.last_status
 
-        # Make sure time didn't jump backward. If it does jump
-        # backward reset the since timer.
-        now = time.time()
-        if critical_since and critical_since > now:
-            critical_since = None
-        if warning_since and warning_since > now:
-            warning_since = None
-
-        if soft_status == 'critical':
-            critical_since = critical_since or metric['time']
-            warning_since = warning_since or metric['time']
-        elif soft_status == 'warning':
-            critical_since = None
-            warning_since = warning_since or metric['time']
-        else:
-            critical_since = None
-            warning_since = None
-
-        warn_duration = (
-            (metric['time'] - warning_since) if warning_since else 0
+    def _get_softstatus_period(self, label):
+        softstatus_periods = self.config.get('metric.softstatus_period', {})
+        default_period = self.config.get(
+            'metric.softstatus_period_default', 5 * 60,
         )
-        crit_duration = (
-            (metric['time'] - critical_since) if critical_since else 0
-        )
-
-        if crit_duration >= period:
-            status = 'critical'
-        elif warn_duration >= period:
-            status = 'warning'
-        elif soft_status == 'warning' and last_status == 'critical':
-            # Downgrade status from critical to warning immediately
-            status = 'warning'
-        elif soft_status == 'ok':
-            # Downgrade status to ok immediately
-            status = 'ok'
-        else:
-            status = last_status
-
-        self._soft_status_since[key] = (warning_since, critical_since)
-
-        if soft_status != status or last_status != status:
-            logging.debug(
-                'metric=%s: soft_status=%s, last_status=%s, result=%s. '
-                'warn for %d second / crit for %d second',
-                key,
-                soft_status,
-                last_status,
-                status,
-                warn_duration,
-                crit_duration,
-            )
-
-        return status
+        return int(softstatus_periods.get(label, default_period))
 
     def get_last_metric(self, name, item):
         """ Return the last metric matching name and item.

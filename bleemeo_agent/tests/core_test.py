@@ -17,6 +17,7 @@
 #
 
 import socket
+import time
 
 import bleemeo_agent.core
 
@@ -476,3 +477,97 @@ def test_format_value():
     assert bleemeo_agent.core.format_value(
         -2**30, bleemeo_agent.core.UNIT_BYTE, 'Byte'
     ) == '-1.00 GBytes'
+
+
+def test_check_soft_status():
+    period = 300
+    base_time = int(time.time())
+
+    data = [
+        # (time_offset, soft_status, expected_result_status)
+        (-10, 'ok', 'ok'),
+        (0, 'warning', 'ok'),
+        (10, 'warning', 'ok'),
+        (280, 'warning', 'ok'),
+        (290, 'warning', 'ok'),
+        (300, 'warning', 'warning'),
+    ]
+    softstatus_state = None
+    for (time_offset, soft_status, expected_status) in data:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            softstatus_state,
+            {
+                'measurement': 'metric',
+                'time': base_time + time_offset,
+            },
+            soft_status,
+            period,
+            base_time + time_offset,
+        )
+        assert softstatus_state.last_status == expected_status
+
+    data = [
+        # (time_offset, soft_status, expected_result_status)
+        (-10, 'ok', 'ok'),
+        (0, 'warning', 'ok'),
+        (10, 'warning', 'ok'),
+        (200, 'critical', 'ok'),
+        (290, 'critical', 'ok'),
+        (300, 'critical', 'warning'),
+        (310, 'critical', 'warning'),
+        (490, 'critical', 'warning'),
+        (500, 'critical', 'critical'),
+        (510, 'critical', 'critical'),
+        (520, 'warning', 'warning'),
+        (530, 'critical', 'warning'),
+        (820, 'critical', 'warning'),
+        (830, 'critical', 'critical'),
+        (840, 'ok', 'ok'),
+    ]
+    softstatus_state = None
+    for (time_offset, soft_status, expected_status) in data:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            softstatus_state,
+            {
+                'measurement': 'metric',
+                'time': base_time + time_offset,
+            },
+            soft_status,
+            period,
+            base_time + time_offset,
+        )
+        print(softstatus_state)
+        assert softstatus_state.last_status == expected_status, (
+            "At time_offset=%s" % time_offset
+        )
+
+
+def test_check_soft_status_changing_period():
+    base_time = int(time.time())
+
+    data = [
+        # (time_offset, soft_status, period, expected_result_status)
+        (-10, 'ok', 0, 'ok'),
+        (0, 'warning', 0, 'warning'),
+        (10, 'critical', 0, 'critical'),
+        (90, 'ok', 300, 'ok'),
+        (100, 'warning', 300, 'ok'),
+        (400, 'warning', 300, 'warning'),
+        (410, 'warning', 500, 'warning'),
+    ]
+    softstatus_state = None
+    for (time_offset, soft_status, period, expected_status) in data:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            softstatus_state,
+            {
+                'measurement': 'metric',
+                'time': base_time + time_offset,
+            },
+            soft_status,
+            period,
+            base_time + time_offset,
+        )
+        print(softstatus_state)
+        assert softstatus_state.last_status == expected_status, (
+            "At time_offset=%s" % time_offset
+        )

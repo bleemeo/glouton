@@ -281,6 +281,9 @@ class BleemeoCache:
         self._state.reload()
         cache = self._state.get("_bleemeo_cache")
 
+        if cache['version'] > self.CACHE_VERSION:
+            return
+
         self.metrics = {}
         self.services = {}
         self.tags = list(cache['tags'])
