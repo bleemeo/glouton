@@ -21,6 +21,7 @@ import argparse
 import collections
 import copy
 import datetime
+import fnmatch
 import io
 import itertools
 import json
@@ -1710,24 +1711,15 @@ class Core:
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
 
-        if new_discovered_services != self.discovered_services:
-            if new_discovered_services != self.discovered_services:
-                logging.debug(
-                    'Update configuration after change in discovered services'
-                )
-            self.discovered_services = new_discovered_services
-            self.state.set_complex_dict(
-                'discovered_services', self.discovered_services)
-
-        self.services = copy.deepcopy(self.discovered_services)
+        services = copy.deepcopy(new_discovered_services)
         _apply_service_override(
-            self.services,
+            services,
             self.config.get('service', []),
             self,
         )
-        self.apply_service_defaults()
+        self.apply_service_defaults(services)
 
-        for (key, service) in self.services.items():
+        for (key, service) in services.items():
             (service_name, instance) = key
             if not instance:
                 name = service_name
@@ -1741,19 +1733,65 @@ class Core:
                 )
                 del service['jmx_metrics']
 
+            if self._service_ignore_check(service_name, instance):
+                service['ignore_check'] = True
+
+            if self._service_ignore_metrics(service_name, instance):
+                service['ignore_metrics'] = True
+
+        if new_discovered_services != self.discovered_services:
+            self.discovered_services = new_discovered_services
+            self.state.set_complex_dict(
+                'discovered_services', self.discovered_services)
+        self.services = services
+
         self.graphite_server.update_discovery()
         bleemeo_agent.checker.update_checks(self)
 
         self.last_discovery_update = bleemeo_agent.util.get_clock()
 
-    def apply_service_defaults(self):
+    def apply_service_defaults(self, services):
         """ Apply defaults to services.
 
             Currently only "stack" is set.
         """
-        for service_info in self.services.values():
+        for service_info in services.values():
             if service_info.get('stack', None) is None:
                 service_info['stack'] = self.config.get('stack', '')
+
+    def _service_ignore_check(self, service_name, instance):
+        """ Return True if the check for given service should be ignored
+        """
+        service_ignore_check = self.config.get('service_ignore_check', [])
+        for item in service_ignore_check:
+            if isinstance(item, dict):
+                ignore_name = item['id']
+                ignore_instance = item.get('instance', '')
+            else:
+                ignore_name = item
+                ignore_instance = '*'
+            if service_name != ignore_name:
+                continue
+            if fnmatch.fnmatch(instance, ignore_instance):
+                return True
+        return False
+
+    def _service_ignore_metrics(self, service_name, instance):
+        """ Return True if the metrics for given service should be ignored
+        """
+        service_ignore_metrics = self.config.get('service_ignore_metrics', [])
+        for item in service_ignore_metrics:
+            if isinstance(item, dict):
+                ignore_name = item['id']
+                ignore_instance = item.get('instance', '')
+            else:
+                ignore_name = item
+                ignore_instance = '*'
+            if service_name != ignore_name:
+                continue
+            if fnmatch.fnmatch(instance, ignore_instance):
+                return True
+        return False
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name
