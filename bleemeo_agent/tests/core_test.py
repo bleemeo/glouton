@@ -479,6 +479,24 @@ def test_format_value():
     ) == '-1.00 GBytes'
 
 
+def test_check_soft_status_empty_cache():
+    period = 300
+    base_time = int(time.time())
+
+    for status in ['ok', 'warning', 'critical']:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            None,
+            {
+                'measurement': 'metric',
+                'time': base_time,
+            },
+            status,
+            period,
+            base_time,
+        )
+        assert softstatus_state.last_status == status
+
+
 def test_check_soft_status():
     period = 300
     base_time = int(time.time())

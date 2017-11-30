@@ -376,6 +376,7 @@ def get_pending_update(core):
 
 
 def get_top_info(core):
+    # pylint: disable=too-many-branches
     """ Return informations needed to build a "top" view.
     """
     processes = []
