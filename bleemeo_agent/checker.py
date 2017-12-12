@@ -234,7 +234,8 @@ class Check:
     def _initialize_tcp_sockets(self):
         tcp_sockets = {}
 
-        if self.port is not None and self.protocol == socket.IPPROTO_TCP:
+        if (self.port is not None and self.address is not None
+                and self.protocol == socket.IPPROTO_TCP):
             tcp_sockets[(self.address, self.port)] = None
 
         for port_protocol, address in self.extra_ports.items():
@@ -245,6 +246,8 @@ class Check:
             if port == self.port:
                 continue
             if self.check_info.get('ignore_high_port') and port > 32000:
+                continue
+            if address is None:
                 continue
             tcp_sockets[(address, port)] = None
 
@@ -325,9 +328,7 @@ class Check:
                 or not self.core.services[key].get('active', True)):
             return
 
-        if self.address is None and self.instance:
-            # Address is None if this check is associated with a stopped
-            # container. In such case none of our test could pass
+        if not self.service_info.get('container_running', True):
             (return_code, output) = (
                 STATUS_CRITICAL, 'Container stopped: connection refused'
             )
@@ -369,11 +370,7 @@ class Check:
                     output = extra_port_output
 
         if return_code == STATUS_CHECK_NOT_RUN:
-            logging.debug(
-                'check %s: no check available. Not metric sent',
-                self.display_name,
-            )
-            return
+            return_code = STATUS_OK
 
         if self.instance:
             logging.debug(

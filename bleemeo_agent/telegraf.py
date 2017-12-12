@@ -1632,9 +1632,7 @@ def _get_telegraf_config(core):
         service_info = core.services[key].copy()
         service_info['instance'] = instance
 
-        if service_info.get('address') is None and instance:
-            # Address is None if this check is associated with a stopped
-            # container. In such case, no metrics could be gathered.
+        if not service_info.get('container_running', True):
             continue
 
         if (service_name == 'haproxy'

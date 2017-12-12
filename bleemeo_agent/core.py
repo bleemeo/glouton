@@ -533,7 +533,8 @@ def _sanitize_service(
 
 
 def _purge_services(
-        new_discovered_services, running_services, deleted_services):
+        docker_containers, new_discovered_services, running_services,
+        deleted_services):
     """ Remove deleted_services (service deleted from API) and check
         for uninstalled service (to mark them inactive).
     """
@@ -546,12 +547,21 @@ def _purge_services(
         set(new_discovered_services) - set(running_services)
     )
     for service_key in no_longer_running:
-        (service_name, instance) = service_key
-        if instance:
-            # Don't process container here
+        if not new_discovered_services[service_key]['active']:
             continue
+        (service_name, instance) = service_key
         exe_path = new_discovered_services[service_key].get('exe_path')
-        if not instance and exe_path and not os.path.exists(exe_path):
+        if instance and instance not in docker_containers:
+            logging.info(
+                'Service %s (%s): container no longer running,'
+                ' marking it as inactive',
+                service_name,
+                instance,
+            )
+            new_discovered_services[service_key]['active'] = (
+                instance in docker_containers
+            )
+        elif not instance and exe_path and not os.path.exists(exe_path):
             # Binary for service no longer exists. It has been uninstalled.
             new_discovered_services[service_key]['active'] = False
             logging.info(
@@ -1742,6 +1752,7 @@ class Core:
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
         new_discovered_services = _purge_services(
+            self.docker_containers,
             new_discovered_services,
             discovered_running_services,
             deleted_services,
@@ -1749,13 +1760,13 @@ class Core:
 
         # Remove container address. If container is still running, address
         # will be re-added from discovered_running_services.
-        # Also mark it as inactive. Also if still existing (stopped or running)
-        # it will be mark as still active from discovered_running_services.
+        # Also mark it as container_running=False. Also will be updated if
+        # still running.
         for service_key, service_info in new_discovered_services.items():
             (service_name, instance) = service_key
             if instance:
                 service_info['address'] = None
-                service_info['active'] = False
+                service_info['container_running'] = False
 
         new_discovered_services.update(discovered_running_services)
         logging.debug('%s services are present', len(new_discovered_services))
@@ -2115,6 +2126,9 @@ class Core:
                         labels = {}
                     service_info['stack'] = labels.get('bleemeo.stack', None)
                     service_info['container_id'] = docker_inspect.get('Id')
+                    # At this point, current is running because we are
+                    # iterating over processes.
+                    service_info['container_running'] = True
 
                 self._discovery_fill_address_and_ports(
                     service_info,
