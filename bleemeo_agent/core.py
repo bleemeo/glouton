@@ -826,6 +826,55 @@ def _check_soft_status(softstatus_state, metric, soft_status, period, now):
     )
 
 
+def _service_ignore(rules, service_name, instance):
+    """ Return True if the service should be ignored
+    """
+    filter_re = re.compile(r'(host|container):\s?([^ ]+)(\s|$)')
+    for item in rules:
+        # Compatibility with old rules
+        if not isinstance(item, dict):
+            item = {
+                'name': item,
+                'instance': 'container:* host:*',
+            }
+        if 'id' in item:
+            if item.get('instance', '') == '':
+                item = {
+                    'name': item['id'],
+                    'instance': 'host:*',
+                }
+            elif item['instance'] == '*':
+                item = {
+                    'name': item['id'],
+                    'instance': 'host:* container:*',
+                }
+            else:
+                item = {
+                    'name': item['id'],
+                    'instance': 'container:%s' % item['instance'],
+                }
+
+        ignore_name = item.get('name', '')
+        if service_name != ignore_name:
+            continue
+
+        rule = item.get('instance', 'host:* container:*')
+        host = None
+        container = None
+        for match in filter_re.findall(rule):
+            if match[0] == 'host':
+                host = match[1]
+            elif match[0] == 'container':
+                container = match[1]
+
+        if instance == '' and host is not None:
+            return True
+        if (instance != '' and container is not None
+                and fnmatch.fnmatch(instance, container)):
+            return True
+    return False
+
+
 class State:
     """ Persistant store for state of the agent.
 
@@ -1719,6 +1768,9 @@ class Core:
         )
         self.apply_service_defaults(services)
 
+        ignored_checks = self.config.get('service_ignore_check', [])
+        ignored_metrics = self.config.get('service_ignore_metrics', [])
+
         for (key, service) in services.items():
             (service_name, instance) = key
             if not instance:
@@ -1733,10 +1785,10 @@ class Core:
                 )
                 del service['jmx_metrics']
 
-            if self._service_ignore_check(service_name, instance):
+            if _service_ignore(ignored_checks, service_name, instance):
                 service['ignore_check'] = True
 
-            if self._service_ignore_metrics(service_name, instance):
+            if _service_ignore(ignored_metrics, service_name, instance):
                 service['ignore_metrics'] = True
 
         if new_discovered_services != self.discovered_services:
@@ -1758,40 +1810,6 @@ class Core:
         for service_info in services.values():
             if service_info.get('stack', None) is None:
                 service_info['stack'] = self.config.get('stack', '')
-
-    def _service_ignore_check(self, service_name, instance):
-        """ Return True if the check for given service should be ignored
-        """
-        service_ignore_check = self.config.get('service_ignore_check', [])
-        for item in service_ignore_check:
-            if isinstance(item, dict):
-                ignore_name = item['id']
-                ignore_instance = item.get('instance', '')
-            else:
-                ignore_name = item
-                ignore_instance = ''
-            if service_name != ignore_name:
-                continue
-            if fnmatch.fnmatch(instance, ignore_instance):
-                return True
-        return False
-
-    def _service_ignore_metrics(self, service_name, instance):
-        """ Return True if the metrics for given service should be ignored
-        """
-        service_ignore_metrics = self.config.get('service_ignore_metrics', [])
-        for item in service_ignore_metrics:
-            if isinstance(item, dict):
-                ignore_name = item['id']
-                ignore_instance = item.get('instance', '')
-            else:
-                ignore_name = item
-                ignore_instance = ''
-            if service_name != ignore_name:
-                continue
-            if fnmatch.fnmatch(instance, ignore_instance):
-                return True
-        return False
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name

@@ -19,6 +19,8 @@
 import socket
 import time
 
+import yaml
+
 import bleemeo_agent.core
 
 # List of process cmdline and the expected service type
@@ -589,3 +591,102 @@ def test_check_soft_status_changing_period():
         assert softstatus_state.last_status == expected_status, (
             "At time_offset=%s" % time_offset
         )
+
+
+def test_ignore_service_doc():
+    """ Test service_ignore based on online documentation rules
+    """
+    config = yaml.safe_load("""
+rules:
+    - name: mysql
+    - name: postgres
+      instance: "host:* container:*"
+    - name: apache
+      instance: "container:*integration*"
+    - name: nginx
+      instance: "container:*"
+    - name: redis
+      instance: "host:*"
+""")
+    rules = config['rules']
+
+    cases = [
+        # (service_name, instance, ignored)
+        ('rabbitmq', '', False),
+        ('rabbitmq', 'random-value', False),
+        ('mysql', '', True),
+        ('mysql', 'container-name', True),
+        ('mysql', 'something', True),
+        ('postgres', '', True),
+        ('postgres', 'random-value', True),
+        ('apache', '', False),
+        ('apache', 'container-name', False),
+        ('apache', 'container-integration', True),
+        ('apache', 'integration-container', True),
+        ('apache', 'test-integration-container', True),
+        ('nginx', '', False),
+        ('nginx', 'random-value', True),
+        ('redis', '', True),
+        ('redis', 'random-value', False),
+    ]
+
+    for (service_name, instance, expected) in cases:
+        result = bleemeo_agent.core._service_ignore(
+            rules, service_name, instance
+        )
+        if result:
+            fail_msg = '(%s, %s) is ignored (excepted to NOT be ignored)' % (
+                service_name,
+                instance,
+            )
+        else:
+            fail_msg = '(%s, %s) is NOT ignored (excepted to be ignored)' % (
+                service_name,
+                instance,
+            )
+        assert result == expected, fail_msg
+
+
+def test_ignore_service_compat():
+    """ Test service_ignore based on previous online documentation rules
+    """
+    config = yaml.safe_load("""
+rules:
+    - mysql
+    - id: apache
+      instance: container-name-*
+    - id: redis
+      instance: ""
+""")
+    rules = config['rules']
+
+    cases = [
+        # (service_name, instance, ignored)
+        ('rabbitmq', '', False),
+        ('mysql', '', True),
+        ('mysql', 'container-name', True),
+        ('mysql', 'something', True),
+        ('apache', '', False),
+        ('apache', 'container-name', False),
+        ('apache', 'container-name-', True),
+        ('apache', 'container-name-test', True),
+        ('apache', 'integration-container-name-test', False),
+        ('redis', '', True),
+        ('redis', 'random-value', False),
+    ]
+
+    for (service_name, instance, expected) in cases:
+        result = bleemeo_agent.core._service_ignore(
+            rules, service_name, instance
+        )
+        if result:
+            fail_msg = '(%s, %s) is ignored (excepted to NOT be ignored)' % (
+                service_name,
+                instance,
+            )
+        else:
+            fail_msg = '(%s, %s) is NOT ignored (excepted to be ignored)' % (
+                service_name,
+                instance,
+            )
+        assert result == expected, fail_msg
