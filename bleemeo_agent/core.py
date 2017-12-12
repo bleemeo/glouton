@@ -1769,7 +1769,7 @@ class Core:
                 ignore_instance = item.get('instance', '')
             else:
                 ignore_name = item
-                ignore_instance = '*'
+                ignore_instance = ''
             if service_name != ignore_name:
                 continue
             if fnmatch.fnmatch(instance, ignore_instance):
@@ -1786,7 +1786,7 @@ class Core:
                 ignore_instance = item.get('instance', '')
             else:
                 ignore_name = item
-                ignore_instance = '*'
+                ignore_instance = ''
             if service_name != ignore_name:
                 continue
             if fnmatch.fnmatch(instance, ignore_instance):
