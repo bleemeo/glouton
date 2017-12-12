@@ -2641,6 +2641,7 @@ class Core:
             * the IP address from the first network with driver == bridge
             * the IP address of this container in the docker_gwbridge
             * the IP address from the first network
+            * the IP address from io.rancher.container.ip label
         """
         if docker is None:
             return None
@@ -2683,7 +2684,14 @@ class Core:
             if address:
                 return address
 
-        return address_first_network
+        if address_first_network:
+            return address_first_network
+
+        labels = container_info.get('Config', {}).get('Labels', {})
+        if 'io.rancher.container.ip' in labels:
+            return labels['io.rancher.container.ip']
+
+        return None
 
     def get_docker_ports(self, container_name):
         container_info = self.docker_client.inspect_container(container_name)
