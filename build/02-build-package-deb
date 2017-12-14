@@ -3,15 +3,53 @@
 set -e
 
 cd work
-docker run --rm -v $(pwd):/srv/workspace -w /srv/workspace \
-    bleemeo/pbuilder dpkg-source -b bleemeo-agent-*
+WORKSPACE=`pwd`
+COMMIT_HASH=`cat COMMIT_HASH`
+VERSION=`cat VERSION`
 
-docker run --privileged=true --rm \
-    -v /srv/pbuilder:/srv/pbuilder \
-    -v $(pwd):/srv/workspace -w /srv/workspace \
-    bleemeo/pbuilder pbuilder \
-        build \
-        --basetgz /srv/pbuilder/ubuntu-trusty-amd64-bleemeo-agent.tgz \
-        --buildresult /srv/workspace/result \
-        --debbuildopts -sa \
-        bleemeo-agent_*.dsc
+build_package(){
+    dist_name="$1"
+    dist_version="$2"
+    version_suffix="$3"
+    pbuilder_variant="${4:-bleemeo-agent}"
+
+    echo "## Building package for ${dist_name} ${dist_version}"
+    cp -a "${WORKSPACE}"/bleemeo-agent-${VERSION} "${WORKSPACE}"/bleemeo-agent-${VERSION}${version_suffix}
+
+    if [ -e "${WORKSPACE}"/bleemeo-agent-${VERSION}${version_suffix}/packaging/debian-patches/${dist_version}.patch ]; then
+        patch -d "${WORKSPACE}"/bleemeo-agent-${VERSION}${version_suffix} -p1 < "${WORKSPACE}"/bleemeo-agent-${VERSION}${version_suffix}/packaging/debian-patches/${dist_version}.patch
+    fi
+
+    rm -f "${WORKSPACE}"/bleemeo-agent-${VERSION}${version_suffix}/debian/changelog
+    docker run --rm -v "${WORKSPACE}":/srv/workspace -w /srv/workspace/bleemeo-agent-${VERSION}${version_suffix} \
+        -e DEBEMAIL=jenkins@bleemeo.com -e DEBFULLNAME="Bleemeo Packaging Team" \
+        bleemeo/pbuilder dch \
+            --create --package bleemeo-agent \
+            --newversion ${VERSION}${version_suffix} \
+            --distribution ${dist_version} \
+            --urgency low \
+            "Build package based on ${COMMIT_HASH} commit for ${dist_name} ${dist_version}"
+
+    docker run --rm -v "${WORKSPACE}":/srv/workspace -w /srv/workspace \
+        bleemeo/pbuilder dpkg-source -b bleemeo-agent-${VERSION}${version_suffix}
+    rm -fr "${WORKSPACE}"/bleemeo-agent-${VERSION}${version_suffix}
+
+    docker run --privileged=true --rm \
+        -v /srv/pbuilder:/srv/pbuilder \
+        -v "${WORKSPACE}":/srv/workspace -w /srv/workspace \
+        bleemeo/pbuilder pbuilder \
+            build \
+            --basetgz /srv/pbuilder/${dist_name}-${dist_version}-amd64-${pbuilder_variant}.tgz \
+            --buildresult /srv/workspace/result \
+            --debbuildopts -sa \
+            bleemeo-agent_${VERSION}${version_suffix}.dsc
+
+    rm -f "${WORKSPACE}"/bleemeo-agent_${VERSION}${version_suffix}.dsc "${WORKSPACE}"/bleemeo-agent_${VERSION}${version_suffix}.tar.xz
+}
+
+build_package ubuntu trusty ~ubuntu14.04
+build_package ubuntu xenial ~ubuntu16.04
+build_package ubuntu artful ~ubuntu17.10 base
+build_package debian wheezy ~debian7
+build_package debian jessie ~debian8
+build_package debian stretch ~debian9 base

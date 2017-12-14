@@ -2,34 +2,36 @@
 
 set -e
 
-cd work/result
+cd work
+WORKSPACE=`pwd`
+VERSION=`cat VERSION`
 
 CREATEREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/centos
 CREATEREPO_DOCKER_CMD="docker run --rm -v ${CREATEREPO_ROOT}:${CREATEREPO_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/centos-createrepo"
 
 CENTOS_SUPPORTED_VERSIONS="7"
 
-for version in ${CENTOS_SUPPORTED_VERSIONS}
+for centos_version in ${CENTOS_SUPPORTED_VERSIONS}
 do
-    cp -p *.centos.*.rpm ${CREATEREPO_ROOT}/${version}/x86_64/Packages
-    ${CREATEREPO_DOCKER_CMD} sh -c "repomanage --old ${CREATEREPO_ROOT}/${version}/x86_64/Packages | xargs --no-run-if-empty rm -v"
-    ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${version}/x86_64/Packages/*.rpm
-    ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${version}/x86_64
+    cp -p "${WORKSPACE}"/result/bleemeo-agent*-${VERSION}-1.el${centos_version}.centos.*.rpm ${CREATEREPO_ROOT}/${centos_version}/x86_64/Packages
+    ${CREATEREPO_DOCKER_CMD} sh -c "repomanage --old ${CREATEREPO_ROOT}/${centos_version}/x86_64/Packages | xargs --no-run-if-empty rm -v"
+    ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${centos_version}/x86_64/Packages/*.rpm
+    ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${centos_version}/x86_64
 done
 
 CREATEREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/fedora
 CREATEREPO_DOCKER_CMD="docker run --rm -v ${CREATEREPO_ROOT}:${CREATEREPO_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/fedora-createrepo"
 
-FEDORA_SUPPORTED_VERSIONS="24"
+FEDORA_SUPPORTED_VERSIONS="26 27"
 FEDORA_SUPPORTED_ARCH="x86_64 armhfp"
 
-for version in ${FEDORA_SUPPORTED_VERSIONS}
+for fedora_version in ${FEDORA_SUPPORTED_VERSIONS}
 do
     for arch in ${FEDORA_SUPPORTED_ARCH}
     do
-        cp -p *.fc24.*.rpm ${CREATEREPO_ROOT}/${version}/${arch}/Packages
-        ${CREATEREPO_DOCKER_CMD} sh -c "dnf repomanage --old ${CREATEREPO_ROOT}/${version}/${arch}/Packages | xargs --no-run-if-empty rm -v"
-        ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${version}/${arch}/Packages/*.rpm
-        ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${version}/${arch}
+        cp -p "${WORKSPACE}"/result/bleemeo-agent*-${VERSION}-1.fc${fedora_version}.*.rpm ${CREATEREPO_ROOT}/${fedora_version}/${arch}/Packages
+        ${CREATEREPO_DOCKER_CMD} sh -c "dnf repomanage --old ${CREATEREPO_ROOT}/${fedora_version}/${arch}/Packages | xargs --no-run-if-empty rm -v"
+        ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${fedora_version}/${arch}/Packages/*.rpm
+        ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${fedora_version}/${arch}
     done
 done

@@ -2,10 +2,12 @@
 
 set -e
 
-cd work/result
+cd work
+WORKSPACE=`pwd`
 
 WINDOWSREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/windows
 
+cd "${WORKSPACE}"/result
 LATEST=$(ls bleemeo-agent_*.exe)
 cp -p ${LATEST} ${WINDOWSREPO_ROOT}/
 
