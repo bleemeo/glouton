@@ -2689,7 +2689,9 @@ class Core:
 
         labels = container_info.get('Config', {}).get('Labels', {})
         if 'io.rancher.container.ip' in labels:
-            return labels['io.rancher.container.ip']
+            ip_mask = labels['io.rancher.container.ip']
+            (ip, mask) = ip_mask.split('/')
+            return ip
 
         return None
 
