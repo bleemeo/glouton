@@ -1408,9 +1408,11 @@ class BleemeoConnector(threading.Thread):
             'v1/agent/%s/' % self.agent_uuid,
             'patch',
             params={'fields': 'tags'},
-            data=json.dumps({'tags': [{'name': x} for x in tags]}),
+            data=json.dumps({'tags': [
+                {'name': x} for x in tags if x and len(x) <= 100
+            ]}),
         )
-        if response.status_code > 400:
+        if response.status_code >= 400:
             raise ApiError(response)
 
         bleemeo_cache.tags = []
