@@ -50,6 +50,7 @@ build_package(){
 build_package ubuntu trusty ~ubuntu14.04
 build_package ubuntu xenial ~ubuntu16.04
 build_package ubuntu artful ~ubuntu17.10 base
+build_package ubuntu bionic ~ubuntu18.04 base
 build_package debian wheezy ~debian7
 build_package debian jessie ~debian8
 build_package debian stretch ~debian9 base
