@@ -547,7 +547,7 @@ def _purge_services(
         set(new_discovered_services) - set(running_services)
     )
     for service_key in no_longer_running:
-        if not new_discovered_services[service_key]['active']:
+        if not new_discovered_services[service_key].get('active', True):
             continue
         (service_name, instance) = service_key
         exe_path = new_discovered_services[service_key].get('exe_path')

@@ -406,7 +406,9 @@ class BleemeoCache:
             if service_info.get('uuid') is None:
                 continue
 
-            listen_addresses = set(service_info['listen_addresses'].split(','))
+            listen_addresses = set(
+                service_info.get('listen_addresses', '').split(',')
+            )
             if '' in listen_addresses:
                 listen_addresses.remove('')
             self.services[service_info['uuid']] = Service(
@@ -414,7 +416,7 @@ class BleemeoCache:
                 service_info['label'],
                 service_info.get('instance'),
                 listen_addresses,
-                service_info['exe_path'],
+                service_info.get('exe_path', ''),
                 service_info.get('stack', ''),
                 service_info.get('active', True),
             )
