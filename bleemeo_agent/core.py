@@ -1938,6 +1938,24 @@ class Core:
                 processes.setdefault(pid, {'cmdline': cmdline})
                 processes[pid]['instance'] = container_name
 
+        # If a process in a container ended between the time agent get all
+        # processes and the time it listed process from a container, it will
+        # think that the process is running outside any container.
+        # This will be an issue if that process is one from a service, the
+        # service will be discovered on the host while it is in fact in a
+        # container.
+        # This could typically happen with PostgreSQL which create one process
+        # per connection.
+        # To avoid this issue, only process that still exist at this point are
+        # considerated.
+        if (self.container is None
+                or self.config.get('container.pid_namespace_host')):
+            running_pids = psutil.pids()
+            processes = {
+                pid: value for (pid, value) in processes.items()
+                if pid in running_pids
+            }
+
         return processes
 
     def get_netstat(self):
