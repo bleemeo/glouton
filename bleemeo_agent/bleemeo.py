@@ -561,7 +561,13 @@ class BleemeoConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             self._loop()
 
-        if self.connected and not self.upgrade_in_progress:
+        if self.connected and self.upgrade_in_progress:
+            self.publish(
+                'v1/agent/%s/disconnect' % self.agent_uuid,
+                json.dumps({'disconnect-cause': 'Upgrade'}),
+                force=True
+            )
+        elif self.connected:
             self.publish(
                 'v1/agent/%s/disconnect' % self.agent_uuid,
                 json.dumps({'disconnect-cause': 'Clean shutdown'}),
