@@ -230,6 +230,7 @@ class Check:
             next_run_in=0,
         )
         self.open_sockets_job = None
+        self._last_status = None
 
     def _initialize_tcp_sockets(self):
         tcp_sockets = {}
@@ -402,6 +403,12 @@ class Check:
                 if sock is not None:
                     sock.close()
                     self.tcp_sockets[key] = None
+            if self._last_status is None or self._last_status == STATUS_OK:
+                self.core.add_scheduled_job(
+                    self.run_check,
+                    seconds=0,
+                    next_run_in=30,
+                )
 
         if return_code == STATUS_OK and self.tcp_sockets:
             # Make sure all socket are openned
@@ -410,6 +417,8 @@ class Check:
                 seconds=0,
                 next_run_in=5,
             )
+
+        self._last_status = return_code
 
     def stop(self):
         """ Unschedule this check
