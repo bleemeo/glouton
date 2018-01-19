@@ -859,6 +859,7 @@ class BleemeoConnector(threading.Thread):
         bleemeo_api = None
 
         last_metrics_count = 0
+        successive_errors = 0
 
         while not self.core.is_terminating.is_set():
             if self.agent_uuid is None:
@@ -987,7 +988,14 @@ class BleemeoConnector(threading.Thread):
                 last_sync = clock_now
                 self._bleemeo_cache = bleemeo_cache.copy()
 
-            self.core.is_terminating.wait(15)
+            if has_error:
+                successive_errors += 1
+                delay = min(successive_errors * 15, 60)
+            else:
+                successive_errors = 0
+                delay = 15
+
+            self.core.is_terminating.wait(delay)
 
     def _sync_metrics(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-locals
@@ -1321,7 +1329,7 @@ class BleemeoConnector(threading.Thread):
                 },
             )
             if response.status_code != expected_code:
-                raise ApiError(response.content)
+                raise ApiError(response)
             data = response.json()
             listen_addresses = set(data['listen_addresses'].split(','))
             if '' in listen_addresses:
@@ -1510,7 +1518,7 @@ class BleemeoConnector(threading.Thread):
             )
 
             if response.status_code not in (200, 201):
-                raise ApiError(response.content)
+                raise ApiError(response)
             obj_uuid = response.json()['id']
             container = Container(
                 obj_uuid,
@@ -1623,7 +1631,7 @@ class BleemeoConnector(threading.Thread):
                     response.json()['id'],
                 )
             else:
-                raise ApiError(response.content)
+                raise ApiError(response)
 
             data = response.json()
             fact = AgentFact(
@@ -1653,7 +1661,7 @@ class BleemeoConnector(threading.Thread):
                 'delete',
             )
             if response.status_code != 204:
-                raise ApiError(response.content)
+                raise ApiError(response)
             del bleemeo_cache.facts[fact_uuid]
             if (fact.key in bleemeo_cache.facts_by_key and
                     bleemeo_cache.facts_by_key[fact.key].uuid == fact_uuid):
