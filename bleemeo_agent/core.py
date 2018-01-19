@@ -455,8 +455,8 @@ def get_service_info(cmdline):
             )
             if match:
                 return service_info
-    else:
-        return KNOWN_PROCESS.get(name)
+        return None
+    return KNOWN_PROCESS.get(name)
 
 
 def _apply_service_override(services, override_config, core):
@@ -1742,6 +1742,7 @@ class Core:
             self._netstat_output_mtime = mtime
 
     def update_discovery(self, first_run=False, deleted_services=None):
+        # pylint: disable=too-many-locals
         self._update_docker_info()
         discovered_running_services = self._run_discovery()
         if first_run:
@@ -1933,6 +1934,7 @@ class Core:
     def get_netstat(self):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
+        # pylint: disable=too-many-locals
         """ Parse netstat output and return a mapping pid => list of listening
             port/protocol (e.g. 80/tcp, 127/udp)
         """
@@ -2625,9 +2627,11 @@ class Core:
         """
         if self.bleemeo_connector is not None:
             return self.bleemeo_connector.agent_uuid
+        return None
 
     def get_docker_container_address(self, container_name):
         # pylint: disable=too-many-return-statements
+        # pylint: disable=too-many-locals
         """ Return address where the container may be reachable from host
 
             This may not be possible. This could return None or an IP only
@@ -2690,8 +2694,8 @@ class Core:
         labels = container_info.get('Config', {}).get('Labels', {})
         if 'io.rancher.container.ip' in labels:
             ip_mask = labels['io.rancher.container.ip']
-            (ip, mask) = ip_mask.split('/')
-            return ip
+            (ip_address, _) = ip_mask.split('/')
+            return ip_address
 
         return None
 
