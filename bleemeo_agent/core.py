@@ -427,7 +427,8 @@ def main():
 def get_service_info(cmdline):
     """ Return service_info from KNOWN_PROCESS matching this command line
     """
-    name = os.path.basename(shlex.split(cmdline)[0])
+    arg0 = shlex.split(cmdline)[0]
+    name = os.path.basename(arg0)
 
     if os.name == 'nt':
         name = name.lower()
@@ -437,10 +438,18 @@ def get_service_info(cmdline):
         name = name[:-len('.exe')]
 
     # Some process alter their name to add information. Redis, nginx
-    # or php-fpm do this (example for Redis: "redis-server *:6379").
-    # All currently supported service don't have space in the expected name,
-    # so we can safely always take the first words.
+    # or php-fpm do this.
+    # Example for Redis: "/usr/bin/redis-server *:6379".
+    # Example for nginx: "'nginx: master process /usr/sbin/nginx [...]"
+    # To catch first (Redis), take first "word", since no currently supported
+    # service include a space.
     name = name.split()[0]
+    # To catch second (nginx and php-fpm), ceck if command starts with one word
+    # immediatly followed by ":".
+    if arg0.strip() and arg0.split()[0][-1] == ':':
+        altered_name = arg0.split()[0]
+        if altered_name in KNOWN_PROCESS:
+            return KNOWN_PROCESS[altered_name]
 
     # For now, special case for java, erlang or python process.
     # Need a more general way to manage those case. Every interpreter/VM

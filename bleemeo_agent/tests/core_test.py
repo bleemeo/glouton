@@ -292,9 +292,80 @@ PROCESS_SERVICE = [
     ),
 ]
 
+PROCESS_SERVICE2 = [
+    (
+        "'/opt/program files/mysql/mysqld'",
+        "mysql",
+    ),
+    # Service from Ubuntu 16.04, default config
+    (
+        (
+            "'nginx: master process /usr/sbin/nginx -g daemon on; "
+            "master_process on;'"
+        ),
+        'nginx',
+    ),
+    (
+        "'/usr/bin/redis-server 127.0.0.1:6379' '' '' '' '' '' '' ''",
+        'redis',
+    ),
+    (
+        (
+            "/usr/sbin/slapd -h 'ldap:/// ldapi:///' -g openldap -u openldap "
+            "-F /etc/ldap/slapd.d"
+        ),
+        'openldap',
+    ),
+    (
+        (
+            "'php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)' "
+            "'' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' ''"
+        ),
+        'phpfpm',
+    ),
+    (
+        (
+            '/usr/lib/erlang/erts-7.3/bin/beam -W w -A 64 -P 1048576 -K true '
+            '-B i -- -root /usr/lib/erlang -progname erl -- -home '
+            '/var/lib/rabbitmq -- -pa '
+            '/usr/lib/rabbitmq/lib/rabbitmq_server-3.5.7/sbin/../ebin'
+            ' -noshell -noinput -s rabbit boot -sname rabbit@xenial2 -boot '
+            'start_sasl -kernel inet_default_connect_options '
+            '\'[{nodelay,true}]\' -sasl errlog_type error -sasl '
+            'sasl_error_logger false -rabbit error_logger '
+            '\'{file,"/var/log/rabbitmq/rabbit@xenial2.log"}\' -rabbit'
+            ' sasl_error_logger '
+            '\'{file,"/var/log/rabbitmq/rabbit@xenial2-sasl.log"}\''
+            ' -rabbit enabled_plugins_file \'"/etc/rabbitmq/enabled_plugins"\''
+            ' -rabbit plugins_dir '
+            '\'"/usr/lib/rabbitmq/lib/rabbitmq_server-3.5.7/sbin/../plugins"\''
+            ' -rabbit plugins_expand_dir '
+            '\'"/var/lib/rabbitmq/mnesia/rabbit@xenial2-plugins-expand"\' '
+            '-os_mon start_cpu_sup false -os_mon start_disksup false -os_mon '
+            'start_memsup false -mnesia dir '
+            '\'"/var/lib/rabbitmq/mnesia/rabbit@xenial2"\' -kernel '
+            'inet_dist_listen_min 25672 -kernel inet_dist_listen_max 25672'
+        ),
+        'rabbitmq',
+    ),
+]
+
 
 def test_get_service_info():
     for (cmdline, service) in PROCESS_SERVICE:
+        result = bleemeo_agent.core.get_service_info(cmdline)
+        if service is None:
+            assert result is None, 'Found a service for cmdline %s' % cmdline
+        elif result is None:
+            assert False, 'Expected service %s' % service
+        else:
+            assert result['service'] == service
+
+
+def test_get_service_info2():
+    """ When shlex.quote is available (Python 3.3+) PROCESS_SERVICE are quoted.
+    """
+    for (cmdline, service) in PROCESS_SERVICE2:
         result = bleemeo_agent.core.get_service_info(cmdline)
         if service is None:
             assert result is None, 'Found a service for cmdline %s' % cmdline

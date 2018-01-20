@@ -1654,6 +1654,9 @@ def _get_telegraf_config(core):
                     and service_info.get('address') is None):
                 continue
 
+            if port is None:
+                continue
+
             copy_info.setdefault(
                 'stats_url',
                 'fcgi://%s:%s/status' % (
