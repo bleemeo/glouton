@@ -533,7 +533,7 @@ def _sanitize_service(
         # be created.
         logging.info(
             'Bad custom service definition: '
-            'service "%s" dot not have port settings',
+            'service "%s" does not have port settings',
             name,
         )
         return None

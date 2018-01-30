@@ -1654,7 +1654,7 @@ def _get_telegraf_config(core):
                     and service_info.get('address') is None):
                 continue
 
-            if port is None:
+            if port is None and 'stats_url' not in copy_info:
                 continue
 
             copy_info.setdefault(
