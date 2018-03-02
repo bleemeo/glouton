@@ -122,7 +122,7 @@ class BleemeoAPI:
                 response.status_code,
                 response.text,
             )
-            return None
+            raise ApiError(response)
         return response.json()['token']
 
     def api_call(self, url, method='get', params=None, data=None):
