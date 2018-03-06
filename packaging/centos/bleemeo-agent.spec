@@ -221,6 +221,7 @@ chown bleemeo:telegraf /etc/telegraf/telegraf.d/bleemeo-generated.conf
 chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf
 
 # Bleemeo agent modify telegraf configuration.
+systemctl reset-failed telegraf.service || true
 systemctl restart telegraf.service 2>/dev/null
 
 if [ $1 -eq 1 ] ; then
