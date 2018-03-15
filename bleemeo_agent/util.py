@@ -45,6 +45,88 @@ except NotImplementedError:
     warnings.warn('A secure pseudo-random number generator is not available '
                   'on your system. Falling back to Mersenne Twister.')
 
+try:
+    import docker
+except ImportError:
+    docker = None
+
+
+def decode_docker_top(docker_top):
+    # pylint: disable=too-many-branches
+    """ Return a list of process dict from docker_client.top()
+
+        Result of docker_client.top() is not always the same. On boot2docker,
+        on first boot docker will use ps from busybox which output only few
+        column.
+
+        In addition we first try with a "ps waux" and then with default
+        ps ("ps -ef").
+
+        The process dict is a dictonary with the same key as the one generated
+        by get_top_info from psutil data. Field not found in Docker ps are
+        omitted.
+
+        All process will at least have pid, cmdline and name key.
+    """
+    result = []
+    container_process = docker_top.get('Processes')
+
+    user_index = None
+    pid_index = None
+    pcpu_index = None
+    rss_index = None
+    time_index = None
+    cmdline_index = None
+    stat_index = None
+    for (index, name) in enumerate(docker_top.get('Titles', [])):
+        if name == 'PID':
+            pid_index = index
+        elif name in ('CMD', 'COMMAND'):
+            cmdline_index = index
+        elif name in ('UID', 'USER'):
+            user_index = index
+        elif name == '%CPU':
+            pcpu_index = index
+        elif name == 'RSS':
+            rss_index = index
+        elif name == 'TIME':
+            time_index = index
+        elif name == 'STAT':
+            stat_index = index
+
+    if pid_index is None or cmdline_index is None:
+        return result
+
+    # In some case Docker return None instead of process list. Make
+    # sure container_process is an iterable
+    container_process = container_process or []
+    for row in container_process:
+        # The PID is from the point-of-view of root pid namespace.
+        process = {
+            'pid': int(row[pid_index]),
+            'cmdline': row[cmdline_index],
+            'name': os.path.basename(row[cmdline_index].split()[0]),
+        }
+        if user_index is not None:
+            process['username'] = row[user_index]
+        try:
+            process['cpu_percent'] = float(row[pcpu_index])
+        except (TypeError, ValueError):
+            pass
+        try:
+            process['memory_rss'] = int(row[rss_index])
+        except (TypeError, ValueError):
+            pass
+        try:
+            process['cpu_times'] = pstime_to_second(row[time_index])
+        except (TypeError, ValueError):
+            pass
+        if stat_index is not None:
+            process['status'] = psstat_to_status(row[stat_index])
+        result.append(process)
+
+    return result
+
 
 # Taken from Django project
 def generate_password(length=10,
@@ -90,6 +172,74 @@ def get_clock():
     if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
         return time.monotonic()
     return time.time()
+
+
+def psstat_to_status(psstat):
+    """ Convert a ps STAT to status string returned by psutil
+
+        Only "ps waux" return this field. It something like
+
+        * S   => sleeping
+        * Ss  => sleeping
+        * R+  => running
+
+        The possible second (or more) char are ignored. They indicate
+        additional status that we don't display.
+    """
+    char = psstat[0]
+
+    mapping = {
+        'D': 'disk-sleep',
+        'R': 'running',
+        'S': 'sleeping',
+        'T': 'stopped',
+        't': 'tracing-stop',
+        'X': 'dead',
+        'Z': 'zombie',
+    }
+    return mapping.get(char, '?')
+
+
+def pstime_to_second(pstime):
+    """ Convert a ps CPU time to a number of second
+
+        Only time format from "ps -ef" or "ps waux" is considered.
+        Example of format:
+
+        * 00:16:42   => 1002
+        * 16:42      => 1002
+        * 1-02:27:14 => 95234
+        * 1587:14    => 95234
+    """
+
+    if pstime.count(':') == 1:
+        # format is MM:SS
+        minute, second = pstime.split(':')
+        return int(minute) * 60 + int(second)
+    elif pstime.count(':') == 2 and '-' in pstime:
+        # format is DD-HH:MM:SS
+        day, rest = pstime.split('-')
+        hour, minute, second = rest.split(':')
+        return (
+            int(day) * 86400 +
+            int(hour) * 3600 +
+            int(minute) * 60 +
+            int(second)
+        )
+    elif pstime.count(':') == 2:
+        # format is HH:MM:SS
+        hour, minute, second = pstime.split(':')
+        return int(hour) * 3600 + int(minute) * 60 + int(second)
+    elif 'h' in pstime:
+        # format is HHhMM
+        hour, minute = pstime.split('h')
+        return int(hour) * 3600 + int(minute) * 60
+    elif 'd' in pstime:
+        # format is DDdHH
+        day, hour = pstime.split('d')
+        return int(day) * 86400 + int(hour) * 3600
+    else:
+        raise ValueError('Unknown pstime format "%s"' % pstime)
 
 
 def format_uptime(uptime_seconds):
@@ -379,65 +529,15 @@ def get_top_info(core):
     # pylint: disable=too-many-branches
     """ Return informations needed to build a "top" view.
     """
-    processes = []
-    for process in psutil.process_iter():
-        try:
-            if process.pid == 0:
-                # PID 0 on Windows use it for "System Idle Process".
-                # PID 0 is not used Linux don't use it.
-                # Other system are currently not supported.
-                continue
-            try:
-                username = process.username()
-            except (KeyError, psutil.AccessDenied):
-                # the uid can't be resolved by the system
-                if os.name == 'nt':
-                    username = ''
-                else:
-                    username = str(process.uids().real)
+    gather_started_at = time.time()
 
-            # Cmdline may be unavailable (permission issue ?)
-            # When unavailable, depending on psutil version, it returns
-            # either [] or ['']
-            try:
-                cmdline = process.cmdline()
-                if cmdline and cmdline[0]:
-                    # shlex.quote is needed if the program path has space in
-                    # the name. This is usually true under Windows but Windows
-                    # has shlex.quote (Python 3.3+).
-                    if hasattr(shlex, 'quote'):
-                        cmdline = ' '.join(shlex.quote(x) for x in cmdline)
-                    else:
-                        cmdline = ' '.join(cmdline)
-                    name = process.name()
-                else:
-                    cmdline = process.name()
-                    name = cmdline
-            except psutil.AccessDenied:
-                cmdline = process.name()
-                name = cmdline
+    processes = {}
+    if core.docker_client is not None:
+        processes = _get_docker_process(core.docker_client)
 
-            cpu_times = process.cpu_times()
-            process_info = {
-                'pid': process.pid,
-                'create_time': process.create_time(),
-                'cmdline': cmdline,
-                'name': name,
-                'memory_rss': process.memory_info().rss / 1024,
-                'cpu_percent': process.cpu_percent(),
-                'cpu_times':
-                    cpu_times.user + cpu_times.system,
-                'status': process.status(),
-                'username': username,
-            }
-            try:
-                process_info['exe'] = process.exe()
-            except psutil.AccessDenied:
-                process_info['exe'] = ''
-        except psutil.NoSuchProcess:
-            continue
-
-        processes.append(process_info)
+    if (core.container is None
+            or core.config.get('container.pid_namespace_host')):
+        _update_process_psutil(processes, gather_started_at)
 
     now = time.time()
     cpu_usage = psutil.cpu_times_percent()
@@ -449,7 +549,7 @@ def get_top_info(core):
         'uptime': get_uptime(),
         'loads': get_loadavg(core),
         'users': len(psutil.users()),
-        'processes': processes,
+        'processes': list(processes.values()),
         'cpu': {
             'user': cpu_usage.user,
             'nice': getattr(cpu_usage, 'nice', 0.0),
@@ -502,7 +602,7 @@ def get_top_output(top_info):
     # use a negation for the PID.
     sorted_process = sorted(
         top_info['processes'],
-        key=lambda x: (x['cpu_percent'], -int(x['pid'])),
+        key=lambda x: (x.get('cpu_percent', 0), -int(x['pid'])),
         reverse=True)
     for metric in sorted_process[:25]:
         # convert status (like "sleeping", "running") to one char status
@@ -513,38 +613,38 @@ def get_top_output(top_info):
             psutil.STATUS_STOPPED: 'T',
             psutil.STATUS_TRACING_STOP: 'T',
             psutil.STATUS_ZOMBIE: 'Z',
-        }.get(metric['status'], '?')
+        }.get(metric.get('status'), '?')
         processes.append(
             ('%(pid)5s %(user)-9.9s %(res)6d %(status)s '
              '%(cpu)5.1f %(mem)4.1f %(time)9s %(cmd)s') %
             {
                 'pid': metric['pid'],
-                'user': metric['username'],
-                'res': metric['memory_rss'],
+                'user': metric.get('username', ''),
+                'res': metric.get('memory_rss', 0),
                 'status': status,
-                'cpu': metric['cpu_percent'],
+                'cpu': metric.get('cpu_percent', 0),
                 'mem':
-                    float(metric['memory_rss']) / memory_total * 100,
-                'time': format_cpu_time(metric['cpu_times']),
+                    float(metric.get('memory_rss', 0)) / memory_total * 100,
+                'time': format_cpu_time(metric.get('cpu_times', 0)),
                 'cmd': metric['name'],
             })
 
     process_total = len(top_info['processes'])
     process_running = len([
         x for x in top_info['processes']
-        if x['status'] == psutil.STATUS_RUNNING
+        if x.get('status') == psutil.STATUS_RUNNING
     ])
     process_sleeping = len([
         x for x in top_info['processes']
-        if x['status'] == psutil.STATUS_SLEEPING
+        if x.get('status') == psutil.STATUS_SLEEPING
     ])
     process_stopped = len([
         x for x in top_info['processes']
-        if x['status'] == psutil.STATUS_STOPPED
+        if x.get('status') == psutil.STATUS_STOPPED
     ])
     process_zombie = len([
         x for x in top_info['processes']
-        if x['status'] == psutil.STATUS_ZOMBIE
+        if x.get('status') == psutil.STATUS_ZOMBIE
     ])
 
     date_top = datetime.datetime.fromtimestamp(top_info['time'])
@@ -715,3 +815,114 @@ class JSONEncoder(json.JSONEncoder):
         if isinstance(o, set):
             return list(o)
         return super().default(o)
+
+
+def _get_docker_process(docker_client):
+    if docker is None:
+        return {}
+
+    processes = {}
+
+    for container in docker_client.containers():
+        # container has... nameS
+        # Also name start with "/". I think it may have mulitple name
+        # and/or other "/" with docker-in-docker.
+        container_name = container['Names'][0].lstrip('/')
+        try:
+            try:
+                docker_top = (
+                    docker_client.top(container_name, ps_args="waux")
+                )
+            except TypeError:
+                # Older version of Docker-py don't support ps_args option
+                docker_top = (
+                    docker_client.top(container_name)
+                )
+        except docker.errors.APIError:
+            # most probably container is restarting or just stopped
+            continue
+
+        for process in decode_docker_top(docker_top):
+            pid = process['pid']
+            processes[pid] = process
+            processes[pid]['instance'] = container_name
+
+    return processes
+
+
+def _update_process_psutil(processes, only_started_before):
+    # pylint: disable=too-many-branches
+    for process in psutil.process_iter():
+        try:
+            if process.pid == 0:
+                # PID 0 on Windows use it for "System Idle Process".
+                # PID 0 is not used Linux don't use it.
+                # Other system are currently not supported.
+                continue
+            if process.create_time() > only_started_before:
+                # Ignore process created very recently. This is done to avoid
+                # issue with process created in a container between the listing
+                # of container process and this update from psutil. Such
+                # process would be marked as running outside any container
+                # could lead to discovery error.
+                continue
+            try:
+                username = process.username()
+            except (KeyError, psutil.AccessDenied):
+                # the uid can't be resolved by the system
+                if os.name == 'nt':
+                    username = ''
+                else:
+                    username = str(process.uids().real)
+
+            # Cmdline may be unavailable (permission issue ?)
+            # When unavailable, depending on psutil version, it returns
+            # either [] or ['']
+            try:
+                cmdline = process.cmdline()
+                if cmdline and cmdline[0]:
+                    # shlex.quote is needed if the program path has space in
+                    # the name. This is usually true under Windows but Windows
+                    # has shlex.quote (Python 3.3+).
+                    if hasattr(shlex, 'quote'):
+                        cmdline = ' '.join(shlex.quote(x) for x in cmdline)
+                    else:
+                        cmdline = ' '.join(cmdline)
+                    name = process.name()
+                else:
+                    cmdline = process.name()
+                    name = cmdline
+            except psutil.AccessDenied:
+                cmdline = process.name()
+                name = cmdline
+
+            cpu_times = process.cpu_times()
+            process_info = {
+                'pid': process.pid,
+                'create_time': process.create_time(),
+                'cmdline': cmdline,
+                'name': name,
+                'memory_rss': process.memory_info().rss / 1024,
+                'cpu_percent': process.cpu_percent(),
+                'cpu_times':
+                    cpu_times.user + cpu_times.system,
+                'status': process.status(),
+                'username': username,
+                '_psutil': True,
+            }
+            try:
+                process_info['exe'] = process.exe()
+            except psutil.AccessDenied:
+                process_info['exe'] = ''
+
+            # Keep instance if the process is running in a Docker
+            if process.pid in processes:
+                process_info['instance'] = processes[process.pid]['instance']
+            else:
+                process_info['instance'] = ''
+
+            processes[process.pid] = process_info
+        except psutil.NoSuchProcess:
+            continue
+
+    return processes

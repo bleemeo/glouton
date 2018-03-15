@@ -670,39 +670,6 @@ def disable_https_warning():
     urllib3.disable_warnings(klass)
 
 
-def decode_docker_top(docker_top):
-    """ Return a list of (pid, cmdline) from result for docker_client.top()
-
-        Result of docker_client.top() is not always the same. On boot2docker,
-        on first boot docker will use ps from busybox which output only few
-        column.
-    """
-    result = []
-    container_process = docker_top.get('Processes')
-
-    pid_index = None
-    cmdline_index = None
-    for (index, name) in enumerate(docker_top.get('Titles', [])):
-        if name == 'PID':
-            pid_index = index
-        elif name in ('CMD', 'COMMAND'):
-            cmdline_index = index
-
-    if pid_index is None or cmdline_index is None:
-        return result
-
-    # In some case Docker return None instead of process list. Make
-    # sure container_process is an iterable
-    container_process = container_process or []
-    for process in container_process:
-        # The PID is from the point-of-view of root pid namespace.
-        pid = int(process[pid_index])
-        cmdline = process[cmdline_index]
-        result.append((pid, cmdline))
-
-    return result
-
-
 def format_value(value, unit, unit_text):
     """ Format a value for human
 
@@ -1906,55 +1873,8 @@ class Core:
         # outside docker, it's None
         processes = {}
 
-        if (self.container is None
-                or self.config.get('container.pid_namespace_host')):
-            # The host pid namespace see ALL process.
-            # They are added in instance "None" (i.e. running in the host),
-            # but if they are running in a docker, they will be updated later
-            for process in bleemeo_agent.util.get_top_info(self)['processes']:
-                processes[process['pid']] = {
-                    'cmdline': process['cmdline'],
-                    'instance': '',
-                    'exe': process['exe'],
-                }
-
-        if self.docker_client is None:
-            return processes
-
-        for container in self.docker_client.containers():
-            # container has... nameS
-            # Also name start with "/". I think it may have mulitple name
-            # and/or other "/" with docker-in-docker.
-            container_name = container['Names'][0].lstrip('/')
-            try:
-                docker_top = (
-                    self.docker_client.top(container_name)
-                )
-            except docker.errors.APIError:
-                # most probably container is restarting or just stopped
-                continue
-
-            for (pid, cmdline) in decode_docker_top(docker_top):
-                processes.setdefault(pid, {'cmdline': cmdline})
-                processes[pid]['instance'] = container_name
-
-        # If a process in a container ended between the time agent get all
-        # processes and the time it listed process from a container, it will
-        # think that the process is running outside any container.
-        # This will be an issue if that process is one from a service, the
-        # service will be discovered on the host while it is in fact in a
-        # container.
-        # This could typically happen with PostgreSQL which create one process
-        # per connection.
-        # To avoid this issue, only process that still exist at this point are
-        # considerated.
-        if (self.container is None
-                or self.config.get('container.pid_namespace_host')):
-            running_pids = psutil.pids()
-            processes = {
-                pid: value for (pid, value) in processes.items()
-                if pid in running_pids
-            }
+        for process in bleemeo_agent.util.get_top_info(self)['processes']:
+            processes[process['pid']] = process
 
         return processes
 
