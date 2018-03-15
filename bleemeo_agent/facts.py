@@ -467,6 +467,8 @@ def get_facts(core):
     fqdn = socket.getfqdn()
     if fqdn == 'localhost':
         fqdn = socket.gethostname()
+    elif fqdn == 'localhost.local' and socket.gethostname() != 'localhost':
+        fqdn = socket.gethostname()
 
     if '.' in fqdn:
         (hostname, domain) = fqdn.split('.', 1)
