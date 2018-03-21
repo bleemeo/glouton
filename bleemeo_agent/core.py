@@ -55,6 +55,7 @@ import bleemeo_agent.checker
 import bleemeo_agent.config
 import bleemeo_agent.facts
 import bleemeo_agent.graphite
+import bleemeo_agent.services
 import bleemeo_agent.util
 
 # Optional dependencies
@@ -133,6 +134,11 @@ KNOWN_PROCESS = {
         'protocol': socket.IPPROTO_TCP,
     },
     'exim4': {
+        'service': 'exim',
+        'port': 25,
+        'protocol': socket.IPPROTO_TCP,
+    },
+    'exim': {
         'service': 'exim',
         'port': 25,
         'protocol': socket.IPPROTO_TCP,
@@ -1504,6 +1510,7 @@ class Core:
         self.add_scheduled_job(
             self._gather_metrics_minute,
             seconds=60,
+            next_run_in=12,
         )
         self._gather_update_metrics_job = self.add_scheduled_job(
             self._gather_update_metrics,
@@ -1603,6 +1610,18 @@ class Core:
                     and self.docker_client is not None):
 
                 self._docker_health_status(result['Id'])
+
+        # Some service have additional metrics. Currently only Postfix and exim
+        # for mail queue size
+        for (service_name, instance) in self.services:
+            if service_name == 'postfix':
+                bleemeo_agent.services.gather_postfix_queue_size(
+                    instance, self,
+                )
+            if service_name == 'exim':
+                bleemeo_agent.services.gather_exim_queue_size(
+                    instance, self,
+                )
 
     def _gather_update_metrics(self):
         """ Gather and send metrics from system updates
