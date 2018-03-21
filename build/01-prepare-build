@@ -3,7 +3,7 @@
 set -e
 
 COMMIT_HASH=$(git rev-parse --short HEAD)
-VERSION=0.$(TZ=UTC date +%Y%m%d.%H%M%S)
+VERSION=$(TZ=UTC date +%y.%m.%d.%H%M%S)
 
 echo ${VERSION} > VERSION
 
