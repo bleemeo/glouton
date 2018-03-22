@@ -97,6 +97,21 @@ class Config(dict):
             current = current[path]
         current[last_name] = value
 
+    def delete(self, name, separator='.'):
+        """ If name name contains separator ("." by default), it will search
+            in sub-dict.
+
+            Example, delete("category.value") will result in
+            del self['category']['value'].
+            It does NOT delete empty parent.
+        """
+        current = self
+        splitted_name = name.split(separator)
+        (paths, last_name) = (splitted_name[:-1], splitted_name[-1])
+        for path in paths:
+            current = current[path]
+        del current[last_name]
+
 
 def merge_dict(destination, source):
     """ Merge two dictionary (recursivly). destination is modified
@@ -109,8 +124,8 @@ def merge_dict(destination, source):
                 and isinstance(destination[key], dict)):
             destination[key] = merge_dict(destination[key], value)
         elif (key in destination
-                and isinstance(value, list)
-                and isinstance(destination[key], list)):
+              and isinstance(value, list)
+              and isinstance(destination[key], list)):
             destination[key].extend(value)
         else:
             destination[key] = value
@@ -133,8 +148,8 @@ def load_config(paths=None):
     configs = [default_config]
     for filepath in config_files(paths):
         try:
-            with open(filepath) as fd:
-                config = yaml.safe_load(fd)
+            with open(filepath) as config_file:
+                config = yaml.safe_load(config_file)
 
                 # config could be None if file is empty.
                 # config could be non-dict if top-level of file is another YAML
@@ -146,7 +161,7 @@ def load_config(paths=None):
                         'wrong format for file "%s"' % filepath
                     )
 
-        except Exception as exc:
+        except Exception as exc:  # pylint: disable=broad-except
             errors.append(str(exc).replace('\n', ' '))
 
     return functools.reduce(merge_dict, configs), errors

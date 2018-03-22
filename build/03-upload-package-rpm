@@ -7,9 +7,9 @@ cd work/result
 CREATEREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/centos
 CREATEREPO_DOCKER_CMD="docker run --rm -v ${CREATEREPO_ROOT}:${CREATEREPO_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/centos-createrepo"
 
-CENTOS_SUPPORTED_VERSION="7"
+CENTOS_SUPPORTED_VERSIONS="7"
 
-for version in ${CENTOS_SUPPORTED_VERSION}
+for version in ${CENTOS_SUPPORTED_VERSIONS}
 do
     cp -p *.centos.*.rpm ${CREATEREPO_ROOT}/${version}/x86_64/Packages
     ${CREATEREPO_DOCKER_CMD} sh -c "repomanage --old ${CREATEREPO_ROOT}/${version}/x86_64/Packages | xargs --no-run-if-empty rm -v"
@@ -20,10 +20,10 @@ done
 CREATEREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/fedora
 CREATEREPO_DOCKER_CMD="docker run --rm -v ${CREATEREPO_ROOT}:${CREATEREPO_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/fedora-createrepo"
 
-FEDORA_SUPPORTED_VERSION="24"
+FEDORA_SUPPORTED_VERSIONS="24"
 FEDORA_SUPPORTED_ARCH="x86_64 armhfp"
 
-for version in ${FEDORA_SUPPORTED_VERSION}
+for version in ${FEDORA_SUPPORTED_VERSIONS}
 do
     for arch in ${FEDORA_SUPPORTED_ARCH}
     do

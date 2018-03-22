@@ -1,7 +1,0 @@
-#!/usr/bin/python
-
-import bleemeo_agent.core
-
-
-if __name__ == '__main__':
-    bleemeo_agent.core.main()

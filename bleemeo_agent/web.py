@@ -24,8 +24,8 @@ import jinja2.filters
 import bleemeo_agent.checker
 
 
-app = flask.Flask(__name__)
-app_thread = None
+app = flask.Flask(__name__)  # pylint: disable=invalid-name
+app_thread = None  # pylint: disable=invalid-name
 
 
 @app.route('/')
@@ -74,11 +74,11 @@ def _gather_checks_info():
             else:
                 check_count_critical += 1
             threshold = app.core.get_threshold(
-                metric['measurement'], metric.get('item'),
+                metric['measurement'], metric.get('item', ''),
             )
 
             pretty_name = metric['measurement']
-            if metric.get('item') is not None:
+            if metric.get('item', ''):
                 pretty_name = '%s for %s' % (pretty_name, metric['item'])
             checks.append({
                 'name': metric['measurement'],
@@ -121,7 +121,7 @@ def filter_netsizeformat(value):
 
 
 def start_server(core):
-    global app_thread
+    global app_thread  # pylint: disable=global-statement,invalid-name
 
     bind_address = core.config.get(
         'web.listener.address', '127.0.0.1')

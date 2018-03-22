@@ -55,7 +55,7 @@
         {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['item'], 0) %}
         {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['item'], 0) %}
         {% set disk_total_user = disk_used + disk_free %}
-        {% set disk_threshold = core.get_threshold(disk_metric['measurement'], disk_metric.get('item')) or {} %}
+        {% set disk_threshold = core.get_threshold(disk_metric['measurement'], disk_metric.get('item', '')) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="disk-heading-{{ loop.index }}">
                 <h4 class="panel-title">
@@ -83,11 +83,11 @@
     {% endwith %}
     {% endfor %}
     {% with %}
-        {% set mem_metric = core.get_last_metric('mem_used_perc', None) %}
+        {% set mem_metric = core.get_last_metric('mem_used_perc', '') %}
         {% if mem_metric is not none %}
-        {% set mem_total = core.get_last_metric_value('mem_total', None, 0) %}
+        {% set mem_total = core.get_last_metric_value('mem_total', '', 0) %}
         {% set mem_used = mem_metric['value'] / 100 * mem_total %}
-        {% set mem_threshold = core.get_threshold(mem_metric['measurement'], mem_metric.get('item')) or {} %}
+        {% set mem_threshold = core.get_threshold(mem_metric['measurement'], mem_metric.get('item', '')) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="mem-heading">
                 <h4 class="panel-title">
@@ -137,13 +137,13 @@
     {% endwith %}
     {% endfor %}
     {% with %}
-        {% set cpu_metric = core.get_last_metric('cpu_used', None) %}
+        {% set cpu_metric = core.get_last_metric('cpu_used', '') %}
         {% if cpu_metric is not none %}
-        {% set cpu_user = core.get_last_metric_value('cpu_user', None, 0) %}
-        {% set cpu_system = core.get_last_metric_value('cpu_system', None, 0) %}
+        {% set cpu_user = core.get_last_metric_value('cpu_user', '', 0) %}
+        {% set cpu_system = core.get_last_metric_value('cpu_system', '', 0) %}
         {% set cpu_used = cpu_metric['value'] %}
-        {% set cpu_other = core.get_last_metric_value('cpu_other', None, 0) %}
-        {% set cpu_threshold = core.get_threshold(cpu_metric['measurement'], cpu_metric.get('item')) or {} %}
+        {% set cpu_other = core.get_last_metric_value('cpu_other', '', 0) %}
+        {% set cpu_threshold = core.get_threshold(cpu_metric['measurement'], cpu_metric.get('item', '')) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="cpu-heading">
                 <h4 class="panel-title">

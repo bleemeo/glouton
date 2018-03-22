@@ -23,6 +23,7 @@ import pathlib
 import subprocess
 import sys
 
+# pylint: disable=import-error
 import servicemanager
 import win32console
 import win32security
@@ -92,9 +93,9 @@ def windows_main():
         if args.post_install:
             windows_postinstall(args)
         elif args.pre_install:
-            windows_preinstall(args)
+            windows_preinstall()
         elif args.pre_remove:
-            windows_preremove(args)
+            windows_preremove()
     elif len(sys.argv) == 2 and sys.argv[1] == '--run-service':
         servicemanager.Initialize()
         servicemanager.PrepareToHostSingle(BleemeoAgentService)
@@ -113,9 +114,9 @@ def windows_main():
 def windows_installer_logger():
     # Redirecting stdout/stderr is usefull if program terminate due to
     # unexcepted error
-    fd = open(r'C:\ProgramData\Bleemeo\log\install.log', 'a')
-    sys.stdout = fd
-    sys.stderr = fd
+    install_log = open(r'C:\ProgramData\Bleemeo\log\install.log', 'a')
+    sys.stdout = install_log
+    sys.stderr = install_log
 
     logging.basicConfig(
         filename=r'C:\ProgramData\Bleemeo\log\install.log',
@@ -131,11 +132,11 @@ def decode_console_output(data):
     """
     try:
         return data.decode('cp%s' % win32console.GetConsoleCP())
-    except:
+    except Exception:  # pylint: disable=broad-except
         return data.decode('utf-8', errors='ignore')
 
 
-def windows_preremove(args):
+def windows_preremove():
     """ Stop and remove Windows service for Bleemoe agent and Telegraf
     """
     windows_installer_logger()
@@ -190,7 +191,7 @@ def windows_preremove(args):
     logging.info('##### Pre-remove ended')
 
 
-def windows_preinstall(args):
+def windows_preinstall():
     """ Stop Telegraf and Bleemeo Agent
     """
     windows_installer_logger()
@@ -227,14 +228,14 @@ def windows_postinstall(args):
     logging.info('#### Post-install started')
     config_dir = r'C:\ProgramData\Bleemeo\etc\agent.conf.d'
 
-    config_file = os.path.join(config_dir, '30-install.conf')
-    if not os.path.exists(config_file):
-        with open(config_file, 'w') as fd:
+    config_file_name = os.path.join(config_dir, '30-install.conf')
+    if not os.path.exists(config_file_name):
+        with open(config_file_name, 'w') as config_file:
             print("""
 bleemeo:
     account_id: %s
     registration_key: %s
-""" % (args.account, args.registration), file=fd)
+""" % (args.account, args.registration), file=config_file)
 
     os.makedirs(
         r'C:\ProgramData\Bleemeo\etc\telegraf\telegraf.d', exist_ok=True
@@ -284,7 +285,7 @@ bleemeo:
         win32service.SC_MANAGER_ALL_ACCESS
     )
     try:
-        hs = win32service.OpenService(
+        service_handle = win32service.OpenService(
             hscm, "telegraf", win32service.SERVICE_ALL_ACCESS
         )
         try:
@@ -293,7 +294,7 @@ bleemeo:
                 r"NT AUTHORITY\LocalService",
             )[0]
             sec_descriptor = win32service.QueryServiceObjectSecurity(
-                hs,
+                service_handle,
                 win32security.DACL_SECURITY_INFORMATION
             )
             sec_dacl = sec_descriptor.GetSecurityDescriptorDacl()
@@ -304,18 +305,18 @@ bleemeo:
             )
             sec_descriptor.SetSecurityDescriptorDacl(1, sec_dacl, 0)
             win32service.SetServiceObjectSecurity(
-                hs,
+                service_handle,
                 win32security.DACL_SECURITY_INFORMATION,
                 sec_descriptor,
             )
-        except:
+        except Exception:  # pylint: disable=broad-except
             logging.info(
                 'Failed to change permission on Telegraf service',
                 exc_info=True,
             )
         finally:
-            win32service.CloseServiceHandle(hs)
-    except:
+            win32service.CloseServiceHandle(service_handle)
+    except Exception:  # pylint: disable=broad-except
         logging.info('Failed to find Telegraf service', exc_info=True)
     finally:
         win32service.CloseServiceHandle(hscm)
@@ -375,7 +376,7 @@ class BleemeoAgentService(win32serviceutil.ServiceFramework):
         win32serviceutil.ServiceFramework.__init__(self, args)
         self.core = bleemeo_agent.core.Core(run_as_windows_service=True)
 
-    def SvcDoRun(self):
+    def SvcDoRun(self):  # pylint: disable=invalid-name
         servicemanager.LogMsg(
             servicemanager.EVENTLOG_INFORMATION_TYPE,
             servicemanager.PYS_SERVICE_STARTED,
@@ -384,12 +385,12 @@ class BleemeoAgentService(win32serviceutil.ServiceFramework):
 
         try:
             self.core.run()
-        except:
+        except Exception:
             logging.error('Unhandled error:', exc_info=True)
             raise
         finally:
             logging.info('Agent stopped')
 
-    def SvcStop(self):
+    def SvcStop(self):  # pylint: disable=invalid-name
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         self.core.is_terminating.set()

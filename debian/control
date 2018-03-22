@@ -6,7 +6,7 @@ Build-Depends: debhelper (>=9),
                dh-exec,
                dh-python,
                dh-systemd,
-               python3-setuptools,
+               python3-setuptools (>=30.3.0),
                python3-all
 Standards-Version: 3.9.5
 Homepage: https://bleemeo.com
@@ -19,6 +19,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
     adduser,
     bleemeo-agent-telegraf | bleemeo-agent-collectd | bleemeo-agent-single,
     python3-paho-mqtt,
+    python3-pkg-resources,
     python3-psutil (>= 2.0.0~),
     net-tools,
 Recommends:
@@ -69,3 +70,19 @@ Description: Bleemeo agent with collectd
  This package contains the agent which send metric to
  the SaaS platform with no dependency on daemon.
  This package is appropriate for Docker images.
+
+Package: bleemeo-agent-jmx
+Architecture: all
+Multi-Arch: foreign
+Depends: ${misc:Depends}, ${python3:Depends},
+    bleemeo-agent,
+    jmxtrans,
+# Use pre-depends to force installation and configuration of
+# JRE before jmxtrans
+Pre-Depends: default-jre-headless | java6-runtime-headless
+Description: Bleemeo agent plugin for JMX
+ Bleemeo is a solution of Monitoring as a Service.
+ This package contains the agent which send metric to
+ the SaaS platform.
+ This package contains part needed to monitor JMX
+ metrics.

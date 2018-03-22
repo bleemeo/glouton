@@ -15,6 +15,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+"""
+Module to gather facts about the server (OS familly/version, CPU type, ...)
+"""
 
 import datetime
 import logging
@@ -33,6 +36,7 @@ import bleemeo_agent.config
 import bleemeo_agent.util
 
 if os.name == 'nt':
+    # pylint: disable=import-error
     import pythoncom
     import winreg
     import wmi
@@ -51,7 +55,23 @@ def get_file_content(file_name):
         return None
 
 
-def get_package_version_dpkg(package_name):
+def get_url_content(core, url, timeout=5.0):
+    """ Get URL content. If error occur or status is not 200 return None
+    """
+    try:
+        response = requests.get(
+            url,
+            timeout=timeout,
+            headers={'User-Agent': core.http_user_agent},
+        )
+        if response.status_code != 200:
+            return None
+        return response.text
+    except requests.exceptions.RequestException:
+        return None
+
+
+def _get_package_version_dpkg(package_name):
     try:
         stdout = subprocess.check_output(
             ['dpkg', '-l', package_name],
@@ -73,7 +93,7 @@ def get_package_version_dpkg(package_name):
     return parts[2].decode('utf-8')
 
 
-def get_package_version_rpm(package_name):
+def _get_package_version_rpm(package_name):
     try:
         stdout = subprocess.check_output(
             ['rpm', '-q', package_name, '--qf', '%{EVR}'],
@@ -116,12 +136,12 @@ def get_package_version(package_name, default=None, distribution=None):
 
     result = None
     if distribution is None or distribution == 'debian':
-        result = get_package_version_dpkg(package_name)
+        result = _get_package_version_dpkg(package_name)
         if result is not None:
             return result
 
     if distribution is None or distribution == 'centos':
-        result = get_package_version_rpm(package_name)
+        result = _get_package_version_rpm(package_name)
         if result is not None:
             return result
 
@@ -129,6 +149,10 @@ def get_package_version(package_name, default=None, distribution=None):
 
 
 def get_agent_version(core):
+    """ Returns the version of Bleemeo agent
+
+        Use system package tools (dpkg/rpm) to query the installed version.
+    """
     return get_package_version(
         'bleemeo-agent',
         bleemeo_agent.__version__,
@@ -172,7 +196,7 @@ def get_docker_version(core):
     return (package_version, api_version)
 
 
-def get_telegraf_version(core):
+def _get_telegraf_version(core):
     package_version = get_package_version(
         'telegraf',
         distribution=core.config.get('distribution'),
@@ -200,25 +224,96 @@ def get_telegraf_version(core):
     return package_version
 
 
-def read_os_release():
+def read_os_release(core):
     """ Read os-release file and returns its content as dict
 
         os-relase is a FreeDesktop standard:
         http://www.freedesktop.org/software/systemd/man/os-release.html
     """
     result = {}
-    with open('/etc/os-release') as fd:
-        for line in fd:
-            line = line.strip()
-            if line == '':
-                continue
-            (key, value) = line.split('=', 1)
-            # value is a quoted string (single or double quote).
-            # Use shlex.split to convert to normal string (handling
-            # correctly if the string contains escaped quote)
-            value = shlex.split(value)[0]
-            result[key] = value
+    file_path = '/etc/os-release'
+    if core.container is not None:
+        mount_point = core.config.get('df.host_mount_point')
+        if mount_point is not None:
+            file_path = mount_point + file_path
+        else:
+            return result
+
+    try:
+        with open(file_path) as os_release_file:
+            for line in os_release_file:
+                line = line.strip()
+                if line == '':
+                    continue
+                (key, value) = line.split('=', 1)
+                # value is a quoted string (single or double quote).
+                # Use shlex.split to convert to normal string (handling
+                # correctly if the string contains escaped quote)
+                value = shlex.split(value)[0]
+                result[key] = value
+    except (IOError, OSError):
+        pass
     return result
+
+
+def _get_aws_facts(core):
+    facts = {}
+    facts['aws_ami_id'] = get_url_content(
+        core,
+        'http://169.254.169.254/latest/meta-data/ami-id',
+    )
+    # If first request fail, don't try other one, it's probably not an
+    # AWS EC2.
+    if facts['aws_ami_id'] is None:
+        return facts
+
+    facts['aws_instance_id'] = get_url_content(
+        core,
+        'http://169.254.169.254/latest/meta-data/instance-id',
+    )
+    facts['aws_instance_type'] = get_url_content(
+        core,
+        'http://169.254.169.254/latest/meta-data/instance-type',
+    )
+    facts['aws_local_hostname'] = get_url_content(
+        core,
+        'http://169.254.169.254/latest/meta-data/local-hostname',
+    )
+    facts['aws_security_groups'] = get_url_content(
+        core,
+        'http://169.254.169.254/latest/meta-data/security-groups',
+    )
+    facts['aws_public_ipv4'] = get_url_content(
+        core,
+        'http://169.254.169.254/latest/meta-data/public-ipv4',
+    )
+    facts['aws_placement'] = get_url_content(
+        core,
+        'http://169.254.169.254/latest/meta-data/placement/availability-zone',
+    )
+
+    base_url = (
+        'http://169.254.169.254/latest/meta-data/network/interfaces/macs/'
+    )
+    macs = get_url_content(core, base_url)
+    if macs is not None:
+        result = [
+            get_url_content(core, base_url + x + 'vpc-id')
+            for x in macs.splitlines()
+        ]
+        result = [x for x in result if x is not None]
+        if result:
+            facts['aws_vpc_id'] = ','.join(result)
+
+        result = [
+            get_url_content(core, base_url + x + 'vpc-ipv4-cidr-block')
+            for x in macs.splitlines()
+        ]
+        result = [x for x in result if x is not None]
+        if result:
+            facts['aws_vpc_ipv4_cidr_block'] = ','.join(result)
+
+    return facts
 
 
 def get_primary_address():
@@ -255,15 +350,7 @@ def get_public_ip(core):
         'agent.public_ip_indicator',
         'https://myip.bleemeo.com'
     )
-    try:
-        response = requests.get(url, timeout=5)
-    except requests.exceptions.RequestException:
-        return None
-
-    if response.status_code == 200:
-        return response.text
-
-    return None
+    return get_url_content(core, url)
 
 
 def get_virtual_type(facts):
@@ -307,7 +394,7 @@ def get_virtual_type(facts):
     return result
 
 
-def system_has_swap():
+def _system_has_swap():
     return psutil.swap_memory().total > 0
 
 
@@ -334,10 +421,11 @@ def get_facts_root():
     with open(facts_file, 'w') as file_obj:
         yaml.safe_dump(facts, file_obj, default_flow_style=False)
 
-    return facts
-
 
 def get_facts(core):
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-statements
     """ Return facts/grains/information about current machine.
 
         Returned facts are informations like hostname, OS type/version, etc
@@ -351,21 +439,24 @@ def get_facts(core):
         facts = {}
 
     if os.name != 'nt':
-        os_information = read_os_release()
-        try:
-            os_codename = subprocess.check_output(
-                ['lsb_release', '--codename', '--short']
-            ).decode('utf8').strip()
-        except OSError:
-            os_codename = None
+        os_information = read_os_release(core)
         facts.update({
-            'os_codename': os_codename,
             'os_family': os_information.get('ID_LIKE', None),
             'os_name': os_information.get('NAME', None),
             'os_pretty_name': os_information.get('PRETTY_NAME', None),
             'os_version': os_information.get('VERSION_ID', None),
             'os_version_long': os_information.get('VERSION', None),
         })
+        if core.container is None:
+            try:
+                os_codename = subprocess.check_output(
+                    ['lsb_release', '--codename', '--short']
+                ).decode('utf8').strip()
+            except OSError:
+                os_codename = None
+            facts.update({
+                'os_codename': os_codename,
+            })
     else:
         facts.update({
             'os_version': platform.win32_ver()[0],
@@ -375,6 +466,8 @@ def get_facts(core):
     architecture = platform.machine()
     fqdn = socket.getfqdn()
     if fqdn == 'localhost':
+        fqdn = socket.gethostname()
+    elif fqdn == 'localhost.local' and socket.gethostname() != 'localhost':
         fqdn = socket.gethostname()
 
     if '.' in fqdn:
@@ -426,7 +519,7 @@ def get_facts(core):
 
         wmi_connection = wmi.WMI()
         result = wmi_connection.Win32_ComputerSystem()
-        if len(result):
+        if result:
             system_info = result[0]
             facts.update({
                 'product_name': system_info.Model.strip(),
@@ -434,7 +527,7 @@ def get_facts(core):
             })
 
         result = wmi_connection.Win32_SystemBIOS()
-        if len(result):
+        if result:
             bios_info = result[0].PartComponent
             facts.update({
                 'bios_released_at': bios_info.ReleaseDate.strip(),
@@ -444,6 +537,10 @@ def get_facts(core):
             })
 
     virtual = get_virtual_type(facts)
+
+    if (facts.get('bios_version') is not None
+            and 'amazon' in facts.get('bios_version').lower()):
+        facts.update(_get_aws_facts(core))
 
     (docker_version, docker_api_version) = get_docker_version(core)
 
@@ -459,11 +556,14 @@ def get_facts(core):
         'domain': domain,
         'public_ip': get_public_ip(core),
         'fqdn': fqdn,
+        'installation_format': core.config.get(
+            'agent.installation_format', 'manual'
+        ),
         'hostname': hostname,
         'metrics_source': core.graphite_server.metrics_source,
         'primary_address': primary_address,
-        'swap_present': system_has_swap(),
-        'telegraf_version': get_telegraf_version(core),
+        'swap_present': _system_has_swap(),
+        'telegraf_version': _get_telegraf_version(core),
         'timezone': get_file_content('/etc/timezone'),
         'virtual': virtual,
     })

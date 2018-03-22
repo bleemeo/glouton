@@ -17,6 +17,9 @@
 #
 
 import socket
+import time
+
+import yaml
 
 import bleemeo_agent.core
 
@@ -289,6 +292,64 @@ PROCESS_SERVICE = [
     ),
 ]
 
+PROCESS_SERVICE2 = [
+    (
+        "'/opt/program files/mysql/mysqld'",
+        "mysql",
+    ),
+    # Service from Ubuntu 16.04, default config
+    (
+        (
+            "'nginx: master process /usr/sbin/nginx -g daemon on; "
+            "master_process on;'"
+        ),
+        'nginx',
+    ),
+    (
+        "'/usr/bin/redis-server 127.0.0.1:6379' '' '' '' '' '' '' ''",
+        'redis',
+    ),
+    (
+        (
+            "/usr/sbin/slapd -h 'ldap:/// ldapi:///' -g openldap -u openldap "
+            "-F /etc/ldap/slapd.d"
+        ),
+        'openldap',
+    ),
+    (
+        (
+            "'php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)' "
+            "'' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' '' ''"
+        ),
+        'phpfpm',
+    ),
+    (
+        (
+            '/usr/lib/erlang/erts-7.3/bin/beam -W w -A 64 -P 1048576 -K true '
+            '-B i -- -root /usr/lib/erlang -progname erl -- -home '
+            '/var/lib/rabbitmq -- -pa '
+            '/usr/lib/rabbitmq/lib/rabbitmq_server-3.5.7/sbin/../ebin'
+            ' -noshell -noinput -s rabbit boot -sname rabbit@xenial2 -boot '
+            'start_sasl -kernel inet_default_connect_options '
+            '\'[{nodelay,true}]\' -sasl errlog_type error -sasl '
+            'sasl_error_logger false -rabbit error_logger '
+            '\'{file,"/var/log/rabbitmq/rabbit@xenial2.log"}\' -rabbit'
+            ' sasl_error_logger '
+            '\'{file,"/var/log/rabbitmq/rabbit@xenial2-sasl.log"}\''
+            ' -rabbit enabled_plugins_file \'"/etc/rabbitmq/enabled_plugins"\''
+            ' -rabbit plugins_dir '
+            '\'"/usr/lib/rabbitmq/lib/rabbitmq_server-3.5.7/sbin/../plugins"\''
+            ' -rabbit plugins_expand_dir '
+            '\'"/var/lib/rabbitmq/mnesia/rabbit@xenial2-plugins-expand"\' '
+            '-os_mon start_cpu_sup false -os_mon start_disksup false -os_mon '
+            'start_memsup false -mnesia dir '
+            '\'"/var/lib/rabbitmq/mnesia/rabbit@xenial2"\' -kernel '
+            'inet_dist_listen_min 25672 -kernel inet_dist_listen_max 25672'
+        ),
+        'rabbitmq',
+    ),
+]
+
 
 def test_get_service_info():
     for (cmdline, service) in PROCESS_SERVICE:
@@ -301,18 +362,33 @@ def test_get_service_info():
             assert result['service'] == service
 
 
+def test_get_service_info2():
+    """ When shlex.quote is available (Python 3.3+) PROCESS_SERVICE are quoted.
+    """
+    for (cmdline, service) in PROCESS_SERVICE2:
+        result = bleemeo_agent.core.get_service_info(cmdline)
+        if service is None:
+            assert result is None, 'Found a service for cmdline %s' % cmdline
+        elif result is None:
+            assert False, 'Expected service %s' % service
+        else:
+            assert result['service'] == service
+
+
 def test_sanitize_service():
-    sanitize_service = bleemeo_agent.core.sanitize_service
+    sanitize_service = bleemeo_agent.core._sanitize_service
+
+    core = None
 
     # First check custom services
     service_info = {}
-    assert sanitize_service('test', service_info, False) is None
+    assert sanitize_service('test', '', service_info, False, core) is None
 
     service_info = {'check_type': 'nagios'}
-    assert sanitize_service('test', service_info, False) is None
+    assert sanitize_service('test', '', service_info, False, core) is None
 
     service_info = {'port': 'non-numeric'}
-    assert sanitize_service('test', service_info, False) is None
+    assert sanitize_service('test', '', service_info, False, core) is None
 
     service_info = {'port': 1234}
     wanted = {
@@ -320,11 +396,11 @@ def test_sanitize_service():
         'address': '127.0.0.1',
         'protocol': socket.IPPROTO_TCP
     }
-    assert sanitize_service('test', service_info, False) == wanted
+    assert sanitize_service('test', '', service_info, False, core) == wanted
 
     service_info = {'check_type': 'nagios', 'check_command': 'true'}
     wanted = service_info
-    assert sanitize_service('test', service_info, False) == wanted
+    assert sanitize_service('test', '', service_info, False, core) == wanted
 
     service_info = {'check_type': 'nagios', 'check_command': 'true', 'port': 1}
     wanted = {
@@ -334,20 +410,21 @@ def test_sanitize_service():
         'address': '127.0.0.1',
         'protocol': socket.IPPROTO_TCP
     }
-    assert sanitize_service('test', service_info, False) == wanted
+    assert sanitize_service('test', '', service_info, False, core) == wanted
 
     # discovered services are allowed to exists without service_info
     service_info = {}
-    assert sanitize_service('test', service_info, True) == {}
+    assert sanitize_service('test', '', service_info, True, core) == {}
 
 
 def test_apply_service_override():
+    core = None
 
     services = {
-        ('apache', None): {'placeholder': 'apache'},
-        ('mysql', None): {'placeholder': 'mysql'},
+        ('apache', ''): {'placeholder': 'apache'},
+        ('mysql', ''): {'placeholder': 'mysql'},
         ('mysql', 'container-1'): {'placeholder': 'mysql2'},
-        ('memcached', None): {'address': '127.0.0.1', 'placeholder': 'memc'},
+        ('memcached', ''): {'address': '127.0.0.1', 'placeholder': 'memc'},
     }
 
     override = [
@@ -359,14 +436,14 @@ def test_apply_service_override():
     ]
 
     wanted = {
-        ('apache', None): {'placeholder': 'apache'},
-        ('mysql', None): {'placeholder': 'mysql', 'username': 'user1'},
+        ('apache', ''): {'placeholder': 'apache'},
+        ('mysql', ''): {'placeholder': 'mysql', 'username': 'user1'},
         ('mysql', 'container-1'): {
             'placeholder': 'mysql2',
             'username': 'user2'
         },
-        ('memcached', None): {'address': '10.1.1.2', 'placeholder': 'memc'},
-        ('mywebapp', None): {
+        ('memcached', ''): {'address': '10.1.1.2', 'placeholder': 'memc'},
+        ('mywebapp', ''): {
             'address': '127.0.0.1',
             'port': 8080,
             'protocol': socket.IPPROTO_TCP,
@@ -374,63 +451,255 @@ def test_apply_service_override():
         },
     }
 
-    bleemeo_agent.core.apply_service_override(services, override)
+    bleemeo_agent.core._apply_service_override(services, override, core)
     assert services == wanted
 
 
-def test_decode_docker_top():
-    """ docker top <container> don't always return the same output.
+def test_format_value():
+    assert bleemeo_agent.core.format_value(0., None, None) == '0.00'
+    assert bleemeo_agent.core.format_value(
+        0., bleemeo_agent.core.UNIT_UNIT, 'No unit'
+    ) == '0.00'
 
-        For example with docker-machine, the *first* boot output looks like:
-        PID                 USER                COMMAND
-        3028                root                bash
+    # 42 is an unknown UNIT_*
+    assert bleemeo_agent.core.format_value(
+        0., 42, '%'
+    ) == '0.00 %'
+    # 42 is an unknown UNIT_*
+    assert bleemeo_agent.core.format_value(
+        0., 42, 'thing'
+    ) == '0.00 thing'
 
-        Test case are generated using:
+    assert bleemeo_agent.core.format_value(
+        0., bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '0.00 Bytes'
+    assert bleemeo_agent.core.format_value(
+        1024., bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1.00 KBytes'
+    assert bleemeo_agent.core.format_value(
+        2**30, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1.00 GBytes'
+    assert bleemeo_agent.core.format_value(
+        2**60, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1.00 EBytes'
+    assert bleemeo_agent.core.format_value(
+        2**70, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '1024.00 EBytes'
 
-        docker run --rm -ti --name test \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            bleemeo/bleemeo-agent \
-            python3 -c 'import docker;
-                print(docker.Client(version="1.21").top("test"))'
+    assert bleemeo_agent.core.format_value(
+        -1024., bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '-1.00 KBytes'
+    assert bleemeo_agent.core.format_value(
+        -2**30, bleemeo_agent.core.UNIT_BYTE, 'Byte'
+    ) == '-1.00 GBytes'
+
+
+def test_check_soft_status_empty_cache():
+    period = 300
+    base_time = int(time.time())
+
+    for status in ['ok', 'warning', 'critical']:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            None,
+            {
+                'measurement': 'metric',
+                'time': base_time,
+            },
+            status,
+            period,
+            base_time,
+        )
+        assert softstatus_state.last_status == status
+
+
+def test_check_soft_status():
+    period = 300
+    base_time = int(time.time())
+
+    data = [
+        # (time_offset, soft_status, expected_result_status)
+        (-10, 'ok', 'ok'),
+        (0, 'warning', 'ok'),
+        (10, 'warning', 'ok'),
+        (280, 'warning', 'ok'),
+        (290, 'warning', 'ok'),
+        (300, 'warning', 'warning'),
+    ]
+    softstatus_state = None
+    for (time_offset, soft_status, expected_status) in data:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            softstatus_state,
+            {
+                'measurement': 'metric',
+                'time': base_time + time_offset,
+            },
+            soft_status,
+            period,
+            base_time + time_offset,
+        )
+        assert softstatus_state.last_status == expected_status
+
+    data = [
+        # (time_offset, soft_status, expected_result_status)
+        (-10, 'ok', 'ok'),
+        (0, 'warning', 'ok'),
+        (10, 'warning', 'ok'),
+        (200, 'critical', 'ok'),
+        (290, 'critical', 'ok'),
+        (300, 'critical', 'warning'),
+        (310, 'critical', 'warning'),
+        (490, 'critical', 'warning'),
+        (500, 'critical', 'critical'),
+        (510, 'critical', 'critical'),
+        (520, 'warning', 'warning'),
+        (530, 'critical', 'warning'),
+        (820, 'critical', 'warning'),
+        (830, 'critical', 'critical'),
+        (840, 'ok', 'ok'),
+    ]
+    softstatus_state = None
+    for (time_offset, soft_status, expected_status) in data:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            softstatus_state,
+            {
+                'measurement': 'metric',
+                'time': base_time + time_offset,
+            },
+            soft_status,
+            period,
+            base_time + time_offset,
+        )
+        print(softstatus_state)
+        assert softstatus_state.last_status == expected_status, (
+            "At time_offset=%s" % time_offset
+        )
+
+
+def test_check_soft_status_changing_period():
+    base_time = int(time.time())
+
+    data = [
+        # (time_offset, soft_status, period, expected_result_status)
+        (-10, 'ok', 0, 'ok'),
+        (0, 'warning', 0, 'warning'),
+        (10, 'critical', 0, 'critical'),
+        (90, 'ok', 300, 'ok'),
+        (100, 'warning', 300, 'ok'),
+        (400, 'warning', 300, 'warning'),
+        (410, 'warning', 500, 'warning'),
+    ]
+    softstatus_state = None
+    for (time_offset, soft_status, period, expected_status) in data:
+        softstatus_state = bleemeo_agent.core._check_soft_status(
+            softstatus_state,
+            {
+                'measurement': 'metric',
+                'time': base_time + time_offset,
+            },
+            soft_status,
+            period,
+            base_time + time_offset,
+        )
+        print(softstatus_state)
+        assert softstatus_state.last_status == expected_status, (
+            "At time_offset=%s" % time_offset
+        )
+
+
+def test_ignore_service_doc():
+    """ Test service_ignore based on online documentation rules
     """
+    config = yaml.safe_load("""
+rules:
+    - name: mysql
+    - name: postgres
+      instance: "host:* container:*"
+    - name: apache
+      instance: "container:*integration*"
+    - name: nginx
+      instance: "container:*"
+    - name: redis
+      instance: "host:*"
+""")
+    rules = config['rules']
 
-    docker_top_result = [
-        # Boot2Docker 1.12.3 first boot
-        {
-            'Processes': [
-                ['3216', 'root',
-                    'python3 -c import docker;'
-                    'print(docker.Client(version="1.21").top("test"))']
-            ],
-            'Titles': ['PID', 'USER', 'COMMAND']
-        },
-        # Boot2Docker 1.12.3 second boot
-        {
-            'Titles': [
-                'UID', 'PID', 'PPID', 'C', 'STIME', 'TTY', 'TIME', 'CMD'
-            ],
-            'Processes': [
-                ['root', '1551', '1542', '0', '14:13', 'pts/1', '00:00:00',
-                    'python3 -c import docker;'
-                    'print(docker.Client(version="1.21").top("test"))']
-            ]
-        },
-        # Ubuntu 16.04
-        {
-            'Processes': [
-                ['root', '5017', '4988', '0', '15:15', 'pts/29', '00:00:00',
-                    'python3 -c import docker;'
-                    'print(docker.Client(version="1.21").top("test"))']
-            ],
-            'Titles': [
-                'UID', 'PID', 'PPID', 'C', 'STIME', 'TTY', 'TIME', 'CMD'
-            ]
-        },
+    cases = [
+        # (service_name, instance, ignored)
+        ('rabbitmq', '', False),
+        ('rabbitmq', 'random-value', False),
+        ('mysql', '', True),
+        ('mysql', 'container-name', True),
+        ('mysql', 'something', True),
+        ('postgres', '', True),
+        ('postgres', 'random-value', True),
+        ('apache', '', False),
+        ('apache', 'container-name', False),
+        ('apache', 'container-integration', True),
+        ('apache', 'integration-container', True),
+        ('apache', 'test-integration-container', True),
+        ('nginx', '', False),
+        ('nginx', 'random-value', True),
+        ('redis', '', True),
+        ('redis', 'random-value', False),
     ]
 
-    for case in docker_top_result:
-        result = bleemeo_agent.core.decode_docker_top(case)
-        assert len(result) == 1
-        # result[0][0] is a PID, e.g. a number
-        int(result[0][0])
-        assert result[0][1].startswith('python3')
+    for (service_name, instance, expected) in cases:
+        result = bleemeo_agent.core._service_ignore(
+            rules, service_name, instance
+        )
+        if result:
+            fail_msg = '(%s, %s) is ignored (excepted to NOT be ignored)' % (
+                service_name,
+                instance,
+            )
+        else:
+            fail_msg = '(%s, %s) is NOT ignored (excepted to be ignored)' % (
+                service_name,
+                instance,
+            )
+        assert result == expected, fail_msg
+
+
+def test_ignore_service_compat():
+    """ Test service_ignore based on previous online documentation rules
+    """
+    config = yaml.safe_load("""
+rules:
+    - mysql
+    - id: apache
+      instance: container-name-*
+    - id: redis
+      instance: ""
+""")
+    rules = config['rules']
+
+    cases = [
+        # (service_name, instance, ignored)
+        ('rabbitmq', '', False),
+        ('mysql', '', True),
+        ('mysql', 'container-name', True),
+        ('mysql', 'something', True),
+        ('apache', '', False),
+        ('apache', 'container-name', False),
+        ('apache', 'container-name-', True),
+        ('apache', 'container-name-test', True),
+        ('apache', 'integration-container-name-test', False),
+        ('redis', '', True),
+        ('redis', 'random-value', False),
+    ]
+
+    for (service_name, instance, expected) in cases:
+        result = bleemeo_agent.core._service_ignore(
+            rules, service_name, instance
+        )
+        if result:
+            fail_msg = '(%s, %s) is ignored (excepted to NOT be ignored)' % (
+                service_name,
+                instance,
+            )
+        else:
+            fail_msg = '(%s, %s) is NOT ignored (excepted to be ignored)' % (
+                service_name,
+                instance,
+            )
+        assert result == expected, fail_msg

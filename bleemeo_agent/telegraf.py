@@ -15,8 +15,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+# pylint: disable=too-many-lines
 
-import distutils.version
+import distutils.version  # pylint: disable=import-error,no-name-in-module
 import logging
 import os
 import re
@@ -24,6 +25,7 @@ import shlex
 import subprocess
 import time
 
+import psutil
 import requests
 from six.moves import urllib_parse
 
@@ -38,10 +40,11 @@ STATSD_TELEGRAF_CONFIG = """
 # Statsd Server
 # To disable Statsd server, add:
 #     telegraf:
-#         statsd_enabled: False
+#         statsd:
+#             enabled: False
 # in /etc/bleemeo/agent.conf.d/99-local.conf
 [[inputs.statsd]]
-  service_address = "127.0.0.1:8125"
+  service_address = "%(address)s:%(port)s"
   delete_gauges = false
   delete_counters = false
   delete_timings = true
@@ -53,8 +56,14 @@ STATSD_TELEGRAF_CONFIG = """
 
 APACHE_TELEGRAF_CONFIG = """
 [[inputs.apache]]
-  urls = ["http://%(address)s:%(port)s/server-status?auto"]
+  urls = ["%(status_url)s"]
 """
+
+# Additional configuration if Telegraf >= 1.2.0
+APACHE_TELEGRAF_CONFIG_1_2 = """
+  insecure_skip_verify = true
+"""
+
 
 DOCKER_TELEGRAF_CONFIG = """
 [[inputs.docker]]
@@ -89,15 +98,37 @@ MYSQL_TELEGRAF_CONFIG = """
   servers = ["%(username)s:%(password)s@tcp(%(address)s:%(port)s)/"]
 """
 
+# Additional configuration if Telegraf >= 1.3.0
+MYSQL_TELEGRAF_CONFIG_1_3 = """
+  gather_innodb_metrics = true
+"""
+
 NGINX_TELEGRAF_CONFIG = """
 [[inputs.nginx]]
   urls = ["http://%(address)s:%(port)s/nginx_status"]
 """
 
+# Additional configuration if Telegraf >= 1.4.0
+NGINX_TELEGRAF_CONFIG_1_4 = """
+  insecure_skip_verify = true
+"""
+
+PHPFPM_TELEGRAF_CONFIG = """
+[[inputs.phpfpm]]
+    urls = ["%(stats_url)s"]
+    %(tags)s
+"""  # noqa
+
 POSTGRESQL_TELEGRAF_CONFIG = """
 [[inputs.postgresql]]
     address = "host=%(address)s port=%(port)s user=%(username)s password=%(password)s dbname=postgres sslmode=disable"
 """  # noqa
+
+PROMETHEUS_TELEGRAF_CONFIG = """
+[[inputs.prometheus]]
+  urls = ["%(url)s"]
+  name_prefix = "prometheus_%(prefix)s_"
+"""
 
 RABBITMQ_TELEGRAF_CONFIG = """
 [[inputs.rabbitmq]]
@@ -117,22 +148,71 @@ ZOOKEEPER_CONFIG = """
 """
 
 
+class ComputationFail(Exception):
+    """ Exceptions raised when computed metrics failed to be computed and
+        should not be retried
+    """
+    pass
+
+
+class MissingMetric(Exception):
+    """ Exceptions raised when a metric needed for a computed metrics is
+        not (yet) present. The computed metrics should be retried later.
+    """
+    pass
+
+
 def compare_version(current_version, wanted_version):
     """ Return True if current_version is greater or equal to wanted_version
     """
+    # pylint: disable=no-member
     current_version = distutils.version.LooseVersion(current_version)
     wanted_version = distutils.version.LooseVersion(wanted_version)
     return current_version >= wanted_version
 
 
+def telegraf_replace(value):
+    """ telegraf replace some char before sending to graphite.
+
+        This function do the same transformation
+    """
+    return (
+        value
+        .replace('/', '-')
+        .replace('@', '-')
+        .replace('*', '-')
+        .replace(' ', '_')
+        .replace('..', '.')
+        .replace('\\', '')
+        .replace(')', '_')
+        .replace('(', '_')
+        .replace('.', '_')
+    )
+
+
+def update_discovery(core):
+    try:
+        _write_config(core)
+    except Exception:  # pylint: disable=broad-except
+        logging.warning(
+            'Failed to write telegraf configuration. '
+            'Continuing with current configuration')
+        logging.debug('exception is:', exc_info=True)
+
+
 class Telegraf:
 
-    def __init__(self, graphite_server):
-        self.core = graphite_server.core
-        self.graphite_server = graphite_server
+    def __init__(self, graphite_client):
+        self.core = graphite_client.core
+        self.graphite_client = graphite_client
+        self.graphite_server = graphite_client.server
 
         # used to compute derivated values
         self._raw_value = {}
+
+        self.computed_metrics_pending = set()
+
+        self.last_timestamp = 0
 
         self.core.add_scheduled_job(
             self._purge_metrics,
@@ -151,147 +231,6 @@ class Telegraf:
             for key, (timestamp, value) in self._raw_value.items()
             if timestamp >= cutoff
         }
-
-    def telegraf_version_gte(self, version):
-        """ Return True if installed Telegraf version is at least given version
-
-            If unable to compare given version with current version, return
-            False (for example fact telegraf_version is absent or any error).
-        """
-        current_version = self.core.last_facts.get('telegraf_version')
-        if current_version is None:
-            return False
-
-        try:
-            return compare_version(current_version, version)
-        except:
-            return False
-
-    def update_discovery(self):
-        try:
-            self._write_config()
-        except:
-            logging.warning(
-                'Failed to write telegraf configuration. '
-                'Continuing with current configuration')
-            logging.debug('exception is:', exc_info=True)
-
-    def _write_config(self):
-        telegraf_config = self._get_telegraf_config()
-
-        telegraf_config_path = self.core.config.get(
-            'telegraf.config_file',
-            '/etc/telegraf/telegraf.d/bleemeo-generated.conf'
-        )
-
-        if os.path.exists(telegraf_config_path):
-            with open(telegraf_config_path) as fd:
-                current_content = fd.read()
-
-            if telegraf_config == current_content:
-                logging.debug('telegraf already configured')
-                return
-
-        if (telegraf_config == BASE_TELEGRAF_CONFIG
-                and not os.path.exists(telegraf_config_path)):
-            logging.debug(
-                'telegraf generated config would be empty, skip writting it'
-            )
-            return
-
-        # Don't simply use open. This file must have limited permission
-        # since it may contains password
-        open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
-        fileno = os.open(telegraf_config_path, open_flags, 0o600)
-        with os.fdopen(fileno, 'w') as fd:
-            fd.write(telegraf_config)
-
-        self._restart_telegraf()
-
-    def _get_telegraf_config(self):
-        telegraf_config = BASE_TELEGRAF_CONFIG
-
-        if self.core.config.get('telegraf.statsd_enabled', True):
-            telegraf_config += STATSD_TELEGRAF_CONFIG
-
-        if self.core.docker_client is not None:
-            docker_metrics_enabled = self.core.config.get(
-                'telegraf.docker_metrics_enabled', None
-            )
-            if (docker_metrics_enabled
-                    or (
-                        docker_metrics_enabled is None
-                        and self.telegraf_version_gte('1.0.0')
-                    )):
-                telegraf_config += DOCKER_TELEGRAF_CONFIG
-
-        for (key, service_info) in self.core.services.items():
-            (service_name, instance) = key
-
-            service_info = self.core.services[key].copy()
-            service_info['instance'] = instance
-
-            if service_name == 'apache':
-                telegraf_config += APACHE_TELEGRAF_CONFIG % service_info
-            if service_name == 'elasticsearch':
-                telegraf_config += ELASTICSEARCH_TELEGRAF_CONFIG % service_info
-            if (service_name == 'haproxy'
-                    and service_info.get('stats_url') is not None):
-                telegraf_config += HAPROXY_TELEGRAF_CONFIG % service_info
-            if service_name == 'memcached':
-                telegraf_config += MEMCACHED_TELEGRAF_CONFIG % service_info
-            if (service_name == 'mysql'
-                    and service_info.get('password') is not None):
-                service_info.setdefault('username', 'root')
-                telegraf_config += MYSQL_TELEGRAF_CONFIG % service_info
-            if service_name == 'mongodb':
-                telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
-            if service_name == 'nginx':
-                telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
-            if (service_name == 'postgresql'
-                    and service_info.get('password') is not None):
-                service_info.setdefault('username', 'postgres')
-                telegraf_config += POSTGRESQL_TELEGRAF_CONFIG % service_info
-            if service_name == 'rabbitmq':
-                service_info.setdefault('username', 'guest')
-                service_info.setdefault('password', 'guest')
-                service_info.setdefault('mgmt_port', 15672)
-                telegraf_config += RABBITMQ_TELEGRAF_CONFIG % service_info
-            if service_name == 'redis':
-                telegraf_config += REDIS_TELEGRAF_CONFIG % service_info
-            if service_name == 'zookeeper':
-                telegraf_config += ZOOKEEPER_CONFIG % service_info
-
-        return telegraf_config
-
-    def _restart_telegraf(self):
-        restart_cmd = self.core.config.get(
-            'telegraf.restart_command',
-            'sudo -n service telegraf restart')
-        telegraf_container = self.core.config.get('telegraf.docker_name')
-        if telegraf_container is not None:
-            bleemeo_agent.util.docker_restart(
-                self.core.docker_client, telegraf_container
-            )
-        else:
-            try:
-                output = subprocess.check_output(
-                    shlex.split(restart_cmd),
-                    stderr=subprocess.STDOUT,
-                )
-                return_code = 0
-            except (subprocess.CalledProcessError, OSError) as exception:
-                output = exception.output
-                return_code = exception.returncode
-
-            if return_code != 0:
-                logging.info(
-                    'Failed to restart telegraf after reconfiguration: %s',
-                    output
-                )
-            else:
-                logging.debug(
-                    'telegraf reconfigured and restarted: %s', output)
 
     def get_derivate(self, name, item, timestamp, value):
         """ Return derivate of a COUNTER (e.g. something that only goes upward)
@@ -314,7 +253,7 @@ class Telegraf:
 
         return delta / delta_time
 
-    def get_service_instance(self, service, address, port):
+    def _get_service_instance(self, service, address, port):
         for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
             if (service_name == service
@@ -330,7 +269,7 @@ class Telegraf:
 
         raise KeyError('service not found')
 
-    def get_haproxy_instance(self, hostport):
+    def _get_haproxy_instance(self, hostport):
         if ':' in hostport:
             host, port = hostport.split(':')
             port = int(port)
@@ -349,20 +288,31 @@ class Telegraf:
 
         raise KeyError('service not found')
 
-    def get_elasticsearch_instance(self, node_id):
+    def _get_elasticsearch_instance(self, node_id):
         for (key, service_info) in self.core.services.items():
             (service_name, instance) = key
             if service_name != 'elasticsearch':
+                continue
+            if not service_info.get('active', True):
+                continue
+            if service_info.get('address') is None:
+                continue
+            if service_info.get('port') is None:
                 continue
             if 'es_node_id' not in service_info:
                 try:
                     response = requests.get(
                         'http://%(address)s:%(port)s/_nodes/_local/'
-                        % service_info
+                        % service_info,
+                        headers={'User-Agent': self.core.http_user_agent},
+                        timeout=10.0,
                     )
                     data = response.json()
                     this_node_id = list(data['nodes'].keys())[0]
                 except (requests.RequestException, ValueError):
+                    logging.debug(
+                        'Error while fetching es_node_is', exc_info=True
+                    )
                     continue
 
                 service_info['es_node_id'] = this_node_id
@@ -371,6 +321,17 @@ class Telegraf:
                 return instance
 
         raise KeyError('service not found')
+
+    def get_prometheus_exporter_name(self, metric_name, part):
+        """ Return the config of the Prometheus exporter
+        """
+        prometheus_configs = self.core.config.get('metric.prometheus', {})
+        for name, config in prometheus_configs.items():
+            url_mangled = telegraf_replace(config['url'])
+            if (metric_name.startswith('%s_' % name)
+                    and url_mangled in part):
+                return name
+        raise KeyError('prometheus config not found')
 
     def docker_container_name(self, part):
         """ Return Docker container name for given graphite line.
@@ -435,13 +396,32 @@ class Telegraf:
 
         return None
 
-    def emit_metric(
-            self, name, timestamp, value, computed_metrics_pending):
+    def close(self):
+        self._check_computed_metrics()
 
-        item = None
+    def emit_metric(self, name, timestamp, value):
+        # pylint: disable=too-many-statements
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-return-statements
+        # pylint: disable=too-many-locals
+        """ Rename a metric and pass it to core
+
+            If the metric is used to compute a derrived metric, add it to
+            computed_metrics_pending.
+
+            Nothing is emitted if metric is unknown
+            More that one metrics could be emitted to core
+        """
+        self.graphite_server.data_last_seen_at = bleemeo_agent.util.get_clock()
+
+        if timestamp - self.last_timestamp > 1:
+            self._check_computed_metrics()
+        self.last_timestamp = timestamp
+
+        item = ''
         service = None
-        instance = None
-        container_name = None
+        instance = ''
+        container_name = ''
         derive = False
         no_emit = False
 
@@ -469,7 +449,9 @@ class Telegraf:
                     'time': timestamp,
                     'value': 100 - value,
                 })
-            computed_metrics_pending.add(('cpu_other', None, None, timestamp))
+            self.computed_metrics_pending.add(
+                ('cpu_other', '', '', timestamp)
+            )
         elif part[-2] == 'win_cpu':
             if part[2] != '_Total':
                 return
@@ -494,10 +476,12 @@ class Telegraf:
                     'time': timestamp,
                     'value': 100 - value,
                 })
-                computed_metrics_pending.add(
-                    ('system_load1', None, None, timestamp)
+                self.computed_metrics_pending.add(
+                    ('system_load1', '', '', timestamp)
                 )
-            computed_metrics_pending.add(('cpu_other', None, None, timestamp))
+            self.computed_metrics_pending.add(
+                ('cpu_other', '', '', timestamp)
+            )
         elif part[-2] == 'disk':
             path = part[-3].replace('-', '/')
             path = self.graphite_server.disk_path_rename(path)
@@ -516,7 +500,7 @@ class Telegraf:
 
             # For Windows, assimilate disk (which are also named "C:", "D:"...
             # and (mounted) partition like C:
-            if self.graphite_server._ignored_disk(item):
+            if self.graphite_server.ignored_disk(item):
                 return
 
             if name == 'Percent_Free_Space':
@@ -524,13 +508,13 @@ class Telegraf:
                 value = 100 - value
 
                 # when disk_total is processed, disk_used is also emitted
-                computed_metrics_pending.add(
+                self.computed_metrics_pending.add(
                     ('disk_total', item, None, timestamp)
                 )
             elif name == 'Free_Megabytes':
                 name = 'disk_free'
                 value = value * 1024 * 1024
-                computed_metrics_pending.add(
+                self.computed_metrics_pending.add(
                     ('disk_total', item, None, timestamp)
                 )
             else:
@@ -540,7 +524,9 @@ class Telegraf:
             name = part[-1]
             if not name.startswith('io_'):
                 name = 'io_' + name
-            if self.graphite_server._ignored_disk(item):
+            if self.graphite_server.ignored_disk(item):
+                return
+            if name == 'io_weighted_io_time':
                 return
 
             if name == 'io_iops_in_progress':
@@ -578,7 +564,7 @@ class Telegraf:
                 except ValueError:
                     pass
 
-            if self.graphite_server._ignored_disk(item):
+            if self.graphite_server.ignored_disk(item):
                 return
 
             if name == 'Disk_Read_Bytes_persec':
@@ -627,8 +613,8 @@ class Telegraf:
             elif name in ('mem_buffered', 'mem_cached', 'mem_free'):
                 pass
             elif name in ('mem_total', 'mem_available'):
-                computed_metrics_pending.add(
-                    ('mem_used', None, None, timestamp)
+                self.computed_metrics_pending.add(
+                    ('mem_used', '', '', timestamp)
                 )
             else:
                 return
@@ -652,16 +638,16 @@ class Telegraf:
                     'time': timestamp,
                     'value': mem_used * 100. / self.core.total_memory_size,
                 })
-                computed_metrics_pending.add(
-                    ('mem_free', None, None, timestamp)
+                self.computed_metrics_pending.add(
+                    ('mem_free', '', '', timestamp)
                 )
             elif name in (
                     'Standby_Cache_Reserve_Bytes',
                     'Standby_Cache_Normal_Priority_Bytes',
                     'Standby_Cache_Core_Bytes'):
                 no_emit = True
-                computed_metrics_pending.add(
-                    ('mem_cached', None, None, timestamp)
+                self.computed_metrics_pending.add(
+                    ('mem_cached', '', '', timestamp)
                 )
             else:
                 return
@@ -749,8 +735,8 @@ class Telegraf:
                 name = 'uptime'
             elif name == 'Processor_Queue_Length':
                 no_emit = True
-                computed_metrics_pending.add(
-                    ('system_load1', None, None, timestamp)
+                self.computed_metrics_pending.add(
+                    ('system_load1', '', '', timestamp)
                 )
             else:
                 return
@@ -767,7 +753,7 @@ class Telegraf:
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -797,7 +783,7 @@ class Telegraf:
                 return
             hostport = part[3].replace('_', '.')
             try:
-                instance = self.get_haproxy_instance(hostport)
+                instance = self._get_haproxy_instance(hostport)
             except KeyError:
                 return
 
@@ -813,7 +799,7 @@ class Telegraf:
             else:
                 return
 
-            if instance is None:
+            if not instance:
                 item = proxy_name
             else:
                 item = instance + '_' + proxy_name
@@ -823,7 +809,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -856,19 +842,19 @@ class Telegraf:
                 derive = True
             elif name != 'memcached_uptime':
                 return
-        elif part[-2] == 'mysql':
+        elif part[-2] in ('mysql', 'mysql_innodb'):
             service = 'mysql'
             (server_address, server_port) = part[-3].split(':')
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
                 return
 
-            name = 'mysql_' + part[-1]
+            name = part[-2] + '_' + part[-1]
             derive = True
             if name.startswith('mysql_qcache_'):
                 name = name.replace('qcache', 'cache_result_qcache')
@@ -881,7 +867,7 @@ class Telegraf:
                     name = 'mysql_cache_blocksize_qcache'
                     derive = False
                 elif (name == 'mysql_cache_result_qcache_free_blocks'
-                        or name == 'mysql_cache_result_qcache_free_memory'):
+                      or name == 'mysql_cache_result_qcache_free_memory'):
                     name = name.replace(
                         'mysql_cache_result_qcache_', 'mysql_cache_')
                     derive = False
@@ -896,7 +882,6 @@ class Telegraf:
             elif name.startswith('mysql_threads_'):
                 # Other mysql_threads_* name are fine. Accept them unchanged
                 derive = False
-                pass
             elif name.startswith('mysql_commands_'):
                 # mysql_commands_* name are fine. Accept them unchanged
                 pass
@@ -908,6 +893,9 @@ class Telegraf:
             elif name == 'mysql_innodb_row_lock_current_waits':
                 derive = False
                 name = 'mysql_innodb_locked_transaction'
+            elif name == 'mysql_innodb_trx_rseg_history_len':
+                derive = False
+                name = 'mysql_innodb_history_list_len'
             else:
                 return
         elif part[-2] == 'nginx':
@@ -915,7 +903,7 @@ class Telegraf:
             server_address = part[-3].replace('_', '.')
             server_port = int(part[-4])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -950,7 +938,7 @@ class Telegraf:
             server_address = match.group(1).replace('_', '.')
             server_port = int(match.group(2))
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -969,7 +957,7 @@ class Telegraf:
             else:
                 return
 
-            if instance is None:
+            if not instance:
                 item = dbname
             else:
                 item = instance + '_' + dbname
@@ -993,7 +981,7 @@ class Telegraf:
             else:
                 server_port = int(part[-4])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1036,7 +1024,7 @@ class Telegraf:
             server_address = part[3].replace('_', '.')
             server_port = int(part[2])
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1058,7 +1046,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1075,7 +1063,7 @@ class Telegraf:
                 derive = True
             else:
                 return
-        elif part[2] == 'elasticsearch':
+        elif part[-2].startswith('elasticsearch_'):
             service = 'elasticsearch'
             # It can't rely only on part[3] (node_host), because this is the
             # host as think by ES (usually the "public" IP of the node). But
@@ -1083,7 +1071,7 @@ class Telegraf:
             # server_address = part[3].replace('_', '.')
             node_id = part[4]
             try:
-                instance = self.get_elasticsearch_instance(node_id)
+                instance = self._get_elasticsearch_instance(node_id)
             except KeyError:
                 return
 
@@ -1096,7 +1084,7 @@ class Telegraf:
                 elif part[-1] == 'search_query_total':
                     name = 'elasticsearch_search'
                     derive = True
-                    computed_metrics_pending.add(
+                    self.computed_metrics_pending.add(
                         (
                             'elasticsearch_search_time',
                             instance,
@@ -1108,9 +1096,63 @@ class Telegraf:
                     name = 'elasticsearch_search_time_total'
                     derive = True
                     no_emit = True
-                    computed_metrics_pending.add(
+                    self.computed_metrics_pending.add(
                         (
                             'elasticsearch_search_time',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+            elif part[-2] == 'elasticsearch_jvm':
+                if part[-1] == 'mem_heap_used_in_bytes':
+                    name = 'elasticsearch_jvm_heap_used'
+                elif part[-1] == 'mem_non_heap_used_in_bytes':
+                    name = 'elasticsearch_jvm_non_heap_used'
+                elif part[-1] == 'gc_collectors_old_collection_count':
+                    name = 'elasticsearch_jvm_gc_old'
+                    no_emit = True
+                    derive = True
+                    self.computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+                elif part[-1] == 'gc_collectors_young_collection_count':
+                    name = 'elasticsearch_jvm_gc_young'
+                    no_emit = True
+                    derive = True
+                    self.computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+                elif part[-1] == 'gc_collectors_old_collection_time_in_millis':
+                    name = 'elasticsearch_jvm_gc_time_old'
+                    no_emit = True
+                    derive = True
+                    self.computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc_time',
+                            instance,
+                            instance,
+                            timestamp
+                        )
+                    )
+                elif part[-1] == (
+                        'gc_collectors_young_collection_time_in_millis'):
+                    name = 'elasticsearch_jvm_gc_time_young'
+                    no_emit = True
+                    derive = True
+                    self.computed_metrics_pending.add(
+                        (
+                            'elasticsearch_jvm_gc_time',
                             instance,
                             instance,
                             timestamp
@@ -1127,7 +1169,7 @@ class Telegraf:
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
-                instance = self.get_service_instance(
+                instance = self._get_service_instance(
                     service, server_address, server_port
                 )
             except KeyError:
@@ -1269,17 +1311,83 @@ class Telegraf:
             if len(part) <= position or part[position] != 'total':
                 print(part)
                 return
+        elif part[-2].startswith('prometheus_'):
+            name = part[-2][len('prometheus_'):]
+            try:
+                prometheus_name = self.get_prometheus_exporter_name(name, part)
+            except KeyError:
+                logging.debug(
+                    'Unknown prometheus exporter.'
+                    ' Is it configured in Bleemeo agent ?'
+                    ' And telegraf restarted after last telegraf'
+                    ' config update ?'
+                )
+                return
+            exporter_config = (
+                self.core.config.get('metric.prometheus')[prometheus_name]
+            )
+
+            # tags will contains:
+            # * url
+            # * all prometheus label
+            # Remove host and url, keep other in item
+            url_mangled = telegraf_replace(exporter_config['url'])
+            item_part = []
+            for i in part[2:-2]:
+                if i != url_mangled:
+                    item_part.append(i)
+            item = '-'.join(item_part)
+            if part[-1] == 'counter':
+                if name.endswith('_total'):
+                    # Agent don't send a total, but a derivate.
+                    name = name[:-len('_total')]
+                derive = True
+            elif part[-1] == 'gauge':
+                pass
+            elif part[-1] == 'sum':
+                derive = True
+                no_emit = True
+                self.computed_metrics_pending.add(
+                    ('prometheus_' + name, item, None, timestamp)
+                )
+                name = name + '_sum'
+            elif part[-1] == 'count':
+                derive = True
+                no_emit = True
+                self.computed_metrics_pending.add(
+                    ('prometheus_' + name, item, None, timestamp)
+                )
+                name = name + '_count'
+            elif part[-1] in ('5', '0', '1'):
+                # This is used by quantile and histogram. (0 is in
+                # fact 0.1, 0.25...)
+                # Agent don't process them on use only sum and count.
+                return
+            else:
+                logging.debug(
+                    'Unknown Prometheus metric: %s_%s', name, part[-1],
+                )
+                return
+        elif part[-2] == 'phpfpm':
+            service = 'phpfpm'
+            if ('phpfpm', part[2]) in self.core.services:
+                instance = part[2]
+
+            name = 'phpfpm_' + part[-1]
+
+            if name in {'phpfpm_accepted_conn', 'phpfpm_slow_requests'}:
+                derive = True
         elif (part[2] == 'counter'
-                and self.core.config.get('telegraf.statsd_enabled', True)):
+              and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd counter
             derive = True
             name = 'statsd_' + part[3]
         elif (part[2] == 'gauge'
-                and self.core.config.get('telegraf.statsd_enabled', True)):
+              and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd gauge
             name = 'statsd_' + part[3]
         elif (part[2] == 'timing'
-                and self.core.config.get('telegraf.statsd_enabled', True)):
+              and self.core.config.get('telegraf.statsd.enabled', True)):
             # statsd timing
             name = 'statsd_' + part[3] + '_' + part[4]
             if part[4] == 'count':
@@ -1292,7 +1400,7 @@ class Telegraf:
         if name is None:
             return
 
-        if item is None and service is not None:
+        if not item and service:
             item = instance
 
         if derive:
@@ -1307,9 +1415,398 @@ class Telegraf:
         if service is not None:
             metric['service'] = service
             metric['instance'] = instance
-        if item is not None:
+        if item:
             metric['item'] = item
         if container_name is not None:
             metric['container'] = container_name
 
         self.core.emit_metric(metric, no_emit=no_emit)
+
+    def packet_finish(self):
+        """ Called when graphite_client finished processing one TCP packet
+        """
+        self._check_computed_metrics()
+
+    def _check_computed_metrics(self):
+        """ Some metric are computed from other one. For example CPU stats
+            are aggregated over all CPUs.
+
+            When any cpu state arrive, we flag the aggregate value as "pending"
+            and this function check if stats for all CPU core are fresh enough
+            to compute the aggregate.
+
+            This function use computed_metrics_pending, which old a list
+            of (metric_name, item, timestamp).
+            Item is something like "sda", "sdb" or "eth0", "eth1".
+        """
+        processed = set()
+        new_item = set()
+        for entry in self.computed_metrics_pending:
+            (name, item, instance, timestamp) = entry
+            try:
+                self._compute_metric(name, item, instance, timestamp, new_item)
+                processed.add(entry)
+            except ComputationFail:
+                logging.debug(
+                    'Failed to compute metric %s at time %s',
+                    name, timestamp)
+                # we will never be able to recompute it.
+                # mark it as done and continue :/
+                processed.add(entry)
+            except MissingMetric:
+                # Some metric are missing to do computing. Wait a bit by
+                # keeping this entry in computed_metrics_pending
+                pass
+
+        self.computed_metrics_pending.difference_update(processed)
+        if new_item:
+            self.computed_metrics_pending.update(new_item)
+            self._check_computed_metrics()
+
+    def _compute_metric(self, name, item, instance, timestamp, new_item):
+        # pylint: disable=too-many-statements
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-arguments
+        def get_metric(measurements, searched_item):
+            """ Helper that do common task when retriving metrics:
+
+                * check that metric exists and is not too old
+                  (or Raise MissingMetric)
+                * If the last metric is more recent that the one we want
+                  to compute, raise ComputationFail. We will never be
+                  able to compute the requested value.
+            """
+            metric = self.core.get_last_metric(measurements, searched_item)
+            if metric is None or metric['time'] < timestamp:
+                raise MissingMetric()
+            elif metric['time'] > timestamp:
+                raise ComputationFail()
+            return metric['value']
+
+        service = None
+
+        if name == 'disk_total' and os.name == 'nt':
+            used_perc = get_metric('disk_used_perc', item)
+            free = get_metric('disk_free', item)
+            free_perc = 100 - used_perc
+            disk_total = free / (free_perc / 100.0)
+            disk_used = disk_total * (used_perc / 100.0)
+            value = disk_total
+            self.core.emit_metric({
+                'measurement': 'disk_used',
+                'time': timestamp,
+                'item': item,
+                'value': disk_used,
+            })
+        elif name == 'cpu_other':
+            value = get_metric('cpu_used', '')
+            value -= get_metric('cpu_user', '')
+            value -= get_metric('cpu_system', '')
+        elif name == 'mem_free' and os.name == 'nt':
+            used = get_metric('mem_used', item)
+            cached = get_metric('mem_cached', item)
+            value = self.core.total_memory_size - used - cached
+        elif name == 'mem_cached' and os.name == 'nt':
+            value = 0
+            for sub_type in (
+                    'Standby_Cache_Reserve_Bytes',
+                    'Standby_Cache_Normal_Priority_Bytes',
+                    'Standby_Cache_Core_Bytes'):
+                value += get_metric(sub_type, item)
+            new_item.add(
+                ('mem_free', '', None, timestamp)
+            )
+        elif name == 'mem_used':
+            total = get_metric('mem_total', '')
+            value = total - get_metric('mem_available', '')
+            self.core.emit_metric({
+                'measurement': 'mem_used_perc',
+                'time': timestamp,
+                'value': value / total * 100.,
+            })
+        elif name == 'system_load1':
+            # Unix load represent the number of running and runnable tasks
+            # which include task waiting for disk IO.
+
+            # To re-create the value on Windows:
+            # Number of running task will be number of CPU core * CPU usage
+            # Number of runnable tasks will be "Processor Queue Length", but
+            # this probably does not include task waiting for disk IO.
+
+            cpu_used = get_metric('cpu_used', '')
+            runq = get_metric('Processor_Queue_Length', '')
+            core_count = psutil.cpu_count()
+            if core_count is None:
+                core_count = 1
+            value = core_count * (cpu_used / 100.) + runq
+        elif name == 'elasticsearch_search_time':
+            service = 'elasticsearch'
+            total = get_metric('elasticsearch_search_time_total', item)
+            count = get_metric('elasticsearch_search', item)
+            if count == 0:
+                # If not query during the period, the average time
+                # has not meaning. Don't emit it at all.
+                return
+            value = total / count
+        elif name == 'elasticsearch_jvm_gc':
+            service = 'elasticsearch'
+            gc_old = get_metric('elasticsearch_jvm_gc_old', item)
+            gc_young = get_metric('elasticsearch_jvm_gc_young', item)
+            value = gc_old + gc_young
+        elif name == 'elasticsearch_jvm_gc_time':
+            service = 'elasticsearch'
+            gc_old = get_metric('elasticsearch_jvm_gc_time_old', item)
+            gc_young = get_metric('elasticsearch_jvm_gc_time_young', item)
+            value = gc_old + gc_young
+
+            metric = {
+                'measurement': 'elasticsearch_jvm_gc_utilization',
+                'time': timestamp,
+                'service': service,
+                'value': value / 10.,  # convert ms/s in %
+            }
+            if item:
+                metric['item'] = item
+
+            self.core.emit_metric(metric)
+        elif name.startswith('prometheus_'):
+            name = name[len('prometheus_'):]
+            count = get_metric(name + '_count', item)
+            total = get_metric(name + '_sum', item)
+            if count == 0:
+                # If no item during the period, the average has
+                # no meaning. Don't emit the metric at all.
+                return
+            value = total / count
+        else:
+            logging.debug('Unknown computed metric %s', name)
+            return
+
+        metric = {
+            'measurement': name,
+            'time': timestamp,
+            'value': value,
+        }
+        if item:
+            metric['item'] = item
+        if service is not None:
+            metric['service'] = service
+            metric['instance'] = instance
+        self.core.emit_metric(metric)
+
+
+def _get_telegraf_config(core):
+    # pylint: disable=too-many-statements
+    # pylint: disable=too-many-branches
+    telegraf_config = BASE_TELEGRAF_CONFIG
+
+    if core.config.get('telegraf.statsd.enabled', True):
+        telegraf_config += STATSD_TELEGRAF_CONFIG % {
+            'address': core.config.get(
+                'telegraf.statsd.address', '127.0.0.1',
+            ),
+            'port': core.config.get(
+                'telegraf.statsd.port', '8125',
+            ),
+        }
+
+    if core.docker_client is not None:
+        docker_metrics_enabled = core.config.get(
+            'telegraf.docker_metrics_enabled', None
+        )
+        if (docker_metrics_enabled
+                or (
+                    docker_metrics_enabled is None
+                    and telegraf_version_gte(core, '1.0.0')
+                )):
+            telegraf_config += DOCKER_TELEGRAF_CONFIG
+
+    for (key, service_info) in sorted(core.services.items()):
+        if not service_info.get('active', True):
+            continue
+        if service_info.get('ignore_metrics', False):
+            continue
+        (service_name, instance) = key
+
+        service_info = core.services[key].copy()
+        service_info['instance'] = instance
+
+        if not service_info.get('container_running', True):
+            continue
+
+        if (service_name == 'haproxy'
+                and service_info.get('stats_url') is not None):
+            telegraf_config += HAPROXY_TELEGRAF_CONFIG % service_info
+        if (service_name == 'phpfpm'
+                and (
+                    service_info.get('stats_url') is not None
+                    or service_info.get('port') is not None
+                    or service_info.get('netstat_ports'))):
+            copy_info = service_info.copy()
+            port = service_info.get('port')
+            for port_proto in service_info.get('netstat_ports', {}):
+                if port is not None:
+                    break
+                if port_proto.endswith('/tcp'):
+                    port = port_proto.split('/')[0]
+            if ('stats_url' not in copy_info
+                    and service_info.get('address') is None):
+                continue
+
+            if port is None and 'stats_url' not in copy_info:
+                continue
+
+            copy_info.setdefault(
+                'stats_url',
+                'fcgi://%s:%s/status' % (
+                    service_info.get('address'),
+                    port,
+                )
+            )
+            if instance:
+                copy_info['tags'] = (
+                    '[inputs.phpfpm.tags]\n        instance = "%s"' %
+                    instance
+                )
+            else:
+                copy_info['tags'] = ""
+            telegraf_config += PHPFPM_TELEGRAF_CONFIG % copy_info
+
+        # All next services require an address.
+        if service_info.get('address') is None:
+            continue
+
+        if service_name == 'rabbitmq':
+            service_info.setdefault('username', 'guest')
+            service_info.setdefault('password', 'guest')
+            service_info.setdefault('mgmt_port', 15672)
+            telegraf_config += RABBITMQ_TELEGRAF_CONFIG % service_info
+
+        # All next services require a port.
+        if service_info.get('port') is None:
+            continue
+
+        if service_name == 'apache':
+            if service_info.get('port') == 80:
+                status_url = 'http://%(address)s/server-status?auto'
+            else:
+                status_url = 'http://%(address)s:%(port)s/server-status?auto'
+            service_info = service_info.copy()
+            service_info.setdefault('status_url', status_url % service_info)
+            telegraf_config += APACHE_TELEGRAF_CONFIG % service_info
+            if telegraf_version_gte(core, '1.2.0'):
+                telegraf_config += APACHE_TELEGRAF_CONFIG_1_2
+        if service_name == 'elasticsearch':
+            telegraf_config += ELASTICSEARCH_TELEGRAF_CONFIG % service_info
+        if service_name == 'memcached':
+            telegraf_config += MEMCACHED_TELEGRAF_CONFIG % service_info
+        if (service_name == 'mysql'
+                and service_info.get('password') is not None):
+            service_info.setdefault('username', 'root')
+            telegraf_config += MYSQL_TELEGRAF_CONFIG % service_info
+            if telegraf_version_gte(core, '1.3.0'):
+                telegraf_config += MYSQL_TELEGRAF_CONFIG_1_3
+        if service_name == 'mongodb':
+            telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
+        if service_name == 'nginx':
+            telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
+            if telegraf_version_gte(core, '1.4.0'):
+                telegraf_config += NGINX_TELEGRAF_CONFIG_1_4
+        if (service_name == 'postgresql'
+                and service_info.get('password') is not None):
+            service_info.setdefault('username', 'postgres')
+            telegraf_config += POSTGRESQL_TELEGRAF_CONFIG % service_info
+        if service_name == 'redis':
+            telegraf_config += REDIS_TELEGRAF_CONFIG % service_info
+        if service_name == 'zookeeper':
+            telegraf_config += ZOOKEEPER_CONFIG % service_info
+
+    prometheus_config = core.config.get('metric.prometheus', {})
+    for name in sorted(prometheus_config):
+        exporter_config = prometheus_config[name]
+        telegraf_config += PROMETHEUS_TELEGRAF_CONFIG % {
+            'url': exporter_config['url'],
+            'prefix': name,
+        }
+
+    return telegraf_config
+
+
+def _restart_telegraf(core):
+    restart_cmd = core.config.get(
+        'telegraf.restart_command',
+        'sudo -n service telegraf restart')
+    telegraf_container = core.config.get('telegraf.docker_name')
+    if telegraf_container is not None:
+        bleemeo_agent.util.docker_restart(
+            core.docker_client, telegraf_container
+        )
+    else:
+        try:
+            output = subprocess.check_output(
+                shlex.split(restart_cmd),
+                stderr=subprocess.STDOUT,
+            )
+            return_code = 0
+        except (subprocess.CalledProcessError, OSError) as exception:
+            output = exception.output
+            return_code = exception.returncode
+
+        if return_code != 0:
+            logging.info(
+                'Failed to restart telegraf after reconfiguration: %s',
+                output
+            )
+        else:
+            logging.debug(
+                'telegraf reconfigured and restarted: %s', output)
+
+
+def telegraf_version_gte(core, version):
+    """ Return True if installed Telegraf version is at least given version
+
+        If unable to compare given version with current version, return
+        False (for example fact telegraf_version is absent or any error).
+    """
+    current_version = core.last_facts.get('telegraf_version')
+    if current_version is None:
+        return False
+
+    try:
+        return compare_version(current_version, version)
+    except Exception:  # pylint: disable=broad-except
+        return False
+
+
+def _write_config(core):
+    telegraf_config = _get_telegraf_config(core)
+
+    telegraf_config_path = core.config.get(
+        'telegraf.config_file',
+        '/etc/telegraf/telegraf.d/bleemeo-generated.conf'
+    )
+
+    if os.path.exists(telegraf_config_path):
+        with open(telegraf_config_path) as config_file:
+            current_content = config_file.read()
+
+        if telegraf_config == current_content:
+            logging.debug('telegraf already configured')
+            return
+
+    if (telegraf_config == BASE_TELEGRAF_CONFIG
+            and not os.path.exists(telegraf_config_path)):
+        logging.debug(
+            'telegraf generated config would be empty, skip writting it'
+        )
+        return
+
+    # Don't simply use open. This file must have limited permission
+    # since it may contains password
+    open_flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+    fileno = os.open(telegraf_config_path, open_flags, 0o600)
+    with os.fdopen(fileno, 'w') as config_file:
+        config_file.write(telegraf_config)
+
+    _restart_telegraf(core)
