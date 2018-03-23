@@ -1084,7 +1084,7 @@ class Core:
 
         self._sentry_setup()
         self.thresholds = {
-            (label, ''): value
+            label: value
             for (label, value) in self.config.get('thresholds', {}).items()
         }
         self.discovered_services = self.state.get_complex_dict(
@@ -1350,7 +1350,7 @@ class Core:
         old_thresholds = self.thresholds
 
         new_thresholds = {
-            (label, ''): value
+            label: value
             for (label, value) in self.config.get('thresholds', {}).items()
         }
         bleemeo_agent.config.merge_dict(
@@ -2447,12 +2447,11 @@ class Core:
         """
 
         if thresholds is None:
-            threshold = self.thresholds.get((metric_name, item))
-        else:
-            threshold = thresholds.get((metric_name, item))
+            thresholds = self.thresholds
 
+        threshold = thresholds.get((metric_name, item))
         if threshold is None:
-            threshold = self.thresholds.get(metric_name)
+            threshold = thresholds.get(metric_name)
 
         if threshold is None:
             return None
