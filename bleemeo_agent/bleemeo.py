@@ -1724,8 +1724,20 @@ class BleemeoConnector(threading.Thread):
         # Step 2: delete local object that are deleted from API
         # Not done with facts. API never delete facts.
 
+        if bleemeo_cache.current_config is not None:
+            docker_integration = (
+                bleemeo_cache.current_config.docker_integration
+            )
+        else:
+            docker_integration = True
+        facts = {
+            fact_name: value
+            for (fact_name, value) in self.core.last_facts.items()
+            if docker_integration or not fact_name.startswith('docker_')
+        }
+
         # Step 3: register/update object present in local but not in API
-        for fact_name, value in self.core.last_facts.items():
+        for fact_name, value in facts.items():
             fact = bleemeo_cache.facts_by_key.get(fact_name)
 
             if fact is not None and fact.value == str(value):
@@ -1766,7 +1778,7 @@ class BleemeoConnector(threading.Thread):
         try:
             local_uuids = set(
                 bleemeo_cache.facts_by_key[key].uuid
-                for key in self.core.last_facts
+                for key in facts
             )
         except KeyError:
             logging.info(
