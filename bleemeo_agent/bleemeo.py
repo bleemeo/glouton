@@ -314,6 +314,7 @@ class BleemeoCache:
         config = cache.get('current_config')
         if config:
             config[4] = set(config[4])
+            config[5] = set(config[5])
             self.current_config = AgentConfig(*config)
 
         self.update_lookup_map()
@@ -1070,10 +1071,6 @@ class BleemeoConnector(threading.Thread):
             bleemeo_cache.current_config = None
             return
 
-        if (bleemeo_cache.current_config is not None
-                and config_uuid == bleemeo_cache.current_config.uuid):
-            return
-
         response = bleemeo_api.api_call(
             '/v1/config/%s/' % config_uuid,
         )
@@ -1099,6 +1096,8 @@ class BleemeoConnector(threading.Thread):
             whitelist,
             blacklist,
         )
+        if bleemeo_cache.current_config == config:
+            return
         bleemeo_cache.current_config = config
 
         self.core.set_topinfo_frequency(config.topinfo_frequency)
