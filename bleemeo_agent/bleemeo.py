@@ -84,7 +84,7 @@ Container = collections.namedtuple('Container', (
 AgentConfig = collections.namedtuple('AgentConfig', (
     'uuid',
     'name',
-    'docker_enabled',
+    'docker_integration',
     'topinfo_frequency',
     'metrics_whitelist',
     'metrics_blacklist',
@@ -1094,7 +1094,7 @@ class BleemeoConnector(threading.Thread):
         config = AgentConfig(
             data['id'],
             data['name'],
-            data['docker_enabled'],
+            data['docker_integration'],
             data['topinfo_frequency'],
             whitelist,
             blacklist,
@@ -1557,7 +1557,7 @@ class BleemeoConnector(threading.Thread):
 
         local_containers = self.core.docker_containers
         if (bleemeo_cache.current_config is not None
-                and not bleemeo_cache.current_config.docker_enabled):
+                and not bleemeo_cache.current_config.docker_integration):
             local_containers = {}
 
         # Step 3: register/update object present in local but not in API
@@ -1799,7 +1799,7 @@ class BleemeoConnector(threading.Thread):
             return
 
         if (self._bleemeo_cache.current_config is not None
-                and not self._bleemeo_cache.current_config.docker_enabled
+                and not self._bleemeo_cache.current_config.docker_integration
                 and metric.get('container')):
             return
 
