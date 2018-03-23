@@ -18,6 +18,7 @@
 # pylint: disable=too-many-lines
 
 import collections
+import datetime
 import hashlib
 import json
 import logging
@@ -66,7 +67,8 @@ MetricRegistrationReq = collections.namedtuple('MetricRegistrationReq', (
     'instance',
     'container_name',
     'status_of_label',
-    'has_status',
+    'last_status',
+    'last_problem_origins',
     'last_seen',
 ))
 Service = collections.namedtuple('Service', (
@@ -92,6 +94,18 @@ AgentConfig = collections.namedtuple('AgentConfig', (
 AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
 ))
+
+STATUS_OK = 0
+STATUS_WARNING = 1
+STATUS_CRITICAL = 2
+STATUS_UNKNOWN = 3
+
+STATUS_NAME_TO_CODE = {
+    'ok': STATUS_OK,
+    'warning': STATUS_WARNING,
+    'critical': STATUS_CRITICAL,
+    'unknown': STATUS_UNKNOWN,
+}
 
 
 class ApiError(Exception):
@@ -483,7 +497,7 @@ class BleemeoConnector(threading.Thread):
         self._current_metrics_lock = threading.Lock()
         # Make sure this metrics exists and try to be registered
         self._current_metrics[('agent_status', '')] = MetricRegistrationReq(
-            'agent_status', '', None, '', '', None, True, time.time(),
+            'agent_status', '', None, '', '', None, STATUS_OK, '', time.time(),
         )
 
     def on_connect(self, _client, _userdata, _flags, result_code):
@@ -1106,7 +1120,7 @@ class BleemeoConnector(threading.Thread):
             self._current_metrics = {
                 key: value
                 for (key, value) in self._current_metrics.items()
-                if self.sent_metric(value.label, value.has_status)
+                if self.sent_metric(value.label, value.last_status is not None)
             }
         logging.info('Changed to configuration %s', config.name)
 
@@ -1227,6 +1241,15 @@ class BleemeoConnector(threading.Thread):
             if reg_req.item:
                 payload['item'] = reg_req.item
 
+            if reg_req.last_status is not None:
+                payload['last_status'] = reg_req.last_status
+                payload['last_status_changed_at'] = (
+                    datetime.datetime.utcnow()
+                    .replace(tzinfo=datetime.timezone.utc)
+                    .isoformat()
+                )
+                payload['problem_origins'] = [reg_req.last_problem_origins]
+
             response = bleemeo_api.api_call(
                 metric_url,
                 method='post',
@@ -1235,7 +1258,9 @@ class BleemeoConnector(threading.Thread):
                     'fields': 'id,label,item,service,container,'
                               'threshold_low_warning,threshold_low_critical,'
                               'threshold_high_warning,threshold_high_critical,'
-                              'unit,unit_text,agent,status_of,service',
+                              'unit,unit_text,agent,status_of,service,'
+                              'last_status,last_status_changed_at,'
+                              'problem_origins',
                 },
             )
             if 400 <= response.status_code < 500:
@@ -1830,7 +1855,8 @@ class BleemeoConnector(threading.Thread):
                 metric.get('instance', ''),
                 metric.get('container', ''),
                 metric.get('status_of', ''),
-                metric_has_status,
+                STATUS_NAME_TO_CODE.get(metric.get('status')),
+                metric.get('check_output', ''),
                 time.time(),
             )
 
