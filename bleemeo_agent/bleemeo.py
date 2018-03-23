@@ -1006,6 +1006,16 @@ class BleemeoConnector(threading.Thread):
                     last_sync <= self.core.last_discovery_update or
                     last_metrics_count != metrics_count):
                 try:
+                    with self._current_metrics_lock:
+                        self._current_metrics = {
+                            key: value
+                            for (key, value) in self._current_metrics.items()
+                            if self.sent_metric(
+                                value.label,
+                                value.last_status is not None,
+                                bleemeo_cache,
+                            )
+                        }
                     full = (
                         next_full_sync <= clock_now or
                         last_sync <= self.last_containers_removed
@@ -1047,8 +1057,6 @@ class BleemeoConnector(threading.Thread):
 
             if sync_run and not has_error:
                 last_sync = clock_now
-                self._bleemeo_cache = bleemeo_cache.copy()
-
             if has_error:
                 successive_errors += 1
                 delay = min(successive_errors * 15, 60)
@@ -1056,6 +1064,7 @@ class BleemeoConnector(threading.Thread):
                 successive_errors = 0
                 delay = 15
 
+            self._bleemeo_cache = bleemeo_cache.copy()
             self.core.is_terminating.wait(delay)
 
     def _sync_agent(self, bleemeo_cache, bleemeo_api):
@@ -1116,12 +1125,6 @@ class BleemeoConnector(threading.Thread):
 
         self.core.set_topinfo_frequency(config.topinfo_frequency)
         self.core.fire_triggers(updates_count=True)
-        with self._current_metrics_lock:
-            self._current_metrics = {
-                key: value
-                for (key, value) in self._current_metrics.items()
-                if self.sent_metric(value.label, value.last_status is not None)
-            }
         logging.info('Changed to configuration %s', config.name)
 
     def _sync_metrics(self, bleemeo_cache, bleemeo_api, full=True):
@@ -1695,17 +1698,19 @@ class BleemeoConnector(threading.Thread):
                     if value.container_name not in deleted_container_names
                 }
 
-    def sent_metric(self, metric_name, metric_has_status):
+    def sent_metric(self, metric_name, metric_has_status, bleemeo_cache=None):
         """ Return True if the metric should be sent to Bleemeo Cloud platform
         """
-        if self._bleemeo_cache.current_config is None:
+        if bleemeo_cache is None:
+            bleemeo_cache = self._bleemeo_cache
+        if bleemeo_cache.current_config is None:
             return True
 
-        blacklist = self._bleemeo_cache.current_config.metrics_blacklist
+        blacklist = bleemeo_cache.current_config.metrics_blacklist
         if metric_name in blacklist:
             return False
 
-        whitelist = self._bleemeo_cache.current_config.metrics_whitelist
+        whitelist = bleemeo_cache.current_config.metrics_whitelist
         if not whitelist:
             # Always sent metrics if whitelist is empty
             return True
