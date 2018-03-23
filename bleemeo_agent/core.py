@@ -1148,7 +1148,11 @@ class Core:
 
     def set_topinfo_frequency(self, frequency):
         self._topinfo_frequency = frequency
-        self.schedule_topinfo()
+        if self._topinfo_job is not None:
+            # Only reschedule topinfo job if already scheduled.
+            # This is needed because APscheduler 2.x does not allow to
+            # unschedule a job while the scheduler it not yet started.
+            self.schedule_topinfo()
         logging.debug(
             'Changed topinfo frequency to every %d second', frequency,
         )
