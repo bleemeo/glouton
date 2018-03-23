@@ -82,7 +82,12 @@ Container = collections.namedtuple('Container', (
     'uuid', 'name', 'inspect_hash',
 ))
 AgentConfig = collections.namedtuple('AgentConfig', (
-    'uuid', 'name', 'docker_enabled', 'topinfo_frequency', 'metrics_whitelist',
+    'uuid',
+    'name',
+    'docker_enabled',
+    'topinfo_frequency',
+    'metrics_whitelist',
+    'metrics_blacklist',
 ))
 AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
@@ -551,7 +556,14 @@ class BleemeoConnector(threading.Thread):
         if self.core.sentry_client and self.agent_uuid:
             self.core.sentry_client.site = self.agent_uuid
 
-        self._bleemeo_cache = BleemeoCache(self.core.state)
+        try:
+            self._bleemeo_cache = BleemeoCache(self.core.state)
+        except Exception:  # pylint: disable=broad-except
+            logging.warning(
+                'Error while loading the cache. Starting with empty cache',
+                exc_info=True,
+            )
+            self._bleemeo_cache = BleemeoCache(self.core.state, skip_load=True)
 
         if self._bleemeo_cache.current_config:
             self.core.set_topinfo_frequency(
@@ -1074,12 +1086,18 @@ class BleemeoConnector(threading.Thread):
         else:
             whitelist = set()
 
+        if data.get('metrics_blacklist', ''):
+            blacklist = set(data['metrics_blacklist'].split(','))
+        else:
+            blacklist = set()
+
         config = AgentConfig(
             data['id'],
             data['name'],
             data['docker_enabled'],
             data['topinfo_frequency'],
             whitelist,
+            blacklist,
         )
         bleemeo_cache.current_config = config
 
@@ -1658,6 +1676,10 @@ class BleemeoConnector(threading.Thread):
         """
         if self._bleemeo_cache.current_config is None:
             return True
+
+        blacklist = self._bleemeo_cache.current_config.metrics_blacklist
+        if metric_name in blacklist:
+            return False
 
         whitelist = self._bleemeo_cache.current_config.metrics_whitelist
         if not whitelist:
