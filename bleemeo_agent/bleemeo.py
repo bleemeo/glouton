@@ -280,6 +280,7 @@ class BleemeoCache:
         self.containers = {}
         self.facts = {}
         self.current_config = None
+        self.next_config_at = None
 
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
@@ -299,6 +300,7 @@ class BleemeoCache:
         new.containers = self.containers.copy()
         new.facts = self.facts.copy()
         new.current_config = self.current_config
+        new.next_config_at = self.next_config_at
         new.update_lookup_map()
         return new
 
@@ -330,6 +332,14 @@ class BleemeoCache:
             config[4] = set(config[4])
             config[5] = set(config[5])
             self.current_config = AgentConfig(*config)
+
+        next_config_at = cache.get('next_config_at')
+        if next_config_at:
+            self.next_config_at = (
+                datetime.datetime
+                .utcfromtimestamp(next_config_at)
+                .replace(tzinfo=datetime.timezone.utc)
+            )
 
         self.update_lookup_map()
 
@@ -376,6 +386,9 @@ class BleemeoCache:
             'tags': self.tags,
             'containers': self.containers,
             'current_config': self.current_config,
+            'next_config_at':
+                self.next_config_at.timestamp()
+                if self.next_config_at else None,
         }
         self._state.set('_bleemeo_cache', cache)
 
@@ -489,6 +502,7 @@ class BleemeoConnector(threading.Thread):
 
         self.trigger_full_sync = False
         self.last_containers_removed = bleemeo_agent.util.get_clock()
+        self.last_config_will_change_msg = bleemeo_agent.util.get_clock()
         self._bleemeo_cache = None
 
         self.mqtt_client = mqtt.Client()
@@ -544,6 +558,11 @@ class BleemeoConnector(threading.Thread):
             if body['message_type'] == 'config-changed':
                 logging.debug('Got "config-changed" message from Bleemeo')
                 self.trigger_full_sync = True
+            if body['message_type'] == 'config-will-change':
+                logging.debug('Got "config-will-change" message from Bleemeo')
+                self.last_config_will_change_msg = (
+                    bleemeo_agent.util.get_clock()
+                )
 
     def on_publish(self, _client, _userdata, _mid):
         self._mqtt_queue_size -= 1
@@ -937,6 +956,10 @@ class BleemeoConnector(threading.Thread):
                     self.core.http_user_agent,
                 )
 
+            if (bleemeo_cache.next_config_at is not None and
+                    bleemeo_cache.next_config_at.timestamp() < time.time()):
+                self.trigger_full_sync = True
+
             if self.trigger_full_sync:
                 next_full_sync = 0
                 time.sleep(random.randint(5, 15))
@@ -950,7 +973,8 @@ class BleemeoConnector(threading.Thread):
             sync_run = False
             metrics_sync = False
 
-            if next_full_sync < clock_now:
+            if (next_full_sync < clock_now
+                    or last_sync <= self.last_config_will_change_msg):
                 try:
                     self._sync_agent(bleemeo_cache, bleemeo_api)
                     sync_run = True
@@ -1074,7 +1098,7 @@ class BleemeoConnector(threading.Thread):
         response = bleemeo_api.api_call(
             'v1/agent/%s/' % self.agent_uuid,
             'patch',
-            params={'fields': 'tags,current_config'},
+            params={'fields': 'tags,current_config,next_config_at'},
             data=json.dumps({'tags': [
                 {'name': x} for x in tags if x and len(x) <= 100
             ]}),
@@ -1088,6 +1112,12 @@ class BleemeoConnector(threading.Thread):
         for tag in data['tags']:
             if not tag['is_automatic']:
                 bleemeo_cache.tags.append(tag['name'])
+
+        if data.get('next_config_at'):
+            bleemeo_cache.next_config_at = datetime.datetime.strptime(
+                data['next_config_at'],
+                '%Y-%m-%dT%H:%M:%SZ',
+            ).replace(tzinfo=datetime.timezone.utc)
 
         config_uuid = data.get('current_config')
         if config_uuid is None:
