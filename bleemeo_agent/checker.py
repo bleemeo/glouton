@@ -25,8 +25,8 @@ import socket
 import struct
 import time
 
-# pylint: disable=import-error
 import requests
+# pylint: disable=wrong-import-order
 from six.moves.urllib import parse as urllib_parse
 
 import bleemeo_agent.util
