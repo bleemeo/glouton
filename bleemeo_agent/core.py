@@ -1047,6 +1047,7 @@ class Core:
         self.config = None
 
     def _init(self):
+        # pylint: disable=too-many-branches
         self.started_at = bleemeo_agent.util.get_clock()
         (errors, warnings) = self.reload_config()
         self._config_logger()
@@ -1107,6 +1108,48 @@ class Core:
         )
 
         self.cache = Cache(self.state)
+
+        image_provisioning_file = self.config.get(
+            'agent.image_provisioning_file', 'image_provisioning',
+        )
+        if os.path.exists(image_provisioning_file):
+            (_, current_mac) = (
+                bleemeo_agent.facts.get_primary_addresses()
+            )
+
+            initial_ip_output = ''
+            try:
+                with open(image_provisioning_file) as file_obj:
+                    initial_ip_output = file_obj.read()
+            except (OSError, IOError) as exc:
+                logging.warning(
+                    'Unable to read content of %s file: %s',
+                    image_provisioning_file,
+                    exc,
+                )
+
+            (_, initial_mac) = (
+                bleemeo_agent.facts.get_primary_addresses(initial_ip_output)
+            )
+
+            if (current_mac == initial_mac
+                    or current_mac is None
+                    or initial_mac is None):
+                logging.info(
+                    'Not starting bleemeo-agent since installation'
+                    ' for provisioning an image was requested and agent is'
+                    ' still running on the same machine',
+                )
+                logging.info(
+                    'If this is wrong and agent should run on this machine,'
+                    ' remove %s file',
+                    image_provisioning_file,
+                )
+                return False
+        try:
+            os.unlink(image_provisioning_file)
+        except OSError:
+            pass
 
         return True
 
