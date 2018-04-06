@@ -464,16 +464,28 @@ def get_facts(core):
 
     primary_address = get_primary_address()
     architecture = platform.machine()
-    fqdn = socket.getfqdn()
-    if fqdn == 'localhost':
-        fqdn = socket.gethostname()
-    elif fqdn == 'localhost.local' and socket.gethostname() != 'localhost':
-        fqdn = socket.gethostname()
+    hostname = socket.gethostname()
+
+    try:
+        # This is what hostname (3.20) does:
+        # * use getaddrinfo on hostname with AI_CANONNAME
+        # * take ai_canonname from first result
+        result = socket.getaddrinfo(
+            hostname, port=0, type=socket.SOCK_DGRAM, flags=socket.AI_CANONNAME
+        )
+        fqdn = result[0][3]
+    except (IndexError, socket.gaierror):
+        fqdn = hostname
+
+    if (fqdn in ('', 'localhost', 'localhost.local', 'localhost.localdomain')
+            and hostname != 'localhost'):
+        fqdn = hostname
 
     if '.' in fqdn:
-        (hostname, domain) = fqdn.split('.', 1)
+        domain = fqdn.split('.', 1)[1]
     else:
-        (hostname, domain) = (fqdn, None)
+        domain = None
+
     if os.name != 'nt':
         kernel = subprocess.check_output(
             ['uname', '--kernel-name']
