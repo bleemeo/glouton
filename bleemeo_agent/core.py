@@ -1109,22 +1109,22 @@ class Core:
 
         self.cache = Cache(self.state)
 
-        image_provisioning_file = self.config.get(
-            'agent.image_provisioning_file', 'image_provisioning',
+        cloudimage_creation_file = self.config.get(
+            'agent.cloudimage_creation_file', 'cloudimage_creation',
         )
-        if os.path.exists(image_provisioning_file):
+        if os.path.exists(cloudimage_creation_file):
             (_, current_mac) = (
                 bleemeo_agent.facts.get_primary_addresses()
             )
 
             initial_ip_output = ''
             try:
-                with open(image_provisioning_file) as file_obj:
+                with open(cloudimage_creation_file) as file_obj:
                     initial_ip_output = file_obj.read()
             except (OSError, IOError) as exc:
                 logging.warning(
                     'Unable to read content of %s file: %s',
-                    image_provisioning_file,
+                    cloudimage_creation_file,
                     exc,
                 )
 
@@ -1137,17 +1137,17 @@ class Core:
                     or initial_mac is None):
                 logging.info(
                     'Not starting bleemeo-agent since installation'
-                    ' for provisioning an image was requested and agent is'
+                    ' for creation of a cloud image was requested and agent is'
                     ' still running on the same machine',
                 )
                 logging.info(
                     'If this is wrong and agent should run on this machine,'
                     ' remove %s file',
-                    image_provisioning_file,
+                    cloudimage_creation_file,
                 )
                 return False
         try:
-            os.unlink(image_provisioning_file)
+            os.unlink(cloudimage_creation_file)
         except OSError:
             pass
 
