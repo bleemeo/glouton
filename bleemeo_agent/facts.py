@@ -316,31 +316,66 @@ def _get_aws_facts(core):
     return facts
 
 
-def get_primary_address():
-    """ Return the primary IP(v4) address.
+def get_primary_addresses(ip_output=None):
+    # pylint: disable=too-many-locals
+    """ Return the primery IPv4 and MAC addresses
 
-        This should be the address that this server use to communicate
-        on internet. It may be the private IP if the box is NATed
+        This should be the IP address that this server use to communicate
+        on internet. It may be the private IP if the box is NATed. The MAC
+        address the is one associated with the interface holding the
+        primary IP address.
     """
-    # Any python library doing the job ?
     # psutils could retrive IP address from interface, but we don't
     # known which is the "primary" interface.
-    # For now rely on "ip" command
-    try:
-        output = subprocess.check_output(
-            ['ip', 'route', 'get', '8.8.8.8'])
-        split_output = output.decode('utf-8').split()
-        for (index, word) in enumerate(split_output):
-            if word == 'src':
-                return split_output[index+1]
-    except (subprocess.CalledProcessError, OSError):
-        # Either "ip" is not found... or you don't have a route to 8.8.8.8
-        # (no internet ?).
-        # We could try with psutil, but "ip" is present on all recent ditro
-        # and you should have internet :)
-        pass
+    # psutils could retrive MAC address but require version 3.0 which is
+    # not present on all system.
+    # For now rely on "ip" command.
 
-    return None
+    if ip_output is None:
+        try:
+            output1 = subprocess.check_output(
+                ['ip', 'route', 'get', '8.8.8.8']
+            )
+            output2 = subprocess.check_output(
+                ['ip', 'address', 'show']
+            )
+            ip_output = output1.decode('utf-8') + output2.decode('utf-8')
+        except (subprocess.CalledProcessError, OSError):
+            return (None, None)
+
+    lines = ip_output.splitlines()
+    if not lines:
+        return (None, None)
+    ip_route, lines = lines[0], lines[1:]
+
+    ip_address = None
+    mac_address = None
+
+    split_output = ip_route.split()
+    for (index, word) in enumerate(split_output):
+        if word == 'src':
+            ip_address = split_output[index+1]
+
+    re_new_interface = re.compile(r'^\d+: .*$')
+    re_ether_address = re.compile(
+        r'^\s+link/ether ([0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}) .*'
+    )
+    re_inet_address = re.compile(r'\s+inet (\d+(\.\d+){3})/\d+ .*')
+    current_mac_address = None
+    for line in lines:
+        if re_new_interface.match(line):
+            current_mac_address = None
+
+        match = re_inet_address.match(line)
+        if match and match.group(1) == ip_address:
+            mac_address = current_mac_address
+            break
+
+        match = re_ether_address.match(line)
+        if match:
+            current_mac_address = match.group(1)
+
+    return (ip_address, mac_address)
 
 
 def get_public_ip(core):
@@ -462,7 +497,7 @@ def get_facts(core):
             'os_version': platform.win32_ver()[0],
         })
 
-    primary_address = get_primary_address()
+    (primary_address, primary_mac_address) = get_primary_addresses()
     architecture = platform.machine()
     hostname = socket.gethostname()
 
@@ -556,6 +591,11 @@ def get_facts(core):
 
     (docker_version, docker_api_version) = get_docker_version(core)
 
+    if core.graphite_server:
+        facts.update({
+            'metrics_source': core.graphite_server.metrics_source,
+        })
+
     facts.update({
         'agent_version': get_agent_version(core),
         'architecture': architecture,
@@ -572,8 +612,8 @@ def get_facts(core):
             'agent.installation_format', 'manual'
         ),
         'hostname': hostname,
-        'metrics_source': core.graphite_server.metrics_source,
         'primary_address': primary_address,
+        'primary_mac_address': primary_mac_address,
         'swap_present': _system_has_swap(),
         'telegraf_version': _get_telegraf_version(core),
         'timezone': get_file_content('/etc/timezone'),
