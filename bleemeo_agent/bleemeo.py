@@ -1118,6 +1118,8 @@ class BleemeoConnector(threading.Thread):
                 data['next_config_at'],
                 '%Y-%m-%dT%H:%M:%SZ',
             ).replace(tzinfo=datetime.timezone.utc)
+        else:
+            bleemeo_cache.next_config_at = None
 
         config_uuid = data.get('current_config')
         if config_uuid is None:
