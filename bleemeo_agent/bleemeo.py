@@ -87,7 +87,7 @@ AgentConfig = collections.namedtuple('AgentConfig', (
     'uuid',
     'name',
     'docker_integration',
-    'topinfo_frequency',
+    'topinfo_period',
     'metrics_whitelist',
     'metrics_blacklist',
 ))
@@ -600,8 +600,8 @@ class BleemeoConnector(threading.Thread):
             self._bleemeo_cache = BleemeoCache(self.core.state, skip_load=True)
 
         if self._bleemeo_cache.current_config:
-            self.core.set_topinfo_frequency(
-                self._bleemeo_cache.current_config.topinfo_frequency
+            self.core.set_topinfo_period(
+                self._bleemeo_cache.current_config.topinfo_period,
             )
 
     def run(self):
@@ -1145,7 +1145,7 @@ class BleemeoConnector(threading.Thread):
             data['id'],
             data['name'],
             data['docker_integration'],
-            data['topinfo_frequency'],
+            data['topinfo_period'],
             whitelist,
             blacklist,
         )
@@ -1153,7 +1153,7 @@ class BleemeoConnector(threading.Thread):
             return
         bleemeo_cache.current_config = config
 
-        self.core.set_topinfo_frequency(config.topinfo_frequency)
+        self.core.set_topinfo_period(config.topinfo_period)
         self.core.fire_triggers(updates_count=True)
         logging.info('Changed to configuration %s', config.name)
 

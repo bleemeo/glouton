@@ -1025,7 +1025,7 @@ class Core:
 
         self._discovery_job = None  # scheduled in schedule_tasks
         self._topinfo_job = None
-        self._topinfo_frequency = 10
+        self._topinfo_period = 10
         self.discovered_services = {}
         self.services = {}
         self.metrics_unit = {}
@@ -1146,15 +1146,15 @@ class Core:
         """
         return self.config.get('container.type', None)
 
-    def set_topinfo_frequency(self, frequency):
-        self._topinfo_frequency = frequency
+    def set_topinfo_period(self, period):
+        self._topinfo_period = period
         if self._topinfo_job is not None:
             # Only reschedule topinfo job if already scheduled.
             # This is needed because APscheduler 2.x does not allow to
             # unschedule a job while the scheduler it not yet started.
             self.schedule_topinfo()
         logging.debug(
-            'Changed topinfo frequency to every %d second', frequency,
+            'Changed topinfo frequency to every %d second', period,
         )
 
     def _config_logger(self):
@@ -1557,7 +1557,7 @@ class Core:
 
         self._topinfo_job = self.add_scheduled_job(
             self.send_top_info,
-            seconds=self._topinfo_frequency,
+            seconds=self._topinfo_period,
         )
 
     def start_threads(self):
