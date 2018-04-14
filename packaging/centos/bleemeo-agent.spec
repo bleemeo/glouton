@@ -228,6 +228,7 @@ if [ $1 -eq 1 ] ; then
     # Bleemeo agent telegraf modify its configuration.
     # On first installation of bleemeo-agent-telegraf, restart the agent
     touch /var/lib/bleemeo/upgrade 2>/dev/null
+    systemctl reset-failed bleemeo-agent.service || true
     systemctl restart bleemeo-agent.service 2>/dev/null
 fi
 exit 0
@@ -252,6 +253,7 @@ if [ $1 -eq 1 ] ; then
     # Bleemeo agent collectd modify its configuration.
     # On first installation of bleemeo-agent-collectd, restart the agent
     touch /var/lib/bleemeo/upgrade 2>/dev/null
+    systemctl reset-failed bleemeo-agent.service || true
     systemctl restart bleemeo-agent.service 2>/dev/null
 fi
 exit 0

@@ -498,6 +498,7 @@ class BleemeoConnector(threading.Thread):
 
         self._metric_queue = queue.Queue()
         self.connected = False
+        self._last_disconnects = []
         self._mqtt_queue_size = 0
 
         self.trigger_full_sync = False
@@ -539,6 +540,8 @@ class BleemeoConnector(threading.Thread):
     def on_disconnect(self, _client, _userdata, _result_code):
         if self.connected:
             logging.info('MQTT connection lost')
+        self._last_disconnects.append(time.time())
+        self._last_disconnects = self._last_disconnects[-15:]
         self.connected = False
 
     def on_message(self, _client, _userdata, msg):
@@ -626,7 +629,34 @@ class BleemeoConnector(threading.Thread):
 
         self._mqtt_setup()
 
+        _mqtt_reconnect_at = 0
         while not self.core.is_terminating.is_set():
+            if (not _mqtt_reconnect_at
+                    and len(self._last_disconnects) >= 6
+                    and self._last_disconnects[-6] > time.time() - 60):
+                logging.info(
+                    'Too many attempt to connect to MQTT on last minute.'
+                    ' Disabling MQTT for 60 seconds'
+                )
+                self.mqtt_client.disconnect()
+                self.mqtt_client.loop_stop()
+                _mqtt_reconnect_at = time.time() + 60
+            if (not _mqtt_reconnect_at
+                    and len(self._last_disconnects) >= 15
+                    and self._last_disconnects[-15] > time.time() - 600):
+                logging.info(
+                    'Too many attempt to connect to MQTT on last 10 minutes.'
+                    ' Disabling MQTT for 5 minutes'
+                )
+                self.mqtt_client.disconnect()
+                self.mqtt_client.loop_stop()
+                _mqtt_reconnect_at = time.time() + 300
+                self._last_disconnects = []
+            elif _mqtt_reconnect_at and _mqtt_reconnect_at < time.time():
+                logging.info('Re-enabling MQTT connection')
+                _mqtt_reconnect_at = 0
+                self._mqtt_setup()
+
             self._loop()
 
         if self.connected and self.upgrade_in_progress:

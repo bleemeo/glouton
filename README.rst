@@ -29,7 +29,7 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
 * Install bleemeo-agent with its dependencies::
 
     pip install -U setuptools
-    python setup.py install # install/develop
+    pip install -r requirements-dev.txt
 
 * Install telegraf and configure it::
 

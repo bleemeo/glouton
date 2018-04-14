@@ -1050,7 +1050,7 @@ class Core:
 
     def _init(self):
         # pylint: disable=too-many-branches
-
+        # pylint: disable=too-many-statements
         self.started_at = bleemeo_agent.util.get_clock()
         (errors, warnings) = self.reload_config()
         self._config_logger()
@@ -1111,6 +1111,48 @@ class Core:
         )
 
         self.cache = Cache(self.state)
+
+        cloudimage_creation_file = self.config.get(
+            'agent.cloudimage_creation_file', 'cloudimage_creation',
+        )
+        if os.path.exists(cloudimage_creation_file):
+            (_, current_mac) = (
+                bleemeo_agent.facts.get_primary_addresses()
+            )
+
+            initial_ip_output = ''
+            try:
+                with open(cloudimage_creation_file) as file_obj:
+                    initial_ip_output = file_obj.read()
+            except (OSError, IOError) as exc:
+                logging.warning(
+                    'Unable to read content of %s file: %s',
+                    cloudimage_creation_file,
+                    exc,
+                )
+
+            (_, initial_mac) = (
+                bleemeo_agent.facts.get_primary_addresses(initial_ip_output)
+            )
+
+            if (current_mac == initial_mac
+                    or current_mac is None
+                    or initial_mac is None):
+                logging.info(
+                    'Not starting bleemeo-agent since installation'
+                    ' for creation of a cloud image was requested and agent is'
+                    ' still running on the same machine',
+                )
+                logging.info(
+                    'If this is wrong and agent should run on this machine,'
+                    ' remove %s file',
+                    cloudimage_creation_file,
+                )
+                return False
+        try:
+            os.unlink(cloudimage_creation_file)
+        except OSError:
+            pass
 
         self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
         if self.config.get('bleemeo.enabled', True):
