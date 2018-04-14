@@ -18,6 +18,7 @@
 # pylint: disable=too-many-lines
 
 import collections
+import datetime
 import hashlib
 import json
 import logging
@@ -66,6 +67,8 @@ MetricRegistrationReq = collections.namedtuple('MetricRegistrationReq', (
     'instance',
     'container_name',
     'status_of_label',
+    'last_status',
+    'last_problem_origins',
     'last_seen',
 ))
 Service = collections.namedtuple('Service', (
@@ -80,9 +83,29 @@ Service = collections.namedtuple('Service', (
 Container = collections.namedtuple('Container', (
     'uuid', 'name', 'inspect_hash',
 ))
+AgentConfig = collections.namedtuple('AgentConfig', (
+    'uuid',
+    'name',
+    'docker_integration',
+    'topinfo_period',
+    'metrics_whitelist',
+    'metrics_blacklist',
+))
 AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
 ))
+
+STATUS_OK = 0
+STATUS_WARNING = 1
+STATUS_CRITICAL = 2
+STATUS_UNKNOWN = 3
+
+STATUS_NAME_TO_CODE = {
+    'ok': STATUS_OK,
+    'warning': STATUS_WARNING,
+    'critical': STATUS_CRITICAL,
+    'unknown': STATUS_UNKNOWN,
+}
 
 
 class ApiError(Exception):
@@ -256,6 +279,8 @@ class BleemeoCache:
         self.tags = []
         self.containers = {}
         self.facts = {}
+        self.current_config = None
+        self.next_config_at = None
 
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
@@ -274,6 +299,8 @@ class BleemeoCache:
         new.tags = list(self.tags)
         new.containers = self.containers.copy()
         new.facts = self.facts.copy()
+        new.current_config = self.current_config
+        new.next_config_at = self.next_config_at
         new.update_lookup_map()
         return new
 
@@ -299,6 +326,20 @@ class BleemeoCache:
 
         for container_uuid, values in cache['containers'].items():
             self.containers[container_uuid] = Container(*values)
+
+        config = cache.get('current_config')
+        if config:
+            config[4] = set(config[4])
+            config[5] = set(config[5])
+            self.current_config = AgentConfig(*config)
+
+        next_config_at = cache.get('next_config_at')
+        if next_config_at:
+            self.next_config_at = (
+                datetime.datetime
+                .utcfromtimestamp(next_config_at)
+                .replace(tzinfo=datetime.timezone.utc)
+            )
 
         self.update_lookup_map()
 
@@ -344,6 +385,10 @@ class BleemeoCache:
             'services': self.services,
             'tags': self.tags,
             'containers': self.containers,
+            'current_config': self.current_config,
+            'next_config_at':
+                self.next_config_at.timestamp()
+                if self.next_config_at else None,
         }
         self._state.set('_bleemeo_cache', cache)
 
@@ -458,6 +503,7 @@ class BleemeoConnector(threading.Thread):
 
         self.trigger_full_sync = False
         self.last_containers_removed = bleemeo_agent.util.get_clock()
+        self.last_config_will_change_msg = bleemeo_agent.util.get_clock()
         self._bleemeo_cache = None
 
         self.mqtt_client = mqtt.Client()
@@ -466,7 +512,7 @@ class BleemeoConnector(threading.Thread):
         self._current_metrics_lock = threading.Lock()
         # Make sure this metrics exists and try to be registered
         self._current_metrics[('agent_status', '')] = MetricRegistrationReq(
-            'agent_status', '', None, '', '', None, time.time(),
+            'agent_status', '', None, '', '', None, STATUS_OK, '', time.time(),
         )
 
     def on_connect(self, _client, _userdata, _flags, result_code):
@@ -512,6 +558,14 @@ class BleemeoConnector(threading.Thread):
             if body['message_type'] == 'threshold-update':
                 logging.debug('Got "threshold-update" message from Bleemeo')
                 self.trigger_full_sync = True
+            if body['message_type'] == 'config-changed':
+                logging.debug('Got "config-changed" message from Bleemeo')
+                self.trigger_full_sync = True
+            if body['message_type'] == 'config-will-change':
+                logging.debug('Got "config-will-change" message from Bleemeo')
+                self.last_config_will_change_msg = (
+                    bleemeo_agent.util.get_clock()
+                )
 
     def on_publish(self, _client, _userdata, _mid):
         self._mqtt_queue_size -= 1
@@ -535,21 +589,35 @@ class BleemeoConnector(threading.Thread):
             self.core.state.set(
                 'password', bleemeo_agent.util.generate_password())
 
+    def init(self):
+        if self.core.sentry_client and self.agent_uuid:
+            self.core.sentry_client.site = self.agent_uuid
+
+        try:
+            self._bleemeo_cache = BleemeoCache(self.core.state)
+        except Exception:  # pylint: disable=broad-except
+            logging.warning(
+                'Error while loading the cache. Starting with empty cache',
+                exc_info=True,
+            )
+            self._bleemeo_cache = BleemeoCache(self.core.state, skip_load=True)
+
+        if self._bleemeo_cache.current_config:
+            self.core.set_topinfo_period(
+                self._bleemeo_cache.current_config.topinfo_period,
+            )
+
     def run(self):
         self.core.add_scheduled_job(
             self._bleemeo_health_check,
             seconds=60,
         )
 
-        if self.core.sentry_client and self.agent_uuid:
-            self.core.sentry_client.site = self.agent_uuid
-
         try:
             self.check_config_requirement()
         except StopIteration:
             return
 
-        self._bleemeo_cache = BleemeoCache(self.core.state)
         sync_thread = threading.Thread(target=self._bleemeo_synchronizer)
         sync_thread.daemon = True
         sync_thread.start()
@@ -824,6 +892,12 @@ class BleemeoConnector(threading.Thread):
             'fqdn': name,
         }
 
+        initial_config_name = self.core.config.get(
+            'bleemeo.initial_config_name'
+        )
+        if initial_config_name:
+            payload['initial_config_name'] = initial_config_name
+
         content = None
         try:
             response = requests.post(
@@ -912,6 +986,10 @@ class BleemeoConnector(threading.Thread):
                     self.core.http_user_agent,
                 )
 
+            if (bleemeo_cache.next_config_at is not None and
+                    bleemeo_cache.next_config_at.timestamp() < time.time()):
+                self.trigger_full_sync = True
+
             if self.trigger_full_sync:
                 next_full_sync = 0
                 time.sleep(random.randint(5, 15))
@@ -924,6 +1002,19 @@ class BleemeoConnector(threading.Thread):
             has_error = False
             sync_run = False
             metrics_sync = False
+
+            if (next_full_sync < clock_now
+                    or last_sync <= self.last_config_will_change_msg):
+                try:
+                    self._sync_agent(bleemeo_cache, bleemeo_api)
+                    sync_run = True
+                except ApiError as exc:
+                    logging.info(
+                        'Unable to synchronize agent. API responded: %s',
+                        exc.response.content,
+                    )
+                    self.core.is_terminating.wait(5)
+                    has_error = True
 
             if (next_full_sync <= clock_now or
                     last_sync <= self.last_containers_removed or
@@ -969,6 +1060,16 @@ class BleemeoConnector(threading.Thread):
                     last_sync <= self.core.last_discovery_update or
                     last_metrics_count != metrics_count):
                 try:
+                    with self._current_metrics_lock:
+                        self._current_metrics = {
+                            key: value
+                            for (key, value) in self._current_metrics.items()
+                            if self.sent_metric(
+                                value.label,
+                                value.last_status is not None,
+                                bleemeo_cache,
+                            )
+                        }
                     full = (
                         next_full_sync <= clock_now or
                         last_sync <= self.last_containers_removed
@@ -997,33 +1098,19 @@ class BleemeoConnector(threading.Thread):
                     self.core.is_terminating.wait(5)
                     has_error = True
 
-            if next_full_sync < clock_now:
-                try:
-                    self._sync_tags(bleemeo_cache, bleemeo_api)
-                    sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize tags. API responded: %s',
-                        exc.response.content,
-                    )
-                    self.core.is_terminating.wait(5)
-                    has_error = True
-
-                if not has_error:
-                    next_full_sync = (
-                        clock_now +
-                        random.randint(3500, 3700)
-                    )
-                    bleemeo_cache.save()
-                    logging.debug(
-                        'Next full sync in %d seconds',
-                        next_full_sync - clock_now,
-                    )
+            if next_full_sync < clock_now and not has_error:
+                next_full_sync = (
+                    clock_now +
+                    random.randint(3500, 3700)
+                )
+                bleemeo_cache.save()
+                logging.debug(
+                    'Next full sync in %d seconds',
+                    next_full_sync - clock_now,
+                )
 
             if sync_run and not has_error:
                 last_sync = clock_now
-                self._bleemeo_cache = bleemeo_cache.copy()
-
             if has_error:
                 successive_errors += 1
                 delay = min(successive_errors * 15, 60)
@@ -1031,7 +1118,76 @@ class BleemeoConnector(threading.Thread):
                 successive_errors = 0
                 delay = 15
 
+            self._bleemeo_cache = bleemeo_cache.copy()
             self.core.is_terminating.wait(delay)
+
+    def _sync_agent(self, bleemeo_cache, bleemeo_api):
+        logging.debug('Synchronize agent')
+        tags = set(self.core.config.get('tags', []))
+
+        response = bleemeo_api.api_call(
+            'v1/agent/%s/' % self.agent_uuid,
+            'patch',
+            params={'fields': 'tags,current_config,next_config_at'},
+            data=json.dumps({'tags': [
+                {'name': x} for x in tags if x and len(x) <= 100
+            ]}),
+        )
+        if response.status_code >= 400:
+            raise ApiError(response)
+
+        data = response.json()
+
+        bleemeo_cache.tags = []
+        for tag in data['tags']:
+            if not tag['is_automatic']:
+                bleemeo_cache.tags.append(tag['name'])
+
+        if data.get('next_config_at'):
+            bleemeo_cache.next_config_at = datetime.datetime.strptime(
+                data['next_config_at'],
+                '%Y-%m-%dT%H:%M:%SZ',
+            ).replace(tzinfo=datetime.timezone.utc)
+        else:
+            bleemeo_cache.next_config_at = None
+
+        config_uuid = data.get('current_config')
+        if config_uuid is None:
+            bleemeo_cache.current_config = None
+            return
+
+        response = bleemeo_api.api_call(
+            '/v1/config/%s/' % config_uuid,
+        )
+        if response.status_code >= 400:
+            raise ApiError(response)
+
+        data = response.json()
+        if data['metrics_whitelist']:
+            whitelist = set(data['metrics_whitelist'].split(','))
+        else:
+            whitelist = set()
+
+        if data.get('metrics_blacklist', ''):
+            blacklist = set(data['metrics_blacklist'].split(','))
+        else:
+            blacklist = set()
+
+        config = AgentConfig(
+            data['id'],
+            data['name'],
+            data['docker_integration'],
+            data['topinfo_period'],
+            whitelist,
+            blacklist,
+        )
+        if bleemeo_cache.current_config == config:
+            return
+        bleemeo_cache.current_config = config
+
+        self.core.set_topinfo_period(config.topinfo_period)
+        self.core.fire_triggers(updates_count=True)
+        logging.info('Changed to configuration %s', config.name)
 
     def _sync_metrics(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-locals
@@ -1150,6 +1306,15 @@ class BleemeoConnector(threading.Thread):
             if reg_req.item:
                 payload['item'] = reg_req.item
 
+            if reg_req.last_status is not None:
+                payload['last_status'] = reg_req.last_status
+                payload['last_status_changed_at'] = (
+                    datetime.datetime.utcnow()
+                    .replace(tzinfo=datetime.timezone.utc)
+                    .isoformat()
+                )
+                payload['problem_origins'] = [reg_req.last_problem_origins]
+
             response = bleemeo_api.api_call(
                 metric_url,
                 method='post',
@@ -1158,7 +1323,9 @@ class BleemeoConnector(threading.Thread):
                     'fields': 'id,label,item,service,container,'
                               'threshold_low_warning,threshold_low_critical,'
                               'threshold_high_warning,threshold_high_critical,'
-                              'unit,unit_text,agent,status_of,service',
+                              'unit,unit_text,agent,status_of,service,'
+                              'last_status,last_status_changed_at,'
+                              'problem_origins',
                 },
             )
             if 400 <= response.status_code < 500:
@@ -1442,28 +1609,6 @@ class BleemeoConnector(threading.Thread):
                     service.label,
                 )
 
-    def _sync_tags(self, bleemeo_cache, bleemeo_api):
-        """ Synchronize tags with Bleemeo API
-        """
-        logging.debug('Synchronize tags')
-        tags = set(self.core.config.get('tags', []))
-
-        response = bleemeo_api.api_call(
-            'v1/agent/%s/' % self.agent_uuid,
-            'patch',
-            params={'fields': 'tags'},
-            data=json.dumps({'tags': [
-                {'name': x} for x in tags if x and len(x) <= 100
-            ]}),
-        )
-        if response.status_code >= 400:
-            raise ApiError(response)
-
-        bleemeo_cache.tags = []
-        for tag in response.json()['tags']:
-            if not tag['is_automatic']:
-                bleemeo_cache.tags.append(tag['name'])
-
     def _sync_containers(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-locals
@@ -1499,8 +1644,13 @@ class BleemeoConnector(threading.Thread):
         # Step 2: delete local object that are deleted from API
         # Not done for containers. API never delete a container
 
+        local_containers = self.core.docker_containers
+        if (bleemeo_cache.current_config is not None
+                and not bleemeo_cache.current_config.docker_integration):
+            local_containers = {}
+
         # Step 3: register/update object present in local but not in API
-        for name, inspect in self.core.docker_containers.items():
+        for name, inspect in local_containers.items():
             new_hash = hashlib.sha1(
                 json.dumps(inspect, sort_keys=True).encode('utf-8')
             ).hexdigest()
@@ -1569,7 +1719,7 @@ class BleemeoConnector(threading.Thread):
         try:
             local_uuids = set(
                 bleemeo_cache.containers_by_name[name].uuid
-                for name in self.core.docker_containers
+                for name in local_containers
             )
         except KeyError:
             logging.info(
@@ -1610,6 +1760,31 @@ class BleemeoConnector(threading.Thread):
                     if value.container_name not in deleted_container_names
                 }
 
+    def sent_metric(self, metric_name, metric_has_status, bleemeo_cache=None):
+        """ Return True if the metric should be sent to Bleemeo Cloud platform
+        """
+        if bleemeo_cache is None:
+            bleemeo_cache = self._bleemeo_cache
+        if bleemeo_cache.current_config is None:
+            return True
+
+        blacklist = bleemeo_cache.current_config.metrics_blacklist
+        if metric_name in blacklist:
+            return False
+
+        whitelist = bleemeo_cache.current_config.metrics_whitelist
+        if not whitelist:
+            # Always sent metrics if whitelist is empty
+            return True
+
+        if metric_has_status:
+            return True
+
+        if metric_name in whitelist:
+            return True
+
+        return False
+
     def _sync_facts(self, bleemeo_cache, bleemeo_api):
         # pylint: disable=too-many-locals
         logging.debug('Synchronize facts')
@@ -1640,8 +1815,20 @@ class BleemeoConnector(threading.Thread):
         # Step 2: delete local object that are deleted from API
         # Not done with facts. API never delete facts.
 
+        if bleemeo_cache.current_config is not None:
+            docker_integration = (
+                bleemeo_cache.current_config.docker_integration
+            )
+        else:
+            docker_integration = True
+        facts = {
+            fact_name: value
+            for (fact_name, value) in self.core.last_facts.items()
+            if docker_integration or not fact_name.startswith('docker_')
+        }
+
         # Step 3: register/update object present in local but not in API
-        for fact_name, value in self.core.last_facts.items():
+        for fact_name, value in facts.items():
             fact = bleemeo_cache.facts_by_key.get(fact_name)
 
             if fact is not None and fact.value == str(value):
@@ -1682,7 +1869,7 @@ class BleemeoConnector(threading.Thread):
         try:
             local_uuids = set(
                 bleemeo_cache.facts_by_key[key].uuid
-                for key in self.core.last_facts
+                for key in facts
             )
         except KeyError:
             logging.info(
@@ -1709,6 +1896,16 @@ class BleemeoConnector(threading.Thread):
             )
 
     def emit_metric(self, metric):
+        metric_name = metric['measurement']
+        metric_has_status = metric.get('status') is not None
+        if not self.sent_metric(metric_name, metric_has_status):
+            return
+
+        if (self._bleemeo_cache.current_config is not None
+                and not self._bleemeo_cache.current_config.docker_integration
+                and metric.get('container')):
+            return
+
         if self._metric_queue.qsize() > 100000:
             # Remove one message to make room.
             self._metric_queue.get_nowait()
@@ -1725,6 +1922,8 @@ class BleemeoConnector(threading.Thread):
                 metric.get('instance', ''),
                 metric.get('container', ''),
                 metric.get('status_of', ''),
+                STATUS_NAME_TO_CODE.get(metric.get('status')),
+                metric.get('check_output', ''),
                 time.time(),
             )
 

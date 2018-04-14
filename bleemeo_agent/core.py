@@ -1024,6 +1024,8 @@ class Core:
         self.last_report = None
 
         self._discovery_job = None  # scheduled in schedule_tasks
+        self._topinfo_job = None
+        self._topinfo_period = 10
         self.discovered_services = {}
         self.services = {}
         self.metrics_unit = {}
@@ -1048,6 +1050,7 @@ class Core:
 
     def _init(self):
         # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
         self.started_at = bleemeo_agent.util.get_clock()
         (errors, warnings) = self.reload_config()
         self._config_logger()
@@ -1081,7 +1084,7 @@ class Core:
 
         self._sentry_setup()
         self.thresholds = {
-            (label, ''): value
+            label: value
             for (label, value) in self.config.get('thresholds', {}).items()
         }
         self.discovered_services = self.state.get_complex_dict(
@@ -1151,6 +1154,30 @@ class Core:
         except OSError:
             pass
 
+        self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
+        if self.config.get('bleemeo.enabled', True):
+            if bleemeo_agent.bleemeo is None:
+                logging.warning(
+                    'Missing dependency (paho-mqtt), '
+                    'can not start Bleemeo connector'
+                )
+            else:
+                self.bleemeo_connector = (
+                    bleemeo_agent.bleemeo.BleemeoConnector(self)
+                )
+        if self.config.get('influxdb.enabled', False):
+            if bleemeo_agent.influxdb is None:
+                logging.warning(
+                    'Missing dependency (influxdb), '
+                    'can not start InfluxDB connector'
+                )
+            else:
+                self.influx_connector = (
+                    bleemeo_agent.influxdb.InfluxDBConnector(self))
+
+        if self.bleemeo_connector:
+            self.bleemeo_connector.init()
+
         return True
 
     @property
@@ -1160,6 +1187,17 @@ class Core:
             It's None if running outside any container.
         """
         return self.config.get('container.type', None)
+
+    def set_topinfo_period(self, period):
+        self._topinfo_period = period
+        if self._topinfo_job is not None:
+            # Only reschedule topinfo job if already scheduled.
+            # This is needed because APscheduler 2.x does not allow to
+            # unschedule a job while the scheduler it not yet started.
+            self.schedule_topinfo()
+        logging.debug(
+            'Changed topinfo frequency to every %d second', period,
+        )
 
     def _config_logger(self):
         output = self.config.get('logging.output', 'console')
@@ -1354,7 +1392,7 @@ class Core:
         old_thresholds = self.thresholds
 
         new_thresholds = {
-            (label, ''): value
+            label: value
             for (label, value) in self.config.get('thresholds', {}).items()
         }
         bleemeo_agent.config.merge_dict(
@@ -1399,27 +1437,6 @@ class Core:
         try:
             self.setup_signal()
             self._docker_connect()
-
-            self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
-            if self.config.get('bleemeo.enabled', True):
-                if bleemeo_agent.bleemeo is None:
-                    logging.warning(
-                        'Missing dependency (paho-mqtt), '
-                        'can not start Bleemeo connector'
-                    )
-                else:
-                    self.bleemeo_connector = (
-                        bleemeo_agent.bleemeo.BleemeoConnector(self)
-                    )
-            if self.config.get('influxdb.enabled', False):
-                if bleemeo_agent.influxdb is None:
-                    logging.warning(
-                        'Missing dependency (influxdb), '
-                        'can not start InfluxDB connector'
-                    )
-                else:
-                    self.influx_connector = (
-                        bleemeo_agent.influxdb.InfluxDBConnector(self))
 
             self.schedule_tasks()
             self.start_threads()
@@ -1550,6 +1567,7 @@ class Core:
             self._gather_metrics,
             seconds=10,
         )
+        self.schedule_topinfo()
         self.add_scheduled_job(
             self._gather_metrics_minute,
             seconds=60,
@@ -1559,10 +1577,6 @@ class Core:
             self._gather_update_metrics,
             seconds=3600,
             next_run_in=15,
-        )
-        self.add_scheduled_job(
-            self.send_top_info,
-            seconds=10,
         )
         self.add_scheduled_job(
             self._check_triggers,
@@ -1577,6 +1591,16 @@ class Core:
         # Call jobs we want to run immediatly
         self.update_facts()
         self.update_discovery(first_run=True)
+
+    def schedule_topinfo(self):
+        if self._topinfo_job is not None:
+            self.unschedule_job(self._topinfo_job)
+            self._topinfo_job = None
+
+        self._topinfo_job = self.add_scheduled_job(
+            self.send_top_info,
+            seconds=self._topinfo_period,
+        )
 
     def start_threads(self):
         self.graphite_server.start()
@@ -1755,6 +1779,12 @@ class Core:
             if metric['time'] >= cutoff and key not in deleted_metrics
         }
 
+    def fire_triggers(self, updates_count=None, discovery=None):
+        if updates_count:
+            self._trigger_updates_count = True
+        if discovery:
+            self._trigger_discovery = True
+
     def _check_triggers(self):
         if self._trigger_discovery:
             self._discovery_job = self.trigger_job(self._discovery_job)
@@ -1781,6 +1811,7 @@ class Core:
 
     def update_discovery(self, first_run=False, deleted_services=None):
         # pylint: disable=too-many-locals
+        self._trigger_discovery = False
         self._update_docker_info()
         discovered_running_services = self._run_discovery()
         if first_run:
@@ -2458,12 +2489,11 @@ class Core:
         """
 
         if thresholds is None:
-            threshold = self.thresholds.get((metric_name, item))
-        else:
-            threshold = thresholds.get((metric_name, item))
+            thresholds = self.thresholds
 
+        threshold = thresholds.get((metric_name, item))
         if threshold is None:
-            threshold = self.thresholds.get(metric_name)
+            threshold = thresholds.get(metric_name)
 
         if threshold is None:
             return None
