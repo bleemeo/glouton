@@ -11,7 +11,6 @@ build_package(){
     dist_name="$1"
     dist_version="$2"
     version_suffix="$3"
-    pbuilder_variant="${4:-bleemeo-agent}"
 
     echo "## Building package for ${dist_name} ${dist_version}"
     cp -a "${WORKSPACE}"/bleemeo-agent-${VERSION} "${WORKSPACE}"/bleemeo-agent-${VERSION}${version_suffix}
@@ -39,7 +38,7 @@ build_package(){
         -v "${WORKSPACE}":/srv/workspace -w /srv/workspace \
         bleemeo/pbuilder pbuilder \
             build \
-            --basetgz /srv/pbuilder/${dist_name}-${dist_version}-amd64-${pbuilder_variant}.tgz \
+            --basetgz /srv/pbuilder/${dist_name}-${dist_version}-amd64-bleemeo-agent.tgz \
             --buildresult /srv/workspace/result \
             --debbuildopts -sa \
             bleemeo-agent_${VERSION}${version_suffix}.dsc
@@ -49,8 +48,8 @@ build_package(){
 
 build_package ubuntu trusty ~ubuntu14.04
 build_package ubuntu xenial ~ubuntu16.04
-build_package ubuntu artful ~ubuntu17.10 base
-build_package ubuntu bionic ~ubuntu18.04 base
+build_package ubuntu artful ~ubuntu17.10
+build_package ubuntu bionic ~ubuntu18.04
 build_package debian wheezy ~debian7
 build_package debian jessie ~debian8
-build_package debian stretch ~debian9 base
+build_package debian stretch ~debian9
