@@ -2,42 +2,16 @@
 
 set -e
 
+WORKSPACE=`pwd`/work
 COMMIT_HASH=$(git rev-parse --short HEAD)
 VERSION=0.$(TZ=UTC date +%Y%m%d.%H%M%S)
 
-echo ${VERSION} > VERSION
+mkdir "${WORKSPACE}"
+mkdir "${WORKSPACE}"/result
 
-mkdir work
-mkdir work/result
+echo ${VERSION} > "${WORKSPACE}"/VERSION
+echo ${COMMIT_HASH} > "${WORKSPACE}"/COMMIT_HASH
 
-git archive --format=tar --output=work/bleemeo-agent_${VERSION}.tar --prefix=bleemeo-agent-${VERSION}/ HEAD
-
-cd work
+git archive --format=tar --output="${WORKSPACE}"/bleemeo-agent_${VERSION}.tar --prefix=bleemeo-agent-${VERSION}/ HEAD
+cd "${WORKSPACE}"
 tar xvf bleemeo-agent_${VERSION}.tar
-
-cd bleemeo-agent-${VERSION}
-rm -f debian/changelog
-
-docker run --rm -v $(pwd):/srv/workspace -w /srv/workspace \
-    -e DEBEMAIL=jenkins@bleemeo.com -e DEBFULLNAME="Bleemeo Packaging Team" \
-    bleemeo/pbuilder dch \
-        --create \
-        --package bleemeo-agent \
-        --newversion ${VERSION} \
-        --distribution unstable \
-        --urgency low \
-        "Build package based on ${COMMIT_HASH} commit"
-
-sed -i -e "s/%define version .*$/%define version ${VERSION}/" \
-       -e "s/%define git_commit .*$/%define git_commit ${COMMIT_HASH}/" \
-       -e "s/%define build_date .*$/%define build_date $(TZ=UTC LANG= date +"%a %b %d %Y")/" \
-       packaging/centos/bleemeo-agent.spec
-
-sed -i -e "s/%define version .*$/%define version ${VERSION}/" \
-       -e "s/%define git_commit .*$/%define git_commit ${COMMIT_HASH}/" \
-       -e "s/%define build_date .*$/%define build_date $(TZ=UTC LANG= date +"%a %b %d %Y")/" \
-       packaging/fedora/bleemeo-agent.spec
-
-sed -i -e "s/^version=0.1$/version=${VERSION}/" \
-       packaging/windows/installer.cfg
-
