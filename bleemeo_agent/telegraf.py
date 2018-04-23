@@ -1568,6 +1568,7 @@ class Telegraf:
                 'measurement': 'elasticsearch_jvm_gc_utilization',
                 'time': timestamp,
                 'service': service,
+                'instance': instance,
                 'value': value / 10.,  # convert ms/s in %
             }
             if item:
@@ -1575,6 +1576,7 @@ class Telegraf:
 
             self.core.emit_metric(metric)
         elif name == 'apache_busy_workers':
+            service = 'apache'
             max_worker = get_metric('apache_max_workers', item)
             idle_worker = get_metric('apache_scoreboard_waiting', item)
             open_worker = get_metric('apache_scoreboard_open', item)
@@ -1583,12 +1585,14 @@ class Telegraf:
                 'measurement': 'apache_busy_workers_perc',
                 'time': timestamp,
                 'service': service,
+                'instance': instance,
                 'value': 100 * value / max_worker,
             }
             if item:
                 metric['item'] = item
             self.core.emit_metric(metric)
         elif name == 'apache_max_workers':
+            service = 'apache'
             value = 0
             for sub_type in (
                     'apache_scoreboard_waiting',
