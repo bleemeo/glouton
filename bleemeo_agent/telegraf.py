@@ -776,6 +776,10 @@ class Telegraf:
                 name = name.replace('scboard', 'scoreboard')
             else:
                 return
+            if name.startswith('apache_scoreboard_'):
+                self.computed_metrics_pending.add(
+                    ('apache_max_workers', instance, instance, timestamp)
+                )
         elif part[-2] == 'haproxy':
             service = 'haproxy'
             proxy_name = part[2]
@@ -1570,6 +1574,38 @@ class Telegraf:
                 metric['item'] = item
 
             self.core.emit_metric(metric)
+        elif name == 'apache_busy_workers':
+            max_worker = get_metric('apache_max_workers', item)
+            idle_worker = get_metric('apache_scoreboard_waiting', item)
+            open_worker = get_metric('apache_scoreboard_open', item)
+            value = max_worker - idle_worker - open_worker
+            metric = {
+                'measurement': 'apache_busy_workers_perc',
+                'time': timestamp,
+                'service': service,
+                'value': 100 * value / max_worker,
+            }
+            if item:
+                metric['item'] = item
+            self.core.emit_metric(metric)
+        elif name == 'apache_max_workers':
+            value = 0
+            for sub_type in (
+                    'apache_scoreboard_waiting',
+                    'apache_scoreboard_starting',
+                    'apache_scoreboard_reading',
+                    'apache_scoreboard_sending',
+                    'apache_scoreboard_keepalive',
+                    'apache_scoreboard_dnslookup',
+                    'apache_scoreboard_closing',
+                    'apache_scoreboard_logging',
+                    'apache_scoreboard_finishing',
+                    'apache_scoreboard_idle_cleanup',
+                    'apache_scoreboard_open'):
+                value += get_metric(sub_type, item)
+            new_item.add(
+                ('apache_busy_workers', item, instance, timestamp)
+            )
         elif name.startswith('prometheus_'):
             name = name[len('prometheus_'):]
             count = get_metric(name + '_count', item)
