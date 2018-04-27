@@ -655,7 +655,7 @@ class BleemeoConnector(threading.Thread):
             elif _mqtt_reconnect_at and _mqtt_reconnect_at < time.time():
                 logging.info('Re-enabling MQTT connection')
                 _mqtt_reconnect_at = 0
-                self._mqtt_setup()
+                self._mqtt_start()
 
             self._loop()
 
@@ -772,6 +772,14 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.on_message = self.on_message
         self.mqtt_client.on_publish = self.on_publish
 
+        self.mqtt_client.username_pw_set(
+            self.agent_username,
+            self.agent_password,
+        )
+        self._mqtt_start()
+
+    def _mqtt_start(self):
+
         mqtt_host = self.core.config.get(
             'bleemeo.mqtt.host',
             'mqtt.bleemeo.com'
@@ -779,11 +787,6 @@ class BleemeoConnector(threading.Thread):
         mqtt_port = self.core.config.get(
             'bleemeo.mqtt.port',
             8883,
-        )
-
-        self.mqtt_client.username_pw_set(
-            self.agent_username,
-            self.agent_password,
         )
 
         try:
