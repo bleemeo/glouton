@@ -378,7 +378,7 @@ class Telegraf:
             label keys that are (in lexical order) before "container_name".
         """
 
-        for container_name, inspect in self.core.docker_containers.items():
+        for name, inspect in self.core.docker_containers_by_name.items():
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
@@ -390,9 +390,9 @@ class Telegraf:
 
             # Docker only allow "_", "." and "-" as special char in
             # container_name. Of those, only "." is replaced by "_"
-            tmp = container_name.replace('.', '_')
+            tmp = name.replace('.', '_')
             if len(part) > position and part[position] == tmp:
-                return container_name
+                return name
 
         return None
 
@@ -1225,7 +1225,7 @@ class Telegraf:
             # Only send metric for cpu=cpu-total
             # cpu tag is normally at part[5] position. But any label
             # before "cpu" will change its place
-            inspect = self.core.docker_containers[container_name]
+            inspect = self.core.docker_containers_by_name[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
@@ -1274,7 +1274,7 @@ class Telegraf:
             # tag. For "device" and "container_name", "engine_host" is AFTER.
             # Here "engine_host" is BEFORE "network". Using this allow same
             # code for all version of Telegraf.
-            inspect = self.core.docker_containers[container_name]
+            inspect = self.core.docker_containers_by_name[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
@@ -1303,7 +1303,7 @@ class Telegraf:
             # Only send metric for device=total
             # device tag is normally at part[5] position. But any label
             # before "device" will change its place
-            inspect = self.core.docker_containers[container_name]
+            inspect = self.core.docker_containers_by_name[container_name]
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
@@ -1779,9 +1779,10 @@ def _restart_telegraf(core):
         'sudo -n service telegraf restart')
     telegraf_container = core.config.get('telegraf.docker_name')
     if telegraf_container is not None:
-        bleemeo_agent.util.docker_restart(
-            core.docker_client, telegraf_container
-        )
+        if telegraf_container:
+            bleemeo_agent.util.docker_restart(
+                core.docker_client, telegraf_container
+            )
     else:
         try:
             output = subprocess.check_output(

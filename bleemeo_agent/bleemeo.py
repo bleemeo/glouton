@@ -18,6 +18,7 @@
 # pylint: disable=too-many-lines
 
 import collections
+import copy
 import datetime
 import hashlib
 import json
@@ -41,6 +42,11 @@ import bleemeo_agent.util
 
 MQTT_QUEUE_MAX_SIZE = 2000
 REQUESTS_TIMEOUT = 15.0
+
+# API don't accept full length for some object.
+API_METRIC_ITEM_LENGTH = 100
+API_CONTAINER_NAME_LENGTH = 100
+API_SERVICE_INSTANCE_LENGTH = 50
 
 
 MetricThreshold = collections.namedtuple('MetricThreshold', (
@@ -81,7 +87,7 @@ Service = collections.namedtuple('Service', (
     'active',
 ))
 Container = collections.namedtuple('Container', (
-    'uuid', 'name', 'inspect_hash',
+    'uuid', 'name', 'docker_id', 'inspect_hash',
 ))
 AgentConfig = collections.namedtuple('AgentConfig', (
     'uuid',
@@ -106,6 +112,45 @@ STATUS_NAME_TO_CODE = {
     'critical': STATUS_CRITICAL,
     'unknown': STATUS_UNKNOWN,
 }
+
+
+def services_to_short_key(services):
+    reverse_lookup = {}
+    for key, service_info in services.items():
+        (service_name, instance) = key
+        short_key = (service_name, instance[:API_SERVICE_INSTANCE_LENGTH])
+
+        if short_key not in reverse_lookup:
+            reverse_lookup[short_key] = key
+        else:
+            other_info = services[reverse_lookup[short_key]]
+            if (service_info.get('active', True)
+                    and not other_info.get('active', True)):
+                # Prefer the active service
+                reverse_lookup[short_key] = key
+            elif (service_info.get('container_id', '') >
+                  other_info.get('container_id', '')):
+                # Completly arbitrary condition that will hopefully keep
+                # a consistent result whatever the services order is.
+                reverse_lookup[short_key] = key
+
+    result = {
+        key: short_key for (short_key, key) in reverse_lookup.items()
+    }
+    return result
+
+
+def sort_docker_inspect(inspect):
+    """ Sort the docker inspect to have consistent hash value
+
+        Mounts order does not matter but is not consistent between
+        call to docker inspect (at least on minikube).
+    """
+    if inspect.get('Mounts'):
+        inspect['Mounts'].sort(
+            key=lambda x: (x.get('Source', ''), x.get('Destination', '')),
+        )
+    return inspect
 
 
 class ApiError(Exception):
@@ -269,7 +314,9 @@ class BleemeoCache:
         All information stored in this cache could be lost on Agent restart
         (e.g. rebuilt from Bleemeo API)
     """
-    CACHE_VERSION = 1
+    # Version 1: initial version
+    # Version 2: Added docker_id to Containers
+    CACHE_VERSION = 2
 
     def __init__(self, state, skip_load=False):
         self._state = state
@@ -284,6 +331,7 @@ class BleemeoCache:
 
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
+        self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
 
         if not skip_load:
@@ -324,8 +372,10 @@ class BleemeoCache:
             values[3] = set(values[3])
             self.services[service_uuid] = Service(*values)
 
-        for container_uuid, values in cache['containers'].items():
-            self.containers[container_uuid] = Container(*values)
+        # Can't load containers from cache version 1
+        if cache['version'] > 1:
+            for container_uuid, values in cache['containers'].items():
+                self.containers[container_uuid] = Container(*values)
 
         config = cache.get('current_config')
         if config:
@@ -346,6 +396,7 @@ class BleemeoCache:
     def update_lookup_map(self):
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
+        self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
 
         for metric in self.metrics.values():
@@ -353,6 +404,7 @@ class BleemeoCache:
 
         for container in self.containers.values():
             self.containers_by_name[container.name] = container
+            self.containers_by_docker_id[container.docker_id] = container
 
         for service in self.services.values():
             key = (service.label, service.instance)
@@ -467,15 +519,6 @@ class BleemeoCache:
             )
 
         self.tags = list(self._state.get('tags_uuid', {}))
-
-        docker_container_uuid = self._state.get('docker_container_uuid', {})
-        for (container_name, value) in docker_container_uuid.items():
-            (container_uuid, inspect_hash) = value
-            self.containers[container_uuid] = Container(
-                container_uuid,
-                container_name,
-                inspect_hash,
-            )
 
         self.save()
         self._reload()
@@ -802,6 +845,7 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.loop_start()
 
     def _loop(self):
+        # pylint: disable=too-many-branches
         """ Call as long as agent is running. It's the "main" method for
             Bleemeo connector thread.
         """
@@ -813,9 +857,14 @@ class BleemeoConnector(threading.Thread):
             while True:
                 metric_point = self._metric_queue.get(timeout=timeout)
                 timeout = 0.3  # Long wait only for the first get
+                short_item = (
+                    metric_point.get('item', '')[:API_METRIC_ITEM_LENGTH]
+                )
+                if metric_point.get('instance'):
+                    short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
                 key = (
                     metric_point['measurement'],
-                    metric_point.get('item', '')
+                    short_item,
                 )
                 metric = self._bleemeo_cache.metrics_by_labelitem.get(key)
 
@@ -840,8 +889,20 @@ class BleemeoConnector(threading.Thread):
 
                     continue
 
-                bleemeo_metric = metric_point.copy()
-                bleemeo_metric['uuid'] = metric.uuid
+                bleemeo_metric = {
+                    'uuid': metric.uuid,
+                    'measurement': metric.label,
+                    'time': metric_point['time'],
+                    'value': metric_point['value'],
+                }
+                if metric.item:
+                    bleemeo_metric['item'] = metric.item
+                if 'status' in metric_point:
+                    bleemeo_metric['status'] = metric_point['status']
+                if 'check_output' in metric_point:
+                    bleemeo_metric['check_output'] = (
+                        metric_point['check_output']
+                    )
                 metrics.append(bleemeo_metric)
                 if len(metrics) > 1000:
                     break
@@ -1262,12 +1323,16 @@ class BleemeoConnector(threading.Thread):
         # other.
         random.shuffle(current_metrics)
 
+        service_short_lookup = services_to_short_key(self.core.services)
         metrics_req_count = len(current_metrics)
         count = 0
         while current_metrics:
             reg_req = current_metrics.pop()
             count += 1
-            key = (reg_req.label, reg_req.item)
+            short_item = reg_req.item[:API_METRIC_ITEM_LENGTH]
+            if reg_req.service_label:
+                short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
+            key = (reg_req.label, short_item)
             if (key in bleemeo_cache.metrics_by_labelitem
                     or key in deleted_metrics):
                 continue
@@ -1277,7 +1342,7 @@ class BleemeoConnector(threading.Thread):
                 'label': reg_req.label,
             }
             if reg_req.status_of_label:
-                status_of_key = (reg_req.status_of_label, reg_req.item)
+                status_of_key = (reg_req.status_of_label, short_item)
                 if status_of_key not in bleemeo_cache.metrics_by_labelitem:
                     if count >= metrics_req_count:
                         logging.debug(
@@ -1301,13 +1366,18 @@ class BleemeoConnector(threading.Thread):
                 payload['container'] = container.uuid
             if reg_req.service_label:
                 key = (reg_req.service_label, reg_req.instance)
-                service = bleemeo_cache.services_by_labelinstance.get(key)
+                if key not in service_short_lookup:
+                    continue
+                short_key = service_short_lookup[key]
+                service = bleemeo_cache.services_by_labelinstance.get(
+                    short_key
+                )
                 if service is None:
                     continue
                 payload['service'] = service.uuid
 
             if reg_req.item:
-                payload['item'] = reg_req.item
+                payload['item'] = short_item
 
             if reg_req.last_status is not None:
                 payload['last_status'] = reg_req.last_status
@@ -1383,10 +1453,14 @@ class BleemeoConnector(threading.Thread):
         # Step 4: delete object present in API by not in local
         # Only metric $SERVICE_NAME_status from service with ignore_check=True
         # are deleted
+        service_short_lookup = services_to_short_key(self.core.services)
         for (key, service_info) in self.core.services.items():
             if not service_info.get('ignore_check', False):
                 continue
-            (service_name, instance) = key
+            if key not in service_short_lookup:
+                continue
+            short_key = service_short_lookup[key]
+            (service_name, instance) = short_key
             metric = bleemeo_cache.metrics_by_labelitem.get(
                 ('%s_status' % service_name, instance)
             )
@@ -1421,12 +1495,16 @@ class BleemeoConnector(threading.Thread):
         # or deleted by API.
         with self._current_metrics_lock:
             cutoff = time.time() - 3600
-            self._current_metrics = {
-                key: value
-                for (key, value) in self._current_metrics.items()
-                if value.last_seen >= cutoff and
-                (value.label, value.item) not in deleted_metrics
-            }
+            result = {}
+            for (key, value) in self._current_metrics.items():
+                if value.last_seen < cutoff:
+                    continue
+                short_item = value.item[:API_METRIC_ITEM_LENGTH]
+                if value.service_label:
+                    short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
+                if (value.label, short_item) not in deleted_metrics:
+                    result[key] = value
+            self._current_metrics = result
 
         if last_error is not None:
             raise last_error  # pylint: disable=raising-bad-type
@@ -1487,11 +1565,15 @@ class BleemeoConnector(threading.Thread):
             self.core.update_discovery(deleted_services=deleted_services)
 
         # Step 3: register/update object present in local but not in API
+        service_short_lookup = services_to_short_key(self.core.services)
         for key, service_info in self.core.services.items():
-            (service_name, instance) = key
+            if key not in service_short_lookup:
+                continue
+            short_key = service_short_lookup[key]
+            (service_name, instance) = short_key
             listen_addresses = get_listen_addresses(service_info)
 
-            service = bleemeo_cache.services_by_labelinstance.get(key)
+            service = bleemeo_cache.services_by_labelinstance.get(short_key)
             if (service is not None and
                     service.listen_addresses == listen_addresses and
                     service.exe_path == service_info.get('exe_path', '') and
@@ -1573,8 +1655,10 @@ class BleemeoConnector(threading.Thread):
         # Step 4: delete object present in API by not in local
         try:
             local_uuids = set(
-                bleemeo_cache.services_by_labelinstance[key].uuid
-                for key in self.core.services
+                bleemeo_cache.services_by_labelinstance[
+                    service_short_lookup[key]
+                ].uuid
+                for key in self.core.services if key in service_short_lookup
             )
         except KeyError:
             logging.info(
@@ -1625,7 +1709,7 @@ class BleemeoConnector(threading.Thread):
                 container_url,
                 params={
                     'agent': self.agent_uuid,
-                    'fields': 'id,name,docker_inspect'
+                    'fields': 'id,name,docker_id,docker_inspect'
                 },
             )
 
@@ -1633,16 +1717,22 @@ class BleemeoConnector(threading.Thread):
             bleemeo_cache.containers_by_name = {}
             for data in api_containers:
                 docker_inspect = json.loads(data['docker_inspect'])
+                docker_inspect = sort_docker_inspect(docker_inspect)
+                name = docker_inspect['Name'].lstrip('/')
                 inspect_hash = hashlib.sha1(
                     json.dumps(docker_inspect, sort_keys=True).encode('utf-8')
                 ).hexdigest()
                 container = Container(
                     data['id'],
-                    data['name'],
+                    name,
+                    data['docker_id'],
                     inspect_hash,
                 )
                 bleemeo_cache.containers[container.uuid] = container
                 bleemeo_cache.containers_by_name[container.name] = container
+                bleemeo_cache.containers_by_docker_id[container.docker_id] = (
+                    container
+                )
 
         # Step 2: delete local object that are deleted from API
         # Not done for containers. API never delete a container
@@ -1653,11 +1743,13 @@ class BleemeoConnector(threading.Thread):
             local_containers = {}
 
         # Step 3: register/update object present in local but not in API
-        for name, inspect in local_containers.items():
+        for docker_id, inspect in local_containers.items():
+            name = inspect['Name'].lstrip('/')
+            inspect = sort_docker_inspect(copy.deepcopy(inspect))
             new_hash = hashlib.sha1(
                 json.dumps(inspect, sort_keys=True).encode('utf-8')
             ).hexdigest()
-            container = bleemeo_cache.containers_by_name.get(name)
+            container = bleemeo_cache.containers_by_docker_id.get(docker_id)
 
             if container is not None and container.inspect_hash == new_hash:
                 continue
@@ -1677,7 +1769,7 @@ class BleemeoConnector(threading.Thread):
 
             payload = {
                 'host': self.agent_uuid,
-                'name': name,
+                'name': name[:API_CONTAINER_NAME_LENGTH],
                 'command': ' '.join(cmd),
                 'docker_status': inspect.get('State', {}).get('Status', ''),
                 'docker_created_at': convert_docker_date(
@@ -1692,7 +1784,7 @@ class BleemeoConnector(threading.Thread):
                 'docker_api_version': self.core.last_facts.get(
                     'docker_api_version', ''
                 ),
-                'docker_id': inspect.get('Id', ''),
+                'docker_id': docker_id,
                 'docker_image_id': inspect.get('Image', ''),
                 'docker_image_name':
                     inspect.get('Config', '').get('Image', ''),
@@ -1712,17 +1804,19 @@ class BleemeoConnector(threading.Thread):
             container = Container(
                 obj_uuid,
                 name,
+                docker_id,
                 new_hash,
             )
             bleemeo_cache.containers[obj_uuid] = container
-            bleemeo_cache.containers_by_name[name] = container
+            bleemeo_cache.containers_by_name[container.name] = container
+            bleemeo_cache.containers_by_docker_id[docker_id] = container
             logging.debug('Container %s %s', container.name, action_text)
 
         # Step 4: delete object present in API by not in local
         try:
             local_uuids = set(
-                bleemeo_cache.containers_by_name[name].uuid
-                for name in local_containers
+                bleemeo_cache.containers_by_docker_id[key].uuid
+                for key in local_containers
             )
         except KeyError:
             logging.info(

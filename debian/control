@@ -25,6 +25,7 @@ Depends: ${misc:Depends}, ${python3:Depends},
 Recommends:
     ca-certificates,
     python3-docker,
+    python3-kubernetes,
     python3-flask,
     python3-influxdb (>= 2.6.0~),
     python3-raven,

@@ -1,0 +1,207 @@
+# You will need to configure bleemeo-agent-credentials with account and
+# registration key.
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: bleemeo-agent-credentials
+type:
+stringData:
+  BLEEMEO_AGENT_ACCOUNT: YOUR_ACCOUNT_ID
+  BLEEMEO_AGENT_REGISTRATION_KEY: YOUR_REGISTRATION_KEY
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bleemeo-agent-config
+data:
+  99-local.conf: |
+    # Add bleemeo-agent customization here
+    df:
+      path_ignore:
+      # some ignore usefull for minikube. Anyway on minikube data are stored
+      # in /mnt/sda1 which is not exlucded
+      - /mnt/sda1/var/lib  # minikube real path for /var/lib
+      - /var/lib  # minikube bind-mount lots of /var/lib sub-path
+      - /etc/     # minikube bind-mount path in /etc
+      - /tmp      # minikube bind-mount path in /tmp
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: bleemeo-agent
+  namespace: default
+---
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: bleemeo-agent
+rules:
+  - apiGroups:
+      - ""
+    resources:
+      - pods
+    verbs:
+      - get
+      - list
+---
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1beta1
+metadata:
+  name: bleemeo-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: bleemeo-agent
+subjects:
+- kind: ServiceAccount
+  name: bleemeo-agent
+  namespace: default
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: bleemeo-telegraf-config
+data:
+  telegraf.conf: |
+    [agent]
+      interval = "10s"
+      round_interval = true
+      metric_batch_size = 1000
+      metric_buffer_limit = 10000
+      collection_jitter = "0s"
+      flush_interval = "10s"
+      flush_jitter = "0s"
+      precision = ""
+      debug = false
+      quiet = false
+      logfile = ""
+      hostname = ""
+      omit_hostname = false
+    [[outputs.graphite]]
+      servers = ["localhost:2003"]
+      prefix = "telegraf"
+    [[inputs.cpu]]
+      percpu = true
+      totalcpu = true
+      collect_cpu_time = false
+    [[inputs.disk]]
+      ignore_fs = ["tmpfs", "devtmpfs"]
+    [[inputs.diskio]]
+    [[inputs.kernel]]
+    [[inputs.mem]]
+    [[inputs.processes]]
+    [[inputs.swap]]
+    [[inputs.system]]
+    [[inputs.net]]
+---
+kind: DaemonSet
+apiVersion: extensions/v1beta1
+metadata:
+  name: bleemeo-agent
+  namespace: default
+  labels:
+    app: bleemeo
+    component: agent
+spec:
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: bleemeo
+        component: agent
+    spec:
+      serviceAccountName: bleemeo-agent
+      terminationGracePeriodSeconds: 60
+      hostNetwork: true
+      hostPID: true
+      containers:
+      - image: bleemeo/bleemeo-agent
+        imagePullPolicy: IfNotPresent
+        name: bleemeo-agent
+        ports:
+        - name: http
+          containerPort: 8015
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: lib-bleemeo
+          mountPath: /var/lib/bleemeo
+        - name: hostroot
+          mountPath: /hostroot
+          readOnly: true
+        - name: telegraf-d
+          mountPath: /etc/telegraf/telegraf.d
+        - name: bleemeo-agent-config
+          mountPath: /etc/bleemeo/agent.conf.d/99-local.conf
+          subPath: 99-local.conf
+        env:
+        - name: BLEEMEO_AGENT_TELEGRAF_DOCKER_NAME
+          value: ""  # Do not restart telegraf using Docker. It auto-reload itself under k8s
+        - name: BLEEMEO_AGENT_KUBERNETES_ENABLED
+          value: "True"
+        - name: BLEEMEO_AGENT_KUBERNETES_NODENAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        envFrom:
+        - secretRef:
+            name: bleemeo-agent-credentials
+      - image: telegraf:1.6.2
+        name: telegraf
+        args:
+        - sh
+        - -ec
+        - |
+            # Cheap config file watcher
+            last_stat=`ls -l /etc/telegraf/telegraf.conf /etc/telegraf/telegraf.d/`
+            telegraf --config-directory /etc/telegraf/telegraf.d &
+            telegraf_pid=$!
+            cleanup() {
+                echo "Stopping..."
+                trap '' EXIT
+                kill $telegraf_pid
+                wait
+                exit $?
+            }
+            trap cleanup INT QUIT KILL EXIT
+            while true; do
+                sleep 5
+                current_stat=`ls -l /etc/telegraf/telegraf.conf /etc/telegraf/telegraf.d/`
+                if [ "$last_stat" != "$current_stat" ]; then
+                    kill -HUP $telegraf_pid
+                    last_stat=$current_stat
+                fi
+            done
+        volumeMounts:
+        - name: docker-socket
+          mountPath: /var/run/docker.sock
+        - name: hostroot
+          mountPath: /hostroot
+          readOnly: true
+        - name: telegraf-d
+          mountPath: /etc/telegraf/telegraf.d
+        - name: bleemeo-telegraf-config
+          mountPath: /etc/telegraf/telegraf.conf
+          subPath: telegraf.conf
+      volumes:
+      - name: docker-socket
+        hostPath:
+          path: /var/run/docker.sock
+      - name: lib-bleemeo
+        hostPath:
+          path: /var/lib/bleemeo
+      - name: hostroot
+        hostPath:
+          path: /
+      - name: telegraf-d
+        emptyDir: {}
+      - name: bleemeo-agent-config
+        configMap:
+          name: bleemeo-agent-config
+      - name: bleemeo-telegraf-config
+        configMap:
+          name: bleemeo-telegraf-config

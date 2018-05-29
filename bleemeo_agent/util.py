@@ -828,6 +828,7 @@ def _get_docker_process(docker_client):
         # Also name start with "/". I think it may have mulitple name
         # and/or other "/" with docker-in-docker.
         container_name = container['Names'][0].lstrip('/')
+        docker_id = container['Id']
         try:
             try:
                 docker_top = (
@@ -846,6 +847,7 @@ def _get_docker_process(docker_client):
             pid = process['pid']
             processes[pid] = process
             processes[pid]['instance'] = container_name
+            processes[pid]['docker_id'] = docker_id
 
     return processes
 

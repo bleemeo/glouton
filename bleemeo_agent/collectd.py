@@ -736,9 +736,10 @@ def _restart_collectd(core):
         'sudo -n service collectd restart')
     collectd_container = core.config.get('collectd.docker_name')
     if collectd_container is not None:
-        bleemeo_agent.util.docker_restart(
-            core.docker_client, collectd_container
-        )
+        if collectd_container:
+            bleemeo_agent.util.docker_restart(
+                core.docker_client, collectd_container
+            )
     else:
         try:
             output = subprocess.check_output(

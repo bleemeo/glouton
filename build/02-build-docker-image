@@ -2,7 +2,7 @@
 
 set -ex
 
-docker pull ubuntu:16.04
+docker pull ubuntu:18.04
 
 cd work
 WORKSPACE=`pwd`

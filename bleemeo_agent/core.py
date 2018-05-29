@@ -82,6 +82,13 @@ try:
 except ImportError:
     docker = None
 
+try:
+    import kubernetes
+    import kubernetes.client
+    import kubernetes.config
+except ImportError:
+    kubernetes = None
+
 # Optional dependencies
 try:
     import raven
@@ -104,6 +111,8 @@ ENVIRON_CONFIG_VARS = [
     ('BLEEMEO_AGENT_MQTT_HOST', 'bleemeo.mqtt.host', 'string'),
     ('BLEEMEO_AGENT_MQTT_PORT', 'bleemeo.mqtt.port', 'int'),
     ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
+    ('BLEEMEO_AGENT_KUBERNETES_NODENAME', 'kubernetes.nodename', 'string'),
+    ('BLEEMEO_AGENT_KUBERNETES_ENABLED', 'kubernetes.enabled', 'bool'),
     ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
     ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
     ('BLEEMEO_AGENT_TELEGRAF_CONFIG_FILE', 'telegraf.config_file', 'string'),
@@ -375,6 +384,7 @@ loggers:
     urllib3: {level: WARNING}
     werkzeug: {level: WARNING}
     apscheduler: {level: WARNING}
+    kubernetes.client.rest: {level: INFO}
 root:
     # Level and handlers will be updated at runtime
     level: INFO
@@ -548,8 +558,11 @@ def _sanitize_service(
 
 
 def _purge_services(
-        docker_containers, new_discovered_services, running_services,
+        core, new_discovered_services, running_services,
         deleted_services):
+    # pylint: disable=too-many-branches
+    # pylint: disable=too-many-nested-blocks
+    # pylint: disable=too-many-locals
     """ Remove deleted_services (service deleted from API) and check
         for uninstalled service (to mark them inactive).
     """
@@ -565,20 +578,61 @@ def _purge_services(
         if not new_discovered_services[service_key].get('active', True):
             continue
         (service_name, instance) = service_key
-        exe_path = new_discovered_services[service_key].get('exe_path')
-        if instance and instance not in docker_containers:
+        service_info = new_discovered_services[service_key]
+        exe_path = service_info.get('exe_path')
+        if instance and instance not in core.docker_containers_by_name:
             logging.info(
                 'Service %s (%s): container no longer running,'
                 ' marking it as inactive',
                 service_name,
                 instance,
             )
-            new_discovered_services[service_key]['active'] = (
-                instance in docker_containers
-            )
+            service_info['active'] = False
+        elif instance and 'pod_uid' in service_info:
+            pod_uid = service_info['pod_uid']
+            if pod_uid not in core.k8s_pods:
+                logging.info(
+                    'Service %s (%s): pod no longer running,'
+                    ' marking it as inactive',
+                    service_name,
+                    instance,
+                )
+                service_info['active'] = False
+            else:
+                pod = core.k8s_pods[pod_uid]
+                if pod.status and pod.status.container_statuses:
+                    for container in pod.status.container_statuses:
+                        container_id = container.container_id
+                        if (not container_id or not
+                                container_id.startswith('docker://')):
+                            continue
+                        container_id = container_id[len('docker://'):]
+                        if container_id == service_info.get('container_id'):
+                            continue
+                        other_inspect = core.docker_containers.get(
+                            container_id
+                        )
+                        if not other_inspect:
+                            continue
+
+                        other_key = (
+                            service_name,
+                            other_inspect['Name'].lstrip('/'),
+                        )
+                        if (other_key in new_discovered_services or
+                                other_key in running_services):
+                            logging.debug(
+                                'Service %s (%s): pod restarted,'
+                                ' marking old service as inactive',
+                                service_name,
+                                instance,
+                            )
+                            new_discovered_services[service_key]['active'] = (
+                                False
+                            )
         elif not instance and exe_path and not os.path.exists(exe_path):
             # Binary for service no longer exists. It has been uninstalled.
-            new_discovered_services[service_key]['active'] = False
+            service_info['active'] = False
             logging.info(
                 'Service %s was uninstalled, marking it as inactive',
                 service_name,
@@ -1011,7 +1065,11 @@ class Core:
         self.influx_connector = None
         self.graphite_server = None
         self.docker_client = None
+        self.k8s_client = None
+        self.k8s_pods = {}
+        self.k8s_docker_to_pods = {}
         self.docker_containers = {}
+        self.docker_containers_by_name = {}
         self.docker_containers_ignored = {}
         self.docker_networks = {}
         if APSCHEDULE_IS_3X:
@@ -1437,6 +1495,7 @@ class Core:
         try:
             self.setup_signal()
             self._docker_connect()
+            self._k8s_connect()
 
             self.schedule_tasks()
             self.start_threads()
@@ -1507,8 +1566,22 @@ class Core:
             logging.debug('Docker ping failed. Assume Docker is not used')
             self.docker_client = None
 
+    def _k8s_connect(self):
+        if not self.config.get('kubernetes.enabled', False):
+            return
+        if kubernetes is None:
+            logging.warning('Missing Kubernetes dependencies.')
+            return
+
+        try:
+            kubernetes.config.load_incluster_config()
+            self.k8s_client = kubernetes.client.CoreV1Api()
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.error('Failed to initialize Kubernetes client: %s', exc)
+
     def _update_docker_info(self):
         self.docker_containers = {}
+        self.docker_containers_by_name = {}
         self.docker_networks = {}
         self.docker_containers_ignored = {}
 
@@ -1516,18 +1589,20 @@ class Core:
             return
 
         for container in self.docker_client.containers(all=True):
-            inspect = self.docker_client.inspect_container(container['Id'])
+            docker_id = container['Id']
+            inspect = self.docker_client.inspect_container(docker_id)
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
             bleemeo_enable = labels.get('bleemeo.enable', '').lower()
             if bleemeo_enable in ('0', 'off', 'false', 'no'):
-                self.docker_containers_ignored[container['Id']] = (
+                self.docker_containers_ignored[docker_id] = (
                     inspect['Name'].lstrip('/')
                 )
                 continue
             name = inspect['Name'].lstrip('/')
-            self.docker_containers[name] = inspect
+            self.docker_containers[docker_id] = inspect
+            self.docker_containers_by_name[name] = inspect
 
         if not hasattr(self.docker_client, 'networks'):
             return
@@ -1545,6 +1620,31 @@ class Core:
                 network = self.docker_client.inspect_network(name)
 
             self.docker_networks[name] = network
+
+    def _update_kubernetes_info(self):
+        self.k8s_pods = {}
+        self.k8s_docker_to_pods = {}
+
+        if self.k8s_client is None:
+            return
+
+        my_node = self.config.get('kubernetes.nodename')
+        if my_node:
+            pods = self.k8s_client.list_pod_for_all_namespaces(
+                field_selector='spec.nodeName=%s' % my_node
+            )
+        else:
+            # fallback to query ALL pods
+            pods = self.k8s_client.list_pod_for_all_namespaces()
+        for pod in pods.items:
+            self.k8s_pods[pod.metadata.uid] = pod
+            if pod.status and pod.status.container_statuses:
+                for container in pod.status.container_statuses:
+                    if (not container.container_id or not
+                            container.container_id.startswith('docker://')):
+                        continue
+                    docker_id = container.container_id[len('docker://'):]
+                    self.k8s_docker_to_pods[docker_id] = pod
 
     def schedule_tasks(self):
         self.add_scheduled_job(
@@ -1676,7 +1776,7 @@ class Core:
                     and 'Health' in result['State']
                     and self.docker_client is not None):
 
-                self._docker_health_status(result['Id'])
+                self._docker_health_status(key)
 
         # Some service have additional metrics. Currently only Postfix and exim
         # for mail queue size
@@ -1723,7 +1823,8 @@ class Core:
             return  # most probably container was removed
 
         name = result['Name'].lstrip('/')
-        self.docker_containers[name] = result
+        self.docker_containers[container_id] = result
+        self.docker_containers_by_name[name] = result
         if 'Health' not in result['State']:
             return
 
@@ -1813,6 +1914,7 @@ class Core:
         # pylint: disable=too-many-locals
         self._trigger_discovery = False
         self._update_docker_info()
+        self._update_kubernetes_info()
         discovered_running_services = self._run_discovery()
         if first_run:
             # Should only be needed on first run. In addition to avoid
@@ -1822,7 +1924,7 @@ class Core:
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
         new_discovered_services = _purge_services(
-            self.docker_containers,
+            self,
             new_discovered_services,
             discovered_running_services,
             deleted_services,
@@ -2125,6 +2227,7 @@ class Core:
         service_info['address'] = default_address
 
     def _run_discovery(self):
+        # pylint: disable=too-many-branches
         """ Try to discover some service based on known port/process
         """
         discovered_services = {}
@@ -2162,15 +2265,27 @@ class Core:
                     ports = netstat_info.get(pid, {})
                 else:
                     ports = self.get_docker_ports(instance)
-                    docker_inspect = self.docker_containers[instance]
+                    docker_inspect = self.docker_containers_by_name[instance]
+                    docker_id = docker_inspect.get('Id')
                     labels = docker_inspect.get('Config', {}).get('Labels', {})
                     if labels is None:
                         labels = {}
                     service_info['stack'] = labels.get('bleemeo.stack', None)
-                    service_info['container_id'] = docker_inspect.get('Id')
+                    service_info['container_id'] = docker_id
                     # At this point, current is running because we are
                     # iterating over processes.
                     service_info['container_running'] = True
+
+                    pod = self.k8s_docker_to_pods.get(docker_id)
+                    if pod:
+                        service_info['pod_uid'] = pod.metadata.uid
+                        ports = self.get_kubernetes_ports(
+                            pod, docker_id, ports,
+                        )
+                    if pod and pod.metadata.annotations:
+                        service_info['stack'] = pod.metadata.annotations.get(
+                            'bleemeo.stack', service_info['stack'],
+                        )
 
                 self._discovery_fill_address_and_ports(
                     service_info,
@@ -2671,6 +2786,7 @@ class Core:
     def get_docker_container_address(self, container_name):
         # pylint: disable=too-many-return-statements
         # pylint: disable=too-many-locals
+        # pylint: disable=too-many-branches
         """ Return address where the container may be reachable from host
 
             This may not be possible. This could return None or an IP only
@@ -2736,6 +2852,10 @@ class Core:
             (ip_address, _) = ip_mask.split('/')
             return ip_address
 
+        # Try k8s
+        if container_id in self.k8s_docker_to_pods:
+            return self.k8s_docker_to_pods[container_id].status.pod_ip
+
         return None
 
     def get_docker_ports(self, container_name):
@@ -2748,6 +2868,40 @@ class Core:
         ports = {
             x: '0.0.0.0' for x in listening_ports
         }
+        return ports
+
+    def get_kubernetes_ports(self, pod, docker_id, ports):
+        # pylint: disable=no-self-use
+        name = None
+        for container in pod.status.container_statuses:
+            container_id = container.container_id
+            if (not container_id or not
+                    container_id.startswith('docker://')):
+                continue
+            container_id = container_id[len('docker://'):]
+            if container_id == docker_id:
+                name = container.name
+                break
+
+        if name is None:
+            return ports
+
+        for container in pod.spec.containers:
+            if container.name != name:
+                continue
+            ports = {}
+            if container.ports:
+                # Address "0.0.0.0" will be replaced by container address in
+                # _discovery_fill_address_and_ports method.
+                for ent in container.ports:
+                    if 'containerPort' in ent:
+                        portproto = '%s/%s' % (
+                            ent['containerPort'],
+                            ent.get('protocol', 'tcp').lower(),
+                        )
+                        ports[portproto] = '0.0.0.0'
+                break
+
         return ports
 
 

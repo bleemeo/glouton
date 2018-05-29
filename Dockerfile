@@ -4,18 +4,25 @@
 # docker run --name="bleemeo-agent" --net=host --pid=host -v /tmp/telegraf:/etc/telegraf/telegraf.d/bleemeo-generated.conf -v /var/lib/bleemeo:/var/lib/bleemeo -v /var/run/docker.sock:/var/run/docker.sock bleemeo/bleemeo-agent
 #
 
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 
 MAINTAINER Lionel Porcheron <lionel.porcheron@bleemeo.com>
 
-RUN echo "deb http://packages.bleemeo.com/bleemeo-agent xenial main" >> /etc/apt/sources.list.d/bleemeo-agent.list && \
-    apt-key adv --recv-keys --keyserver keyserver.ubuntu.com 9B8BDA4BE10E9F2328D40077E848FD17FC23F27E && \
-    apt-get -y update && apt-get -y dist-upgrade && \
+RUN apt-get -y update && apt-get -y dist-upgrade && apt-get install --no-install-recommends -y wget ca-certificates && \
+    mkdir /etc/bleemeo && \
+    wget -qO- https://packages.bleemeo.com/bleemeo-agent/ubuntu/bleemeo-keyring.asc | awk '/^$/{ x = 1; } /^[^=-]/{ if (x) { print $0; } ; }' | base64 -d > /etc/bleemeo/bleemeo-keyring.gpg && \
+    echo "deb [signed-by=/etc/bleemeo/bleemeo-keyring.gpg] http://packages.bleemeo.com/bleemeo-agent bionic main" >> /etc/apt/sources.list.d/bleemeo-agent.list && \
+    ls -lh /etc/bleemeo && \
+    apt-get update && \
     apt-get install -y bleemeo-agent-single bleemeo-agent && \
     mkdir -p /etc/telegraf/telegraf.d/ && touch /etc/telegraf/telegraf.d/bleemeo-generated.conf && \
-    chown bleemeo /etc/telegraf/telegraf.d/bleemeo-generated.conf
+    chown bleemeo /etc/telegraf/telegraf.d/bleemeo-generated.conf && \
+    rm -fr /var/lib/apt/lists/*
 
 ADD 60-bleemeo.conf /etc/bleemeo/agent.conf.d/
 
 #USER bleemeo
+# Ubuntu 18.18 image use "/UTC" as default timezone (/etc/timezone).
+# pytz don't known "/UTC". Use "UTC" instead.
+ENV TZ=UTC
 CMD ["/usr/bin/bleemeo-agent", "--yes-run-as-root"]

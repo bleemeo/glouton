@@ -28,7 +28,7 @@
  # Too cmplicated to provide examples here.
 --- a/setup.cfg
 +++ /dev/null
-@@ -1,44 +0,0 @@
+@@ -1,45 +0,0 @@
 -[metadata]
 -name = bleemeo-agent
 -description = "Agent for Bleemeo"
@@ -68,6 +68,7 @@
 -bleemeo = paho-mqtt
 -sentry = raven
 -web = flask
+-kubernetes = kubernetes
 -
 -[options.entry_points]
 -console_scripts = 
