@@ -13,7 +13,7 @@ CENTOS_SUPPORTED_VERSIONS="7"
 
 for centos_version in ${CENTOS_SUPPORTED_VERSIONS}
 do
-    cp -p "${WORKSPACE}"/result/bleemeo-agent*-${VERSION}-1.el${centos_version}.centos.*.rpm ${CREATEREPO_ROOT}/${centos_version}/x86_64/Packages
+    cp -p "${WORKSPACE}"/result/bleemeo-agent*-${VERSION}-1.el${centos_version}.*.rpm ${CREATEREPO_ROOT}/${centos_version}/x86_64/Packages
     ${CREATEREPO_DOCKER_CMD} sh -c "repomanage --old ${CREATEREPO_ROOT}/${centos_version}/x86_64/Packages | xargs --no-run-if-empty rm -v"
     ${CREATEREPO_DOCKER_CMD} rpmsign --addsign ${CREATEREPO_ROOT}/${centos_version}/x86_64/Packages/*.rpm
     ${CREATEREPO_DOCKER_CMD} createrepo ${CREATEREPO_ROOT}/${centos_version}/x86_64
