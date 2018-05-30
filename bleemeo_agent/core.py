@@ -2894,10 +2894,10 @@ class Core:
                 # Address "0.0.0.0" will be replaced by container address in
                 # _discovery_fill_address_and_ports method.
                 for ent in container.ports:
-                    if 'containerPort' in ent:
+                    if ent.container_port:
                         portproto = '%s/%s' % (
-                            ent['containerPort'],
-                            ent.get('protocol', 'tcp').lower(),
+                            ent.container_port,
+                            ent.protocol.lower(),
                         )
                         ports[portproto] = '0.0.0.0'
                 break
