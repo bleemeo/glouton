@@ -22,7 +22,4 @@ RUN apt-get -y update && apt-get -y dist-upgrade && apt-get install --no-install
 ADD 60-bleemeo.conf /etc/bleemeo/agent.conf.d/
 
 #USER bleemeo
-# Ubuntu 18.18 image use "/UTC" as default timezone (/etc/timezone).
-# pytz don't known "/UTC". Use "UTC" instead.
-ENV TZ=UTC
 CMD ["/usr/bin/bleemeo-agent", "--yes-run-as-root"]

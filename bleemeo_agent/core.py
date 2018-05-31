@@ -1074,7 +1074,9 @@ class Core:
         self.docker_networks = {}
         if APSCHEDULE_IS_3X:
             self._scheduler = (
-                apscheduler.schedulers.background.BackgroundScheduler()
+                apscheduler.schedulers.background.BackgroundScheduler(
+                    timezone='UTC',
+                )
             )
         else:
             self._scheduler = apscheduler.scheduler.Scheduler()  # noqa pylint: disable=no-member
