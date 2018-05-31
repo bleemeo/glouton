@@ -1715,6 +1715,7 @@ class BleemeoConnector(threading.Thread):
 
             bleemeo_cache.containers = {}
             bleemeo_cache.containers_by_name = {}
+            bleemeo_cache.containers_by_docker_id = {}
             for data in api_containers:
                 docker_inspect = json.loads(data['docker_inspect'])
                 docker_inspect = sort_docker_inspect(docker_inspect)
