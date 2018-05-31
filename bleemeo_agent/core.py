@@ -1494,15 +1494,19 @@ class Core:
             os.unlink(upgrade_file)
         except OSError:
             pass
+
+        threads_started = False
         try:
             self.setup_signal()
             self._docker_connect()
             self._k8s_connect()
 
             self.schedule_tasks()
-            self.start_threads()
-            if self.is_terminating.is_set():
+            if not self.start_threads():
+                self.is_terminating.set()
                 return
+            else:
+                threads_started = True
             try:
                 self._scheduler.start()
                 # This loop is break by KeyboardInterrupt (ctrl+c or SIGTERM).
@@ -1517,12 +1521,13 @@ class Core:
             pass
         finally:
             self.is_terminating.set()
-            self.graphite_server.join()
+            if threads_started:
+                self.graphite_server.join()
+                if self.bleemeo_connector is not None:
+                    self.bleemeo_connector.join()
+                if self.influx_connector is not None:
+                    self.influx_connector.join()
             self.cache.save()
-            if self.bleemeo_connector is not None:
-                self.bleemeo_connector.join()
-            if self.influx_connector is not None:
-                self.influx_connector.join()
 
     def setup_signal(self):
         """ Make kill (SIGKILL) send a KeyboardInterrupt
@@ -1709,8 +1714,7 @@ class Core:
         self.graphite_server.initialization_done.wait(5)
         if not self.graphite_server.listener_up:
             logging.error('Graphite listener is not working, stopping agent')
-            self.is_terminating.set()
-            return
+            return False
 
         if self.bleemeo_connector:
             self.bleemeo_connector.start()
@@ -1730,6 +1734,8 @@ class Core:
         thread = threading.Thread(target=self._watch_docker_event)
         thread.daemon = True
         thread.start()
+
+        return True
 
     def _gather_metrics(self):
         """ Gather and send some metric missing from other sources
