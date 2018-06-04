@@ -12,8 +12,10 @@
         Uptime: {{ uptime }}<br/>
         Load: {{ loads }}<br/>
         <!-- Registration: 1st January 1970 {# TODO #}<br/> -->
+        {% if core.last_report %}
         Last Report: {{ core.last_report.strftime('%c') }}<br/>
         <br/>
+        {% endif %}
         {% if core.config.get('tags') %}
         Tags: {{ ', '.join(core.config.get('tags', [])) }}<br/>
         {% endif %}
