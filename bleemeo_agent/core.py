@@ -1344,7 +1344,7 @@ class Core:
                     )
                 options['trigger'] = 'date'
                 options['run_date'] = (
-                    datetime.datetime.now() +
+                    datetime.datetime.utcnow() +
                     datetime.timedelta(seconds=next_run_in)
                 )
             else:
@@ -1352,10 +1352,10 @@ class Core:
                 options['seconds'] = seconds
 
                 if next_run_in is not None and next_run_in == 0:
-                    options['next_run_time'] = datetime.datetime.now()
+                    options['next_run_time'] = datetime.datetime.utcnow()
                 elif next_run_in is not None:
                     options['next_run_time'] = (
-                        datetime.datetime.now() +
+                        datetime.datetime.utcnow() +
                         datetime.timedelta(seconds=next_run_in)
                     )
 
@@ -1408,7 +1408,7 @@ class Core:
             >>> self.the_job = self.trigger_job(self.the_job)  # doctest: +SKIP
         """
         if APSCHEDULE_IS_3X:
-            job.modify(next_run_time=datetime.datetime.now())
+            job.modify(next_run_time=datetime.datetime.utcnow())
         else:
             self._scheduler.unschedule_job(job)
             job = self._scheduler.add_interval_job(
