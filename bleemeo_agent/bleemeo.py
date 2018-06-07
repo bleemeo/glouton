@@ -555,7 +555,15 @@ class BleemeoConnector(threading.Thread):
         self._current_metrics_lock = threading.Lock()
         # Make sure this metrics exists and try to be registered
         self._current_metrics[('agent_status', '')] = MetricRegistrationReq(
-            'agent_status', '', None, '', '', None, STATUS_OK, '', time.time(),
+            'agent_status',
+            '',
+            None,
+            '',
+            '',
+            None,
+            STATUS_OK,
+            '',
+            bleemeo_agent.util.get_clock(),
         )
 
     def on_connect(self, _client, _userdata, _flags, result_code):
@@ -583,7 +591,7 @@ class BleemeoConnector(threading.Thread):
     def on_disconnect(self, _client, _userdata, _result_code):
         if self.connected:
             logging.info('MQTT connection lost')
-        self._last_disconnects.append(time.time())
+        self._last_disconnects.append(bleemeo_agent.util.get_clock())
         self._last_disconnects = self._last_disconnects[-15:]
         self.connected = False
 
@@ -674,28 +682,29 @@ class BleemeoConnector(threading.Thread):
 
         _mqtt_reconnect_at = 0
         while not self.core.is_terminating.is_set():
+            clock_now = bleemeo_agent.util.get_clock()
             if (not _mqtt_reconnect_at
                     and len(self._last_disconnects) >= 6
-                    and self._last_disconnects[-6] > time.time() - 60):
+                    and self._last_disconnects[-6] > clock_now - 60):
                 logging.info(
                     'Too many attempt to connect to MQTT on last minute.'
                     ' Disabling MQTT for 60 seconds'
                 )
                 self.mqtt_client.disconnect()
                 self.mqtt_client.loop_stop()
-                _mqtt_reconnect_at = time.time() + 60
+                _mqtt_reconnect_at = clock_now + 60
             if (not _mqtt_reconnect_at
                     and len(self._last_disconnects) >= 15
-                    and self._last_disconnects[-15] > time.time() - 600):
+                    and self._last_disconnects[-15] > clock_now - 600):
                 logging.info(
                     'Too many attempt to connect to MQTT on last 10 minutes.'
                     ' Disabling MQTT for 5 minutes'
                 )
                 self.mqtt_client.disconnect()
                 self.mqtt_client.loop_stop()
-                _mqtt_reconnect_at = time.time() + 300
+                _mqtt_reconnect_at = clock_now + 300
                 self._last_disconnects = []
-            elif _mqtt_reconnect_at and _mqtt_reconnect_at < time.time():
+            elif _mqtt_reconnect_at and _mqtt_reconnect_at < clock_now:
                 logging.info('Re-enabling MQTT connection')
                 _mqtt_reconnect_at = 0
                 self._mqtt_start()
@@ -1491,10 +1500,10 @@ class BleemeoConnector(threading.Thread):
         self.core.update_thresholds(bleemeo_cache.get_core_thresholds())
         self.core.metrics_unit = bleemeo_cache.get_core_units()
 
-        # During full sync, also drop metric not seen for last hour
+        # During full sync, also drop metric not seen for last hour + 10min
         # or deleted by API.
         with self._current_metrics_lock:
-            cutoff = time.time() - 3600
+            cutoff = bleemeo_agent.util.get_clock() - 4200
             result = {}
             for (key, value) in self._current_metrics.items():
                 if value.last_seen < cutoff:
@@ -2022,7 +2031,7 @@ class BleemeoConnector(threading.Thread):
                 metric.get('status_of', ''),
                 STATUS_NAME_TO_CODE.get(metric.get('status')),
                 metric.get('check_output', ''),
-                time.time(),
+                bleemeo_agent.util.get_clock(),
             )
 
     @property
