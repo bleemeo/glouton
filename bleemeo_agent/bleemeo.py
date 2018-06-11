@@ -65,6 +65,7 @@ Metric = collections.namedtuple('Metric', (
     'thresholds',
     'unit',
     'unit_text',
+    'active',
 ))
 MetricRegistrationReq = collections.namedtuple('MetricRegistrationReq', (
     'label',
@@ -316,7 +317,8 @@ class BleemeoCache:
     """
     # Version 1: initial version
     # Version 2: Added docker_id to Containers
-    CACHE_VERSION = 2
+    # Version 3: Added active to Metric
+    CACHE_VERSION = 3
 
     def __init__(self, state, skip_load=False):
         self._state = state
@@ -366,6 +368,11 @@ class BleemeoCache:
 
         for metric_uuid, values in cache['metrics'].items():
             values[6] = MetricThreshold(*values[6])
+            if cache['version'] < 3:
+                # Add default "True" to active field.
+                # It will be fixed on next full synchronization that
+                # will happen quickly
+                values.append(True)
             self.metrics[metric_uuid] = Metric(*values)
 
         for service_uuid, values in cache['services'].items():
@@ -497,6 +504,7 @@ class BleemeoCache:
                 threshold,
                 None,
                 None,
+                True,
             )
         services_uuid = self._state.get_complex_dict('services_uuid', {})
         for service_info in services_uuid.values():
@@ -551,6 +559,7 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client = mqtt.Client()
 
+        self._api_support_metric_update = True
         self._current_metrics = {}
         self._current_metrics_lock = threading.Lock()
         # Make sure this metrics exists and try to be registered
@@ -1095,7 +1104,9 @@ class BleemeoConnector(threading.Thread):
                 try:
                     full = (
                         next_full_sync <= clock_now or
-                        last_sync <= self.last_containers_removed
+                        last_sync <= self.last_containers_removed or
+                        # After 3 successive_errors force a full sync.
+                        successive_errors == 3
                     )
                     self._sync_services(bleemeo_cache, bleemeo_api, full)
                     # Metrics registration may need services to be synced.
@@ -1113,7 +1124,11 @@ class BleemeoConnector(threading.Thread):
             if (next_full_sync <= clock_now or
                     last_sync <= self.core.last_discovery_update):
                 try:
-                    full = (next_full_sync <= clock_now)
+                    full = (
+                        next_full_sync <= clock_now or
+                        # After 3 successive_errors force a full sync.
+                        successive_errors == 3
+                    )
                     self._sync_containers(bleemeo_cache, bleemeo_api, full)
                     # Metrics registration may need containers to be synced.
                     # For a pass of metric registrations
@@ -1145,7 +1160,9 @@ class BleemeoConnector(threading.Thread):
                         }
                     full = (
                         next_full_sync <= clock_now or
-                        last_sync <= self.last_containers_removed
+                        last_sync <= self.last_containers_removed or
+                        # After 3 successive_errors force a full sync.
+                        successive_errors == 3
                     )
                     self._sync_metrics(bleemeo_cache, bleemeo_api, full)
                     last_metrics_count = metrics_count
@@ -1269,7 +1286,12 @@ class BleemeoConnector(threading.Thread):
         """ Synchronize metrics with Bleemeo SaaS
         """
         logging.debug('Synchronize metrics (full=%s)', full)
+        clock_now = bleemeo_agent.util.get_clock()
         metric_url = 'v1/metric/'
+
+        if full:
+            # retry metric update
+            self._api_support_metric_update = True
 
         # Step 1: refresh cache from API
         if full:
@@ -1278,7 +1300,7 @@ class BleemeoConnector(threading.Thread):
                 params={
                     'agent': self.agent_uuid,
                     'fields':
-                        'id,item,label,unit,unit_text'
+                        'id,item,label,unit,unit_text,active'
                         ',threshold_low_warning,threshold_low_critical'
                         ',threshold_high_warning,threshold_high_critical'
                         ',service,container,status_of',
@@ -1305,6 +1327,7 @@ class BleemeoConnector(threading.Thread):
                     ),
                     data['unit'],
                     data['unit_text'],
+                    data['active'],
                 )
                 bleemeo_cache.metrics[metric.uuid] = metric
                 key = (metric.label, metric.item)
@@ -1332,6 +1355,7 @@ class BleemeoConnector(threading.Thread):
         # other.
         random.shuffle(current_metrics)
 
+        metric_last_seen = {}
         service_short_lookup = services_to_short_key(self.core.services)
         metrics_req_count = len(current_metrics)
         count = 0
@@ -1342,8 +1366,39 @@ class BleemeoConnector(threading.Thread):
             if reg_req.service_label:
                 short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
             key = (reg_req.label, short_item)
-            if (key in bleemeo_cache.metrics_by_labelitem
-                    or key in deleted_metrics):
+
+            if key in deleted_metrics:
+                continue
+            metric = bleemeo_cache.metrics_by_labelitem.get(key)
+
+            if metric:
+                metric_last_seen[metric.uuid] = reg_req.last_seen
+                if (not metric.active
+                        and reg_req.last_seen > clock_now - 600
+                        and self._api_support_metric_update):
+                    logging.debug(
+                        'Mark active the metric %s: %s (%s)',
+                        metric.uuid,
+                        metric.label,
+                        metric.item,
+                    )
+                    response = bleemeo_api.api_call(
+                        urllib_parse.urljoin(metric_url, '%s/' % metric.uuid),
+                        'patch',
+                        params={
+                            'fields': 'active',
+                        },
+                        data=json.dumps({
+                            'active': True,
+                        }),
+                    )
+                    if response.status_code == 403:
+                        self._api_support_metric_update = False
+                        logging.debug(
+                            'API does not yet support metric update.'
+                        )
+                    elif response.status_code != 200:
+                        raise ApiError(response)
                 continue
 
             payload = {
@@ -1402,7 +1457,7 @@ class BleemeoConnector(threading.Thread):
                 method='post',
                 data=json.dumps(payload),
                 params={
-                    'fields': 'id,label,item,service,container,'
+                    'fields': 'id,label,item,service,container,active,'
                               'threshold_low_warning,threshold_low_critical,'
                               'threshold_high_warning,threshold_high_critical,'
                               'unit,unit_text,agent,status_of,service,'
@@ -1441,10 +1496,12 @@ class BleemeoConnector(threading.Thread):
                 ),
                 data['unit'],
                 data['unit_text'],
+                data['active'],
             )
             bleemeo_cache.metrics[metric.uuid] = metric
             key = (metric.label, metric.item)
             bleemeo_cache.metrics_by_labelitem[key] = metric
+            metric_last_seen[metric.uuid] = reg_req.last_seen
             if metric.item:
                 logging.debug(
                     'Metric %s (item %s) registered with uuid %s',
@@ -1496,6 +1553,42 @@ class BleemeoConnector(threading.Thread):
                 logging.debug(
                     'Metric %s deleted', metric.label,
                 )
+
+        # Extra step: mark inactive metric (not seen for last hour + 10min)
+        # But only if agent is running for at least 1 hours & 10 min
+        if (self.core.started_at < clock_now - 4200
+                and self._api_support_metric_update):
+            for metric in bleemeo_cache.metrics.values():
+                if metric.label == 'agent_sent_message':
+                    # This metric is managed by Bleemeo Cloud platform
+                    continue
+                last_seen = metric_last_seen.get(metric.uuid)
+                if ((last_seen is None or last_seen < clock_now - 4200)
+                        and metric.active):
+                    logging.debug(
+                        'Mark inactive the metric %s: %s (%s)',
+                        metric.uuid,
+                        metric.label,
+                        metric.item,
+                    )
+                    response = bleemeo_api.api_call(
+                        urllib_parse.urljoin(metric_url, '%s/' % metric.uuid),
+                        'patch',
+                        params={
+                            'fields': 'active',
+                        },
+                        data=json.dumps({
+                            'active': False,
+                        }),
+                    )
+                    if response.status_code == 403:
+                        self._api_support_metric_update = False
+                        logging.debug(
+                            'API does not yet support metric update.'
+                        )
+                        break
+                    elif response.status_code != 200:
+                        raise ApiError(response)
 
         self.core.update_thresholds(bleemeo_cache.get_core_thresholds())
         self.core.metrics_unit = bleemeo_cache.get_core_units()
