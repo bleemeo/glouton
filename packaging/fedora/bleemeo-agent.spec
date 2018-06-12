@@ -193,6 +193,17 @@ fi
 bleemeo-agent-gather-facts
 # Retrive netstat that also needs root privilege
 bleemeo-netstat
+
+# Bleemeo agent need access to Docker socket, so it need to create
+# the docker group to avoid requiring to run as root.
+if ! getent group docker >/dev/null; then
+    groupadd -r docker
+    if [ -e /var/run/docker.sock -a `stat -c %G /var/run/docker.sock` = "root" ]; then
+        chgrp docker /var/run/docker.sock
+    fi
+    /usr/lib/bleemeo/bleemeo-hook-package-modified > /dev/null 2>&1
+fi
+
 if [ $1 -eq 1 ] ; then
     # Initial installation
     systemctl enable --quiet --now bleemeo-agent.service
@@ -213,11 +224,10 @@ getent group bleemeo >/dev/null || groupadd -r bleemeo
 getent passwd bleemeo >/dev/null || \
     useradd -r -g bleemeo -d /var/lib/bleemeo -s /sbin/nologin \
     -c "Bleemeo agent daemon" bleemeo
-usermod -aG docker bleemeo 2> /dev/null || true
+usermod -aG docker telegraf 2> /dev/null || true
 exit 0
 
 %post telegraf
-usermod -aG docker telegraf 2> /dev/null || true
 chown bleemeo:telegraf /etc/telegraf/telegraf.d/bleemeo-generated.conf
 chmod 0640 /etc/telegraf/telegraf.d/bleemeo-generated.conf
 
