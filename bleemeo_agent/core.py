@@ -104,21 +104,6 @@ DOCKER_DISCOVERY_EVENTS = [
     'destroy',
 ]
 
-ENVIRON_CONFIG_VARS = [
-    ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id', 'string'),
-    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key', 'string'),
-    ('BLEEMEO_AGENT_API_BASE', 'bleemeo.api_base', 'string'),
-    ('BLEEMEO_AGENT_MQTT_HOST', 'bleemeo.mqtt.host', 'string'),
-    ('BLEEMEO_AGENT_MQTT_PORT', 'bleemeo.mqtt.port', 'int'),
-    ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
-    ('BLEEMEO_AGENT_KUBERNETES_NODENAME', 'kubernetes.nodename', 'string'),
-    ('BLEEMEO_AGENT_KUBERNETES_ENABLED', 'kubernetes.enabled', 'bool'),
-    ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
-    ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
-    ('BLEEMEO_AGENT_TELEGRAF_CONFIG_FILE', 'telegraf.config_file', 'string'),
-    ('BLEEMEO_AGENT_TELEGRAF_DOCKER_NAME', 'telegraf.docker_name', 'string'),
-]
-
 
 # Bleemeo agent changed the name of some service
 SERVICE_RENAME = {
@@ -671,33 +656,6 @@ def _guess_jmx_config(service_info, process):
             continue
 
         service_info['jmx_port'] = jmx_port
-
-
-def convert_type(value_text, value_type):
-    """ Convert string value to given value_type
-
-        Usefull for parameter from environment that must be case to Python type
-
-        Supported value_type:
-
-        * string: no convertion
-        * int: int() from Python
-        * bool: case-insensitive; "true", "yes", "1" => True
-    """
-    if value_type == 'string':
-        return value_text
-
-    if value_type == 'int':
-        return int(value_text)
-    elif value_type == 'bool':
-        if value_text.lower() in ('true', 'yes', '1'):
-            return True
-        elif value_text.lower() in ('false', 'no', '0'):
-            return False
-        else:
-            raise ValueError('invalid value %r for boolean' % value_text)
-    else:
-        raise NotImplementedError('Unknown type %s' % value_type)
 
 
 def disable_https_warning():
@@ -2475,17 +2433,6 @@ class Core:
         # pylint: disable=too-many-locals
         (self.config, errors) = bleemeo_agent.config.load_config()
         warnings = []
-
-        for (env_name, conf_name, conf_type) in ENVIRON_CONFIG_VARS:
-            if env_name in os.environ:
-                try:
-                    value = convert_type(os.environ[env_name], conf_type)
-                except ValueError as exc:
-                    errors.append(
-                        'Bad environ variable %s: %s' % (env_name, exc)
-                    )
-                    continue
-                self.config.set(conf_name, value)
 
         metric_prometheus = self.config.get('metric.prometheus', {})
         for name in list(metric_prometheus):

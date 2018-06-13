@@ -59,61 +59,61 @@ WINDOWS_PATHS = [
 
 
 ENVIRON_CONFIG_VARS = [
-    ('BLEEMEO_AGENT_FACT_FILE', 'agent.facts_file', 'string'),
-    ('BLEEMEO_AGENT_INSTALLATION', 'agent.installation', 'string'),
-    ('BLEEMEO_AGENT_NETSTAT_FILE', 'agent.netstat_file', 'string'),
-    ('BLEEMEO_AGENT_PUBLIC_IP_INDICATOR', 'agent.public_ip_indicator', 'string'),
-    ('BLEEMEO_AGENT_STATE_FILE', 'agent.state_file', 'string'),
-    ('BLEEMEO_AGENT_UPGRADE_FILE', 'agent.upgrade_file', 'string'),
-    ('BLEEMEO_AGENT_TAGS', 'tags', 'list'),
-    ('BLEEMEO_AGENT_STACK', 'stack', 'string'),
-    ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
-    ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
-    ('BLEEMEO_AGENT_CONTAINER_TYPE', 'container.type', 'string'),
-    ('BLEEMEO_AGENT_CONTAINER_PID_NAMESPACE_HOST', 'container.pid_namespace_host', 'bool'),
-    ('BLEEMEO_AGENT_ENABLED', 'bleemeo.enabled', 'bool'),
-    ('BLEEMEO_AGENT_ACCOUNT_ID', 'bleemeo.account_id', 'string'),
-    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key', 'string'),
-    ('BLEEMEO_AGENT_API_BASE', 'bleemeo.api_base', 'string'),
-    ('BLEEMEO_AGENT_MQTT_HOST', 'bleemeo.mqtt.host', 'string'),
-    ('BLEEMEO_AGENT_MQTT_PORT', 'bleemeo.mqtt.port', 'int'),
-    ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
-    ('BLEEMEO_AGENT_MQTT_CAFILE', 'bleemeo.mqtt.cafile', 'string'),
-    ('BLEEMEO_AGENT_SSL_INSECURE', 'bleemeo.mqtt.ssl_insecure', 'bool'),
-    ('BLEEMEO_AGENT_SENTRY_DSN', 'bleemeo.sentry.dsn', 'string'),
-    ('BLEEMEO_AGENT_GRAPHITE_METRICS_SOURCES', 'graphite.metrics_sources', 'string'),
-    ('BLEEMEO_AGENT_GRAPHITE_LISTENER_ADDRESS', 'graphite.listener.address', 'string'),
-    ('BLEEMEO_AGENT_GRAPHITE_LISTENER_PORT', 'graphite.listener.port', 'int'),
-    ('BLEEMEO_AGENT_TELEGRAF_STATSD_ENABLED', 'telegraf.statsd.enabled', 'bool'),
-    ('BLEEMEO_AGENT_TELEGRAF_STATSD_ADDRESS', 'telegraf.statsd.address', 'string'),
-    ('BLEEMEO_AGENT_TELEGRAF_CONFIG_FILE', 'telegraf.config_file', 'string'),
-    ('BLEEMEO_AGENT_TELEGRAF_DOCKER_NAME', 'telegraf.docker_name', 'string'),
-    ('BLEEMEO_AGENT_TELEGRAF_DOCKER_METRICS_ENABLED', 'telegraf.docker_metrics_enabled', 'bool'),
-    ('BLEEMEO_AGENT_TELEGRF_RESTART_COMMAND', 'telegraf.restart_command', 'string'),
-    ('BLEEMEO_AGENT_COLLECTD_CONFIG_FILE', 'collectd.config_file', 'string'),
-    ('BLEEMEO_AGENT_COLLECTD_DOCKER_NAME', 'collectd.docker_name', 'string'),
-    ('BLEEMEO_AGENT_COLLECTD_RESTART_COMMAND', 'collectd.restart_command', 'string'),
-    ('BLEEMEO_AGENT_METRIC_PULL', 'metric.pull', 'dict'),
-    ('BLEEMEO_AGENT_METRIC_PROMETHEUS', 'metric.prometheus', 'dict'),
-    ('BLEEMEO_AGENT_METRIC_SOFTSTATUS_PERIOD_DEFAULT', 'metric.softstatus_period_default', 'int'),
-    ('BLEEMEO_AGENT_METRIC_SOFTSTATUS_PERIOD', 'metric.softstatus_period', 'int'),
-    ('BLEEMEO_AGENT_SERVICE', 'service', 'list'),
-    ('BLEEMEO_AGENT_SERVICE_IGNORE_METRICS', 'service_ignore_metrics', 'list'),
-    ('BLEEMEO_AGENT_SERVICE_IGNORE_CHECK', 'service_ignore_check', 'list'),
-    ('BLEEMEO_AGENT_WEB_ENABLED', 'web.enabled', 'bool'),
-    ('BLEEMEO_AGENT_WEB_LISTENER_ADDRESS', 'web.listener.address', 'string'),
-    ('BLEEMEO_AGENT_WEB_LISTENER_PORT', 'web.listener.port', 'int'),
-    ('BLEEMEO_AGENT_INFLUXDB_ENABLED', 'influxdb.enabled', 'bool'),
-    ('BLEEMEO_AGENT_INFLUXDB_HOST', 'influxdb.host', 'string'),
-    ('BLEEMEO_AGENT_INFLUXDB_PORT', 'influxdb.port', 'int'),
-    ('BLEEMEO_AGENT_INFLUXDB_DB_NAME', 'influxdb.db_name', 'string'),
-    ('BLEEMEO_AGENT_NETWORK_INTERFACE_BLACKLIST', 'network_interface_blacklist', 'list'),
-    ('BLEEMEO_AGENT_DISK_MONITOR', 'disk_monitor', 'list'),
-    ('BLEEMEO_AGGENT_DF_PATH_IGNORE', 'df.path_ignore', 'list'),
-    ('BLEEMEO_AGENT_DF_HOST_MOUNT_POINT', 'df.host_mount_point', 'string'),
-    ('BLEEMEO_AGENT_THRESHOLDS', 'thresholds', 'dict'),
-    ('BLEEMEO_AGENT_KUBERNETES_NODENAME', 'kubernetes.nodename', 'string'),
-    ('BLEEMEO_AGENT_KUBERNETES_ENABLED', 'kubernetes.enabled', 'bool'),
+    ('agent.facts_file', 'string'),
+    ('agent.installation', 'string'),
+    ('agent.netstat_file', 'string'),
+    ('agent.public_ip_indicator', 'string'),
+    ('agent.state_file', 'string'),
+    ('agent.upgrade_file', 'string'),
+    ('tags', 'list'),
+    ('stack', 'string'),
+    ('logging.level', 'string'),
+    ('logging.output', 'string'),
+    ('container.type', 'string'),
+    ('container.pid_namespace_host', 'bool'),
+    ('bleemeo.enabled', 'bool'),
+    ('bleemeo.account_id', 'string'),
+    ('bleemeo.registration_key', 'string'),
+    ('bleemeo.api_base', 'string'),
+    ('bleemeo.mqtt.host', 'string'),
+    ('bleemeo.mqtt.port', 'int'),
+    ('bleemeo.mqtt.ssl', 'bool'),
+    ('bleemeo.mqtt.cafile', 'string'),
+    ('bleemeo.mqtt.ssl_insecure', 'bool'),
+    ('bleemeo.sentry.dsn', 'string'),
+    ('graphite.metrics_sources', 'string'),
+    ('graphite.listener.address', 'string'),
+    ('graphite.listener.port', 'int'),
+    ('telegraf.statsd.enabled', 'bool'),
+    ('telegraf.statsd.address', 'string'),
+    ('telegraf.config_file', 'string'),
+    ('telegraf.docker_name', 'string'),
+    ('telegraf.docker_metrics_enabled', 'bool'),
+    ('telegraf.restart_command', 'string'),
+    ('collectd.config_file', 'string'),
+    ('collectd.docker_name', 'string'),
+    ('collectd.restart_command', 'string'),
+    ('metric.pull', 'dict'),
+    ('metric.prometheus', 'dict'),
+    ('metric.softstatus_period_default', 'int'),
+    ('metric.softstatus_period', 'int'),
+    ('service', 'list'),
+    ('service_ignore_metrics', 'list'),
+    ('service_ignore_check', 'list'),
+    ('web.enabled', 'bool'),
+    ('web.listener.address', 'string'),
+    ('web.listener.port', 'int'),
+    ('influxdb.enabled', 'bool'),
+    ('influxdb.host', 'string'),
+    ('influxdb.port', 'int'),
+    ('influxdb.db_name', 'string'),
+    ('network_interface_blacklist', 'list'),
+    ('disk_monitor', 'list'),
+    ('df.path_ignore', 'list'),
+    ('df.host_mount_point', 'string'),
+    ('thresholds', 'dict'),
+    ('kubernetes.nodename', 'string'),
+    ('kubernetes.enabled', 'bool'),
 ]
 
 
@@ -172,6 +172,45 @@ class Config(dict):
         del current[last_name]
 
 
+def convert_type(value_text, value_type):
+    """ Convert string value to given value_type
+
+        Usefull for parameter from environment that must be case to Python type
+
+        Supported value_type:
+
+        * string: no convertion
+        * int: int() from Python
+        * bool: case-insensitive; "true", "yes", "1" => True
+    """
+    if value_type == 'string':
+        return value_text
+
+    if value_type == 'int':
+        return int(value_text)
+    elif value_type == 'bool':
+        if value_text.lower() in ('true', 'yes', '1'):
+            return True
+        elif value_text.lower() in ('false', 'no', '0'):
+            return False
+        else:
+            raise ValueError('invalid value %r for boolean' % value_text)
+    else:
+        raise NotImplementedError('Unknown type %s' % value_type)
+
+
+def convert_conf_name(conf_name):
+    """ Convert the conf_name in env_name for load_conf()."""
+    env_name = 'BLEEMEO_AGENT_'
+    if conf_name.startswith('agent.'):
+        env_name += conf_name.lstrip('agent.').replace('.', '_')
+    elif conf_name.startswith('bleemeo.'):
+        env_name += conf_name.lstrip('bleemeo.').replace('.', '_')
+    else:
+        env_name += conf_name.replace('.', '_')
+    return env_name.upper()
+
+
 def merge_dict(destination, source):
     """ Merge two dictionary (recursivly). destination is modified
 
@@ -223,7 +262,29 @@ def load_config(paths=None):
         except Exception as exc:  # pylint: disable=broad-except
             errors.append(str(exc).replace('\n', ' '))
 
-    return functools.reduce(merge_dict, configs), errors
+    # final configuration
+    final_config = functools.reduce(merge_dict, configs)
+
+    # overload of the configuration by the environnement variables
+    for(conf_name, conf_type) in ENVIRON_CONFIG_VARS:
+        env_name = convert_conf_name(conf_name)
+        if env_name in os.environ:
+            if conf_type in ['dict', 'list']:
+                errors.append(
+                    'Can not overload %s (type %s not supported)'
+                    % (env_name, conf_type)
+                )
+                continue
+            try:
+                value = convert_type(os.environ[env_name], conf_type)
+            except ValueError as exc:
+                errors.append(
+                    'Bad environ variable %s: %s' % (env_name, exc)
+                )
+                continue
+            final_config.set(conf_name, value)
+
+    return final_config, errors
 
 
 def config_files(paths):
