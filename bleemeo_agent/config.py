@@ -58,7 +58,7 @@ WINDOWS_PATHS = [
 ]
 
 
-ENVIRON_CONFIG_VARS = [
+CONFIG_VARS = [
     ('agent.facts_file', 'string'),
     ('agent.installation', 'string'),
     ('agent.netstat_file', 'string'),
@@ -201,14 +201,21 @@ def convert_type(value_text, value_type):
 
 def convert_conf_name(conf_name):
     """ Convert the conf_name in env_name for load_conf()."""
-    env_name = 'BLEEMEO_AGENT_'
+    env_name = []
+    base = "BLEEMEO_AGENT_"
     if conf_name.startswith('agent.'):
-        env_name += conf_name.lstrip('agent.').replace('.', '_')
+        env_name.append(
+            base +
+            conf_name.lstrip('agent.').replace('.', '_').upper()
+        )
     elif conf_name.startswith('bleemeo.'):
-        env_name += conf_name.lstrip('bleemeo.').replace('.', '_')
-    else:
-        env_name += conf_name.replace('.', '_')
-    return env_name.upper()
+        env_name.append(
+            base +
+            conf_name.lstrip('bleemeo.').replace('.', '_').upper()
+        )
+
+    env_name.append("BLEEMEO_AGENT_" + conf_name.replace('.', '_').upper())
+    return env_name
 
 
 def merge_dict(destination, source):
@@ -266,23 +273,24 @@ def load_config(paths=None):
     final_config = functools.reduce(merge_dict, configs)
 
     # overload of the configuration by the environnement variables
-    for(conf_name, conf_type) in ENVIRON_CONFIG_VARS:
+    for(conf_name, conf_type) in CONFIG_VARS:
         env_name = convert_conf_name(conf_name)
-        if env_name in os.environ:
-            if conf_type in ['dict', 'list']:
-                errors.append(
-                    'Can not overload %s (type %s not supported)'
-                    % (env_name, conf_type)
-                )
-                continue
-            try:
-                value = convert_type(os.environ[env_name], conf_type)
-            except ValueError as exc:
-                errors.append(
-                    'Bad environ variable %s: %s' % (env_name, exc)
-                )
-                continue
-            final_config.set(conf_name, value)
+        for env_namep in env_name:
+            if env_namep in os.environ:
+                if conf_type in ['dict', 'list']:
+                    errors.append(
+                        'Can not overload %s (type %s not supported)'
+                        % (env_namep, conf_type)
+                    )
+                    continue
+                try:
+                    value = convert_type(os.environ[env_namep], conf_type)
+                except ValueError as exc:
+                    errors.append(
+                        'Bad environ variable %s: %s' % (env_namep, exc)
+                    )
+                    continue
+                final_config.set(conf_name, value)
 
     return final_config, errors
 
