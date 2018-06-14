@@ -16,6 +16,8 @@
 #   limitations under the License.
 #
 
+import pytest
+
 import bleemeo_agent.config
 
 
@@ -32,8 +34,10 @@ def test_config_object():
     assert conf.get('test.a') == 'a'
     assert conf.get('test.one') == 1
     assert conf.get('test.sub-level.two') == 2.0
-    assert conf.get('test.does.not.exists') is None
-    assert conf.get('test.does.not.exists', 'default') == 'default'
+    with pytest.raises(KeyError):
+        conf.get('test.does.not.exists')
+    with pytest.raises(TypeError):
+        conf.get('test.does.not.exists', 'default')
 
     conf.set('test.b', 'B')
     assert conf.get('test.b') == 'B'
@@ -161,9 +165,9 @@ def test_load_config():
     assert config.get('second_conf_loaded') is True
     assert config.get('merged_dict.main') == 1.0
 
-    # Ensure that when value is defined to None, we return None and not the
-    # default
-    assert config.get('sub_section.nested', 'a value') is None
+    # Ensure that the separator must be named
+    with pytest.raises(TypeError):
+        config.get('sub_section.nested', '.')
 
 
 def test_convert_conf_name():

@@ -145,7 +145,7 @@ class Config(dict):
     Also add "set" method that known about sub-dict.
     """
 
-    def get(self, name, default=None, separator='.'):
+    def get(self, name, *, separator='.'):
         """ If name contains separator ("." by default), it will search
             in sub-dict.
 
@@ -155,7 +155,7 @@ class Config(dict):
         current = self
         for path in name.split(separator):
             if path not in current:
-                return default
+                raise KeyError("{} is not a valid key in config".format(name))
             current = current[path]
         return current
 
