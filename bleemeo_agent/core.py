@@ -385,6 +385,8 @@ loggers:
     werkzeug: {level: WARNING}
     apscheduler: {level: WARNING}
     kubernetes.client.rest: {level: INFO}
+    apscheduler.executors: {level: ERROR}
+    apscheduler.scheduler: {level: ERROR}
 root:
     # Level and handlers will be updated at runtime
     level: INFO
