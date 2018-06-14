@@ -164,3 +164,31 @@ def test_load_config():
     # Ensure that when value is defined to None, we return None and not the
     # default
     assert config.get('sub_section.nested', 'a value') is None
+
+
+def test_convert_conf_name():
+    tests = [
+        (
+            'agent.public_ip_indicator',
+            ['BLEEMEO_AGENT_AGENT_PUBLIC_IP_INDICATOR']
+        ),
+        (
+            'bleemeo.account_id',
+            ['BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID', 'BLEEMEO_AGENT_ACCOUNT_ID']
+        ),
+        (
+            'telegraf.docker_metrics_enabled',
+            ['BLEEMEO_AGENT_TELEGRAF_DOCKER_METRICS_ENABLED']
+        ),
+        (
+            'disk_monitor',
+            ['BLEEMEO_AGENT_DISK_MONITOR']
+        ),
+        (
+            'a.disk_monitor',
+            ['BLEEMEO_AGENT_A_DISK_MONITOR']
+        )
+    ]
+    for (conf, envs) in tests:
+        for env in envs:
+            assert(env in bleemeo_agent.config.convert_conf_name(conf))

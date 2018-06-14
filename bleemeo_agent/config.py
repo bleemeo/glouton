@@ -206,12 +206,12 @@ def convert_conf_name(conf_name):
     if conf_name.startswith('agent.'):
         env_name.append(
             base +
-            conf_name.lstrip('agent.').replace('.', '_').upper()
+            conf_name[len('agent.'):].replace('.', '_').upper()
         )
     elif conf_name.startswith('bleemeo.'):
         env_name.append(
             base +
-            conf_name.lstrip('bleemeo.').replace('.', '_').upper()
+            conf_name[len('bleemeo.'):].replace('.', '_').upper()
         )
 
     env_name.append("BLEEMEO_AGENT_" + conf_name.replace('.', '_').upper())
