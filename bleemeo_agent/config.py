@@ -293,22 +293,22 @@ def load_config(paths=None):
     # final configuration
     final_config = functools.reduce(merge_dict, configs)
 
-    # overload of the configuration by the environnement variables
+    # overload of the final configuration by the environnement variables
     for (conf_name, conf_type, _conf_value) in CONFIG_VARS:
-        env_name = convert_conf_name(conf_name)
-        for env_namep in env_name:
-            if env_namep in os.environ:
+        env_names = convert_conf_name(conf_name)
+        for env_name in env_names:
+            if env_name in os.environ:
                 if conf_type in ['dict', 'list']:
                     errors.append(
                         'Can not overload %s (type %s not supported)'
-                        % (env_namep, conf_type)
+                        % (env_name, conf_type)
                     )
                     continue
                 try:
-                    value = convert_type(os.environ[env_namep], conf_type)
+                    value = convert_type(os.environ[env_name], conf_type)
                 except ValueError as exc:
                     errors.append(
-                        'Bad environ variable %s: %s' % (env_namep, exc)
+                        'Bad environ variable %s: %s' % (env_name, exc)
                     )
                     continue
                 final_config.set(conf_name, value)
