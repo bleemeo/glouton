@@ -324,6 +324,13 @@ def load_config(paths=None):
     return final_config, errors
 
 
+def load_config_with_default(paths=None):
+    """ Merge the default config with the config from load_config"""
+    (final_config, errors) = load_config(paths)
+    default_config = load_default_config()
+    return merge_dict(default_config, final_config), errors
+
+
 def config_files(paths):
     """ Return config files present in given paths.
 

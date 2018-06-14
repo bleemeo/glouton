@@ -2431,7 +2431,7 @@ class Core:
     def reload_config(self):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-locals
-        (self.config, errors) = bleemeo_agent.config.load_config()
+        (self.config, errors) = bleemeo_agent.config.load_config_with_default()
         warnings = []
 
         metric_prometheus = self.config.get('metric.prometheus', {})
