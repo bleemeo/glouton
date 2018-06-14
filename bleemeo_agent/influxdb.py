@@ -50,8 +50,8 @@ class InfluxDBConnector(threading.Thread):
 
     def _do_connect(self):
         self.influx_client = influxdb.InfluxDBClient(
-            host=self.core.config.get('influxdb.server.host', 'localhost'),
-            port=self.core.config.get('influxdb.server.port', 8086),
+            host=self.core.config.get('influxdb.host', 'localhost'),
+            port=self.core.config.get('influxdb.port', 8086),
         )
         try:
             self.influx_client.create_database(self.db_name)
