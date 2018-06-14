@@ -258,6 +258,14 @@ def merge_dict(destination, source):
     return destination
 
 
+def load_default_config():
+    """ Initialization of the default configuration """
+    default_config = Config()
+    for(conf_name, _conf_type, conf_value) in CONFIG_VARS:
+        default_config.set(conf_name, conf_value)
+    return default_config
+
+
 def load_config(paths=None):
     """ Load configuration from given paths (a list) and return a ConfigParser
 
