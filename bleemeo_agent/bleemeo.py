@@ -1473,7 +1473,8 @@ class BleemeoConnector(threading.Thread):
                 )
                 registration_error += 1
                 last_error = ApiError(response)
-                if registration_error > 3:
+                time.sleep(min(registration_error * 0.5, 5))
+                if registration_error > 10:
                     raise last_error  # pylint: disable=raising-bad-type
                 continue
             elif response.status_code != 201:
