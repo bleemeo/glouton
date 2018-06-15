@@ -1589,15 +1589,17 @@ class Core:
             logging.error('Failed to initialize Kubernetes client: %s', exc)
 
     def _update_docker_info(self):
-        self.docker_containers = {}
-        self.docker_containers_by_name = {}
-        self.docker_networks = {}
-        self.docker_containers_ignored = {}
+        docker_containers = {}
+        docker_containers_by_name = {}
+        docker_networks = {}
+        docker_containers_ignored = {}
 
         if self.docker_client is None:
-            return
+            containers = []
+        else:
+            containers = self.docker_client.containers(all=True)
 
-        for container in self.docker_client.containers(all=True):
+        for container in containers:
             docker_id = container['Id']
             try:
                 inspect = self.docker_client.inspect_container(docker_id)
@@ -1608,30 +1610,32 @@ class Core:
                 labels = {}
             bleemeo_enable = labels.get('bleemeo.enable', '').lower()
             if bleemeo_enable in ('0', 'off', 'false', 'no'):
-                self.docker_containers_ignored[docker_id] = (
+                docker_containers_ignored[docker_id] = (
                     inspect['Name'].lstrip('/')
                 )
                 continue
             name = inspect['Name'].lstrip('/')
-            self.docker_containers[docker_id] = inspect
-            self.docker_containers_by_name[name] = inspect
+            docker_containers[docker_id] = inspect
+            docker_containers_by_name[name] = inspect
 
-        if not hasattr(self.docker_client, 'networks'):
-            return
-        if not hasattr(self.docker_client, 'inspect_network'):
-            return
+        if (hasattr(self.docker_client, 'networks') and
+                hasattr(self.docker_client, 'inspect_network')):
+            for network in self.docker_client.networks():
+                if 'Name' not in network:
+                    continue
+                name = network['Name']
+                if name == 'docker_gwbridge':
+                    # For this network, the list of containers is needed. This
+                    # is not returned on listing, and require direct inspection
+                    # of the network
+                    network = self.docker_client.inspect_network(name)
 
-        for network in self.docker_client.networks():
-            if 'Name' not in network:
-                continue
-            name = network['Name']
-            if name == 'docker_gwbridge':
-                # For this network, the list of containers is needed. This
-                # is not returned on listing, and require direct inspection of
-                # the network
-                network = self.docker_client.inspect_network(name)
+                docker_networks[name] = network
 
-            self.docker_networks[name] = network
+        self.docker_containers = docker_containers
+        self.docker_containers_by_name = docker_containers_by_name
+        self.docker_networks = docker_networks
+        self.docker_containers_ignored = docker_containers_ignored
 
     def _update_kubernetes_info(self):
         self.k8s_pods = {}
