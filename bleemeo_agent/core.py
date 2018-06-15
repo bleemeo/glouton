@@ -1599,7 +1599,10 @@ class Core:
 
         for container in self.docker_client.containers(all=True):
             docker_id = container['Id']
-            inspect = self.docker_client.inspect_container(docker_id)
+            try:
+                inspect = self.docker_client.inspect_container(docker_id)
+            except docker.errors.APIError:
+                continue  # most probably container was removed
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
                 labels = {}
@@ -1829,7 +1832,7 @@ class Core:
         """
         try:
             result = self.docker_client.inspect_container(container_id)
-        except Exception:  # pylint: disable=broad-except
+        except docker.errors.APIError:
             return  # most probably container was removed
 
         name = result['Name'].lstrip('/')
@@ -2274,8 +2277,12 @@ class Core:
                 if not instance:
                     ports = netstat_info.get(pid, {})
                 else:
-                    ports = self.get_docker_ports(instance)
-                    docker_inspect = self.docker_containers_by_name[instance]
+                    docker_inspect = self.docker_containers_by_name.get(
+                        instance
+                    )
+                    if docker_inspect is None:
+                        continue  # container was removed or just created
+                    ports = self.get_docker_ports(docker_inspect)
                     docker_id = docker_inspect.get('Id')
                     labels = docker_inspect.get('Config', {}).get('Labels', {})
                     if labels is None:
@@ -2346,12 +2353,17 @@ class Core:
                 pass
         else:
             # MySQL is running inside a docker.
-            container_info = self.docker_client.inspect_container(instance)
-            for env in container_info['Config']['Env']:
-                # env has the form "VARIABLE=value"
-                if env.startswith('MYSQL_ROOT_PASSWORD='):
-                    mysql_user = 'root'
-                    mysql_password = env.replace('MYSQL_ROOT_PASSWORD=', '')
+            try:
+                container_info = self.docker_client.inspect_container(instance)
+                for env in container_info['Config']['Env']:
+                    # env has the form "VARIABLE=value"
+                    if env.startswith('MYSQL_ROOT_PASSWORD='):
+                        mysql_user = 'root'
+                        mysql_password = env.replace(
+                            'MYSQL_ROOT_PASSWORD=', ''
+                        )
+            except docker.errors.APIError:
+                pass  # most probably container was removed
 
         service_info['username'] = mysql_user
         service_info['password'] = mysql_password
@@ -2364,15 +2376,18 @@ class Core:
 
         if instance:
             # Only know to extract user/password from Docker container
-            container_info = self.docker_client.inspect_container(instance)
-            for env in container_info['Config']['Env']:
-                # env has the form "VARIABLE=value"
-                if env.startswith('POSTGRES_PASSWORD='):
-                    password = env.replace('POSTGRES_PASSWORD=', '')
-                    if user is None:
-                        user = 'postgres'
-                elif env.startswith('POSTGRES_USER='):
-                    user = env.replace('POSTGRES_USER=', '')
+            try:
+                container_info = self.docker_client.inspect_container(instance)
+                for env in container_info['Config']['Env']:
+                    # env has the form "VARIABLE=value"
+                    if env.startswith('POSTGRES_PASSWORD='):
+                        password = env.replace('POSTGRES_PASSWORD=', '')
+                        if user is None:
+                            user = 'postgres'
+                    elif env.startswith('POSTGRES_USER='):
+                        user = env.replace('POSTGRES_USER=', '')
+            except docker.errors.APIError:
+                pass  # most probably container was removed
 
         service_info['username'] = user
         service_info['password'] = password
@@ -2868,8 +2883,8 @@ class Core:
 
         return None
 
-    def get_docker_ports(self, container_name):
-        container_info = self.docker_client.inspect_container(container_name)
+    def get_docker_ports(self, container_info):
+        # pylint: disable=no-self-use
         exposed_ports = container_info['Config'].get('ExposedPorts', {})
         listening_ports = list(exposed_ports.keys())
 
