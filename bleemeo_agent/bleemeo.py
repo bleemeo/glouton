@@ -1308,8 +1308,7 @@ class BleemeoConnector(threading.Thread):
             )
 
             old_metrics = bleemeo_cache.metrics
-            bleemeo_cache.metrics = {}
-            bleemeo_cache.metrics_by_labelitem = {}
+            new_metrics = {}
 
             for data in api_metrics:
                 metric = Metric(
@@ -1329,9 +1328,9 @@ class BleemeoConnector(threading.Thread):
                     data['unit_text'],
                     data['active'],
                 )
-                bleemeo_cache.metrics[metric.uuid] = metric
-                key = (metric.label, metric.item)
-                bleemeo_cache.metrics_by_labelitem[key] = metric
+                new_metrics[metric.uuid] = metric
+            bleemeo_cache.metrics = new_metrics
+            bleemeo_cache.update_lookup_map()
         else:
             old_metrics = bleemeo_cache.metrics
 
@@ -1499,8 +1498,6 @@ class BleemeoConnector(threading.Thread):
                 data['active'],
             )
             bleemeo_cache.metrics[metric.uuid] = metric
-            key = (metric.label, metric.item)
-            bleemeo_cache.metrics_by_labelitem[key] = metric
             metric_last_seen[metric.uuid] = reg_req.last_seen
             if metric.item:
                 logging.debug(
@@ -1515,6 +1512,7 @@ class BleemeoConnector(threading.Thread):
                     metric.label,
                     metric.uuid,
                 )
+        bleemeo_cache.update_lookup_map()
 
         # Step 4: delete object present in API by not in local
         # Only metric $SERVICE_NAME_status from service with ignore_check=True
@@ -1632,8 +1630,7 @@ class BleemeoConnector(threading.Thread):
             )
 
             old_services = bleemeo_cache.services
-            bleemeo_cache.services = {}
-            bleemeo_cache.services_by_labelinstance = {}
+            new_services = {}
             for data in api_services:
                 listen_addresses = set(data['listen_addresses'].split(','))
                 if '' in listen_addresses:
@@ -1647,9 +1644,9 @@ class BleemeoConnector(threading.Thread):
                     data['stack'],
                     data['active'],
                 )
-                bleemeo_cache.services[service.uuid] = service
-                key = (service.label, service.instance)
-                bleemeo_cache.services_by_labelinstance[key] = service
+                new_services[service.uuid] = service
+            bleemeo_cache.services = new_services
+            bleemeo_cache.update_lookup_map()
         else:
             old_services = bleemeo_cache.services
 
@@ -1735,8 +1732,6 @@ class BleemeoConnector(threading.Thread):
                 data['active'],
             )
             bleemeo_cache.services[service.uuid] = service
-            key = (service.label, service.instance)
-            bleemeo_cache.services_by_labelinstance[key] = service
 
             if service.instance:
                 logging.debug(
@@ -1753,6 +1748,7 @@ class BleemeoConnector(threading.Thread):
                     action_text,
                     service.uuid,
                 )
+        bleemeo_cache.update_lookup_map()
 
         # Step 4: delete object present in API by not in local
         try:
@@ -1782,10 +1778,6 @@ class BleemeoConnector(threading.Thread):
                 continue
             del bleemeo_cache.services[service_uuid]
             key = (service.label, service.instance)
-            if (key in bleemeo_cache.services_by_labelinstance and
-                    bleemeo_cache.services_by_labelinstance[key].uuid ==
-                    service_uuid):
-                del bleemeo_cache.services_by_labelinstance[key]
             if service.instance:
                 logging.debug(
                     'Service %s on %s deleted',
@@ -1797,6 +1789,7 @@ class BleemeoConnector(threading.Thread):
                     'Service %s deleted',
                     service.label,
                 )
+        bleemeo_cache.update_lookup_map()
 
     def _sync_containers(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-branches
@@ -1815,9 +1808,7 @@ class BleemeoConnector(threading.Thread):
                 },
             )
 
-            bleemeo_cache.containers = {}
-            bleemeo_cache.containers_by_name = {}
-            bleemeo_cache.containers_by_docker_id = {}
+            new_containers = {}
             for data in api_containers:
                 docker_inspect = json.loads(data['docker_inspect'])
                 docker_inspect = sort_docker_inspect(docker_inspect)
@@ -1831,11 +1822,9 @@ class BleemeoConnector(threading.Thread):
                     data['docker_id'],
                     inspect_hash,
                 )
-                bleemeo_cache.containers[container.uuid] = container
-                bleemeo_cache.containers_by_name[container.name] = container
-                bleemeo_cache.containers_by_docker_id[container.docker_id] = (
-                    container
-                )
+                new_containers[container.uuid] = container
+            bleemeo_cache.containers = new_containers
+            bleemeo_cache.update_lookup_map()
 
         # Step 2: delete local object that are deleted from API
         # Not done for containers. API never delete a container
@@ -1911,9 +1900,8 @@ class BleemeoConnector(threading.Thread):
                 new_hash,
             )
             bleemeo_cache.containers[obj_uuid] = container
-            bleemeo_cache.containers_by_name[container.name] = container
-            bleemeo_cache.containers_by_docker_id[docker_id] = container
             logging.debug('Container %s %s', container.name, action_text)
+        bleemeo_cache.update_lookup_map()
 
         # Step 4: delete object present in API by not in local
         try:
@@ -1945,12 +1933,9 @@ class BleemeoConnector(threading.Thread):
                 continue
             self.last_containers_removed = bleemeo_agent.util.get_clock()
             del bleemeo_cache.containers[container_uuid]
-            if (container.name in bleemeo_cache.containers_by_name and
-                    bleemeo_cache.containers_by_name[container.name].uuid ==
-                    container_uuid):
-                del bleemeo_cache.containers_by_name[container.name]
             deleted_container_names.add(container.name)
             logging.debug('Container %s deleted', container.name)
+        bleemeo_cache.update_lookup_map()
 
         if deleted_container_names:
             with self._current_metrics_lock:
