@@ -1937,13 +1937,13 @@ class BleemeoConnector(threading.Thread):
             logging.debug('Container %s deleted', container.name)
         bleemeo_cache.update_lookup_map()
 
-        if deleted_container_names:
-            with self._current_metrics_lock:
-                self._current_metrics = {
-                    key: value
-                    for (key, value) in self._current_metrics.items()
-                    if value.container_name not in deleted_container_names
-                }
+        with self._current_metrics_lock:
+            self._current_metrics = {
+                key: value
+                for (key, value) in self._current_metrics.items()
+                if not value.container_name
+                or value.container_name in bleemeo_cache.containers_by_name
+            }
 
     def sent_metric(self, metric_name, metric_has_status, bleemeo_cache=None):
         """ Return True if the metric should be sent to Bleemeo Cloud platform
