@@ -123,10 +123,8 @@ def filter_netsizeformat(value):
 def start_server(core):
     global app_thread  # pylint: disable=global-statement,invalid-name
 
-    bind_address = core.config.get(
-        'web.listener.address', '127.0.0.1')
-    bind_port = core.config.get(
-        'web.listener.port', 8015)
+    bind_address = core.config['web.listener.address']
+    bind_port = core.config['web.listener.port']
     app.core = core
     if app.core.state.get('web_secret_key') is None:
         app.core.state.set(

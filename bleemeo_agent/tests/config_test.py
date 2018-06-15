@@ -31,27 +31,33 @@ def test_config_object():
         },
     }
 
-    assert conf.get('test.a') == 'a'
-    assert conf.get('test.one') == 1
-    assert conf.get('test.sub-level.two') == 2.0
+    assert conf['test.a'] == 'a'
+    assert conf['test.one'] == 1
+    assert conf['test.sub-level.two'] == 2.0
     with pytest.raises(KeyError):
-        conf.get('test.does.not.exists')
-    with pytest.raises(TypeError):
-        conf.get('test.does.not.exists', 'default')
+        conf['test.does.not.exists']
 
-    conf.set('test.b', 'B')
-    assert conf.get('test.b') == 'B'
-    assert conf.get('test.one') == 1
+    conf['test.b'] = 'B'
+    assert conf['test.b'] == 'B'
+    assert conf['test.one'] == 1
 
-    conf.set('test.now.does.exists.value', 42)
-    assert conf.get('test.now.does.exists.value') == 42
+    conf['test.now.does.exists.value'] = 42
+    assert conf['test.now.does.exists.value'] == 42
+
+    del conf['test.now.does.exists.value']
+    with pytest.raises(KeyError):
+        conf['test.now.does.exists.value']
 
 
 def test_merge_dict():
-    assert bleemeo_agent.config.merge_dict({}, {}) == {}
+    assert(
+        bleemeo_agent.config.merge_dict({}, {}) ==
+        {}
+    )
     assert (
         bleemeo_agent.config.merge_dict({'a': 1}, {'b': 2}) ==
-        {'a': 1, 'b': 2})
+        {'a': 1, 'b': 2}
+    )
 
     d1 = {
         'd1': 1,
@@ -79,14 +85,21 @@ def test_merge_dict():
             'remplaced': 2,
         }
     }
-    assert bleemeo_agent.config.merge_dict(d1, d2) == want
+    assert(
+        bleemeo_agent.config.merge_dict(d1, d2) ==
+        want
+    )
 
 
 def test_merge_list():
-    assert bleemeo_agent.config.merge_dict({'a': []}, {'a': []}) == {'a': []}
+    assert(
+        bleemeo_agent.config.merge_dict({'a': []}, {'a': []}) ==
+        {'a': []}
+    )
     assert (
         bleemeo_agent.config.merge_dict({'a': []}, {'a': [1]}) ==
-        {'a': [1]})
+        {'a': [1]}
+    )
 
     d1 = {
         'a': [1, 2],
@@ -113,7 +126,10 @@ def test_merge_list():
             'c': [3, 4],
         }
     }
-    assert bleemeo_agent.config.merge_dict(d1, d2) == want
+    assert(
+        bleemeo_agent.config.merge_dict(d1, d2) ==
+        want
+    )
 
 
 def test_config_files():
@@ -142,7 +158,7 @@ def test_load_config():
 
     assert len(errors) == 0
 
-    assert config == {
+    config_expected = {
         'main_conf_loaded': True,
         'first_conf_loaded': True,
         'second_conf_loaded': True,
@@ -162,12 +178,13 @@ def test_load_config():
             'nested': None,
         },
     }
-    assert config.get('second_conf_loaded') is True
-    assert config.get('merged_dict.main') == 1.0
 
-    # Ensure that the separator must be named
-    with pytest.raises(TypeError):
-        config.get('sub_section.nested', '.')
+    assert isinstance(config, bleemeo_agent.config.Config)
+
+    assert config._internal_dict == config_expected
+
+    assert config['second_conf_loaded'] is True
+    assert config['merged_dict.main'] == 1.0
 
 
 def test_convert_conf_name():

@@ -16,8 +16,8 @@
         Last Report: {{ core.last_report.strftime('%c') }}<br/>
         <br/>
         {% endif %}
-        {% if core.config.get('tags') %}
-        Tags: {{ ', '.join(core.config.get('tags', [])) }}<br/>
+        {% if core.config['tags'] %}
+        Tags: {{ ', '.join(core.config['tags']) }}<br/>
         {% endif %}
         </p>
     </div>

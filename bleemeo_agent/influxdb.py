@@ -38,7 +38,7 @@ class InfluxDBConnector(threading.Thread):
         super(InfluxDBConnector, self).__init__()
         self.core = core
 
-        self.db_name = self.core.config.get('influxdb.db_name', 'metrics')
+        self.db_name = self.core.config['influxdb.db_name']
         self.retention_policy_name = 'standard_policy'
 
         self.influx_client = None
@@ -50,8 +50,8 @@ class InfluxDBConnector(threading.Thread):
 
     def _do_connect(self):
         self.influx_client = influxdb.InfluxDBClient(
-            host=self.core.config.get('influxdb.host', 'localhost'),
-            port=self.core.config.get('influxdb.port', 8086),
+            host=self.core.config['influxdb.host'],
+            port=self.core.config['influxdb.port'],
         )
         try:
             self.influx_client.create_database(self.db_name)

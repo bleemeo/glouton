@@ -65,10 +65,12 @@ CONFIG_VARS = [
     ('agent.public_ip_indicator', 'string', 'https://myip.bleemeo.com'),
     ('agent.state_file', 'string', 'state.json'),
     ('agent.upgrade_file', 'string', 'upgrade'),
+    ('agent.cloudimage_creation_file', 'string', 'cloudimage_creation'),
     ('tags', 'list', []),
     ('stack', 'string', ''),
     ('logging.level', 'string', 'INFO'),
     ('logging.output', 'string', 'console'),
+    ('logging.output_file', 'string', None),
     ('container.type', 'string', None),
     ('container.pid_namespace_host', 'bool', False),
     ('bleemeo.enabled', 'bool', True),
@@ -85,7 +87,7 @@ CONFIG_VARS = [
     ),
     ('bleemeo.mqtt.ssl_insecure', 'bool', False),
     ('bleemeo.sentry.dsn', 'string', None),
-    ('graphite.metrics_sources', 'string', 'telegraf'),
+    ('graphite.metrics_source', 'string', 'telegraf'),
     ('graphite.listener.address', 'string', '127.0.0.1'),
     ('graphite.listener.port', 'int', 2003),
     ('telegraf.statsd.enabled', 'bool', True),
@@ -131,35 +133,47 @@ CONFIG_VARS = [
     ('network_interface_blacklist', 'list', []),
     ('disk_monitor', 'list', []),
     ('df.path_ignore', 'list', []),
-    ('df.host_mount_point', 'string', None),
+    ('df.host_mount_point', 'string', '/does-no-exists'),
     ('thresholds', 'dict', {}),
     ('kubernetes.nodename', 'string', None),
     ('kubernetes.enabled', 'bool', False),
+    ('distribution', 'string', None),
+    ('jmx.enabled', 'bool', True),
+    (
+        'jmxtrans.config_file',
+        'string',
+        '/var/lib/jmxtrans/bleemeo-generated.json'
+    ),
 ]
 
 
-class Config(dict):
+class Config:
     """
     Work exacly like a normal dict, but "get" method known about sub-dict
 
     Also add "set" method that known about sub-dict.
     """
+    def __init__(self, initial_dict=None):
+        """ init function of Config class """
+        if initial_dict is None:
+            self._internal_dict = {}
+        else:
+            self._internal_dict = initial_dict
 
-    def get(self, name, *, separator='.'):
-        """ If name contains separator ("." by default), it will search
-            in sub-dict.
+    def __getitem__(self, key):
+        """ If the name contains separator ('.'), it will search in sub-dict.
 
-            Example, if you config is {'category': {'value': 5}}, then
-            get('category.value') will return 5.
+            Example, if tou config is {'category': {'value': 5}}, then
+            config['category.value'] wil return 5
         """
-        current = self
-        for path in name.split(separator):
+        current = self._internal_dict
+        for path in key.split('.'):
             if path not in current:
-                raise KeyError("{} is not a valid key in config".format(name))
+                raise KeyError("{} is not a valid key in config".format(key))
             current = current[path]
         return current
 
-    def set(self, name, value, separator='.'):
+    def __setitem__(self, key, value):
         """ If name contains separator ("." by default), it will search
             in sub-dict.
 
@@ -168,29 +182,37 @@ class Config(dict):
             It does create intermediary dict as needed (in your example,
             self['category'] = {} if not already an dict).
         """
-        current = self
-        splitted_name = name.split(separator)
-        (paths, last_name) = (splitted_name[:-1], splitted_name[-1])
+        current = self._internal_dict
+        splitted_key = key.split('.')
+        (paths, last_key) = (splitted_key[:-1], splitted_key[-1])
         for path in paths:
             if not isinstance(current.get(path), dict):
                 current[path] = {}
             current = current[path]
-        current[last_name] = value
+        current[last_key] = value
 
-    def delete(self, name, separator='.'):
+    def __delitem__(self, key):
         """ If name name contains separator ("." by default), it will search
             in sub-dict.
 
-            Example, delete("category.value") will result in
+            Example, del config["category.value"] will result in
             del self['category']['value'].
             It does NOT delete empty parent.
         """
-        current = self
-        splitted_name = name.split(separator)
-        (paths, last_name) = (splitted_name[:-1], splitted_name[-1])
+        current = self._internal_dict
+        splitted_key = key.split('.')
+        (paths, last_key) = (splitted_key[:-1], splitted_key[-1])
         for path in paths:
             current = current[path]
-        del current[last_name]
+        del current[last_key]
+
+    def merge(self, source):
+        if isinstance(source, Config):
+            self._internal_dict = merge_dict(
+                self._internal_dict,
+                source._internal_dict  # pylint: disable=W0212
+            )
+        return self
 
 
 def convert_type(value_text, value_type):
@@ -262,7 +284,7 @@ def load_default_config():
     """ Initialization of the default configuration """
     default_config = Config()
     for(conf_name, _conf_type, conf_value) in CONFIG_VARS:
-        default_config.set(conf_name, conf_value)
+        default_config[conf_name] = conf_value
     return default_config
 
 
@@ -276,7 +298,7 @@ def load_config(paths=None):
     elif paths is None:
         paths = PATHS
 
-    default_config = Config()
+    default_config = {}
     errors = []
 
     configs = [default_config]
@@ -299,7 +321,7 @@ def load_config(paths=None):
             errors.append(str(exc).replace('\n', ' '))
 
     # final configuration
-    final_config = functools.reduce(merge_dict, configs)
+    final_config = Config(functools.reduce(merge_dict, configs))
 
     # overload of the final configuration by the environnement variables
     for (conf_name, conf_type, _conf_value) in CONFIG_VARS:
@@ -319,7 +341,7 @@ def load_config(paths=None):
                         'Bad environ variable %s: %s' % (env_name, exc)
                     )
                     continue
-                final_config.set(conf_name, value)
+                final_config[conf_name] = value
 
     return final_config, errors
 
@@ -328,7 +350,7 @@ def load_config_with_default(paths=None):
     """ Merge the default config with the config from load_config"""
     (final_config, errors) = load_config(paths)
     default_config = load_default_config()
-    return merge_dict(default_config, final_config), errors
+    return default_config.merge(final_config), errors
 
 
 def config_files(paths):
