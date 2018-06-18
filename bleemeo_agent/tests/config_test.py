@@ -50,10 +50,7 @@ def test_config_object():
 
 
 def test_merge_dict():
-    assert(
-        bleemeo_agent.config.merge_dict({}, {}) ==
-        {}
-    )
+    assert(bleemeo_agent.config.merge_dict({}, {}) == {})
     assert (
         bleemeo_agent.config.merge_dict({'a': 1}, {'b': 2}) ==
         {'a': 1, 'b': 2}

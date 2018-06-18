@@ -2513,7 +2513,8 @@ class Core:
                 value = self.config[deprecated_key]
                 if value is not None:
                     warnings.append(
-                        'Configuration "%s" is deprecated and replaced by "%s"' % (
+                        'Configuration "%s" is deprecated and'
+                        'replaced by "%s"' % (
                             deprecated_key,
                             new_key,
                         )
