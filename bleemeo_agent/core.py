@@ -2519,9 +2519,9 @@ class Core:
                             new_key,
                         )
                     )
-                    if self.config[new_ke] is None:
+                    if self.config[new_key] is None:
                         self.config[new_key] = value
-                    self.config.delete(deprecated_key)
+                    del self.config[deprecated_key]
             except KeyError:
                 pass
 
