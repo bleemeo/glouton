@@ -283,8 +283,13 @@ def merge_dict(destination, source):
 def load_default_config():
     """ Initialization of the default configuration """
     default_config = Config()
-    for(conf_name, _conf_type, conf_value) in CONFIG_VARS:
-        default_config[conf_name] = conf_value
+    for(conf_name, conf_type, conf_value) in CONFIG_VARS:
+        if conf_type == 'list':
+            default_config[conf_name] = list(conf_value)
+        elif conf_type == 'dict':
+            default_config[conf_name] = dict(conf_value)
+        else:
+            default_config[conf_name] = conf_value
     return default_config
 
 

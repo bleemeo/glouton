@@ -210,3 +210,30 @@ def test_convert_conf_name():
     for (conf, envs) in tests:
         for env in envs:
             assert(env in bleemeo_agent.config.convert_conf_name(conf))
+
+
+def test_config():
+    config1 = bleemeo_agent.config.load_default_config()
+    config2 = bleemeo_agent.config.load_default_config()
+    config1['logging.output'] = 'console2'
+    assert(config1['logging.output'] == 'console2')
+    assert(config2['logging.output'] == 'console')
+    config1['bleemeo.enabled'] = False
+    assert(not config1['bleemeo.enabled'])
+    assert(config2['bleemeo.enabled'])
+    config1['bleemeo.mqtt.port'] = 2018
+    assert(config1['bleemeo.mqtt.port'] == 2018)
+    assert(config2['bleemeo.mqtt.port'] == 8883)
+    config1['bleemeo.mqtt.port'] = 8883
+    config1['logging.output'] = 'console'
+    config1['bleemeo.enabled'] = True
+    assert(config1._internal_dict == config2._internal_dict)
+    config2['tags'].append('test')
+    assert(config1['tags'] == [])
+    assert(config2['tags'] == ['test'])
+    config2['thresholds']['test'] = 1
+    assert(config2['thresholds'] == {'test': 1})
+    assert(config1['thresholds'] == {})
+    del config2['thresholds']['test']
+    config2['tags'].remove('test')
+    assert(config1._internal_dict == config2._internal_dict)
