@@ -2134,9 +2134,7 @@ class BleemeoConnector(threading.Thread):
 
     @property
     def bleemeo_base_url(self):
-        return self.core.config[
-            'bleemeo.api_base', 'https://api.bleemeo.com/'
-        ]
+        return self.core.config['bleemeo.api_base']
 
     @property
     def upgrade_in_progress(self):

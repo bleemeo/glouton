@@ -330,8 +330,8 @@ def load_config(paths=None):
             if env_name in os.environ:
                 if conf_type in ['dict', 'list']:
                     errors.append(
-                        'Can not overload %s (type %s not supported)'
-                        % (env_name, conf_type)
+                        'Update %s from environment variable is not supported'
+                        % (env_name)
                     )
                     continue
                 try:
