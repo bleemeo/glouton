@@ -434,12 +434,16 @@ def get_facts_root():
     """ Gather facts that need root privilege and write them in yaml file
     """
 
-    config, errors = bleemeo_agent.config.load_config_with_default()
+    config, errors, warnings = bleemeo_agent.config.load_config_with_default()
     if errors:
         logging.error(
             'Error while loading configuration: %s', '\n'.join(errors)
         )
         return
+    if warnings:
+        logging.warning(
+            'Warning while loading configuration: %s', '\n'.join(warnings)
+        )
 
     facts_file = config['agent.facts_file']
 

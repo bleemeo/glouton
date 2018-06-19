@@ -289,7 +289,33 @@ def load_default_config():
     return default_config
 
 
+def check_deprecated_config(config, warnings):
+    """ Checks that an obsolete configuration is not used
+    """
+    deprecated_config = [
+        ('telegraf.statsd_enabled', 'telegraf.statsd.enabled'),
+    ]
+    for (deprecated_key, new_key) in deprecated_config:
+        try:
+            value = config[deprecated_key]
+            if value is not None:
+                warnings.append(
+                    'Configuration "%s" is deprecated and'
+                    'replaced by "%s"' % (deprecated_key, new_key,)
+                )
+                try:
+                    if config[new_key] is None:
+                        config[new_key] = value
+                except KeyError:
+                    config[new_key] = value
+            del config[deprecated_key]
+        except KeyError:
+            pass
+    return config, warnings
+
+
 def load_config(paths=None):
+    # pylint: disable=too-many-locals
     """ Load configuration from given paths (a list) and return a ConfigParser
 
         If paths is not provided, use default value (PATH, see doc from module)
@@ -301,6 +327,7 @@ def load_config(paths=None):
 
     default_config = {}
     errors = []
+    warnings = []
 
     configs = [default_config]
     for filepath in config_files(paths):
@@ -344,14 +371,16 @@ def load_config(paths=None):
                     continue
                 final_config[conf_name] = value
 
-    return final_config, errors
+    final_config, warnings = check_deprecated_config(final_config, warnings)
+
+    return final_config, errors, warnings
 
 
 def load_config_with_default(paths=None):
     """ Merge the default config with the config from load_config"""
-    (final_config, errors) = load_config(paths)
+    (final_config, errors, warning) = load_config(paths)
     default_config = load_default_config()
-    return default_config.merge(final_config), errors
+    return default_config.merge(final_config), errors, warning
 
 
 def config_files(paths):

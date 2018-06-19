@@ -2431,9 +2431,9 @@ class Core:
     def reload_config(self):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-locals
-        (self.config, errors) = bleemeo_agent.config.load_config_with_default()
-        warnings = []
-
+        (self.config, errors, warnings) = (
+            bleemeo_agent.config.load_config_with_default()
+        )
         metric_prometheus = self.config['metric.prometheus']
         for name in list(metric_prometheus):
             if 'url' not in metric_prometheus[name]:
@@ -2504,26 +2504,6 @@ class Core:
                 service['jmx_metrics'] = valid_metrics
 
         self.config['service'] = valid_services
-
-        deprecated_config = [
-            ('telegraf.statsd_enabled', 'telegraf.statsd.enabled'),
-        ]
-        for (deprecated_key, new_key) in deprecated_config:
-            try:
-                value = self.config[deprecated_key]
-                if value is not None:
-                    warnings.append(
-                        'Configuration "%s" is deprecated and'
-                        'replaced by "%s"' % (
-                            deprecated_key,
-                            new_key,
-                        )
-                    )
-                    if self.config[new_key] is None:
-                        self.config[new_key] = value
-                    del self.config[deprecated_key]
-            except KeyError:
-                pass
 
         return (errors, warnings)
 

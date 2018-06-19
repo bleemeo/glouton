@@ -148,7 +148,7 @@ def test_config_files():
 
 
 def test_load_config():
-    config, errors = bleemeo_agent.config.load_config([
+    config, errors, _warnings = bleemeo_agent.config.load_config([
         'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d',
     ])
