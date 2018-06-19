@@ -185,14 +185,10 @@ def test_load_config():
 
 
 def test_convert_conf_name():
-    tests = [
+    test = [
         (
             'agent.public_ip_indicator',
             ['BLEEMEO_AGENT_AGENT_PUBLIC_IP_INDICATOR']
-        ),
-        (
-            'bleemeo.account_id',
-            ['BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID', 'BLEEMEO_AGENT_ACCOUNT_ID']
         ),
         (
             'telegraf.docker_metrics_enabled',
@@ -207,7 +203,40 @@ def test_convert_conf_name():
             ['BLEEMEO_AGENT_A_DISK_MONITOR']
         )
     ]
-    for (conf, envs) in tests:
+    test_compatibility = [
+        (
+            'bleemeo.account_id',
+            ['BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID', 'BLEEMEO_AGENT_ACCOUNT_ID']
+        ),
+        (
+            'bleemeo.registration_key',
+            [
+                'BLEEMEO_AGENT_BLEEMEO_REGISTRATION_KEY',
+                'BLEEMEO_AGENT_REGISTRATION_KEY'
+            ]
+        ),
+        (
+            'bleemeo.api_base',
+            ['BLEEMEO_AGENT_API_BASE', 'BLEEMEO_AGENT_BLEEMEO_API_BASE']
+        ),
+        (
+            'bleemeo.mqtt.host',
+            ['BLEEMEO_AGENT_MQTT_HOST', 'BLEEMEO_AGENT_BLEEMEO_MQTT_HOST']
+        ),
+        (
+            'bleemeo.mqtt.port',
+            ['BLEEMEO_AGENT_MQTT_PORT', 'BLEEMEO_AGENT_BLEEMEO_MQTT_PORT']
+        ),
+        (
+            'bleemeo.mqtt.ssl',
+            ['BLEEMEO_AGENT_MQTT_SSL', 'BLEEMEO_AGENT_BLEEMEO_MQTT_SSL']
+        ),
+    ]
+
+    for (conf, envs) in test:
+        for env in envs:
+            assert(env in bleemeo_agent.config.convert_conf_name(conf))
+    for (conf, envs) in test_compatibility:
         for env in envs:
             assert(env in bleemeo_agent.config.convert_conf_name(conf))
 

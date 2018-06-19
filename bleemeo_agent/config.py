@@ -247,12 +247,7 @@ def convert_conf_name(conf_name):
     """ Convert the conf_name in env_name for load_conf()."""
     env_name = []
     base = "BLEEMEO_AGENT_"
-    if conf_name.startswith('agent.'):
-        env_name.append(
-            base +
-            conf_name[len('agent.'):].replace('.', '_').upper()
-        )
-    elif conf_name.startswith('bleemeo.'):
+    if conf_name.startswith('bleemeo.'):
         env_name.append(
             base +
             conf_name[len('bleemeo.'):].replace('.', '_').upper()
