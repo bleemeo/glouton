@@ -2623,6 +2623,10 @@ class Core:
     def update_last_report(self):
         self.last_report = datetime.datetime.now()
 
+    @property
+    def registration_at(self):
+        return self.bleemeo_connector.registration_at
+
     def get_threshold(self, metric_name, item='', thresholds=None):
         """ Get threshold definition for given metric
 
