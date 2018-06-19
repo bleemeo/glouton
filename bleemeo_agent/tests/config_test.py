@@ -174,6 +174,11 @@ def test_load_config():
         'sub_section': {
             'nested': None,
         },
+        'telegraf': {
+            'statsd': {
+                'enabled': None,
+            },
+        },
     }
 
     assert isinstance(config, bleemeo_agent.config.Config)

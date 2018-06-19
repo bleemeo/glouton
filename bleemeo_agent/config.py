@@ -304,8 +304,7 @@ def check_deprecated_config(config, warnings):
                     'replaced by "%s"' % (deprecated_key, new_key,)
                 )
                 try:
-                    if config[new_key] is None:
-                        config[new_key] = value
+                    config[new_key]
                 except KeyError:
                     config[new_key] = value
             del config[deprecated_key]
