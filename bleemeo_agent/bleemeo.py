@@ -367,6 +367,11 @@ class BleemeoCache:
         self.services = {}
         self.tags = list(cache['tags'])
         self.containers = {}
+        if cache['registration_at']:
+            self.registration_at = datetime.datetime.strptime(
+                cache['registration_at'],
+                '%Y-%m-%d %H:%M:%S.%f',
+            ).replace(tzinfo=datetime.timezone.utc)
 
         for metric_uuid, values in cache['metrics'].items():
             values[6] = MetricThreshold(*values[6])
@@ -450,6 +455,8 @@ class BleemeoCache:
             'next_config_at':
                 self.next_config_at.timestamp()
                 if self.next_config_at else None,
+            'registration_at':
+                self.registration_at.strftime('%Y-%m-%d %H:%M:%S.%f')
         }
         self._state.set('_bleemeo_cache', cache)
 
