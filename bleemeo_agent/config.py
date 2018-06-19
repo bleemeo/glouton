@@ -377,9 +377,9 @@ def load_config(paths=None):
 
 def load_config_with_default(paths=None):
     """ Merge the default config with the config from load_config"""
-    (final_config, errors, warning) = load_config(paths)
+    (final_config, errors, warnings) = load_config(paths)
     default_config = load_default_config()
-    return default_config.merge(final_config), errors, warning
+    return default_config.merge(final_config), errors, warnings
 
 
 def config_files(paths):

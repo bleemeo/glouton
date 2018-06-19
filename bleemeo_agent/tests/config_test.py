@@ -148,7 +148,7 @@ def test_config_files():
 
 
 def test_load_config():
-    config, errors, _warnings = bleemeo_agent.config.load_config([
+    config, errors, warnings = bleemeo_agent.config.load_config([
         'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d',
     ])
@@ -181,6 +181,7 @@ def test_load_config():
         },
     }
 
+    assert len(warnings) == 1
     assert isinstance(config, bleemeo_agent.config.Config)
 
     assert config._internal_dict == config_expected
