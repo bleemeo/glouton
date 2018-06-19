@@ -134,7 +134,7 @@ CONFIG_VARS = [
     ('network_interface_blacklist', 'list', []),
     ('disk_monitor', 'list', []),
     ('df.path_ignore', 'list', []),
-    ('df.host_mount_point', 'string', '/does-no-exists'),
+    ('df.host_mount_point', 'string', None),
     ('thresholds', 'dict', {}),
     ('kubernetes.nodename', 'string', None),
     ('kubernetes.enabled', 'bool', False),

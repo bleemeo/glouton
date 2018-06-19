@@ -356,10 +356,16 @@ def get_pending_update(core):
     """
     # If running inside a Docker container, it can't run commands
     if core.container is not None:
-        updates_file_name = os.path.join(
-            core.config['df.host_mount_point'],
-            'var/lib/update-notifier/updates-available',
-        )
+        if core.config['df.host_mount_point']:
+            updates_file_name = os.path.join(
+                core.config['df.host_mount_point'],
+                'var/lib/update-notifier/updates-available',
+            )
+        else:
+            updates_file_name = os.path.join(
+                '/does-not-exist',
+                'var/lib/update-notifier/updates-available',
+            )
         update_count = None
         security_count = None
         try:
