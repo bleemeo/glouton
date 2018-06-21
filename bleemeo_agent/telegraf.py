@@ -1073,7 +1073,14 @@ class Telegraf:
             # host as think by ES (usually the "public" IP of the node). But
             # Agent use "127.0.0.1" for localhost.
             # server_address = part[3].replace('_', '.')
-            node_id = part[4]
+
+            # tags for ES include variable length node_attribute.
+            # Use negative index to avoid issue.
+            # tags present are cluster_name, node_attribute,
+            # node_host, node_id, node_name
+            # So node_id is part[-4] (remember that plugin name and
+            # measurement name are after all tags).
+            node_id = part[-4]
             try:
                 instance = self._get_elasticsearch_instance(node_id)
             except KeyError:
