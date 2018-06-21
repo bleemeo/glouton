@@ -29,6 +29,7 @@ import requests
 # pylint: disable=wrong-import-order
 from six.moves.urllib import parse as urllib_parse
 
+import bleemeo_agent.other_types
 import bleemeo_agent.util
 
 
@@ -383,19 +384,24 @@ class Check:
                 'check %s: return code is %s (output=%s)',
                 self.service, return_code, output,
             )
-
-        metric = {
-            'measurement': '%s_status' % self.service,
-            'status': STATUS_NAME[return_code],
-            'service': self.service,
-            'time': now,
-            'value': float(return_code),
-            'check_output': output,
-        }
         if self.instance:
-            metric['item'] = self.instance
-            metric['instance'] = self.instance
-        self.core.emit_metric(metric)
+            instance = self.instance
+            item = self.instance
+        else:
+            instance = ''
+            item = ''
+        metric_point = bleemeo_agent.other_types.MetricPoint(
+            label='%s_status' % self.service,
+            time=now,
+            value=float(return_code),
+            item=item,
+            service_label=self.service,
+            service_instance=instance,
+            status_code=STATUS_NAME[return_code],
+            status_of='',
+            problem_origin=output,
+        )
+        self.core.emit_metric(metric_point)
 
         if return_code != STATUS_OK:
             # close all TCP sockets

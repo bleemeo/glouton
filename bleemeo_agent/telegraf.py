@@ -29,6 +29,7 @@ import psutil
 import requests
 from six.moves import urllib_parse
 
+import bleemeo_agent.other_types
 import bleemeo_agent.util
 
 
@@ -444,11 +445,20 @@ class Telegraf:
                 name = 'cpu_wait'
 
             if name == 'cpu_idle':
-                self.core.emit_metric({
-                    'measurement': 'cpu_used',
-                    'time': timestamp,
-                    'value': 100 - value,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='cpu_used',
+                        time=timestamp,
+                        value=100 - value,
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
             self.computed_metrics_pending.add(
                 ('cpu_other', '', '', timestamp)
             )
@@ -471,11 +481,20 @@ class Telegraf:
                 return
 
             if name == 'cpu_idle':
-                self.core.emit_metric({
-                    'measurement': 'cpu_used',
-                    'time': timestamp,
-                    'value': 100 - value,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='cpu_used',
+                        time=timestamp,
+                        value=100 - value,
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
                 self.computed_metrics_pending.add(
                     ('system_load1', '', '', timestamp)
                 )
@@ -537,15 +556,23 @@ class Telegraf:
                     return
 
             if name == 'io_time':
-                self.core.emit_metric({
-                    'measurement': 'io_utilization',
-                    # io_time is a number of ms spent doing IO (per seconds)
-                    # utilization is 100% when we spent 1000ms during one
-                    # second
-                    'value': value / 1000. * 100.,
-                    'time': timestamp,
-                    'item': item,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='io_utilization',
+                        time=timestamp,
+                        # io_time is a number of ms spent doing IO(per seconds)
+                        # utilization is 100% when we spent 1000ms during one
+                        # second
+                        value=value / 1000. * 100.,
+                        item=item,
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
         elif part[-2] == 'win_diskio':
             item = part[2]
             name = part[-1]
@@ -579,15 +606,23 @@ class Telegraf:
                 name = 'io_writes'
             elif name == 'Percent_Disk_Time':
                 name = 'io_utilization'
-                self.core.emit_metric({
-                    'measurement': 'io_time',
-                    # io_time is a number of ms spent doing IO (per seconds)
-                    # utilization is 100% when we spent 1000ms during one
-                    # second
-                    'value': value * 1000. / 100.,
-                    'time': timestamp,
-                    'item': item,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='io_time',
+                        time=timestamp,
+                        # io_time is a number of ms spent doing IO(per seconds)
+                        # utilization is 100% when we spent 1000ms during one
+                        # second
+                        value=value * 1000. / 100.,
+                        item=item,
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
             elif name == 'Percent_Disk_Read_Time':
                 name = 'io_read_time'
                 # Like io_time/io_utilization
@@ -622,22 +657,49 @@ class Telegraf:
             name = part[-1]
             if name == 'Available_Bytes':
                 name = 'mem_available'
-                self.core.emit_metric({
-                    'measurement': 'mem_available_perc',
-                    'time': timestamp,
-                    'value': value * 100. / self.core.total_memory_size,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='mem_available_perc',
+                        time=timestamp,
+                        value=value * 100. / self.core.total_memory_size,
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
                 mem_used = self.core.total_memory_size - value
-                self.core.emit_metric({
-                    'measurement': 'mem_used',
-                    'time': timestamp,
-                    'value': mem_used,
-                })
-                self.core.emit_metric({
-                    'measurement': 'mem_used_perc',
-                    'time': timestamp,
-                    'value': mem_used * 100. / self.core.total_memory_size,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='mem_used',
+                        time=timestamp,
+                        value=mem_used,
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='mem_used_perc',
+                        time=timestamp,
+                        value=mem_used * 100. / self.core.total_memory_size,
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
                 self.computed_metrics_pending.add(
                     ('mem_free', '', '', timestamp)
                 )
@@ -711,16 +773,34 @@ class Telegraf:
                     swap_used = 0.0
                 else:
                     swap_used = self.core.total_swap_size / (value / 100.)
-                self.core.emit_metric({
-                    'measurement': 'swap_used',
-                    'time': timestamp,
-                    'value': swap_used,
-                })
-                self.core.emit_metric({
-                    'measurement': 'swap_free',
-                    'time': timestamp,
-                    'value': self.core.total_swap_size - swap_used,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='swap_used',
+                        time=timestamp,
+                        value=swap_used,
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
+                self.core.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='swap_free',
+                        time=timestamp,
+                        value=self.core.total_swap_size - swap_used,
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code=None,
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
         elif part[-2] == 'system':
             name = 'system_' + part[-1]
             if name == 'system_uptime':
@@ -1411,20 +1491,31 @@ class Telegraf:
             value = self.get_derivate(name, item, timestamp, value)
             if value is None:
                 return
-        metric = {
-            'measurement': name,
-            'time': timestamp,
-            'value': value,
-        }
-        if service is not None:
-            metric['service'] = service
-            metric['instance'] = instance
-        if item:
-            metric['item'] = item
-        if container_name is not None:
-            metric['container'] = container_name
 
-        self.core.emit_metric(metric, no_emit=no_emit)
+        if service is None:
+            service = ''
+            instance = ''
+
+        if not item:
+            item = ''
+
+        if container_name is None:
+            container_name = ''
+        self.core.emit_metric(
+            bleemeo_agent.other_types.MetricPoint(
+                label=name,
+                time=timestamp,
+                value=value,
+                item=item,
+                service_label=service,
+                service_instance=instance,
+                container_name=container_name,
+                status_code=None,
+                status_of='',
+                problem_origin='',
+            ),
+            no_emit=no_emit
+        )
 
     def packet_finish(self):
         """ Called when graphite_client finished processing one TCP packet
@@ -1497,12 +1588,20 @@ class Telegraf:
             disk_total = free / (free_perc / 100.0)
             disk_used = disk_total * (used_perc / 100.0)
             value = disk_total
-            self.core.emit_metric({
-                'measurement': 'disk_used',
-                'time': timestamp,
-                'item': item,
-                'value': disk_used,
-            })
+            self.core.emit_metric(
+                bleemeo_agent.other_types.MetricPoint(
+                    label='disk_used',
+                    time=timestamp,
+                    value=disk_used,
+                    item=item,
+                    service_label='',
+                    service_instance='',
+                    container_name='',
+                    status_code=None,
+                    status_of='',
+                    problem_origin='',
+                )
+            )
         elif name == 'cpu_other':
             value = get_metric('cpu_used', '')
             value -= get_metric('cpu_user', '')
@@ -1524,11 +1623,20 @@ class Telegraf:
         elif name == 'mem_used':
             total = get_metric('mem_total', '')
             value = total - get_metric('mem_available', '')
-            self.core.emit_metric({
-                'measurement': 'mem_used_perc',
-                'time': timestamp,
-                'value': value / total * 100.,
-            })
+            self.core.emit_metric(
+                bleemeo_agent.other_types.MetricPoint(
+                    label='mem_used_perc',
+                    time=timestamp,
+                    value=value / total * 100,
+                    item='',
+                    service_label='',
+                    service_instance='',
+                    container_name='',
+                    status_code=None,
+                    status_of='',
+                    problem_origin='',
+                )
+            )
         elif name == 'system_load1':
             # Unix load represent the number of running and runnable tasks
             # which include task waiting for disk IO.
@@ -1564,33 +1672,44 @@ class Telegraf:
             gc_young = get_metric('elasticsearch_jvm_gc_time_young', item)
             value = gc_old + gc_young
 
-            metric = {
-                'measurement': 'elasticsearch_jvm_gc_utilization',
-                'time': timestamp,
-                'service': service,
-                'instance': instance,
-                'value': value / 10.,  # convert ms/s in %
-            }
-            if item:
-                metric['item'] = item
-
-            self.core.emit_metric(metric)
+            if not item:
+                item = ''
+            self.core.emit_metric(
+                bleemeo_agent.other_types.MetricPoint(
+                    label='elasticsearch_jvm_gc_utilization',
+                    time=timestamp,
+                    value=value / 10.,  # convert ms/s in %
+                    item=item,
+                    service_label=service,
+                    service_instance=instance,
+                    container_name='',
+                    status_code=None,
+                    status_of='',
+                    problem_origin='',
+                )
+            )
         elif name == 'apache_busy_workers':
             service = 'apache'
             max_worker = get_metric('apache_max_workers', item)
             idle_worker = get_metric('apache_scoreboard_waiting', item)
             open_worker = get_metric('apache_scoreboard_open', item)
             value = max_worker - idle_worker - open_worker
-            metric = {
-                'measurement': 'apache_busy_workers_perc',
-                'time': timestamp,
-                'service': service,
-                'instance': instance,
-                'value': 100 * value / max_worker,
-            }
-            if item:
-                metric['item'] = item
-            self.core.emit_metric(metric)
+            if not item:
+                item = ''
+            self.core.emit_metric(
+                bleemeo_agent.other_types.MetricPoint(
+                    label='apache_busy_workers_perc',
+                    time=timestamp,
+                    value=100 * value / max_worker,
+                    item=item,
+                    service_label=service,
+                    service_instance=instance,
+                    container_name='',
+                    status_code=None,
+                    status_of='',
+                    problem_origin='',
+                )
+            )
         elif name == 'apache_max_workers':
             service = 'apache'
             value = 0
@@ -1622,18 +1741,25 @@ class Telegraf:
         else:
             logging.debug('Unknown computed metric %s', name)
             return
-
-        metric = {
-            'measurement': name,
-            'time': timestamp,
-            'value': value,
-        }
-        if item:
-            metric['item'] = item
-        if service is not None:
-            metric['service'] = service
-            metric['instance'] = instance
-        self.core.emit_metric(metric)
+        if not item:
+            item = ''
+        if service is None:
+            service = ''
+            instance = ''
+        self.core.emit_metric(
+            bleemeo_agent.other_types.MetricPoint(
+                label=name,
+                time=timestamp,
+                value=value,
+                item=item,
+                service_label=service,
+                service_instance=instance,
+                container_name='',
+                status_code=None,
+                status_of='',
+                problem_origin='',
+            )
+        )
 
 
 def _get_telegraf_config(core):

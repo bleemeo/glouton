@@ -55,6 +55,7 @@ import bleemeo_agent.checker
 import bleemeo_agent.config
 import bleemeo_agent.facts
 import bleemeo_agent.graphite
+import bleemeo_agent.other_types
 import bleemeo_agent.services
 import bleemeo_agent.util
 
@@ -1753,33 +1754,68 @@ class Core:
         now = time.time()
 
         if self.graphite_server.metrics_source != 'telegraf':
-            self.emit_metric({
-                'measurement': 'uptime',
-                'time': now,
-                'value': uptime_seconds,
-            })
+            self.emit_metric(
+                bleemeo_agent.other_types.MetricPoint(
+                    label='uptime',
+                    time=now,
+                    value=uptime_seconds,
+                    item='',
+                    service_label='',
+                    service_instance='',
+                    container_name='',
+                    status_code=None,
+                    status_of='',
+                    problem_origin='',
+                )
+            )
 
         if self.bleemeo_connector and self.bleemeo_connector.connected:
-            self.emit_metric({
-                'measurement': 'agent_status',
-                'time': now,
-                'value': 0.0,  # status ok
-            })
+            self.emit_metric(
+                bleemeo_agent.other_types.MetricPoint(
+                    label='agent_status',
+                    time=now,
+                    value=0.0,  # status ok
+                    item='',
+                    service_label='',
+                    service_instance='',
+                    container_name='',
+                    status_code=None,
+                    status_of='',
+                    problem_origin='',
+                )
+            )
 
         if os.name == 'nt':
-            self.emit_metric({
-                'measurement': 'mem_total',
-                'time': now,
-                'value': float(self.total_memory_size),
-            })
+            self.emit_metric(
+                bleemeo_agent.other_types.MetricPoint(
+                    label='mem_total',
+                    time=now,
+                    value=float(self.total_memory_size),
+                    item='',
+                    service_label='',
+                    service_instance='',
+                    container_name='',
+                    status_code=None,
+                    status_of='',
+                    problem_origin='',
+                )
+            )
             if self.last_facts.get('swap_present', False):
                 self.total_swap_size = psutil.swap_memory().total
-                self.emit_metric({
-                    'measurement': 'swap_total',
-                    'time': now,
-                    'value': float(self.total_swap_size),
-                })
-
+                self.emit_metric(
+                    bleemeo_agent.other_types.MetricPoint(
+                        label='swap_total',
+                        time=now,
+                        value=float(self.total_swap_size),
+                        item='',
+                        service_label='',
+                        service_instance='',
+                        container_name='',
+                        status_code='',
+                        status_of='',
+                        problem_origin='',
+                    )
+                )
         metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:
             self.emit_metric(metric)

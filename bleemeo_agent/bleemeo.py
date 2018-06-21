@@ -2081,35 +2081,35 @@ class BleemeoConnector(threading.Thread):
                 fact.uuid,
             )
 
-    def emit_metric(self, metric):
-        metric_name = metric['measurement']
-        metric_has_status = metric.get('status') is not None
+    def emit_metric(self, metric_point):
+        metric_name = metric_point.name
+        metric_has_status = metric_point.status_code is not None
         if not self.sent_metric(metric_name, metric_has_status):
             return
 
         if (self._bleemeo_cache.current_config is not None
                 and not self._bleemeo_cache.current_config.docker_integration
-                and metric.get('container')):
+                and metric_point.container != ''):
             return
 
         if self._metric_queue.qsize() > 100000:
             # Remove one message to make room.
             self._metric_queue.get_nowait()
-        self._metric_queue.put(metric)
-        metric_name = metric['measurement']
-        service = metric.get('service')
-        item = metric.get('item', '')
+        self._metric_queue.put(metric_point)
+        metric_name = metric_point.name
+        service = metric_point.service
+        item = metric_point.item
 
         with self._current_metrics_lock:
             self._current_metrics[(metric_name, item)] = MetricRegistrationReq(
                 metric_name,
                 item,
                 service,
-                metric.get('instance', ''),
-                metric.get('container', ''),
-                metric.get('status_of', ''),
-                STATUS_NAME_TO_CODE.get(metric.get('status')),
-                metric.get('check_output', ''),
+                metric_point.instance,
+                metric_point.container,
+                metric_point.status_of,
+                STATUS_NAME_TO_CODE.get(metric_point.status_code),
+                metric_point.problem_origin,
                 bleemeo_agent.util.get_clock(),
             )
 
