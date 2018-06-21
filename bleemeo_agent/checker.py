@@ -397,6 +397,7 @@ class Check:
             item=item,
             service_label=self.service,
             service_instance=instance,
+            container_name='',
             status_code=STATUS_NAME[return_code],
             status_of='',
             problem_origin=output,

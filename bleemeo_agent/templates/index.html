@@ -54,16 +54,16 @@
     <div class="col-xs-5">
     {% for disk_metric in disks_used_perc|sort(attribute='item') %}
     {% with %}
-        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric['item'], 0) %}
-        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric['item'], 0) %}
+        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric.item, 0) %}
+        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric.item, 0) %}
         {% set disk_total_user = disk_used + disk_free %}
-        {% set disk_threshold = core.get_threshold(disk_metric['measurement'], disk_metric.get('item', '')) or {} %}
+        {% set disk_threshold = core.get_threshold(disk_metric.label, disk_metric.item) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="disk-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#disk-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="disk-collapse-{{ loop.index }}">
                         <i class="fa fa-chevron-right"></i>
-                        {{ disk_metric['item'] }} disk space
+                        {{ disk_metric.item }} disk space
                     </a>
                 </h4>
             </div>
@@ -71,7 +71,7 @@
                 <div class="panel-body add-left-margin">
                     Value: {{ disk_used|filesizeformat(True) }}<br/>
                     {% if 'status' in disk_metric %}
-                    Status: {{ disk_metric['status']|capitalize }} <br/>
+                    Status: {{ disk_metric.status_code|capitalize }} <br/>
                     {% endif %}
                     {% if disk_threshold.get('high_warning') %}
                     Warning: {{ (disk_total_user * disk_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
@@ -88,8 +88,8 @@
         {% set mem_metric = core.get_last_metric('mem_used_perc', '') %}
         {% if mem_metric is not none %}
         {% set mem_total = core.get_last_metric_value('mem_total', '', 0) %}
-        {% set mem_used = mem_metric['value'] / 100 * mem_total %}
-        {% set mem_threshold = core.get_threshold(mem_metric['measurement'], mem_metric.get('item', '')) or {} %}
+        {% set mem_used = mem_metric.value / 100 * mem_total %}
+        {% set mem_threshold = core.get_threshold(mem_metric.label, mem_metric.item) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="mem-heading">
                 <h4 class="panel-title">
@@ -103,7 +103,7 @@
                 <div class="panel-body add-left-margin">
                     Value: {{ mem_used|filesizeformat(True) }}<br/>
                     {% if 'status' in mem_metric %}
-                    Status: {{ mem_metric['status']|capitalize }} <br/>
+                    Status: {{ mem_metric.status_code|capitalize }} <br/>
                     {% endif %}
                     {% if mem_threshold.get('high_warning') %}
                     Warning: {{ (mem_total * mem_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
@@ -118,14 +118,14 @@
     {% endwith %}
     {% for net_metric in nets_bits_recv|sort(attribute='item') %}
     {% with %}
-        {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric['item'], 0) %}
-        {% set recv_bytes = net_metric['value'] %}
+        {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric.item, 0) %}
+        {% set recv_bytes = net_metric.value %}
         <div>
             <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#net-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="net-collapse-{{ loop.index }}">
                         <i class="fa fa-chevron-right"></i>
-                        {{ net_metric['item'] }} traffic
+                        {{ net_metric.item }} traffic
                     </a>
                 </h4>
             </div>
@@ -143,9 +143,9 @@
         {% if cpu_metric is not none %}
         {% set cpu_user = core.get_last_metric_value('cpu_user', '', 0) %}
         {% set cpu_system = core.get_last_metric_value('cpu_system', '', 0) %}
-        {% set cpu_used = cpu_metric['value'] %}
+        {% set cpu_used = cpu_metric.value %}
         {% set cpu_other = core.get_last_metric_value('cpu_other', '', 0) %}
-        {% set cpu_threshold = core.get_threshold(cpu_metric['measurement'], cpu_metric.get('item', '')) or {} %}
+        {% set cpu_threshold = core.get_threshold(cpu_metric.label, cpu_metric.item) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="cpu-heading">
                 <h4 class="panel-title">
@@ -163,8 +163,8 @@
                         <li>by system: {{ cpu_system|round(1) }} %</li>
                         <li>by other tasks: {{ cpu_other|round(1) }} %</li>
                     </ul>
-                    {% if 'status' in cpu_metric %}
-                    Status: {{ cpu_metric['status']|capitalize }} <br/>
+                    {% if cpu_metric.status_code is not none %}
+                    Status: {{ cpu_metric.status_code|capitalize }} <br/>
                     {% endif %}
                     {% if cpu_threshold.get('high_warning') %}
                     Warning: {{ cpu_threshold['high_warning'] }} %<br/>

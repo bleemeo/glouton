@@ -21,6 +21,8 @@ import re
 import subprocess
 import time
 
+import bleemeo_agent.other_types
+
 
 def gather_exim_queue_size(instance, core):
     """ Gather and send metric for queue size
@@ -56,14 +58,20 @@ def gather_exim_queue_size(instance, core):
 
     try:
         count = int(output)
-        core.emit_metric({
-            'measurement': 'exim_queue_size',
-            'time': time.time(),
-            'value': float(count),
-            'instance': instance,
-            'item': instance,
-            'service': 'exim',
-        })
+        core.emit_metric(
+            bleemeo_agent.other_types.MetricPoint(
+                label='exim_queue_size',
+                time=time.time(),
+                value=float(count),
+                item=instance,
+                service_label='exim',
+                service_instance=instance,
+                container_name='',
+                status_code=None,
+                status_of='',
+                problem_origin='',
+            )
+        )
     except ValueError:
         return
 
@@ -103,11 +111,17 @@ def gather_postfix_queue_size(instance, core):
     match = re.search(r'-- \d+ Kbytes in (\d+) Request.', output)
     if match:
         count = int(match.group(1))
-        core.emit_metric({
-            'measurement': 'postfix_queue_size',
-            'time': time.time(),
-            'value': float(count),
-            'instance': instance,
-            'item': instance,
-            'service': 'postfix',
-        })
+        core.emit_metric(
+            bleemeo_agent.other_types.MetricPoint(
+                label='postfix_queue_size',
+                time=time.time(),
+                value=float(count),
+                item=instance,
+                service_label='postfix',
+                service_instance=instance,
+                container_name='',
+                status_code=None,
+                status_of='',
+                problem_origin='',
+            )
+        )

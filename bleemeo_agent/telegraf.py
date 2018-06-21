@@ -1572,12 +1572,14 @@ class Telegraf:
                   to compute, raise ComputationFail. We will never be
                   able to compute the requested value.
             """
-            metric = self.core.get_last_metric(measurements, searched_item)
-            if metric is None or metric['time'] < timestamp:
+            metric_point = self.core.get_last_metric(
+                measurements, searched_item
+            )
+            if metric_point is None or metric_point.time < timestamp:
                 raise MissingMetric()
-            elif metric['time'] > timestamp:
+            elif metric_point.time > timestamp:
                 raise ComputationFail()
-            return metric['value']
+            return metric_point.value
 
         service = None
 

@@ -759,16 +759,23 @@ def pull_raw_metric(core, name):
             logging.warning(
                 'Failed to retrive metric %s: response it not a number',
                 name)
-
         if value is not None:
-            metric = {
-                'time': time.time(),
-                'measurement': name,
-                'value': value,
-            }
+            item = ''
             if metric_config.get('item', ''):
-                metric['item'] = metric_config.get('item', '')
-            core.emit_metric(metric)
+                item = metric_config.get('item', '')
+            metric_point = bleemeo_agent.other_types.MetricPoint(
+                label=name,
+                time=time.time(),
+                value=value,
+                item=item,
+                service_label='',
+                service_instance='',
+                container_name='',
+                status_code=None,
+                status_of='',
+                problem_origin='',
+            )
+            core.emit_metric(metric_point)
 
 
 def docker_restart(docker_client, container_name):
