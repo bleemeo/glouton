@@ -307,6 +307,31 @@ def get_listen_addresses(service_info):
     )
 
 
+def _prioritize_metrics(metrics):
+    """ Move some metrics to the head of the list
+    """
+    # We do this by swapping "high" priority metric with
+    # another metrics.
+
+    priority_label = set((
+        'cpu_idle', 'cpu_wait', 'cpu_nice', 'cpu_user', 'cpu_system',
+        'cpu_interrupt', 'cpu_softirq', 'cpu_steal',
+        'mem_free', 'mem_cached', 'mem_buffered', 'mem_used',
+        'io_utilization', 'io_read_bytes', 'io_write_bytes', 'io_reads',
+        'io_writes', 'net_bits_recv', 'net_bits_sent', 'net_packets_recv',
+        'net_packets_sent', 'net_err_in', 'net_err_out', 'disk_used_perc',
+        'swap_used_perc', 'cpu_used', 'mem_used_perc',
+        'agent_status',
+    ))
+
+    swap_idx = 0
+    for (idx, metric) in enumerate(metrics):
+        if metric.label in priority_label:
+            metrics[idx], metrics[swap_idx] = metrics[swap_idx], metrics[idx]
+            swap_idx += 1
+    return metrics
+
+
 class BleemeoCache:
     # pylint: disable=too-many-instance-attributes
     """ In-memory cache backed with state file for Bleemeo API
@@ -1354,12 +1379,15 @@ class BleemeoConnector(threading.Thread):
         # other.
         random.shuffle(current_metrics)
 
+        current_metrics = _prioritize_metrics(current_metrics)
+
         metric_last_seen = {}
         service_short_lookup = services_to_short_key(self.core.services)
         metrics_req_count = len(current_metrics)
         count = 0
+        reg_count_before_update = 30
         while current_metrics:
-            reg_req = current_metrics.pop()
+            reg_req = current_metrics.pop(0)
             count += 1
             short_item = reg_req.item[:API_METRIC_ITEM_LENGTH]
             if reg_req.service_label:
@@ -1513,6 +1541,12 @@ class BleemeoConnector(threading.Thread):
                     metric.label,
                     metric.uuid,
                 )
+            reg_count_before_update -= 1
+            if reg_count_before_update == 0:
+                bleemeo_cache.update_lookup_map()
+                self._bleemeo_cache = bleemeo_cache
+                reg_count_before_update = 60
+
         bleemeo_cache.update_lookup_map()
 
         # Step 4: delete object present in API by not in local
