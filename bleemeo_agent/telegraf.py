@@ -1282,7 +1282,14 @@ class Telegraf:
                 key for (key, value) in labels.items()
                 if key > 'network' and value != ''
             ]
-            position = 3 + len(label_keys_after)
+
+            # Position is part[-3] for Telegraf < 1.7. Telegraf 1.7
+            # introduced a "server_version" which is after "network".
+            if telegraf_version_gte(self.core, '1.7.0'):
+                position = 4 + len(label_keys_after)
+            else:
+                position = 3 + len(label_keys_after)
+
             if len(part) <= position or part[-position] != 'total':
                 return
         elif part[-2] == 'docker_container_blkio':
