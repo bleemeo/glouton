@@ -130,8 +130,8 @@ def test_merge_list():
 
 
 def test_config_files():
-    assert bleemeo_agent.config.config_files(['/does-not-exsits']) == []
-    assert bleemeo_agent.config.config_files(
+    assert bleemeo_agent.config._config_files(['/does-not-exsits']) == []
+    assert bleemeo_agent.config._config_files(
         ['/etc/passwd']) == ['/etc/passwd']
 
     wants = [
@@ -144,11 +144,11 @@ def test_config_files():
         'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d'
     ]
-    assert bleemeo_agent.config.config_files(paths) == wants
+    assert bleemeo_agent.config._config_files(paths) == wants
 
 
 def test_load_config():
-    config, errors, warnings = bleemeo_agent.config.load_config([
+    config, errors, warnings = bleemeo_agent.config._load_config([
         'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d',
     ])
@@ -212,7 +212,7 @@ def test_convert_conf_name():
     test_compatibility = [
         (
             'bleemeo.account_id',
-            ['BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID', 'BLEEMEO_AGENT_ACCOUNT_ID']
+            ['BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID', 'BLEEMEO_AGENT_ACCOUNT']
         ),
         (
             'bleemeo.registration_key',
@@ -241,15 +241,23 @@ def test_convert_conf_name():
 
     for (conf, envs) in test:
         for env in envs:
-            assert(env in bleemeo_agent.config.convert_conf_name(conf))
+            env_names, warnings = bleemeo_agent.config._convert_conf_name(
+                conf, []
+            )
+            assert len(warnings) == 0
+            assert(env in env_names)
     for (conf, envs) in test_compatibility:
         for env in envs:
-            assert(env in bleemeo_agent.config.convert_conf_name(conf))
+            env_names, warnings = bleemeo_agent.config._convert_conf_name(
+                conf, []
+            )
+            assert len(warnings) == 0
+            assert(env in env_names)
 
 
 def test_config():
-    config1 = bleemeo_agent.config.load_default_config()
-    config2 = bleemeo_agent.config.load_default_config()
+    config1 = bleemeo_agent.config._load_default_config()
+    config2 = bleemeo_agent.config._load_default_config()
     config1['logging.output'] = 'console2'
     assert(config1['logging.output'] == 'console2')
     assert(config2['logging.output'] == 'console')

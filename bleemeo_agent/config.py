@@ -216,7 +216,7 @@ class Config:
         return self
 
 
-def convert_type(value_text, value_type):
+def _convert_type(value_text, value_type):
     """ Convert string value to given value_type
 
         Usefull for parameter from environment that must be case to Python type
@@ -243,18 +243,28 @@ def convert_type(value_text, value_type):
         raise NotImplementedError('Unknown type %s' % value_type)
 
 
-def convert_conf_name(conf_name):
+def _convert_conf_name(conf_name, warnings):
     """ Convert the conf_name in env_name for load_conf()."""
-    env_name = []
+    deprecated_env_names = [
+        ('bleemeo.account_id', 'BLEEMEO_AGENT_ACCOUNT'),
+        ('bleemeo.registration_key', 'BLEEMEO_AGENT_REGISTRATION_KEY'),
+        ('bleemeo.api_base', 'BLEEMEO_AGENT_API_BASE'),
+        ('bleemeo.mqtt.host', 'BLEEMEO_AGENT_MQTT_HOST'),
+        ('bleemeo.mqtt.port', 'BLEEMEO_AGENT_MQTT_PORT'),
+        ('bleemeo.mqtt.ssl', 'BLEEMEO_AGENT_MQTT_SSL'),
+    ]
+    env_names = []
     base = "BLEEMEO_AGENT_"
-    if conf_name.startswith('bleemeo.'):
-        env_name.append(
-            base +
-            conf_name[len('bleemeo.'):].replace('.', '_').upper()
-        )
-
-    env_name.append("BLEEMEO_AGENT_" + conf_name.replace('.', '_').upper())
-    return env_name
+    env_names.append(base + conf_name.replace('.', '_').upper())
+    for config_name, deprecated_env_name in deprecated_env_names:
+        if config_name == conf_name:
+            env_names.append(deprecated_env_name)
+            if deprecated_env_name in os.environ:
+                warnings.append(
+                    'Use of a deprecated environement '
+                    'variable : %s' % deprecated_env_name
+                )
+    return env_names, warnings
 
 
 def merge_dict(destination, source):
@@ -276,7 +286,7 @@ def merge_dict(destination, source):
     return destination
 
 
-def load_default_config():
+def _load_default_config():
     """ Initialization of the default configuration """
     default_config = Config()
     for(conf_name, conf_type, conf_value) in CONFIG_VARS:
@@ -289,7 +299,7 @@ def load_default_config():
     return default_config
 
 
-def check_deprecated_config(config, warnings):
+def _check_deprecated_config(config, warnings):
     """ Checks that an obsolete configuration is not used
     """
     deprecated_config = [
@@ -300,7 +310,7 @@ def check_deprecated_config(config, warnings):
             value = config[deprecated_key]
             if value is not None:
                 warnings.append(
-                    'Configuration "%s" is deprecated and'
+                    'Configuration "%s" is deprecated and '
                     'replaced by "%s"' % (deprecated_key, new_key,)
                 )
                 try:
@@ -313,7 +323,7 @@ def check_deprecated_config(config, warnings):
     return config, warnings
 
 
-def load_config(paths=None):
+def _load_config(paths=None):
     # pylint: disable=too-many-locals
     """ Load configuration from given paths (a list) and return a ConfigParser
 
@@ -329,7 +339,7 @@ def load_config(paths=None):
     warnings = []
 
     configs = [default_config]
-    for filepath in config_files(paths):
+    for filepath in _config_files(paths):
         try:
             with open(filepath) as config_file:
                 config = yaml.safe_load(config_file)
@@ -352,7 +362,7 @@ def load_config(paths=None):
 
     # overload of the final configuration by the environnement variables
     for (conf_name, conf_type, _conf_value) in CONFIG_VARS:
-        env_names = convert_conf_name(conf_name)
+        env_names, warnings = _convert_conf_name(conf_name, warnings)
         for env_name in env_names:
             if env_name in os.environ:
                 if conf_type in ['dict', 'list']:
@@ -362,7 +372,7 @@ def load_config(paths=None):
                     )
                     continue
                 try:
-                    value = convert_type(os.environ[env_name], conf_type)
+                    value = _convert_type(os.environ[env_name], conf_type)
                 except ValueError as exc:
                     errors.append(
                         'Bad environ variable %s: %s' % (env_name, exc)
@@ -370,19 +380,19 @@ def load_config(paths=None):
                     continue
                 final_config[conf_name] = value
 
-    final_config, warnings = check_deprecated_config(final_config, warnings)
+    final_config, warnings = _check_deprecated_config(final_config, warnings)
 
     return final_config, errors, warnings
 
 
 def load_config_with_default(paths=None):
     """ Merge the default config with the config from load_config"""
-    (final_config, errors, warnings) = load_config(paths)
-    default_config = load_default_config()
+    (final_config, errors, warnings) = _load_config(paths)
+    default_config = _load_default_config()
     return default_config.merge(final_config), errors, warnings
 
 
-def config_files(paths):
+def _config_files(paths):
     """ Return config files present in given paths.
 
         For each path, if:
