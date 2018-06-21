@@ -255,15 +255,18 @@ def _convert_conf_name(conf_name, warnings):
     ]
     env_names = []
     base = "BLEEMEO_AGENT_"
-    env_names.append(base + conf_name.replace('.', '_').upper())
     for config_name, deprecated_env_name in deprecated_env_names:
         if config_name == conf_name:
             env_names.append(deprecated_env_name)
             if deprecated_env_name in os.environ:
                 warnings.append(
-                    'Use of a deprecated environement '
-                    'variable : %s' % deprecated_env_name
+                    'Environement variable "%s" is deprecated, '
+                    'the correct is: "%s"' % (
+                        deprecated_env_name, base +
+                        conf_name.replace('.', '_').upper()
+                    )
                 )
+    env_names.append(base + conf_name.replace('.', '_').upper())
     return env_names, warnings
 
 
