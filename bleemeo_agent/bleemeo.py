@@ -355,6 +355,7 @@ class BleemeoCache:
         self.facts = {}
         self.current_config = None
         self.next_config_at = None
+        self.registration_at = None
 
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
@@ -376,6 +377,7 @@ class BleemeoCache:
         new.facts = self.facts.copy()
         new.current_config = self.current_config
         new.next_config_at = self.next_config_at
+        new.registration_at = self.registration_at
         new.update_lookup_map()
         return new
 
@@ -390,6 +392,13 @@ class BleemeoCache:
         self.services = {}
         self.tags = list(cache['tags'])
         self.containers = {}
+
+        registration_at = cache.get('registration_at')
+        if registration_at:
+            self.registration_at = datetime.datetime.strptime(
+                registration_at,
+                '%Y-%m-%d %H:%M:%S.%f',
+            ).replace(tzinfo=datetime.timezone.utc)
 
         for metric_uuid, values in cache['metrics'].items():
             values[6] = MetricThreshold(*values[6])
@@ -473,6 +482,9 @@ class BleemeoCache:
             'next_config_at':
                 self.next_config_at.timestamp()
                 if self.next_config_at else None,
+            'registration_at':
+                self.registration_at.strftime('%Y-%m-%d %H:%M:%S.%f')
+                if self.registration_at else None,
         }
         self._state.set('_bleemeo_cache', cache)
 
@@ -1236,14 +1248,19 @@ class BleemeoConnector(threading.Thread):
             self._bleemeo_cache = bleemeo_cache.copy()
             self.core.is_terminating.wait(delay)
 
+    @property
+    def registration_at(self):
+        return self._bleemeo_cache.registration_at
+
     def _sync_agent(self, bleemeo_cache, bleemeo_api):
+        # pylint: disable=too-many-branches
         logging.debug('Synchronize agent')
         tags = set(self.core.config.get('tags', []))
 
         response = bleemeo_api.api_call(
             'v1/agent/%s/' % self.agent_uuid,
             'patch',
-            params={'fields': 'tags,current_config,next_config_at'},
+            params={'fields': 'tags,current_config,next_config_at,created_at'},
             data=json.dumps({'tags': [
                 {'name': x} for x in tags if x and len(x) <= 100
             ]}),
@@ -1252,6 +1269,12 @@ class BleemeoConnector(threading.Thread):
             raise ApiError(response)
 
         data = response.json()
+
+        if data['created_at']:
+            bleemeo_cache.registration_at = datetime.datetime.strptime(
+                data['created_at'],
+                '%Y-%m-%dT%H:%M:%S.%fZ',
+            ).replace(tzinfo=datetime.timezone.utc)
 
         bleemeo_cache.tags = []
         for tag in data['tags']:

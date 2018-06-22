@@ -11,7 +11,9 @@
         {% endif %}
         Uptime: {{ uptime }}<br/>
         Load: {{ loads }}<br/>
-        <!-- Registration: 1st January 1970 {# TODO #}<br/> -->
+	{% if core.registration_at %}
+	Registration: {{ core.registration_at.strftime('%c') }}<br/>
+	{% endif %}
         {% if core.last_report %}
         Last Report: {{ core.last_report.strftime('%c') }}<br/>
         <br/>
