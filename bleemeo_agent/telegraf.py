@@ -325,7 +325,7 @@ class Telegraf:
     def get_prometheus_exporter_name(self, metric_name, part):
         """ Return the config of the Prometheus exporter
         """
-        prometheus_configs = self.core.config.get('metric.prometheus', {})
+        prometheus_configs = self.core.config['metric.prometheus']
         for name, config in prometheus_configs.items():
             url_mangled = telegraf_replace(config['url'])
             if (metric_name.startswith('%s_' % name)
@@ -1342,7 +1342,7 @@ class Telegraf:
                 )
                 return
             exporter_config = (
-                self.core.config.get('metric.prometheus')[prometheus_name]
+                self.core.config['metric.prometheus'][prometheus_name]
             )
 
             # tags will contains:
@@ -1396,16 +1396,16 @@ class Telegraf:
             if name in {'phpfpm_accepted_conn', 'phpfpm_slow_requests'}:
                 derive = True
         elif (part[2] == 'counter'
-              and self.core.config.get('telegraf.statsd.enabled', True)):
+              and self.core.config['telegraf.statsd.enabled']):
             # statsd counter
             derive = True
             name = 'statsd_' + part[3]
         elif (part[2] == 'gauge'
-              and self.core.config.get('telegraf.statsd.enabled', True)):
+              and self.core.config['telegraf.statsd.enabled']):
             # statsd gauge
             name = 'statsd_' + part[3]
         elif (part[2] == 'timing'
-              and self.core.config.get('telegraf.statsd.enabled', True)):
+              and self.core.config['telegraf.statsd.enabled']):
             # statsd timing
             name = 'statsd_' + part[3] + '_' + part[4]
             if part[4] == 'count':
@@ -1655,20 +1655,14 @@ def _get_telegraf_config(core):
     # pylint: disable=too-many-branches
     telegraf_config = BASE_TELEGRAF_CONFIG
 
-    if core.config.get('telegraf.statsd.enabled', True):
+    if core.config['telegraf.statsd.enabled']:
         telegraf_config += STATSD_TELEGRAF_CONFIG % {
-            'address': core.config.get(
-                'telegraf.statsd.address', '127.0.0.1',
-            ),
-            'port': core.config.get(
-                'telegraf.statsd.port', '8125',
-            ),
+            'address': core.config['telegraf.statsd.address'],
+            'port': core.config['telegraf.statsd.port'],
         }
 
     if core.docker_client is not None:
-        docker_metrics_enabled = core.config.get(
-            'telegraf.docker_metrics_enabled', None
-        )
+        docker_metrics_enabled = core.config['telegraf.docker_metrics_enabled']
         if (docker_metrics_enabled
                 or (
                     docker_metrics_enabled is None
@@ -1776,7 +1770,7 @@ def _get_telegraf_config(core):
         if service_name == 'zookeeper':
             telegraf_config += ZOOKEEPER_CONFIG % service_info
 
-    prometheus_config = core.config.get('metric.prometheus', {})
+    prometheus_config = core.config['metric.prometheus']
     for name in sorted(prometheus_config):
         exporter_config = prometheus_config[name]
         telegraf_config += PROMETHEUS_TELEGRAF_CONFIG % {
@@ -1788,10 +1782,8 @@ def _get_telegraf_config(core):
 
 
 def _restart_telegraf(core):
-    restart_cmd = core.config.get(
-        'telegraf.restart_command',
-        'sudo -n service telegraf restart')
-    telegraf_container = core.config.get('telegraf.docker_name')
+    restart_cmd = core.config['telegraf.restart_command']
+    telegraf_container = core.config['telegraf.docker_name']
     if telegraf_container is not None:
         if telegraf_container:
             bleemeo_agent.util.docker_restart(
@@ -1837,10 +1829,7 @@ def telegraf_version_gte(core, version):
 def _write_config(core):
     telegraf_config = _get_telegraf_config(core)
 
-    telegraf_config_path = core.config.get(
-        'telegraf.config_file',
-        '/etc/telegraf/telegraf.d/bleemeo-generated.conf'
-    )
+    telegraf_config_path = core.config['telegraf.config_file']
 
     if os.path.exists(telegraf_config_path):
         with open(telegraf_config_path) as config_file:

@@ -99,19 +99,17 @@ class GraphiteServer(threading.Thread):
     def metrics_source(self):
         """ Return the current metrics source (collectd or telegraf)
         """
-        return self.core.config.get('graphite.metrics_source', 'telegraf')
+        return self.core.config['graphite.metrics_source']
 
     @property
     def jmx_enabled(self):
         """ Returns True if JMX collector is enabled
         """
-        return self.core.config.get('jmx.enabled', True)
+        return self.core.config['jmx.enabled']
 
     def run(self):
-        bind_address = self.core.config.get(
-            'graphite.listener.address', '127.0.0.1')
-        bind_port = self.core.config.get(
-            'graphite.listener.port', 2003)
+        bind_address = self.core.config['graphite.listener.address']
+        bind_port = self.core.config['graphite.listener.port']
         sock_server = socket.socket()
         sock_server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
@@ -198,7 +196,7 @@ class GraphiteServer(threading.Thread):
     def network_interface_blacklist(self, if_name):
         """ Returns True if the given interface is blacklisted
         """
-        for pattern in self.core.config.get('network_interface_blacklist', []):
+        for pattern in self.core.config['network_interface_blacklist']:
             if if_name.startswith(pattern):
                 return True
         return False
@@ -207,7 +205,7 @@ class GraphiteServer(threading.Thread):
         """ Tell if disk should be monitored. It avoid monitoring sda1 or
             dm-1
         """
-        for pattern in self.core.config.get('disk_monitor', []):
+        for pattern in self.core.config['disk_monitor']:
             if re.match(pattern, disk):
                 return False
 
@@ -219,8 +217,8 @@ class GraphiteServer(threading.Thread):
             In case of collectd running in a container, it's used to show
             partition as seen by the host, instead of as seen by a container.
         """
-        mount_point = self.core.config.get('df.host_mount_point')
-        ignored_patterns = self.core.config.get('df.path_ignore', [])
+        mount_point = self.core.config['df.host_mount_point']
+        ignored_patterns = self.core.config['df.path_ignore']
 
         return _disk_path_rename(path, mount_point, ignored_patterns)
 

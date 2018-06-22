@@ -635,10 +635,7 @@ class Collectd:
 def _write_config(core):
     collectd_config = _get_collectd_config(core)
 
-    collectd_config_path = core.config.get(
-        'collectd.config_file',
-        '/etc/collectd/collectd.conf.d/bleemeo-generated.conf'
-    )
+    collectd_config_path = core.config['collectd.config_file']
 
     if os.path.exists(collectd_config_path):
         with open(collectd_config_path) as config_file:
@@ -722,7 +719,7 @@ def _get_collectd_config(core):
         # collectd could only monitor varnish on same host as collectd
         if (service_name == 'varnish'
                 and not instance
-                and core.config.get('collectd.docker_name') is None):
+                and core.config['collectd.docker_name'] is None):
             collectd_config += VARNISH_COLLECTD_CONFIG % service_info
 
         services_type_seen.add(service_name)
@@ -731,10 +728,8 @@ def _get_collectd_config(core):
 
 
 def _restart_collectd(core):
-    restart_cmd = core.config.get(
-        'collectd.restart_command',
-        'sudo -n service collectd restart')
-    collectd_container = core.config.get('collectd.docker_name')
+    restart_cmd = core.config['collectd.restart_command']
+    collectd_container = core.config['collectd.docker_name']
     if collectd_container is not None:
         if collectd_container:
             bleemeo_agent.util.docker_restart(

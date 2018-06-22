@@ -58,28 +58,123 @@ WINDOWS_PATHS = [
 ]
 
 
-class Config(dict):
+CONFIG_VARS = [
+    ('agent.facts_file', 'string', 'facts.yaml'),
+    ('agent.installation_format', 'string', 'manual'),
+    ('agent.netstat_file', 'string', 'netstat.out'),
+    ('agent.public_ip_indicator', 'string', 'https://myip.bleemeo.com'),
+    ('agent.state_file', 'string', 'state.json'),
+    ('agent.upgrade_file', 'string', 'upgrade'),
+    ('agent.cloudimage_creation_file', 'string', 'cloudimage_creation'),
+    ('tags', 'list', []),
+    ('stack', 'string', ''),
+    ('logging.level', 'string', 'INFO'),
+    ('logging.output', 'string', 'console'),
+    ('logging.output_file', 'string', None),
+    ('container.type', 'string', None),
+    ('container.pid_namespace_host', 'bool', False),
+    ('bleemeo.enabled', 'bool', True),
+    ('bleemeo.account_id', 'string', None),
+    ('bleemeo.registration_key', 'string', None),
+    ('bleemeo.api_base', 'string', 'https://api.bleemeo.com/'),
+    ('bleemeo.mqtt.host', 'string', 'mqtt.bleemeo.com'),
+    ('bleemeo.mqtt.port', 'int', 8883),
+    ('bleemeo.mqtt.ssl', 'bool', True),
+    ('bleemeo.initial_config_name', 'string', None),
+    (
+        'bleemeo.mqtt.cafile',
+        'string',
+        '/etc/ssl/certs/ca-certificates.crt'
+    ),
+    ('bleemeo.mqtt.ssl_insecure', 'bool', False),
+    ('bleemeo.sentry.dsn', 'string', None),
+    ('graphite.metrics_source', 'string', 'telegraf'),
+    ('graphite.listener.address', 'string', '127.0.0.1'),
+    ('graphite.listener.port', 'int', 2003),
+    ('telegraf.statsd.enabled', 'bool', True),
+    ('telegraf.statsd.address', 'string', '127.0.0.1'),
+    ('telegraf.statsd.port', 'int', '8125'),
+    (
+        'telegraf.config_file',
+        'string',
+        '/etc/telegraf/telegraf.d/bleemeo-generated.conf'
+    ),
+    ('telegraf.docker_name', 'string', None),
+    ('telegraf.docker_metrics_enabled', 'bool', None),
+    (
+        'telegraf.restart_command',
+        'string',
+        'sudo -n service telegraf restart'
+    ),
+    (
+        'collectd.config_file',
+        'string',
+        '/etc/collectd/collectd.conf.d/bleemeo-generated.conf'
+    ),
+    ('collectd.docker_name', 'string', None),
+    (
+        'collectd.restart_command',
+        'string',
+        'sudo -n service collectd restart'
+    ),
+    ('metric.pull', 'dict', {}),
+    ('metric.prometheus', 'dict', {}),
+    ('metric.softstatus_period_default', 'int', 5 * 60),
+    ('metric.softstatus_period', 'dict', {}),
+    ('service', 'list', []),
+    ('service_ignore_metrics', 'list', []),
+    ('service_ignore_check', 'list', []),
+    ('web.enabled', 'bool', True),
+    ('web.listener.address', 'string', '127.0.0.1'),
+    ('web.listener.port', 'int', 8015),
+    ('influxdb.enabled', 'bool', False),
+    ('influxdb.host', 'string', 'localhost'),
+    ('influxdb.port', 'int', 8086),
+    ('influxdb.db_name', 'string', 'metrics'),
+    ('network_interface_blacklist', 'list', []),
+    ('disk_monitor', 'list', []),
+    ('df.path_ignore', 'list', []),
+    ('df.host_mount_point', 'string', None),
+    ('thresholds', 'dict', {}),
+    ('kubernetes.nodename', 'string', None),
+    ('kubernetes.enabled', 'bool', False),
+    ('distribution', 'string', None),
+    ('jmx.enabled', 'bool', True),
+    (
+        'jmxtrans.config_file',
+        'string',
+        '/var/lib/jmxtrans/bleemeo-generated.json'
+    ),
+]
+
+
+class Config:
     """
     Work exacly like a normal dict, but "get" method known about sub-dict
 
     Also add "set" method that known about sub-dict.
     """
+    def __init__(self, initial_dict=None):
+        """ init function of Config class """
+        if initial_dict is None:
+            self._internal_dict = {}
+        else:
+            self._internal_dict = initial_dict
 
-    def get(self, name, default=None, separator='.'):
-        """ If name contains separator ("." by default), it will search
-            in sub-dict.
+    def __getitem__(self, key):
+        """ If the name contains separator ('.'), it will search in sub-dict.
 
-            Example, if you config is {'category': {'value': 5}}, then
-            get('category.value') will return 5.
+            Example, if tou config is {'category': {'value': 5}}, then
+            config['category.value'] wil return 5
         """
-        current = self
-        for path in name.split(separator):
+        current = self._internal_dict
+        for path in key.split('.'):
             if path not in current:
-                return default
+                raise KeyError("{} is not a valid key in config".format(key))
             current = current[path]
         return current
 
-    def set(self, name, value, separator='.'):
+    def __setitem__(self, key, value):
         """ If name contains separator ("." by default), it will search
             in sub-dict.
 
@@ -88,29 +183,91 @@ class Config(dict):
             It does create intermediary dict as needed (in your example,
             self['category'] = {} if not already an dict).
         """
-        current = self
-        splitted_name = name.split(separator)
-        (paths, last_name) = (splitted_name[:-1], splitted_name[-1])
+        current = self._internal_dict
+        splitted_key = key.split('.')
+        (paths, last_key) = (splitted_key[:-1], splitted_key[-1])
         for path in paths:
             if not isinstance(current.get(path), dict):
                 current[path] = {}
             current = current[path]
-        current[last_name] = value
+        current[last_key] = value
 
-    def delete(self, name, separator='.'):
+    def __delitem__(self, key):
         """ If name name contains separator ("." by default), it will search
             in sub-dict.
 
-            Example, delete("category.value") will result in
+            Example, del config["category.value"] will result in
             del self['category']['value'].
             It does NOT delete empty parent.
         """
-        current = self
-        splitted_name = name.split(separator)
-        (paths, last_name) = (splitted_name[:-1], splitted_name[-1])
+        current = self._internal_dict
+        splitted_key = key.split('.')
+        (paths, last_key) = (splitted_key[:-1], splitted_key[-1])
         for path in paths:
             current = current[path]
-        del current[last_name]
+        del current[last_key]
+
+    def merge(self, source):
+        if isinstance(source, Config):
+            self._internal_dict = merge_dict(
+                self._internal_dict,
+                source._internal_dict  # pylint: disable=W0212
+            )
+        return self
+
+
+def _convert_type(value_text, value_type):
+    """ Convert string value to given value_type
+
+        Usefull for parameter from environment that must be case to Python type
+
+        Supported value_type:
+
+        * string: no convertion
+        * int: int() from Python
+        * bool: case-insensitive; "true", "yes", "1" => True
+    """
+    if value_type == 'string':
+        return value_text
+
+    if value_type == 'int':
+        return int(value_text)
+    elif value_type == 'bool':
+        if value_text.lower() in ('true', 'yes', '1'):
+            return True
+        elif value_text.lower() in ('false', 'no', '0'):
+            return False
+        else:
+            raise ValueError('invalid value %r for boolean' % value_text)
+    else:
+        raise NotImplementedError('Unknown type %s' % value_type)
+
+
+def _convert_conf_name(conf_name, warnings):
+    """ Convert the conf_name in env_name for load_conf()."""
+    deprecated_env_names = [
+        ('bleemeo.account_id', 'BLEEMEO_AGENT_ACCOUNT'),
+        ('bleemeo.registration_key', 'BLEEMEO_AGENT_REGISTRATION_KEY'),
+        ('bleemeo.api_base', 'BLEEMEO_AGENT_API_BASE'),
+        ('bleemeo.mqtt.host', 'BLEEMEO_AGENT_MQTT_HOST'),
+        ('bleemeo.mqtt.port', 'BLEEMEO_AGENT_MQTT_PORT'),
+        ('bleemeo.mqtt.ssl', 'BLEEMEO_AGENT_MQTT_SSL'),
+    ]
+    env_names = []
+    base = "BLEEMEO_AGENT_"
+    for config_name, deprecated_env_name in deprecated_env_names:
+        if config_name == conf_name:
+            env_names.append(deprecated_env_name)
+            if deprecated_env_name in os.environ:
+                warnings.append(
+                    'Environement variable "%s" is deprecated, '
+                    'the correct is: "%s"' % (
+                        deprecated_env_name, base +
+                        conf_name.replace('.', '_').upper()
+                    )
+                )
+    env_names.append(base + conf_name.replace('.', '_').upper())
+    return env_names, warnings
 
 
 def merge_dict(destination, source):
@@ -132,7 +289,45 @@ def merge_dict(destination, source):
     return destination
 
 
-def load_config(paths=None):
+def _load_default_config():
+    """ Initialization of the default configuration """
+    default_config = Config()
+    for(conf_name, conf_type, conf_value) in CONFIG_VARS:
+        if conf_type == 'list':
+            default_config[conf_name] = list(conf_value)
+        elif conf_type == 'dict':
+            default_config[conf_name] = dict(conf_value)
+        else:
+            default_config[conf_name] = conf_value
+    return default_config
+
+
+def _check_deprecated_config(config, warnings):
+    """ Checks that an obsolete configuration is not used
+    """
+    deprecated_config = [
+        ('telegraf.statsd_enabled', 'telegraf.statsd.enabled'),
+    ]
+    for (deprecated_key, new_key) in deprecated_config:
+        try:
+            value = config[deprecated_key]
+            if value is not None:
+                warnings.append(
+                    'Configuration "%s" is deprecated and '
+                    'replaced by "%s"' % (deprecated_key, new_key,)
+                )
+                try:
+                    config[new_key]
+                except KeyError:
+                    config[new_key] = value
+            del config[deprecated_key]
+        except KeyError:
+            pass
+    return config, warnings
+
+
+def _load_config(paths=None):
+    # pylint: disable=too-many-locals
     """ Load configuration from given paths (a list) and return a ConfigParser
 
         If paths is not provided, use default value (PATH, see doc from module)
@@ -142,11 +337,12 @@ def load_config(paths=None):
     elif paths is None:
         paths = PATHS
 
-    default_config = Config()
+    default_config = {}
     errors = []
+    warnings = []
 
     configs = [default_config]
-    for filepath in config_files(paths):
+    for filepath in _config_files(paths):
         try:
             with open(filepath) as config_file:
                 config = yaml.safe_load(config_file)
@@ -164,10 +360,42 @@ def load_config(paths=None):
         except Exception as exc:  # pylint: disable=broad-except
             errors.append(str(exc).replace('\n', ' '))
 
-    return functools.reduce(merge_dict, configs), errors
+    # final configuration
+    final_config = Config(functools.reduce(merge_dict, configs))
+
+    # overload of the final configuration by the environnement variables
+    for (conf_name, conf_type, _conf_value) in CONFIG_VARS:
+        env_names, warnings = _convert_conf_name(conf_name, warnings)
+        for env_name in env_names:
+            if env_name in os.environ:
+                if conf_type in ['dict', 'list']:
+                    errors.append(
+                        'Update %s from environment variable is not supported'
+                        % (env_name)
+                    )
+                    continue
+                try:
+                    value = _convert_type(os.environ[env_name], conf_type)
+                except ValueError as exc:
+                    errors.append(
+                        'Bad environ variable %s: %s' % (env_name, exc)
+                    )
+                    continue
+                final_config[conf_name] = value
+
+    final_config, warnings = _check_deprecated_config(final_config, warnings)
+
+    return final_config, errors, warnings
 
 
-def config_files(paths):
+def load_config_with_default(paths=None):
+    """ Merge the default config with the config from load_config"""
+    (final_config, errors, warnings) = _load_config(paths)
+    default_config = _load_default_config()
+    return default_config.merge(final_config), errors, warnings
+
+
+def _config_files(paths):
     """ Return config files present in given paths.
 
         For each path, if:

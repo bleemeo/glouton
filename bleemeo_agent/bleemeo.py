@@ -670,8 +670,8 @@ class BleemeoConnector(threading.Thread):
 
     def check_config_requirement(self):
         sleep_delay = 10
-        while (self.core.config.get('bleemeo.account_id') is None
-               or self.core.config.get('bleemeo.registration_key') is None):
+        while (self.core.config['bleemeo.account_id'] is None
+               or self.core.config['bleemeo.registration_key'] is None):
             logging.warning(
                 'bleemeo.account_id and/or '
                 'bleemeo.registration_key is undefine. '
@@ -845,11 +845,8 @@ class BleemeoConnector(threading.Thread):
         else:
             tls_version = ssl.PROTOCOL_TLSv1
 
-        if self.core.config.get('bleemeo.mqtt.ssl', True):
-            cafile = self.core.config.get(
-                'bleemeo.mqtt.cafile',
-                '/etc/ssl/certs/ca-certificates.crt'
-            )
+        if self.core.config['bleemeo.mqtt.ssl']:
+            cafile = self.core.config['bleemeo.mqtt.cafile']
             if cafile is not None and '$INSTDIR' in cafile and os.name == 'nt':
                 # Under Windows, $INSTDIR is remplaced by installation
                 # directory
@@ -862,7 +859,7 @@ class BleemeoConnector(threading.Thread):
                 tls_version=tls_version,
             )
             self.mqtt_client.tls_insecure_set(
-                self.core.config.get('bleemeo.mqtt.ssl_insecure', False)
+                self.core.config['bleemeo.mqtt.ssl_insecure']
             )
 
         self.mqtt_client.on_connect = self.on_connect
@@ -878,14 +875,8 @@ class BleemeoConnector(threading.Thread):
 
     def _mqtt_start(self):
 
-        mqtt_host = self.core.config.get(
-            'bleemeo.mqtt.host',
-            'mqtt.bleemeo.com'
-        )
-        mqtt_port = self.core.config.get(
-            'bleemeo.mqtt.port',
-            8883,
-        )
+        mqtt_host = self.core.config['bleemeo.mqtt.host']
+        mqtt_port = self.core.config['bleemeo.mqtt.port']
 
         try:
             logging.debug('Connecting to MQTT broker at %s', mqtt_host)
@@ -1003,7 +994,7 @@ class BleemeoConnector(threading.Thread):
             logging.debug('Register delayed, fact fqdn not available')
             return
 
-        registration_key = self.core.config.get('bleemeo.registration_key')
+        registration_key = self.core.config['bleemeo.registration_key']
         payload = {
             'account': self.account_id,
             'initial_password': self.core.state.get('password'),
@@ -1011,9 +1002,7 @@ class BleemeoConnector(threading.Thread):
             'fqdn': name,
         }
 
-        initial_config_name = self.core.config.get(
-            'bleemeo.initial_config_name'
-        )
+        initial_config_name = self.core.config['bleemeo.initial_config_name']
         if initial_config_name:
             payload['initial_config_name'] = initial_config_name
 
@@ -1255,7 +1244,7 @@ class BleemeoConnector(threading.Thread):
     def _sync_agent(self, bleemeo_cache, bleemeo_api):
         # pylint: disable=too-many-branches
         logging.debug('Synchronize agent')
-        tags = set(self.core.config.get('tags', []))
+        tags = set(self.core.config['tags'])
 
         response = bleemeo_api.api_call(
             'v1/agent/%s/' % self.agent_uuid,
@@ -2172,7 +2161,7 @@ class BleemeoConnector(threading.Thread):
 
     @property
     def account_id(self):
-        return self.core.config.get('bleemeo.account_id')
+        return self.core.config['bleemeo.account_id']
 
     @property
     def agent_uuid(self):
@@ -2188,11 +2177,9 @@ class BleemeoConnector(threading.Thread):
 
     @property
     def bleemeo_base_url(self):
-        return self.core.config.get(
-            'bleemeo.api_base', 'https://api.bleemeo.com/',
-        )
+        return self.core.config['bleemeo.api_base']
 
     @property
     def upgrade_in_progress(self):
-        upgrade_file = self.core.config.get('agent.upgrade_file', 'upgrade')
+        upgrade_file = self.core.config['agent.upgrade_file']
         return os.path.exists(upgrade_file)

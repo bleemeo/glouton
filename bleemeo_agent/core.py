@@ -104,21 +104,6 @@ DOCKER_DISCOVERY_EVENTS = [
     'destroy',
 ]
 
-ENVIRON_CONFIG_VARS = [
-    ('BLEEMEO_AGENT_ACCOUNT', 'bleemeo.account_id', 'string'),
-    ('BLEEMEO_AGENT_REGISTRATION_KEY', 'bleemeo.registration_key', 'string'),
-    ('BLEEMEO_AGENT_API_BASE', 'bleemeo.api_base', 'string'),
-    ('BLEEMEO_AGENT_MQTT_HOST', 'bleemeo.mqtt.host', 'string'),
-    ('BLEEMEO_AGENT_MQTT_PORT', 'bleemeo.mqtt.port', 'int'),
-    ('BLEEMEO_AGENT_MQTT_SSL', 'bleemeo.mqtt.ssl', 'bool'),
-    ('BLEEMEO_AGENT_KUBERNETES_NODENAME', 'kubernetes.nodename', 'string'),
-    ('BLEEMEO_AGENT_KUBERNETES_ENABLED', 'kubernetes.enabled', 'bool'),
-    ('BLEEMEO_AGENT_LOGGING_LEVEL', 'logging.level', 'string'),
-    ('BLEEMEO_AGENT_LOGGING_OUTPUT', 'logging.output', 'string'),
-    ('BLEEMEO_AGENT_TELEGRAF_CONFIG_FILE', 'telegraf.config_file', 'string'),
-    ('BLEEMEO_AGENT_TELEGRAF_DOCKER_NAME', 'telegraf.docker_name', 'string'),
-]
-
 
 # Bleemeo agent changed the name of some service
 SERVICE_RENAME = {
@@ -675,33 +660,6 @@ def _guess_jmx_config(service_info, process):
         service_info['jmx_port'] = jmx_port
 
 
-def convert_type(value_text, value_type):
-    """ Convert string value to given value_type
-
-        Usefull for parameter from environment that must be case to Python type
-
-        Supported value_type:
-
-        * string: no convertion
-        * int: int() from Python
-        * bool: case-insensitive; "true", "yes", "1" => True
-    """
-    if value_type == 'string':
-        return value_text
-
-    if value_type == 'int':
-        return int(value_text)
-    elif value_type == 'bool':
-        if value_text.lower() in ('true', 'yes', '1'):
-            return True
-        elif value_text.lower() in ('false', 'no', '0'):
-            return False
-        else:
-            raise ValueError('invalid value %r for boolean' % value_text)
-    else:
-        raise NotImplementedError('Unknown type %s' % value_type)
-
-
 def disable_https_warning():
     """
     Agent does HTTPS requests with verify=False (only for checks, not
@@ -1126,7 +1084,7 @@ class Core:
                 'Warning while loading configuration: %s', '\n'.join(warnings)
             )
 
-        state_file = self.config.get('agent.state_file', 'state.json')
+        state_file = self.config['agent.state_file']
         try:
             self.state = State(state_file)
         except (OSError, IOError) as exc:
@@ -1147,7 +1105,7 @@ class Core:
         self._sentry_setup()
         self.thresholds = {
             label: value
-            for (label, value) in self.config.get('thresholds', {}).items()
+            for (label, value) in self.config['thresholds'].items()
         }
         self.discovered_services = self.state.get_complex_dict(
             'discovered_services', {}
@@ -1161,7 +1119,7 @@ class Core:
         # too noisy.
         disable_https_warning()
 
-        netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
+        netstat_file = self.config['agent.netstat_file']
         try:
             mtime = os.stat(netstat_file).st_mtime
         except OSError:
@@ -1174,9 +1132,9 @@ class Core:
 
         self.cache = Cache(self.state)
 
-        cloudimage_creation_file = self.config.get(
-            'agent.cloudimage_creation_file', 'cloudimage_creation',
-        )
+        cloudimage_creation_file = self.config[
+            'agent.cloudimage_creation_file'
+        ]
         if os.path.exists(cloudimage_creation_file):
             (_, current_mac) = (
                 bleemeo_agent.facts.get_primary_addresses()
@@ -1217,7 +1175,7 @@ class Core:
             pass
 
         self.graphite_server = bleemeo_agent.graphite.GraphiteServer(self)
-        if self.config.get('bleemeo.enabled', True):
+        if self.config['bleemeo.enabled']:
             if bleemeo_agent.bleemeo is None:
                 logging.warning(
                     'Missing dependency (paho-mqtt), '
@@ -1227,7 +1185,7 @@ class Core:
                 self.bleemeo_connector = (
                     bleemeo_agent.bleemeo.BleemeoConnector(self)
                 )
-        if self.config.get('influxdb.enabled', False):
+        if self.config['influxdb.enabled']:
             if bleemeo_agent.influxdb is None:
                 logging.warning(
                     'Missing dependency (influxdb), '
@@ -1248,7 +1206,7 @@ class Core:
 
             It's None if running outside any container.
         """
-        return self.config.get('container.type', None)
+        return self.config['container.type']
 
     def set_topinfo_period(self, period):
         self._topinfo_period = period
@@ -1262,8 +1220,8 @@ class Core:
         )
 
     def _config_logger(self):
-        output = self.config.get('logging.output', 'console')
-        log_level = self.config.get('logging.level', 'INFO')
+        output = self.config['logging.output']
+        log_level = self.config['logging.level']
 
         if output == 'syslog':
             logger_config = yaml.safe_load(LOGGER_CONFIG)
@@ -1284,9 +1242,9 @@ class Core:
             del logger_config['handlers']['syslog']
             logger_config['root']['handlers'] = ['file']
             logger_config['root']['level'] = log_level
-            logger_config['handlers']['file']['filename'] = self.config.get(
+            logger_config['handlers']['file']['filename'] = self.config[
                 'logging.output_file'
-            )
+            ]
             try:
                 logging.config.dictConfig(logger_config)
             except ValueError:
@@ -1303,7 +1261,7 @@ class Core:
     def _sentry_setup(self):
         """ Configure Sentry if enabled
         """
-        dsn = self.config.get('bleemeo.sentry.dsn')
+        dsn = self.config['bleemeo.sentry.dsn']
         if not dsn:
             return
 
@@ -1455,7 +1413,7 @@ class Core:
 
         new_thresholds = {
             label: value
-            for (label, value) in self.config.get('thresholds', {}).items()
+            for (label, value) in self.config['thresholds'].items()
         }
         bleemeo_agent.config.merge_dict(
             new_thresholds,
@@ -1474,7 +1432,7 @@ class Core:
     def _schedule_metric_pull(self):
         """ Schedule metric which are pulled
         """
-        for (name, config) in self.config.get('metric.pull', {}).items():
+        for (name, config) in self.config['metric.pull'].items():
             interval = config.get('interval', 10)
             self.add_scheduled_job(
                 bleemeo_agent.util.pull_raw_metric,
@@ -1491,7 +1449,7 @@ class Core:
             'Agent starting... (version=%s)',
             bleemeo_agent.facts.get_agent_version(self),
         )
-        upgrade_file = self.config.get('agent.upgrade_file', 'upgrade')
+        upgrade_file = self.config['agent.upgrade_file']
         try:
             os.unlink(upgrade_file)
         except OSError:
@@ -1576,7 +1534,7 @@ class Core:
             self.docker_client = None
 
     def _k8s_connect(self):
-        if not self.config.get('kubernetes.enabled', False):
+        if not self.config['kubernetes.enabled']:
             return
         if kubernetes is None:
             logging.warning('Missing Kubernetes dependencies.')
@@ -1644,7 +1602,7 @@ class Core:
         if self.k8s_client is None:
             return
 
-        my_node = self.config.get('kubernetes.nodename')
+        my_node = self.config['kubernetes.nodename']
         if my_node:
             pods = self.k8s_client.list_pod_for_all_namespaces(
                 field_selector='spec.nodeName=%s' % my_node
@@ -1731,7 +1689,7 @@ class Core:
         if self.influx_connector:
             self.influx_connector.start()
 
-        if self.config.get('web.enabled', True):
+        if self.config['web.enabled']:
             if bleemeo_agent.web is None:
                 logging.warning(
                     'Missing dependency (flask), '
@@ -1916,7 +1874,7 @@ class Core:
             self._update_facts_job = self.trigger_job(self._update_facts_job)
             self._trigger_facts = False
 
-        netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
+        netstat_file = self.config['agent.netstat_file']
         try:
             mtime = os.stat(netstat_file).st_mtime
         except OSError:
@@ -1963,13 +1921,13 @@ class Core:
         services = copy.deepcopy(new_discovered_services)
         _apply_service_override(
             services,
-            self.config.get('service', []),
+            self.config['service'],
             self,
         )
         self.apply_service_defaults(services)
 
-        ignored_checks = self.config.get('service_ignore_check', [])
-        ignored_metrics = self.config.get('service_ignore_metrics', [])
+        ignored_checks = self.config['service_ignore_check']
+        ignored_metrics = self.config['service_ignore_metrics']
 
         for (key, service) in services.items():
             (service_name, instance) = key
@@ -2009,7 +1967,7 @@ class Core:
         """
         for service_info in services.values():
             if service_info.get('stack', None) is None:
-                service_info['stack'] = self.config.get('stack', '')
+                service_info['stack'] = self.config['stack']
 
     def _search_old_service(self, running_service):
         """ Search and rename any service that use an old name
@@ -2100,7 +2058,7 @@ class Core:
 
         netstat_info = {}
 
-        netstat_file = self.config.get('agent.netstat_file', 'netstat.out')
+        netstat_file = self.config['agent.netstat_file']
         netstat_re = re.compile(
             r'^(?P<protocol>udp6?|tcp6?)\s+\d+\s+\d+\s+'
             r'(?P<address>[0-9a-f.:]+):(?P<port>\d+)\s+[0-9a-f.:*]+\s+'
@@ -2494,21 +2452,10 @@ class Core:
     def reload_config(self):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-locals
-        (self.config, errors) = bleemeo_agent.config.load_config()
-        warnings = []
-
-        for (env_name, conf_name, conf_type) in ENVIRON_CONFIG_VARS:
-            if env_name in os.environ:
-                try:
-                    value = convert_type(os.environ[env_name], conf_type)
-                except ValueError as exc:
-                    errors.append(
-                        'Bad environ variable %s: %s' % (env_name, exc)
-                    )
-                    continue
-                self.config.set(conf_name, value)
-
-        metric_prometheus = self.config.get('metric.prometheus', {})
+        (self.config, errors, warnings) = (
+            bleemeo_agent.config.load_config_with_default()
+        )
+        metric_prometheus = self.config['metric.prometheus']
         for name in list(metric_prometheus):
             if 'url' not in metric_prometheus[name]:
                 warnings.append(
@@ -2519,7 +2466,7 @@ class Core:
                 del metric_prometheus[name]
 
         valid_services = []
-        for service in self.config.get('service', []):
+        for service in self.config['service']:
             if 'id' not in service:
                 warnings.append(
                     'Ignoring invalid service entry without id'
@@ -2577,23 +2524,7 @@ class Core:
                         valid_metrics.append(jmx_metric)
                 service['jmx_metrics'] = valid_metrics
 
-        self.config.set('service', valid_services)
-
-        deprecated_config = [
-            ('telegraf.statsd_enabled', 'telegraf.statsd.enabled'),
-        ]
-        for (deprecated_key, new_key) in deprecated_config:
-            value = self.config.get(deprecated_key)
-            if value is not None:
-                warnings.append(
-                    'Configuration "%s" is deprecated and replaced by "%s"' % (
-                        deprecated_key,
-                        new_key,
-                    )
-                )
-                if self.config.get(new_key) is None:
-                    self.config.set(new_key, value)
-                self.config.delete(deprecated_key)
+        self.config['service'] = valid_services
 
         return (errors, warnings)
 
@@ -2782,10 +2713,8 @@ class Core:
         return new_softstatus_state.last_status
 
     def _get_softstatus_period(self, label):
-        softstatus_periods = self.config.get('metric.softstatus_period', {})
-        default_period = self.config.get(
-            'metric.softstatus_period_default', 5 * 60,
-        )
+        softstatus_periods = self.config['metric.softstatus_period']
+        default_period = self.config['metric.softstatus_period_default']
         return int(softstatus_periods.get(label, default_period))
 
     def get_last_metric(self, name, item):

@@ -597,12 +597,8 @@ class JmxConfig:
             "@class":
                 "com.googlecode.jmxtrans.model.output.GraphiteWriterFactory",
             "rootPrefix": "jmxtrans",
-            "port": self.core.config.get(
-                'graphite.listener.port', 2003
-            ),
-            "host": self.core.config.get(
-                'graphite.listener.address', '127.0.0.1'
-            ),
+            "port": self.core.config['graphite.listener.port'],
+            "host": self.core.config['graphite.listener.address'],
             "flushStrategy": "timeBased",
             "flushDelayInSeconds": 10,
         }
@@ -689,10 +685,7 @@ class JmxConfig:
 
         config = self.get_jmxtrans_config()
 
-        config_path = self.core.config.get(
-            'jmxtrans.config_file',
-            '/var/lib/jmxtrans/bleemeo-generated.json',
-        )
+        config_path = self.core.config['jmxtrans.config_file']
 
         if os.path.exists(config_path):
             with open(config_path) as config_file:

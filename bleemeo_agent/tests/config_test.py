@@ -16,6 +16,8 @@
 #   limitations under the License.
 #
 
+import pytest
+
 import bleemeo_agent.config
 
 
@@ -29,25 +31,30 @@ def test_config_object():
         },
     }
 
-    assert conf.get('test.a') == 'a'
-    assert conf.get('test.one') == 1
-    assert conf.get('test.sub-level.two') == 2.0
-    assert conf.get('test.does.not.exists') is None
-    assert conf.get('test.does.not.exists', 'default') == 'default'
+    assert conf['test.a'] == 'a'
+    assert conf['test.one'] == 1
+    assert conf['test.sub-level.two'] == 2.0
+    with pytest.raises(KeyError):
+        conf['test.does.not.exists']
 
-    conf.set('test.b', 'B')
-    assert conf.get('test.b') == 'B'
-    assert conf.get('test.one') == 1
+    conf['test.b'] = 'B'
+    assert conf['test.b'] == 'B'
+    assert conf['test.one'] == 1
 
-    conf.set('test.now.does.exists.value', 42)
-    assert conf.get('test.now.does.exists.value') == 42
+    conf['test.now.does.exists.value'] = 42
+    assert conf['test.now.does.exists.value'] == 42
+
+    del conf['test.now.does.exists.value']
+    with pytest.raises(KeyError):
+        conf['test.now.does.exists.value']
 
 
 def test_merge_dict():
-    assert bleemeo_agent.config.merge_dict({}, {}) == {}
+    assert(bleemeo_agent.config.merge_dict({}, {}) == {})
     assert (
         bleemeo_agent.config.merge_dict({'a': 1}, {'b': 2}) ==
-        {'a': 1, 'b': 2})
+        {'a': 1, 'b': 2}
+    )
 
     d1 = {
         'd1': 1,
@@ -75,14 +82,21 @@ def test_merge_dict():
             'remplaced': 2,
         }
     }
-    assert bleemeo_agent.config.merge_dict(d1, d2) == want
+    assert(
+        bleemeo_agent.config.merge_dict(d1, d2) ==
+        want
+    )
 
 
 def test_merge_list():
-    assert bleemeo_agent.config.merge_dict({'a': []}, {'a': []}) == {'a': []}
+    assert(
+        bleemeo_agent.config.merge_dict({'a': []}, {'a': []}) ==
+        {'a': []}
+    )
     assert (
         bleemeo_agent.config.merge_dict({'a': []}, {'a': [1]}) ==
-        {'a': [1]})
+        {'a': [1]}
+    )
 
     d1 = {
         'a': [1, 2],
@@ -109,12 +123,15 @@ def test_merge_list():
             'c': [3, 4],
         }
     }
-    assert bleemeo_agent.config.merge_dict(d1, d2) == want
+    assert(
+        bleemeo_agent.config.merge_dict(d1, d2) ==
+        want
+    )
 
 
 def test_config_files():
-    assert bleemeo_agent.config.config_files(['/does-not-exsits']) == []
-    assert bleemeo_agent.config.config_files(
+    assert bleemeo_agent.config._config_files(['/does-not-exsits']) == []
+    assert bleemeo_agent.config._config_files(
         ['/etc/passwd']) == ['/etc/passwd']
 
     wants = [
@@ -127,18 +144,18 @@ def test_config_files():
         'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d'
     ]
-    assert bleemeo_agent.config.config_files(paths) == wants
+    assert bleemeo_agent.config._config_files(paths) == wants
 
 
 def test_load_config():
-    config, errors = bleemeo_agent.config.load_config([
+    config, errors, warnings = bleemeo_agent.config._load_config([
         'bleemeo_agent/tests/configs/main.conf',
         'bleemeo_agent/tests/configs/conf.d',
     ])
 
     assert len(errors) == 0
 
-    assert config == {
+    config_expected = {
         'main_conf_loaded': True,
         'first_conf_loaded': True,
         'second_conf_loaded': True,
@@ -157,10 +174,109 @@ def test_load_config():
         'sub_section': {
             'nested': None,
         },
+        'telegraf': {
+            'statsd': {
+                'enabled': None,
+            },
+        },
     }
-    assert config.get('second_conf_loaded') is True
-    assert config.get('merged_dict.main') == 1.0
 
-    # Ensure that when value is defined to None, we return None and not the
-    # default
-    assert config.get('sub_section.nested', 'a value') is None
+    assert len(warnings) == 1
+    assert isinstance(config, bleemeo_agent.config.Config)
+
+    assert config._internal_dict == config_expected
+
+    assert config['second_conf_loaded'] is True
+    assert config['merged_dict.main'] == 1.0
+
+
+def test_convert_conf_name():
+    test = [
+        (
+            'agent.public_ip_indicator',
+            ['BLEEMEO_AGENT_AGENT_PUBLIC_IP_INDICATOR']
+        ),
+        (
+            'telegraf.docker_metrics_enabled',
+            ['BLEEMEO_AGENT_TELEGRAF_DOCKER_METRICS_ENABLED']
+        ),
+        (
+            'disk_monitor',
+            ['BLEEMEO_AGENT_DISK_MONITOR']
+        ),
+        (
+            'a.disk_monitor',
+            ['BLEEMEO_AGENT_A_DISK_MONITOR']
+        )
+    ]
+    test_compatibility = [
+        (
+            'bleemeo.account_id',
+            ['BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID', 'BLEEMEO_AGENT_ACCOUNT']
+        ),
+        (
+            'bleemeo.registration_key',
+            [
+                'BLEEMEO_AGENT_BLEEMEO_REGISTRATION_KEY',
+                'BLEEMEO_AGENT_REGISTRATION_KEY'
+            ]
+        ),
+        (
+            'bleemeo.api_base',
+            ['BLEEMEO_AGENT_API_BASE', 'BLEEMEO_AGENT_BLEEMEO_API_BASE']
+        ),
+        (
+            'bleemeo.mqtt.host',
+            ['BLEEMEO_AGENT_MQTT_HOST', 'BLEEMEO_AGENT_BLEEMEO_MQTT_HOST']
+        ),
+        (
+            'bleemeo.mqtt.port',
+            ['BLEEMEO_AGENT_MQTT_PORT', 'BLEEMEO_AGENT_BLEEMEO_MQTT_PORT']
+        ),
+        (
+            'bleemeo.mqtt.ssl',
+            ['BLEEMEO_AGENT_MQTT_SSL', 'BLEEMEO_AGENT_BLEEMEO_MQTT_SSL']
+        ),
+    ]
+
+    for (conf, envs) in test:
+        for env in envs:
+            env_names, warnings = bleemeo_agent.config._convert_conf_name(
+                conf, []
+            )
+            assert len(warnings) == 0
+            assert(env in env_names)
+    for (conf, envs) in test_compatibility:
+        for env in envs:
+            env_names, warnings = bleemeo_agent.config._convert_conf_name(
+                conf, []
+            )
+            assert len(warnings) == 0
+            assert(env in env_names)
+
+
+def test_config():
+    config1 = bleemeo_agent.config._load_default_config()
+    config2 = bleemeo_agent.config._load_default_config()
+    config1['logging.output'] = 'console2'
+    assert(config1['logging.output'] == 'console2')
+    assert(config2['logging.output'] == 'console')
+    config1['bleemeo.enabled'] = False
+    assert(not config1['bleemeo.enabled'])
+    assert(config2['bleemeo.enabled'])
+    config1['bleemeo.mqtt.port'] = 2018
+    assert(config1['bleemeo.mqtt.port'] == 2018)
+    assert(config2['bleemeo.mqtt.port'] == 8883)
+    config1['bleemeo.mqtt.port'] = 8883
+    config1['logging.output'] = 'console'
+    config1['bleemeo.enabled'] = True
+    assert(config1._internal_dict == config2._internal_dict)
+    config2['tags'].append('test')
+    assert(config1['tags'] == [])
+    assert(config2['tags'] == ['test'])
+    config2['thresholds']['test'] = 1
+    assert(config2['thresholds'] == {'test': 1})
+    assert(config1['thresholds'] == {})
+    del config2['thresholds']['test']
+    config2['tags'].remove('test')
+    assert(config1._internal_dict == config2._internal_dict)

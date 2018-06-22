@@ -156,7 +156,7 @@ def get_agent_version(core):
     return get_package_version(
         'bleemeo-agent',
         bleemeo_agent.__version__,
-        distribution=core.config.get('distribution'),
+        distribution=core.config['distribution'],
     )
 
 
@@ -178,19 +178,19 @@ def get_docker_version(core):
     package_version = get_package_version(
         'docker-engine',
         package_version,
-        distribution=core.config.get('distribution'),
+        distribution=core.config['distribution'],
     )
     if package_version is None:
         package_version = get_package_version(
             'docker.io',
             package_version,
-            distribution=core.config.get('distribution'),
+            distribution=core.config['distribution'],
         )
-    if package_version is None and core.config.get('distribution') == 'centos':
+    if package_version is None and core.config['distribution'] == 'centos':
         package_version = get_package_version(
             'docker',
             package_version,
-            distribution=core.config.get('distribution'),
+            distribution=core.config['distribution'],
         )
 
     return (package_version, api_version)
@@ -199,7 +199,7 @@ def get_docker_version(core):
 def _get_telegraf_version(core):
     package_version = get_package_version(
         'telegraf',
-        distribution=core.config.get('distribution'),
+        distribution=core.config['distribution'],
     )
     if package_version is None:
         telegraf = 'telegraf'
@@ -233,7 +233,7 @@ def read_os_release(core):
     result = {}
     file_path = '/etc/os-release'
     if core.container is not None:
-        mount_point = core.config.get('df.host_mount_point')
+        mount_point = core.config['df.host_mount_point']
         if mount_point is not None:
             file_path = mount_point + file_path
         else:
@@ -381,10 +381,7 @@ def get_primary_addresses(ip_output=None):
 def get_public_ip(core):
     """ Return public IP used by this agent
     """
-    url = core.config.get(
-        'agent.public_ip_indicator',
-        'https://myip.bleemeo.com'
-    )
+    url = core.config['agent.public_ip_indicator']
     return get_url_content(core, url)
 
 
@@ -437,14 +434,18 @@ def get_facts_root():
     """ Gather facts that need root privilege and write them in yaml file
     """
 
-    config, errors = bleemeo_agent.config.load_config()
+    config, errors, warnings = bleemeo_agent.config.load_config_with_default()
     if errors:
         logging.error(
             'Error while loading configuration: %s', '\n'.join(errors)
         )
         return
+    if warnings:
+        logging.warning(
+            'Warning while loading configuration: %s', '\n'.join(warnings)
+        )
 
-    facts_file = config.get('agent.facts_file', 'facts.yaml')
+    facts_file = config['agent.facts_file']
 
     facts = {
         'serial_number': get_file_content(
@@ -466,7 +467,7 @@ def get_facts(core):
         Returned facts are informations like hostname, OS type/version, etc
     """
     # Load facts that need root privilege from facts_file
-    facts_file = core.config.get('agent.facts_file', 'facts.yaml')
+    facts_file = core.config['agent.facts_file']
     try:
         with open(facts_file) as file_obj:
             facts = yaml.safe_load(file_obj)
@@ -601,16 +602,14 @@ def get_facts(core):
         'architecture': architecture,
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
         'collectd_version': get_package_version(
-            'collectd', distribution=core.config.get('distribution'),
+            'collectd', distribution=core.config['distribution'],
         ),
         'docker_api_version': docker_api_version,
         'docker_version': docker_version,
         'domain': domain,
         'public_ip': get_public_ip(core),
         'fqdn': fqdn,
-        'installation_format': core.config.get(
-            'agent.installation_format', 'manual'
-        ),
+        'installation_format': core.config['agent.installation_format'],
         'hostname': hostname,
         'primary_address': primary_address,
         'primary_mac_address': primary_mac_address,

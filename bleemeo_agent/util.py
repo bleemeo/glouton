@@ -356,8 +356,10 @@ def get_pending_update(core):
     """
     # If running inside a Docker container, it can't run commands
     if core.container is not None:
+        if not core.config['df.host_mount_point']:
+            return (None, None)
         updates_file_name = os.path.join(
-            core.config.get('df.host_mount_point', '/does-no-exists'),
+            core.config['df.host_mount_point'],
             'var/lib/update-notifier/updates-available',
         )
         update_count = None
@@ -536,7 +538,7 @@ def get_top_info(core):
         processes = _get_docker_process(core.docker_client)
 
     if (core.container is None
-            or core.config.get('container.pid_namespace_host')):
+            or core.config['container.pid_namespace_host']):
         _update_process_psutil(processes, gather_started_at)
 
     now = time.time()
@@ -744,7 +746,7 @@ def pull_raw_metric(core, name):
         * ssl_check: should we check that SSL certificate are valid
           [default: yes]
     """
-    metric_config = core.config.get('metric.pull.%s' % name, {})
+    metric_config = core.config['metric.pull.%s' % name]
 
     if 'url' not in metric_config:
         logging.warning('Missing URL for metric %s. Ignoring it', name)
