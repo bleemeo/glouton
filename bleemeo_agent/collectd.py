@@ -238,17 +238,10 @@ class Collectd:
             name = 'cpu_%s' % match_dict['type_instance']
             if name == 'cpu_idle':
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='cpu_used',
                         time=timestamp,
                         value=100 - value,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
             self.computed_metrics_pending.add(
@@ -291,7 +284,7 @@ class Collectd:
                 return
             if name == 'io_time':
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='io_utilization',
                         time=timestamp,
                         # io_time is a number of ms spent doing IO
@@ -299,12 +292,6 @@ class Collectd:
                         # 1000ms during one second
                         value=value / 1000. * 100.,
                         item=item,
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
         elif match_dict['plugin'] == 'interface':
@@ -519,17 +506,12 @@ class Collectd:
             service = ''
         if not item:
             item = ''
-        metric_point = bleemeo_agent.type.MetricPoint(
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label=name,
             time=timestamp,
             value=value,
             item=item,
             service_label=service,
-            service_instance='',
-            container_name='',
-            status_code=None,
-            status_of='',
-            problem_origin='',
         )
         self.core.emit_metric(metric_point)
 
@@ -601,17 +583,11 @@ class Collectd:
             value += get_metric('disk_reserved', item)
 
             self.core.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label=name.replace('_total', '_used_perc'),
                     time=timestamp,
                     value=used_perc,
                     item=item,
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
         elif name == 'cpu_other':
@@ -645,17 +621,10 @@ class Collectd:
                 value_perc = float(used) / value * 100
 
             self.core.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label=name.replace('_total', '_used_perc'),
                     time=timestamp,
                     value=value_perc,
-                    item='',
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
         if not item:
@@ -663,17 +632,13 @@ class Collectd:
         if service is None:
             service = ''
             instance = ''
-        metric_point = bleemeo_agent.type.MetricPoint(
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label=name,
             time=timestamp,
             value=value,
             item=item,
             service_label=service,
             service_instance=instance,
-            container_name='',
-            status_code=None,
-            status_of='',
-            problem_origin='',
         )
         self.core.emit_metric(metric_point)
 

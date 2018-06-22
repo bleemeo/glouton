@@ -59,17 +59,13 @@ def gather_exim_queue_size(instance, core):
     try:
         count = int(output)
         core.emit_metric(
-            bleemeo_agent.type.MetricPoint(
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label='exim_queue_size',
                 time=time.time(),
                 value=float(count),
                 item=instance,
                 service_label='exim',
                 service_instance=instance,
-                container_name='',
-                status_code=None,
-                status_of='',
-                problem_origin='',
             )
         )
     except ValueError:
@@ -112,16 +108,12 @@ def gather_postfix_queue_size(instance, core):
     if match:
         count = int(match.group(1))
         core.emit_metric(
-            bleemeo_agent.type.MetricPoint(
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label='postfix_queue_size',
                 time=time.time(),
                 value=float(count),
                 item=instance,
                 service_label='postfix',
                 service_instance=instance,
-                container_name='',
-                status_code=None,
-                status_of='',
-                problem_origin='',
             )
         )

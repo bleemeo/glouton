@@ -71,7 +71,7 @@
                 <div class="panel-body add-left-margin">
                     Value: {{ disk_used|filesizeformat(True) }}<br/>
                     {% if 'status' in disk_metric %}
-                    Status: {{ disk_metric.status_code|capitalize }} <br/>
+                    Status: {{ type.STATUS_NAME[disk_metric.status_code]|capitalize }} <br/>
                     {% endif %}
                     {% if disk_threshold.get('high_warning') %}
                     Warning: {{ (disk_total_user * disk_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
@@ -103,7 +103,7 @@
                 <div class="panel-body add-left-margin">
                     Value: {{ mem_used|filesizeformat(True) }}<br/>
                     {% if 'status' in mem_metric %}
-                    Status: {{ mem_metric.status_code|capitalize }} <br/>
+                    Status: {{ type.STATUS_NAME[mem_metric.status_code]|capitalize }} <br/>
                     {% endif %}
                     {% if mem_threshold.get('high_warning') %}
                     Warning: {{ (mem_total * mem_threshold['high_warning'] / 100)|filesizeformat(True) }} <br/>
@@ -164,7 +164,7 @@
                         <li>by other tasks: {{ cpu_other|round(1) }} %</li>
                     </ul>
                     {% if cpu_metric.status_code is not none %}
-                    Status: {{ cpu_metric.status_code|capitalize }} <br/>
+                    Status: {{ type.STATUS_NAME[cpu_metric.status_code]|capitalize }} <br/>
                     {% endif %}
                     {% if cpu_threshold.get('high_warning') %}
                     Warning: {{ cpu_threshold['high_warning'] }} %<br/>

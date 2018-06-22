@@ -817,8 +817,8 @@ def format_duration(value):
 def _check_soft_status(softstatus_state, metric, soft_status, period, now):
     if softstatus_state is None:
         softstatus_state = MetricSoftStatusState(
-            metric['measurement'],
-            metric.get('item', ''),
+            metric.label,
+            metric.item,
             soft_status,
             None,
             None,
@@ -834,20 +834,20 @@ def _check_soft_status(softstatus_state, metric, soft_status, period, now):
         warning_since = None
 
     if soft_status == 'critical':
-        critical_since = critical_since or metric['time']
-        warning_since = warning_since or metric['time']
+        critical_since = critical_since or metric.time
+        warning_since = warning_since or metric.time
     elif soft_status == 'warning':
         critical_since = None
-        warning_since = warning_since or metric['time']
+        warning_since = warning_since or metric.time
     else:
         critical_since = None
         warning_since = None
 
     warn_duration = (
-        (metric['time'] - warning_since) if warning_since else 0
+        (metric.time - warning_since) if warning_since else 0
     )
     crit_duration = (
-        (metric['time'] - critical_since) if critical_since else 0
+        (metric.time - critical_since) if critical_since else 0
     )
 
     if period == 0:
@@ -1755,65 +1755,37 @@ class Core:
 
         if self.graphite_server.metrics_source != 'telegraf':
             self.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='uptime',
                     time=now,
                     value=uptime_seconds,
-                    item='',
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
 
         if self.bleemeo_connector and self.bleemeo_connector.connected:
             self.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='agent_status',
                     time=now,
                     value=0.0,  # status ok
-                    item='',
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
 
         if os.name == 'nt':
             self.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='mem_total',
                     time=now,
                     value=float(self.total_memory_size),
-                    item='',
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
             if self.last_facts.get('swap_present', False):
                 self.total_swap_size = psutil.swap_memory().total
                 self.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='swap_total',
                         time=now,
                         value=float(self.total_swap_size),
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code='',
-                        status_of='',
-                        problem_origin='',
                     )
                 )
         metric = self.graphite_server.get_time_elapsed_since_last_data()
@@ -1852,32 +1824,18 @@ class Core:
         )
         if pending_update is not None:
             self.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='system_pending_updates',
                     time=now,
                     value=float(pending_update),
-                    item='',
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
         if pending_security_update is not None:
             self.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='system_pending_security_updates',
                     time=now,
                     value=float(pending_security_update),
-                    item='',
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
 
@@ -1907,18 +1865,16 @@ class Core:
 
         logs = result['State']['Health'].get('Log', [])
         problem_origin = 'Container stopped'
-        if docker_status == 'running':
+        if docker_status == 'running' and logs:
             problem_origin = logs[-1].get('Output')
 
-        metric_point = bleemeo_agent.type.MetricPoint(
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label='docker_container_health_status',
             time=time.time(),
             value=float(status),
             item=name,
-            service_label='',
-            service_instancte='',
             container_name=name,
-            status_code=None,
+            status_code=status,
             status_of=bleemeo_agent.checker.STATUS_NAME[status],
             problem_origin=problem_origin,
         )
@@ -1944,9 +1900,9 @@ class Core:
 
         # XXX: concurrent access with emit_metric.
         self.last_metrics = {
-            key: metric
-            for (key, metric) in self.last_metrics.items()
-            if metric['time'] >= cutoff and key not in deleted_metrics
+            key: metric_point
+            for (key, metric_point) in self.last_metrics.items()
+            if metric_point.time >= cutoff and key not in deleted_metrics
         }
 
     def fire_triggers(self, updates_count=None, discovery=None):
@@ -2799,7 +2755,8 @@ class Core:
                 )
 
         metric_point = metric_point._replace(
-            status_code=status, problem_origin=text
+            status_code=bleemeo_agent.type.STATUS_NAME_TO_CODE[status],
+            problem_origin=text
         )
 
         metric_status = metric_point._replace(
@@ -2811,18 +2768,18 @@ class Core:
 
         return metric_point
 
-    def _check_soft_status(self, metric, soft_status, period):
+    def _check_soft_status(self, metric_point, soft_status, period):
         """ Check if soft_status was in error for at least the grace period
             of the metric.
 
             Return the new status
         """
-        key = (metric['measurement'], metric.get('item', ''))
+        key = (metric_point.label, metric_point.item)
         softstatus_state = self.cache.softstatus_by_labelitem.get(key)
 
         new_softstatus_state = _check_soft_status(
             softstatus_state,
-            metric,
+            metric_point,
             soft_status,
             period,
             time.time(),

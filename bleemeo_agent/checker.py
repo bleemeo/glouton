@@ -390,16 +390,14 @@ class Check:
         else:
             instance = ''
             item = ''
-        metric_point = bleemeo_agent.type.MetricPoint(
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label='%s_status' % self.service,
             time=now,
             value=float(return_code),
             item=item,
             service_label=self.service,
             service_instance=instance,
-            container_name='',
-            status_code=STATUS_NAME[return_code],
-            status_of='',
+            status_code=return_code,
             problem_origin=output,
         )
         self.core.emit_metric(metric_point)

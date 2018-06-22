@@ -763,17 +763,11 @@ def pull_raw_metric(core, name):
             item = ''
             if metric_config.get('item', ''):
                 item = metric_config.get('item', '')
-            metric_point = bleemeo_agent.type.MetricPoint(
+            metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
                 time=time.time(),
                 value=value,
                 item=item,
-                service_label='',
-                service_instance='',
-                container_name='',
-                status_code=None,
-                status_of='',
-                problem_origin='',
             )
             core.emit_metric(metric_point)
 

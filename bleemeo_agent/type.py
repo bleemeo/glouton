@@ -18,6 +18,25 @@
 
 from collections import namedtuple
 
+STATUS_OK = 0
+STATUS_WARNING = 1
+STATUS_CRITICAL = 2
+STATUS_UNKNOWN = 3
+
+STATUS_NAME = {
+    STATUS_OK: 'ok',
+    STATUS_WARNING: 'warning',
+    STATUS_CRITICAL: 'critical',
+    STATUS_UNKNOWN: 'unknown',
+}
+
+STATUS_NAME_TO_CODE = {
+    'ok': STATUS_OK,
+    'warning': STATUS_WARNING,
+    'critical': STATUS_CRITICAL,
+    'unknown': STATUS_UNKNOWN,
+}
+
 MetricPoint = namedtuple(
     'MetricPoint',
     [
@@ -32,4 +51,17 @@ MetricPoint = namedtuple(
         'status_of',
         'problem_origin'
     ]
+)
+
+DEFAULT_METRICPOINT = MetricPoint(
+    label='',
+    time='',
+    value='',
+    item='',
+    service_label='',
+    service_instance='',
+    container_name='',
+    status_code=None,
+    status_of='',
+    problem_origin='',
 )

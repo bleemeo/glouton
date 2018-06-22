@@ -22,6 +22,7 @@ import time
 import yaml
 
 import bleemeo_agent.core
+import bleemeo_agent.type
 
 # List of process cmdline and the expected service type
 PROCESS_SERVICE = [
@@ -501,10 +502,10 @@ def test_check_soft_status_empty_cache():
     for status in ['ok', 'warning', 'critical']:
         softstatus_state = bleemeo_agent.core._check_soft_status(
             None,
-            {
-                'measurement': 'metric',
-                'time': base_time,
-            },
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                label='metric',
+                time=base_time,
+            ),
             status,
             period,
             base_time,
@@ -529,10 +530,10 @@ def test_check_soft_status():
     for (time_offset, soft_status, expected_status) in data:
         softstatus_state = bleemeo_agent.core._check_soft_status(
             softstatus_state,
-            {
-                'measurement': 'metric',
-                'time': base_time + time_offset,
-            },
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                label='metric',
+                time=base_time + time_offset,
+            ),
             soft_status,
             period,
             base_time + time_offset,
@@ -561,10 +562,10 @@ def test_check_soft_status():
     for (time_offset, soft_status, expected_status) in data:
         softstatus_state = bleemeo_agent.core._check_soft_status(
             softstatus_state,
-            {
-                'measurement': 'metric',
-                'time': base_time + time_offset,
-            },
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                label='metric',
+                time=base_time + time_offset,
+            ),
             soft_status,
             period,
             base_time + time_offset,
@@ -592,10 +593,10 @@ def test_check_soft_status_changing_period():
     for (time_offset, soft_status, period, expected_status) in data:
         softstatus_state = bleemeo_agent.core._check_soft_status(
             softstatus_state,
-            {
-                'measurement': 'metric',
-                'time': base_time + time_offset,
-            },
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                label='metric',
+                time=base_time + time_offset,
+            ),
             soft_status,
             period,
             base_time + time_offset,

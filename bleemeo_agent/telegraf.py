@@ -446,17 +446,10 @@ class Telegraf:
 
             if name == 'cpu_idle':
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='cpu_used',
                         time=timestamp,
                         value=100 - value,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
             self.computed_metrics_pending.add(
@@ -482,17 +475,10 @@ class Telegraf:
 
             if name == 'cpu_idle':
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='cpu_used',
                         time=timestamp,
                         value=100 - value,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
                 self.computed_metrics_pending.add(
@@ -557,7 +543,7 @@ class Telegraf:
 
             if name == 'io_time':
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='io_utilization',
                         time=timestamp,
                         # io_time is a number of ms spent doing IO(per seconds)
@@ -565,12 +551,6 @@ class Telegraf:
                         # second
                         value=value / 1000. * 100.,
                         item=item,
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
         elif part[-2] == 'win_diskio':
@@ -607,7 +587,7 @@ class Telegraf:
             elif name == 'Percent_Disk_Time':
                 name = 'io_utilization'
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='io_time',
                         time=timestamp,
                         # io_time is a number of ms spent doing IO(per seconds)
@@ -615,12 +595,6 @@ class Telegraf:
                         # second
                         value=value * 1000. / 100.,
                         item=item,
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
             elif name == 'Percent_Disk_Read_Time':
@@ -658,46 +632,25 @@ class Telegraf:
             if name == 'Available_Bytes':
                 name = 'mem_available'
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='mem_available_perc',
                         time=timestamp,
                         value=value * 100. / self.core.total_memory_size,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
                 mem_used = self.core.total_memory_size - value
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='mem_used',
                         time=timestamp,
                         value=mem_used,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='mem_used_perc',
                         time=timestamp,
                         value=mem_used * 100. / self.core.total_memory_size,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
                 self.computed_metrics_pending.add(
@@ -774,31 +727,17 @@ class Telegraf:
                 else:
                     swap_used = self.core.total_swap_size / (value / 100.)
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='swap_used',
                         time=timestamp,
                         value=swap_used,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
                 self.core.emit_metric(
-                    bleemeo_agent.type.MetricPoint(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='swap_free',
                         time=timestamp,
                         value=self.core.total_swap_size - swap_used,
-                        item='',
-                        service_label='',
-                        service_instance='',
-                        container_name='',
-                        status_code=None,
-                        status_of='',
-                        problem_origin='',
                     )
                 )
         elif part[-2] == 'system':
@@ -1502,7 +1441,7 @@ class Telegraf:
         if container_name is None:
             container_name = ''
         self.core.emit_metric(
-            bleemeo_agent.type.MetricPoint(
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
                 time=timestamp,
                 value=value,
@@ -1510,9 +1449,6 @@ class Telegraf:
                 service_label=service,
                 service_instance=instance,
                 container_name=container_name,
-                status_code=None,
-                status_of='',
-                problem_origin='',
             ),
             no_emit=no_emit
         )
@@ -1591,17 +1527,11 @@ class Telegraf:
             disk_used = disk_total * (used_perc / 100.0)
             value = disk_total
             self.core.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='disk_used',
                     time=timestamp,
                     value=disk_used,
                     item=item,
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
         elif name == 'cpu_other':
@@ -1626,17 +1556,10 @@ class Telegraf:
             total = get_metric('mem_total', '')
             value = total - get_metric('mem_available', '')
             self.core.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='mem_used_perc',
                     time=timestamp,
                     value=value / total * 100,
-                    item='',
-                    service_label='',
-                    service_instance='',
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
         elif name == 'system_load1':
@@ -1677,17 +1600,13 @@ class Telegraf:
             if not item:
                 item = ''
             self.core.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='elasticsearch_jvm_gc_utilization',
                     time=timestamp,
                     value=value / 10.,  # convert ms/s in %
                     item=item,
                     service_label=service,
                     service_instance=instance,
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
         elif name == 'apache_busy_workers':
@@ -1699,17 +1618,13 @@ class Telegraf:
             if not item:
                 item = ''
             self.core.emit_metric(
-                bleemeo_agent.type.MetricPoint(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='apache_busy_workers_perc',
                     time=timestamp,
                     value=100 * value / max_worker,
                     item=item,
                     service_label=service,
                     service_instance=instance,
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
             )
         elif name == 'apache_max_workers':
@@ -1749,17 +1664,13 @@ class Telegraf:
             service = ''
             instance = ''
         self.core.emit_metric(
-            bleemeo_agent.type.MetricPoint(
+            bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
                 time=timestamp,
                 value=value,
                 item=item,
                 service_label=service,
                 service_instance=instance,
-                container_name='',
-                status_code=None,
-                status_of='',
-                problem_origin='',
             )
         )
 

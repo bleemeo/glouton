@@ -439,17 +439,13 @@ class Jmxtrans:
 
             if not item:
                 item = ''
-            metric_point = bleemeo_agent.type.MetricPoint(
+            metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=new_name,
                 time=timestamp,
                 value=new_value,
                 item=item,
                 service_label=service_name,
                 service_instance=instance,
-                container_name='',
-                status_code=None,
-                status_of='',
-                problem_origin='',
             )
 
             if jmx_metric.get('sum', False):
@@ -478,17 +474,13 @@ class Jmxtrans:
             (name, item, service_name) = key
             if not item:
                 item = ''
-            metric_point = bleemeo_agent.type.MetricPoint(
+            metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
                 time=timestamp,
                 value=sum(values),
                 item=item,
                 service_label=service_name,
                 service_instance=item,
-                container_name='',
-                status_code=None,
-                status_of='',
-                problem_origin='',
             )
 
             if jmx_metric.get('ratio') is not None:
@@ -520,17 +512,13 @@ class Jmxtrans:
             if new_value is not None:
                 if not item:
                     item = ''
-                metric_point = bleemeo_agent.type.MetricPoint(
+                metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label=name,
                     time=timestamp,
                     value=new_value,
                     item=item,
                     service_label=service_name,
                     service_instance=item,
-                    container_name='',
-                    status_code=None,
-                    status_of='',
-                    problem_origin='',
                 )
 
                 self.core.emit_metric(metric_point)

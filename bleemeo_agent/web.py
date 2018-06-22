@@ -67,9 +67,9 @@ def _gather_checks_info():
     for metric_point in app.core.last_metrics.values():
         if (metric_point.status_code is not None
                 and metric_point.status_of == ''):
-            if metric_point.status_code == 'ok':
+            if metric_point.status_code == bleemeo_agent.type.STATUS_OK:
                 check_count_ok += 1
-            elif metric_point.status_code == 'warning':
+            elif metric_point.status_code == bleemeo_agent.type.STATUS_WARNING:
                 check_count_warning += 1
             else:
                 check_count_critical += 1
