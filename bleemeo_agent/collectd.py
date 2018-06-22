@@ -564,11 +564,11 @@ class Collectd:
                   able to compute the requested value.
             """
             metric = self.core.get_last_metric(measurements, searched_item)
-            if metric is None or metric['time'] < timestamp:
+            if metric is None or metric.time < timestamp:
                 raise MissingMetric()
-            elif metric['time'] > timestamp:
+            elif metric.time > timestamp:
                 raise ComputationFail()
-            return metric['value']
+            return metric.value
 
         service = None
 

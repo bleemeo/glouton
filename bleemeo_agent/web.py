@@ -84,7 +84,9 @@ def _gather_checks_info():
                 'name': metric_point.label,
                 'pretty_name': pretty_name,
                 'item': metric_point.item,
-                'status': metric_point.status_code,
+                'status': bleemeo_agent.type.STATUS_NAME[
+                    metric_point.status_code
+                ],
                 'value': metric_point.value,
                 'threshold': threshold,
             })

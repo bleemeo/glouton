@@ -916,7 +916,9 @@ class BleemeoConnector(threading.Thread):
                 if metric.item:
                     bleemeo_metric['item'] = metric.item
                 if metric_point.status_code is not None:
-                    bleemeo_metric['status'] = metric_point.status_code
+                    bleemeo_metric['status'] = bleemeo_agent.type.STATUS_NAME[
+                        metric_point.status_code
+                    ]
                 if metric_point.problem_origin != '':
                     bleemeo_metric['check_output'] = (
                         metric_point.problem_origin
