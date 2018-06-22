@@ -763,7 +763,7 @@ def pull_raw_metric(core, name):
             item = ''
             if metric_config.get('item', ''):
                 item = metric_config.get('item', '')
-            metric_point = bleemeo_agent.other_types.MetricPoint(
+            metric_point = bleemeo_agent.type.MetricPoint(
                 label=name,
                 time=time.time(),
                 value=value,

@@ -29,7 +29,7 @@ import psutil
 import requests
 from six.moves import urllib_parse
 
-import bleemeo_agent.other_types
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 
@@ -446,7 +446,7 @@ class Telegraf:
 
             if name == 'cpu_idle':
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='cpu_used',
                         time=timestamp,
                         value=100 - value,
@@ -482,7 +482,7 @@ class Telegraf:
 
             if name == 'cpu_idle':
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='cpu_used',
                         time=timestamp,
                         value=100 - value,
@@ -557,7 +557,7 @@ class Telegraf:
 
             if name == 'io_time':
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='io_utilization',
                         time=timestamp,
                         # io_time is a number of ms spent doing IO(per seconds)
@@ -607,7 +607,7 @@ class Telegraf:
             elif name == 'Percent_Disk_Time':
                 name = 'io_utilization'
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='io_time',
                         time=timestamp,
                         # io_time is a number of ms spent doing IO(per seconds)
@@ -658,7 +658,7 @@ class Telegraf:
             if name == 'Available_Bytes':
                 name = 'mem_available'
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='mem_available_perc',
                         time=timestamp,
                         value=value * 100. / self.core.total_memory_size,
@@ -673,7 +673,7 @@ class Telegraf:
                 )
                 mem_used = self.core.total_memory_size - value
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='mem_used',
                         time=timestamp,
                         value=mem_used,
@@ -687,7 +687,7 @@ class Telegraf:
                     )
                 )
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='mem_used_perc',
                         time=timestamp,
                         value=mem_used * 100. / self.core.total_memory_size,
@@ -774,7 +774,7 @@ class Telegraf:
                 else:
                     swap_used = self.core.total_swap_size / (value / 100.)
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='swap_used',
                         time=timestamp,
                         value=swap_used,
@@ -788,7 +788,7 @@ class Telegraf:
                     )
                 )
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='swap_free',
                         time=timestamp,
                         value=self.core.total_swap_size - swap_used,
@@ -1502,7 +1502,7 @@ class Telegraf:
         if container_name is None:
             container_name = ''
         self.core.emit_metric(
-            bleemeo_agent.other_types.MetricPoint(
+            bleemeo_agent.type.MetricPoint(
                 label=name,
                 time=timestamp,
                 value=value,
@@ -1591,7 +1591,7 @@ class Telegraf:
             disk_used = disk_total * (used_perc / 100.0)
             value = disk_total
             self.core.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='disk_used',
                     time=timestamp,
                     value=disk_used,
@@ -1626,7 +1626,7 @@ class Telegraf:
             total = get_metric('mem_total', '')
             value = total - get_metric('mem_available', '')
             self.core.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='mem_used_perc',
                     time=timestamp,
                     value=value / total * 100,
@@ -1677,7 +1677,7 @@ class Telegraf:
             if not item:
                 item = ''
             self.core.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='elasticsearch_jvm_gc_utilization',
                     time=timestamp,
                     value=value / 10.,  # convert ms/s in %
@@ -1699,7 +1699,7 @@ class Telegraf:
             if not item:
                 item = ''
             self.core.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='apache_busy_workers_perc',
                     time=timestamp,
                     value=100 * value / max_worker,
@@ -1749,7 +1749,7 @@ class Telegraf:
             service = ''
             instance = ''
         self.core.emit_metric(
-            bleemeo_agent.other_types.MetricPoint(
+            bleemeo_agent.type.MetricPoint(
                 label=name,
                 time=timestamp,
                 value=value,

@@ -21,7 +21,7 @@ import re
 import subprocess
 import time
 
-import bleemeo_agent.other_types
+import bleemeo_agent.type
 
 
 def gather_exim_queue_size(instance, core):
@@ -59,7 +59,7 @@ def gather_exim_queue_size(instance, core):
     try:
         count = int(output)
         core.emit_metric(
-            bleemeo_agent.other_types.MetricPoint(
+            bleemeo_agent.type.MetricPoint(
                 label='exim_queue_size',
                 time=time.time(),
                 value=float(count),
@@ -112,7 +112,7 @@ def gather_postfix_queue_size(instance, core):
     if match:
         count = int(match.group(1))
         core.emit_metric(
-            bleemeo_agent.other_types.MetricPoint(
+            bleemeo_agent.type.MetricPoint(
                 label='postfix_queue_size',
                 time=time.time(),
                 value=float(count),

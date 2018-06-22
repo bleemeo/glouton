@@ -189,7 +189,7 @@ class GraphiteServer(threading.Thread):
                 and delay < highest_threshold):
             return None
 
-        return bleemeo_agent.other_types.MetricPoint(
+        return bleemeo_agent.type.MetricPoint(
             label='time_elapsed_since_last_data',
             time=time.time(),
             value=delay,

@@ -29,7 +29,6 @@ import influxdb.exceptions
 import requests
 from six.moves import queue
 
-import bleemeo_agent.other_types
 import bleemeo_agent.util
 
 

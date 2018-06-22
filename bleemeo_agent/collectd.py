@@ -23,7 +23,7 @@ import re
 import shlex
 import subprocess
 
-import bleemeo_agent.other_types
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 
@@ -238,7 +238,7 @@ class Collectd:
             name = 'cpu_%s' % match_dict['type_instance']
             if name == 'cpu_idle':
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='cpu_used',
                         time=timestamp,
                         value=100 - value,
@@ -291,7 +291,7 @@ class Collectd:
                 return
             if name == 'io_time':
                 self.core.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='io_utilization',
                         time=timestamp,
                         # io_time is a number of ms spent doing IO
@@ -519,7 +519,7 @@ class Collectd:
             service = ''
         if not item:
             item = ''
-        metric_point = bleemeo_agent.other_types.MetricPoint(
+        metric_point = bleemeo_agent.type.MetricPoint(
             label=name,
             time=timestamp,
             value=value,
@@ -601,7 +601,7 @@ class Collectd:
             value += get_metric('disk_reserved', item)
 
             self.core.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label=name.replace('_total', '_used_perc'),
                     time=timestamp,
                     value=used_perc,
@@ -645,7 +645,7 @@ class Collectd:
                 value_perc = float(used) / value * 100
 
             self.core.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label=name.replace('_total', '_used_perc'),
                     time=timestamp,
                     value=value_perc,
@@ -663,7 +663,7 @@ class Collectd:
         if service is None:
             service = ''
             instance = ''
-        metric_point = bleemeo_agent.other_types.MetricPoint(
+        metric_point = bleemeo_agent.type.MetricPoint(
             label=name,
             time=timestamp,
             value=value,

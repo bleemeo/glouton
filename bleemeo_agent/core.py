@@ -55,8 +55,8 @@ import bleemeo_agent.checker
 import bleemeo_agent.config
 import bleemeo_agent.facts
 import bleemeo_agent.graphite
-import bleemeo_agent.other_types
 import bleemeo_agent.services
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 # Optional dependencies
@@ -1755,7 +1755,7 @@ class Core:
 
         if self.graphite_server.metrics_source != 'telegraf':
             self.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='uptime',
                     time=now,
                     value=uptime_seconds,
@@ -1771,7 +1771,7 @@ class Core:
 
         if self.bleemeo_connector and self.bleemeo_connector.connected:
             self.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='agent_status',
                     time=now,
                     value=0.0,  # status ok
@@ -1787,7 +1787,7 @@ class Core:
 
         if os.name == 'nt':
             self.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='mem_total',
                     time=now,
                     value=float(self.total_memory_size),
@@ -1803,7 +1803,7 @@ class Core:
             if self.last_facts.get('swap_present', False):
                 self.total_swap_size = psutil.swap_memory().total
                 self.emit_metric(
-                    bleemeo_agent.other_types.MetricPoint(
+                    bleemeo_agent.type.MetricPoint(
                         label='swap_total',
                         time=now,
                         value=float(self.total_swap_size),
@@ -1852,7 +1852,7 @@ class Core:
         )
         if pending_update is not None:
             self.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='system_pending_updates',
                     time=now,
                     value=float(pending_update),
@@ -1867,7 +1867,7 @@ class Core:
             )
         if pending_security_update is not None:
             self.emit_metric(
-                bleemeo_agent.other_types.MetricPoint(
+                bleemeo_agent.type.MetricPoint(
                     label='system_pending_security_updates',
                     time=now,
                     value=float(pending_security_update),
@@ -1910,7 +1910,7 @@ class Core:
         if docker_status == 'running':
             problem_origin = logs[-1].get('Output')
 
-        metric_point = bleemeo_agent.other_types.MetricPoint(
+        metric_point = bleemeo_agent.type.MetricPoint(
             label='docker_container_health_status',
             time=time.time(),
             value=float(status),

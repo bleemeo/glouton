@@ -23,7 +23,7 @@ import logging
 import os
 import time
 
-import bleemeo_agent.other_types
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 
@@ -439,7 +439,7 @@ class Jmxtrans:
 
             if not item:
                 item = ''
-            metric_point = bleemeo_agent.other_types.MetricPoint(
+            metric_point = bleemeo_agent.type.MetricPoint(
                 label=new_name,
                 time=timestamp,
                 value=new_value,
@@ -478,7 +478,7 @@ class Jmxtrans:
             (name, item, service_name) = key
             if not item:
                 item = ''
-            metric_point = bleemeo_agent.other_types.MetricPoint(
+            metric_point = bleemeo_agent.type.MetricPoint(
                 label=name,
                 time=timestamp,
                 value=sum(values),
@@ -520,7 +520,7 @@ class Jmxtrans:
             if new_value is not None:
                 if not item:
                     item = ''
-                metric_point = bleemeo_agent.other_types.MetricPoint(
+                metric_point = bleemeo_agent.type.MetricPoint(
                     label=name,
                     time=timestamp,
                     value=new_value,

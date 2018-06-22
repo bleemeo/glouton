@@ -29,7 +29,7 @@ import requests
 # pylint: disable=wrong-import-order
 from six.moves.urllib import parse as urllib_parse
 
-import bleemeo_agent.other_types
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 
@@ -390,7 +390,7 @@ class Check:
         else:
             instance = ''
             item = ''
-        metric_point = bleemeo_agent.other_types.MetricPoint(
+        metric_point = bleemeo_agent.type.MetricPoint(
             label='%s_status' % self.service,
             time=now,
             value=float(return_code),
