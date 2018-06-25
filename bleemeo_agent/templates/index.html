@@ -70,7 +70,7 @@
             <div id="disk-collapse-{{ loop.index }}" class="panel-collapse collapse" role="tabpanel" aria-labelledby="disk-heading-{{ loop.index }}">
                 <div class="panel-body add-left-margin">
                     Value: {{ disk_used|filesizeformat(True) }}<br/>
-                    {% if 'status' in disk_metric %}
+                    {% if disk_metric.status_code is not none %}
                     Status: {{ type.STATUS_NAME[disk_metric.status_code]|capitalize }} <br/>
                     {% endif %}
                     {% if disk_threshold.get('high_warning') %}
@@ -102,7 +102,7 @@
             <div id="mem-collapse" class="panel-collapse collapse" role="tabpanel" aria-labelledby="mem-heading">
                 <div class="panel-body add-left-margin">
                     Value: {{ mem_used|filesizeformat(True) }}<br/>
-                    {% if 'status' in mem_metric %}
+                    {% if mem_metric.status_code is not none %}
                     Status: {{ type.STATUS_NAME[mem_metric.status_code]|capitalize }} <br/>
                     {% endif %}
                     {% if mem_threshold.get('high_warning') %}
