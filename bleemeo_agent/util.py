@@ -493,6 +493,8 @@ def get_pending_update(core):
         for line in output.splitlines():
             if line == b'Updated Packages':
                 continue
+            if line.startswith(b'Repo '):
+                continue
             # yum list could add newline when package name is too long,
             # in this case the next line with version will start with
             # few whitespace.
@@ -517,6 +519,13 @@ def get_pending_update(core):
         security_count = 0
         for line in output.splitlines():
             if line == b'Updated Packages':
+                continue
+            if line.startswith(b'Repo '):
+                continue
+            # yum list could add newline when package name is too long,
+            # in this case the next line with version will start with
+            # few whitespace.
+            if line.startswith(b' '):
                 continue
             security_count += 1
 
