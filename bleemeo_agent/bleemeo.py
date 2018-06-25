@@ -102,18 +102,6 @@ AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
 ))
 
-STATUS_OK = 0
-STATUS_WARNING = 1
-STATUS_CRITICAL = 2
-STATUS_UNKNOWN = 3
-
-STATUS_NAME_TO_CODE = {
-    'ok': STATUS_OK,
-    'warning': STATUS_WARNING,
-    'critical': STATUS_CRITICAL,
-    'unknown': STATUS_UNKNOWN,
-}
-
 
 def services_to_short_key(services):
     reverse_lookup = {}
@@ -570,7 +558,7 @@ class BleemeoConnector(threading.Thread):
             '',
             '',
             None,
-            STATUS_OK,
+            bleemeo_agent.type.STATUS_OK,
             '',
             bleemeo_agent.util.get_clock(),
         )
@@ -2110,7 +2098,9 @@ class BleemeoConnector(threading.Thread):
                 metric_point.service_instance,
                 metric_point.container_name,
                 metric_point.status_of,
-                STATUS_NAME_TO_CODE.get(metric_point.status_code),
+                bleemeo_agent.type.STATUS_NAME_TO_CODE.get(
+                    metric_point.status_code
+                ),
                 metric_point.problem_origin,
                 bleemeo_agent.util.get_clock(),
             )
