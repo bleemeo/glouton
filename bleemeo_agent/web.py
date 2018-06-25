@@ -22,6 +22,7 @@ import flask
 import jinja2.filters
 
 import bleemeo_agent.checker
+import bleemeo_agent.type
 
 
 app = flask.Flask(__name__)  # pylint: disable=invalid-name
@@ -56,6 +57,7 @@ def home():
         top_output=top_output,
         disks_used_perc=disks_used_perc,
         nets_bits_recv=nets_bits_recv,
+        STATUS_NAME=bleemeo_agent.type.STATUS_NAME,
     )
 
 

@@ -2615,9 +2615,8 @@ class Core:
     def emit_metric(self, metric_point, no_emit=False):
         """ Sent a metric to all configured output
         """
-        if metric_point.status_of is None and not no_emit:
+        if metric_point.status_code is None and not no_emit:
             metric_point = self.check_threshold(metric_point)
-
         self._store_last_value(metric_point)
 
         if no_emit:
