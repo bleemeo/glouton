@@ -863,9 +863,7 @@ class BleemeoConnector(threading.Thread):
             while True:
                 metric_point = self._metric_queue.get(timeout=timeout)
                 timeout = 0.3  # Long wait only for the first get
-                short_item = (
-                    metric_point.item[:API_METRIC_ITEM_LENGTH]
-                )
+                short_item = (metric_point.item[:API_METRIC_ITEM_LENGTH])
                 if metric_point.service_instance:
                     short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
                 key = (
@@ -907,7 +905,7 @@ class BleemeoConnector(threading.Thread):
                     bleemeo_metric['status'] = bleemeo_agent.type.STATUS_NAME[
                         metric_point.status_code
                     ]
-                if metric_point.problem_origin != '':
+                if metric_point.problem_origin:
                     bleemeo_metric['check_output'] = (
                         metric_point.problem_origin
                     )
@@ -2098,9 +2096,7 @@ class BleemeoConnector(threading.Thread):
                 metric_point.service_instance,
                 metric_point.container_name,
                 metric_point.status_of,
-                bleemeo_agent.type.STATUS_NAME_TO_CODE.get(
-                    metric_point.status_code
-                ),
+                metric_point.status_code,
                 metric_point.problem_origin,
                 bleemeo_agent.util.get_clock(),
             )

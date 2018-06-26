@@ -760,9 +760,7 @@ def pull_raw_metric(core, name):
                 'Failed to retrive metric %s: response it not a number',
                 name)
         if value is not None:
-            item = ''
-            if metric_config.get('item', ''):
-                item = metric_config.get('item', '')
+            item = metric_config.get('item', '')
             metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
                 time=time.time(),

@@ -55,8 +55,8 @@ MetricPoint = namedtuple(
 
 DEFAULT_METRICPOINT = MetricPoint(
     label='',
-    time='',
-    value='',
+    time=0.0,
+    value=0.0,
     item='',
     service_label='',
     service_instance='',

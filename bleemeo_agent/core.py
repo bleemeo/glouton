@@ -1864,9 +1864,13 @@ class Core:
             status = bleemeo_agent.type.STATUS_UNKNOWN
 
         logs = result['State']['Health'].get('Log', [])
-        problem_origin = 'Container stopped'
-        if docker_status == 'running' and logs:
+        problem_origin = ''
+        if docker_status != 'running':
+            problem_origin = 'Container stopped'
+        elif logs:
             problem_origin = logs[-1].get('Output')
+            if problem_origin is None:
+                problem_origin = ''
 
         metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label='docker_container_health_status',
@@ -1875,7 +1879,6 @@ class Core:
             item=name,
             container_name=name,
             status_code=status,
-            status_of=bleemeo_agent.type.STATUS_NAME[status],
             problem_origin=problem_origin,
         )
         self.emit_metric(metric_point)
