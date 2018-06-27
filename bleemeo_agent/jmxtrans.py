@@ -604,7 +604,7 @@ class JmxConfig:
                 continue
 
             (service_name, instance) = key
-            if service_info.get('address') is None and instance is not None:
+            if service_info.get('address') is None and instance:
                 # Address is None if this check is associated with a stopped
                 # container. In such case, no metrics could be gathered.
                 continue

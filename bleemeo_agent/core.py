@@ -500,7 +500,8 @@ def _apply_service_override(services, override_config, core):
 
 def _sanitize_service(
         name, instance, service_info, is_discovered_service, core):
-    if 'port' in service_info and service_info['port'] is not None:
+
+    if service_info.get('port') or service_info.get('jmx_port'):
         if not instance:
             service_info.setdefault('address', '127.0.0.1')
         elif 'address' not in service_info:
@@ -509,6 +510,7 @@ def _sanitize_service(
                 core.get_docker_container_address(instance)
             )
 
+    if 'port' in service_info and service_info['port'] is not None:
         service_info.setdefault('protocol', socket.IPPROTO_TCP)
         try:
             service_info['port'] = int(service_info['port'])
