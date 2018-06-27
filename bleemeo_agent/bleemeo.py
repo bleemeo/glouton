@@ -102,18 +102,6 @@ AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
 ))
 
-STATUS_OK = 0
-STATUS_WARNING = 1
-STATUS_CRITICAL = 2
-STATUS_UNKNOWN = 3
-
-STATUS_NAME_TO_CODE = {
-    'ok': STATUS_OK,
-    'warning': STATUS_WARNING,
-    'critical': STATUS_CRITICAL,
-    'unknown': STATUS_UNKNOWN,
-}
-
 
 def services_to_short_key(services):
     reverse_lookup = {}
@@ -607,7 +595,7 @@ class BleemeoConnector(threading.Thread):
             '',
             '',
             None,
-            STATUS_OK,
+            bleemeo_agent.type.STATUS_OK,
             '',
             bleemeo_agent.util.get_clock(),
         )
@@ -903,19 +891,17 @@ class BleemeoConnector(threading.Thread):
             while True:
                 metric_point = self._metric_queue.get(timeout=timeout)
                 timeout = 0.3  # Long wait only for the first get
-                short_item = (
-                    metric_point.get('item', '')[:API_METRIC_ITEM_LENGTH]
-                )
-                if metric_point.get('instance'):
+                short_item = (metric_point.item[:API_METRIC_ITEM_LENGTH])
+                if metric_point.service_instance:
                     short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
                 key = (
-                    metric_point['measurement'],
+                    metric_point.label,
                     short_item,
                 )
                 metric = self._bleemeo_cache.metrics_by_labelitem.get(key)
 
                 if metric is None:
-                    if time.time() - metric_point['time'] > 7200:
+                    if time.time() - metric_point.time > 7200:
                         continue
                     elif key not in self._current_metrics:
                         continue
@@ -938,16 +924,18 @@ class BleemeoConnector(threading.Thread):
                 bleemeo_metric = {
                     'uuid': metric.uuid,
                     'measurement': metric.label,
-                    'time': metric_point['time'],
-                    'value': metric_point['value'],
+                    'time': metric_point.time,
+                    'value': metric_point.value,
                 }
                 if metric.item:
                     bleemeo_metric['item'] = metric.item
-                if 'status' in metric_point:
-                    bleemeo_metric['status'] = metric_point['status']
-                if 'check_output' in metric_point:
+                if metric_point.status_code is not None:
+                    bleemeo_metric['status'] = bleemeo_agent.type.STATUS_NAME[
+                        metric_point.status_code
+                    ]
+                if metric_point.problem_origin:
                     bleemeo_metric['check_output'] = (
-                        metric_point['check_output']
+                        metric_point.problem_origin
                     )
                 metrics.append(bleemeo_metric)
                 if len(metrics) > 1000:
@@ -2127,35 +2115,35 @@ class BleemeoConnector(threading.Thread):
                 fact.uuid,
             )
 
-    def emit_metric(self, metric):
-        metric_name = metric['measurement']
-        metric_has_status = metric.get('status') is not None
+    def emit_metric(self, metric_point):
+        metric_name = metric_point.label
+        metric_has_status = metric_point.status_code is not None
         if not self.sent_metric(metric_name, metric_has_status):
             return
 
         if (self._bleemeo_cache.current_config is not None
                 and not self._bleemeo_cache.current_config.docker_integration
-                and metric.get('container')):
+                and metric_point.container != ''):
             return
 
         if self._metric_queue.qsize() > 100000:
             # Remove one message to make room.
             self._metric_queue.get_nowait()
-        self._metric_queue.put(metric)
-        metric_name = metric['measurement']
-        service = metric.get('service')
-        item = metric.get('item', '')
+        self._metric_queue.put(metric_point)
+        metric_name = metric_point.label
+        service = metric_point.service_label
+        item = metric_point.item
 
         with self._current_metrics_lock:
             self._current_metrics[(metric_name, item)] = MetricRegistrationReq(
                 metric_name,
                 item,
                 service,
-                metric.get('instance', ''),
-                metric.get('container', ''),
-                metric.get('status_of', ''),
-                STATUS_NAME_TO_CODE.get(metric.get('status')),
-                metric.get('check_output', ''),
+                metric_point.service_instance,
+                metric_point.container_name,
+                metric_point.status_of,
+                metric_point.status_code,
+                metric_point.problem_origin,
                 bleemeo_agent.util.get_clock(),
             )
 

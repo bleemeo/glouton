@@ -23,6 +23,7 @@ import re
 import shlex
 import subprocess
 
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 
@@ -236,11 +237,13 @@ class Collectd:
         if match_dict['plugin'] == 'cpu':
             name = 'cpu_%s' % match_dict['type_instance']
             if name == 'cpu_idle':
-                self.core.emit_metric({
-                    'measurement': 'cpu_used',
-                    'time': timestamp,
-                    'value': 100 - value,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                        label='cpu_used',
+                        time=timestamp,
+                        value=100 - value,
+                    )
+                )
             self.computed_metrics_pending.add(
                 ('cpu_other', '', '', timestamp)
             )
@@ -280,15 +283,17 @@ class Collectd:
             if self.graphite_server.ignored_disk(item):
                 return
             if name == 'io_time':
-                self.core.emit_metric({
-                    'measurement': 'io_utilization',
-                    # io_time is a number of ms spent doing IO (per seconds)
-                    # utilization is 100% when we spent 1000ms during one
-                    # second
-                    'value': value / 1000. * 100.,
-                    'time': timestamp,
-                    'item': item,
-                })
+                self.core.emit_metric(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                        label='io_utilization',
+                        time=timestamp,
+                        # io_time is a number of ms spent doing IO
+                        # (per seconds) utilization is 100% when we spent
+                        # 1000ms during one second
+                        value=value / 1000. * 100.,
+                        item=item,
+                    )
+                )
         elif match_dict['plugin'] == 'interface':
             kind_name = {
                 'if_errors': 'err',
@@ -497,18 +502,18 @@ class Collectd:
                 name = 'varnish_backend_requests'
         else:
             return
-
-        metric = {
-            'measurement': name,
-            'time': timestamp,
-            'value': value,
-        }
-        if service is not None:
-            metric['service'] = service
-        if item:
-            metric['item'] = item
-
-        self.core.emit_metric(metric)
+        if service is None:
+            service = ''
+        if not item:
+            item = ''
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+            label=name,
+            time=timestamp,
+            value=value,
+            item=item,
+            service_label=service,
+        )
+        self.core.emit_metric(metric_point)
 
     def packet_finish(self):
         """ Called when graphite_client finished processing one TCP packet
@@ -559,11 +564,11 @@ class Collectd:
                   able to compute the requested value.
             """
             metric = self.core.get_last_metric(measurements, searched_item)
-            if metric is None or metric['time'] < timestamp:
+            if metric is None or metric.time < timestamp:
                 raise MissingMetric()
-            elif metric['time'] > timestamp:
+            elif metric.time > timestamp:
                 raise ComputationFail()
-            return metric['value']
+            return metric.value
 
         service = None
 
@@ -577,12 +582,14 @@ class Collectd:
             # But still, total will including reserved space
             value += get_metric('disk_reserved', item)
 
-            self.core.emit_metric({
-                'measurement': name.replace('_total', '_used_perc'),
-                'time': timestamp,
-                'item': item,
-                'value': used_perc,
-            })
+            self.core.emit_metric(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label=name.replace('_total', '_used_perc'),
+                    time=timestamp,
+                    value=used_perc,
+                    item=item,
+                )
+            )
         elif name == 'cpu_other':
             value = get_metric('cpu_used', '')
             value -= get_metric('cpu_user', '')
@@ -613,23 +620,27 @@ class Collectd:
             else:
                 value_perc = float(used) / value * 100
 
-            self.core.emit_metric({
-                'measurement': name.replace('_total', '_used_perc'),
-                'time': timestamp,
-                'value': value_perc,
-            })
-
-        metric = {
-            'measurement': name,
-            'time': timestamp,
-            'value': value,
-        }
-        if item:
-            metric['item'] = item
-        if service is not None:
-            metric['service'] = service
-            metric['instance'] = instance
-        self.core.emit_metric(metric)
+            self.core.emit_metric(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label=name.replace('_total', '_used_perc'),
+                    time=timestamp,
+                    value=value_perc,
+                )
+            )
+        if not item:
+            item = ''
+        if service is None:
+            service = ''
+            instance = ''
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+            label=name,
+            time=timestamp,
+            value=value,
+            item=item,
+            service_label=service,
+            service_instance=instance,
+        )
+        self.core.emit_metric(metric_point)
 
 
 def _write_config(core):

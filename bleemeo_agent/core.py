@@ -56,6 +56,7 @@ import bleemeo_agent.config
 import bleemeo_agent.facts
 import bleemeo_agent.graphite
 import bleemeo_agent.services
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 # Optional dependencies
@@ -774,8 +775,8 @@ def format_duration(value):
 def _check_soft_status(softstatus_state, metric, soft_status, period, now):
     if softstatus_state is None:
         softstatus_state = MetricSoftStatusState(
-            metric['measurement'],
-            metric.get('item', ''),
+            metric.label,
+            metric.item,
             soft_status,
             None,
             None,
@@ -791,20 +792,20 @@ def _check_soft_status(softstatus_state, metric, soft_status, period, now):
         warning_since = None
 
     if soft_status == 'critical':
-        critical_since = critical_since or metric['time']
-        warning_since = warning_since or metric['time']
+        critical_since = critical_since or metric.time
+        warning_since = warning_since or metric.time
     elif soft_status == 'warning':
         critical_since = None
-        warning_since = warning_since or metric['time']
+        warning_since = warning_since or metric.time
     else:
         critical_since = None
         warning_since = None
 
     warn_duration = (
-        (metric['time'] - warning_since) if warning_since else 0
+        (metric.time - warning_since) if warning_since else 0
     )
     crit_duration = (
-        (metric['time'] - critical_since) if critical_since else 0
+        (metric.time - critical_since) if critical_since else 0
     )
 
     if period == 0:
@@ -1711,33 +1712,40 @@ class Core:
         now = time.time()
 
         if self.graphite_server.metrics_source != 'telegraf':
-            self.emit_metric({
-                'measurement': 'uptime',
-                'time': now,
-                'value': uptime_seconds,
-            })
+            self.emit_metric(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label='uptime',
+                    time=now,
+                    value=uptime_seconds,
+                )
+            )
 
         if self.bleemeo_connector and self.bleemeo_connector.connected:
-            self.emit_metric({
-                'measurement': 'agent_status',
-                'time': now,
-                'value': 0.0,  # status ok
-            })
+            self.emit_metric(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label='agent_status',
+                    time=now,
+                    value=0.0,  # status ok
+                )
+            )
 
         if os.name == 'nt':
-            self.emit_metric({
-                'measurement': 'mem_total',
-                'time': now,
-                'value': float(self.total_memory_size),
-            })
+            self.emit_metric(
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label='mem_total',
+                    time=now,
+                    value=float(self.total_memory_size),
+                )
+            )
             if self.last_facts.get('swap_present', False):
                 self.total_swap_size = psutil.swap_memory().total
-                self.emit_metric({
-                    'measurement': 'swap_total',
-                    'time': now,
-                    'value': float(self.total_swap_size),
-                })
-
+                self.emit_metric(
+                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                        label='swap_total',
+                        time=now,
+                        value=float(self.total_swap_size),
+                    )
+                )
         metric = self.graphite_server.get_time_elapsed_since_last_data()
         if metric is not None:
             self.emit_metric(metric)
@@ -1774,19 +1782,19 @@ class Core:
         )
         if pending_update is not None:
             self.emit_metric(
-                {
-                    'measurement': 'system_pending_updates',
-                    'time': now,
-                    'value': float(pending_update),
-                },
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label='system_pending_updates',
+                    time=now,
+                    value=float(pending_update),
+                )
             )
         if pending_security_update is not None:
             self.emit_metric(
-                {
-                    'measurement': 'system_pending_security_updates',
-                    'time': now,
-                    'value': float(pending_security_update),
-                },
+                bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label='system_pending_security_updates',
+                    time=now,
+                    value=float(pending_security_update),
+                )
             )
 
     def _docker_health_status(self, container_id):
@@ -1805,30 +1813,33 @@ class Core:
 
         docker_status = result.get('State', {}).get('Status', 'running')
         if docker_status != 'running':
-            status = bleemeo_agent.checker.STATUS_CRITICAL
+            status = bleemeo_agent.type.STATUS_CRITICAL
         elif result['State']['Health'].get('Status') == 'healthy':
-            status = bleemeo_agent.checker.STATUS_OK
+            status = bleemeo_agent.type.STATUS_OK
         elif result['State']['Health'].get('Status') == 'unhealthy':
-            status = bleemeo_agent.checker.STATUS_CRITICAL
+            status = bleemeo_agent.type.STATUS_CRITICAL
         else:
-            status = bleemeo_agent.checker.STATUS_UNKNOWN
-
-        metric = {
-            'measurement': 'docker_container_health_status',
-            'time': time.time(),
-            'value': float(status),
-            'status': bleemeo_agent.checker.STATUS_NAME[status],
-            'item': name,
-            'container': name,
-        }
+            status = bleemeo_agent.type.STATUS_UNKNOWN
 
         logs = result['State']['Health'].get('Log', [])
+        problem_origin = ''
         if docker_status != 'running':
-            metric['check_output'] = 'Container stopped'
+            problem_origin = 'Container stopped'
         elif logs:
-            metric['check_output'] = logs[-1].get('Output')
+            problem_origin = logs[-1].get('Output')
+            if problem_origin is None:
+                problem_origin = ''
 
-        self.emit_metric(metric)
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+            label='docker_container_health_status',
+            time=time.time(),
+            value=float(status),
+            item=name,
+            container_name=name,
+            status_code=status,
+            problem_origin=problem_origin,
+        )
+        self.emit_metric(metric_point)
 
     def purge_metrics(self, deleted_metrics=None):
         """ Remove old metrics from self.last_metrics
@@ -1850,9 +1861,9 @@ class Core:
 
         # XXX: concurrent access with emit_metric.
         self.last_metrics = {
-            key: metric
-            for (key, metric) in self.last_metrics.items()
-            if metric['time'] >= cutoff and key not in deleted_metrics
+            key: metric_point
+            for (key, metric_point) in self.last_metrics.items()
+            if metric_point.time >= cutoff and key not in deleted_metrics
         }
 
     def fire_triggers(self, updates_count=None, discovery=None):
@@ -2528,28 +2539,27 @@ class Core:
 
         return (errors, warnings)
 
-    def _store_last_value(self, metric):
+    def _store_last_value(self, metric_point):
         """ Store the metric in self.last_matrics, replacing the previous value
         """
-        item = metric.get('item', '')
-        measurement = metric['measurement']
-        self.last_metrics[(measurement, item)] = metric
+        item = metric_point.item
+        measurement = metric_point.label
+        self.last_metrics[(measurement, item)] = metric_point
 
-    def emit_metric(self, metric, no_emit=False):
+    def emit_metric(self, metric_point, no_emit=False):
         """ Sent a metric to all configured output
         """
-        if metric.get('status_of') is None and not no_emit:
-            metric = self.check_threshold(metric)
-
-        self._store_last_value(metric)
+        if metric_point.status_code is None and not no_emit:
+            metric_point = self.check_threshold(metric_point)
+        self._store_last_value(metric_point)
 
         if no_emit:
             return
 
         if self.bleemeo_connector is not None:
-            self.bleemeo_connector.emit_metric(metric)
+            self.bleemeo_connector.emit_metric(metric_point)
         if self.influx_connector is not None:
-            self.influx_connector.emit_metric(metric)
+            self.influx_connector.emit_metric(metric_point)
 
     def update_last_report(self):
         self.last_report = datetime.datetime.now()
@@ -2586,7 +2596,7 @@ class Core:
 
         return threshold
 
-    def check_threshold(self, metric):
+    def check_threshold(self, metric_point):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-statements
@@ -2598,15 +2608,15 @@ class Core:
             and unknown respectively.
         """
         threshold = self.get_threshold(
-            metric['measurement'], metric.get('item', '')
+            metric_point.label, metric_point.item
         )
 
         if threshold is None:
-            return metric
+            return metric_point
 
-        value = metric['value']
+        value = metric_point.value
         if value is None:
-            return metric
+            return metric_point
 
         # there is a "soft" status (name taken from Nagios), which is a kind
         # of instant status. As soon as the value cross a threshold, its
@@ -2630,9 +2640,9 @@ class Core:
         else:
             soft_status = 'ok'
 
-        period = self._get_softstatus_period(metric['measurement'])
+        period = self._get_softstatus_period(metric_point.label)
         status = self._check_soft_status(
-            metric,
+            metric_point,
             soft_status,
             period,
         )
@@ -2657,12 +2667,12 @@ class Core:
             status_value = 2.0
 
         (unit, unit_text) = self.metrics_unit.get(
-            (metric['measurement'], metric.get('item', '')),
+            (metric_point.label, metric_point.item),
             (None, None),
         )
 
         text = 'Current value: %s' % format_value(
-            metric['value'], unit, unit_text
+            metric_point.value, unit, unit_text
         )
 
         if status != 'ok':
@@ -2681,30 +2691,32 @@ class Core:
                     )
                 )
 
-        metric = metric.copy()
-        metric['status'] = status
-        metric['check_output'] = text
+        metric_point = metric_point._replace(
+            status_code=bleemeo_agent.type.STATUS_NAME_TO_CODE[status],
+            problem_origin=text
+        )
 
-        metric_status = metric.copy()
-        metric_status['measurement'] = metric['measurement'] + '_status'
-        metric_status['value'] = status_value
-        metric_status['status_of'] = metric['measurement']
+        metric_status = metric_point._replace(
+            label=metric_point.label + '_status',
+            value=status_value,
+            status_of=metric_point.label,
+        )
         self.emit_metric(metric_status)
 
-        return metric
+        return metric_point
 
-    def _check_soft_status(self, metric, soft_status, period):
+    def _check_soft_status(self, metric_point, soft_status, period):
         """ Check if soft_status was in error for at least the grace period
             of the metric.
 
             Return the new status
         """
-        key = (metric['measurement'], metric.get('item', ''))
+        key = (metric_point.label, metric_point.item)
         softstatus_state = self.cache.softstatus_by_labelitem.get(key)
 
         new_softstatus_state = _check_soft_status(
             softstatus_state,
-            metric,
+            metric_point,
             soft_status,
             period,
             time.time(),
@@ -2729,9 +2741,9 @@ class Core:
 
             Return default if metric is not found.
         """
-        metric = self.get_last_metric(name, item)
-        if metric is not None:
-            return metric['value']
+        metric_point = self.get_last_metric(name, item)
+        if metric_point is not None:
+            return metric_point.value
         return default
 
     @property

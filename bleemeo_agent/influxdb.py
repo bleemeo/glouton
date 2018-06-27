@@ -132,27 +132,29 @@ class InfluxDBConnector(threading.Thread):
             self._process_queue()
             self._warn_queue_full()
 
-    def emit_metric(self, metric):
+    def emit_metric(self, metric_point):
         # InfluxDB can't store "NaN" (not a number)...
         # drop any metric that contain a NaN
-        value = metric['value']
+        value = metric_point.value
         if isinstance(value, float) and math.isnan(value):
             return
 
         influx_metric = {
-            'measurement': metric['measurement'],
-            'time': int(metric['time']),
+            'measurement': metric_point.label,
+            'time': int(metric_point.time),
             'fields': {
-                'value': metric['value'],
+                'value': metric_point.value,
             },
             'tags': {
             },
         }
 
-        if metric.get('item'):
-            influx_metric['tags']['item'] = metric['item']
-        if metric.get('status') is not None:
-            influx_metric['tags']['status'] = metric['status']
+        if metric_point.item:
+            influx_metric['tags']['item'] = metric_point.item
+        if metric_point.status_code is not None:
+            influx_metric['tags']['status'] = (
+                bleemeo_agent.type.STATUS_NAME[metric_point.status_code]
+            )
 
         if self.core.agent_uuid is None:
             influx_metric['tags']['hostname'] = socket.getfqdn()

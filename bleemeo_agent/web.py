@@ -22,6 +22,7 @@ import flask
 import jinja2.filters
 
 import bleemeo_agent.checker
+import bleemeo_agent.type
 
 
 app = flask.Flask(__name__)  # pylint: disable=invalid-name
@@ -34,14 +35,14 @@ def home():
     check_info = _gather_checks_info()
     top_output = bleemeo_agent.util.get_top_output(app.core.top_info)
     disks_used_perc = [
-        metric
-        for metric in app.core.last_metrics.values()
-        if metric['measurement'] == 'disk_used_perc'
+        metric_point
+        for metric_point in app.core.last_metrics.values()
+        if metric_point.label == 'disk_used_perc'
     ]
     nets_bits_recv = [
-        metric
-        for metric in app.core.last_metrics.values()
-        if metric['measurement'] == 'net_bits_recv'
+        metric_point
+        for metric_point in app.core.last_metrics.values()
+        if metric_point.label == 'net_bits_recv'
     ]
 
     uptime_seconds = bleemeo_agent.util.get_uptime()
@@ -56,6 +57,7 @@ def home():
         top_output=top_output,
         disks_used_perc=disks_used_perc,
         nets_bits_recv=nets_bits_recv,
+        STATUS_NAME=bleemeo_agent.type.STATUS_NAME,
     )
 
 
@@ -64,28 +66,30 @@ def _gather_checks_info():
     check_count_warning = 0
     check_count_critical = 0
     checks = []
-    for metric in app.core.last_metrics.values():
-        if (metric.get('status') is not None
-                and metric.get('status_of') is None):
-            if metric['status'] == 'ok':
+    for metric_point in app.core.last_metrics.values():
+        if (metric_point.status_code is not None
+                and metric_point.status_of == ''):
+            if metric_point.status_code == bleemeo_agent.type.STATUS_OK:
                 check_count_ok += 1
-            elif metric['status'] == 'warning':
+            elif metric_point.status_code == bleemeo_agent.type.STATUS_WARNING:
                 check_count_warning += 1
             else:
                 check_count_critical += 1
             threshold = app.core.get_threshold(
-                metric['measurement'], metric.get('item', ''),
+                metric_point.label, metric_point.item,
             )
 
-            pretty_name = metric['measurement']
-            if metric.get('item', ''):
-                pretty_name = '%s for %s' % (pretty_name, metric['item'])
+            pretty_name = metric_point.label
+            if metric_point.item:
+                pretty_name = '%s for %s' % (pretty_name, metric_point.item)
             checks.append({
-                'name': metric['measurement'],
+                'name': metric_point.label,
                 'pretty_name': pretty_name,
-                'item': metric.get('item'),
-                'status': metric.get('status'),
-                'value': metric['value'],
+                'item': metric_point.item,
+                'status': bleemeo_agent.type.STATUS_NAME[
+                    metric_point.status_code
+                ],
+                'value': metric_point.value,
                 'threshold': threshold,
             })
 

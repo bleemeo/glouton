@@ -23,6 +23,7 @@ import logging
 import os
 import time
 
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 
@@ -435,17 +436,14 @@ class Jmxtrans:
 
             if jmx_metric.get('scale'):
                 new_value = new_value * jmx_metric['scale']
-
-            metric = {
-                'measurement': new_name,
-                'time': timestamp,
-                'value': new_value,
-                'service': service_name,
-                'instance': instance,
-            }
-
-            if item:
-                metric['item'] = item
+            metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                label=new_name,
+                time=timestamp,
+                value=new_value,
+                item=item if item else '',
+                service_label=service_name,
+                service_instance=instance,
+            )
 
             if jmx_metric.get('sum', False):
                 item = instance
@@ -461,7 +459,7 @@ class Jmxtrans:
             if new_name in _CURRENT_CONFIG.divisors:
                 self._values_cache[(new_name, item)] = (timestamp, new_value)
 
-            self.core.emit_metric(metric)
+            self.core.emit_metric(metric_point)
 
     def packet_finish(self):
         """ Called when graphite_client finished processing one TCP packet
@@ -471,23 +469,21 @@ class Jmxtrans:
     def flush(self, timestamp):
         for key, (jmx_metric, values) in self._sum_value.items():
             (name, item, service_name) = key
-            metric = {
-                'measurement': name,
-                'time': timestamp,
-                'value': sum(values),
-                'service': service_name,
-                'instance': item,
-            }
-
-            if item:
-                metric['item'] = item
+            metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                label=name,
+                time=timestamp,
+                value=sum(values),
+                item=item if item else '',
+                service_label=service_name,
+                service_instance=item,
+            )
 
             if jmx_metric.get('ratio') is not None:
                 self._ratio_value[key] = (jmx_metric, sum(values))
             else:
                 if name in _CURRENT_CONFIG.divisors:
                     self._values_cache[(name, item)] = (timestamp, sum(values))
-                self.core.emit_metric(metric)
+                self.core.emit_metric(metric_point)
         self._sum_value = {}
 
         for key, (jmx_metric, value) in self._ratio_value.items():
@@ -509,18 +505,16 @@ class Jmxtrans:
                 new_value = value / divisor[1]
 
             if new_value is not None:
-                metric = {
-                    'measurement': name,
-                    'time': timestamp,
-                    'value': new_value,
-                    'service': service_name,
-                    'instance': item,
-                }
+                metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                    label=name,
+                    time=timestamp,
+                    value=new_value,
+                    item=item if item else '',
+                    service_label=service_name,
+                    service_instance=item,
+                )
 
-                if item:
-                    metric['item'] = item
-
-                self.core.emit_metric(metric)
+                self.core.emit_metric(metric_point)
 
         self._ratio_value = {}
 

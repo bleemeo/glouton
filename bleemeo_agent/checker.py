@@ -29,24 +29,13 @@ import requests
 # pylint: disable=wrong-import-order
 from six.moves.urllib import parse as urllib_parse
 
+import bleemeo_agent.type
 import bleemeo_agent.util
 
 
-# Must match nagios return code
-STATUS_OK = 0
-STATUS_WARNING = 1
-STATUS_CRITICAL = 2
-STATUS_UNKNOWN = 3
 # Special value, means that check could not be run, e.g. due to missing port
 # information
 STATUS_CHECK_NOT_RUN = -1
-
-STATUS_NAME = {
-    STATUS_OK: 'ok',
-    STATUS_WARNING: 'warning',
-    STATUS_CRITICAL: 'critical',
-    STATUS_UNKNOWN: 'unknown',
-}
 
 
 CHECKS_INFO = {
@@ -331,7 +320,8 @@ class Check:
 
         if not self.service_info.get('container_running', True):
             (return_code, output) = (
-                STATUS_CRITICAL, 'Container stopped: connection refused'
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'Container stopped: connection refused'
             )
         elif self.check_info.get('check_type') == 'nagios':
             (return_code, output) = self.check_nagios()
@@ -350,12 +340,12 @@ class Check:
         else:
             (return_code, output) = (STATUS_CHECK_NOT_RUN, '')
 
-        if (return_code != STATUS_CRITICAL
-                and return_code != STATUS_UNKNOWN
+        if (return_code != bleemeo_agent.type.STATUS_CRITICAL
+                and return_code != bleemeo_agent.type.STATUS_UNKNOWN
                 and self.extra_ports):
             if (return_code == STATUS_CHECK_NOT_RUN
                     and set(self.extra_ports.keys()) == {'unix'}):
-                return_code = STATUS_OK
+                return_code = bleemeo_agent.type.STATUS_OK
 
             for (address, port) in self.tcp_sockets:
                 if port == self.port:
@@ -363,7 +353,7 @@ class Check:
                     continue
                 (extra_port_rc, extra_port_output) = self.check_tcp(
                     address, port)
-                if extra_port_rc == STATUS_CRITICAL:
+                if extra_port_rc == bleemeo_agent.type.STATUS_CRITICAL:
                     (return_code, output) = (extra_port_rc, extra_port_output)
                     break
                 if return_code == STATUS_CHECK_NOT_RUN:
@@ -371,7 +361,7 @@ class Check:
                     output = extra_port_output
 
         if return_code == STATUS_CHECK_NOT_RUN:
-            return_code = STATUS_OK
+            return_code = bleemeo_agent.type.STATUS_OK
 
         if self.instance:
             logging.debug(
@@ -383,34 +373,39 @@ class Check:
                 'check %s: return code is %s (output=%s)',
                 self.service, return_code, output,
             )
-
-        metric = {
-            'measurement': '%s_status' % self.service,
-            'status': STATUS_NAME[return_code],
-            'service': self.service,
-            'time': now,
-            'value': float(return_code),
-            'check_output': output,
-        }
         if self.instance:
-            metric['item'] = self.instance
-            metric['instance'] = self.instance
-        self.core.emit_metric(metric)
+            instance = self.instance
+            item = self.instance
+        else:
+            instance = ''
+            item = ''
+        metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+            label='%s_status' % self.service,
+            time=now,
+            value=float(return_code),
+            item=item,
+            service_label=self.service,
+            service_instance=instance,
+            status_code=return_code,
+            problem_origin=output,
+        )
+        self.core.emit_metric(metric_point)
 
-        if return_code != STATUS_OK:
+        if return_code != bleemeo_agent.type.STATUS_OK:
             # close all TCP sockets
             for key, sock in self.tcp_sockets.items():
                 if sock is not None:
                     sock.close()
                     self.tcp_sockets[key] = None
-            if self._last_status is None or self._last_status == STATUS_OK:
+            if (self._last_status is None
+                    or self._last_status == bleemeo_agent.type.STATUS_OK):
                 self.core.add_scheduled_job(
                     self.run_check,
                     seconds=0,
                     next_run_in=30,
                 )
 
-        if return_code == STATUS_OK and self.tcp_sockets:
+        if return_code == bleemeo_agent.type.STATUS_OK and self.tcp_sockets:
             # Make sure all socket are openned
             self.open_sockets_job = self.core.add_scheduled_job(
                 self.open_sockets,
@@ -436,8 +431,8 @@ class Check:
         )
 
         output = output.decode('utf-8', 'ignore').strip()
-        if return_code > STATUS_UNKNOWN or return_code < 0:
-            return_code = STATUS_UNKNOWN
+        if return_code > bleemeo_agent.type.STATUS_UNKNOWN or return_code < 0:
+            return_code = bleemeo_agent.type.STATUS_UNKNOWN
 
         return (return_code, output)
 
@@ -448,12 +443,12 @@ class Check:
                 tmp = sock.recv(4096)
             except socket.timeout:
                 return (
-                    STATUS_CRITICAL,
+                    bleemeo_agent.type.STATUS_CRITICAL,
                     'Connection timed out after 10 seconds'
                 )
             except socket.error:
                 return (
-                    STATUS_CRITICAL,
+                    bleemeo_agent.type.STATUS_CRITICAL,
                     'Connection closed'
                 )
             if tmp == b'':
@@ -462,15 +457,21 @@ class Check:
 
         if self.check_info['check_tcp_expect'] not in received:
             if received == '':
-                return (STATUS_CRITICAL, 'No data received from host')
+                return (
+                    bleemeo_agent.type.STATUS_CRITICAL,
+                    'No data received from host'
+                )
             return (
-                STATUS_CRITICAL,
+                bleemeo_agent.type.STATUS_CRITICAL,
                 'Unexpected response: %s' % received
             )
 
         sock.close()
         end = bleemeo_agent.util.get_clock()
-        return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
+        return (
+            bleemeo_agent.type.STATUS_OK,
+            'TCP OK - %.3f second response time' % (end-start)
+        )
 
     def check_tcp(self, address=None, port=None):
         # pylint: disable=too-many-return-statements
@@ -491,11 +492,14 @@ class Check:
             sock.connect((address, port))
         except socket.timeout:
             return (
-                STATUS_CRITICAL,
+                bleemeo_agent.type.STATUS_CRITICAL,
                 'TCP port %d, connection timed out after 10 seconds' % port
             )
         except socket.error:
-            return (STATUS_CRITICAL, 'TCP port %d, Connection refused' % port)
+            return (
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'TCP port %d, Connection refused' % port
+            )
 
         if (self.check_info.get('check_tcp_send')
                 and use_default):
@@ -503,12 +507,12 @@ class Check:
                 sock.send(self.check_info['check_tcp_send'].encode('utf8'))
             except socket.timeout:
                 return (
-                    STATUS_CRITICAL,
+                    bleemeo_agent.type.STATUS_CRITICAL,
                     'TCP port %d, connection timed out after 10 seconds' % port
                 )
             except socket.error:
                 return (
-                    STATUS_CRITICAL,
+                    bleemeo_agent.type.STATUS_CRITICAL,
                     'TCP port %d, connection closed too early' % port
                 )
 
@@ -518,7 +522,10 @@ class Check:
 
         sock.close()
         end = bleemeo_agent.util.get_clock()
-        return (STATUS_OK, 'TCP OK - %.3f second response time' % (end-start))
+        return (
+            bleemeo_agent.type.STATUS_OK,
+            'TCP OK - %.3f second response time' % (end-start)
+        )
 
     def check_http(self, tls=False):
         if self.port is None or self.address is None:
@@ -541,10 +548,12 @@ class Check:
                 headers={'User-Agent': self.core.http_user_agent},
             )
         except requests.exceptions.Timeout:
-            return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
+            return (
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'Connection timed out after 10 seconds'
+            )
         except requests.exceptions.RequestException:
-            return (STATUS_CRITICAL, 'Connection refused')
-
+            return (bleemeo_agent.type.STATUS_CRITICAL, 'Connection refused')
         if 'http_status_code' in self.check_info:
             expected_code = int(self.check_info['http_status_code'])
         else:
@@ -554,20 +563,20 @@ class Check:
                 or (expected_code is not None
                     and response.status_code != expected_code)):
             return (
-                STATUS_CRITICAL,
+                bleemeo_agent.type.STATUS_CRITICAL,
                 'HTTP CRITICAL - http_code=%s' % (
                     response.status_code,
                 )
             )
         if expected_code is None and response.status_code >= 400:
             return (
-                STATUS_WARNING,
+                bleemeo_agent.type.STATUS_WARNING,
                 'HTTP WARN - status_code=%s' % (
                     response.status_code,
                 )
             )
         return (
-            STATUS_OK,
+            bleemeo_agent.type.STATUS_OK,
             'HTTP OK - status_code=%s' % (
                 response.status_code,
             )
@@ -585,17 +594,20 @@ class Check:
             client.logout()
         except (imaplib.IMAP4.error, socket.error):
             return (
-                STATUS_CRITICAL,
+                bleemeo_agent.type.STATUS_CRITICAL,
                 'Unable to connect to IMAP server',
             )
         except socket.timeout:
             return (
-                STATUS_CRITICAL,
+                bleemeo_agent.type.STATUS_CRITICAL,
                 'Connection timed out after 10 seconds',
             )
 
         end = bleemeo_agent.util.get_clock()
-        return (STATUS_OK, 'IMAP OK - %.3f second response time' % (end-start))
+        return (
+            bleemeo_agent.type.STATUS_OK,
+            'IMAP OK - %.3f second response time' % (end-start)
+        )
 
     def check_smtp(self):
         if self.port is None or self.address is None:
@@ -609,17 +621,20 @@ class Check:
             client.quit()
         except (smtplib.SMTPException, socket.error):
             return (
-                STATUS_CRITICAL,
+                bleemeo_agent.type.STATUS_CRITICAL,
                 'Unable to connect to SMTP server',
             )
         except socket.timeout:
             return (
-                STATUS_CRITICAL,
+                bleemeo_agent.type.STATUS_CRITICAL,
                 'Connection timed out after 10 seconds',
             )
 
         end = bleemeo_agent.util.get_clock()
-        return (STATUS_OK, 'SMTP OK - %.3f second response time' % (end-start))
+        return (
+            bleemeo_agent.type.STATUS_OK,
+            'SMTP OK - %.3f second response time' % (end-start)
+        )
 
     def check_ntp(self):
         if self.port is None or self.address is None:
@@ -639,7 +654,10 @@ class Check:
             client.sendto(msg, (self.address, self.port))
             msg, _address = client.recvfrom(1024)
         except socket.timeout:
-            return (STATUS_CRITICAL, 'Connection timed out after 10 seconds')
+            return (
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'Connection timed out after 10 seconds'
+            )
 
         unpacked = struct.unpack("!BBBB11I", msg)
         stratum = unpacked[1]
@@ -648,11 +666,18 @@ class Check:
         end = bleemeo_agent.util.get_clock()
 
         if stratum == 0 or stratum == 16:
-            return (STATUS_CRITICAL, 'NTP server not (yet) synchronized')
+            return (
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'NTP server not (yet) synchronized'
+            )
         if abs(server_time - time.time()) > 10:
-            return (STATUS_CRITICAL, 'Local time and NTP time does not match')
+            return (
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'Local time and NTP time does not match'
+            )
         return (
-            STATUS_OK, 'NTP OK - %.3f second response time' % (end-start)
+            bleemeo_agent.type.STATUS_OK,
+            'NTP OK - %.3f second response time' % (end-start)
         )
 
 

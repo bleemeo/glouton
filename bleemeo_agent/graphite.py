@@ -187,11 +187,11 @@ class GraphiteServer(threading.Thread):
                 and delay < highest_threshold):
             return None
 
-        return {
-            'measurement': 'time_elapsed_since_last_data',
-            'time': time.time(),
-            'value': delay,
-        }
+        return bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+            label='time_elapsed_since_last_data',
+            time=time.time(),
+            value=delay,
+        )
 
     def network_interface_blacklist(self, if_name):
         """ Returns True if the given interface is blacklisted
