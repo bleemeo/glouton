@@ -349,6 +349,7 @@ class BleemeoCache:
         self.containers_by_name = {}
         self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
+        self.facts_by_key = {}
 
         if not skip_load:
             cache = self._state.get("_bleemeo_cache")
@@ -420,6 +421,10 @@ class BleemeoCache:
                 .replace(tzinfo=datetime.timezone.utc)
             )
 
+        for fact_raw in cache.get('facts', []):
+            fact = AgentFact(*fact_raw)
+            self.facts[fact.uuid] = fact
+
         self.update_lookup_map()
 
     def update_lookup_map(self):
@@ -427,6 +432,7 @@ class BleemeoCache:
         self.containers_by_name = {}
         self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
+        self.facts_by_key = {}
 
         for metric in self.metrics.values():
             self.metrics_by_labelitem[(metric.label, metric.item)] = metric
@@ -438,6 +444,9 @@ class BleemeoCache:
         for service in self.services.values():
             key = (service.label, service.instance)
             self.services_by_labelinstance[key] = service
+
+        for fact in self.facts.values():
+            self.facts_by_key[fact.key] = fact
 
     def get_core_thresholds(self):
         """ Return thresholds in a format adapted for bleemeo_agent.core
@@ -465,6 +474,7 @@ class BleemeoCache:
             'metrics': self.metrics,
             'services': self.services,
             'tags': self.tags,
+            'facts': list(self.facts.values()),
             'containers': self.containers,
             'current_config': self.current_config,
             'next_config_at':
