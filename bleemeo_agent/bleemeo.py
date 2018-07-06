@@ -585,9 +585,11 @@ class BleemeoConnector(threading.Thread):
         self._metric_queue = queue.Queue()
         self.connected = False
         self._last_disconnects = []
+        self._disable_until = 0
         self._mqtt_queue_size = 0
 
         self.trigger_full_sync = False
+        self.trigger_fact_sync = 0
         self.last_containers_removed = bleemeo_agent.util.get_clock()
         self.last_config_will_change_msg = bleemeo_agent.util.get_clock()
         self._bleemeo_cache = None
@@ -727,9 +729,13 @@ class BleemeoConnector(threading.Thread):
         _mqtt_reconnect_at = 0
         while not self.core.is_terminating.is_set():
             clock_now = bleemeo_agent.util.get_clock()
-            if (not _mqtt_reconnect_at
-                    and len(self._last_disconnects) >= 6
-                    and self._last_disconnects[-6] > clock_now - 60):
+            if (not _mqtt_reconnect_at and self._disable_until > clock_now):
+                self.mqtt_client.disconnect()
+                self.mqtt_client.loop_stop()
+                _mqtt_reconnect_at = self._disable_until
+            elif (not _mqtt_reconnect_at
+                  and len(self._last_disconnects) >= 6
+                  and self._last_disconnects[-6] > clock_now - 60):
                 logging.info(
                     'Too many attempt to connect to MQTT on last minute.'
                     ' Disabling MQTT for 60 seconds'
@@ -737,9 +743,10 @@ class BleemeoConnector(threading.Thread):
                 self.mqtt_client.disconnect()
                 self.mqtt_client.loop_stop()
                 _mqtt_reconnect_at = clock_now + 60
-            if (not _mqtt_reconnect_at
-                    and len(self._last_disconnects) >= 15
-                    and self._last_disconnects[-15] > clock_now - 600):
+                self.trigger_fact_sync = clock_now
+            elif (not _mqtt_reconnect_at
+                  and len(self._last_disconnects) >= 15
+                  and self._last_disconnects[-15] > clock_now - 600):
                 logging.info(
                     'Too many attempt to connect to MQTT on last 10 minutes.'
                     ' Disabling MQTT for 5 minutes'
@@ -748,7 +755,9 @@ class BleemeoConnector(threading.Thread):
                 self.mqtt_client.loop_stop()
                 _mqtt_reconnect_at = clock_now + 300
                 self._last_disconnects = []
-            elif _mqtt_reconnect_at and _mqtt_reconnect_at < clock_now:
+                self.trigger_fact_sync = clock_now
+            elif (_mqtt_reconnect_at and _mqtt_reconnect_at < clock_now
+                  and self._disable_until + 10 < clock_now):
                 logging.info('Re-enabling MQTT connection')
                 _mqtt_reconnect_at = 0
                 self._mqtt_start()
@@ -1076,8 +1085,11 @@ class BleemeoConnector(threading.Thread):
 
         last_metrics_count = 0
         successive_errors = 0
+        last_duplicated_events = []
 
         while not self.core.is_terminating.is_set():
+            duplicated_checked = False
+
             if self.agent_uuid is None:
                 self.register()
 
@@ -1102,6 +1114,19 @@ class BleemeoConnector(threading.Thread):
                 self.trigger_full_sync = False
 
             clock_now = bleemeo_agent.util.get_clock()
+            if self._disable_until > clock_now:
+                logging.info(
+                    'Bleemeo connector is disabled for %d seconds',
+                    self._disable_until - clock_now,
+                )
+                self.core.is_terminating.wait(min(
+                    60, self._disable_until - clock_now,
+                ))
+                continue
+            elif self._disable_until:
+                logging.info('Re-enabling Bleemeo connector')
+                self._disable_until = 0
+                next_full_sync = 0
             with self._current_metrics_lock:
                 metrics_count = len(self._current_metrics)
 
@@ -1112,6 +1137,13 @@ class BleemeoConnector(threading.Thread):
             if (next_full_sync < clock_now
                     or last_sync <= self.last_config_will_change_msg):
                 try:
+                    if not duplicated_checked:
+                        self._sync_check_duplicated(
+                            bleemeo_cache, bleemeo_api, last_duplicated_events,
+                        )
+                        duplicated_checked = True
+                    if self._disable_until:
+                        continue
                     self._sync_agent(bleemeo_cache, bleemeo_api)
                     sync_run = True
                 except ApiError as exc:
@@ -1122,10 +1154,38 @@ class BleemeoConnector(threading.Thread):
                     self.core.is_terminating.wait(5)
                     has_error = True
 
+            if (next_full_sync < clock_now or
+                    last_sync < self.core.last_facts_update or
+                    last_sync < self.trigger_fact_sync):
+                try:
+                    if not duplicated_checked:
+                        self._sync_check_duplicated(
+                            bleemeo_cache, bleemeo_api, last_duplicated_events,
+                        )
+                        duplicated_checked = True
+                    if self._disable_until:
+                        continue
+                    self._sync_facts(bleemeo_cache, bleemeo_api)
+                    sync_run = True
+                except ApiError as exc:
+                    logging.info(
+                        'Unable to synchronize facts. API responded: %s',
+                        exc.response.content,
+                    )
+                    self.core.is_terminating.wait(5)
+                    has_error = True
+
             if (next_full_sync <= clock_now or
                     last_sync <= self.last_containers_removed or
                     last_sync <= self.core.last_discovery_update):
                 try:
+                    if not duplicated_checked:
+                        self._sync_check_duplicated(
+                            bleemeo_cache, bleemeo_api, last_duplicated_events
+                        )
+                        duplicated_checked = True
+                    if self._disable_until:
+                        continue
                     full = (
                         next_full_sync <= clock_now or
                         last_sync <= self.last_containers_removed or
@@ -1148,6 +1208,13 @@ class BleemeoConnector(threading.Thread):
             if (next_full_sync <= clock_now or
                     last_sync <= self.core.last_discovery_update):
                 try:
+                    if not duplicated_checked:
+                        self._sync_check_duplicated(
+                            bleemeo_cache, bleemeo_api, last_duplicated_events,
+                        )
+                        duplicated_checked = True
+                    if self._disable_until:
+                        continue
                     full = (
                         next_full_sync <= clock_now or
                         # After 3 successive_errors force a full sync.
@@ -1172,6 +1239,13 @@ class BleemeoConnector(threading.Thread):
                     last_sync <= self.core.last_discovery_update or
                     last_metrics_count != metrics_count):
                 try:
+                    if not duplicated_checked:
+                        self._sync_check_duplicated(
+                            bleemeo_cache, bleemeo_api, last_duplicated_events,
+                        )
+                        duplicated_checked = True
+                    if self._disable_until:
+                        continue
                     with self._current_metrics_lock:
                         self._current_metrics = {
                             key: value
@@ -1194,19 +1268,6 @@ class BleemeoConnector(threading.Thread):
                 except ApiError as exc:
                     logging.info(
                         'Unable to synchronize metrics. API responded: %s',
-                        exc.response.content,
-                    )
-                    self.core.is_terminating.wait(5)
-                    has_error = True
-
-            if (next_full_sync < clock_now or
-                    last_sync < self.core.last_facts_update):
-                try:
-                    self._sync_facts(bleemeo_cache, bleemeo_api)
-                    sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize facts. API responded: %s',
                         exc.response.content,
                     )
                     self.core.is_terminating.wait(5)
@@ -2015,9 +2076,9 @@ class BleemeoConnector(threading.Thread):
 
         return False
 
-    def _sync_facts(self, bleemeo_cache, bleemeo_api):
+    def _sync_update_facts(self, bleemeo_cache, bleemeo_api):
         # pylint: disable=too-many-locals
-        logging.debug('Synchronize facts')
+        logging.debug('Update facts')
         fact_url = 'v1/agentfact/'
 
         if self.core.state.get('facts_uuid') is not None:
@@ -2041,6 +2102,14 @@ class BleemeoConnector(threading.Thread):
             )
             bleemeo_cache.facts[fact.uuid] = fact
             bleemeo_cache.facts_by_key[fact.key] = fact
+
+    def _sync_facts(self, bleemeo_cache, bleemeo_api):
+        # pylint: disable=too-many-locals
+        logging.debug('Synchronize facts')
+        fact_url = 'v1/agentfact/'
+
+        # Step 1: refresh cache from API
+        # This step is already done by _sync_update_facts
 
         # Step 2: delete local object that are deleted from API
         # Not done with facts. API never delete facts.
@@ -2124,6 +2193,60 @@ class BleemeoConnector(threading.Thread):
                 fact.key,
                 fact.uuid,
             )
+
+    def _sync_check_duplicated(
+            self, bleemeo_cache, bleemeo_api, last_duplicated_events):
+        """ Look at some facts and verify that they didn't changed.
+
+            If the fact changed, I probably means another agent is using
+            the same state.json.
+        """
+        old_facts_by_key = bleemeo_cache.facts_by_key
+        self._sync_update_facts(bleemeo_cache, bleemeo_api)
+
+        # If old_facts and facts retrieved just now
+        # does not match, it means another agent modified them.
+        # If this happen, (temporary) stop all connection with
+        # bleemeo and warm the user.
+        # We only check some key facts.
+        for name in ['fqdn', 'primary_address', 'primary_mac_address']:
+            if (name not in old_facts_by_key
+                    or name not in bleemeo_cache.facts_by_key):
+                continue
+            old_value = old_facts_by_key[name].value
+            current_value = bleemeo_cache.facts_by_key[name].value
+            if old_value == current_value:
+                continue
+
+            clock_now = bleemeo_agent.util.get_clock()
+            last_duplicated_events.append(clock_now)
+            last_duplicated_events = last_duplicated_events[-15:]
+            logging.info(
+                'Detected duplicated state.json. '
+                'Another agent changed "%s" from "%s" to "%s"',
+                name,
+                old_value,
+                current_value,
+            )
+            logging.info(
+                'The following links may be relevant to solve the issue: '
+                'https://docs.bleemeo.com/agent/migrate-agent-new-server/'
+                ' and https://docs.bleemeo.com/agent/install-cloudimage-creation/'  # noqa
+            )
+            if (len(last_duplicated_events) >= 3 and
+                    last_duplicated_events[-3] > clock_now - 3600):
+                delay = 900 + random.randint(-60, 60)
+            else:
+                delay = 300 + random.randint(-60, 60)
+            self._disable_until = clock_now + delay
+            break
+
+        if self._disable_until:
+            self._bleemeo_cache = bleemeo_cache.copy()
+            # Save cache so if agent is restarted in won't
+            # complain of the same change on facts by another
+            # agent.
+            bleemeo_cache.save()
 
     def emit_metric(self, metric_point):
         metric_name = metric_point.label
