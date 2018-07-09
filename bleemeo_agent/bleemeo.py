@@ -736,24 +736,28 @@ class BleemeoConnector(threading.Thread):
             elif (not _mqtt_reconnect_at
                   and len(self._last_disconnects) >= 6
                   and self._last_disconnects[-6] > clock_now - 60):
+                delay = 60 + random.randint(-15, 15)
                 logging.info(
                     'Too many attempt to connect to MQTT on last minute.'
-                    ' Disabling MQTT for 60 seconds'
+                    ' Disabling MQTT for %d seconds',
+                    delay
                 )
                 self.mqtt_client.disconnect()
                 self.mqtt_client.loop_stop()
-                _mqtt_reconnect_at = clock_now + 60
+                _mqtt_reconnect_at = clock_now + delay
                 self.trigger_fact_sync = clock_now
             elif (not _mqtt_reconnect_at
                   and len(self._last_disconnects) >= 15
                   and self._last_disconnects[-15] > clock_now - 600):
+                delay = 300 + random.randint(-60, 60)
                 logging.info(
                     'Too many attempt to connect to MQTT on last 10 minutes.'
-                    ' Disabling MQTT for 5 minutes'
+                    ' Disabling MQTT for %d seconds',
+                    delay,
                 )
                 self.mqtt_client.disconnect()
                 self.mqtt_client.loop_stop()
-                _mqtt_reconnect_at = clock_now + 300
+                _mqtt_reconnect_at = clock_now + delay
                 self._last_disconnects = []
                 self.trigger_fact_sync = clock_now
             elif (_mqtt_reconnect_at and _mqtt_reconnect_at < clock_now
