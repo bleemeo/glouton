@@ -582,7 +582,8 @@ class BleemeoConnector(threading.Thread):
         super(BleemeoConnector, self).__init__()
         self.core = core
 
-        self._metric_queue = queue.Queue()
+        self._metric_queue = queue.Queue(10000)
+        self._unregistered_metric_queue = queue.Queue()
         self.connected = False
         self._last_disconnects = []
         self._disable_until = 0
@@ -831,10 +832,10 @@ class BleemeoConnector(threading.Thread):
                 self._mqtt_queue_size,
             )
 
-        if self._metric_queue.qsize() > 10:
+        if self._unregistered_metric_queue.qsize() > 10:
             logging.info(
                 '%s metric points blocked due to metric not yet registered',
-                self._metric_queue.qsize(),
+                self._unregistered_metric_queue.qsize(),
             )
 
         if (self.core.graphite_server.data_last_seen_at is None or
@@ -907,7 +908,6 @@ class BleemeoConnector(threading.Thread):
             Bleemeo connector thread.
         """
         metrics = []
-        repush_metric = None
         timeout = 3
 
         try:
@@ -929,19 +929,9 @@ class BleemeoConnector(threading.Thread):
                     elif key not in self._current_metrics:
                         continue
                     else:
-                        self._metric_queue.put(metric_point)
-
-                    if repush_metric is metric_point:
-                        # It has looped, the first re-pushed metric was
-                        # re-read.
-                        # Sleep a short time to avoid looping for nothing
-                        # and consuming all CPU
-                        time.sleep(0.5)
-                        break
-
-                    if repush_metric is None:
-                        repush_metric = metric_point
-
+                        if self._unregistered_metric_queue.qsize() > 100000:
+                            self._unregistered_metric_queue_cleanup()
+                        self._unregistered_metric_queue.put(metric_point)
                     continue
 
                 bleemeo_metric = {
@@ -1296,6 +1286,8 @@ class BleemeoConnector(threading.Thread):
             else:
                 successive_errors = 0
                 delay = 15
+            if sync_run:
+                self._unregistered_metric_queue_cleanup()
 
             self._bleemeo_cache = bleemeo_cache.copy()
             self.core.is_terminating.wait(delay)
@@ -1621,6 +1613,7 @@ class BleemeoConnector(threading.Thread):
                 bleemeo_cache.update_lookup_map()
                 self._bleemeo_cache = bleemeo_cache
                 reg_count_before_update = 60
+                self._unregistered_metric_queue_cleanup()
 
         bleemeo_cache.update_lookup_map()
 
@@ -2198,6 +2191,36 @@ class BleemeoConnector(threading.Thread):
                 fact.uuid,
             )
 
+    def _unregistered_metric_queue_cleanup(self):
+        """ Process metrics that are waiting in _unregistered_metric_queue
+
+            * Any now regirested metrics are moved back to _metric_queue
+            * Metrics points too old are droped
+        """
+        try:
+            repush_metric_points = []
+            for _ in range(self._unregistered_metric_queue.qsize()):
+                metric_point = self._unregistered_metric_queue.get(timeout=0.3)
+                short_item = (metric_point.item[:API_METRIC_ITEM_LENGTH])
+                if metric_point.service_instance:
+                    short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
+                key = (metric_point.label, short_item)
+                metric = self._bleemeo_cache.metrics_by_labelitem.get(key)
+
+                if metric is not None:
+                    self._metric_queue.put(metric_point)
+                elif (key in self._current_metrics
+                      and time.time() - metric_point.time < 7200):
+                    repush_metric_points.append(metric_point)
+        except queue.Empty:
+            pass
+
+        if len(repush_metric_points) > 90000:
+            repush_metric_points.sort(key=lambda x: x.time)
+            repush_metric_points = repush_metric_points[-90000:]
+        for point in repush_metric_points:
+            self._unregistered_metric_queue.put(point)
+
     def _sync_check_duplicated(
             self, bleemeo_cache, bleemeo_api, last_duplicated_events):
         """ Look at some facts and verify that they didn't changed.
@@ -2263,9 +2286,6 @@ class BleemeoConnector(threading.Thread):
                 and metric_point.container != ''):
             return
 
-        if self._metric_queue.qsize() > 100000:
-            # Remove one message to make room.
-            self._metric_queue.get_nowait()
         self._metric_queue.put(metric_point)
         metric_name = metric_point.label
         service = metric_point.service_label
