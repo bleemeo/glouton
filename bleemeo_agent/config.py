@@ -81,6 +81,7 @@ CONFIG_VARS = [
     ('bleemeo.mqtt.port', 'int', 8883),
     ('bleemeo.mqtt.ssl', 'bool', True),
     ('bleemeo.initial_config_name', 'string', None),
+    ('bleemeo.initial_agent_name', 'string', ''),
     (
         'bleemeo.mqtt.cafile',
         'string',

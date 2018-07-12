@@ -990,17 +990,20 @@ class BleemeoConnector(threading.Thread):
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/agent/')
 
-        name = self.core.last_facts.get('fqdn')
-        if not name:
+        fqdn = self.core.last_facts.get('fqdn')
+        if not fqdn:
             logging.debug('Register delayed, fact fqdn not available')
             return
+        name = self.core.config['bleemeo.initial_agent_name']
+        if not name:
+            name = fqdn
 
         registration_key = self.core.config['bleemeo.registration_key']
         payload = {
             'account': self.account_id,
             'initial_password': self.core.state.get('password'),
             'display_name': name,
-            'fqdn': name,
+            'fqdn': fqdn,
         }
 
         initial_config_name = self.core.config['bleemeo.initial_config_name']
