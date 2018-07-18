@@ -2286,7 +2286,7 @@ class BleemeoConnector(threading.Thread):
 
         if (self._bleemeo_cache.current_config is not None
                 and not self._bleemeo_cache.current_config.docker_integration
-                and metric_point.container != ''):
+                and metric_point.container_name != ''):
             return
 
         self._metric_queue.put(metric_point)
