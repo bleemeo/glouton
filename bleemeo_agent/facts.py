@@ -137,12 +137,12 @@ def get_package_version(package_name, default=None, distribution=None):
     result = None
     if distribution is None or distribution == 'debian':
         result = _get_package_version_dpkg(package_name)
-        if result is not None:
+        if result is not None and result != "<none>":
             return result
 
     if distribution is None or distribution == 'centos':
         result = _get_package_version_rpm(package_name)
-        if result is not None:
+        if result is not None and result != "<none>":
             return result
 
     return default
