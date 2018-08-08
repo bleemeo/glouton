@@ -434,7 +434,7 @@ def get_service_info(cmdline):
     try:
         arg0 = shlex.split(cmdline)[0]
     except ValueError:
-        return None
+        arg0 = cmdline.split()[0]
 
     name = os.path.basename(arg0)
 
@@ -893,6 +893,7 @@ class State:
 
         Currently store in a json file
     """
+
     def __init__(self, filename):
         self.filename = filename
         self._content = {}
