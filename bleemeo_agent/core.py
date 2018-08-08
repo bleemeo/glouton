@@ -431,7 +431,11 @@ def main():
 def get_service_info(cmdline):
     """ Return service_info from KNOWN_PROCESS matching this command line
     """
-    arg0 = shlex.split(cmdline)[0]
+    try:
+        arg0 = shlex.split(cmdline)[0]
+    except ValueError:
+        return None
+
     name = os.path.basename(arg0)
 
     if os.name == 'nt':
