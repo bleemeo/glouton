@@ -784,6 +784,9 @@ def pull_raw_metric(core, name):
 def docker_restart(docker_client, container_name):
     """ Restart a Docker container
     """
+    if docker_client is None:
+        logging.warning("Telegraph is not running : install docker-py")
+        return
     docker_client.stop(container_name)
     for _ in range(10):
         time.sleep(0.2)
