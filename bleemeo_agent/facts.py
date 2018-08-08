@@ -176,10 +176,22 @@ def get_docker_version(core):
             logging.debug('error getting docker verion', exc_info=True)
 
     package_version = get_package_version(
-        'docker-engine',
+        'docker-ce',
         package_version,
         distribution=core.config['distribution'],
     )
+    if package_version is None:
+        package_version = get_package_version(
+            'docker-ee',
+            package_version,
+            distribution=core.config['distribution'],
+        )
+    if package_version is None:
+        package_version = get_package_version(
+            'docker-engine',
+            package_version,
+            distribution=core.config['distribution'],
+        )
     if package_version is None:
         package_version = get_package_version(
             'docker.io',
