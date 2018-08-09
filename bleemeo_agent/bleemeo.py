@@ -344,6 +344,7 @@ class BleemeoCache:
         self.current_config = None
         self.next_config_at = None
         self.registration_at = None
+        self.account_id = None
 
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
@@ -367,6 +368,7 @@ class BleemeoCache:
         new.current_config = self.current_config
         new.next_config_at = self.next_config_at
         new.registration_at = self.registration_at
+        new.account_id = self.account_id
         new.update_lookup_map()
         return new
 
@@ -388,6 +390,10 @@ class BleemeoCache:
                 registration_at,
                 '%Y-%m-%d %H:%M:%S.%f',
             ).replace(tzinfo=datetime.timezone.utc)
+
+        account_id = cache.get("account_id")
+        if account_id:
+            self.account_id = account_id
 
         for metric_uuid, values in cache['metrics'].items():
             values[6] = MetricThreshold(*values[6])
@@ -483,6 +489,7 @@ class BleemeoCache:
             'registration_at':
                 self.registration_at.strftime('%Y-%m-%d %H:%M:%S.%f')
                 if self.registration_at else None,
+            'account_id': self.account_id,
         }
         self._state.set('_bleemeo_cache', cache)
 
@@ -1000,7 +1007,7 @@ class BleemeoConnector(threading.Thread):
 
         registration_key = self.core.config['bleemeo.registration_key']
         payload = {
-            'account': self.account_id,
+            'account': self.core.config['bleemeo.account_id'],
             'initial_password': self.core.state.get('password'),
             'display_name': name,
             'fqdn': fqdn,
@@ -1015,7 +1022,8 @@ class BleemeoConnector(threading.Thread):
             response = requests.post(
                 registration_url,
                 data=json.dumps(payload),
-                auth=('%s@bleemeo.com' % self.account_id, registration_key),
+                auth=('%s@bleemeo.com' %
+                      self.core.config['bleemeo.account_id'], registration_key),
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
@@ -1307,7 +1315,8 @@ class BleemeoConnector(threading.Thread):
         response = bleemeo_api.api_call(
             'v1/agent/%s/' % self.agent_uuid,
             'patch',
-            params={'fields': 'tags,current_config,next_config_at,created_at'},
+            params={
+                'fields': 'tags,current_config,next_config_at,created_at,account'},
             data=json.dumps({'tags': [
                 {'name': x} for x in tags if x and len(x) <= 100
             ]}),
@@ -1322,6 +1331,9 @@ class BleemeoConnector(threading.Thread):
                 data['created_at'],
                 '%Y-%m-%dT%H:%M:%S.%fZ',
             ).replace(tzinfo=datetime.timezone.utc)
+
+        if data['account']:
+            bleemeo_cache.account_id = data['account']
 
         bleemeo_cache.tags = []
         for tag in data['tags']:
@@ -2309,7 +2321,7 @@ class BleemeoConnector(threading.Thread):
 
     @property
     def account_id(self):
-        return self.core.config['bleemeo.account_id']
+        return self._bleemeo_cache.account_id
 
     @property
     def agent_uuid(self):
