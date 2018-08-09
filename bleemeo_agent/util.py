@@ -789,20 +789,18 @@ def pull_raw_metric(core, name):
 def docker_restart(docker_client, container_name):
     """ Restart a Docker container
     """
-    if docker is None:
-        if docker_client is None:
-            logging.warning(
-                "Failed to restart Telegraf: missing docker-py dependencies"
-            )
-            return
-        docker_client.stop(container_name)
-    else:
-        if docker_client is None:
-            logging.warning(
-                "Failed to restart Telegraf: unable to communicate with Docker"
-            )
-            return
-        docker_client.stop(container_name)
+    if docker is None and docker_client is None:
+        logging.warning(
+            "Failed to restart Telegraf: missing docker-py dependencies"
+        )
+        return
+    elif docker_client is None:
+        logging.warning(
+            "Failed to restart Telegraf: unable to communicate with Docker"
+        )
+        return
+
+    docker_client.stop(container_name)
 
     for _ in range(10):
         time.sleep(0.2)
