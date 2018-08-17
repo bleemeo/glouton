@@ -19,10 +19,22 @@
 package main
 
 import (
+	"../system"
 	"C"
 )
 
+type MetricPoint struct {
+	// Value of the metric
+	Value int
+}
+
+//export MetricPoint
+type MetricPoint _Ctype_MetricPoint
+
 //export FunctionTest
 func FunctionTest() int64 { return 42 }
+
+//export Test
+func Test() MetricPoint { return MetricPoint{42} }
 
 func main() {}
