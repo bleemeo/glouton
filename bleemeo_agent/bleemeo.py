@@ -1022,8 +1022,10 @@ class BleemeoConnector(threading.Thread):
             response = requests.post(
                 registration_url,
                 data=json.dumps(payload),
-                auth=('%s@bleemeo.com' %
-                      self.core.config['bleemeo.account_id'], registration_key),
+                auth=(
+                    '%s@bleemeo.com' % self.core.config['bleemeo.account_id'],
+                    registration_key
+                ),
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
@@ -1316,7 +1318,9 @@ class BleemeoConnector(threading.Thread):
             'v1/agent/%s/' % self.agent_uuid,
             'patch',
             params={
-                'fields': 'tags,current_config,next_config_at,created_at,account'},
+                'fields': 'tags,current_config,next_config_at'
+                          ',created_at,account'
+            },
             data=json.dumps({'tags': [
                 {'name': x} for x in tags if x and len(x) <= 100
             ]}),
