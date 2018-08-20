@@ -102,7 +102,7 @@ func InitMemoryCollector() MemoryCollector {
 
 // Gather returns a MetricPoint for each metric of MemoryCollector.
 //MetricPoints are returns in a list.
-func (memoryCollector MemoryCollector) Gather() [8]types.MetricPoint {
+func (memoryCollector MemoryCollector) Gather() []types.MetricPoint {
 	var virtualMemory, virtualMemoryError = mem.VirtualMemory()
 	var result [8]types.MetricPoint
 	if virtualMemoryError == nil {
@@ -138,7 +138,7 @@ func (memoryCollector MemoryCollector) Gather() [8]types.MetricPoint {
 			Metric: &memoryCollector.memUsedPerc,
 			Value:  float64(virtualMemory.UsedPercent),
 		}
-		return result
+		return result[:]
 	}
-	return result
+	return result[:0]
 }

@@ -1,35 +1,36 @@
 package types
 
+// iota
 const (
 	// NoUnit unit
 	NoUnit int = iota
 
 	// Bytes unit (B)
-	Bytes int = iota
+	Bytes
 
 	// Percent unit (%)
-	Percent int = iota
+	Percent
 
 	// BytesPerSecond unit (B/s)
-	BytesPerSecond int = iota
+	BytesPerSecond
 
 	// BitsPerSecond unit (b/s)
-	BitsPerSecond int = iota
+	BitsPerSecond
 
 	// MillissecondsPerSecond unit (ms/s)
-	MillissecondsPerSecond int = iota
+	MillissecondsPerSecond
 
 	// ReadsPerSecond unit (reads/s)
-	ReadsPerSecond int = iota
+	ReadsPerSecond
 
 	// WritesPerSecond unit (writes/s)
-	WritesPerSecond int = iota
+	WritesPerSecond
 
 	// PacketsPerSecond unit (packets/s)
-	PacketsPerSecond int = iota
+	PacketsPerSecond
 
 	// ErrorsPerSecond unit (errors/s)
-	ErrorsPerSecond int = iota
+	ErrorsPerSecond
 )
 
 const (
@@ -38,10 +39,10 @@ const (
 
 	// StatusTestOkWithoutMetric coresponds to a etablished communication
 	// with the collector but a non received metric
-	StatusTestOkWithoutMetric int = iota
+	StatusTestOkWithoutMetric
 
 	// StatusTestKO : impossible to established the communication with the collector
-	StatusTestKO int = iota
+	StatusTestKO
 )
 
 // Metric contains metric information
