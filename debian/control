@@ -27,9 +27,10 @@ Recommends:
     python3-docker,
     python3-kubernetes,
     python3-flask,
-    python3-influxdb (>= 2.6.0~),
     python3-raven,
     sudo,
+Suggests:
+    python3-influxdb (>= 2.6.0~),
 Description: Bleemeo agent
  Bleemeo is a solution of Monitoring as a Service.
  This package contains the agent which send metric to
