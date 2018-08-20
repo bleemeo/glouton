@@ -601,6 +601,7 @@ class BleemeoConnector(threading.Thread):
         self.last_containers_removed = bleemeo_agent.util.get_clock()
         self.last_config_will_change_msg = bleemeo_agent.util.get_clock()
         self._bleemeo_cache = None
+        self._account_mismatch_notify_at = None
 
         self.mqtt_client = mqtt.Client()
 
@@ -1338,6 +1339,18 @@ class BleemeoConnector(threading.Thread):
 
         if data['account']:
             bleemeo_cache.account_id = data['account']
+            if (data['account'] != self.core.config['bleemeo.account_id'] and
+                    self._account_mismatch_notify_at is None):
+                self._account_mismatch_notify_at = (
+                    bleemeo_agent.util.get_clock()
+                )
+                logging.warning(
+                    'Account ID in configuration file ("%s") mismatch'
+                    ' the current account ID ("%s"). The Account ID from'
+                    ' configuration file will be ignored.',
+                    self.core.config['bleemeo.account_id'],
+                    data['account'],
+                )
 
         bleemeo_cache.tags = []
         for tag in data['tags']:
