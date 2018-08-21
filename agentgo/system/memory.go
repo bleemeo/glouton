@@ -142,3 +142,8 @@ func (memoryCollector MemoryCollector) Gather() []types.MetricPoint {
 	}
 	return result[:0]
 }
+
+// Test returns the status of the collector
+func (memoryCollector MemoryCollector) Test() int {
+	return types.StatusTestOkWithMetric
+}

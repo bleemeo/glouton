@@ -68,3 +68,8 @@ type MetricPoint struct {
 	// Value associated with the metric
 	Value float64
 }
+
+type Collector interface {
+	Gather() []MetricPoint
+	Test() int
+}
