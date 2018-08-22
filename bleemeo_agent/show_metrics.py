@@ -1,4 +1,5 @@
 from ctypes import *
+import time
 
 lib = cdll.LoadLibrary(
     "../agentgo/cabi/cabi.so")
@@ -27,18 +28,20 @@ class MetricPoint(Structure):
 
 
 class MetricVector(Structure):
-    _fields_ = [('metric_point', c_ubyte),
+    _fields_ = [('metric_point', POINTER(MetricPoint)),
                 ('metric_point_count', c_int)]
 
 
-def main():
-    initMemoryCollector = wrap_function(lib, 'InitMemoryCollector', int, None)
-    gather = wrap_function(lib, 'Gather', MetricVector, int)
-
-    memory_collector_id = initMemoryCollector()
+initMemoryCollector = wrap_function(lib, 'InitMemoryCollector', int, None)
+gather = wrap_function(lib, 'Gather', MetricVector, [c_int, ])
+memory_collector_id = initMemoryCollector()
+while True:
     metrics_vector = gather(memory_collector_id)
     for i in range(0, metrics_vector.metric_point_count):
-        metric_point = metrics_vector.metric_point[i]
+        metric_point = (metrics_vector.metric_point.contents)
+        """print("{}, {}".format(metric_point.name,
+                              metrics_vector.metric_point_count))"""
+        time.sleep(0.5)
         print(
             "{}: {}\n".format(
                 metric_point.name.decode("utf-8"), metric_point.value

@@ -56,7 +56,7 @@ var collectors map[int]types.Collector = make(map[int]types.Collector)
 func FunctionTest() int64 { return 42 }
 
 // InitMemoryCollector initialises a memory collector and returns his ID
-// export InitMemoryCollector
+//export InitMemoryCollector
 func InitMemoryCollector() int {
 	var id = rand.Intn(10000)
 
@@ -71,7 +71,7 @@ func InitMemoryCollector() int {
 // FreeCollector deletes a collector
 // exit code 0 : the collector has been removed
 // exit code 1 : the collector did not exist
-// export FreeCollector
+//export FreeCollector
 func FreeCollector(collectorID int) int {
 	_, ok := collectors[collectorID]
 	if ok {
@@ -82,7 +82,7 @@ func FreeCollector(collectorID int) int {
 }
 
 // Gather returns associated metrics of collectorID given in parameter.
-// export Gather
+//export Gather
 func Gather(collectorID int) C.MetricPointVector {
 	var collector, ok = collectors[collectorID]
 	var result C.MetricPointVector
@@ -90,11 +90,17 @@ func Gather(collectorID int) C.MetricPointVector {
 		return result
 	}
 	var metrics = collector.Gather()
-	var metricPointSlice = make([]C.MetricPoint, cap(metrics), len(metrics))
+	var metricPointArray = C.malloc(C.size_t(len(metrics)) * C.sizeof_MetricPoint)
+	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(metricPointArray)
+
 	for index, metricPoint := range metrics {
-		metricPointSlice[index] = convertMetricPointInC(metricPoint)
+		var cMetricPoint = convertMetricPointInC(metricPoint)
+		metricPointSlice[index] = cMetricPoint
 	}
-	return (C.MetricPointVector{metric_point: &metricPointSlice[0], metric_point_count: C.int(len(metricPointSlice))})
+	return (C.MetricPointVector{
+		metric_point:       (*C.MetricPoint)(metricPointArray),
+		metric_point_count: C.int(len(metrics)),
+	})
 
 }
 
@@ -104,18 +110,20 @@ func convertMetricPointInC(metricPoint types.MetricPoint) C.MetricPoint {
 		tagCount++
 	}
 
-	var tag []C.Tag = make([]C.Tag, tagCount, tagCount)
-	var index int
+	var tags = C.malloc(C.size_t(tagCount) * C.sizeof_Tag)
+	var tagsSlice = (*[1<<30 - 1]C.Tag)(tags)
 
+	var index int
 	for key, value := range metricPoint.Metric.Tag {
-		tag[index] = C.Tag{tag_name: C.CString(key), tag_value: C.CString(value)}
+		tagsSlice[index] = C.Tag{
+			tag_name:  C.CString(key),
+			tag_value: C.CString(value),
+		}
 		index++
 	}
 
 	var unit C.enum_Unit
 	switch metricPoint.Metric.Unit {
-	case 0:
-		unit = C.NoUnit
 	case 1:
 		unit = C.Bytes
 	case 2:
@@ -134,11 +142,14 @@ func convertMetricPointInC(metricPoint types.MetricPoint) C.MetricPoint {
 		unit = C.PacketsPerSecond
 	case 9:
 		unit = C.ErrorsPerSecond
+	default:
+	case 0:
+		unit = C.NoUnit
 	}
 
 	var result C.MetricPoint = C.MetricPoint{
 		name:      C.CString(metricPoint.Metric.Name),
-		tag:       &tag[0],
+		tag:       (*C.Tag)(tags),
 		tag_count: C.int(tagCount),
 		chart:     C.CString(metricPoint.Metric.Chart),
 		unit:      unit,
