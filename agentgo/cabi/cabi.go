@@ -93,10 +93,12 @@ func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
 	return inputID
 }
 
-// MemoryInput add a memory input to the inputgroupID and return the input ID in the group
-//export MemoryInput
-func MemoryInput(inputGroupID int) int {
-	return addInputToInputGroup(inputGroupID, inputs.Inputs["mem"]())
+// AddSimpleInput add a simple input to the inputgroupID
+// return the input ID in the group
+// A simple input is only define by its name
+//export AddSimpleInput
+func AddSimpleInput(inputGroupID int, inputName *C.char) int {
+	return addInputToInputGroup(inputGroupID, inputs.Inputs[C.GoString(inputName)]())
 }
 
 // FreeInputGroup deletes a collector

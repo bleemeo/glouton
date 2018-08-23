@@ -28,13 +28,14 @@ class MetricPointVector(Structure):
 
 # Load function from C-lib
 init_input_group = wrap_function(lib, 'InitInputGroup', int, None)
-memory_input = wrap_function(lib, "MemoryInput", int, [c_int, ])
+add_simple_input = wrap_function(
+    lib, "AddSimpleInput", int, [c_int, c_char_p])
 gather = wrap_function(lib, 'Gather', MetricPointVector, [c_int, ])
 
 # Create an input group
 input_group_id = init_input_group()
 # Add a memory input in the input group
-memory_input_id = memory_input(input_group_id)
+memory_input_id = add_simple_input(input_group_id, "mem")
 
 while True:
     # Gather metric from input group
