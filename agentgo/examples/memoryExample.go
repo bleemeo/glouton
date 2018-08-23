@@ -19,29 +19,24 @@
 package main
 
 import (
-	"../system"
+	"../types"
 	"fmt"
+	"github.com/influxdata/telegraf/plugins/inputs"
+	// Needed to run this package
+	_ "github.com/influxdata/telegraf/plugins/inputs/mem"
 	"time"
 )
 
 func main() {
-	var virtualMemory = system.InitMemoryCollector()
 	for {
-		var memoryMetrics = virtualMemory.Gather()
-		fmt.Println("----------------------------------------------------------------------------")
-		for _, metricPoint := range memoryMetrics {
-			var unit = ""
-			switch metricPoint.Metric.Unit {
-			case 1:
-				unit = "B"
-			case 2:
-				unit = "%"
-			default:
-				unit = "unecpected unit"
-
-			}
-			fmt.Printf("%s : %f %s\n", metricPoint.Metric.Name, metricPoint.Value, unit)
+		fmt.Println("----------------------------------------------------")
+		acc := types.InitAccumulator()
+		input := inputs.Inputs["mem"]()
+		input.Gather(&acc)
+		var metricPoints = acc.GetMetricPointSlice()
+		for _, metric := range metricPoints {
+			fmt.Println(metric.Name, ": ", metric.Value)
 		}
-		time.Sleep(2 * 1000000000)
+		time.Sleep(2000 * time.Millisecond)
 	}
 }

@@ -1,75 +1,190 @@
 package types
 
-// iota
-const (
-	// NoUnit unit
-	NoUnit int = iota
-
-	// Bytes unit (B)
-	Bytes
-
-	// Percent unit (%)
-	Percent
-
-	// BytesPerSecond unit (B/s)
-	BytesPerSecond
-
-	// BitsPerSecond unit (b/s)
-	BitsPerSecond
-
-	// MillissecondsPerSecond unit (ms/s)
-	MillissecondsPerSecond
-
-	// ReadsPerSecond unit (reads/s)
-	ReadsPerSecond
-
-	// WritesPerSecond unit (writes/s)
-	WritesPerSecond
-
-	// PacketsPerSecond unit (packets/s)
-	PacketsPerSecond
-
-	// ErrorsPerSecond unit (errors/s)
-	ErrorsPerSecond
-)
+import "time"
+import "fmt"
+import "reflect"
 
 const (
-	// StatusTestOkWithMetric corresponds to a well recevived metric
-	StatusTestOkWithMetric int = iota
+	// Fields type
+	Fields int = iota
 
-	// StatusTestOkWithoutMetric coresponds to a etablished communication
-	// with the collector but a non received metric
-	StatusTestOkWithoutMetric
+	// Gauge type
+	Gauge
 
-	// StatusTestKO : impossible to established the communication with the collector
-	StatusTestKO
+	// Counter type
+	Counter
+
+	// Summary type
+	Summary
+
+	// Histogram type
+	Histogram
 )
 
-// Metric contains metric information
-type Metric struct {
+// MetricPoint contains metric information and his value
+type MetricPoint struct {
 	// Name of the metric
 	Name string
 
 	// Tag list of the metric
-	Tag map[string]string
+	Tags map[string]string
 
-	// Chart name of the metric
-	Chart string
+	// Type of the metric
+	Type int
 
-	// Unit of the metric
-	Unit int
-}
-
-// MetricPoint contains a metric and its value.
-type MetricPoint struct {
-	// Metric of the metric point
-	Metric *Metric
-
-	// Value associated with the metric
+	// Value of the metric
 	Value float64
 }
 
-type Collector interface {
-	Gather() []MetricPoint
-	Test() int
+// Accumulator save the metric from telegraf
+type Accumulator struct {
+	metricPointSlice []MetricPoint
+	errors           []error
+}
+
+// InitAccumulator initialize an accumulator
+func InitAccumulator() Accumulator {
+	return Accumulator{
+		metricPointSlice: nil,
+		errors:           nil,
+	}
+}
+
+// AddFields adds a metric to the accumulator with the given measurement
+// name, fields, and tags (and timestamp). If a timestamp is not provided,
+// then the accumulator sets it to "now".
+// Create a point with a value, decorating it with tags
+// NOTE: tags is expected to be owned by the caller, don't mutate
+// it after passing to Add.
+func (accumulator *Accumulator) AddFields(measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	t ...time.Time) {
+	for key, value := range fields {
+		valuef, err := convertInterface(value)
+		if err != nil {
+			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
+		}
+		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+			Name:  string(measurement + "_" + key),
+			Tags:  tags,
+			Type:  Fields,
+			Value: valuef,
+		})
+	}
+}
+
+// AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
+func (accumulator *Accumulator) AddGauge(measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	t ...time.Time) {
+	for key, value := range fields {
+		valuef, err := convertInterface(value)
+		if err != nil {
+			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
+		}
+		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+			Name:  string(measurement + "_" + key),
+			Tags:  tags,
+			Type:  Gauge,
+			Value: valuef,
+		})
+	}
+}
+
+// AddCounter is the same as AddFields, but will add the metric as a "Counter" type
+func (accumulator *Accumulator) AddCounter(measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	t ...time.Time) {
+	for key, value := range fields {
+		valuef, err := convertInterface(value)
+		if err != nil {
+			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
+		}
+		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+			Name:  string(measurement + "_" + key),
+			Tags:  tags,
+			Type:  Counter,
+			Value: valuef,
+		})
+	}
+}
+
+// AddSummary is the same as AddFields, but will add the metric as a "Summary" type
+func (accumulator *Accumulator) AddSummary(measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	t ...time.Time) {
+	for key, value := range fields {
+		valuef, err := convertInterface(value)
+		if err != nil {
+			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
+		}
+		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+			Name:  string(measurement + "_" + key),
+			Tags:  tags,
+			Type:  Summary,
+			Value: valuef,
+		})
+	}
+}
+
+// AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
+func (accumulator *Accumulator) AddHistogram(measurement string,
+	fields map[string]interface{},
+	tags map[string]string,
+	t ...time.Time) {
+	for key, value := range fields {
+		valuef, err := convertInterface(value)
+		if err != nil {
+			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
+		}
+		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+			Name:  string(measurement + "_" + key),
+			Tags:  tags,
+			Type:  Histogram,
+			Value: valuef,
+		})
+	}
+}
+
+// SetPrecision do nothing right now
+func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {}
+
+// AddError add an error to the Accumulator
+func (accumulator *Accumulator) AddError(err error) {
+	newError := make([]error, 1)
+	newError[0] = err
+	newError = newError[:0]
+	if accumulator.errors == nil {
+		accumulator.errors = newError
+	} else {
+		accumulator.errors = append(accumulator.errors, newError...)
+	}
+}
+
+// GetMetricPointSlice return a slice of metrics containing by the accumulator
+func (accumulator Accumulator) GetMetricPointSlice() []MetricPoint {
+	return accumulator.metricPointSlice
+}
+
+// GetErrors return a slice of errors containings by the accumulator
+func (accumulator Accumulator) GetErrors() []error {
+	return accumulator.errors
+}
+
+// convertInterface convert the interface type in float64
+// if it impossible return 0 and an error
+func convertInterface(value interface{}) (float64, error) {
+	switch value.(type) {
+	case uint64:
+		return float64(value.(uint64)), nil
+	case float64:
+		return value.(float64), nil
+	default:
+		var r = reflect.TypeOf(value)
+		return float64(0), fmt.Errorf("Value type not supported :(%v)", r)
+	}
 }
