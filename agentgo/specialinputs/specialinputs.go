@@ -21,6 +21,7 @@ package specialinputs
 import (
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
+	"github.com/influxdata/telegraf/plugins/inputs/nginx"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
@@ -31,6 +32,18 @@ func InitRedisInput(url string) telegraf.Input {
 	if ok {
 		slice := append(make([]string, 0), url)
 		redisInput.Servers = slice
+	}
+	return input
+}
+
+// InitNginxInput initialize the nginx input
+func InitNginxInput(url string) telegraf.Input {
+	input := inputs.Inputs["nginx"]()
+	nginxInput, ok := input.(*nginx.Nginx)
+	if ok {
+		slice := append(make([]string, 0), url)
+		nginxInput.Urls = slice
+		nginxInput.InsecureSkipVerify = false
 	}
 	return input
 }

@@ -109,6 +109,13 @@ func AddRedisInput(inputGroupID int, servers *C.char) int {
 	return addInputToInputGroup(inputGroupID, specialinputs.InitRedisInput(C.GoString(servers)))
 }
 
+// AddNginxInput add a nginx input to the inputgroupID
+// return the input ID in the group
+//export AddNginxInput
+func AddNginxInput(inputGroupID int, servers *C.char) int {
+	return addInputToInputGroup(inputGroupID, specialinputs.InitNginxInput(C.GoString(servers)))
+}
+
 // FreeInputGroup deletes a collector
 // exit code 0 : the input group has been removed
 // exit code 1 : the input group did not exist
