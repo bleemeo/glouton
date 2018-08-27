@@ -52,4 +52,7 @@ while True:
                 metric_point.name, metric_point.value
             )
         )
+
+    free_metric_point_vector(metrics_vector)
+
     time.sleep(2)

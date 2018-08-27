@@ -19,6 +19,8 @@
 package main
 
 /*
+#include<stdlib.h>
+
 struct Tag {
 	char* tag_name;
 	char* tag_value;
@@ -59,6 +61,8 @@ import (
 	"../specialinputs"
 	"../types"
 	"github.com/influxdata/telegraf"
+	"reflect"
+	"unsafe"
 	// Needed to run this package
 	"github.com/influxdata/telegraf/plugins/inputs"
 	_ "github.com/influxdata/telegraf/plugins/inputs/all"
@@ -130,6 +134,37 @@ func FreeInputGroup(inputgroupID int) int {
 		return 0
 	}
 	return 1
+}
+
+// FreeMetricPointVector free a C.MetricPointVector given in parameter
+//export FreeMetricPointVector
+func FreeMetricPointVector(metricVector C.MetricPointVector) {
+	var metricPointSlice []C.MetricPoint
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&metricPointSlice)))
+	sliceHeader.Cap = int(metricVector.metric_point_count)
+	sliceHeader.Len = int(metricVector.metric_point_count)
+	sliceHeader.Data = uintptr(unsafe.Pointer(metricVector.metric_point))
+	for _, metricPoint := range metricPointSlice {
+		freeMetricPoint(metricPoint)
+	}
+	C.free(unsafe.Pointer(metricVector.metric_point))
+}
+
+// freeMetricPoint free a C.MetricPoint
+func freeMetricPoint(metricPoint C.MetricPoint) {
+	C.free(unsafe.Pointer(metricPoint.name))
+
+	var tagsSlice []C.Tag
+	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&tagsSlice)))
+	sliceHeader.Cap = int(metricPoint.tag_count)
+	sliceHeader.Len = int(metricPoint.tag_count)
+	sliceHeader.Data = uintptr(unsafe.Pointer(metricPoint.tag))
+
+	for _, tag := range tagsSlice {
+		C.free(unsafe.Pointer(tag.tag_value))
+		C.free(unsafe.Pointer(tag.tag_name))
+	}
+	C.free(unsafe.Pointer(metricPoint.tag))
 }
 
 // Gather returns associated metrics in a slice of inputgroupID given in parameter.
