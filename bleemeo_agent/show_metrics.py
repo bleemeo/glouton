@@ -30,12 +30,15 @@ class MetricPointVector(Structure):
 init_input_group = wrap_function(lib, 'InitInputGroup', int, None)
 add_simple_input = wrap_function(
     lib, "AddSimpleInput", int, [c_int, c_char_p])
+add_redis_input = wrap_function(
+    lib, "AddRedisInput", int, [c_int, c_char_p])
 gather = wrap_function(lib, 'Gather', MetricPointVector, [c_int, ])
 
 # Create an input group
 input_group_id = init_input_group()
 # Add a memory input in the input group
-memory_input_id = add_simple_input(input_group_id, "mem")
+# memory_input_id = add_simple_input(input_group_id, "mem")
+redis_input_id = add_redis_input(input_group_id, "172.17.0.3:6379/tcp")
 
 while True:
     # Gather metric from input group

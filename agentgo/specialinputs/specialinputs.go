@@ -16,4 +16,21 @@
 
 // Define the particular inputs
 
-package inputs
+package specialinputs
+
+import (
+	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/plugins/inputs"
+	"github.com/influxdata/telegraf/plugins/inputs/redis"
+)
+
+// InitRedisInput initialize the redis input
+func InitRedisInput(url string) telegraf.Input {
+	input := inputs.Inputs["redis"]()
+	redisInput, ok := input.(*redis.Redis)
+	if ok {
+		slice := append(make([]string, 0), url)
+		redisInput.Servers = slice
+	}
+	return input
+}

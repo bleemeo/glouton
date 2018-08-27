@@ -56,11 +56,12 @@ typedef struct MetricPointVector MetricPointVector;
 import "C"
 
 import (
+	"../specialinputs"
 	"../types"
 	"github.com/influxdata/telegraf"
 	// Needed to run this package
 	"github.com/influxdata/telegraf/plugins/inputs"
-	_ "github.com/influxdata/telegraf/plugins/inputs/mem"
+	_ "github.com/influxdata/telegraf/plugins/inputs/all"
 	"math/rand"
 )
 
@@ -99,6 +100,13 @@ func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
 //export AddSimpleInput
 func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 	return addInputToInputGroup(inputGroupID, inputs.Inputs[C.GoString(inputName)]())
+}
+
+// AddRedisInput add a redis input to the inputgroupID
+// return the input ID in the group
+//export AddRedisInput
+func AddRedisInput(inputGroupID int, servers *C.char) int {
+	return addInputToInputGroup(inputGroupID, specialinputs.InitRedisInput(C.GoString(servers)))
 }
 
 // FreeInputGroup deletes a collector
