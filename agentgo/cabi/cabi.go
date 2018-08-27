@@ -136,9 +136,26 @@ func FreeInputGroup(inputgroupID int) int {
 	return 1
 }
 
+// FreeInput deletes an input in a group
+// exit code 0 : the input has been removed
+// exit code 1 : the input or the group did not exist
+//export FreeInput
+func FreeInput(inputgroupID int, inputID int) int {
+	inputsGroup, ok := inputsgroups[inputgroupID]
+	if ok {
+		_, ok := inputsGroup[inputID]
+		if ok {
+			delete(inputsGroup, inputID)
+			return 0
+		}
+	}
+	return 1
+}
+
 // FreeMetricPointVector free a C.MetricPointVector given in parameter
 //export FreeMetricPointVector
 func FreeMetricPointVector(metricVector C.MetricPointVector) {
+
 	var metricPointSlice []C.MetricPoint
 	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&metricPointSlice)))
 	sliceHeader.Cap = int(metricVector.metric_point_count)
@@ -147,6 +164,7 @@ func FreeMetricPointVector(metricVector C.MetricPointVector) {
 	for _, metricPoint := range metricPointSlice {
 		freeMetricPoint(metricPoint)
 	}
+
 	C.free(unsafe.Pointer(metricVector.metric_point))
 }
 
