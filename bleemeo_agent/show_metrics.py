@@ -38,7 +38,7 @@ gather = wrap_function(lib, 'Gather', MetricPointVector, [c_int, ])
 input_group_id = init_input_group()
 # Add a memory input in the input group
 # memory_input_id = add_simple_input(input_group_id, "mem")
-redis_input_id = add_redis_input(input_group_id, "172.17.0.3:6379/tcp")
+redis_input_id = add_redis_input(input_group_id, "tcp://172.17.0.3:6379")
 
 while True:
     # Gather metric from input group
