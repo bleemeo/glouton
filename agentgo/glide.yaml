@@ -1,6 +1,11 @@
-package: .agentgo
+package: .
 license: Apache License, Version 2.0
-import: agentgo
+owners:
+- name: Pierre Fersing
+  email: pierre.fersing@bleemeo.com
+- name: Adrien Gaillard
+  email: adrien.gaillard@bleemeo.com
+import:
 - package: github.com/influxdata/telegraf
   subpackages:
   - plugins/inputs
