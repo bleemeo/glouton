@@ -2,7 +2,7 @@ from ctypes import *
 import time
 
 lib = cdll.LoadLibrary(
-    "../agentgo/cabi/cabi.so")
+    "../agentgo/src/agentgo/cabi/cabi.so")
 
 
 def wrap_function(lib, funcname, restype, argtypes):

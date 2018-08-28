@@ -1,0 +1,10 @@
+package: .agentgo
+license: Apache License, Version 2.0
+import: agentgo
+- package: github.com/influxdata/telegraf
+  subpackages:
+  - plugins/inputs
+  - plugins/inputs/all
+  - plugins/inputs/mem
+  - plugins/inputs/nginx
+  - plugins/inputs/redis
