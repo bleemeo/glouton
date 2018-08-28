@@ -61,7 +61,6 @@ import (
 	"../specialinputs"
 	"../types"
 	"github.com/influxdata/telegraf"
-	"reflect"
 	"unsafe"
 	// Needed to run this package
 	"github.com/influxdata/telegraf/plugins/inputs"
@@ -156,13 +155,10 @@ func FreeInput(inputgroupID int, inputID int) int {
 //export FreeMetricPointVector
 func FreeMetricPointVector(metricVector C.MetricPointVector) {
 
-	var metricPointSlice []C.MetricPoint
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&metricPointSlice)))
-	sliceHeader.Cap = int(metricVector.metric_point_count)
-	sliceHeader.Len = int(metricVector.metric_point_count)
-	sliceHeader.Data = uintptr(unsafe.Pointer(metricVector.metric_point))
-	for _, metricPoint := range metricPointSlice {
-		freeMetricPoint(metricPoint)
+	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(unsafe.Pointer(metricVector.metric_point))
+
+	for i := 0; i < int(metricVector.metric_point_count); i++ {
+		freeMetricPoint(metricPointSlice[i])
 	}
 
 	C.free(unsafe.Pointer(metricVector.metric_point))
@@ -172,15 +168,11 @@ func FreeMetricPointVector(metricVector C.MetricPointVector) {
 func freeMetricPoint(metricPoint C.MetricPoint) {
 	C.free(unsafe.Pointer(metricPoint.name))
 
-	var tagsSlice []C.Tag
-	sliceHeader := (*reflect.SliceHeader)((unsafe.Pointer(&tagsSlice)))
-	sliceHeader.Cap = int(metricPoint.tag_count)
-	sliceHeader.Len = int(metricPoint.tag_count)
-	sliceHeader.Data = uintptr(unsafe.Pointer(metricPoint.tag))
+	var tagsSlice = (*[1<<30 - 1]C.Tag)(unsafe.Pointer(metricPoint.tag))
 
-	for _, tag := range tagsSlice {
-		C.free(unsafe.Pointer(tag.tag_value))
-		C.free(unsafe.Pointer(tag.tag_name))
+	for i := 0; i < int(metricPoint.tag_count); i++ {
+		C.free(unsafe.Pointer(tagsSlice[i].tag_value))
+		C.free(unsafe.Pointer(tagsSlice[i].tag_name))
 	}
 	C.free(unsafe.Pointer(metricPoint.tag))
 }
