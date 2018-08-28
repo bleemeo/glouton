@@ -58,12 +58,12 @@ typedef struct MetricPointVector MetricPointVector;
 import "C"
 
 import (
-	"../specialinputs"
+	"../inputs"
 	"../types"
 	"github.com/influxdata/telegraf"
 	"unsafe"
 	// Needed to run this package
-	"github.com/influxdata/telegraf/plugins/inputs"
+	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	_ "github.com/influxdata/telegraf/plugins/inputs/all"
 	"math/rand"
 )
@@ -88,6 +88,11 @@ func InitInputGroup() int {
 
 // addInputToInputGroup add the input to the inputGroupID and return the inputID of the input in the group
 func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
+	var _, ok = inputsgroups[inputGroupID]
+	if !ok {
+		return -1
+	}
+
 	var inputID = rand.Intn(10000)
 
 	for _, ok := inputsgroups[inputGroupID][inputID]; ok == true; {
@@ -102,14 +107,18 @@ func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
 // A simple input is only define by its name
 //export AddSimpleInput
 func AddSimpleInput(inputGroupID int, inputName *C.char) int {
-	return addInputToInputGroup(inputGroupID, inputs.Inputs[C.GoString(inputName)]())
+	input, ok := telegraf_inputs.Inputs[C.GoString(inputName)]
+	if !ok {
+		return -1
+	}
+	return addInputToInputGroup(inputGroupID, input())
 }
 
 // AddInputWithAddress add a redis input to the inputgroupID
 // return the input ID in the group
 //export AddInputWithAddress
 func AddInputWithAddress(inputGroupID int, inputName *C.char, server *C.char) int {
-	input, err := specialinputs.InitInputWithAddress(C.GoString(inputName), C.GoString(server))
+	input, err := inputs.InitInputWithAddress(C.GoString(inputName), C.GoString(server))
 	if err != nil {
 		return -1
 	}
@@ -118,7 +127,7 @@ func AddInputWithAddress(inputGroupID int, inputName *C.char, server *C.char) in
 
 // FreeInputGroup deletes a collector
 // exit code 0 : the input group has been removed
-// exit code 1 : the input group did not exist
+// exit code -1 : the input group did not exist
 //export FreeInputGroup
 func FreeInputGroup(inputgroupID int) int {
 	_, ok := inputsgroups[inputgroupID]
@@ -129,12 +138,12 @@ func FreeInputGroup(inputgroupID int) int {
 		delete(inputsgroups, inputgroupID)
 		return 0
 	}
-	return 1
+	return -1
 }
 
 // FreeInput deletes an input in a group
 // exit code 0 : the input has been removed
-// exit code 1 : the input or the group did not exist
+// exit code -1 : the input or the group did not exist
 //export FreeInput
 func FreeInput(inputgroupID int, inputID int) int {
 	inputsGroup, ok := inputsgroups[inputgroupID]
@@ -145,7 +154,7 @@ func FreeInput(inputgroupID int, inputID int) int {
 			return 0
 		}
 	}
-	return 1
+	return -1
 }
 
 // FreeMetricPointVector free a C.MetricPointVector given in parameter

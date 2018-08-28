@@ -16,12 +16,12 @@
 
 // Define the particular inputs
 
-package specialinputs
+package inputs
 
 import (
 	"errors"
 	"github.com/influxdata/telegraf"
-	"github.com/influxdata/telegraf/plugins/inputs"
+	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/nginx"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
@@ -30,33 +30,35 @@ import (
 func InitInputWithAddress(inputName string, address string) (telegraf.Input, error) {
 	switch inputName {
 	case "redis":
-		return initRedisInput(address), nil
+		return initRedisInput(address)
 	case "nginx":
-		return initNginxInput(address), nil
+		return initNginxInput(address)
 	default:
 		return nil, errors.New("invalid inputName: " + inputName)
 	}
 }
 
 // initRedisInput initialize the redis input
-func initRedisInput(url string) telegraf.Input {
-	input := inputs.Inputs["redis"]()
+func initRedisInput(url string) (telegraf.Input, error) {
+	input := telegraf_inputs.Inputs["redis"]()
 	redisInput, ok := input.(*redis.Redis)
 	if ok {
 		slice := append(make([]string, 0), url)
 		redisInput.Servers = slice
+		return input, nil
 	}
-	return input
+	return nil, errors.New("Failed to initialize redis input")
 }
 
 // initNginxInput initialize the nginx input
-func initNginxInput(url string) telegraf.Input {
-	input := inputs.Inputs["nginx"]()
+func initNginxInput(url string) (telegraf.Input, error) {
+	input := telegraf_inputs.Inputs["nginx"]()
 	nginxInput, ok := input.(*nginx.Nginx)
 	if ok {
 		slice := append(make([]string, 0), url)
 		nginxInput.Urls = slice
 		nginxInput.InsecureSkipVerify = false
+		return input, nil
 	}
-	return input
+	return nil, errors.New("Failed to initialize nginx input")
 }
