@@ -19,14 +19,27 @@
 package specialinputs
 
 import (
+	"errors"
 	"github.com/influxdata/telegraf"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/nginx"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
-// InitRedisInput initialize the redis input
-func InitRedisInput(url string) telegraf.Input {
+// InitInputWithAddress initialize an input with an address or an url
+func InitInputWithAddress(inputName string, address string) (telegraf.Input, error) {
+	switch inputName {
+	case "redis":
+		return initRedisInput(address), nil
+	case "nginx":
+		return initNginxInput(address), nil
+	default:
+		return nil, errors.New("invalid inputName: " + inputName)
+	}
+}
+
+// initRedisInput initialize the redis input
+func initRedisInput(url string) telegraf.Input {
 	input := inputs.Inputs["redis"]()
 	redisInput, ok := input.(*redis.Redis)
 	if ok {
@@ -36,8 +49,8 @@ func InitRedisInput(url string) telegraf.Input {
 	return input
 }
 
-// InitNginxInput initialize the nginx input
-func InitNginxInput(url string) telegraf.Input {
+// initNginxInput initialize the nginx input
+func initNginxInput(url string) telegraf.Input {
 	input := inputs.Inputs["nginx"]()
 	nginxInput, ok := input.(*nginx.Nginx)
 	if ok {

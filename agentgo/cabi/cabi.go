@@ -105,18 +105,15 @@ func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 	return addInputToInputGroup(inputGroupID, inputs.Inputs[C.GoString(inputName)]())
 }
 
-// AddRedisInput add a redis input to the inputgroupID
+// AddInputWithAddress add a redis input to the inputgroupID
 // return the input ID in the group
-//export AddRedisInput
-func AddRedisInput(inputGroupID int, servers *C.char) int {
-	return addInputToInputGroup(inputGroupID, specialinputs.InitRedisInput(C.GoString(servers)))
-}
-
-// AddNginxInput add a nginx input to the inputgroupID
-// return the input ID in the group
-//export AddNginxInput
-func AddNginxInput(inputGroupID int, servers *C.char) int {
-	return addInputToInputGroup(inputGroupID, specialinputs.InitNginxInput(C.GoString(servers)))
+//export AddInputWithAddress
+func AddInputWithAddress(inputGroupID int, inputName *C.char, server *C.char) int {
+	input, err := specialinputs.InitInputWithAddress(C.GoString(inputName), C.GoString(server))
+	if err != nil {
+		return -1
+	}
+	return addInputToInputGroup(inputGroupID, input)
 }
 
 // FreeInputGroup deletes a collector

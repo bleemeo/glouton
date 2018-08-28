@@ -30,10 +30,8 @@ class MetricPointVector(Structure):
 init_input_group = wrap_function(lib, 'InitInputGroup', int, None)
 add_simple_input = wrap_function(
     lib, "AddSimpleInput", int, [c_int, c_char_p])
-add_redis_input = wrap_function(
-    lib, "AddRedisInput", int, [c_int, c_char_p])
-add_nginx_input = wrap_function(
-    lib, "AddNginxInput", int, [c_int, c_char_p])
+add_input_with_address = wrap_function(
+    lib, "AddInputWithAddress", int, [c_int, c_char_p, c_char_p])
 gather = wrap_function(lib, 'Gather', MetricPointVector, [c_int, ])
 free_metric_point_vector = wrap_function(
     lib, 'FreeMetricPointVector', None, [MetricPointVector, ])
@@ -42,8 +40,8 @@ free_metric_point_vector = wrap_function(
 input_group_id = init_input_group()
 # Add a memory and nginx input in the input group
 memory_input_id = add_simple_input(input_group_id, "mem")
-nginx_input_id = add_nginx_input(
-    input_group_id, "http://172.17.0.2/nginx_status")
+nginx_input_id = add_input_with_address(
+    input_group_id, "nginx", "http://172.17.0.2/nginx_status")
 
 while True:
     # Gather metric from input group
