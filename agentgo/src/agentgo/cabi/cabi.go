@@ -58,8 +58,8 @@ typedef struct MetricPointVector MetricPointVector;
 import "C"
 
 import (
-	"../inputs"
-	"../types"
+	"agentgo/inputs"
+	"agentgo/types"
 	"github.com/influxdata/telegraf"
 	"unsafe"
 	// Needed to run this package

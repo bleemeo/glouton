@@ -1,4 +1,4 @@
-package: .
+package: agentgo
 license: Apache License, Version 2.0
 owners:
 - name: Pierre Fersing

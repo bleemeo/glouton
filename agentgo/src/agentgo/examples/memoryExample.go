@@ -19,7 +19,7 @@
 package main
 
 import (
-	"../types"
+	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	// Needed to run this package
