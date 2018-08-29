@@ -1,5 +1,5 @@
-hash: 556fda8865f48d725a185c0fba4e158dc4f680071baa50d7bad6d6e51f9cefe5
-updated: 2018-08-28T18:37:47.937869238+02:00
+hash: eaf9dae3d8d56cca9d21b837d09fc191c698eeac1c2601cb8091cc74a7a6cdd2
+updated: 2018-08-29T14:35:15.347990436+02:00
 imports:
 - name: collectd.org
   version: 606bd390f38f050824c77208d6715ed59e3692ac
@@ -555,7 +555,7 @@ imports:
   - trace
   - websocket
 - name: golang.org/x/sys
-  version: f7928cfef4d09d1b080aa2b6fd3ca9ba1567c733
+  version: d99a578cf41bfccdeaf48b0845c823a4b8b0ad5e
   subpackages:
   - unix
   - windows

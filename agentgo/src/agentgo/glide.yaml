@@ -13,3 +13,5 @@ import:
   - plugins/inputs/mem
   - plugins/inputs/nginx
   - plugins/inputs/redis
+- package: golang.org/x/sys
+  version: d99a578cf41bfccdeaf48b0845c823a4b8b0ad5e
