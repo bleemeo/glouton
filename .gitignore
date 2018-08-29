@@ -15,7 +15,8 @@ Pipfile.lock
 build/lib.linux-x86_64-2.7/
 build/scripts-2.7/
 .pytest_cache
-agentgo/vendor/
-agentgo/cabi.h
+agentgo/src/agentgo/vendor/
+agentgo/pkg
 agentgo/cabi.so
+agentgo/cabi.h
 /VERSION
