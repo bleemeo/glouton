@@ -26,23 +26,27 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
 
     mkvirtualenv -p /usr/bin/python3 bleemeo-agent
 
-* Install Go and Glide if not already installed::
+* Install Go and dep if not already installed::
 
     https://golang.org/doc/install
 
-    https://glide.sh/
+    https://golang.github.io/dep/
 
-    curl https://glide.sh/get | sh
+    apt install go-dep
+
+* Initialize the GOPATH::
+
+    cd agentgo
+    export GOPATH=$(pwd)
 
 * Install go dependencies::
 
     cd agentgo/src/agentgo
-    glide install
+    dep ensure -v
 
 * Build the Go extension::
 
     cd agentgo/
-    export GOPATH=$(pwd)
     go build -o cabi.so -buildmode=c-shared agentgo/cabi
 
 * Install bleemeo-agent with its dependencies::
