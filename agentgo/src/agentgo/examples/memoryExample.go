@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"github.com/influxdata/telegraf/plugins/inputs"
 	// Needed to run this package
-	_ "github.com/influxdata/telegraf/plugins/inputs/mem"
+	_ "github.com/influxdata/telegraf/plugins/inputs/all"
 	"time"
 )
 
