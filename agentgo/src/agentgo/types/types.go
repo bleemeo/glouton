@@ -84,7 +84,7 @@ func (accumulator *Accumulator) AddFields(measurement string,
 			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
 		}
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  string(measurement + "_" + key),
+			Name:  measurement + "_" + key,
 			Tags:  tags,
 			Type:  Fields,
 			Value: valuef,
@@ -103,7 +103,7 @@ func (accumulator *Accumulator) AddGauge(measurement string,
 			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
 		}
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  string(measurement + "_" + key),
+			Name:  measurement + "_" + key,
 			Tags:  tags,
 			Type:  Gauge,
 			Value: valuef,
@@ -122,7 +122,7 @@ func (accumulator *Accumulator) AddCounter(measurement string,
 			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
 		}
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  string(measurement + "_" + key),
+			Name:  measurement + "_" + key,
 			Tags:  tags,
 			Type:  Counter,
 			Value: valuef,
@@ -141,7 +141,7 @@ func (accumulator *Accumulator) AddSummary(measurement string,
 			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
 		}
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  string(measurement + "_" + key),
+			Name:  measurement + "_" + key,
 			Tags:  tags,
 			Type:  Summary,
 			Value: valuef,
@@ -160,7 +160,7 @@ func (accumulator *Accumulator) AddHistogram(measurement string,
 			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
 		}
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  string(measurement + "_" + key),
+			Name:  measurement + "_" + key,
 			Tags:  tags,
 			Type:  Histogram,
 			Value: valuef,

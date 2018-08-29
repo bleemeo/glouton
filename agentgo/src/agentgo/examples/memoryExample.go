@@ -32,11 +32,13 @@ func main() {
 		fmt.Println("----------------------------------------------------")
 		acc := types.InitAccumulator()
 		input := inputs.Inputs["mem"]()
-		input.Gather(&acc)
-		var metricPoints = acc.GetMetricPointSlice()
-		for _, metric := range metricPoints {
-			fmt.Println(metric.Name, ": ", metric.Value)
+		var err = input.Gather(&acc)
+		if err == nil {
+			var metricPoints = acc.GetMetricPointSlice()
+			for _, metric := range metricPoints {
+				fmt.Println(metric.Name, ": ", metric.Value)
+			}
+			time.Sleep(2000 * time.Millisecond)
 		}
-		time.Sleep(2000 * time.Millisecond)
 	}
 }

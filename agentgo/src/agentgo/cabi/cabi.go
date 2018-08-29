@@ -16,6 +16,8 @@
 
 // Expose the go metric in C
 
+// nolint: gas
+// nolint: deadcode
 package main
 
 /*
@@ -69,10 +71,6 @@ import (
 )
 
 var inputsgroups = make(map[int]map[int]telegraf.Input)
-
-// FunctionTest export an int in C
-//export FunctionTest
-func FunctionTest() int64 { return 42 }
 
 // InitInputGroup initialises a metric group and returns his ID
 //export InitInputGroup
@@ -194,7 +192,10 @@ func Gather(inputgroupID int) C.MetricPointVector {
 	accumulator := types.InitAccumulator()
 
 	for _, input := range inputgroup {
-		input.Gather(&accumulator)
+		err := input.Gather(&accumulator)
+		if err == nil {
+			return result
+		}
 	}
 	metrics := accumulator.GetMetricPointSlice()
 	var metricPointArray = C.malloc(C.size_t(len(metrics)) * C.sizeof_MetricPoint)
@@ -218,7 +219,7 @@ func convertMetricPointInC(metricPoint types.MetricPoint) C.MetricPoint {
 	}
 
 	var tags = C.malloc(C.size_t(tagCount) * C.sizeof_Tag)
-	var tagsSlice = (*[1<<30 - 1]C.Tag)(tags)
+	var tagsSlice = (*[1<<30 - 1]C.Tag)(tags) // nolint: gotype
 
 	var index int
 	for key, value := range metricPoint.Tags {

@@ -49,6 +49,14 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
     cd agentgo/
     go build -o cabi.so -buildmode=c-shared agentgo/cabi
 
+* Run gometalinter::
+
+    Install gometalinter: https://github.com/alecthomas/gometalinter
+
+    cd agentgo/src
+    gometalinter.v2 --vendor --deadline=10m ./...
+    You can use the --fast option to speed up execution
+
 * Install bleemeo-agent with its dependencies::
 
     pip install -U setuptools
