@@ -31,7 +31,7 @@ func main() {
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.InitAccumulator()
-		input, errInit := inputs.InitInputWithAddress("nginx", "http://172.17.0.3/nginx_status")
+		input, errInit := inputs.InitInputWithAddress("mysql", "root:my-secret-pw@tcp(172.17.0.2:3306)/?tls=false")
 		var err = input.Gather(&acc)
 		if err == nil && errInit == nil {
 			var metricPoints = acc.GetMetricPointSlice()
