@@ -16,8 +16,7 @@
 
 // Expose the go metric in C
 
-// nolint: gas
-// nolint: deadcode
+// nolint: gas, deadcode
 package main
 
 /*

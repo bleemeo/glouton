@@ -19,4 +19,5 @@ agentgo/src/agentgo/vendor/
 agentgo/pkg
 agentgo/cabi.so
 agentgo/cabi.h
+.vscode/
 /VERSION

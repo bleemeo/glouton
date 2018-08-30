@@ -52,8 +52,8 @@
 [[projects]]
   name = "github.com/aws/aws-sdk-go"
   packages = ["aws","aws/awserr","aws/awsutil","aws/client","aws/client/metadata","aws/corehandlers","aws/credentials","aws/credentials/ec2rolecreds","aws/credentials/endpointcreds","aws/credentials/stscreds","aws/csm","aws/defaults","aws/ec2metadata","aws/endpoints","aws/request","aws/session","aws/signer/v4","internal/sdkio","internal/sdkrand","internal/sdkuri","internal/shareddefaults","private/protocol","private/protocol/query","private/protocol/query/queryutil","private/protocol/rest","private/protocol/xml/xmlutil","service/cloudwatch","service/sts"]
-  revision = "8b15f938ed215522a37275106e847f6f0be85fe8"
-  version = "v1.15.23"
+  revision = "7715ed93fca215da2c707088a0cca5646ad91543"
+  version = "v1.15.24"
 
 [[projects]]
   name = "github.com/bsm/sarama-cluster"
@@ -71,7 +71,7 @@
   branch = "master"
   name = "github.com/couchbase/go-couchbase"
   packages = ["."]
-  revision = "5a0c9a51996952787fa7d77dc1635661c4369f0c"
+  revision = "783ee52d1ad06ae4e6c2801bb646652315ff72d5"
 
 [[projects]]
   branch = "master"
@@ -228,10 +228,10 @@
   version = "v1.2.2"
 
 [[projects]]
-  branch = "master"
   name = "github.com/hashicorp/go-cleanhttp"
   packages = ["."]
-  revision = "d5fe4b57a186c716b0e00b8c301cbd9b4182694d"
+  revision = "e8ab9daed8d1ddd2d3c4efba338fe2eeae2e4f18"
+  version = "v0.5.0"
 
 [[projects]]
   branch = "master"
@@ -261,7 +261,7 @@
   branch = "master"
   name = "github.com/influxdata/telegraf"
   packages = [".","filter","internal","internal/config/aws","internal/globpath","internal/limiter","internal/templating","internal/tls","metric","plugins/inputs","plugins/inputs/activemq","plugins/inputs/aerospike","plugins/inputs/all","plugins/inputs/amqp_consumer","plugins/inputs/apache","plugins/inputs/aurora","plugins/inputs/bcache","plugins/inputs/bond","plugins/inputs/burrow","plugins/inputs/cassandra","plugins/inputs/ceph","plugins/inputs/cgroup","plugins/inputs/chrony","plugins/inputs/cloudwatch","plugins/inputs/conntrack","plugins/inputs/consul","plugins/inputs/couchbase","plugins/inputs/couchdb","plugins/inputs/cpu","plugins/inputs/dcos","plugins/inputs/disk","plugins/inputs/diskio","plugins/inputs/disque","plugins/inputs/dmcache","plugins/inputs/dns_query","plugins/inputs/docker","plugins/inputs/dovecot","plugins/inputs/elasticsearch","plugins/inputs/exec","plugins/inputs/fail2ban","plugins/inputs/fibaro","plugins/inputs/file","plugins/inputs/filecount","plugins/inputs/filestat","plugins/inputs/fluentd","plugins/inputs/graylog","plugins/inputs/haproxy","plugins/inputs/hddtemp","plugins/inputs/hddtemp/go-hddtemp","plugins/inputs/http","plugins/inputs/http_listener","plugins/inputs/http_response","plugins/inputs/httpjson","plugins/inputs/icinga2","plugins/inputs/influxdb","plugins/inputs/internal","plugins/inputs/interrupts","plugins/inputs/ipmi_sensor","plugins/inputs/ipset","plugins/inputs/iptables","plugins/inputs/jolokia","plugins/inputs/jolokia2","plugins/inputs/jti_openconfig_telemetry","plugins/inputs/jti_openconfig_telemetry/auth","plugins/inputs/jti_openconfig_telemetry/oc","plugins/inputs/kafka_consumer","plugins/inputs/kafka_consumer_legacy","plugins/inputs/kapacitor","plugins/inputs/kernel","plugins/inputs/kernel_vmstat","plugins/inputs/kibana","plugins/inputs/kubernetes","plugins/inputs/leofs","plugins/inputs/linux_sysctl_fs","plugins/inputs/logparser","plugins/inputs/lustre2","plugins/inputs/mailchimp","plugins/inputs/mcrouter","plugins/inputs/mem","plugins/inputs/memcached","plugins/inputs/mesos","plugins/inputs/minecraft","plugins/inputs/minecraft/internal/rcon","plugins/inputs/mongodb","plugins/inputs/mqtt_consumer","plugins/inputs/mysql","plugins/inputs/mysql/v1","plugins/inputs/nats","plugins/inputs/nats_consumer","plugins/inputs/net","plugins/inputs/net_response","plugins/inputs/nginx","plugins/inputs/nginx_plus","plugins/inputs/nsq","plugins/inputs/nsq_consumer","plugins/inputs/nstat","plugins/inputs/ntpq","plugins/inputs/nvidia_smi","plugins/inputs/openldap","plugins/inputs/opensmtpd","plugins/inputs/passenger","plugins/inputs/pf","plugins/inputs/pgbouncer","plugins/inputs/phpfpm","plugins/inputs/ping","plugins/inputs/postfix","plugins/inputs/postgresql","plugins/inputs/postgresql_extensible","plugins/inputs/powerdns","plugins/inputs/processes","plugins/inputs/procstat","plugins/inputs/prometheus","plugins/inputs/puppetagent","plugins/inputs/rabbitmq","plugins/inputs/raindrops","plugins/inputs/redis","plugins/inputs/rethinkdb","plugins/inputs/riak","plugins/inputs/salesforce","plugins/inputs/sensors","plugins/inputs/smart","plugins/inputs/snmp","plugins/inputs/snmp_legacy","plugins/inputs/socket_listener","plugins/inputs/solr","plugins/inputs/sqlserver","plugins/inputs/statsd","plugins/inputs/swap","plugins/inputs/syslog","plugins/inputs/sysstat","plugins/inputs/system","plugins/inputs/tail","plugins/inputs/tcp_listener","plugins/inputs/teamspeak","plugins/inputs/tengine","plugins/inputs/tomcat","plugins/inputs/trig","plugins/inputs/twemproxy","plugins/inputs/udp_listener","plugins/inputs/unbound","plugins/inputs/varnish","plugins/inputs/webhooks","plugins/inputs/webhooks/filestack","plugins/inputs/webhooks/github","plugins/inputs/webhooks/mandrill","plugins/inputs/webhooks/papertrail","plugins/inputs/webhooks/particle","plugins/inputs/webhooks/rollbar","plugins/inputs/win_perf_counters","plugins/inputs/win_services","plugins/inputs/x509_cert","plugins/inputs/zfs","plugins/inputs/zipkin","plugins/inputs/zipkin/codec","plugins/inputs/zipkin/codec/jsonV1","plugins/inputs/zipkin/codec/thrift","plugins/inputs/zipkin/trace","plugins/inputs/zookeeper","plugins/parsers","plugins/parsers/collectd","plugins/parsers/csv","plugins/parsers/dropwizard","plugins/parsers/graphite","plugins/parsers/grok","plugins/parsers/influx","plugins/parsers/json","plugins/parsers/logfmt","plugins/parsers/nagios","plugins/parsers/value","plugins/parsers/wavefront","selfstat"]
-  revision = "3adcc3a93d9a7cd27f07dfb5b5e4c2b6476533ba"
+  revision = "e7b50384cf13781ca2e0c332b08f656d23ed2bda"
 
 [[projects]]
   name = "github.com/jackc/pgx"
@@ -325,8 +325,8 @@
 [[projects]]
   name = "github.com/nats-io/go-nats"
   packages = [".","encoders/builtin","util"]
-  revision = "062418ea1c2181f52dc0f954f6204370519a868b"
-  version = "v1.5.0"
+  revision = "fb0396ee0bdb8018b0fef30d6d1de798ce99cd05"
+  version = "v1.6.0"
 
 [[projects]]
   name = "github.com/nats-io/nuid"
@@ -584,6 +584,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "431846889b5798f1c3fa24b48a2bfcbdc7dfa890cc16123e32b7b688c5cd1e80"
+  inputs-digest = "0e17cb0a1f7367afd5d45ed945d04538de38c79dd39d1f76d024ecb256d258b6"
   solver-name = "gps-cdcl"
   solver-version = 1

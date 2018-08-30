@@ -22,6 +22,7 @@ import (
 	"errors"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
+	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 	"github.com/influxdata/telegraf/plugins/inputs/nginx"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
@@ -33,6 +34,8 @@ func InitInputWithAddress(inputName string, address string) (telegraf.Input, err
 		return initRedisInput(address)
 	case "nginx":
 		return initNginxInput(address)
+	case "mysql":
+		return initMysqlInput(address)
 	default:
 		return nil, errors.New("invalid inputName: " + inputName)
 	}
@@ -61,4 +64,16 @@ func initNginxInput(url string) (telegraf.Input, error) {
 		return input, nil
 	}
 	return nil, errors.New("Failed to initialize nginx input")
+}
+
+// initMysqlInput initialize the mysql input
+func initMysqlInput(server string) (telegraf.Input, error) {
+	input := telegraf_inputs.Inputs["mysql"]()
+	mysqlInput, ok := input.(*mysql.Mysql)
+	if ok {
+		slice := append(make([]string, 0), server)
+		mysqlInput.Servers = slice
+		return input, nil
+	}
+	return nil, errors.New("Failed to initialize mysql input")
 }
