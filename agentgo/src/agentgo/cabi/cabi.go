@@ -39,6 +39,7 @@ enum Type{
 
 struct MetricPoint
 {
+	int input_id;
 	char* name;
 	Tag *tag;
 	int tag_count;
@@ -187,30 +188,39 @@ func Gather(inputgroupID int) C.MetricPointVector {
 	if !ok {
 		return result
 	}
-	accumulator := types.InitAccumulator()
+	metrics := make(map[int][]types.MetricPoint)
 
-	for _, input := range inputgroup {
+	for inputID, input := range inputgroup {
+		accumulator := types.InitAccumulator()
 		err := input.Gather(&accumulator)
 		if err != nil {
 			return result
 		}
+		metrics[inputID] = accumulator.GetMetricPointSlice()
 	}
-	metrics := accumulator.GetMetricPointSlice()
-	var metricPointArray = C.malloc(C.size_t(len(metrics)) * C.sizeof_MetricPoint)
-	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(metricPointArray)
 
-	for index, metricPoint := range metrics {
-		var cMetricPoint = convertMetricPointInC(metricPoint)
-		metricPointSlice[index] = cMetricPoint
+	var metricsLen int
+	for _, metricsSlice := range metrics {
+		metricsLen += len(metricsSlice)
+	}
+	var metricPointArray = C.malloc(C.size_t(metricsLen) * C.sizeof_MetricPoint)
+	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(metricPointArray)
+	var index int
+	for inputID, metricsSlice := range metrics {
+		for _, goMetricPoint := range metricsSlice {
+			var cMetricPoint = convertMetricPointInC(goMetricPoint, inputID)
+			metricPointSlice[index] = cMetricPoint
+			index++
+		}
 	}
 	return (C.MetricPointVector{
 		metric_point:       (*C.MetricPoint)(metricPointArray),
-		metric_point_count: C.int(len(metrics)),
+		metric_point_count: C.int(metricsLen),
 	})
 
 }
 
-func convertMetricPointInC(metricPoint types.MetricPoint) C.MetricPoint {
+func convertMetricPointInC(metricPoint types.MetricPoint, inputID int) C.MetricPoint {
 	var tagCount int
 	for range metricPoint.Tags {
 		tagCount++
@@ -243,6 +253,7 @@ func convertMetricPointInC(metricPoint types.MetricPoint) C.MetricPoint {
 	}
 
 	var result C.MetricPoint = C.MetricPoint{
+		input_id:    C.int(inputID),
 		name:        C.CString(metricPoint.Name),
 		tag:         (*C.Tag)(tags),
 		tag_count:   C.int(tagCount),

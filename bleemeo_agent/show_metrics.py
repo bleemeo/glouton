@@ -14,7 +14,8 @@ def wrap_function(lib, funcname, restype, argtypes):
 
 
 class MetricPoint(ctypes.Structure):
-    _fields_ = [('name', ctypes.c_char_p),
+    _fields_ = [('input_id', ctypes.c_int),
+                ('name', ctypes.c_char_p),
                 ('tag', ctypes.POINTER(ctypes.c_int)),
                 ('tag_count', ctypes.c_int),
                 ('metric_type', ctypes.c_int),
@@ -51,11 +52,11 @@ while True:
     for i in range(0, metrics_vector.metric_point_count):
         metric_point = (metrics_vector.metric_point[i])
         print(
-            "{}: {}".format(
+            "Python: {}: {}".format(
                 metric_point.name, metric_point.value
             )
         )
 
     free_metric_point_vector(metrics_vector)
 
-    time.sleep(10)
+    time.sleep(2)
