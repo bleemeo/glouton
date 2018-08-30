@@ -1,7 +1,7 @@
-from ctypes import *
+import ctypes
 import time
 
-lib = cdll.LoadLibrary(
+lib = ctypes.cdll.LoadLibrary(
     "../agentgo/cabi.so")
 
 
@@ -13,26 +13,26 @@ def wrap_function(lib, funcname, restype, argtypes):
     return func
 
 
-class MetricPoint(Structure):
-    _fields_ = [('name', c_char_p),
-                ('tag', POINTER(c_int)),
-                ('tag_count', c_int),
-                ('metric_type', c_int),
-                ('value', c_float)]
+class MetricPoint(ctypes.Structure):
+    _fields_ = [('name', ctypes.c_char_p),
+                ('tag', ctypes.POINTER(ctypes.c_int)),
+                ('tag_count', ctypes.c_int),
+                ('metric_type', ctypes.c_int),
+                ('value', ctypes.c_float)]
 
 
-class MetricPointVector(Structure):
-    _fields_ = [('metric_point', POINTER(MetricPoint)),
-                ('metric_point_count', c_int)]
+class MetricPointVector(ctypes.Structure):
+    _fields_ = [('metric_point', ctypes.POINTER(MetricPoint)),
+                ('metric_point_count', ctypes.c_int)]
 
 
 # Load function from C-lib
 init_input_group = wrap_function(lib, 'InitInputGroup', int, None)
 add_simple_input = wrap_function(
-    lib, "AddSimpleInput", int, [c_int, c_char_p])
+    lib, "AddSimpleInput", int, [ctypes.c_int, ctypes.c_char_p])
 add_input_with_address = wrap_function(
-    lib, "AddInputWithAddress", int, [c_int, c_char_p, c_char_p])
-gather = wrap_function(lib, 'Gather', MetricPointVector, [c_int, ])
+    lib, "AddInputWithAddress", int, [ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p])
+gather = wrap_function(lib, 'Gather', MetricPointVector, [ctypes.c_int, ])
 free_metric_point_vector = wrap_function(
     lib, 'FreeMetricPointVector', None, [MetricPointVector, ])
 
@@ -41,7 +41,7 @@ input_group_id = init_input_group()
 # Add a memory and nginx input in the input group
 memory_input_id = add_simple_input(input_group_id, "mem")
 nginx_input_id = add_input_with_address(
-    input_group_id, "nginx", "http://172.17.0.2/nginx_status")
+    input_group_id, "nginx", "http://172.17.0.3/nginx_status")
 
 while True:
     # Gather metric from input group
@@ -58,4 +58,4 @@ while True:
 
     free_metric_point_vector(metrics_vector)
 
-    time.sleep(2)
+    time.sleep(10)
