@@ -19,9 +19,9 @@
 package main
 
 import (
+	"agentgo/inputs"
 	"agentgo/types"
 	"fmt"
-	"github.com/influxdata/telegraf/plugins/inputs"
 	// Needed to run this package
 	_ "github.com/influxdata/telegraf/plugins/inputs/all"
 	"time"
@@ -31,9 +31,9 @@ func main() {
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.InitAccumulator()
-		input := inputs.Inputs["mem"]()
+		input, errInit := inputs.InitInputWithAddress("nginx", "http://172.17.0.3/nginx_status")
 		var err = input.Gather(&acc)
-		if err == nil {
+		if err == nil && errInit == nil {
 			var metricPoints = acc.GetMetricPointSlice()
 			for _, metric := range metricPoints {
 				fmt.Println(metric.Name, ": ", metric.Value)

@@ -27,6 +27,16 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
+// InitSimpleInput initialize an input only with his name if it possible.
+func InitSimpleInput(inputName string) (telegraf.Input, error) {
+	var input, ok = telegraf_inputs.Inputs[inputName]
+	if ok {
+		return input(), nil
+	}
+	return nil, errors.New("invalid inputName: " + inputName)
+
+}
+
 // InitInputWithAddress initialize an input with an address or an url
 func InitInputWithAddress(inputName string, address string) (telegraf.Input, error) {
 	switch inputName {

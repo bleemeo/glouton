@@ -63,8 +63,7 @@ import (
 	"agentgo/types"
 	"github.com/influxdata/telegraf"
 	"unsafe"
-	// Needed to run this package
-	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
+	// Needed this dependencie to find inputs
 	_ "github.com/influxdata/telegraf/plugins/inputs/all"
 	"math/rand"
 )
@@ -104,11 +103,11 @@ func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
 // A simple input is only define by its name
 //export AddSimpleInput
 func AddSimpleInput(inputGroupID int, inputName *C.char) int {
-	input, ok := telegraf_inputs.Inputs[C.GoString(inputName)]
-	if !ok {
+	input, err := inputs.InitSimpleInput(C.GoString(inputName))
+	if err != nil {
 		return -1
 	}
-	return addInputToInputGroup(inputGroupID, input())
+	return addInputToInputGroup(inputGroupID, input)
 }
 
 // AddInputWithAddress add a redis input to the inputgroupID
@@ -192,7 +191,7 @@ func Gather(inputgroupID int) C.MetricPointVector {
 
 	for _, input := range inputgroup {
 		err := input.Gather(&accumulator)
-		if err == nil {
+		if err != nil {
 			return result
 		}
 	}
