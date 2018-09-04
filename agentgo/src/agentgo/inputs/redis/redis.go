@@ -14,31 +14,26 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Example of cpu module use
+// Package for redis input
 
-package main
+package redis
 
+/*
 import (
-	"agentgo/inputs/cpu"
-	"agentgo/types"
-	"fmt"
-	"time"
+	"github.com/influxdata/telegraf"
+	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
+	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
-func main() {
-	cpuInput := cpu.NewInput()
-	for {
-		fmt.Println("----------------------------------------------------")
-		acc := types.InitAccumulator()
-		var err = cpuInput.Gather(&acc)
-		if err == nil {
-			var metricPoints = acc.GetMetricPointSlice()
-			for _, metric := range metricPoints {
-				fmt.Println(metric.Name, ": ", metric.Value)
-			}
-			time.Sleep(2000 * time.Millisecond)
-		} else {
-			fmt.Println("Error")
-		}
+// initRedisInput initialize the redis input
+func initRedisInput(url string) (telegraf.Input, error) {
+	input := telegraf_inputs.Inputs["redis"]()
+	redisInput, ok := input.(*redis.Redis)
+	if ok {
+		slice := append(make([]string, 0), url)
+		redisInput.Servers = slice
+		return input, nil
 	}
+	return nil, errors.New("Failed to initialize redis input")
 }
+*/

@@ -78,13 +78,10 @@ func (accumulator *Accumulator) AddFields(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
-	for key, value := range fields {
-		valuef, err := convertInterface(value)
-		if err != nil {
-			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
-		}
+	for metricName, value := range fields {
+		valuef := value.(float64)
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  measurement + "_" + key,
+			Name:  metricName,
 			Tags:  tags,
 			Type:  Fields,
 			Value: valuef,
@@ -97,13 +94,10 @@ func (accumulator *Accumulator) AddGauge(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
-	for key, value := range fields {
-		valuef, err := convertInterface(value)
-		if err != nil {
-			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
-		}
+	for metricName, value := range fields {
+		valuef := value.(float64)
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  measurement + "_" + key,
+			Name:  metricName,
 			Tags:  tags,
 			Type:  Gauge,
 			Value: valuef,
@@ -116,13 +110,10 @@ func (accumulator *Accumulator) AddCounter(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
-	for key, value := range fields {
-		valuef, err := convertInterface(value)
-		if err != nil {
-			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
-		}
+	for metricName, value := range fields {
+		valuef := value.(float64)
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  measurement + "_" + key,
+			Name:  metricName,
 			Tags:  tags,
 			Type:  Counter,
 			Value: valuef,
@@ -135,13 +126,10 @@ func (accumulator *Accumulator) AddSummary(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
-	for key, value := range fields {
-		valuef, err := convertInterface(value)
-		if err != nil {
-			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
-		}
+	for metricName, value := range fields {
+		valuef := value.(float64)
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  measurement + "_" + key,
+			Name:  metricName,
 			Tags:  tags,
 			Type:  Summary,
 			Value: valuef,
@@ -154,13 +142,10 @@ func (accumulator *Accumulator) AddHistogram(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
-	for key, value := range fields {
-		valuef, err := convertInterface(value)
-		if err != nil {
-			accumulator.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, key, err))
-		}
+	for metricName, value := range fields {
+		valuef := value.(float64)
 		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  measurement + "_" + key,
+			Name:  metricName,
 			Tags:  tags,
 			Type:  Histogram,
 			Value: valuef,
@@ -193,16 +178,16 @@ func (accumulator Accumulator) GetErrors() []error {
 	return accumulator.errors
 }
 
-// convertInterface convert the interface type in float64
+// ConvertInterface convert the interface type in float64
 // if it impossible return 0 and an error
-func convertInterface(value interface{}) (float64, error) {
+func ConvertInterface(value interface{}) (float64, error) {
 	switch value.(type) {
 	case uint64:
 		return float64(value.(uint64)), nil
 	case float64:
 		return value.(float64), nil
 	default:
-		var r = reflect.TypeOf(value)
-		return float64(0), fmt.Errorf("Value type not supported :(%v)", r)
+		var valueType = reflect.TypeOf(value)
+		return float64(0), fmt.Errorf("Value type not supported :(%v)", valueType)
 	}
 }

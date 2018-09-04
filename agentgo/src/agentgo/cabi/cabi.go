@@ -60,7 +60,7 @@ typedef struct MetricPointVector MetricPointVector;
 import "C"
 
 import (
-	"agentgo/inputs"
+	"agentgo/inputs/cpu"
 	"agentgo/types"
 	"github.com/influxdata/telegraf"
 	"unsafe"
@@ -104,13 +104,15 @@ func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
 // A simple input is only define by its name
 //export AddSimpleInput
 func AddSimpleInput(inputGroupID int, inputName *C.char) int {
-	input, err := inputs.InitSimpleInput(C.GoString(inputName))
-	if err != nil {
-		return -1
+	goInputName := C.GoString(inputName)
+	if goInputName == "cpu" {
+		input := cpu.NewInput()
+		return addInputToInputGroup(inputGroupID, input)
 	}
-	return addInputToInputGroup(inputGroupID, input)
+	return -1
 }
 
+/*
 // AddInputWithAddress add a redis input to the inputgroupID
 // return the input ID in the group
 //export AddInputWithAddress
@@ -121,6 +123,7 @@ func AddInputWithAddress(inputGroupID int, inputName *C.char, server *C.char) in
 	}
 	return addInputToInputGroup(inputGroupID, input)
 }
+*/
 
 // FreeInputGroup deletes a collector
 // exit code 0 : the input group has been removed

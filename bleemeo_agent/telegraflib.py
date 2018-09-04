@@ -1,9 +1,10 @@
 import ctypes
 import time
+import bleemeo_agent.type
 
 
 lib = ctypes.cdll.LoadLibrary(
-    "../agentgo/cabi.so")
+    "agentgo/cabi.so")
 
 
 class Tag(ctypes.Structure):
@@ -14,7 +15,7 @@ class Tag(ctypes.Structure):
 class MetricPoint(ctypes.Structure):
     _fields_ = [('input_id', ctypes.c_int),
                 ('name', ctypes.c_char_p),
-                ('tag', ctypes.POINTER(ctypes.c_int)),
+                ('tag', ctypes.POINTER(Tag)),
                 ('tag_count', ctypes.c_int),
                 ('metric_type', ctypes.c_int),
                 ('value', ctypes.c_float)]
@@ -44,71 +45,87 @@ free_metric_point_vector = wrap_function(
     lib, 'FreeMetricPointVector', None, [MetricPointVector, ])
 
 
-class Telegraplib:
+class Telegraflib:
 
     def __init__(self, is_terminated=None, emit_metric=None):
-        self.inputs_map = {}
+        self.inputs_id_map = {}
+        self.metric_to_compute = {}
         self.input_group_id = init_input_group()
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
 
-    def add_input(self, input_id):
-        if isinstance(input_id, int) and input_id not in self.inputs_map:
-            self.inputs_map[input_id] = {}
-            return True
-        return False
-
-    def add_input_information(self, input_id, field, value):
-        if input_id in self.inputs_map:
-            input_informations = self.inputs_map[input_id]
-        if (isinstance(input_informations, dict) and isinstance(field, str) and isinstance(value, str) and field not in input_informations):
-            input_informations[field] = value
-            self.inputs_map = input_informations
-            return True
-        return False
+    def add_simple_input(self, input_name, input_informations={}):
+        input_id = add_simple_input(
+            self.input_group_id, bytes(input_name, 'utf_8'))
+        if input_id >= 0:
+            if input_informations:
+                self.inputs_id_map[input_id] = input_informations
+                try:
+                    if input_informations["name"] != input_name:
+                        raise ValueError("The input name is different in the input_information_name: {} != {}".format(
+                            input_name, input_informations["name"]))
+                except KeyError:
+                    input_informations["name"] = input_name
+            else:
+                input_informations["name"] = input_name
+        else:
+            raise ValueError(
+                "Impossible value of input_id: add_simple_input has fail: {}".format(input_name))
 
     def init_system_inputs(self):
-        cpu_input_id = add_simple_input(self.input_group_id, "cpu")
-        disk_input_id = add_simple_input(self.input_group_id, "disk")
-        diskio_input_id = add_simple_input(self.input_group_id, "diskio")
-        mem_input_id = add_simple_input(self.input_group_id, "mem")
-        net_input_id = add_simple_input(self.input_group_id, "net")
-        swap_input_id = add_simple_input(self.input_group_id, "swap")
-        system_input_id = add_simple_input(self.input_group_id, "system")
-        procstat_input_id = add_simple_input(self.input_group_id, "procstat")
+        self.add_simple_input("mem")
 
-        self.add_input(cpu_input_id)
-        self.add_input_information(cpu_input_id, "name", "cpu")
-        self.add_input(disk_input_id)
-        self.add_input_information(disk_input_id, "name", "disk")
-        self.add_input(diskio_input_id)
-        self.add_input_information(diskio_input_id, "name", "diskio")
-        self.add_input(mem_input_id)
-        self.add_input_information(mem_input_id, "name", "mem")
-        self.add_input(net_input_id)
-        self.add_input_information(net_input_id, "name", "net")
-        self.add_input(swap_input_id)
-        self.add_input_information(swap_input_id, "name", "swap")
-        self.add_input(system_input_id)
-        self.add_input_information(system_input_id, "name", "system")
-        self.add_input(procstat_input_id)
-        self.add_input_information(procstat_input_id, "name", "procstat")
-
-    def gather_metrics(self):
-        metrics_vector = gather(self.input_group_id)
-        print("\n-------------------------------------------------")
-        for i in range(0, metrics_vector.metric_point_count):
-            metric_point = (metrics_vector.metric_point[i])
-            print(
-                "Python: {}: {}".format(
-                    metric_point.name, metric_point.value
-                )
-            )
-        free_metric_point_vector(metrics_vector)
-
+    def gather_system_metrics(self):
+        self.init_system_inputs()
+        while True:
+            metrics_vector = gather(self.input_group_id)
+            for i in range(0, metrics_vector.metric_point_count):
+                metric_point = (metrics_vector.metric_point[i])
+                self.emit_metric(self.convert_metric_point(metric_point))
+                """item = ""
+                for j in range(0, metric_point.tag_count):
+                    tag = (metric_point.tag[j])
+                    if (tag.tag_name).decode("utf-8") == "item":
+                        item = (tag.tag_value).decode("utf-8")
+                """
+            free_metric_point_vector(metrics_vector)
         time.sleep(10)
 
+    def convert_metric_point(self, metric_point):
+        for input_id, input_informations in self.inputs_id_map:
+            if input_id == metric_point.input_id:
+                input_name = input_informations["name"]
+                if input_name == "mem":
+                    return self.convert_mem_metric_point(metric_point)
+                if input_name == "cpu":
+                    return self.convert_cpu_metric_point(metric_point)
+                else:
+                    return bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+                        label=(metric_point.name).decode("utf-8"),
+                        time=time.time(),
+                        value=metric_point.value,
+                        item='',)
 
-test = Telegraplib()
-test.init_system_inputs()
-test.gather_metrics()
+    def convert_mem_metric_point(self, metric_point):
+        return bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+            label=(metric_point.name).decode("utf-8"),
+            time=time.time(),
+            value=metric_point.value,
+            item='',)
+
+    def convert_cpu_metric_point(self, metric_point):
+        name = (metric_point.name).decode("utf_8")
+        if name == "cpu_usage_iowait":
+            name = "cpu_wait"
+        elif name == "cpu_usage_irq":
+            name = "cpu_interrupt"
+        else:
+            name = name.replace("_usage", "")
+        if name in ["cpu_user", "cpu_system", "cpu_nice", "cpu_interrupt", "cpu_softirq", "cpu_steal"]:
+            self.metric_to_compute[name] = metric_point.value
+
+        return bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
+            label=name,
+            time=time.time(),
+            value=metric_point.value,
+            item='',)
