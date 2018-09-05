@@ -22,15 +22,21 @@ import (
 	"agentgo/inputs/cpu"
 	"agentgo/types"
 	"fmt"
+	"github.com/influxdata/telegraf"
 	"time"
 )
 
+var inputsgroups = make(map[int]map[int]telegraf.Input)
+
 func main() {
-	cpuInput := cpu.NewInput()
+	inputsgroups[1] = make(map[int]telegraf.Input)
+	inputsgroups[1][1] = cpu.NewInput()
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.InitAccumulator()
-		var err = cpuInput.Gather(&acc)
+		fmt.Println("Go: ", acc)
+		var err = inputsgroups[1][1].Gather(&acc)
+		fmt.Println("Go: ", acc)
 		if err == nil {
 			var metricPoints = acc.GetMetricPointSlice()
 			for _, metric := range metricPoints {

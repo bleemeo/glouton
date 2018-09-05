@@ -193,8 +193,8 @@ func Gather(inputgroupID int) C.MetricPointVector {
 	}
 	metrics := make(map[int][]types.MetricPoint)
 
+	accumulator := types.InitAccumulator()
 	for inputID, input := range inputgroup {
-		accumulator := types.InitAccumulator()
 		err := input.Gather(&accumulator)
 		if err != nil {
 			return result

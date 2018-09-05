@@ -29,7 +29,6 @@ import (
 // Input countains input information abour CPU
 type Input struct {
 	cpuInput telegraf.Input
-	errors   []error
 }
 
 // NewInput initialise cpu.Input
@@ -49,19 +48,19 @@ func NewInput() Input {
 }
 
 // SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
+func (input Input) SampleConfig() string {
 	return input.cpuInput.SampleConfig()
 }
 
 // Description returns a one-sentence description on the Input
-func (input *Input) Description() string {
+func (input Input) Description() string {
 	return input.cpuInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc *types.Accumulator) error {
-	cpuAccumulator := initAccumulator(acc)
+func (input Input) Gather(acc telegraf.Accumulator) error {
+	cpuAccumulator := initAccumulator(&acc)
 	err := input.cpuInput.Gather(&cpuAccumulator)
 	//fmt.Println(cpuAccumulator.GetAccumulator().GetMetricPointSlice())
 	return err
@@ -69,11 +68,11 @@ func (input *Input) Gather(acc *types.Accumulator) error {
 
 // Accumulator save the cpu metric from telegraf
 type Accumulator struct {
-	acc *types.Accumulator
+	acc *telegraf.Accumulator
 }
 
 // InitAccumulator initialize an accumulator
-func initAccumulator(acc *types.Accumulator) Accumulator {
+func initAccumulator(acc *telegraf.Accumulator) Accumulator {
 	return Accumulator{
 		acc: acc,
 	}
@@ -97,7 +96,7 @@ func (accumulator *Accumulator) AddGauge(measurement string,
 	for metricName, value := range fields {
 		valuef, err := types.ConvertInterface(value)
 		if err != nil {
-			accumulator.acc.AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
+			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
 			continue
 		}
 		finalMetricName := measurement + strings.Replace(metricName, "usage", "", -1)
@@ -125,16 +124,16 @@ func (accumulator *Accumulator) AddGauge(measurement string,
 			cpuOther += valuef
 		}
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t[0])
+	(*accumulator.acc).AddGauge(measurement, finalFields, finalTags, t[0])
 }
 
 // AddError add an error to the Accumulator
 func (accumulator *Accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+	(*accumulator.acc).AddError(err)
 }
 
 // GetAccumulator return the accumulator field
-func (accumulator Accumulator) GetAccumulator() types.Accumulator {
+func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
 	return *accumulator.acc
 }
 

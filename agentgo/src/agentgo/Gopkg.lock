@@ -419,10 +419,10 @@
   version = "v1.0.6"
 
 [[projects]]
+  branch = "master"
   name = "github.com/soniah/gosnmp"
   packages = ["."]
-  revision = "3651b0e1a5302d5d5f6d47a2af02658f8bb36311"
-  version = "v1.14"
+  revision = "35d70ef6436030897babd670877f2d4a1748c249"
 
 [[projects]]
   branch = "master"
@@ -584,6 +584,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "0e17cb0a1f7367afd5d45ed945d04538de38c79dd39d1f76d024ecb256d258b6"
+  inputs-digest = "f362a575b129680934b69c1ea112ed7b358d437a8d1c71e04fe549b0e1afd9a4"
   solver-name = "gps-cdcl"
   solver-version = 1
