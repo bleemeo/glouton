@@ -61,12 +61,13 @@ import "C"
 
 import (
 	"agentgo/inputs/cpu"
+	"agentgo/inputs/mysql"
+	"agentgo/inputs/nginx"
+	"agentgo/inputs/redis"
 	"agentgo/types"
 	"github.com/influxdata/telegraf"
-	"unsafe"
-	// Needed this dependencie to find inputs
-	_ "github.com/influxdata/telegraf/plugins/inputs/all"
 	"math/rand"
+	"unsafe"
 )
 
 var inputsgroups = make(map[int]map[int]telegraf.Input)
@@ -112,18 +113,20 @@ func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 	return -1
 }
 
-/*
-// AddInputWithAddress add a redis input to the inputgroupID
+// AddInputWithAddress add an input to the inputgroupID
 // return the input ID in the group
 //export AddInputWithAddress
 func AddInputWithAddress(inputGroupID int, inputName *C.char, server *C.char) int {
-	input, err := inputs.InitInputWithAddress(C.GoString(inputName), C.GoString(server))
-	if err != nil {
-		return -1
+	goInputName := C.GoString(inputName)
+	if goInputName == "redis" {
+		return addInputToInputGroup(inputGroupID, redis.NewInput(C.GoString(server)))
+	} else if goInputName == "nginx" {
+		return addInputToInputGroup(inputGroupID, nginx.NewInput(C.GoString(server)))
+	} else if goInputName == "mysql" {
+		return addInputToInputGroup(inputGroupID, mysql.NewInput(C.GoString(server)))
 	}
-	return addInputToInputGroup(inputGroupID, input)
+	return -1
 }
-*/
 
 // FreeInputGroup deletes a collector
 // exit code 0 : the input group has been removed

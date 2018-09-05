@@ -26,7 +26,7 @@ import (
 	"time"
 )
 
-// Input countains input information abour CPU
+// Input countains input information about CPU
 type Input struct {
 	cpuInput telegraf.Input
 }
@@ -62,7 +62,6 @@ func (input Input) Description() string {
 func (input Input) Gather(acc telegraf.Accumulator) error {
 	cpuAccumulator := initAccumulator(&acc)
 	err := input.cpuInput.Gather(&cpuAccumulator)
-	//fmt.Println(cpuAccumulator.GetAccumulator().GetMetricPointSlice())
 	return err
 }
 
