@@ -123,6 +123,8 @@ func (accumulator *Accumulator) AddGauge(measurement string,
 			cpuUsed += valuef
 			cpuOther += valuef
 		}
+		finalFields["cpu_other"] = cpuOther
+		finalFields["cpu_used"] = cpuUsed
 	}
 	(*accumulator.acc).AddGauge(measurement, finalFields, finalTags, t[0])
 }
