@@ -102,6 +102,48 @@ func (accumulator *Accumulator) AddGauge(measurement string,
 			continue
 		} else if finalMetricName == "mem_wired" {
 			continue
+		} else if finalMetricName == "mem_commit_limit" {
+			continue
+		} else if finalMetricName == "mem_committed_as" {
+			continue
+		} else if finalMetricName == "mem_dirty" {
+			continue
+		} else if finalMetricName == "mem_high_free" {
+			continue
+		} else if finalMetricName == "mem_high_total" {
+			continue
+		} else if finalMetricName == "mem_huge_page_size" {
+			continue
+		} else if finalMetricName == "mem_huge_pages_free" {
+			continue
+		} else if finalMetricName == "mem_huge_pages_total" {
+			continue
+		} else if finalMetricName == "mem_low_free" {
+			continue
+		} else if finalMetricName == "mem_low_total" {
+			continue
+		} else if finalMetricName == "mem_mapped" {
+			continue
+		} else if finalMetricName == "mem_page_tables" {
+			continue
+		} else if finalMetricName == "mem_shared" {
+			continue
+		} else if finalMetricName == "mem_swap_cached" {
+			continue
+		} else if finalMetricName == "mem_swap_free" {
+			continue
+		} else if finalMetricName == "mem_swap_total" {
+			continue
+		} else if finalMetricName == "mem_vmalloc_chunk" {
+			continue
+		} else if finalMetricName == "mem_vmalloc_total" {
+			continue
+		} else if finalMetricName == "mem_vmalloc_used" {
+			continue
+		} else if finalMetricName == "mem_write_back" {
+			continue
+		} else if finalMetricName == "mem_write_back_tmp" {
+			continue
 		}
 		finalFields[finalMetricName] = valuef
 	}
