@@ -19,6 +19,7 @@
 package mysql
 
 import (
+	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
@@ -84,10 +85,7 @@ func initAccumulator(acc *telegraf.Accumulator) Accumulator {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *Accumulator) AddFields(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// TODO
 	(*accumulator.acc).AddFields(measurement, fields, nil)
 }
@@ -106,32 +104,26 @@ func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
 // They are not implemented
 
 // AddGauge is useless for mysql
-func (accumulator *Accumulator) AddGauge(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddGauge not implemented for mysql accumulator"))
 }
 
 // AddCounter is useless for mysql
-func (accumulator *Accumulator) AddCounter(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for mysql accumulator"))
 }
 
 // AddSummary is useless for mysql
-func (accumulator *Accumulator) AddSummary(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for mysql accumulator"))
 }
 
 // AddHistogram is useless for mysql
-func (accumulator *Accumulator) AddHistogram(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for mysql accumulator"))
 }
 
 // SetPrecision is useless for mysql
-func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {}
+func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {
+	(*accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for mysql accumulator"))
+}

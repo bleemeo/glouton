@@ -80,10 +80,7 @@ func initAccumulator(acc *telegraf.Accumulator) Accumulator {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *Accumulator) AddGauge(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		valuef, err := types.ConvertInterface(value)
@@ -164,32 +161,26 @@ func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
 // They are not implemented
 
 // AddFields is useless for mem
-func (accumulator *Accumulator) AddFields(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for mem accumulator"))
 }
 
 // AddCounter is useless for mem
-func (accumulator *Accumulator) AddCounter(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for mem accumulator"))
 }
 
 // AddSummary is useless for mem
-func (accumulator *Accumulator) AddSummary(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for mem accumulator"))
 }
 
 // AddHistogram is useless for mem
-func (accumulator *Accumulator) AddHistogram(measurement string,
-	fields map[string]interface{},
-	tags map[string]string,
-	t ...time.Time) {
+func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	(*accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for mem accumulator"))
 }
 
 // SetPrecision is useless for mem
-func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {}
+func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {
+	(*accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for mem accumulator"))
+}
