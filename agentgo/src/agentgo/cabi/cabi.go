@@ -61,6 +61,7 @@ import "C"
 
 import (
 	"agentgo/inputs/cpu"
+	"agentgo/inputs/mem"
 	"agentgo/inputs/mysql"
 	"agentgo/inputs/nginx"
 	"agentgo/inputs/redis"
@@ -108,6 +109,9 @@ func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 	goInputName := C.GoString(inputName)
 	if goInputName == "cpu" {
 		input := cpu.NewInput()
+		return addInputToInputGroup(inputGroupID, input)
+	} else if goInputName == "mem" {
+		input := mem.NewInput()
 		return addInputToInputGroup(inputGroupID, input)
 	}
 	return -1

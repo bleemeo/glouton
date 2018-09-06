@@ -14,60 +14,55 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package for nginx input
-
-package nginx
+package mem
 
 import (
+	"agentgo/types"
+	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/nginx"
+	"github.com/influxdata/telegraf/plugins/inputs/mem"
 	"time"
 )
 
-// Input countains input information about Mysql
+// Input countains input information about mem
 type Input struct {
-	nginxInput telegraf.Input
+	memInput telegraf.Input
 }
 
-// NewInput initialise nginx.Input
-func NewInput(url string) Input {
-	var input, ok = telegraf_inputs.Inputs["nginx"]
+// NewInput initialise mem.Input
+func NewInput() Input {
+	var input, ok = telegraf_inputs.Inputs["mem"]
 	if ok {
-		nginxInput, ok := input().(*nginx.Nginx)
-		if ok {
-			slice := append(make([]string, 0), url)
-			nginxInput.Urls = slice
-			nginxInput.InsecureSkipVerify = false
-			return Input{
-				nginxInput: nginxInput,
-			}
+		memInput := input().(*mem.MemStats)
+		return Input{
+			memInput: memInput,
 		}
 	}
 	return Input{
-		nginxInput: nil,
+		memInput: nil,
 	}
 }
 
 // SampleConfig returns the default configuration of the Input
 func (input Input) SampleConfig() string {
-	return input.nginxInput.SampleConfig()
+	return input.memInput.SampleConfig()
 }
 
 // Description returns a one-sentence description on the Input
 func (input Input) Description() string {
-	return input.nginxInput.Description()
+	return input.memInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input Input) Gather(acc telegraf.Accumulator) error {
-	nginxAccumulator := initAccumulator(&acc)
-	err := input.nginxInput.Gather(&nginxAccumulator)
+	memAccumulator := initAccumulator(&acc)
+	err := input.memInput.Gather(&memAccumulator)
 	return err
 }
 
-// Accumulator save the nginx metric from telegraf
+// Accumulator save the mem metric from telegraf
 type Accumulator struct {
 	acc *telegraf.Accumulator
 }
@@ -79,18 +74,38 @@ func initAccumulator(acc *telegraf.Accumulator) Accumulator {
 	}
 }
 
-// AddFields adds a metric to the accumulator with the given measurement
+// AddGauge adds a metric to the accumulator with the given measurement
 // name, fields, and tags (and timestamp). If a timestamp is not provided,
 // then the accumulator sets it to "now".
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *Accumulator) AddFields(measurement string,
+func (accumulator *Accumulator) AddGauge(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
-	// TODO
-	(*accumulator.acc).AddFields(measurement, fields, nil)
+	finalFields := make(map[string]interface{})
+	for metricName, value := range fields {
+		valuef, err := types.ConvertInterface(value)
+		if err != nil {
+			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
+			continue
+		}
+		finalMetricName := measurement + "_" + metricName
+		if finalMetricName == "mem_available_percent" {
+			finalMetricName = "mem_available_perc"
+		} else if finalMetricName == "mem_used_percent" {
+			finalMetricName = "mem_used_perc"
+		} else if finalMetricName == "mem_active" {
+			continue
+		} else if finalMetricName == "mem_inactive" {
+			continue
+		} else if finalMetricName == "mem_wired" {
+			continue
+		}
+		finalFields[finalMetricName] = valuef
+	}
+	(*accumulator.acc).AddGauge(measurement, finalFields, nil)
 }
 
 // AddError add an error to the Accumulator
@@ -103,36 +118,36 @@ func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
 	return *accumulator.acc
 }
 
-// This functions are useless for nginx metric.
+// This functions are useless for mem metric.
 // They are not implemented
 
-// AddGauge is useless for nginx
-func (accumulator *Accumulator) AddGauge(measurement string,
+// AddFields is useless for mem
+func (accumulator *Accumulator) AddFields(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
 }
 
-// AddCounter is useless for nginx
+// AddCounter is useless for mem
 func (accumulator *Accumulator) AddCounter(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
 }
 
-// AddSummary is useless for nginx
+// AddSummary is useless for mem
 func (accumulator *Accumulator) AddSummary(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
 }
 
-// AddHistogram is useless for nginx
+// AddHistogram is useless for mem
 func (accumulator *Accumulator) AddHistogram(measurement string,
 	fields map[string]interface{},
 	tags map[string]string,
 	t ...time.Time) {
 }
 
-// SetPrecision is useless for nginx
+// SetPrecision is useless for mem
 func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {}

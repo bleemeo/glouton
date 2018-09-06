@@ -89,7 +89,7 @@ func (accumulator *Accumulator) AddFields(measurement string,
 	tags map[string]string,
 	t ...time.Time) {
 	// TODO
-	(*accumulator.acc).AddFields(measurement, fields, tags, t[0])
+	(*accumulator.acc).AddFields(measurement, fields, nil)
 }
 
 // AddError add an error to the Accumulator
