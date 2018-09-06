@@ -54,11 +54,12 @@ class Telegraflib:
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
 
-    def add_simple_input(self, input_name, input_informations={}):
+    def add_simple_input(self, input_name, input_informations=None):
         input_id = add_simple_input(
             self.input_group_id, bytes(input_name, 'utf_8'))
         if input_id >= 0:
-            if input_informations:
+            if input_informations is None:
+                input_informations = {}
                 self.inputs_id_map[input_id] = input_informations
                 try:
                     if input_informations["name"] != input_name:
