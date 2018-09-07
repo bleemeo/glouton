@@ -32,9 +32,15 @@
   version = "v1.4.0"
 
 [[projects]]
+  name = "github.com/gobwas/glob"
+  packages = [".","compiler","match","syntax","syntax/ast","syntax/lexer","util/runes","util/strings"]
+  revision = "5ccd90ef52e1e632236f7326478d4faa74f99438"
+  version = "v0.2.3"
+
+[[projects]]
   branch = "master"
   name = "github.com/influxdata/telegraf"
-  packages = [".","internal","internal/tls","plugins/inputs","plugins/inputs/cpu","plugins/inputs/mem","plugins/inputs/mysql","plugins/inputs/mysql/v1","plugins/inputs/nginx","plugins/inputs/redis","plugins/inputs/system"]
+  packages = [".","filter","internal","internal/tls","plugins/inputs","plugins/inputs/cpu","plugins/inputs/linux_sysctl_fs","plugins/inputs/mem","plugins/inputs/mysql","plugins/inputs/mysql/v1","plugins/inputs/net","plugins/inputs/nginx","plugins/inputs/processes","plugins/inputs/redis","plugins/inputs/swap","plugins/inputs/system"]
   revision = "e7b50384cf13781ca2e0c332b08f656d23ed2bda"
 
 [[projects]]
@@ -48,6 +54,12 @@
   packages = ["cpu","disk","host","internal/common","load","mem","net","process"]
   revision = "8048a2e9c5773235122027dd585cf821b2af1249"
   version = "v2.18.07"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/shirou/w32"
+  packages = ["."]
+  revision = "bb4de0191aa41b5507caa14b0650cdbddcd9280b"
 
 [[projects]]
   name = "github.com/stretchr/objx"
@@ -76,6 +88,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "be5356479c62e02287c80890fb9e807771d4bb30fce5023da28d8bb06fdb3cac"
+  inputs-digest = "8d7332e0bf806a6cf4bdec7679c1bc34dd96dd837752798cbd23b49420dfa3ab"
   solver-name = "gps-cdcl"
   solver-version = 1
