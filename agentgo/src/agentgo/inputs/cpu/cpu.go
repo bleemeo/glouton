@@ -91,16 +91,16 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 	var cpuOther float64
 	var cpuUsed float64
 	for metricName, value := range fields {
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
 		finalMetricName := measurement + strings.Replace(metricName, "usage", "", -1)
 		if finalMetricName == "cpu_irq" {
 			finalMetricName = "cpu_interrupt"
 		} else if finalMetricName == "cpu_iowait" {
 			finalMetricName = "cpu_wait"
+		}
+		valuef, err := types.ConvertInterface(value)
+		if err != nil {
+			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
+			continue
 		}
 		finalFields[finalMetricName] = valuef
 		if finalMetricName == "cpu_user" {
@@ -120,9 +120,9 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 			cpuUsed += valuef
 			cpuOther += valuef
 		}
-		finalFields["cpu_other"] = cpuOther
-		finalFields["cpu_used"] = cpuUsed
 	}
+	finalFields["cpu_other"] = cpuOther
+	finalFields["cpu_used"] = cpuUsed
 	(*accumulator.acc).AddGauge(measurement, finalFields, finalTags, t[0])
 }
 

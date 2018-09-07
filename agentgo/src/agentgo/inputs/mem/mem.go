@@ -84,11 +84,6 @@ func initAccumulator(acc *telegraf.Accumulator) Accumulator {
 func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
 		finalMetricName := measurement + "_" + metricName
 		if finalMetricName == "mem_available_percent" {
 			finalMetricName = "mem_available_perc"
@@ -141,6 +136,11 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 		} else if finalMetricName == "mem_write_back" {
 			continue
 		} else if finalMetricName == "mem_write_back_tmp" {
+			continue
+		}
+		valuef, err := types.ConvertInterface(value)
+		if err != nil {
+			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
 			continue
 		}
 		finalFields[finalMetricName] = valuef

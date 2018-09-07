@@ -165,6 +165,10 @@ func ConvertInterface(value interface{}) (float64, error) {
 		return float64(value.(uint64)), nil
 	case float64:
 		return value.(float64), nil
+	case int:
+		return float64(value.(int)), nil
+	case int64:
+		return float64(value.(int64)), nil
 	default:
 		var valueType = reflect.TypeOf(value)
 		return float64(0), fmt.Errorf("Value type not supported :(%v)", valueType)

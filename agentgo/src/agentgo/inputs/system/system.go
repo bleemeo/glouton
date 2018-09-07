@@ -83,14 +83,16 @@ func initAccumulator(acc *telegraf.Accumulator) Accumulator {
 func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
+		finalMetricName := measurement + "_" + metricName
+		if finalMetricName == "system_n_users" {
+			finalMetricName = "users_logged"
+		} else if finalMetricName == "system_n_cpus" {
+			continue
+		}
 		valuef, err := types.ConvertInterface(value)
 		if err != nil {
 			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
 			continue
-		}
-		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "system_n_users" {
-			finalMetricName = "users_logged"
 		}
 		finalFields[finalMetricName] = valuef
 	}
