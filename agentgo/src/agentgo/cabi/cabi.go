@@ -63,6 +63,7 @@ import (
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/mem"
 	"agentgo/inputs/mysql"
+	"agentgo/inputs/net"
 	"agentgo/inputs/nginx"
 	"agentgo/inputs/process"
 	"agentgo/inputs/redis"
@@ -124,6 +125,9 @@ func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 		return addInputToInputGroup(inputGroupID, input)
 	} else if goInputName == "process" {
 		input := process.NewInput()
+		return addInputToInputGroup(inputGroupID, input)
+	} else if goInputName == "net" {
+		input := net.NewInput()
 		return addInputToInputGroup(inputGroupID, input)
 	}
 	return -1

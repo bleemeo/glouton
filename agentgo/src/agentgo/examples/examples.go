@@ -19,7 +19,7 @@
 package main
 
 import (
-	"agentgo/inputs/system"
+	"agentgo/inputs/net"
 	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
@@ -30,7 +30,7 @@ var inputsgroups = make(map[int]map[int]telegraf.Input)
 
 func main() {
 	inputsgroups[1] = make(map[int]telegraf.Input)
-	inputsgroups[1][1] = system.NewInput()
+	inputsgroups[1][1] = net.NewInput()
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.Accumulator{}
@@ -38,11 +38,16 @@ func main() {
 		if err == nil {
 			var metricPoints = acc.GetMetricPointSlice()
 			for _, metric := range metricPoints {
-				fmt.Println(metric.Name, ": ", metric.Value)
+				item, ok := metric.Tags["item"]
+				if ok {
+					fmt.Println(item, ": ", metric.Name, ": ", metric.Value)
+				} else {
+					fmt.Println(metric.Name, ": ", metric.Value)
+				}
 			}
-			time.Sleep(2000 * time.Millisecond)
 		} else {
 			fmt.Println("Error")
 		}
+		time.Sleep(2000 * time.Millisecond)
 	}
 }
