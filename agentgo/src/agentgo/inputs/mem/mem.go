@@ -49,7 +49,7 @@ func (input Input) SampleConfig() string {
 	return input.memInput.SampleConfig()
 }
 
-// Description returns a one-sentence description on the Input
+// Description returns a one-sentence description of the Input
 func (input Input) Description() string {
 	return input.memInput.Description()
 }
