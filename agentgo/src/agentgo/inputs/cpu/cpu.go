@@ -83,6 +83,7 @@ func initAccumulator(acc *telegraf.Accumulator) Accumulator {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
+// nolint: gocyclo
 func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	finalTags := make(map[string]string)

@@ -33,7 +33,7 @@ func main() {
 	inputsgroups[1][1] = mem.NewInput()
 	for {
 		fmt.Println("----------------------------------------------------")
-		acc := types.InitAccumulator()
+		acc := types.Accumulator{}
 		var err = inputsgroups[1][1].Gather(&acc)
 		if err == nil {
 			var metricPoints = acc.GetMetricPointSlice()
