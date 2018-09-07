@@ -43,7 +43,7 @@ free_metric_point_vector = wrap_function(
     lib, 'FreeMetricPointVector', None, [MetricPointVector, ])
 
 group_id = init_input_group()
-cpu_id = add_simple_input(group_id, b"mem")
+cpu_id = add_simple_input(group_id, b"process")
 while True:
     metrics_vector = gather(group_id)
     for i in range(0, metrics_vector.metric_point_count):
