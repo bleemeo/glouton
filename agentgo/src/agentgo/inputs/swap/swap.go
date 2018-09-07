@@ -57,18 +57,18 @@ func (input Input) Description() string {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input Input) Gather(acc telegraf.Accumulator) error {
-	swapAccumulator := initAccumulator(&acc)
+	swapAccumulator := initAccumulator(acc)
 	err := input.swapInput.Gather(&swapAccumulator)
 	return err
 }
 
 // Accumulator save the swap metric from telegraf
 type Accumulator struct {
-	acc *telegraf.Accumulator
+	acc telegraf.Accumulator
 }
 
 // InitAccumulator initialize an accumulator
-func initAccumulator(acc *telegraf.Accumulator) Accumulator {
+func initAccumulator(acc telegraf.Accumulator) Accumulator {
 	return Accumulator{
 		acc: acc,
 	}
@@ -89,12 +89,12 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		valuef, err := types.ConvertInterface(value)
 		if err != nil {
-			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
+			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
 			continue
 		}
 		finalFields[finalMetricName] = valuef
 	}
-	(*accumulator.acc).AddGauge(measurement, finalFields, nil)
+	(accumulator.acc).AddGauge(measurement, finalFields, nil)
 }
 
 // AddCounter adds a metric to the accumulator with the given measurement
@@ -109,22 +109,17 @@ func (accumulator *Accumulator) AddCounter(measurement string, fields map[string
 		finalMetricName := measurement + "_" + metricName
 		valuef, err := types.ConvertInterface(value)
 		if err != nil {
-			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
+			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
 			continue
 		}
 		finalFields[finalMetricName] = valuef
 	}
-	(*accumulator.acc).AddGauge(measurement, finalFields, nil)
+	(accumulator.acc).AddGauge(measurement, finalFields, nil)
 }
 
 // AddError add an error to the Accumulator
 func (accumulator *Accumulator) AddError(err error) {
-	(*accumulator.acc).AddError(err)
-}
-
-// GetAccumulator return the accumulator field
-func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
-	return *accumulator.acc
+	(accumulator.acc).AddError(err)
 }
 
 // This functions are useless for swap metric.
@@ -132,20 +127,20 @@ func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
 
 // AddFields is useless for swap
 func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(*accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for swap accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for swap accumulator"))
 }
 
 // AddSummary is useless for swap
 func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(*accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for swap accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for swap accumulator"))
 }
 
 // AddHistogram is useless for swap
 func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(*accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for swap accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for swap accumulator"))
 }
 
 // SetPrecision is useless for swap
 func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {
-	(*accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for swap accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for swap accumulator"))
 }
