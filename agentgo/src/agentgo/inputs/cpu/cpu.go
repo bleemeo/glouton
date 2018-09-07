@@ -60,18 +60,18 @@ func (input Input) Description() string {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input Input) Gather(acc telegraf.Accumulator) error {
-	cpuAccumulator := initAccumulator(&acc)
+	cpuAccumulator := initAccumulator(acc)
 	err := input.cpuInput.Gather(&cpuAccumulator)
 	return err
 }
 
 // Accumulator save the cpu metric from telegraf
 type Accumulator struct {
-	acc *telegraf.Accumulator
+	acc telegraf.Accumulator
 }
 
 // InitAccumulator initialize an accumulator
-func initAccumulator(acc *telegraf.Accumulator) Accumulator {
+func initAccumulator(acc telegraf.Accumulator) Accumulator {
 	return Accumulator{
 		acc: acc,
 	}
@@ -99,7 +99,7 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		valuef, err := types.ConvertInterface(value)
 		if err != nil {
-			(*accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
+			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
 			continue
 		}
 		finalFields[finalMetricName] = valuef
@@ -123,17 +123,12 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 	}
 	finalFields["cpu_other"] = cpuOther
 	finalFields["cpu_used"] = cpuUsed
-	(*accumulator.acc).AddGauge(measurement, finalFields, finalTags, t[0])
+	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t[0])
 }
 
 // AddError add an error to the Accumulator
 func (accumulator *Accumulator) AddError(err error) {
-	(*accumulator.acc).AddError(err)
-}
-
-// GetAccumulator return the accumulator field
-func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
-	return *accumulator.acc
+	(accumulator.acc).AddError(err)
 }
 
 // This functions are useless for Cpu metric.
@@ -141,25 +136,25 @@ func (accumulator Accumulator) GetAccumulator() telegraf.Accumulator {
 
 // AddFields is useless for Cpu
 func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(*accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for cpu accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for cpu accumulator"))
 }
 
 // AddCounter is useless for Cpu
 func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(*accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for cpu accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for cpu accumulator"))
 }
 
 // AddSummary is useless for Cpu
 func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(*accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for cpu accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for cpu accumulator"))
 }
 
 // AddHistogram is useless for Cpu
 func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(*accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for cpu accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for cpu accumulator"))
 }
 
 // SetPrecision is useless for Cpu
 func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {
-	(*accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for cpu accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for cpu accumulator"))
 }
