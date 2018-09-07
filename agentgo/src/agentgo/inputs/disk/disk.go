@@ -89,6 +89,9 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 	}
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
+		if finalMetricName == "disk_used_percent" {
+			finalMetricName = "disk_used_perc"
+		}
 		valuef, err := types.ConvertInterface(value)
 		if err != nil {
 			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
