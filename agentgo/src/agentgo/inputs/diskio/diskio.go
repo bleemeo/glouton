@@ -14,56 +14,56 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package net
+package diskio
 
 import (
 	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/net"
+	"github.com/influxdata/telegraf/plugins/inputs/diskio"
+	"strings"
 	"time"
 )
 
-// Input countains input information about net
+// Input countains input information about diskio
 type Input struct {
-	netInput telegraf.Input
+	diskioInput telegraf.Input
 }
 
-// NewInput initialise met.Input
+// NewInput initialise diskio.Input
 func NewInput() Input {
-	var input, ok = telegraf_inputs.Inputs["net"]
+	var input, ok = telegraf_inputs.Inputs["diskio"]
 	if ok {
-		netInput := input().(*net.NetIOStats)
-		netInput.IgnoreProtocolStats = true
+		diskioInput := input().(*diskio.DiskIO)
 		return Input{
-			netInput: netInput,
+			diskioInput: diskioInput,
 		}
 	}
 	return Input{
-		netInput: nil,
+		diskioInput: nil,
 	}
 }
 
 // SampleConfig returns the default configuration of the Input
 func (input Input) SampleConfig() string {
-	return input.netInput.SampleConfig()
+	return input.diskioInput.SampleConfig()
 }
 
 // Description returns a one-sentence description on the Input
 func (input Input) Description() string {
-	return input.netInput.Description()
+	return input.diskioInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input Input) Gather(acc telegraf.Accumulator) error {
 	netAccumulator := initAccumulator(acc)
-	err := input.netInput.Gather(&netAccumulator)
+	err := input.diskioInput.Gather(&netAccumulator)
 	return err
 }
 
-// Accumulator save the net metric from telegraf
+// Accumulator save the diskio metric from telegraf
 type Accumulator struct {
 	acc telegraf.Accumulator
 }
@@ -85,23 +85,25 @@ func initAccumulator(acc telegraf.Accumulator) Accumulator {
 func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	finalTags := make(map[string]string)
-	item, ok := tags["interface"]
+	item, ok := tags["name"]
 	if ok {
 		finalTags["item"] = item
 	}
 	for metricName, value := range fields {
-		finalMetricName := measurement + "_" + metricName
+		finalMetricName := strings.Replace(measurement+"_"+metricName, "disk", "", 1)
+		if finalMetricName == "io_weighted_io_time" {
+			continue
+		} else if finalMetricName == "io_iops_in_progress" {
+			continue
+		}
 		valuef, err := types.ConvertInterface(value)
 		if err != nil {
 			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
 			continue
 		}
-		if finalMetricName == "net_bytes_sent" {
-			finalMetricName = "net_bits_sent"
-			valuef = 8 * valuef
-		} else if finalMetricName == "net_bytes_recv" {
-			finalMetricName = "net_bits_recv"
-			valuef = 8 * valuef
+		if finalMetricName == "io_io_time" {
+			finalMetricName = "io_time"
+			finalFields["io_utilization"] = valuef * 1000
 		}
 		finalFields[finalMetricName] = valuef
 	}
@@ -113,30 +115,30 @@ func (accumulator *Accumulator) AddError(err error) {
 	(accumulator.acc).AddError(err)
 }
 
-// This functions are useless for net metric.
+// This functions are useless for diskio metric.
 // They are not implemented
 
-// AddFields is useless for net
+// AddFields is useless for diskio
 func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for net accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for diskio accumulator"))
 }
 
-// AddGauge is useless for net
+// AddGauge is useless for diskio
 func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for net accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for diskio accumulator"))
 }
 
-// AddSummary is useless for net
+// AddSummary is useless for diskio
 func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for net accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for diskio accumulator"))
 }
 
-// AddHistogram is useless for net
+// AddHistogram is useless for diskio
 func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for net accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for diskio accumulator"))
 }
 
-// SetPrecision is useless for net
+// SetPrecision is useless for diskio
 func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {
-	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for net accumulator"))
+	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for diskio accumulator"))
 }

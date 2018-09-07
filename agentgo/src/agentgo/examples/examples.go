@@ -19,7 +19,7 @@
 package main
 
 import (
-	"agentgo/inputs/net"
+	"agentgo/inputs/diskio"
 	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
@@ -30,7 +30,7 @@ var inputsgroups = make(map[int]map[int]telegraf.Input)
 
 func main() {
 	inputsgroups[1] = make(map[int]telegraf.Input)
-	inputsgroups[1][1] = net.NewInput()
+	inputsgroups[1][1] = diskio.NewInput()
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.Accumulator{}
