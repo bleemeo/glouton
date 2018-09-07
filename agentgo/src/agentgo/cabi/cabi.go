@@ -65,6 +65,7 @@ import (
 	"agentgo/inputs/mysql"
 	"agentgo/inputs/nginx"
 	"agentgo/inputs/redis"
+	"agentgo/inputs/swap"
 	"agentgo/types"
 	"github.com/influxdata/telegraf"
 	"math/rand"
@@ -112,6 +113,9 @@ func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 		return addInputToInputGroup(inputGroupID, input)
 	} else if goInputName == "mem" {
 		input := mem.NewInput()
+		return addInputToInputGroup(inputGroupID, input)
+	} else if goInputName == "swap" {
+		input := swap.NewInput()
 		return addInputToInputGroup(inputGroupID, input)
 	}
 	return -1

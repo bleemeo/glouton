@@ -19,7 +19,7 @@
 package main
 
 import (
-	"agentgo/inputs/mem"
+	"agentgo/inputs/swap"
 	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
@@ -30,7 +30,7 @@ var inputsgroups = make(map[int]map[int]telegraf.Input)
 
 func main() {
 	inputsgroups[1] = make(map[int]telegraf.Input)
-	inputsgroups[1][1] = mem.NewInput()
+	inputsgroups[1][1] = swap.NewInput()
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.Accumulator{}
