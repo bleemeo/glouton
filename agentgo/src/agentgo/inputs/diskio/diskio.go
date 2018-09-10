@@ -17,7 +17,6 @@
 package diskio
 
 import (
-	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -96,16 +95,13 @@ func (accumulator *Accumulator) AddCounter(measurement string, fields map[string
 		} else if finalMetricName == "io_iops_in_progress" {
 			continue
 		}
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
+
 		if finalMetricName == "io_io_time" {
 			finalMetricName = "io_time"
+			valuef := value.(uint64)
 			finalFields["io_utilization"] = valuef * 1000
 		}
-		finalFields[finalMetricName] = valuef
+		finalFields[finalMetricName] = value
 	}
 	(accumulator.acc).AddGauge(measurement, finalFields, finalTags)
 }

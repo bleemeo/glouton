@@ -17,7 +17,6 @@
 package system
 
 import (
-	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -89,12 +88,7 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 		} else if finalMetricName == "system_n_cpus" {
 			continue
 		}
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
-		finalFields[finalMetricName] = valuef
+		finalFields[finalMetricName] = value
 	}
 	(accumulator.acc).AddGauge(measurement, finalFields, tags, t[0])
 }

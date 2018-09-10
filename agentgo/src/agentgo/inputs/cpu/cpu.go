@@ -17,7 +17,6 @@
 package cpu
 
 import (
-	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -97,26 +96,26 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 		} else if finalMetricName == "cpu_iowait" {
 			finalMetricName = "cpu_wait"
 		}
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
-		finalFields[finalMetricName] = valuef
+		finalFields[finalMetricName] = value
 		if finalMetricName == "cpu_user" {
+			valuef := value.(float64)
 			cpuUsed += valuef
 		} else if finalMetricName == "cpu_nice" {
-			cpuUsed += valuef
+			valuef := value.(float64)
 			cpuOther += valuef
 		} else if finalMetricName == "cpu_system" {
+			valuef := value.(float64)
 			cpuUsed += valuef
 		} else if finalMetricName == "cpu_interrupt" {
+			valuef := value.(float64)
 			cpuUsed += valuef
 			cpuOther += valuef
 		} else if finalMetricName == "cpu_softirq" {
+			valuef := value.(float64)
 			cpuUsed += valuef
 			cpuOther += valuef
 		} else if finalMetricName == "cpu_steal" {
+			valuef := value.(float64)
 			cpuUsed += valuef
 			cpuOther += valuef
 		}

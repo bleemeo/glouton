@@ -68,65 +68,85 @@ type Accumulator struct {
 // it after passing to Add.
 func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	for metricName, value := range fields {
-		valuef := value.(float64)
-		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  metricName,
-			Tags:  tags,
-			Type:  Fields,
-			Value: valuef,
-		})
+		valuef, err := convertInterface(value)
+		if err == nil {
+			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+				Name:  metricName,
+				Tags:  tags,
+				Type:  Fields,
+				Value: valuef,
+			})
+		} else {
+			accumulator.AddError(err)
+		}
 	}
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
 func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	for metricName, value := range fields {
-		valuef := value.(float64)
-		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  metricName,
-			Tags:  tags,
-			Type:  Gauge,
-			Value: valuef,
-		})
+		valuef, err := convertInterface(value)
+		if err == nil {
+			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+				Name:  metricName,
+				Tags:  tags,
+				Type:  Fields,
+				Value: valuef,
+			})
+		} else {
+			accumulator.AddError(err)
+		}
 	}
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type
 func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	for metricName, value := range fields {
-		valuef := value.(float64)
-		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  metricName,
-			Tags:  tags,
-			Type:  Counter,
-			Value: valuef,
-		})
+		valuef, err := convertInterface(value)
+		if err == nil {
+			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+				Name:  metricName,
+				Tags:  tags,
+				Type:  Fields,
+				Value: valuef,
+			})
+		} else {
+			accumulator.AddError(err)
+		}
 	}
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type
 func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	for metricName, value := range fields {
-		valuef := value.(float64)
-		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  metricName,
-			Tags:  tags,
-			Type:  Summary,
-			Value: valuef,
-		})
+		valuef, err := convertInterface(value)
+		if err == nil {
+			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+				Name:  metricName,
+				Tags:  tags,
+				Type:  Fields,
+				Value: valuef,
+			})
+		} else {
+			accumulator.AddError(err)
+		}
 	}
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
 func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	for metricName, value := range fields {
-		valuef := value.(float64)
-		accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-			Name:  metricName,
-			Tags:  tags,
-			Type:  Histogram,
-			Value: valuef,
-		})
+		valuef, err := convertInterface(value)
+		if err == nil {
+			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+				Name:  metricName,
+				Tags:  tags,
+				Type:  Fields,
+				Value: valuef,
+			})
+		} else {
+			accumulator.AddError(err)
+		}
 	}
 }
 
@@ -157,9 +177,9 @@ func (accumulator Accumulator) GetErrors() []error {
 	return accumulator.errors
 }
 
-// ConvertInterface convert the interface type in float64
+// convertInterface convert the interface type in float64
 // if it impossible return 0 and an error
-func ConvertInterface(value interface{}) (float64, error) {
+func convertInterface(value interface{}) (float64, error) {
 	switch value.(type) {
 	case uint64:
 		return float64(value.(uint64)), nil

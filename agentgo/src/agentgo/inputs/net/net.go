@@ -17,7 +17,6 @@
 package net
 
 import (
-	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -91,19 +90,19 @@ func (accumulator *Accumulator) AddCounter(measurement string, fields map[string
 	}
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
 		if finalMetricName == "net_bytes_sent" {
+			valuef := value.(uint64)
 			finalMetricName = "net_bits_sent"
 			valuef = 8 * valuef
+			finalFields[finalMetricName] = valuef
 		} else if finalMetricName == "net_bytes_recv" {
+			valuef := value.(uint64)
 			finalMetricName = "net_bits_recv"
 			valuef = 8 * valuef
+			finalFields[finalMetricName] = valuef
+		} else {
+			finalFields[finalMetricName] = value
 		}
-		finalFields[finalMetricName] = valuef
 	}
 	(accumulator.acc).AddGauge(measurement, finalFields, finalTags)
 }

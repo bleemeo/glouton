@@ -17,7 +17,6 @@
 package swap
 
 import (
-	"agentgo/types"
 	"fmt"
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -87,12 +86,7 @@ func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]i
 		if finalMetricName == "swap_used_percent" {
 			finalMetricName = "swap_used_perc"
 		}
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
-		finalFields[finalMetricName] = valuef
+		finalFields[finalMetricName] = value
 	}
 	(accumulator.acc).AddGauge(measurement, finalFields, nil)
 }
@@ -107,12 +101,7 @@ func (accumulator *Accumulator) AddCounter(measurement string, fields map[string
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
-		valuef, err := types.ConvertInterface(value)
-		if err != nil {
-			(accumulator.acc).AddError(fmt.Errorf("Error when converting type of %v_%v : %v", measurement, metricName, err))
-			continue
-		}
-		finalFields[finalMetricName] = valuef
+		finalFields[finalMetricName] = value
 	}
 	(accumulator.acc).AddGauge(measurement, finalFields, nil)
 }
