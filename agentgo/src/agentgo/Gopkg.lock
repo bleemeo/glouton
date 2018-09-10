@@ -40,7 +40,7 @@
 [[projects]]
   branch = "master"
   name = "github.com/influxdata/telegraf"
-  packages = [".","filter","internal","internal/tls","plugins/inputs","plugins/inputs/cpu","plugins/inputs/linux_sysctl_fs","plugins/inputs/mem","plugins/inputs/mysql","plugins/inputs/mysql/v1","plugins/inputs/net","plugins/inputs/nginx","plugins/inputs/processes","plugins/inputs/redis","plugins/inputs/swap","plugins/inputs/system"]
+  packages = [".","filter","internal","internal/tls","plugins/inputs","plugins/inputs/cpu","plugins/inputs/disk","plugins/inputs/diskio","plugins/inputs/linux_sysctl_fs","plugins/inputs/mem","plugins/inputs/mysql","plugins/inputs/mysql/v1","plugins/inputs/net","plugins/inputs/nginx","plugins/inputs/processes","plugins/inputs/redis","plugins/inputs/swap","plugins/inputs/system"]
   revision = "e7b50384cf13781ca2e0c332b08f656d23ed2bda"
 
 [[projects]]
@@ -88,6 +88,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "8d7332e0bf806a6cf4bdec7679c1bc34dd96dd837752798cbd23b49420dfa3ab"
+  inputs-digest = "4f224f5912fd47e6fd98b2c4cdd03d8a64fd9ad622d74348077f12a3ca1ff32e"
   solver-name = "gps-cdcl"
   solver-version = 1

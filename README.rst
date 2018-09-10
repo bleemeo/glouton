@@ -57,6 +57,11 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
     gometalinter.v2 --vendor --deadline=10m ./...
     You can use the --fast option to speed up execution
 
+* Run Go tests::
+
+    cd agentgo/src/agentgo/tests
+    go test
+
 * Install bleemeo-agent with its dependencies::
 
     pip install -U setuptools
