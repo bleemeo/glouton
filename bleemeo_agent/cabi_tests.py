@@ -4,7 +4,7 @@ import bleemeo_agent.type
 
 
 lib = ctypes.cdll.LoadLibrary(
-    "agentgo/cabi.so")
+    "agentgo/libcabi.so")
 
 
 class Tag(ctypes.Structure):
@@ -38,12 +38,14 @@ def wrap_function(lib, funcname, restype, argtypes):
 init_input_group = wrap_function(lib, 'InitInputGroup', int, None)
 add_simple_input = wrap_function(
     lib, "AddSimpleInput", int, [ctypes.c_int, ctypes.c_char_p])
+add_input_with_address = wrap_function(
+    lib, "AddInputWithAddress", int, [ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p])
 gather = wrap_function(lib, 'Gather', MetricPointVector, [ctypes.c_int, ])
 free_metric_point_vector = wrap_function(
     lib, 'FreeMetricPointVector', None, [MetricPointVector, ])
 
 group_id = init_input_group()
-cpu_id = add_simple_input(group_id, b"process")
+cpu_id = add_input_with_address(group_id, b"redis", b"tcp://172.17.0.5:6379")
 while True:
     metrics_vector = gather(group_id)
     for i in range(0, metrics_vector.metric_point_count):
