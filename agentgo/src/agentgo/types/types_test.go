@@ -16,15 +16,14 @@
 
 // Test of types module
 
-package tests
+package types
 
 import (
-	"agentgo/types"
 	"testing"
 )
 
 func TestAddFields(t *testing.T) {
-	accumulator := types.Accumulator{}
+	accumulator := Accumulator{}
 	fields := map[string]interface{}{
 		"metric1": 1.26,
 		"metric2": 2.58,

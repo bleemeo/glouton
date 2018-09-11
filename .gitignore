@@ -17,7 +17,7 @@ build/scripts-2.7/
 .pytest_cache
 agentgo/src/agentgo/vendor/
 agentgo/pkg
-agentgo/cabi.so
-agentgo/cabi.h
+agentgo/libcabi.so
+agentgo/libcabi.h
 .vscode/
 /VERSION

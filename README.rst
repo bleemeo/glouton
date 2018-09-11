@@ -26,41 +26,26 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
 
     mkvirtualenv -p /usr/bin/python3 bleemeo-agent
 
-* Install Go and dep if not already installed::
+* Install Go, dep and gometalinter if not already installed::
+ 
+    apt install golang go-dep
 
-    https://golang.org/doc/install
+    go get -u gopkg.in/alecthomas/gometalinter.v2
+    gometalinter.v2 --install
 
-    https://golang.github.io/dep/
+* Install dependencies and build the Go libcabi::
 
-    apt install go-dep
-
-* Initialize the GOPATH::
-
-    cd agentgo
-    export GOPATH=$(pwd)
-
-* Install go dependencies::
-
-    cd agentgo/src/agentgo
-    dep ensure -v
-
-* Build the Go extension::
-
-    cd agentgo/
-    go build -o cabi.so -buildmode=c-shared agentgo/cabi
+    (export GOPATH=$(pwd)/agentgo && cd agentgo/src/agentgo && dep ensure)
+    (export GOPATH=$(pwd)/agentgo && go build -o agentgo/libcabi.so -buildmode=c-shared agentgo/cabi)
 
 * Run gometalinter::
 
-    Install gometalinter: https://github.com/alecthomas/gometalinter
-
-    cd agentgo/src
-    gometalinter.v2 --vendor --deadline=10m ./...
-    You can use the --fast option to speed up execution
+    (export GOPATH=$(pwd)/agentgo && cd agentgo/src && gometalinter.v2 --vendor --fast --deadline=10m ./...)
+    You can remove the --fast option to have additional lint correction
 
 * Run Go tests::
 
-    cd agentgo/src/agentgo/tests
-    go test
+    (export GOPATH=$(pwd)/agentgo && cd agentgo/ && go test agentgo/...)
 
 * Install bleemeo-agent with its dependencies::
 
