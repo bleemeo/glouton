@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// Package for redis input not finished
+// Package for redis input
 
 package redis
 
@@ -100,8 +100,50 @@ func initAccumulator(acc telegraf.Accumulator) Accumulator {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	// TODO
-	(accumulator.acc).AddFields(measurement, fields, nil)
+	finalFields := make(map[string]interface{})
+	for metricName, value := range fields {
+		finalMetricName := measurement + "_" + metricName
+		if finalMetricName == "redis_connected_slaves" {
+			finalFields["redis_current_connections_slaves"] = value
+		} else if finalMetricName == "redis_clients" {
+			finalFields["redis_current_connections_clients"] = value
+		} else if finalMetricName == "redis_evicted_keys" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_expired_keys" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_keyspace_hits" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_keyspace_misses" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_keyspace_hitrate" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_total_system_memory" {
+			finalFields["redis_memory"] = value
+		} else if finalMetricName == "redis_used_memory_lua" {
+			finalFields["redis_memory_lua"] = value
+		} else if finalMetricName == "redis_used_memory_peak" {
+			finalFields["redis_memory_peak"] = value
+		} else if finalMetricName == "redis_used_memory_rss" {
+			finalFields["redis_memory_rss"] = value
+		} else if finalMetricName == "redis_pubsub_channels" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_pubsub_patterns" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_total_connections_received" {
+			finalFields["redis_total_connections"] = value
+		} else if finalMetricName == "total_commands_processed" {
+			finalFields["redis_total_operations"] = value
+		} else if finalMetricName == "redis_total_commands_processed" {
+			finalFields["redis_total_operations"] = value
+		} else if finalMetricName == "redis_uptime" {
+			finalFields[finalMetricName] = value
+		} else if finalMetricName == "redis_rdb_changes_since_last_save" {
+			finalFields["redis_volatile_changes"] = value
+		} else {
+			continue
+		}
+	}
+	(accumulator.acc).AddFields(measurement, finalFields, nil)
 }
 
 // AddError add an error to the Accumulator
