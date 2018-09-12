@@ -77,33 +77,33 @@ import (
 	"unsafe"
 )
 
-var inputsgroups = make(map[int]map[int]telegraf.Input)
+var group = make(map[int]map[int]telegraf.Input)
 
-// InitInputGroup initialises a metric group and returns his ID
-//export InitInputGroup
-func InitInputGroup() int {
+// InitGroup initialises a metric group and returns his ID
+//export InitGroup
+func InitGroup() int {
 	var id = rand.Intn(10000)
 
-	for _, ok := inputsgroups[id]; ok == true; {
+	for _, ok := group[id]; ok == true; {
 		id = rand.Intn(10000)
 	}
-	inputsgroups[id] = make(map[int]telegraf.Input)
+	group[id] = make(map[int]telegraf.Input)
 	return id
 }
 
-// addInputToInputGroup add the input to the inputGroupID and return the inputID of the input in the group
-func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
-	var _, ok = inputsgroups[inputGroupID]
+// addInputToGroup add the input to the groupID and return the inputID of the input in the group
+func addInputToGroup(groupID int, input telegraf.Input) int {
+	var _, ok = group[groupID]
 	if !ok {
 		return -1
 	}
 
 	var inputID = rand.Intn(10000)
 
-	for _, ok := inputsgroups[inputGroupID][inputID]; ok == true; {
+	for _, ok := group[groupID][inputID]; ok == true; {
 		inputID = rand.Intn(10000)
 	}
-	inputsgroups[inputGroupID][inputID] = input
+	group[groupID][inputID] = input
 	return inputID
 }
 
@@ -111,32 +111,32 @@ func addInputToInputGroup(inputGroupID int, input telegraf.Input) int {
 // return the input ID in the group
 // A simple input is only define by its name
 //export AddSimpleInput
-func AddSimpleInput(inputGroupID int, inputName *C.char) int {
+func AddSimpleInput(groupID int, inputName *C.char) int {
 	goInputName := C.GoString(inputName)
 	if goInputName == "cpu" {
 		input := cpu.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	} else if goInputName == "mem" {
 		input := mem.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	} else if goInputName == "swap" {
 		input := swap.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	} else if goInputName == "system" {
 		input := system.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	} else if goInputName == "process" {
 		input := process.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	} else if goInputName == "net" {
 		input := net.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	} else if goInputName == "diskio" {
 		input := diskio.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	} else if goInputName == "disk" {
 		input := disk.NewInput()
-		return addInputToInputGroup(inputGroupID, input)
+		return addInputToGroup(groupID, input)
 	}
 	return -1
 }
@@ -144,29 +144,29 @@ func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 // AddInputWithAddress add an input to the inputgroupID
 // return the input ID in the group
 //export AddInputWithAddress
-func AddInputWithAddress(inputGroupID int, inputName *C.char, server *C.char) int {
+func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
 	goInputName := C.GoString(inputName)
 	if goInputName == "redis" {
-		return addInputToInputGroup(inputGroupID, redis.NewInput(C.GoString(server)))
+		return addInputToGroup(groupID, redis.NewInput(C.GoString(server)))
 	} else if goInputName == "nginx" {
-		return addInputToInputGroup(inputGroupID, nginx.NewInput(C.GoString(server)))
+		return addInputToGroup(groupID, nginx.NewInput(C.GoString(server)))
 	} else if goInputName == "mysql" {
-		return addInputToInputGroup(inputGroupID, mysql.NewInput(C.GoString(server)))
+		return addInputToGroup(groupID, mysql.NewInput(C.GoString(server)))
 	}
 	return -1
 }
 
-// FreeInputGroup deletes a collector
+// FreeGroup deletes a collector
 // exit code 0 : the input group has been removed
 // exit code -1 : the input group did not exist
-//export FreeInputGroup
-func FreeInputGroup(inputgroupID int) int {
-	_, ok := inputsgroups[inputgroupID]
+//export FreeGroup
+func FreeGroup(inputgroupID int) int {
+	_, ok := group[inputgroupID]
 	if ok {
-		for id := range inputsgroups[inputgroupID] {
-			delete(inputsgroups[inputgroupID], id)
+		for id := range group[inputgroupID] {
+			delete(group[inputgroupID], id)
 		}
-		delete(inputsgroups, inputgroupID)
+		delete(group, inputgroupID)
 		return 0
 	}
 	return -1
@@ -177,7 +177,7 @@ func FreeInputGroup(inputgroupID int) int {
 // exit code -1 : the input or the group did not exist
 //export FreeInput
 func FreeInput(inputgroupID int, inputID int) int {
-	inputsGroup, ok := inputsgroups[inputgroupID]
+	inputsGroup, ok := group[inputgroupID]
 	if ok {
 		_, ok := inputsGroup[inputID]
 		if ok {
@@ -217,7 +217,7 @@ func freeMetricPoint(metricPoint C.MetricPoint) {
 // Gather returns associated metrics in a slice of inputgroupID given in parameter.
 //export Gather
 func Gather(inputgroupID int) C.MetricPointVector {
-	var inputgroup, ok = inputsgroups[inputgroupID]
+	var inputgroup, ok = group[inputgroupID]
 	var result C.MetricPointVector
 	if !ok {
 		return result

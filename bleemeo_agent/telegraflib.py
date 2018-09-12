@@ -52,9 +52,9 @@ def _wrap_function(_lib, funcname, restype, argtypes):
 
 
 # Load function from C-lib
-_init_input_group = _wrap_function(_lib, 'InitInputGroup', int, None)
-_free_input_group = _wrap_function(
-    _lib, 'FreeInputGroup', None, [ctypes.c_int, ])
+_init_group = _wrap_function(_lib, 'InitGroup', int, None)
+_free_group = _wrap_function(
+    _lib, 'FreeGroup', None, [ctypes.c_int, ])
 _add_simple_input = _wrap_function(
     _lib, "AddSimpleInput", int, [ctypes.c_int, ctypes.c_char_p])
 _add_input_with_address = _wrap_function(
@@ -68,8 +68,8 @@ class Telegraflib:
 
     def __init__(self, is_terminated=None, emit_metric=None):
         self.inputs_id_map = {}
-        self.input_group_id = _init_input_group()
-        self.system_input_group_id = _init_input_group()
+        self.input_group_id = _init_group()
+        self.system_input_group_id = _init_group()
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
 
@@ -131,9 +131,9 @@ class Telegraflib:
                 "Impossible value of input_id: _add_input_with_address has fail: {}".format(input_name))
 
     def update_discovery(self, services):
-        _free_input_group(self.system_input_group_id)
+        _free_group(self.system_input_group_id)
         self.inputs_id_map = {}
-        self.system_input_group_id = _init_input_group()
+        self.system_input_group_id = _init_group()
         for (service_name, instance) in services:
             input_informations = {}
             if service_name == "redis":
