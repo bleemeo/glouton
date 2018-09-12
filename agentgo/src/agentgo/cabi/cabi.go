@@ -61,6 +61,7 @@ import "C"
 
 import (
 	"agentgo/inputs/cpu"
+	"agentgo/inputs/disk"
 	"agentgo/inputs/diskio"
 	"agentgo/inputs/mem"
 	"agentgo/inputs/mysql"
@@ -132,6 +133,9 @@ func AddSimpleInput(inputGroupID int, inputName *C.char) int {
 		return addInputToInputGroup(inputGroupID, input)
 	} else if goInputName == "diskio" {
 		input := diskio.NewInput()
+		return addInputToInputGroup(inputGroupID, input)
+	} else if goInputName == "disk" {
+		input := disk.NewInput()
 		return addInputToInputGroup(inputGroupID, input)
 	}
 	return -1
