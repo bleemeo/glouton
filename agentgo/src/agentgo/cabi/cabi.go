@@ -116,7 +116,7 @@ func addInputToGroup(groupID int, input telegraf.Input) int {
 	return inputID
 }
 
-// AddSimpleInput add a simple input to the inputgroupID
+// AddSimpleInput add a simple input to the groupID
 // return the input ID in the group
 // A simple input is only define by its name
 //export AddSimpleInput
@@ -150,7 +150,7 @@ func AddSimpleInput(groupID int, inputName *C.char) int {
 	return -1
 }
 
-// AddInputWithAddress add an input to the inputgroupID
+// AddInputWithAddress add an input to the groupID
 // return the input ID in the group
 //export AddInputWithAddress
 func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
@@ -169,13 +169,10 @@ func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
 // exit code 0 : the input group has been removed
 // exit code -1 : the input group did not exist
 //export FreeGroup
-func FreeGroup(inputgroupID int) int {
-	_, ok := group[inputgroupID]
+func FreeGroup(groupID int) int {
+	_, ok := group[groupID]
 	if ok {
-		for id := range group[inputgroupID] {
-			delete(group[inputgroupID], id)
-		}
-		delete(group, inputgroupID)
+		delete(group, groupID)
 		return 0
 	}
 	return -1
@@ -185,8 +182,8 @@ func FreeGroup(inputgroupID int) int {
 // exit code 0 : the input has been removed
 // exit code -1 : the input or the group did not exist
 //export FreeInput
-func FreeInput(inputgroupID int, inputID int) int {
-	inputsGroup, ok := group[inputgroupID]
+func FreeInput(groupID int, inputID int) int {
+	inputsGroup, ok := group[groupID]
 	if ok {
 		_, ok := inputsGroup[inputID]
 		if ok {
@@ -223,10 +220,10 @@ func freeMetricPoint(metricPoint C.MetricPoint) {
 	C.free(unsafe.Pointer(metricPoint.tag))
 }
 
-// Gather returns associated metrics in a slice of inputgroupID given in parameter.
+// Gather returns associated metrics in a slice of groupID given in parameter.
 //export Gather
-func Gather(inputgroupID int) C.MetricPointVector {
-	var inputgroup, ok = group[inputgroupID]
+func Gather(groupID int) C.MetricPointVector {
+	var inputgroup, ok = group[groupID]
 	var result C.MetricPointVector
 	if !ok {
 		return result
