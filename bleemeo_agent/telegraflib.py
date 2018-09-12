@@ -20,60 +20,61 @@ import time
 import bleemeo_agent.type
 
 
-lib = ctypes.cdll.LoadLibrary(
+_lib = ctypes.cdll.LoadLibrary(
     "agentgo/libcabi.so")
 
 
-class Tag(ctypes.Structure):
+class _Tag(ctypes.Structure):
     _fields_ = [('tag_name', ctypes.c_char_p),
                 ('tag_value', ctypes.c_char_p)]
 
 
-class MetricPoint(ctypes.Structure):
+class _MetricPoint(ctypes.Structure):
     _fields_ = [('input_id', ctypes.c_int),
                 ('name', ctypes.c_char_p),
-                ('tag', ctypes.POINTER(Tag)),
+                ('tag', ctypes.POINTER(_Tag)),
                 ('tag_count', ctypes.c_int),
                 ('metric_type', ctypes.c_int),
                 ('value', ctypes.c_float)]
 
 
-class MetricPointVector(ctypes.Structure):
-    _fields_ = [('metric_point', ctypes.POINTER(MetricPoint)),
+class _MetricPointVector(ctypes.Structure):
+    _fields_ = [('metric_point', ctypes.POINTER(_MetricPoint)),
                 ('metric_point_count', ctypes.c_int)]
 
 
-def wrap_function(lib, funcname, restype, argtypes):
+def _wrap_function(_lib, funcname, restype, argtypes):
     """Simplify wrapping ctypes functions"""
-    func = lib.__getattr__(funcname)
+    func = _lib.__getattr__(funcname)
     func.restype = restype
     func.argtypes = argtypes
     return func
 
 
 # Load function from C-lib
-init_input_group = wrap_function(lib, 'InitInputGroup', int, None)
-free_input_group = wrap_function(lib, 'FreeInputGroup', None, [ctypes.c_int, ])
-add_simple_input = wrap_function(
-    lib, "AddSimpleInput", int, [ctypes.c_int, ctypes.c_char_p])
-add_input_with_address = wrap_function(
-    lib, "AddInputWithAddress", int, [ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p])
-gather = wrap_function(lib, 'Gather', MetricPointVector, [ctypes.c_int, ])
-free_metric_point_vector = wrap_function(
-    lib, 'FreeMetricPointVector', None, [MetricPointVector, ])
+_init_input_group = _wrap_function(_lib, 'InitInputGroup', int, None)
+_free_input_group = _wrap_function(
+    _lib, 'FreeInputGroup', None, [ctypes.c_int, ])
+_add_simple_input = _wrap_function(
+    _lib, "AddSimpleInput", int, [ctypes.c_int, ctypes.c_char_p])
+_add_input_with_address = _wrap_function(
+    _lib, "AddInputWithAddress", int, [ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p])
+_gather = _wrap_function(_lib, 'Gather', _MetricPointVector, [ctypes.c_int, ])
+_free_metric_point_vector = _wrap_function(
+    _lib, 'FreeMetricPointVector', None, [_MetricPointVector, ])
 
 
 class Telegraflib:
 
     def __init__(self, is_terminated=None, emit_metric=None):
         self.inputs_id_map = {}
-        self.input_group_id = init_input_group()
-        self.system_input_group_id = init_input_group()
+        self.input_group_id = _init_input_group()
+        self.system_input_group_id = _init_input_group()
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
 
-    def add_system_input(self, input_name, input_informations=None):
-        input_id = add_simple_input(
+    def _add_system_input(self, input_name, input_informations=None):
+        input_id = _add_simple_input(
             self.system_input_group_id, bytes(input_name, 'utf_8'))
         if input_id >= 0:
             if input_informations is None:
@@ -89,10 +90,10 @@ class Telegraflib:
             self.inputs_id_map[input_id] = input_informations
         else:
             raise ValueError(
-                "Impossible value of input_id: add_simple_input has fail: {}".format(input_name))
+                "Impossible value of input_id: _add_system_input has fail: {}".format(input_name))
 
-    def add_simple_input(self, input_name, input_informations=None):
-        input_id = add_simple_input(
+    def _add_simple_input(self, input_name, input_informations=None):
+        input_id = _add_simple_input(
             self.input_group_id, bytes(input_name, 'utf_8'))
         if input_id >= 0:
             if input_informations is None:
@@ -108,10 +109,10 @@ class Telegraflib:
             self.inputs_id_map[input_id] = input_informations
         else:
             raise ValueError(
-                "Impossible value of input_id: add_simple_input has fail: {}".format(input_name))
+                "Impossible value of input_id: _add_simple_input has fail: {}".format(input_name))
 
-    def add_input_with_address(self, input_name, input_address, input_informations=None):
-        input_id = add_input_with_address(self.input_group_id, bytes(
+    def _add_input_with_address(self, input_name, input_address, input_informations=None):
+        input_id = _add_input_with_address(self.input_group_id, bytes(
             input_name, 'utf_8'), bytes(input_address, 'utf_8'))
         if input_id >= 0:
             if input_informations is None:
@@ -127,12 +128,12 @@ class Telegraflib:
             self.inputs_id_map[input_id] = input_informations
         else:
             raise ValueError(
-                "Impossible value of input_id: add_input_with_address has fail: {}".format(input_name))
+                "Impossible value of input_id: _add_input_with_address has fail: {}".format(input_name))
 
     def update_discovery(self, services):
-        free_input_group(self.system_input_group_id)
+        _free_input_group(self.system_input_group_id)
         self.inputs_id_map = {}
-        self.system_input_group_id = init_input_group()
+        self.system_input_group_id = _init_input_group()
         for (service_name, instance) in services:
             input_informations = {}
             if service_name == "redis":
@@ -140,37 +141,37 @@ class Telegraflib:
                 input_informations["instance"] = instance
                 service_info = services[(service_name, instance)]
                 server_address = "tcp://%(address)s:%(port)s" % service_info
-                self.add_input_with_address(
+                self._add_input_with_address(
                     "redis", server_address, input_informations)
 
-    def init_system_inputs(self):
-        self.add_system_input("cpu")
-        self.add_system_input("disk")
-        self.add_system_input("diskio")
-        self.add_system_input("mem")
-        self.add_system_input("net")
-        self.add_system_input("process")
-        self.add_system_input("swap")
-        self.add_system_input("system")
+    def _init_system_inputs(self):
+        self._add_system_input("cpu")
+        self._add_system_input("disk")
+        self._add_system_input("diskio")
+        self._add_system_input("mem")
+        self._add_system_input("net")
+        self._add_system_input("process")
+        self._add_system_input("swap")
+        self._add_system_input("system")
 
     def gather_metrics(self):
-        self.init_system_inputs()
+        self._init_system_inputs()
         while True:
-            metrics_vector = gather(self.input_group_id)
+            metrics_vector = _gather(self.input_group_id)
             for i in range(0, metrics_vector.metric_point_count):
                 metric_point = metrics_vector.metric_point[i]
-                self.emit_metric(self.convert_metric_point(metric_point))
-            free_metric_point_vector(metrics_vector)
+                self.emit_metric(self._convert_metric_point(metric_point))
+            _free_metric_point_vector(metrics_vector)
 
-            system_metrics_vector = gather(self.system_input_group_id)
+            system_metrics_vector = _gather(self.system_input_group_id)
             for i in range(0, system_metrics_vector.metric_point_count):
                 metric_point = system_metrics_vector.metric_point[i]
-                self.emit_metric(self.convert_metric_point(metric_point))
-            free_metric_point_vector(system_metrics_vector)
+                self.emit_metric(self._convert_metric_point(metric_point))
+            _free_metric_point_vector(system_metrics_vector)
 
             time.sleep(10)
 
-    def convert_metric_point(self, metric_point):
+    def _convert_metric_point(self, metric_point):
         item = ""
         for j in range(0, metric_point.tag_count):
             tag = metric_point.tag[j]
