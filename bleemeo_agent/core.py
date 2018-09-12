@@ -58,6 +58,7 @@ import bleemeo_agent.graphite
 import bleemeo_agent.services
 import bleemeo_agent.type
 import bleemeo_agent.util
+import bleemeo_agent.telegraflib
 
 # Optional dependencies
 try:
@@ -1070,6 +1071,7 @@ class Core:
         self._update_facts_job = None
         self._gather_update_metrics_job = None
         self.config = None
+        self.telegraf = bleemeo_agent.telegraflib.Telegraflib(emit_metric=self.emit_metric)
 
     def _init(self):
         # pylint: disable=too-many-branches
@@ -1704,6 +1706,10 @@ class Core:
         thread = threading.Thread(target=self._watch_docker_event)
         thread.daemon = True
         thread.start()
+
+        metric_thread = threading.Thread(target=self.telegraf.gather_metrics)
+        metric_thread.daemon = True
+        metric_thread.start()
 
         return True
 
