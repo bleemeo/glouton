@@ -53,6 +53,7 @@ def wrap_function(lib, funcname, restype, argtypes):
 
 # Load function from C-lib
 init_input_group = wrap_function(lib, 'InitInputGroup', int, None)
+free_input_group = wrap_function(lib, 'FreeInputGroup', None, [ctypes.c_int, ])
 add_simple_input = wrap_function(
     lib, "AddSimpleInput", int, [ctypes.c_int, ctypes.c_char_p])
 add_input_with_address = wrap_function(
@@ -128,14 +129,19 @@ class Telegraflib:
             raise ValueError(
                 "Impossible value of input_id: add_input_with_address has fail: {}".format(input_name))
 
-    def remove_input(self, input_id):
-        """TODO"""
-
-    def find_input_id(self, input_name):
-        for input_id, input_informations in self.inputs_id_map:
-            if input_informations["name"] == input_name:
-                return input_id
-        return -1
+    def update_discovery(self, services):
+        free_input_group(self.system_input_group_id)
+        self.inputs_id_map = {}
+        self.system_input_group_id = init_input_group()
+        for (service_name, instance) in services:
+            input_informations = {}
+            if service_name == "redis":
+                input_informations["name"] = service_name
+                input_informations["instance"] = instance
+                service_info = services[(service_name, instance)]
+                server_address = "tcp://%(address)s:%(port)s" % service_info
+                self.add_input_with_address(
+                    "redis", server_address, input_informations)
 
     def init_system_inputs(self):
         self.add_system_input("cpu")
@@ -170,6 +176,8 @@ class Telegraflib:
             tag = metric_point.tag[j]
             if (tag.tag_name).decode("utf-8") == "item":
                 item = (tag.tag_value).decode("utf-8")
+        if metric_point.name.decode('utf-8').startswith("redis"):
+            item = self.inputs_id_map[metric_point.input_id]["instance"]
         return bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label="go_" + (metric_point.name).decode("utf-8"),
             time=time.time(),

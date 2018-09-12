@@ -1071,7 +1071,7 @@ class Core:
         self._update_facts_job = None
         self._gather_update_metrics_job = None
         self.config = None
-        self.telegraf = bleemeo_agent.telegraflib.Telegraflib(emit_metric=self.emit_metric)
+        self.telegraf = bleemeo_agent.telegraflib.Telegraflib(self.is_terminating, self.emit_metric)
 
     def _init(self):
         # pylint: disable=too-many-branches
@@ -1976,6 +1976,7 @@ class Core:
 
         self.graphite_server.update_discovery()
         bleemeo_agent.checker.update_checks(self)
+        self.telegraf.update_discovery(self.services)
 
         self.last_discovery_update = bleemeo_agent.util.get_clock()
 
