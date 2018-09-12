@@ -82,10 +82,14 @@ var group = make(map[int]map[int]telegraf.Input)
 // InitGroup initialises a metric group and returns his ID
 //export InitGroup
 func InitGroup() int {
-	var id = rand.Intn(10000)
-
-	for _, ok := group[id]; ok == true; {
-		id = rand.Intn(10000)
+	var id = rand.Intn(32767)
+	var selectionNumber int
+	for _, ok := group[id]; ok == true && selectionNumber < 10; {
+		id = rand.Intn(32767)
+		selectionNumber++
+	}
+	if selectionNumber == 10 {
+		return -1
 	}
 	group[id] = make(map[int]telegraf.Input)
 	return id
@@ -98,10 +102,15 @@ func addInputToGroup(groupID int, input telegraf.Input) int {
 		return -1
 	}
 
-	var inputID = rand.Intn(10000)
+	var inputID = rand.Intn(32767)
 
-	for _, ok := group[groupID][inputID]; ok == true; {
-		inputID = rand.Intn(10000)
+	var selectionNumber int
+	for _, ok := group[groupID][inputID]; ok == true && selectionNumber < 10; {
+		inputID = rand.Intn(32767)
+		selectionNumber++
+	}
+	if selectionNumber == 10 {
+		return -1
 	}
 	group[groupID][inputID] = input
 	return inputID

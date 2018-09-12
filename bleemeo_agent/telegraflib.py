@@ -72,6 +72,12 @@ class Telegraflib:
         self.system_input_group_id = _init_group()
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
+        if self.input_group_id < 0:
+            raise ValueError(
+                "Impossible value for input_group_id: failed to initialize TelegrafLib")
+        if self.system_input_group_id < 0:
+            raise ValueError(
+                "Impossible value for system_input_group_id: failed to initialize TelegrafLib")
 
     def _add_system_input(self, input_name, input_informations=None):
         input_id = _add_simple_input(
@@ -131,9 +137,12 @@ class Telegraflib:
                 "Impossible value of input_id: _add_input_with_address has fail: {}".format(input_name))
 
     def update_discovery(self, services):
-        _free_group(self.system_input_group_id)
+        _free_group(self.input_group_id)
         self.inputs_id_map = {}
-        self.system_input_group_id = _init_group()
+        self.input_group_id = _init_group()
+        if self.input_group_id < 0:
+            raise ValueError(
+                "Impossible value for input_group_id: failed to initialize TelegrafLib")
         for (service_name, instance) in services:
             input_informations = {}
             if service_name == "redis":
