@@ -198,7 +198,7 @@ func FreeInput(groupID int, inputID int) int {
 //export FreeMetricPointVector
 func FreeMetricPointVector(metricVector C.MetricPointVector) {
 
-	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(unsafe.Pointer(metricVector.metric_point))
+	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(unsafe.Pointer(metricVector.metric_point))[:metricVector.metric_point_count:metricVector.metric_point_count]
 
 	for i := 0; i < int(metricVector.metric_point_count); i++ {
 		freeMetricPoint(metricPointSlice[i])
@@ -211,7 +211,7 @@ func FreeMetricPointVector(metricVector C.MetricPointVector) {
 func freeMetricPoint(metricPoint C.MetricPoint) {
 	C.free(unsafe.Pointer(metricPoint.name))
 
-	var tagsSlice = (*[1<<30 - 1]C.Tag)(unsafe.Pointer(metricPoint.tag))
+	var tagsSlice = (*[1<<30 - 1]C.Tag)(unsafe.Pointer(metricPoint.tag))[:metricPoint.tag_count:metricPoint.tag_count]
 
 	for i := 0; i < int(metricPoint.tag_count); i++ {
 		C.free(unsafe.Pointer(tagsSlice[i].tag_value))
@@ -244,7 +244,7 @@ func Gather(groupID int) C.MetricPointVector {
 		metricsLen += len(metricsSlice)
 	}
 	var metricPointArray = C.malloc(C.size_t(metricsLen) * C.sizeof_MetricPoint)
-	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(metricPointArray)
+	var metricPointSlice = (*[1<<30 - 1]C.MetricPoint)(metricPointArray)[:metricsLen:metricsLen]
 	var index int
 	for inputID, metricsSlice := range metrics {
 		for _, goMetricPoint := range metricsSlice {
@@ -267,7 +267,7 @@ func convertMetricPointInC(metricPoint types.MetricPoint, inputID int) C.MetricP
 	}
 
 	var tags = C.malloc(C.size_t(tagCount) * C.sizeof_Tag)
-	var tagsSlice = (*[1<<30 - 1]C.Tag)(tags) // nolint: gotype
+	var tagsSlice = (*[1<<30 - 1]C.Tag)(tags)[:tagCount:tagCount] // nolint: gotype
 
 	var index int
 	for key, value := range metricPoint.Tags {
