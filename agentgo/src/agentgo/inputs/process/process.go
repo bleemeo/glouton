@@ -29,8 +29,8 @@ type Input struct {
 	processInput telegraf.Input
 }
 
-// NewInput initialise process.Input
-func NewInput() Input {
+// New initialise process.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["processes"]
 	if ok {
 		processInput := input().(*processes.Processes)

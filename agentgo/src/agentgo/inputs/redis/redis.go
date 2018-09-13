@@ -45,8 +45,8 @@ type Input struct {
 	redisInput telegraf.Input
 }
 
-// NewInput initialise redis.Input
-func NewInput(url string) Input {
+// New initialise redis.Input
+func New(url string) Input {
 	var input, ok = telegraf_inputs.Inputs["redis"]
 	if ok {
 		redisInput, ok := input().(*redis.Redis)

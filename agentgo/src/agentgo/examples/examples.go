@@ -30,7 +30,7 @@ var inputsgroups = make(map[int]map[int]telegraf.Input)
 
 func main() {
 	inputsgroups[1] = make(map[int]telegraf.Input)
-	inputsgroups[1][1] = input.NewInput("tcp://172.17.0.5:6379")
+	inputsgroups[1][1] = input.New("tcp://172.17.0.5:6379")
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.Accumulator{}

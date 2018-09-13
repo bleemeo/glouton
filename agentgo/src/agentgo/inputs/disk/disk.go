@@ -29,8 +29,8 @@ type Input struct {
 	diskInput telegraf.Input
 }
 
-// NewInput initialise disk.Input
-func NewInput() Input {
+// New initialise disk.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["disk"]
 	if ok {
 		diskInput := input().(*disk.DiskStats)

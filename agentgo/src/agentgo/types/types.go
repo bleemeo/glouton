@@ -134,7 +134,6 @@ func (accumulator Accumulator) GetErrors() []error {
 }
 
 // convertInterface convert the interface type in float64
-// if it impossible return 0 and an error
 func convertInterface(value interface{}) (float64, error) {
 	switch value.(type) {
 	case uint64:

@@ -30,14 +30,14 @@ func TestAddFields(t *testing.T) {
 	}
 	accumulator.AddGauge("test", fields, nil)
 	if len(accumulator.GetMetricPointSlice()) != 2 {
-		t.Error("Unexpected len of accumulator metric slice")
+		t.Errorf("len of accumulator = %d, want 2", len(accumulator.GetMetricPointSlice()))
 	}
 	fields = map[string]interface{}{
 		"metric3": 1.245,
 	}
 	accumulator.AddGauge("test", fields, nil)
 	if len(accumulator.GetMetricPointSlice()) != 3 {
-		t.Error("Unexpected len of accumulator metric slice")
+		t.Errorf("len of accumulator = %d, want 3", len(accumulator.GetMetricPointSlice()))
 	}
 
 }

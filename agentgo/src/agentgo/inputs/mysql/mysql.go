@@ -31,8 +31,8 @@ type Input struct {
 	mysqlInput telegraf.Input
 }
 
-// NewInput initialise mysql.Input
-func NewInput(server string) Input {
+// New initialise mysql.Input
+func New(server string) Input {
 	var input, ok = telegraf_inputs.Inputs["mysql"]
 	if ok {
 		mysqlInput, ok := input().(*mysql.Mysql)

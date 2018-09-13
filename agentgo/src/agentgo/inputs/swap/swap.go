@@ -29,8 +29,8 @@ type Input struct {
 	swapInput telegraf.Input
 }
 
-// NewInput initialise swap.Input
-func NewInput() Input {
+// New initialise swap.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["swap"]
 	if ok {
 		swapInput := input().(*swap.SwapStats)

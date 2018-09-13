@@ -124,28 +124,28 @@ func addInputToGroup(groupID int, input telegraf.Input) int {
 func AddSimpleInput(groupID int, inputName *C.char) int {
 	goInputName := C.GoString(inputName)
 	if goInputName == "cpu" {
-		input := cpu.NewInput()
+		input := cpu.New()
 		return addInputToGroup(groupID, input)
 	} else if goInputName == "mem" {
-		input := mem.NewInput()
+		input := mem.New()
 		return addInputToGroup(groupID, input)
 	} else if goInputName == "swap" {
-		input := swap.NewInput()
+		input := swap.New()
 		return addInputToGroup(groupID, input)
 	} else if goInputName == "system" {
-		input := system.NewInput()
+		input := system.New()
 		return addInputToGroup(groupID, input)
 	} else if goInputName == "process" {
-		input := process.NewInput()
+		input := process.New()
 		return addInputToGroup(groupID, input)
 	} else if goInputName == "net" {
-		input := net.NewInput()
+		input := net.New()
 		return addInputToGroup(groupID, input)
 	} else if goInputName == "diskio" {
-		input := diskio.NewInput()
+		input := diskio.New()
 		return addInputToGroup(groupID, input)
 	} else if goInputName == "disk" {
-		input := disk.NewInput()
+		input := disk.New()
 		return addInputToGroup(groupID, input)
 	}
 	return -1
@@ -157,11 +157,11 @@ func AddSimpleInput(groupID int, inputName *C.char) int {
 func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
 	goInputName := C.GoString(inputName)
 	if goInputName == "redis" {
-		return addInputToGroup(groupID, redis.NewInput(C.GoString(server)))
+		return addInputToGroup(groupID, redis.New(C.GoString(server)))
 	} else if goInputName == "nginx" {
-		return addInputToGroup(groupID, nginx.NewInput(C.GoString(server)))
+		return addInputToGroup(groupID, nginx.New(C.GoString(server)))
 	} else if goInputName == "mysql" {
-		return addInputToGroup(groupID, mysql.NewInput(C.GoString(server)))
+		return addInputToGroup(groupID, mysql.New(C.GoString(server)))
 	}
 	return -1
 }

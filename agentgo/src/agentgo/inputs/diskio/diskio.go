@@ -30,8 +30,8 @@ type Input struct {
 	diskioInput telegraf.Input
 }
 
-// NewInput initialise diskio.Input
-func NewInput() Input {
+// New initialise diskio.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)

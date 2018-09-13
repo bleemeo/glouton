@@ -30,8 +30,8 @@ type Input struct {
 	cpuInput telegraf.Input
 }
 
-// NewInput initialise cpu.Input
-func NewInput() Input {
+// New initialise cpu.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["cpu"]
 	if ok {
 		cpuInput := input().(*cpu.CPUStats)

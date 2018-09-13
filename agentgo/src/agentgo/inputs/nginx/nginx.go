@@ -31,8 +31,8 @@ type Input struct {
 	nginxInput telegraf.Input
 }
 
-// NewInput initialise nginx.Input
-func NewInput(url string) Input {
+// New initialise nginx.Input
+func New(url string) Input {
 	var input, ok = telegraf_inputs.Inputs["nginx"]
 	if ok {
 		nginxInput, ok := input().(*nginx.Nginx)

@@ -29,8 +29,8 @@ type Input struct {
 	netInput telegraf.Input
 }
 
-// NewInput initialise met.Input
-func NewInput() Input {
+// New initialise met.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput := input().(*net.NetIOStats)

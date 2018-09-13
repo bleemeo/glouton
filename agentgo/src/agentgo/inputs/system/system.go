@@ -29,8 +29,8 @@ type Input struct {
 	systemInput telegraf.Input
 }
 
-// NewInput initialise system.Input
-func NewInput() Input {
+// New initialise system.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["system"]
 	if ok {
 		systemInput := input().(*system.SystemStats)

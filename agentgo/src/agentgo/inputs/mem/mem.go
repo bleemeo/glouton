@@ -29,8 +29,8 @@ type Input struct {
 	memInput telegraf.Input
 }
 
-// NewInput initialise mem.Input
-func NewInput() Input {
+// New initialise mem.Input
+func New() Input {
 	var input, ok = telegraf_inputs.Inputs["mem"]
 	if ok {
 		memInput := input().(*mem.MemStats)
