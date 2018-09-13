@@ -87,7 +87,7 @@ func initAccumulator(acc telegraf.Accumulator) accumulator {
 // it after passing to Add.
 func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// TODO
-	(accumulator.acc).AddFields(measurement, fields, nil)
+	(accumulator.acc).AddFields(measurement, fields, tags, t...)
 }
 
 // AddError add an error to the accumulator

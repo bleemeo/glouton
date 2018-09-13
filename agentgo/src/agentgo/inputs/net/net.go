@@ -104,7 +104,7 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 			finalFields[finalMetricName] = value
 		}
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, finalTags)
+	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t...)
 }
 
 // AddError add an error to the accumulator

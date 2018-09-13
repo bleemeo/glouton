@@ -144,7 +144,7 @@ func (accumulator *accumulator) AddFields(measurement string, fields map[string]
 			continue
 		}
 	}
-	(accumulator.acc).AddFields(measurement, finalFields, nil)
+	(accumulator.acc).AddFields(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the accumulator

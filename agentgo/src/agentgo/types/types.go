@@ -70,47 +70,27 @@ type Accumulator struct {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 {
-		accumulator.addMetrics(measurement, fields, tags, Fields, t[0])
-	} else {
-		accumulator.addMetrics(measurement, fields, tags, Fields, time.Now())
-	}
+	accumulator.addMetrics(measurement, fields, tags, Fields, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
 func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 {
-		accumulator.addMetrics(measurement, fields, tags, Gauge, t[0])
-	} else {
-		accumulator.addMetrics(measurement, fields, tags, Gauge, time.Now())
-	}
+	accumulator.addMetrics(measurement, fields, tags, Gauge, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type
 func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 {
-		accumulator.addMetrics(measurement, fields, tags, Counter, t[0])
-	} else {
-		accumulator.addMetrics(measurement, fields, tags, Counter, time.Now())
-	}
+	accumulator.addMetrics(measurement, fields, tags, Counter, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type
 func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 {
-		accumulator.addMetrics(measurement, fields, tags, Summary, t[0])
-	} else {
-		accumulator.addMetrics(measurement, fields, tags, Summary, time.Now())
-	}
+	accumulator.addMetrics(measurement, fields, tags, Summary, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
 func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if len(t) == 1 {
-		accumulator.addMetrics(measurement, fields, tags, Histogram, t[0])
-	} else {
-		accumulator.addMetrics(measurement, fields, tags, Histogram, time.Now())
-	}
+	accumulator.addMetrics(measurement, fields, tags, Histogram, t...)
 }
 
 // SetPrecision do nothing right now
@@ -151,6 +131,12 @@ func convertInterface(value interface{}) (float64, error) {
 }
 
 func (accumulator *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, metricType int, t ...time.Time) {
+	var metricTime time.Time
+	if len(t) == 1 {
+		metricTime = t[0]
+	} else {
+		metricTime = time.Now()
+	}
 	for metricName, value := range fields {
 		valuef, err := convertInterface(value)
 		if err == nil {
@@ -159,7 +145,7 @@ func (accumulator *Accumulator) addMetrics(measurement string, fields map[string
 				Tags:  tags,
 				Type:  metricType,
 				Value: valuef,
-				Time:  t[0],
+				Time:  metricTime,
 			})
 		} else {
 			accumulator.AddError(err)

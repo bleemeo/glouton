@@ -90,7 +90,7 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		finalFields[finalMetricName] = value
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, tags, t[0])
+	(accumulator.acc).AddGauge(measurement, finalFields, tags, t...)
 }
 
 // AddCounter adds a metric to the accumulator with the given measurement

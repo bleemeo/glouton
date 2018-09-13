@@ -122,7 +122,7 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 	}
 	finalFields["cpu_other"] = cpuOther
 	finalFields["cpu_used"] = cpuUsed
-	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t[0])
+	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t...)
 }
 
 // AddError add an error to the Accumulator
