@@ -35,7 +35,8 @@ class _MetricPoint(ctypes.Structure):
                 ('tag', ctypes.POINTER(_Tag)),
                 ('tag_count', ctypes.c_int),
                 ('metric_type', ctypes.c_int),
-                ('value', ctypes.c_float)]
+                ('value', ctypes.c_float),
+                ('time', ctypes.c_int)]
 
 
 class _MetricPointVector(ctypes.Structure):
@@ -190,7 +191,7 @@ class Telegraflib:
             item = self.inputs_id_map[metric_point.input_id]["instance"]
         return bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label="go_" + (metric_point.name).decode("utf-8"),
-            time=time.time(),
             value=metric_point.value,
             item=item,
+            time=metric_point.time,
         )

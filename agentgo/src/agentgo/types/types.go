@@ -52,6 +52,9 @@ type MetricPoint struct {
 
 	// Value of the metric
 	Value float64
+
+	// Time
+	Time time.Time
 }
 
 // Accumulator save the metric from telegraf
@@ -67,86 +70,46 @@ type Accumulator struct {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	for metricName, value := range fields {
-		valuef, err := convertInterface(value)
-		if err == nil {
-			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-				Name:  metricName,
-				Tags:  tags,
-				Type:  Fields,
-				Value: valuef,
-			})
-		} else {
-			accumulator.AddError(err)
-		}
+	if len(t) == 1 {
+		accumulator.addMetrics(measurement, fields, tags, Fields, t[0])
+	} else {
+		accumulator.addMetrics(measurement, fields, tags, Fields, time.Now())
 	}
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
 func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	for metricName, value := range fields {
-		valuef, err := convertInterface(value)
-		if err == nil {
-			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-				Name:  metricName,
-				Tags:  tags,
-				Type:  Fields,
-				Value: valuef,
-			})
-		} else {
-			accumulator.AddError(err)
-		}
+	if len(t) == 1 {
+		accumulator.addMetrics(measurement, fields, tags, Gauge, t[0])
+	} else {
+		accumulator.addMetrics(measurement, fields, tags, Gauge, time.Now())
 	}
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type
 func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	for metricName, value := range fields {
-		valuef, err := convertInterface(value)
-		if err == nil {
-			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-				Name:  metricName,
-				Tags:  tags,
-				Type:  Fields,
-				Value: valuef,
-			})
-		} else {
-			accumulator.AddError(err)
-		}
+	if len(t) == 1 {
+		accumulator.addMetrics(measurement, fields, tags, Counter, t[0])
+	} else {
+		accumulator.addMetrics(measurement, fields, tags, Counter, time.Now())
 	}
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type
 func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	for metricName, value := range fields {
-		valuef, err := convertInterface(value)
-		if err == nil {
-			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-				Name:  metricName,
-				Tags:  tags,
-				Type:  Fields,
-				Value: valuef,
-			})
-		} else {
-			accumulator.AddError(err)
-		}
+	if len(t) == 1 {
+		accumulator.addMetrics(measurement, fields, tags, Summary, t[0])
+	} else {
+		accumulator.addMetrics(measurement, fields, tags, Summary, time.Now())
 	}
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
 func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	for metricName, value := range fields {
-		valuef, err := convertInterface(value)
-		if err == nil {
-			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
-				Name:  metricName,
-				Tags:  tags,
-				Type:  Fields,
-				Value: valuef,
-			})
-		} else {
-			accumulator.AddError(err)
-		}
+	if len(t) == 1 {
+		accumulator.addMetrics(measurement, fields, tags, Histogram, t[0])
+	} else {
+		accumulator.addMetrics(measurement, fields, tags, Histogram, time.Now())
 	}
 }
 
@@ -192,5 +155,22 @@ func convertInterface(value interface{}) (float64, error) {
 	default:
 		var valueType = reflect.TypeOf(value)
 		return float64(0), fmt.Errorf("Value type not supported :(%v)", valueType)
+	}
+}
+
+func (accumulator *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, metricType int, t ...time.Time) {
+	for metricName, value := range fields {
+		valuef, err := convertInterface(value)
+		if err == nil {
+			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+				Name:  metricName,
+				Tags:  tags,
+				Type:  metricType,
+				Value: valuef,
+				Time:  t[0],
+			})
+		} else {
+			accumulator.AddError(err)
+		}
 	}
 }

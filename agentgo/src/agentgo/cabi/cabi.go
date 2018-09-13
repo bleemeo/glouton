@@ -45,6 +45,7 @@ struct MetricPoint
 	int tag_count;
 	enum Type metric_type;
 	float value;
+	int time;
 };
 
 typedef struct MetricPoint MetricPoint;
@@ -298,7 +299,8 @@ func convertMetricPointInC(metricPoint types.MetricPoint, inputID int) C.MetricP
 		tag:         (*C.Tag)(tags),
 		tag_count:   C.int(tagCount),
 		metric_type: metricType,
-		value:       C.float(metricPoint.Value)}
+		value:       C.float(metricPoint.Value),
+		time:        C.int((metricPoint.Time).UnixNano())}
 
 	return result
 }
