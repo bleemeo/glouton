@@ -81,14 +81,14 @@ func (input Input) Gather(acc telegraf.Accumulator) error {
 	return err
 }
 
-// Accumulator save the redis metric from telegraf
-type Accumulator struct {
+// accumulator save the redis metric from telegraf
+type accumulator struct {
 	acc telegraf.Accumulator
 }
 
 // InitAccumulator initialize an accumulator
-func initAccumulator(acc telegraf.Accumulator) Accumulator {
-	return Accumulator{
+func initAccumulator(acc telegraf.Accumulator) accumulator {
+	return accumulator{
 		acc: acc,
 	}
 }
@@ -100,7 +100,7 @@ func initAccumulator(acc telegraf.Accumulator) Accumulator {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 // nolint: gocyclo
-func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
@@ -147,8 +147,8 @@ func (accumulator *Accumulator) AddFields(measurement string, fields map[string]
 	(accumulator.acc).AddFields(measurement, finalFields, nil)
 }
 
-// AddError add an error to the Accumulator
-func (accumulator *Accumulator) AddError(err error) {
+// AddError add an error to the accumulator
+func (accumulator *accumulator) AddError(err error) {
 	(accumulator.acc).AddError(err)
 }
 
@@ -156,26 +156,26 @@ func (accumulator *Accumulator) AddError(err error) {
 // They are not implemented
 
 // AddGauge is useless for redis
-func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	(accumulator.acc).AddError(fmt.Errorf("AddGauge not implemented for redis accumulator"))
 }
 
 // AddCounter is useless for redis
-func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for redis accumulator"))
 }
 
 // AddSummary is useless for redis
-func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for redis accumulator"))
 }
 
 // AddHistogram is useless for redis
-func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for redis accumulator"))
 }
 
 // SetPrecision is useless for redis
-func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {
+func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
 	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for redis accumulator"))
 }
