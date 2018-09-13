@@ -70,6 +70,7 @@ class Telegraflib:
     def __init__(self, is_terminated=None, emit_metric=None):
         self.inputs_id_map = {}
         self.input_group_id = _init_group()
+        self.system_inputs_id_map = {}
         self.system_input_group_id = _init_group()
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
@@ -94,7 +95,7 @@ class Telegraflib:
                             input_name, input_informations["name"]))
                 except KeyError:
                     input_informations["name"] = input_name
-            self.inputs_id_map[input_id] = input_informations
+            self.system_inputs_id_map[input_id] = input_informations
         else:
             raise ValueError(
                 "Impossible value of input_id: _add_system_input has fail: {}".format(input_name))
