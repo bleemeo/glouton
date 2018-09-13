@@ -82,7 +82,7 @@ class Telegraflib:
 
     def _add_system_input(self, input_name, input_informations=None):
         input_id = _add_simple_input(
-            self.system_input_group_id, bytes(input_name, 'utf_8'))
+            self.system_input_group_id, input_name.encode('utf-8'))
         if input_id >= 0:
             if input_informations is None:
                 input_informations = {}
@@ -101,7 +101,7 @@ class Telegraflib:
 
     def _add_simple_input(self, input_name, input_informations=None):
         input_id = _add_simple_input(
-            self.input_group_id, bytes(input_name, 'utf_8'))
+            self.input_group_id, input_name.encode('utf-8'))
         if input_id >= 0:
             if input_informations is None:
                 input_informations = {}
@@ -119,8 +119,8 @@ class Telegraflib:
                 "Impossible value of input_id: _add_simple_input has fail: {}".format(input_name))
 
     def _add_input_with_address(self, input_name, input_address, input_informations=None):
-        input_id = _add_input_with_address(self.input_group_id, bytes(
-            input_name, 'utf_8'), bytes(input_address, 'utf_8'))
+        input_id = _add_input_with_address(
+            self.input_group_id, input_name.encode('utf-8'), input_address.encode('utf-8'))
         if input_id >= 0:
             if input_informations is None:
                 input_informations = {}
