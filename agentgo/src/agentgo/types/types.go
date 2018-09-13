@@ -120,14 +120,7 @@ func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) 
 
 // AddError add an error to the Accumulator
 func (accumulator *Accumulator) AddError(err error) {
-	newError := make([]error, 1)
-	newError[0] = err
-	newError = newError[:0]
-	if accumulator.errors == nil {
-		accumulator.errors = newError
-	} else {
-		accumulator.errors = append(accumulator.errors, newError...)
-	}
+	accumulator.errors = append(accumulator.errors, err)
 }
 
 // GetMetricPointSlice return a slice of metrics containing by the accumulator
