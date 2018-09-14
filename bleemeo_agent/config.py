@@ -233,15 +233,13 @@ def _convert_type(value_text, value_type):
 
     if value_type == 'int':
         return int(value_text)
-    elif value_type == 'bool':
+    if value_type == 'bool':
         if value_text.lower() in ('true', 'yes', '1'):
             return True
-        elif value_text.lower() in ('false', 'no', '0'):
+        if value_text.lower() in ('false', 'no', '0'):
             return False
-        else:
-            raise ValueError('invalid value %r for boolean' % value_text)
-    else:
-        raise NotImplementedError('Unknown type %s' % value_type)
+        raise ValueError('invalid value %r for boolean' % value_text)
+    raise NotImplementedError('Unknown type %s' % value_type)
 
 
 def _convert_conf_name(conf_name, warnings):

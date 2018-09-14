@@ -221,7 +221,7 @@ def pstime_to_second(pstime):
         # format is MM:SS
         minute, second = pstime.split(':')
         return int(minute) * 60 + int(second)
-    elif pstime.count(':') == 2 and '-' in pstime:
+    if pstime.count(':') == 2 and '-' in pstime:
         # format is DD-HH:MM:SS
         day, rest = pstime.split('-')
         hour, minute, second = rest.split(':')
@@ -231,20 +231,19 @@ def pstime_to_second(pstime):
             int(minute) * 60 +
             int(second)
         )
-    elif pstime.count(':') == 2:
+    if pstime.count(':') == 2:
         # format is HH:MM:SS
         hour, minute, second = pstime.split(':')
         return int(hour) * 3600 + int(minute) * 60 + int(second)
-    elif 'h' in pstime:
+    if 'h' in pstime:
         # format is HHhMM
         hour, minute = pstime.split('h')
         return int(hour) * 3600 + int(minute) * 60
-    elif 'd' in pstime:
+    if 'd' in pstime:
         # format is DDdHH
         day, hour = pstime.split('d')
         return int(day) * 86400 + int(hour) * 3600
-    else:
-        raise ValueError('Unknown pstime format "%s"' % pstime)
+    raise ValueError('Unknown pstime format "%s"' % pstime)
 
 
 def format_uptime(uptime_seconds):
@@ -794,7 +793,7 @@ def docker_restart(docker_client, container_name):
             "Failed to restart Telegraf: missing docker-py dependencies"
         )
         return
-    elif docker_client is None:
+    if docker_client is None:
         logging.warning(
             "Failed to restart Telegraf: unable to communicate with Docker"
         )

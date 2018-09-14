@@ -536,9 +536,9 @@ def _sanitize_service(
             name,
         )
         return None
-    elif (service_info.get('check_type') != 'nagios'
-          and 'port' not in service_info and not is_discovered_service
-          and 'jmx_port' not in service_info):
+    if (service_info.get('check_type') != 'nagios'
+            and 'port' not in service_info and not is_discovered_service
+            and 'jmx_port' not in service_info):
         # discovered services could exist without port, etc.
         # It means that no check will be performed but service object will
         # be created.
@@ -684,7 +684,7 @@ def disable_https_warning():
     # recent Debian version and virtualenv version) and fallback to urllib3
     # directly.
     try:
-        import requests.packages.urllib3 as urllib3
+        from requests.packages import urllib3
     except ImportError:
         import urllib3
 
@@ -712,7 +712,7 @@ def format_value(value, unit, unit_text):
     if unit is None or unit_text is None or unit == UNIT_UNIT:
         return '%.2f' % value
 
-    if unit == UNIT_BYTE or unit == UNIT_BIT:
+    if unit in (UNIT_BYTE, UNIT_BIT):
         scale = ['', 'K', 'M', 'G', 'T', 'P', 'E']
         current_scale = scale.pop(0)
         while abs(value) >= 1024 and scale:
@@ -1474,8 +1474,7 @@ class Core:
             if not self.start_threads():
                 self.is_terminating.set()
                 return
-            else:
-                threads_started = True
+            threads_started = True
             try:
                 self._scheduler.start()
                 # This loop is break by KeyboardInterrupt (ctrl+c or SIGTERM).
@@ -2816,7 +2815,7 @@ class Core:
             if config['IPAddress']:
                 if driver == 'bridge':
                     return config['IPAddress']
-                elif address_first_network is None:
+                if address_first_network is None:
                     address_first_network = config['IPAddress']
 
         docker_gwbridge = (
@@ -2911,8 +2910,6 @@ def install_thread_hook(raven_self):
         def run_with_except_hook(*args, **kw):
             try:
                 run_old(*args, **kw)
-            except (KeyboardInterrupt, SystemExit):
-                raise
             except Exception:
                 raven_self.captureException(exc_info=sys.exc_info())
                 raise

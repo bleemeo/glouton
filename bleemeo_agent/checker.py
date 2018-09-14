@@ -665,7 +665,7 @@ class Check:
 
         end = bleemeo_agent.util.get_clock()
 
-        if stratum == 0 or stratum == 16:
+        if stratum in (0, 16):
             return (
                 bleemeo_agent.type.STATUS_CRITICAL,
                 'NTP server not (yet) synchronized'

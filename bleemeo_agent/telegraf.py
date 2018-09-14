@@ -617,7 +617,7 @@ class Telegraf:
 
                 # mem_used will be computed as mem_total - mem_available
                 return  # We don't use mem_used of telegraf.
-            elif name == 'mem_available_percent':
+            if name == 'mem_available_percent':
                 name = 'mem_available_perc'
             elif name in ('mem_buffered', 'mem_cached', 'mem_free'):
                 pass
@@ -672,7 +672,7 @@ class Telegraf:
                 return
 
             name = 'net_' + part[-1]
-            if name == 'net_bytes_recv' or name == 'net_bytes_sent':
+            if name in ('net_bytes_recv', 'net_bytes_sent'):
                 name = name.replace('bytes', 'bits')
                 value = value * 8
 
@@ -889,8 +889,8 @@ class Telegraf:
                 elif name == 'mysql_cache_result_qcache_total_blocks':
                     name = 'mysql_cache_blocksize_qcache'
                     derive = False
-                elif (name == 'mysql_cache_result_qcache_free_blocks'
-                      or name == 'mysql_cache_result_qcache_free_memory'):
+                elif name in ('mysql_cache_result_qcache_free_blocks',
+                              'mysql_cache_result_qcache_free_memory'):
                     name = name.replace(
                         'mysql_cache_result_qcache_', 'mysql_cache_')
                     derive = False
