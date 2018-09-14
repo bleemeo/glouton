@@ -25,52 +25,64 @@ import (
 	"time"
 )
 
+type metricSave struct {
+	value      interface{}
+	metricTime time.Time
+}
+
 // Input countains input information about diskio
 type Input struct {
 	diskioInput telegraf.Input
+	pastValues  map[string]map[string]metricSave
 }
 
 // New initialise diskio.Input
-func New() Input {
+func New() *Input {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
-		return Input{
+		return &Input{
 			diskioInput: diskioInput,
 		}
 	}
-	return Input{
+	return &Input{
 		diskioInput: nil,
+		pastValues:  nil,
 	}
 }
 
 // SampleConfig returns the default configuration of the Input
-func (input Input) SampleConfig() string {
+func (input *Input) SampleConfig() string {
 	return input.diskioInput.SampleConfig()
 }
 
 // Description returns a one-sentence description of the Input
-func (input Input) Description() string {
+func (input *Input) Description() string {
 	return input.diskioInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input Input) Gather(acc telegraf.Accumulator) error {
-	diskioAccumulator := initAccumulator(acc)
+func (input *Input) Gather(acc telegraf.Accumulator) error {
+	diskioAccumulator := initAccumulator(acc, input.pastValues)
 	err := input.diskioInput.Gather(&diskioAccumulator)
+	input.pastValues = diskioAccumulator.currentValues
 	return err
 }
 
 // accumulator save the diskio metric from telegraf
 type accumulator struct {
-	acc telegraf.Accumulator
+	acc           telegraf.Accumulator
+	pastValues    map[string]map[string]metricSave
+	currentValues map[string]map[string]metricSave
 }
 
 // InitAccumulator initialize an accumulator
-func initAccumulator(acc telegraf.Accumulator) accumulator {
+func initAccumulator(acc telegraf.Accumulator, pastValues map[string]map[string]metricSave) accumulator {
 	return accumulator{
-		acc: acc,
+		acc:           acc,
+		pastValues:    pastValues,
+		currentValues: nil,
 	}
 }
 
@@ -82,26 +94,62 @@ func initAccumulator(acc telegraf.Accumulator) accumulator {
 // it after passing to Add.
 // nolint: gocyclo
 func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	if accumulator.currentValues == nil {
+		accumulator.currentValues = make(map[string]map[string]metricSave)
+	}
+	var metricTime time.Time
+	if len(t) != 1 {
+		metricTime = time.Now()
+	} else {
+		metricTime = t[0]
+	}
+
 	finalFields := make(map[string]interface{})
 	finalTags := make(map[string]string)
 	item, ok := tags["name"]
 	if ok {
 		finalTags["item"] = item
+		accumulator.currentValues[item] = make(map[string]metricSave)
 	}
+
 	for metricName, value := range fields {
 		finalMetricName := strings.Replace(measurement+"_"+metricName, "disk", "", 1)
-		if finalMetricName == "io_weighted_io_time" {
-			continue
-		} else if finalMetricName == "io_iops_in_progress" {
-			continue
-		}
-
-		if finalMetricName == "io_io_time" {
+		switch finalMetricName {
+		case "io_read_bytes", "io_read_time", "io_reads", "io_write_bytes", "io_writes", "io_write_time":
+			pastMetricSave, ok := accumulator.pastValues[item][finalMetricName]
+			accumulator.currentValues[item][finalMetricName] = metricSave{value, metricTime}
+			if ok {
+				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value.(uint64))) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
+				finalFields[finalMetricName] = valuef
+			} else {
+				continue
+			}
+		case "io_io_time":
 			finalMetricName = "io_time"
-			valuef := value.(uint64)
-			finalFields["io_utilization"] = valuef * 1000
+			pastMetricSave, ok := accumulator.pastValues[item][finalMetricName]
+			accumulator.currentValues[item][finalMetricName] = metricSave{value, metricTime}
+			if ok {
+				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value.(uint64))) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
+				finalFields[finalMetricName] = valuef
+
+			} else {
+				continue
+			}
+
+			pastIOUtilization, ok := accumulator.pastValues[item]["io_utilization"]
+			accumulator.currentValues[item]["io_utilization"] = metricSave{value.(uint64) * 1000, metricTime}
+			if ok {
+				valuef := 100 * (float64(value.(uint64))*1000 - float64(pastIOUtilization.value.(uint64))) / metricTime.Sub(pastIOUtilization.metricTime).Seconds()
+				finalFields["io_utilization"] = valuef
+			} else {
+				continue
+			}
+
+		case "io_weighted_io_time", "io_iops_in_progress":
+			continue
+		default:
+			finalFields[finalMetricName] = value
 		}
-		finalFields[finalMetricName] = value
 	}
 	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t...)
 }
