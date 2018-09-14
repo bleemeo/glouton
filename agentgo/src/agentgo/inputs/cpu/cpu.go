@@ -85,8 +85,6 @@ func initAccumulator(acc telegraf.Accumulator) accumulator {
 // nolint: gocyclo
 func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
-	finalTags := make(map[string]string)
-	finalTags["item"] = tags["cpu"]
 	var cpuOther float64
 	var cpuUsed float64
 	for metricName, value := range fields {
@@ -122,7 +120,7 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 	}
 	finalFields["cpu_other"] = cpuOther
 	finalFields["cpu_used"] = cpuUsed
-	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t...)
+	(accumulator.acc).AddGauge(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the Accumulator
