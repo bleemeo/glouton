@@ -46,6 +46,7 @@ except ImportError:
     APSCHEDULE_IS_3X = True
 
 import psutil
+import requests
 import six
 from six.moves import configparser
 import yaml
@@ -1530,10 +1531,12 @@ class Core:
         if hasattr(docker, 'APIClient'):
             self.docker_client = docker.APIClient(
                 version=DOCKER_API_VERSION,
+                timeout=10,
             )
         else:
             self.docker_client = docker.Client(  # pylint: disable=no-member
                 version=DOCKER_API_VERSION,
+                timeout=10,
             )
         try:
             self.docker_client.ping()
@@ -1569,7 +1572,8 @@ class Core:
             docker_id = container['Id']
             try:
                 inspect = self.docker_client.inspect_container(docker_id)
-            except docker.errors.APIError:
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
                 continue  # most probably container was removed
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
@@ -1809,7 +1813,8 @@ class Core:
         """
         try:
             result = self.docker_client.inspect_container(container_id)
-        except docker.errors.APIError:
+        except (docker.errors.APIError,
+                requests.exceptions.RequestException):
             return  # most probably container was removed
 
         name = result['Name'].lstrip('/')
@@ -2342,7 +2347,8 @@ class Core:
                         mysql_password = env.replace(
                             'MYSQL_ROOT_PASSWORD=', ''
                         )
-            except docker.errors.APIError:
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
                 pass  # most probably container was removed
 
         service_info['username'] = mysql_user
@@ -2366,7 +2372,8 @@ class Core:
                             user = 'postgres'
                     elif env.startswith('POSTGRES_USER='):
                         user = env.replace('POSTGRES_USER=', '')
-            except docker.errors.APIError:
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
                 pass  # most probably container was removed
 
         service_info['username'] = user
@@ -2790,7 +2797,8 @@ class Core:
             container_info = self.docker_client.inspect_container(
                 container_name,
             )
-        except docker.errors.APIError:
+        except (docker.errors.APIError,
+                requests.exceptions.RequestException):
             return None
 
         container_id = container_info.get('Id')

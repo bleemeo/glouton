@@ -850,31 +850,36 @@ def _get_docker_process(docker_client):
 
     processes = {}
 
-    for container in docker_client.containers():
-        # container has... nameS
-        # Also name start with "/". I think it may have mulitple name
-        # and/or other "/" with docker-in-docker.
-        container_name = container['Names'][0].lstrip('/')
-        docker_id = container['Id']
-        try:
+    try:
+        for container in docker_client.containers():
+            # container has... nameS
+            # Also name start with "/". I think it may have mulitple name
+            # and/or other "/" with docker-in-docker.
+            container_name = container['Names'][0].lstrip('/')
+            docker_id = container['Id']
             try:
-                docker_top = (
-                    docker_client.top(container_name, ps_args="waux")
-                )
-            except TypeError:
-                # Older version of Docker-py don't support ps_args option
-                docker_top = (
-                    docker_client.top(container_name)
-                )
-        except docker.errors.APIError:
-            # most probably container is restarting or just stopped
-            continue
+                try:
+                    docker_top = (
+                        docker_client.top(container_name, ps_args="waux")
+                    )
+                except TypeError:
+                    # Older version of Docker-py don't support ps_args option
+                    docker_top = (
+                        docker_client.top(container_name)
+                    )
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
+                # most probably container is restarting or just stopped
+                continue
 
-        for process in decode_docker_top(docker_top):
-            pid = process['pid']
-            processes[pid] = process
-            processes[pid]['instance'] = container_name
-            processes[pid]['docker_id'] = docker_id
+            for process in decode_docker_top(docker_top):
+                pid = process['pid']
+                processes[pid] = process
+                processes[pid]['instance'] = container_name
+                processes[pid]['docker_id'] = docker_id
+    except (docker.errors.APIError,
+            requests.exceptions.RequestException) as exc:
+        logging.info('Failed to get Docker containers list: %s', exc)
 
     return processes
 
