@@ -32,7 +32,7 @@ type Input struct {
 }
 
 // New initialise nginx.Input
-func New(url string) Input {
+func New(url string) *Input {
 	var input, ok = telegraf_inputs.Inputs["nginx"]
 	if ok {
 		nginxInput, ok := input().(*nginx.Nginx)
@@ -40,29 +40,29 @@ func New(url string) Input {
 			slice := append(make([]string, 0), url)
 			nginxInput.Urls = slice
 			nginxInput.InsecureSkipVerify = false
-			return Input{
+			return &Input{
 				nginxInput: nginxInput,
 			}
 		}
 	}
-	return Input{
+	return &Input{
 		nginxInput: nil,
 	}
 }
 
 // SampleConfig returns the default configuration of the Input
-func (input Input) SampleConfig() string {
+func (input *Input) SampleConfig() string {
 	return input.nginxInput.SampleConfig()
 }
 
 // Description returns a one-sentence description of the Input
-func (input Input) Description() string {
+func (input *Input) Description() string {
 	return input.nginxInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input Input) Gather(acc telegraf.Accumulator) error {
+func (input *Input) Gather(acc telegraf.Accumulator) error {
 	nginxAccumulator := initAccumulator(acc)
 	err := input.nginxInput.Gather(&nginxAccumulator)
 	return err

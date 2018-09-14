@@ -30,33 +30,33 @@ type Input struct {
 }
 
 // New initialise met.Input
-func New() Input {
+func New() *Input {
 	var input, ok = telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
-		return Input{
+		return &Input{
 			netInput: netInput,
 		}
 	}
-	return Input{
+	return &Input{
 		netInput: nil,
 	}
 }
 
 // SampleConfig returns the default configuration of the Input
-func (input Input) SampleConfig() string {
+func (input *Input) SampleConfig() string {
 	return input.netInput.SampleConfig()
 }
 
 // Description returns a one-sentence description of the Input
-func (input Input) Description() string {
+func (input *Input) Description() string {
 	return input.netInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input Input) Gather(acc telegraf.Accumulator) error {
+func (input *Input) Gather(acc telegraf.Accumulator) error {
 	netAccumulator := initAccumulator(acc)
 	err := input.netInput.Gather(&netAccumulator)
 	return err

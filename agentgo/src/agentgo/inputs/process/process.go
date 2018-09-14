@@ -30,32 +30,32 @@ type Input struct {
 }
 
 // New initialise process.Input
-func New() Input {
+func New() *Input {
 	var input, ok = telegraf_inputs.Inputs["processes"]
 	if ok {
 		processInput := input().(*processes.Processes)
-		return Input{
+		return &Input{
 			processInput: processInput,
 		}
 	}
-	return Input{
+	return &Input{
 		processInput: nil,
 	}
 }
 
 // SampleConfig returns the default configuration of the Input
-func (input Input) SampleConfig() string {
+func (input *Input) SampleConfig() string {
 	return input.processInput.SampleConfig()
 }
 
 // Description returns a one-sentence description of the Input
-func (input Input) Description() string {
+func (input *Input) Description() string {
 	return input.processInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input Input) Gather(acc telegraf.Accumulator) error {
+func (input *Input) Gather(acc telegraf.Accumulator) error {
 	processAccumulator := initAccumulator(acc)
 	err := input.processInput.Gather(&processAccumulator)
 	return err
