@@ -300,7 +300,7 @@ func convertMetricPointInC(metricPoint types.MetricPoint, inputID int) C.MetricP
 		tag_count:   C.int(tagCount),
 		metric_type: metricType,
 		value:       C.float(metricPoint.Value),
-		time:        C.int((metricPoint.Time).UnixNano())}
+		time:        C.int((metricPoint.Time).UnixNano() / 1000000000)}
 
 	return result
 }
