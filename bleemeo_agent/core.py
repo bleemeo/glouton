@@ -1564,6 +1564,7 @@ class Core:
             logging.error('Failed to initialize Kubernetes client: %s', exc)
 
     def _update_docker_info(self):
+        # pylint: disable=too-many-locals
         docker_containers = {}
         docker_containers_by_name = {}
         docker_networks = {}
@@ -1574,10 +1575,13 @@ class Core:
                 self._docker_connect()
             docker_client = self.docker_client
 
-        if docker_client is None:
-            containers = []
-        else:
-            containers = docker_client.containers(all=True)
+        containers = []
+        if docker_client is not None:
+            try:
+                containers = docker_client.containers(all=True)
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException) as exc:
+                logging.info('Failed to list containers: %s', exc)
 
         for container in containers:
             docker_id = container['Id']
@@ -1601,7 +1605,13 @@ class Core:
 
         if (hasattr(docker_client, 'networks') and
                 hasattr(docker_client, 'inspect_network')):
-            for network in docker_client.networks():
+            networks = []
+            try:
+                containers = docker_client.containers(all=True)
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException) as exc:
+                logging.info('Failed to list Docker network: %s', exc)
+            for network in networks:
                 if 'Name' not in network:
                     continue
                 name = network['Name']
