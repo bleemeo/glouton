@@ -147,6 +147,20 @@ class ApiError(Exception):
         super(ApiError, self).__init__()
         self.response = response
 
+    def __str__(self):
+        try:
+            content = self.response.content.decode('utf-8').replace(
+                '\r\n', '\n').replace('\n\r', '\n').replace('\n', ' ')
+        except UnicodeDecodeError:
+            content = repr(self.response.content)
+        if len(content) > 70:
+            content = '%s...' % content[:67]
+
+        return 'HTTP %s: %s' % (
+            self.response.status_code,
+            content,
+        )
+
 
 class BleemeoAPI:
     """ class to handle communication with Bleemeo API
@@ -175,9 +189,8 @@ class BleemeoAPI:
         )
         if response.status_code != 200:
             logging.debug(
-                'Failed to retrieve JWT, status=%s, content=%s',
-                response.status_code,
-                response.text,
+                'Failed to retrieve JWT: %s',
+                ApiError(response),
             )
             raise ApiError(response)
         return response.json()['token']
@@ -1154,11 +1167,8 @@ class BleemeoConnector(threading.Thread):
                         continue
                     self._sync_agent(bleemeo_cache, bleemeo_api)
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize agent. API responded: %s',
-                        exc.response.content,
-                    )
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.info('Unable to synchronize agent. %s', exc)
                     self.core.is_terminating.wait(5)
                     has_error = True
 
@@ -1175,11 +1185,8 @@ class BleemeoConnector(threading.Thread):
                         continue
                     self._sync_facts(bleemeo_cache, bleemeo_api)
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize facts. API responded: %s',
-                        exc.response.content,
-                    )
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.info('Unable to synchronize agent. %s', exc)
                     self.core.is_terminating.wait(5)
                     has_error = True
 
@@ -1205,11 +1212,8 @@ class BleemeoConnector(threading.Thread):
                     # For a pass of metric registrations
                     metrics_sync = True
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize services. API responded: %s',
-                        exc.response.content,
-                    )
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.info('Unable to synchronize agent. %s', exc)
                     self.core.is_terminating.wait(5)
                     has_error = True
 
@@ -1233,11 +1237,8 @@ class BleemeoConnector(threading.Thread):
                     # For a pass of metric registrations
                     metrics_sync = True
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize containers. API responded: %s',
-                        exc.response.content,
-                    )
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.info('Unable to synchronize agent. %s', exc)
                     self.core.is_terminating.wait(5)
                     has_error = True
 
@@ -1273,11 +1274,8 @@ class BleemeoConnector(threading.Thread):
                     self._sync_metrics(bleemeo_cache, bleemeo_api, full)
                     last_metrics_count = metrics_count
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize metrics. API responded: %s',
-                        exc.response.content,
-                    )
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.info('Unable to synchronize agent. %s', exc)
                     self.core.is_terminating.wait(5)
                     has_error = True
 
