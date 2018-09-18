@@ -23,6 +23,7 @@ import shlex
 import smtplib
 import socket
 import struct
+import threading
 import time
 
 import requests
@@ -206,6 +207,12 @@ class Check:
         if not self.check_info.get('check_type') and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
+        self.open_sockets_job = None
+        self._fast_check_job = None
+        self._last_status = None
+        self._lock = threading.Lock()
+        self._closed = False
+
         logging.debug(
             'Created new check for service %s',
             self.display_name
@@ -218,8 +225,6 @@ class Check:
             seconds=60,
             next_run_in=0,
         )
-        self.open_sockets_job = None
-        self._last_status = None
 
     def _initialize_tcp_sockets(self):
         tcp_sockets = {}
@@ -261,7 +266,11 @@ class Check:
             tcp_socket.settimeout(2)
             try:
                 tcp_socket.connect((address, port))
-                self.tcp_sockets[(address, port)] = tcp_socket
+                with self._lock:
+                    if self._closed:
+                        tcp_socket.close()
+                        return
+                    self.tcp_sockets[(address, port)] = tcp_socket
             except socket.error:
                 tcp_socket.close()
                 logging.debug(
@@ -273,7 +282,9 @@ class Check:
         if run_check:
             # open_socket failed, run check now
             # reschedule job to be run immediately
-            self.current_job = self.core.trigger_job(self.current_job)
+            with self._lock:
+                if not self._closed:
+                    self.current_job = self.core.trigger_job(self.current_job)
 
     def check_sockets(self):
         """ Check if some socket are closed
@@ -363,6 +374,9 @@ class Check:
         if return_code == STATUS_CHECK_NOT_RUN:
             return_code = bleemeo_agent.type.STATUS_OK
 
+        with self._lock:
+            if self._closed:
+                return
         if self.instance:
             logging.debug(
                 'check %s: return code is %s (output=%s)',
@@ -399,19 +413,29 @@ class Check:
                     self.tcp_sockets[key] = None
             if (self._last_status is None
                     or self._last_status == bleemeo_agent.type.STATUS_OK):
-                self.core.add_scheduled_job(
-                    self.run_check,
-                    seconds=0,
-                    next_run_in=30,
-                )
+                with self._lock:
+                    if self._fast_check_job is not None:
+                        self.core.unschedule_job(self._fast_check_job)
+                    if self._closed:
+                        return
+                    self._fast_check_job = self.core.add_scheduled_job(
+                        self.run_check,
+                        seconds=0,
+                        next_run_in=30,
+                    )
 
         if return_code == bleemeo_agent.type.STATUS_OK and self.tcp_sockets:
             # Make sure all socket are openned
-            self.open_sockets_job = self.core.add_scheduled_job(
-                self.open_sockets,
-                seconds=0,
-                next_run_in=5,
-            )
+            with self._lock:
+                if self.open_sockets_job is not None:
+                    self.core.unschedule_job(self.open_sockets_job)
+                if self._closed:
+                    return
+                self.open_sockets_job = self.core.add_scheduled_job(
+                    self.open_sockets,
+                    seconds=0,
+                    next_run_in=5,
+                )
 
         self._last_status = return_code
 
@@ -419,11 +443,14 @@ class Check:
         """ Unschedule this check
         """
         logging.debug('Stoping check %s', self.display_name)
-        self.core.unschedule_job(self.open_sockets_job)
-        self.core.unschedule_job(self.current_job)
-        for tcp_socket in self.tcp_sockets.values():
-            if tcp_socket is not None:
-                tcp_socket.close()
+        with self._lock:
+            self._closed = True
+            self.core.unschedule_job(self.open_sockets_job)
+            self.core.unschedule_job(self.current_job)
+            self.core.unschedule_job(self._fast_check_job)
+            for tcp_socket in self.tcp_sockets.values():
+                if tcp_socket is not None:
+                    tcp_socket.close()
 
     def check_nagios(self):
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
