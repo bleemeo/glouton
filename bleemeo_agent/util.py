@@ -885,6 +885,13 @@ def _get_docker_process(docker_client):
 
 def _update_process_psutil(processes, only_started_before):
     # pylint: disable=too-many-branches
+
+    # Process creation time is accurate up to 1/SC_CLK_TCK seconds,
+    # usually 1/100th of seconds.
+    # Process must be started at least 1/100th before only_started_before.
+    # Keep some additional margin by doubling this value.
+    only_started_before -= 2/100
+
     for process in psutil.process_iter():
         try:
             if process.pid == 0:
