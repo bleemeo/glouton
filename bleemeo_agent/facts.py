@@ -166,9 +166,11 @@ def get_docker_version(core):
     api_version = None
     package_version = None
 
-    if core.docker_client is not None:
+    # Read of (single) attribute is atomic, no lock needed
+    docker_client = core.docker_client
+    if docker_client is not None:
         try:
-            versions = core.docker_client.version()
+            versions = docker_client.version()
             api_version = versions.get('ApiVersion')
             package_version = versions.get('Version')
             return (package_version, api_version)

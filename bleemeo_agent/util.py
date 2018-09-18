@@ -547,8 +547,11 @@ def get_top_info(core):
     gather_started_at = time.time()
 
     processes = {}
-    if core.docker_client is not None:
-        processes = _get_docker_process(core.docker_client)
+
+    # Read of (single) attribute is atomic, no lock needed
+    docker_client = core.docker_client
+    if docker_client is not None:
+        processes = _get_docker_process(docker_client)
 
     if (core.container is None
             or core.config['container.pid_namespace_host']):

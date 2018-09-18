@@ -1034,6 +1034,7 @@ class Core:
         self.influx_connector = None
         self.graphite_server = None
         self.docker_client = None
+        self._docker_client_cond = threading.Condition()
         self.k8s_client = None
         self.k8s_pods = {}
         self.k8s_docker_to_pods = {}
@@ -1467,7 +1468,8 @@ class Core:
         threads_started = False
         try:
             self.setup_signal()
-            self._docker_connect()
+            with self._docker_client_cond:
+                self._docker_connect()
             self._k8s_connect()
 
             self.schedule_tasks()
@@ -1520,6 +1522,8 @@ class Core:
 
     def _docker_connect(self):
         """ Try to connect to docker remote API
+
+            Assume _docker_client_cond is held
         """
         if docker is None:
             logging.debug(
@@ -1539,8 +1543,11 @@ class Core:
             )
         try:
             self.docker_client.ping()
-        except Exception:  # pylint: disable=broad-except
-            logging.debug('Docker ping failed. Assume Docker is not used')
+            self._docker_client_cond.notify_all()
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.debug(
+                'Docker ping failed. Assume Docker is not used: %s', exc
+            )
             self.docker_client = None
 
     def _k8s_connect(self):
@@ -1562,15 +1569,20 @@ class Core:
         docker_networks = {}
         docker_containers_ignored = {}
 
-        if self.docker_client is None:
+        with self._docker_client_cond:
+            if self.docker_client is None:
+                self._docker_connect()
+            docker_client = self.docker_client
+
+        if docker_client is None:
             containers = []
         else:
-            containers = self.docker_client.containers(all=True)
+            containers = docker_client.containers(all=True)
 
         for container in containers:
             docker_id = container['Id']
             try:
-                inspect = self.docker_client.inspect_container(docker_id)
+                inspect = docker_client.inspect_container(docker_id)
             except (docker.errors.APIError,
                     requests.exceptions.RequestException):
                 continue  # most probably container was removed
@@ -1587,9 +1599,9 @@ class Core:
             docker_containers[docker_id] = inspect
             docker_containers_by_name[name] = inspect
 
-        if (hasattr(self.docker_client, 'networks') and
-                hasattr(self.docker_client, 'inspect_network')):
-            for network in self.docker_client.networks():
+        if (hasattr(docker_client, 'networks') and
+                hasattr(docker_client, 'inspect_network')):
+            for network in docker_client.networks():
                 if 'Name' not in network:
                     continue
                 name = network['Name']
@@ -1597,7 +1609,7 @@ class Core:
                     # For this network, the list of containers is needed. This
                     # is not returned on listing, and require direct inspection
                     # of the network
-                    network = self.docker_client.inspect_network(name)
+                    network = docker_client.inspect_network(name)
 
                 docker_networks[name] = network
 
@@ -1763,13 +1775,16 @@ class Core:
     def _gather_metrics_minute(self):
         """ Gather and send every minute some metric missing from other sources
         """
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
+
         for key in list(self.docker_containers.keys()):
             result = self.docker_containers.get(key)
             if (result is not None
                     and 'Health' in result['State']
-                    and self.docker_client is not None):
+                    and docker_client is not None):
 
-                self._docker_health_status(key)
+                self._docker_health_status(docker_client, key)
 
         # Some service have additional metrics. Currently only Postfix and exim
         # for mail queue size
@@ -1807,11 +1822,11 @@ class Core:
                 )
             )
 
-    def _docker_health_status(self, container_id):
+    def _docker_health_status(self, docker_client, container_id):
         """ Send metric for docker container health status
         """
         try:
-            result = self.docker_client.inspect_container(container_id)
+            result = docker_client.inspect_container(container_id)
         except (docker.errors.APIError,
                 requests.exceptions.RequestException):
             return  # most probably container was removed
@@ -2316,6 +2331,8 @@ class Core:
         mysql_user = None
         mysql_password = None
 
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
         if not instance:
             # grab maintenace password from debian.cnf
             try:
@@ -2335,10 +2352,10 @@ class Core:
                 mysql_password = debian_cnf.get('client', 'password')
             except (configparser.NoSectionError, configparser.NoOptionError):
                 pass
-        else:
-            # MySQL is running inside a docker.
+        elif docker_client is not None:
+            # MySQL is running inside a docker and Docker connection is up.
             try:
-                container_info = self.docker_client.inspect_container(instance)
+                container_info = docker_client.inspect_container(instance)
                 for env in container_info['Config']['Env']:
                     # env has the form "VARIABLE=value"
                     if env.startswith('MYSQL_ROOT_PASSWORD='):
@@ -2359,10 +2376,12 @@ class Core:
         user = None
         password = None
 
-        if instance:
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
+        if instance and docker_client is not None:
             # Only know to extract user/password from Docker container
             try:
-                container_info = self.docker_client.inspect_container(instance)
+                container_info = docker_client.inspect_container(instance)
                 for env in container_info['Config']['Env']:
                     # env has the form "VARIABLE=value"
                     if env.startswith('POSTGRES_PASSWORD='):
@@ -2385,28 +2404,40 @@ class Core:
 
         while True:
             reconnect_delay = 5
-            while self.docker_client is None:
-                time.sleep(reconnect_delay)
-                self._docker_connect()
-                reconnect_delay = min(60, reconnect_delay * 2)
-
-            try:
-                self.docker_client.ping()
-            except Exception:  # pylint: disable=broad-except
-                self.docker_client = None
-                continue
-
-            try:
-                try:
-                    generator = self.docker_client.events(
-                        decode=True, since=last_event_at,
+            with self._docker_client_cond:
+                while self.docker_client is None:
+                    self._docker_client_cond.wait(
+                        reconnect_delay,
                     )
-                except TypeError:
-                    # older version of docker-py does decode=True by default
-                    # (and don't have this option)
-                    # Also they don't have since option.
-                    generator = self.docker_client.events()
+                    reconnect_delay = min(60, reconnect_delay * 2)
 
+                    if self.docker_client is None:
+                        self._docker_connect()
+
+                try:
+                    self.docker_client.ping()
+                except Exception:  # pylint: disable=broad-except
+                    self.docker_client = None
+                    continue
+
+                try:
+                    try:
+                        generator = self.docker_client.events(
+                            decode=True, since=last_event_at,
+                        )
+                    except TypeError:
+                        # older version of docker-py does decode=True by
+                        # default (and don't have this option)
+                        # Also they don't have since option.
+                        generator = self.docker_client.events()
+                except Exception as exc:  # pylint: disable=broad-except
+                    logging.debug(
+                        'Unable to create the Docker event watcher: %s',
+                        exc,
+                    )
+                    continue
+
+            try:
                 for event in generator:
                     # even older version of docker-py does not support decoding
                     # at all
@@ -2463,7 +2494,12 @@ class Core:
 
         elif (action.startswith('health_status:')
               and event_type == 'container'):
-            self._docker_health_status(actor_id)
+
+            # Read of (single) attribute is atomic, no lock needed
+            docker_client = self.docker_client
+
+            if docker_client is not None:
+                self._docker_health_status(docker_client, actor_id)
             # If an health_status event occure, it means that
             # docker container inspect changed.
             # Update the discovery date, so BleemeoConnector will
@@ -2801,8 +2837,13 @@ class Core:
         if docker is None:
             return None
 
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
+        if docker_client is None:
+            return None
+
         try:
-            container_info = self.docker_client.inspect_container(
+            container_info = docker_client.inspect_container(
                 container_name,
             )
         except (docker.errors.APIError,
