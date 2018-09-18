@@ -116,6 +116,7 @@ CHECKS_INFO = {
 
 # global variable with all checks created
 CHECKS = {}
+_CHECKS_LOCK = threading.Lock()
 
 
 def update_checks(core):
@@ -125,12 +126,13 @@ def update_checks(core):
     for key, service_info in core.services.items():
         (service_name, instance) = key
         checks_seen.add(key)
-        if key in CHECKS and CHECKS[key].service_info == service_info:
-            # check unchanged
-            continue
-        elif key in CHECKS:
-            CHECKS[key].stop()
-            del CHECKS[key]
+        with _CHECKS_LOCK:
+            if key in CHECKS and CHECKS[key].service_info == service_info:
+                # check unchanged
+                continue
+            elif key in CHECKS:
+                CHECKS[key].stop()
+                del CHECKS[key]
 
         if service_info.get('ignore_check', False):
             continue
@@ -146,7 +148,8 @@ def update_checks(core):
                 instance,
                 service_info,
             )
-            CHECKS[key] = new_check
+            with _CHECKS_LOCK:
+                CHECKS[key] = new_check
         except NotImplementedError:
             logging.debug(
                 'No check exists for service %s', service_name,
@@ -158,10 +161,11 @@ def update_checks(core):
                 exc_info=True
             )
 
-    deleted_checks = set(CHECKS.keys()) - checks_seen
-    for key in deleted_checks:
-        CHECKS[key].stop()
-        del CHECKS[key]
+    with _CHECKS_LOCK:
+        deleted_checks = set(CHECKS.keys()) - checks_seen
+        for key in deleted_checks:
+            CHECKS[key].stop()
+            del CHECKS[key]
 
 
 def periodic_check():
@@ -169,8 +173,9 @@ def periodic_check():
 
         * that all TCP socket are still openned
     """
-    for check in CHECKS.values():
-        check.check_sockets()
+    with _CHECKS_LOCK:
+        for check in CHECKS.values():
+            check.check_sockets()
 
 
 class Check:
@@ -291,6 +296,10 @@ class Check:
         """
         try_reopen = False
 
+        if self.open_sockets_job is not None:
+            # open_sockets is pending, wait for it before checking sockets
+            return
+
         sockets = {}
         for key, sock in self.tcp_sockets.items():
             if sock is not None:
@@ -317,7 +326,16 @@ class Check:
                 try_reopen = True
 
         if try_reopen:
-            self.open_sockets()
+            with self._lock:
+                if self.open_sockets_job is not None:
+                    self.core.unschedule_job(self.open_sockets_job)
+                if self._closed:
+                    return
+                self.open_sockets_job = self.core.add_scheduled_job(
+                    self.open_sockets,
+                    seconds=0,
+                    next_run_in=0,
+                )
 
     def run_check(self):
         # pylint: disable=too-many-branches
