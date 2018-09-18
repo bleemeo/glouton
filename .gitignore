@@ -16,3 +16,4 @@ build/lib.linux-x86_64-2.7/
 build/scripts-2.7/
 .pytest_cache
 /VERSION
+.vscode
