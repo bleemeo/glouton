@@ -2421,6 +2421,7 @@ class Core:
                 logging.debug('Docker event watcher error', exc_info=True)
 
     def _process_docker_event(self, event):
+        # pylint: disable=too-many-branches
 
         if 'Action' in event:
             action = event['Action']
@@ -2451,6 +2452,14 @@ class Core:
                     if ('container_id' in service_info
                             and service_info['container_id'] == actor_id):
                         service_info['active'] = False
+            if action == 'die':
+                # Mark immediately any service from this container
+                # as "container_stopped". It will avoid error message to be
+                # "TCP connection refused" but directly "Container stopped"
+                for service_info in self.services.values():
+                    if ('container_id' in service_info
+                            and service_info['container_id'] == actor_id):
+                        service_info['container_running'] = False
 
         elif (action.startswith('health_status:')
               and event_type == 'container'):
