@@ -1693,6 +1693,9 @@ class BleemeoConnector(threading.Thread):
                 if metric.label == 'agent_sent_message':
                     # This metric is managed by Bleemeo Cloud platform
                     continue
+                if metric.label == 'agent_status':
+                    # This metric should always stay active
+                    continue
                 last_seen = metric_last_seen.get(metric.uuid)
                 if ((last_seen is None or last_seen < clock_now - 4200)
                         and metric.active):
