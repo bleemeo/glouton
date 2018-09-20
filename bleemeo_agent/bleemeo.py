@@ -1879,11 +1879,13 @@ class BleemeoConnector(threading.Thread):
                 action_text = 'updated'
                 url = service_url + str(service.uuid) + '/'
                 expected_code = 200
+                active_changed = (service.active != payload['active'])
             else:
                 method = 'post'
                 action_text = 'registrered'
                 url = service_url
                 expected_code = 201
+                active_changed = False
 
             payload.update({
                 'account': self.account_id,
@@ -1932,6 +1934,19 @@ class BleemeoConnector(threading.Thread):
                     action_text,
                     service.uuid,
                 )
+            if active_changed:
+                # API will update all associated metrics and update their
+                # active status. Apply the same rule on local cache
+                if service.active:
+                    deactivated_at = None
+                else:
+                    deactivated_at = time.time()
+
+                for (metric_key, metric) in bleemeo_cache.metrics.items():
+                    if metric.service_uuid == service.uuid:
+                        bleemeo_cache.metrics[metric_key] = metric._replace(
+                            deactivated_at=deactivated_at,
+                        )
         bleemeo_cache.update_lookup_map()
 
         # Step 4: delete object present in API by not in local
