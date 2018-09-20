@@ -1833,6 +1833,7 @@ class Core:
             )
 
     def _docker_health_status(self, docker_client, container_id):
+        # pylint: disable=too-many-branches
         """ Send metric for docker container health status
         """
         try:
@@ -1847,20 +1848,42 @@ class Core:
         if 'Health' not in result['State']:
             return
 
+        now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        try:
+            started_at = datetime.datetime.strptime(
+                result['State'].get('StartedAt', '').split('.')[0],
+                '%Y-%m-%dT%H:%M:%S',
+            ).replace(tzinfo=datetime.timezone.utc)
+        except (ValueError, AttributeError):
+            started_at = now
+
         docker_status = result.get('State', {}).get('Status', 'running')
+        health_status = result['State'].get('Health', {}).get('Status')
         if docker_status != 'running':
             status = bleemeo_agent.type.STATUS_CRITICAL
-        elif result['State']['Health'].get('Status') == 'healthy':
+        elif health_status == 'healthy':
             status = bleemeo_agent.type.STATUS_OK
-        elif result['State']['Health'].get('Status') == 'unhealthy':
+        elif health_status == 'starting':
+            if now - started_at < datetime.timedelta(minutes=1):
+                status = bleemeo_agent.type.STATUS_OK
+            else:
+                status = bleemeo_agent.type.STATUS_WARNING
+        elif health_status == 'unhealthy':
             status = bleemeo_agent.type.STATUS_CRITICAL
         else:
+            logging.debug(
+                'Docker container status is unknown: %r',
+                health_status,
+            )
             status = bleemeo_agent.type.STATUS_UNKNOWN
 
         logs = result['State']['Health'].get('Log', [])
         problem_origin = ''
         if docker_status != 'running':
             problem_origin = 'Container stopped'
+        elif (health_status == 'starting'
+              and status == bleemeo_agent.type.STATUS_WARNING):
+            problem_origin = 'Container is still starting'
         elif logs:
             problem_origin = logs[-1].get('Output')
             if problem_origin is None:
