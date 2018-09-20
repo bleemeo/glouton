@@ -1008,6 +1008,25 @@ class BleemeoConnector(threading.Thread):
                     bleemeo_metric['status'] = bleemeo_agent.type.STATUS_NAME[
                         metric_point.status_code
                     ]
+                    if metric_point.service_label:
+                        # If the service received a kill signal, give 5 minutes
+                        # of grace time after that kill signal.
+                        service_key = (
+                            metric_point.service_label,
+                            metric_point.service_instance,
+                        )
+                        last_kill_at = self.core.services.get(
+                            service_key, {}
+                        ).get(
+                            'last_kill_at', 0,
+                        )
+                        clock_now = bleemeo_agent.util.get_clock()
+                        grace_period = last_kill_at + 300 - clock_now
+                        # Ignore grace period shorter than 1 minute. Without
+                        # explicit grace period, a default of 1 minute will
+                        # be used.
+                        if grace_period > 60:
+                            bleemeo_metric['event_grace_period'] = grace_period
                 if metric_point.problem_origin:
                     bleemeo_metric['check_output'] = (
                         metric_point.problem_origin

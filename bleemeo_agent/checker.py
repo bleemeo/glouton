@@ -340,6 +340,7 @@ class Check:
     def run_check(self):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
+        # pylint: disable=too-many-locals
         now = time.time()
 
         key = (self.service, self.instance)

@@ -2023,6 +2023,15 @@ class Core:
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
+
+        # Keep any last_kill_at that is less than 1 hour old
+        common_keys = set(services).intersection(set(self.services))
+        cutoff = bleemeo_agent.util.get_clock() - 3600
+        for key in common_keys:
+            last_kill_at = self.services[key].get('last_kill_at', 0)
+            if last_kill_at > cutoff:
+                services[key]['last_kill_at'] = last_kill_at
+
         self.services = services
 
         self.graphite_server.update_discovery()
@@ -2524,7 +2533,15 @@ class Core:
                     if ('container_id' in service_info
                             and service_info['container_id'] == actor_id):
                         service_info['container_running'] = False
-
+        elif (action == 'kill' and event_type == 'container'):
+            # Mark affected service as "received a kill", to allow to longer
+            # grace period before notification. Since kill come from the user,
+            # it means user did something and probably don't need notification.
+            clock_now = bleemeo_agent.util.get_clock()
+            for service_info in self.services.values():
+                if ('container_id' in service_info
+                        and service_info['container_id'] == actor_id):
+                    service_info['last_kill_at'] = clock_now
         elif (action.startswith('health_status:')
               and event_type == 'container'):
 
