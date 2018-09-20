@@ -16,6 +16,7 @@
 #   limitations under the License.
 #
 
+import datetime
 import imaplib
 import logging
 import select
@@ -395,6 +396,49 @@ class Check:
 
         with self._lock:
             if self._closed:
+                return
+
+        # Re-check if the container stopped during the check
+        current_service_info = self.core.services.get(key, {})
+        if (return_code != bleemeo_agent.type.STATUS_OK and
+                not current_service_info.get('container_running', True)):
+            (return_code, output) = (
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'Container stopped: connection refused'
+            )
+        # If the container has just started few seconds ago (and check failed)
+        # ignore and retry soon
+        if return_code != bleemeo_agent.type.STATUS_OK:
+            container_id = current_service_info.get('container_id')
+            container = self.core.docker_containers.get(container_id)
+            try:
+                started_at = datetime.datetime.strptime(
+                    container['State'].get('StartedAt', '').split('.')[0],
+                    '%Y-%m-%dT%H:%M:%S',
+                ).replace(tzinfo=datetime.timezone.utc)
+            except (ValueError, AttributeError, TypeError):
+                started_at = None
+            cutoff = datetime.datetime.utcnow().replace(
+                tzinfo=datetime.timezone.utc,
+            ) - datetime.timedelta(seconds=10)
+            if started_at is not None and started_at > cutoff:
+                logging.debug(
+                    'check %s: return code is %s (output=%s). '
+                    'Ignore since container just started',
+                    self.display_name,
+                    return_code,
+                    output,
+                )
+                with self._lock:
+                    if self._fast_check_job is not None:
+                        self.core.unschedule_job(self._fast_check_job)
+                    if self._closed:
+                        return
+                    self._fast_check_job = self.core.add_scheduled_job(
+                        self.run_check,
+                        seconds=0,
+                        next_run_in=10,
+                    )
                 return
         if self.instance:
             logging.debug(
