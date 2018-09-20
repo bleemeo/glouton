@@ -394,7 +394,6 @@ class BleemeoCache:
 
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
-        self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
         self.facts_by_key = {}
 
@@ -493,7 +492,6 @@ class BleemeoCache:
     def update_lookup_map(self):
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
-        self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
         self.facts_by_key = {}
 
@@ -502,7 +500,6 @@ class BleemeoCache:
 
         for container in self.containers.values():
             self.containers_by_name[container.name] = container
-            self.containers_by_docker_id[container.docker_id] = container
 
         for service in self.services.values():
             key = (service.label, service.instance)
@@ -2040,7 +2037,7 @@ class BleemeoConnector(threading.Thread):
             new_hash = hashlib.sha1(
                 json.dumps(inspect, sort_keys=True).encode('utf-8')
             ).hexdigest()
-            container = bleemeo_cache.containers_by_docker_id.get(docker_id)
+            container = bleemeo_cache.containers_by_name.get(name)
 
             if container is not None and container.inspect_hash == new_hash:
                 continue
@@ -2105,8 +2102,8 @@ class BleemeoConnector(threading.Thread):
         # Step 4: delete object present in API by not in local
         try:
             local_uuids = set(
-                bleemeo_cache.containers_by_docker_id[key].uuid
-                for key in local_containers
+                bleemeo_cache.containers_by_name[v['Name'].lstrip('/')].uuid
+                for v in local_containers.values()
             )
         except KeyError:
             logging.info(
