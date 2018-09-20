@@ -65,7 +65,7 @@ Metric = collections.namedtuple('Metric', (
     'thresholds',
     'unit',
     'unit_text',
-    'active',
+    'deactivated_at',
 ))
 MetricRegistrationReq = collections.namedtuple('MetricRegistrationReq', (
     'label',
@@ -140,6 +140,37 @@ def sort_docker_inspect(inspect):
             key=lambda x: (x.get('Source', ''), x.get('Destination', '')),
         )
     return inspect
+
+
+def _api_datetime_to_time(date_text):
+    """ Convert a textual date to an timestamp
+
+        >>> _api_datetime_to_time("2018-06-08T09:06:53.310377Z")
+        1528448813.310377
+        >>> _api_datetime_to_time(None)  # return None
+        >>> _api_datetime_to_time("2018-06-08T09:06:53Z")
+        1528448813.0
+    """
+    if not date_text:
+        return None
+
+    formats = [
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+        '%Y-%m-%dT%H:%M:%SZ',
+    ]
+    date = None
+    for fmt in formats:
+        try:
+            date = datetime.datetime.strptime(
+                date_text, fmt
+            ).replace(tzinfo=datetime.timezone.utc)
+            break
+        except ValueError:
+            pass
+
+    if date is None:
+        return None
+    return date.timestamp()
 
 
 class ApiError(Exception):
@@ -344,7 +375,9 @@ class BleemeoCache:
     # Version 1: initial version
     # Version 2: Added docker_id to Containers
     # Version 3: Added active to Metric
-    CACHE_VERSION = 3
+    # Version 4: Changed field "active" (boolean) to "deactivated_at" (time) on
+    #            Metric
+    CACHE_VERSION = 4
 
     def __init__(self, state, skip_load=False):
         self._state = state
@@ -386,6 +419,7 @@ class BleemeoCache:
         return new
 
     def _reload(self):
+        # pylint: disable=too-many-branches
         self._state.reload()
         cache = self._state.get("_bleemeo_cache")
 
@@ -415,6 +449,16 @@ class BleemeoCache:
                 # It will be fixed on next full synchronization that
                 # will happen quickly
                 values.append(True)
+            if cache['version'] < 4:
+                # The active boolean changed to a deactivated_at time
+                # convert active=True to deactivated_at=None
+                # and active=False to deactivated_at=now.
+                # It will be fixed on next full synchronization that
+                # will happen quickly
+                if values[9]:
+                    values[9] = None
+                else:
+                    values[9] = time.time()
             self.metrics[metric_uuid] = Metric(*values)
 
         for service_uuid, values in cache['services'].items():
@@ -559,7 +603,7 @@ class BleemeoCache:
                 threshold,
                 None,
                 None,
-                True,
+                None,
             )
         services_uuid = self._state.get_complex_dict('services_uuid', {})
         for service_info in services_uuid.values():
@@ -1424,7 +1468,7 @@ class BleemeoConnector(threading.Thread):
                 params={
                     'agent': self.agent_uuid,
                     'fields':
-                        'id,item,label,unit,unit_text,active'
+                        'id,item,label,unit,unit_text,deactivated_at'
                         ',threshold_low_warning,threshold_low_critical'
                         ',threshold_high_warning,threshold_high_critical'
                         ',service,container,status_of',
@@ -1450,7 +1494,7 @@ class BleemeoConnector(threading.Thread):
                     ),
                     data['unit'],
                     data['unit_text'],
-                    data['active'],
+                    _api_datetime_to_time(data['deactivated_at']),
                 )
                 new_metrics[metric.uuid] = metric
             bleemeo_cache.metrics = new_metrics
@@ -1499,7 +1543,9 @@ class BleemeoConnector(threading.Thread):
 
             if metric:
                 metric_last_seen[metric.uuid] = reg_req.last_seen
-                if (not metric.active
+                last_seen_time = time.time() - (clock_now - reg_req.last_seen)
+                if (metric.deactivated_at
+                        and last_seen_time > metric.deactivated_at
                         and reg_req.last_seen > clock_now - 600
                         and self._api_support_metric_update):
                     logging.debug(
@@ -1583,7 +1629,7 @@ class BleemeoConnector(threading.Thread):
                 method='post',
                 data=json.dumps(payload),
                 params={
-                    'fields': 'id,label,item,service,container,active,'
+                    'fields': 'id,label,item,service,container,deactivated_at,'
                               'threshold_low_warning,threshold_low_critical,'
                               'threshold_high_warning,threshold_high_critical,'
                               'unit,unit_text,agent,status_of,service,'
@@ -1623,7 +1669,7 @@ class BleemeoConnector(threading.Thread):
                 ),
                 data['unit'],
                 data['unit_text'],
-                data['active'],
+                _api_datetime_to_time(data['deactivated_at']),
             )
             bleemeo_cache.metrics[metric.uuid] = metric
             metric_last_seen[metric.uuid] = reg_req.last_seen
@@ -1700,7 +1746,7 @@ class BleemeoConnector(threading.Thread):
                     continue
                 last_seen = metric_last_seen.get(metric.uuid)
                 if ((last_seen is None or last_seen < clock_now - 4200)
-                        and metric.active):
+                        and not metric.deactivated_at):
                     logging.debug(
                         'Mark inactive the metric %s: %s (%s)',
                         metric.uuid,
