@@ -1298,10 +1298,12 @@ class BleemeoConnector(threading.Thread):
             else:
                 successive_errors = 0
                 delay = 15
+
+            self._bleemeo_cache = bleemeo_cache.copy()
+
             if sync_run:
                 self._unregistered_metric_queue_cleanup()
 
-            self._bleemeo_cache = bleemeo_cache.copy()
             self.core.is_terminating.wait(delay)
 
     @property
