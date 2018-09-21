@@ -1957,10 +1957,12 @@ class Core:
 
     def update_discovery(self, first_run=False, deleted_services=None):
         # pylint: disable=too-many-locals
+        # pylint: disable=too-many-branches
+        gather_started_at = time.time()
         self._trigger_discovery = False
         self._update_docker_info()
         self._update_kubernetes_info()
-        discovered_running_services = self._run_discovery()
+        discovered_running_services = self._run_discovery(gather_started_at)
         if first_run:
             # Should only be needed on first run. In addition to avoid
             # possible race-condition, do not run this while
@@ -2109,7 +2111,7 @@ class Core:
             in self.discovered_services.items()
         }
 
-    def _get_processes_map(self):
+    def _get_processes_map(self, gather_started_at):
         """ Return a mapping from PID to name and container in which
             process is running.
 
@@ -2122,7 +2124,8 @@ class Core:
         # outside docker, it's None
         processes = {}
 
-        for process in bleemeo_agent.util.get_top_info(self)['processes']:
+        top_info = bleemeo_agent.util.get_top_info(self, gather_started_at)
+        for process in top_info['processes']:
             processes[process['pid']] = process
 
         return processes
@@ -2280,12 +2283,13 @@ class Core:
         service_info['port'] = default_port
         service_info['address'] = default_address
 
-    def _run_discovery(self):
+    def _run_discovery(self, gather_started_at):
         # pylint: disable=too-many-branches
+        # pylint: disable=too-many-locals
         """ Try to discover some service based on known port/process
         """
         discovered_services = {}
-        processes = self._get_processes_map()
+        processes = self._get_processes_map(gather_started_at)
 
         netstat_info = self.get_netstat()
 

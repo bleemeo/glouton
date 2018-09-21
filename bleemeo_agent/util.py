@@ -15,6 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+# pylint: disable=too-many-lines
 
 import datetime
 import json
@@ -54,6 +55,23 @@ try:
     import docker
 except ImportError:
     docker = None
+
+
+DOCKER_CGROUP_RE = re.compile(
+    r'^\d+:[^:]+:'
+    r'(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])'
+    r'(?P<docker_id>[0-9a-fA-F]+)'
+    r'(\.scope)?$',
+    re.MULTILINE,
+)
+
+
+def get_docker_id_from_cgroup(cgroup_data):
+    result = set()
+    for match in DOCKER_CGROUP_RE.finditer(cgroup_data):
+        result.add(match.group('docker_id'))
+
+    return result
 
 
 def decode_docker_top(docker_top):
@@ -540,11 +558,12 @@ def get_pending_update(core):
     return (None, None)
 
 
-def get_top_info(core):
+def get_top_info(core, gather_started_at=None):
     # pylint: disable=too-many-branches
     """ Return informations needed to build a "top" view.
     """
-    gather_started_at = time.time()
+    if not gather_started_at:
+        gather_started_at = time.time()
 
     processes = {}
 
@@ -555,7 +574,9 @@ def get_top_info(core):
 
     if (core.container is None
             or core.config['container.pid_namespace_host']):
-        _update_process_psutil(processes, gather_started_at)
+        _update_process_psutil(
+            processes, core.docker_containers, gather_started_at,
+        )
 
     now = time.time()
     cpu_usage = psutil.cpu_times_percent()
@@ -886,8 +907,10 @@ def _get_docker_process(docker_client):
     return processes
 
 
-def _update_process_psutil(processes, only_started_before):
+def _update_process_psutil(processes, docker_containers, only_started_before):
     # pylint: disable=too-many-branches
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-statements
 
     # Process creation time is accurate up to 1/SC_CLK_TCK seconds,
     # usually 1/100th of seconds.
@@ -902,7 +925,8 @@ def _update_process_psutil(processes, only_started_before):
                 # PID 0 is not used Linux don't use it.
                 # Other system are currently not supported.
                 continue
-            if process.create_time() > only_started_before:
+            create_time = process.create_time()
+            if create_time > only_started_before:
                 # Ignore process created very recently. This is done to avoid
                 # issue with process created in a container between the listing
                 # of container process and this update from psutil. Such
@@ -947,7 +971,7 @@ def _update_process_psutil(processes, only_started_before):
             cpu_times = process.cpu_times()
             process_info = {
                 'pid': process.pid,
-                'create_time': process.create_time(),
+                'create_time': create_time,
                 'cmdline': cmdline,
                 'name': name,
                 'memory_rss': process.memory_info().rss / 1024,
@@ -967,7 +991,40 @@ def _update_process_psutil(processes, only_started_before):
             if process.pid in processes:
                 process_info['instance'] = processes[process.pid]['instance']
             else:
-                process_info['instance'] = ''
+                # Check /proc/pid/cgroup to be double sure that this process
+                # run outside any container.
+                docker_id = None
+                try:
+                    with open('/proc/%d/cgroup' % process.pid) as fileobj:
+                        cgroup_data = fileobj.read()
+
+                    docker_ids = get_docker_id_from_cgroup(cgroup_data)
+                    if len(docker_ids) == 1:
+                        docker_id = docker_ids.pop()
+                except (OSError, IOError):
+                    pass
+
+                if docker_id and docker_id in docker_containers:
+                    container = docker_containers[docker_id]
+                    container_name = container['Name'].lstrip('/')
+                    process_info['instance'] = container_name
+                    logging.debug(
+                        'Base on cgroup, process %d (%s) belong to '
+                        'container %r',
+                        process.pid,
+                        name,
+                        container_name,
+                    )
+                elif docker_id and create_time > time.time() - 3:
+                    logging.debug(
+                        'Skipping process %d (%s) created recently and seems '
+                        'to belong to a container',
+                        process.pid,
+                        name,
+                    )
+                    continue
+                else:
+                    process_info['instance'] = ''
 
             processes[process.pid] = process_info
         except psutil.NoSuchProcess:
