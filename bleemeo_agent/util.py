@@ -558,7 +558,7 @@ def get_pending_update(core):
     return (None, None)
 
 
-def get_top_info(core, gather_started_at=None):
+def get_top_info(core, gather_started_at=None, for_discovery=False):
     # pylint: disable=too-many-branches
     """ Return informations needed to build a "top" view.
     """
@@ -574,9 +574,14 @@ def get_top_info(core, gather_started_at=None):
 
     if (core.container is None
             or core.config['container.pid_namespace_host']):
-        _update_process_psutil(
-            processes, core.docker_containers, gather_started_at,
-        )
+        if for_discovery:
+            # When used for services discovery, to additional check to ensure
+            # process belong or not to a containers.
+            _update_process_psutil(
+                processes, gather_started_at, core.docker_containers,
+            )
+        else:
+            _update_process_psutil(processes, gather_started_at)
 
     now = time.time()
     cpu_usage = psutil.cpu_times_percent()
@@ -907,7 +912,11 @@ def _get_docker_process(docker_client):
     return processes
 
 
-def _update_process_psutil(processes, docker_containers, only_started_before):
+def _update_process_psutil(
+        processes, only_started_before, docker_containers=None):
+    """ If docker_containers is not None, try to use cgroup to ensure process
+        without container are really without containers.
+    """
     # pylint: disable=too-many-branches
     # pylint: disable=too-many-locals
     # pylint: disable=too-many-statements
@@ -987,10 +996,12 @@ def _update_process_psutil(processes, docker_containers, only_started_before):
             except psutil.AccessDenied:
                 process_info['exe'] = ''
 
+            process_info['instance'] = ''
+
             # Keep instance if the process is running in a Docker
             if process.pid in processes:
                 process_info['instance'] = processes[process.pid]['instance']
-            else:
+            elif docker_containers is not None:
                 # Check /proc/pid/cgroup to be double sure that this process
                 # run outside any container.
                 docker_id = None
@@ -1023,8 +1034,6 @@ def _update_process_psutil(processes, docker_containers, only_started_before):
                         name,
                     )
                     continue
-                else:
-                    process_info['instance'] = ''
 
             processes[process.pid] = process_info
         except psutil.NoSuchProcess:

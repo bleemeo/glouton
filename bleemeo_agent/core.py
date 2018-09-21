@@ -2124,7 +2124,9 @@ class Core:
         # outside docker, it's None
         processes = {}
 
-        top_info = bleemeo_agent.util.get_top_info(self, gather_started_at)
+        top_info = bleemeo_agent.util.get_top_info(
+            self, gather_started_at, True
+        )
         for process in top_info['processes']:
             processes[process['pid']] = process
 
