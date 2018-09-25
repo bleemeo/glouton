@@ -1490,11 +1490,12 @@ class Core:
         except KeyboardInterrupt:
             pass
         finally:
+            logging.debug('Stoping...')
             self.is_terminating.set()
             if threads_started:
                 self.graphite_server.join()
                 if self.bleemeo_connector is not None:
-                    self.bleemeo_connector.join()
+                    self.bleemeo_connector.stop()
                 if self.influx_connector is not None:
                     self.influx_connector.join()
             self.cache.save()

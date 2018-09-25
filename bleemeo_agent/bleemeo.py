@@ -854,6 +854,13 @@ class BleemeoConnector(threading.Thread):
         self.mqtt_client.loop_stop()
         sync_thread.join(5)
 
+    def stop(self):
+        """ Stop and wait to completion of self
+        """
+        # Break _loop() immediatly
+        self._metric_queue.put(None)
+        self.join()
+
     def _ready_for_mqtt(self):
         """ Check for requirement needed before MQTT connection
 
@@ -970,12 +977,17 @@ class BleemeoConnector(threading.Thread):
             Bleemeo connector thread.
         """
         metrics = []
-        timeout = 3
+        timeout = 6
+        deadline = None
 
         try:
             while True:
                 metric_point = self._metric_queue.get(timeout=timeout)
-                timeout = 0.3  # Long wait only for the first get
+                if metric_point is None:
+                    break
+                if deadline is None:
+                    deadline = time.time() + 6
+                timeout = max(0, min(deadline - time.time(), 6))
                 short_item = (metric_point.item[:API_METRIC_ITEM_LENGTH])
                 if metric_point.service_instance:
                     short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
@@ -1032,7 +1044,7 @@ class BleemeoConnector(threading.Thread):
                         metric_point.problem_origin
                     )
                 metrics.append(bleemeo_metric)
-                if len(metrics) > 1000:
+                if len(metrics) > 2000:
                     break
         except queue.Empty:
             pass
