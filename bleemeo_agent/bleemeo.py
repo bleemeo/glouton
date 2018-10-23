@@ -193,6 +193,10 @@ class ApiError(Exception):
         )
 
 
+class AuthApiError(ApiError):
+    """ Fail to authenticate on API (bad username/password) """
+
+
 class BleemeoAPI:
     """ class to handle communication with Bleemeo API
     """
@@ -219,11 +223,12 @@ class BleemeoAPI:
             timeout=10,
         )
         if response.status_code != 200:
-            logging.debug(
-                'Failed to retrieve JWT: %s',
-                ApiError(response),
-            )
-            raise ApiError(response)
+            if response.status_code < 500:
+                err = AuthApiError(response)
+            else:
+                err = ApiError(response)
+            logging.debug('Failed to retrieve JWT: %s', err)
+            raise err
         return response.json()['token']
 
     def api_call(self, url, method='get', params=None, data=None):
@@ -647,6 +652,7 @@ class BleemeoConnector(threading.Thread):
         self._unregistered_metric_queue = queue.Queue()
         self.connected = False
         self._last_disconnects = []
+        self._successive_mqtt_errors = 0
         self._disable_until = 0
         self._mqtt_queue_size = 0
 
@@ -695,6 +701,7 @@ class BleemeoConnector(threading.Thread):
             self.mqtt_client.subscribe(
                 'v1/agent/%s/notification' % self.agent_uuid
             )
+            self._successive_mqtt_errors = 0
             logging.info('MQTT connection established')
 
     def on_disconnect(self, _client, _userdata, _result_code):
@@ -702,6 +709,23 @@ class BleemeoConnector(threading.Thread):
             logging.info('MQTT connection lost')
         self._last_disconnects.append(bleemeo_agent.util.get_clock())
         self._last_disconnects = self._last_disconnects[-15:]
+        self._successive_mqtt_errors += 1
+
+        clock_now = bleemeo_agent.util.get_clock()
+        if self._successive_mqtt_errors > 10 and not self._disable_until:
+            logging.info(
+                'Fail to connect to MQTT. Temporary disable Bleemeo connector',
+            )
+            self._disable_until = (
+                clock_now + 900 + random.randint(0, 60)
+            )
+        elif self._successive_mqtt_errors > 3 and not self._disable_until:
+            logging.info(
+                'Fail to connect to MQTT. Temporary disable Bleemeo connector',
+            )
+            self._disable_until = (
+                clock_now + 60 + random.randint(0, 30)
+            )
         self.connected = False
 
     def on_message(self, _client, _userdata, msg):
@@ -1079,6 +1103,10 @@ class BleemeoConnector(threading.Thread):
 
     def register(self):
         """ Register the agent to Bleemeo SaaS service
+
+            Return an error message or None if no error. Absence of error does
+            not necessary means registration was done. It may have been delayed
+            due to information not yet available.
         """
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/agent/')
@@ -1086,7 +1114,7 @@ class BleemeoConnector(threading.Thread):
         fqdn = self.core.last_facts.get('fqdn')
         if not fqdn:
             logging.debug('Register delayed, fact fqdn not available')
-            return
+            return None
         name = self.core.config['bleemeo.initial_agent_name']
         if not name:
             name = fqdn
@@ -1132,19 +1160,16 @@ class BleemeoConnector(threading.Thread):
             self.core.state.set('agent_uuid', content['id'])
             logging.debug('Regisration successfull')
         elif content is not None:
-            logging.info(
-                'Registration failed: %s',
-                content
-            )
+            return 'Registration failed: %s' % content
         elif response is not None:
-            logging.debug(
-                'Registration failed, response is not a json: %s',
-                response.content[:100])
+            return 'Registration failed: %s' % content[:100]
         else:
-            logging.debug('Registration failed, unable to connect to API')
+            return 'Registration failed: unable to connect to API'
 
         if self.core.sentry_client and self.agent_uuid:
             self.core.sentry_client.site = self.agent_uuid
+
+        return None
 
     def _bleemeo_synchronizer(self):
         if self._ready_for_mqtt():
@@ -1178,16 +1203,84 @@ class BleemeoConnector(threading.Thread):
 
         last_metrics_count = 0
         successive_errors = 0
+        successive_auth_errors = 0
         last_duplicated_events = []
+        error_delay = 5
+        last_error = None
+        first_loop = True
 
         while not self.core.is_terminating.is_set():
             duplicated_checked = False
 
-            if self.agent_uuid is None:
-                self.register()
+            if last_error is not None:
+                logging.info(
+                    'Unable to synchronize with Bleemeo Cloud platform: %s',
+                    last_error,
+                )
+                successive_errors += 1
+                if isinstance(last_error, AuthApiError):
+                    successive_auth_errors += 1
+                else:
+                    successive_auth_errors = 0
+                delay = min(successive_errors * 15, 60)
+                clock_now = bleemeo_agent.util.get_clock()
+                if successive_auth_errors > 10 and not self._disable_until:
+                    logging.info(
+                        'Too many authentication failure. '
+                        'Is this agent deleted on Bleemeo Cloud ?',
+                    )
+                    self._disable_until = (
+                        clock_now + 900 + random.randint(0, 60)
+                    )
+                elif successive_auth_errors > 3 and not self._disable_until:
+                    logging.info(
+                        'Too many authentication failure. '
+                        'Is this agent deleted on Bleemeo Cloud ?',
+                    )
+                    self._disable_until = (
+                        clock_now + 60 + random.randint(0, 30)
+                    )
+                elif successive_errors >= 15 and not self._disable_until:
+                    error_delay = 30
+                    logging.info(
+                        'Too many errors, temporary disable Bleemeo connector'
+                    )
+                    self._disable_until = (
+                        clock_now + 900 + random.randint(0, 60)
+                    )
+            elif first_loop:
+                delay = 0
+            elif not self._disable_until:
+                successive_errors = 0
+                successive_auth_errors = 0
+                delay = 15
+
+            last_error = None
+            first_loop = False
+
+            clock_now = bleemeo_agent.util.get_clock()
+            if self._disable_until > clock_now:
+                logging.info(
+                    'Bleemeo connector is disabled for %d seconds',
+                    self._disable_until - clock_now,
+                )
+                self.core.is_terminating.wait(min(
+                    60, self._disable_until - clock_now,
+                ))
+                continue
+            elif self._disable_until:
+                logging.info('Re-enabling Bleemeo connector')
+                self._disable_until = 0
+                next_full_sync = 0
+
+            self.core.is_terminating.wait(delay)
+            if self.core.is_terminating.is_set():
+                break
 
             if self.agent_uuid is None:
-                self.core.is_terminating.wait(15)
+                last_error = self.register()
+
+            if self.agent_uuid is None:
                 continue
 
             if bleemeo_api is None:
@@ -1206,26 +1299,12 @@ class BleemeoConnector(threading.Thread):
                 time.sleep(random.randint(5, 15))
                 self.trigger_full_sync = False
 
-            clock_now = bleemeo_agent.util.get_clock()
-            if self._disable_until > clock_now:
-                logging.info(
-                    'Bleemeo connector is disabled for %d seconds',
-                    self._disable_until - clock_now,
-                )
-                self.core.is_terminating.wait(min(
-                    60, self._disable_until - clock_now,
-                ))
-                continue
-            elif self._disable_until:
-                logging.info('Re-enabling Bleemeo connector')
-                self._disable_until = 0
-                next_full_sync = 0
             with self._current_metrics_lock:
                 metrics_count = len(self._current_metrics)
 
-            has_error = False
             sync_run = False
             metrics_sync = False
+            clock_now = bleemeo_agent.util.get_clock()
 
             if (next_full_sync < clock_now
                     or last_sync <= self.last_config_will_change_msg):
@@ -1240,9 +1319,9 @@ class BleemeoConnector(threading.Thread):
                     self._sync_agent(bleemeo_cache, bleemeo_api)
                     sync_run = True
                 except (ApiError, requests.exceptions.RequestException) as exc:
-                    logging.info('Unable to synchronize agent. %s', exc)
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                    logging.debug('Unable to synchronize agent. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (next_full_sync < clock_now or
                     last_sync < self.core.last_facts_update or
@@ -1258,9 +1337,9 @@ class BleemeoConnector(threading.Thread):
                     self._sync_facts(bleemeo_cache, bleemeo_api)
                     sync_run = True
                 except (ApiError, requests.exceptions.RequestException) as exc:
-                    logging.info('Unable to synchronize agent. %s', exc)
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                    logging.debug('Unable to synchronize facts. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (next_full_sync <= clock_now or
                     last_sync <= self.last_containers_removed or
@@ -1285,9 +1364,9 @@ class BleemeoConnector(threading.Thread):
                     metrics_sync = True
                     sync_run = True
                 except (ApiError, requests.exceptions.RequestException) as exc:
-                    logging.info('Unable to synchronize agent. %s', exc)
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                    logging.debug('Unable to synchronize services. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (next_full_sync <= clock_now or
                     last_sync <= self.core.last_discovery_update):
@@ -1310,9 +1389,9 @@ class BleemeoConnector(threading.Thread):
                     metrics_sync = True
                     sync_run = True
                 except (ApiError, requests.exceptions.RequestException) as exc:
-                    logging.info('Unable to synchronize agent. %s', exc)
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                    logging.debug('Unable to synchronize containers. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (metrics_sync or
                     next_full_sync <= clock_now or
@@ -1347,11 +1426,11 @@ class BleemeoConnector(threading.Thread):
                     last_metrics_count = metrics_count
                     sync_run = True
                 except (ApiError, requests.exceptions.RequestException) as exc:
-                    logging.info('Unable to synchronize agent. %s', exc)
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                    logging.debug('Unable to synchronize metrics. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
-            if next_full_sync < clock_now and not has_error:
+            if next_full_sync < clock_now and last_error is None:
                 next_full_sync = (
                     clock_now +
                     random.randint(3500, 3700)
@@ -1362,21 +1441,13 @@ class BleemeoConnector(threading.Thread):
                     next_full_sync - clock_now,
                 )
 
-            if sync_run and not has_error:
+            if sync_run and last_error is None:
                 last_sync = clock_now
-            if has_error:
-                successive_errors += 1
-                delay = min(successive_errors * 15, 60)
-            else:
-                successive_errors = 0
-                delay = 15
 
             self._bleemeo_cache = bleemeo_cache.copy()
 
             if sync_run:
                 self._unregistered_metric_queue_cleanup()
-
-            self.core.is_terminating.wait(delay)
 
     @property
     def registration_at(self):
