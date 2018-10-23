@@ -227,11 +227,16 @@ def _get_telegraf_version(core):
 
         # output is either "Telegraf - version 1.0.0"
         # or "Telegraf v1.2.0 (git: release-1.2 b2c[...])"
+        # or "Telegraf 1.8.2+bleemeo1 (git: bleemeo 7d9b8309)"
         prefix = 'Telegraf - version '
         if output.startswith(prefix):
             package_version = output[len(prefix):]
 
         match = re.match(r'Telegraf v([^ ]+) \(git: .*\)', output)
+        if match:
+            package_version = match.group(1)
+
+        match = re.match(r'Telegraf ([^ ]+) \(git: .*\)', output)
         if match:
             package_version = match.group(1)
 
