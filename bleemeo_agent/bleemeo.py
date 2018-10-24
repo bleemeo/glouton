@@ -658,6 +658,7 @@ class BleemeoConnector(threading.Thread):
 
         self.trigger_full_sync = False
         self.trigger_fact_sync = 0
+        self._sync_loop_event = threading.Event()
         self.last_containers_removed = bleemeo_agent.util.get_clock()
         self.last_config_will_change_msg = bleemeo_agent.util.get_clock()
         self._bleemeo_cache = None
@@ -876,6 +877,8 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client.disconnect()
         self.mqtt_client.loop_stop()
+
+        self._sync_loop_event.set()  # unblock sync_loop thread
         sync_thread.join(5)
 
     def stop(self):
@@ -1208,6 +1211,7 @@ class BleemeoConnector(threading.Thread):
         error_delay = 5
         last_error = None
         first_loop = True
+        interrupted = False
 
         while not self.core.is_terminating.is_set():
             duplicated_checked = False
@@ -1273,7 +1277,14 @@ class BleemeoConnector(threading.Thread):
                 self._disable_until = 0
                 next_full_sync = 0
 
-            self.core.is_terminating.wait(delay)
+            if interrupted:
+                self.core.is_terminating.wait(delay)
+            interrupted = self._sync_loop_event.wait(delay)
+            if interrupted:
+                # Wait a tiny bit, so other metrics in the same batch could
+                # arrive
+                self.core.is_terminating.wait(1)
+            self._sync_loop_event.clear()
             if self.core.is_terminating.is_set():
                 break
 
@@ -2487,6 +2498,8 @@ class BleemeoConnector(threading.Thread):
         item = metric_point.item
 
         with self._current_metrics_lock:
+            if (metric_name, item) not in self._current_metrics:
+                self._sync_loop_event.set()
             self._current_metrics[(metric_name, item)] = MetricRegistrationReq(
                 metric_name,
                 item,

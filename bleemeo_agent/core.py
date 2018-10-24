@@ -1059,6 +1059,7 @@ class Core:
         self.discovered_services = {}
         self.services = {}
         self.metrics_unit = {}
+        self._trigger_condition = threading.Condition()
         self._trigger_discovery = False
         self._trigger_facts = False
         self._trigger_updates_count = False
@@ -1435,7 +1436,7 @@ class Core:
                             'system_pending_security_updates'):
             if (self.get_threshold(update_name, thresholds=old_thresholds) !=
                     self.get_threshold(update_name)):
-                self._trigger_updates_count = True
+                self.fire_triggers(updates_count=True)
 
         return self.thresholds
 
@@ -1509,9 +1510,11 @@ class Core:
             self.is_terminating.set()
 
         def handler_hup(_signum, _frame):
-            self._trigger_discovery = True
-            self._trigger_updates_count = True
-            self._trigger_facts = True
+            self.fire_triggers(
+                updates_count=True,
+                discovery=True,
+                facts=True,
+            )
             if self.bleemeo_connector:
                 self.bleemeo_connector.trigger_full_sync = True
 
@@ -1687,10 +1690,6 @@ class Core:
             next_run_in=15,
         )
         self.add_scheduled_job(
-            self._check_triggers,
-            seconds=10,
-        )
-        self.add_scheduled_job(
             self.cache.save,
             seconds=10 * 60,
         )
@@ -1733,6 +1732,10 @@ class Core:
                 bleemeo_agent.web.start_server(self)
 
         thread = threading.Thread(target=self._watch_docker_event)
+        thread.daemon = True
+        thread.start()
+
+        thread = threading.Thread(target=self._check_triggers)
         thread.daemon = True
         thread.start()
 
@@ -1926,41 +1929,81 @@ class Core:
             if metric_point.time >= cutoff and key not in deleted_metrics
         }
 
-    def fire_triggers(self, updates_count=None, discovery=None):
-        if updates_count:
-            self._trigger_updates_count = True
-        if discovery:
-            self._trigger_discovery = True
+    def fire_triggers(
+            self, updates_count=False, discovery=False, facts=False,
+            immediate=True):
+        with self._trigger_condition:
+            if updates_count:
+                self._trigger_updates_count = True
+            if discovery:
+                self._trigger_discovery = True
+            if facts:
+                self._trigger_facts = True
+            if immediate:
+                self._trigger_condition.notify()
 
     def _check_triggers(self):
-        if self._trigger_discovery:
-            self._discovery_job = self.trigger_job(self._discovery_job)
-            self._trigger_discovery = False
-        if self._trigger_updates_count:
-            self._gather_update_metrics_job = self.trigger_job(
-                self._gather_update_metrics_job
-            )
-            self._trigger_updates_count = False
-        if self._trigger_facts:
-            self._update_facts_job = self.trigger_job(self._update_facts_job)
-            self._trigger_facts = False
+        interrupted = False
+        next_discovery_at = None
+        while not self.is_terminating.is_set():
+            if interrupted:
+                self.is_terminating.wait(10)
 
-        netstat_file = self.config['agent.netstat_file']
-        try:
-            mtime = os.stat(netstat_file).st_mtime
-        except OSError:
-            mtime = 0
+            with self._trigger_condition:
+                if (not self._trigger_discovery
+                        and not self._trigger_updates_count
+                        and not self._trigger_facts):
+                    interrupted = self._trigger_condition.wait(10)
 
-        if mtime != self._netstat_output_mtime:
-            # Trigger discovery if netstat.out changed
-            self._trigger_discovery = True
-            self._netstat_output_mtime = mtime
+                if self.is_terminating.is_set():
+                    break
+
+                clock_now = bleemeo_agent.util.get_clock()
+                if self._trigger_discovery:
+                    # When something requested a discovery, run one immediately
+                    # but also request one in 1 minutes. The two discovery
+                    # allows to
+                    # * Immediately discovery service that start quickly
+                    # * Still discovery service that are slow to start
+                    if next_discovery_at is None:
+                        next_discovery_at = clock_now + 60
+                    else:
+                        next_discovery_at = max(
+                            next_discovery_at, clock_now + 60,
+                        )
+                    self._trigger_discovery = False
+                    self._discovery_job = self.trigger_job(self._discovery_job)
+                elif next_discovery_at and next_discovery_at < clock_now:
+                    next_discovery_at = None
+                    self._discovery_job = self.trigger_job(self._discovery_job)
+                if self._trigger_updates_count:
+                    self._gather_update_metrics_job = self.trigger_job(
+                        self._gather_update_metrics_job
+                    )
+                    self._trigger_updates_count = False
+                if self._trigger_facts:
+                    self._update_facts_job = self.trigger_job(
+                        self._update_facts_job
+                    )
+                    self._trigger_facts = False
+
+            netstat_file = self.config['agent.netstat_file']
+            try:
+                mtime = os.stat(netstat_file).st_mtime
+            except OSError:
+                mtime = 0
+
+            if mtime != self._netstat_output_mtime:
+                # Trigger discovery if netstat.out changed
+                self.fire_triggers(discovery=True)
+                self._netstat_output_mtime = mtime
 
     def update_discovery(self, first_run=False, deleted_services=None):
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         gather_started_at = time.time()
-        self._trigger_discovery = False
+        with self._trigger_condition:
+            self._trigger_discovery = False
         self._update_docker_info()
         self._update_kubernetes_info()
         discovered_running_services = self._run_discovery(gather_started_at)
@@ -2523,7 +2566,9 @@ class Core:
 
         if (action in DOCKER_DISCOVERY_EVENTS
                 and event_type == 'container'):
-            self._trigger_discovery = True
+            self.fire_triggers(
+                discovery=True, immediate=action in ['start', 'die'],
+            )
             if action == 'destroy':
                 # Mark immediately any service from this container
                 # as inactive. It avoid that a service check detect
