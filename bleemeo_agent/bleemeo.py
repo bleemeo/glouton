@@ -718,7 +718,7 @@ class BleemeoConnector(threading.Thread):
                 'Fail to connect to MQTT. Temporary disable Bleemeo connector',
             )
             self._disable_until = (
-                clock_now + 900 + random.randint(0, 60)
+                clock_now + 300 + random.randint(0, 600)
             )
         elif self._successive_mqtt_errors > 3 and not self._disable_until:
             logging.info(
@@ -1234,7 +1234,7 @@ class BleemeoConnector(threading.Thread):
                         'Is this agent deleted on Bleemeo Cloud ?',
                     )
                     self._disable_until = (
-                        clock_now + 900 + random.randint(0, 60)
+                        clock_now + 300 + random.randint(0, 600)
                     )
                 elif successive_auth_errors > 3 and not self._disable_until:
                     logging.info(
@@ -1250,7 +1250,7 @@ class BleemeoConnector(threading.Thread):
                         'Too many errors, temporary disable Bleemeo connector'
                     )
                     self._disable_until = (
-                        clock_now + 900 + random.randint(0, 60)
+                        clock_now + 300 + random.randint(0, 600)
                     )
             elif first_loop:
                 delay = 0
