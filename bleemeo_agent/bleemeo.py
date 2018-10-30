@@ -705,29 +705,49 @@ class BleemeoConnector(threading.Thread):
             self._successive_mqtt_errors = 0
             logging.info('MQTT connection established')
 
-    def on_disconnect(self, _client, _userdata, _result_code):
+    def on_disconnect(self, _client, _userdata, result_code):
         if self.connected:
             logging.info('MQTT connection lost')
         self._last_disconnects.append(bleemeo_agent.util.get_clock())
         self._last_disconnects = self._last_disconnects[-15:]
         self._successive_mqtt_errors += 1
+        self.connected = False
 
         clock_now = bleemeo_agent.util.get_clock()
+        if self.core.started_at > clock_now - 60:
+            # Do not disable Bleemeo connector for MQTT disconnection
+            # on the first minute. We want the _sync_loop to run first.
+            return
+
+        if result_code == 1:
+            # code 1 is a generic code. It could be timeout,
+            # connection refused, bad protocol, etc
+            # The most likely error that would trigger successive errors is
+            # being unable to connect due to connection refused/dropped.
+            reason = 'unable to connect'
+        elif result_code == 0:
+            # code 0 is succesful disconnect, e.g. after call to disconnect
+            # This case should never cause successive errors
+            reason = 'unknown error'
+        else:
+            reason = (
+                'connection refused. Was this server deleted '
+                'on Bleemeo Cloud platform ?'
+            )
         if self._successive_mqtt_errors > 10 and not self._disable_until:
             logging.info(
-                'Fail to connect to MQTT. Temporary disable Bleemeo connector',
+                'Too many MQTT retry: %s', reason
             )
             self._disable_until = (
                 clock_now + 300 + random.randint(0, 600)
             )
         elif self._successive_mqtt_errors > 3 and not self._disable_until:
             logging.info(
-                'Fail to connect to MQTT. Temporary disable Bleemeo connector',
+                'Too many MQTT retry: %s', reason
             )
             self._disable_until = (
                 clock_now + 60 + random.randint(0, 30)
             )
-        self.connected = False
 
     def on_message(self, _client, _userdata, msg):
         notify_topic = 'v1/agent/%s/notification' % self.agent_uuid
@@ -1163,6 +1183,15 @@ class BleemeoConnector(threading.Thread):
             self.core.state.set('agent_uuid', content['id'])
             logging.debug('Regisration successfull')
         elif content is not None:
+            if 'Invalid username/password' in str(content):
+                return (
+                    'Wrong credential for registration. '
+                    'Configuration contains account_id=%s and '
+                    'registration_key starts with %s' % (
+                        self.core.config['bleemeo.account_id'],
+                        registration_key[:8],
+                    )
+                )
             return 'Registration failed: %s' % content
         elif response is not None:
             return 'Registration failed: %s' % content[:100]
@@ -1217,15 +1246,30 @@ class BleemeoConnector(threading.Thread):
             duplicated_checked = False
 
             if last_error is not None:
-                logging.info(
-                    'Unable to synchronize with Bleemeo Cloud platform: %s',
-                    last_error,
-                )
                 successive_errors += 1
                 if isinstance(last_error, AuthApiError):
                     successive_auth_errors += 1
+                    if 'fqdn' in bleemeo_cache.facts_by_key:
+                        with_fqdn = (
+                            ' with fqdn %s' %
+                            bleemeo_cache.facts_by_key['fqdn'].value
+                        )
+                    else:
+                        with_fqdn = ''
+                    logging.info(
+                        'Synchronize with Bleemeo Cloud platform failed: '
+                        'Unable to log in with credentials from state.json. '
+                        'Using agent ID %s%s. '
+                        'Was this server deleted on Bleemeo Cloud platform ?',
+                        self.agent_uuid,
+                        with_fqdn,
+                    )
                 else:
                     successive_auth_errors = 0
+                    logging.info(
+                        'Synchronize with Bleemeo Cloud platform failed: %s',
+                        last_error,
+                    )
                 delay = min(successive_errors * 15, 60)
                 clock_now = bleemeo_agent.util.get_clock()
                 if successive_auth_errors > 10 and not self._disable_until:
@@ -2294,8 +2338,7 @@ class BleemeoConnector(threading.Thread):
             params={'agent': self.agent_uuid, 'page_size': 100},
         )
 
-        bleemeo_cache.facts = {}
-        bleemeo_cache.facts_by_key = {}
+        facts = {}
 
         for data in api_facts:
             fact = AgentFact(
@@ -2303,8 +2346,9 @@ class BleemeoConnector(threading.Thread):
                 data['key'],
                 data['value'],
             )
-            bleemeo_cache.facts[fact.uuid] = fact
-            bleemeo_cache.facts_by_key[fact.key] = fact
+            facts[fact.uuid] = fact
+        bleemeo_cache.facts = facts
+        bleemeo_cache.update_lookup_map()
 
     def _sync_facts(self, bleemeo_cache, bleemeo_api):
         # pylint: disable=too-many-locals
