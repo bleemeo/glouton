@@ -5,7 +5,7 @@ Maintainer: Bleemeo Packaging Team <packaging-team@bleemeo.com>
 Build-Depends: debhelper (>=9),
                dh-exec,
                dh-python,
-               dh-systemd,
+               debhelper (>= 9.20160709) | dh-systemd,
                python3-setuptools (>=30.3.0),
                python3-all
 Standards-Version: 3.9.5
