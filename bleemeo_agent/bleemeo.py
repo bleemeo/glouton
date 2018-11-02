@@ -1008,7 +1008,7 @@ class BleemeoConnector(threading.Thread):
 
         try:
             logging.debug('Connecting to MQTT broker at %s', mqtt_host)
-            self.mqtt_client.connect(
+            self.mqtt_client.connect_async(
                 mqtt_host,
                 mqtt_port,
                 60,
