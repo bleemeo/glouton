@@ -170,7 +170,10 @@ def _api_datetime_to_time(date_text):
 
     if date is None:
         return None
-    return date.timestamp()
+    if hasattr(date, 'timestamp'):
+        return date.timestamp()
+    epoc = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+    return (date - epoc).total_seconds()
 
 
 class ApiError(Exception):
