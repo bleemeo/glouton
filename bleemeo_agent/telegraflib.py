@@ -17,12 +17,15 @@
 
 import ctypes
 from ctypes import (c_char_p, c_float, c_int, POINTER)
+import os
+import threading
 import time
+
 import bleemeo_agent.type
 
 
-_lib = ctypes.cdll.LoadLibrary(
-    "agentgo/libcabi.so")
+_lib = None
+_lock = threading.Lock()
 
 
 class _Tag(ctypes.Structure):
@@ -45,34 +48,36 @@ class _MetricPointVector(ctypes.Structure):
                 ('metric_point_count', c_int)]
 
 
-def _wrap_function(_lib, funcname, restype, argtypes):
-    """Simplify wrapping ctypes functions"""
-    func = _lib.__getattr__(funcname)
-    func.restype = restype
-    func.argtypes = argtypes
-    return func
+def _init_lib():
+    global _lib
+    with _lock:
+        if _lib is not None:
+            return
+        if os.path.exists("agentgo/libcabi.so"):
+            lib_path = "agentgo/libcabi.so"
+        else:
+            lib_path = "libcabi.so"
+        _lib = ctypes.cdll.LoadLibrary(lib_path)
 
-
-# Load function from C-lib
-_init_group = _wrap_function(_lib, 'InitGroup', int, None)
-_free_group = _wrap_function(
-    _lib, 'FreeGroup', None, [c_int, ])
-_add_simple_input = _wrap_function(
-    _lib, "AddSimpleInput", int, [c_int, c_char_p])
-_add_input_with_address = _wrap_function(
-    _lib, "AddInputWithAddress", int, [c_int, c_char_p, c_char_p])
-_gather = _wrap_function(_lib, 'Gather', _MetricPointVector, [c_int, ])
-_free_metric_point_vector = _wrap_function(
-    _lib, 'FreeMetricPointVector', None, [_MetricPointVector, ])
+        _lib.InitGroup  # force load symbol
+        _lib.FreeGroup.restype = None
+        _lib.FreeGroup.argtypes = [c_int]
+        _lib.AddSimpleInput.argtypes = [c_int, c_char_p]
+        _lib.AddInputWithAddress.argtypes = [c_int, c_char_p, c_char_p]
+        _lib.Gather.restype = _MetricPointVector
+        _lib.Gather.argtypes = [c_int]
+        _lib.FreeMetricPointVector.restype = None
+        _lib.FreeMetricPointVector.argtypes = [_MetricPointVector]
 
 
 class Telegraflib:
 
     def __init__(self, is_terminated=None, emit_metric=None):
+        _init_lib()
         self.inputs_id_map = {}
-        self.input_group_id = _init_group()
+        self.input_group_id = _lib.InitGroup()
         self.system_inputs_id_map = {}
-        self.system_input_group_id = _init_group()
+        self.system_input_group_id = _lib.InitGroup()
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
         if self.input_group_id < 0:
@@ -83,7 +88,7 @@ class Telegraflib:
                 "Impossible value for system_input_group_id: failed to initialize TelegrafLib")
 
     def _add_system_input(self, input_name, input_informations=None):
-        input_id = _add_simple_input(
+        input_id = _lib.AddSimpleInput(
             self.system_input_group_id, input_name.encode('utf-8'))
         if input_id >= 0:
             if input_informations is None:
@@ -102,7 +107,7 @@ class Telegraflib:
                 "Impossible value of input_id: _add_system_input has fail: {}".format(input_name))
 
     def _add_simple_input(self, input_name, input_informations=None):
-        input_id = _add_simple_input(
+        input_id = _lib.AddSimpleInput(
             self.input_group_id, input_name.encode('utf-8'))
         if input_id >= 0:
             if input_informations is None:
@@ -121,7 +126,7 @@ class Telegraflib:
                 "Impossible value of input_id: _add_simple_input has fail: {}".format(input_name))
 
     def _add_input_with_address(self, input_name, input_address, input_informations=None):
-        input_id = _add_input_with_address(
+        input_id = _lib.AddInputWithAddress(
             self.input_group_id, input_name.encode('utf-8'), input_address.encode('utf-8'))
         if input_id >= 0:
             if input_informations is None:
@@ -140,9 +145,9 @@ class Telegraflib:
                 "Impossible value of input_id: _add_input_with_address has fail: {}".format(input_name))
 
     def update_discovery(self, services):
-        _free_group(self.input_group_id)
+        _lib.FreeGroup(self.input_group_id)
         self.inputs_id_map = {}
-        self.input_group_id = _init_group()
+        self.input_group_id = _lib.InitGroup()
         if self.input_group_id < 0:
             raise ValueError(
                 "Impossible value for input_group_id: failed to initialize TelegrafLib")
@@ -169,17 +174,17 @@ class Telegraflib:
     def gather_metrics(self):
         self._init_system_inputs()
         while True:
-            metrics_vector = _gather(self.input_group_id)
+            metrics_vector = _lib.Gather(self.input_group_id)
             for i in range(0, metrics_vector.metric_point_count):
                 metric_point = metrics_vector.metric_point[i]
                 self.emit_metric(self._convert_metric_point(metric_point))
-            _free_metric_point_vector(metrics_vector)
+            _lib.FreeMetricPointVector(metrics_vector)
 
-            system_metrics_vector = _gather(self.system_input_group_id)
+            system_metrics_vector = _lib.Gather(self.system_input_group_id)
             for i in range(0, system_metrics_vector.metric_point_count):
                 metric_point = system_metrics_vector.metric_point[i]
                 self.emit_metric(self._convert_metric_point(metric_point))
-            _free_metric_point_vector(system_metrics_vector)
+            _lib.FreeMetricPointVector(system_metrics_vector)
 
             time.sleep(10)
 
