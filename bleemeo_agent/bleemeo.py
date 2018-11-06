@@ -655,6 +655,7 @@ class BleemeoConnector(threading.Thread):
         self._successive_mqtt_errors = 0
         self._disable_until = 0
         self._mqtt_queue_size = 0
+        self._mqtt_thread = None
 
         self.trigger_full_sync = False
         self.trigger_fact_sync = 0
@@ -838,8 +839,7 @@ class BleemeoConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             clock_now = bleemeo_agent.util.get_clock()
             if (not _mqtt_reconnect_at and self._disable_until > clock_now):
-                self.mqtt_client.disconnect()
-                self.mqtt_client.loop_stop()
+                self._mqtt_stop(wait_delay=0)
                 _mqtt_reconnect_at = self._disable_until
             elif (not _mqtt_reconnect_at
                   and len(self._last_disconnects) >= 6
@@ -850,8 +850,7 @@ class BleemeoConnector(threading.Thread):
                     ' Disabling MQTT for %d seconds',
                     delay
                 )
-                self.mqtt_client.disconnect()
-                self.mqtt_client.loop_stop()
+                self._mqtt_stop(wait_delay=0)
                 _mqtt_reconnect_at = clock_now + delay
                 self.trigger_fact_sync = clock_now
             elif (not _mqtt_reconnect_at
@@ -863,8 +862,7 @@ class BleemeoConnector(threading.Thread):
                     ' Disabling MQTT for %d seconds',
                     delay,
                 )
-                self.mqtt_client.disconnect()
-                self.mqtt_client.loop_stop()
+                self._mqtt_stop(wait_delay=0)
                 _mqtt_reconnect_at = clock_now + delay
                 self._last_disconnects = []
                 self.trigger_fact_sync = clock_now
@@ -873,6 +871,11 @@ class BleemeoConnector(threading.Thread):
                 logging.info('Re-enabling MQTT connection')
                 _mqtt_reconnect_at = 0
                 self._mqtt_start()
+
+            if (self._mqtt_thread is not None
+                    and not self._mqtt_thread.is_alive()):
+                logging.error('Thread MQTT connector crashed. Stopping agent')
+                self.core.is_terminating.set()
 
             self._loop()
 
@@ -889,15 +892,7 @@ class BleemeoConnector(threading.Thread):
                 force=True
             )
 
-        # Wait up to 5 second for MQTT queue to be empty before disconnecting
-        deadline = bleemeo_agent.util.get_clock() + 5
-        while (self._mqtt_queue_size > 0
-               and bleemeo_agent.util.get_clock() < deadline):
-            time.sleep(0.1)
-
-        self.mqtt_client.disconnect()
-        self.mqtt_client.loop_stop()
-
+        self._mqtt_stop(wait_delay=5)
         self._sync_loop_event.set()  # unblock sync_loop thread
         sync_thread.join(5)
 
@@ -1002,6 +997,7 @@ class BleemeoConnector(threading.Thread):
         self._mqtt_start()
 
     def _mqtt_start(self):
+        assert self._mqtt_thread is None
 
         mqtt_host = self.core.config['bleemeo.mqtt.host']
         mqtt_port = self.core.config['bleemeo.mqtt.port']
@@ -1016,7 +1012,27 @@ class BleemeoConnector(threading.Thread):
         except socket.error:
             pass
 
-        self.mqtt_client.loop_start()
+        self._mqtt_thread = threading.Thread(
+            target=self.mqtt_client.loop_forever,
+            kwargs={'retry_first_connection': True},
+        )
+        self._mqtt_thread.daemon = True
+        self._mqtt_thread.start()
+
+    def _mqtt_stop(self, wait_delay=5):
+        if wait_delay:
+            deadline = bleemeo_agent.util.get_clock() + wait_delay
+            while (self._mqtt_queue_size > 0
+                   and bleemeo_agent.util.get_clock() < deadline):
+                time.sleep(0.1)
+        else:
+            deadline = 0
+
+        self.mqtt_client.disconnect()
+        if self._mqtt_thread is not None:
+            remaining = max(0, deadline - bleemeo_agent.util.get_clock())
+            self._mqtt_thread.join(min(3, remaining))
+        self._mqtt_thread = None
 
     def _loop(self):
         # pylint: disable=too-many-branches

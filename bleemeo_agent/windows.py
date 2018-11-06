@@ -107,6 +107,7 @@ def windows_main():
             core.run()
         finally:
             logging.info('Agent stopped')
+            core.is_terminating.set()
     else:
         win32serviceutil.HandleCommandLine(BleemeoAgentService)
 
@@ -390,6 +391,7 @@ class BleemeoAgentService(win32serviceutil.ServiceFramework):
             raise
         finally:
             logging.info('Agent stopped')
+            self.core.is_terminating.set()
 
     def SvcStop(self):  # pylint: disable=invalid-name
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)

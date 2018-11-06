@@ -427,6 +427,7 @@ def main():
         core.run()
     finally:
         logging.info('Agent stopped')
+        core.is_terminating.set()
 
 
 def get_service_info(cmdline):
@@ -1678,6 +1679,10 @@ class Core:
             self._gather_metrics,
             seconds=10,
         )
+        self.add_scheduled_job(
+            self._check_thread,
+            seconds=60,
+        )
         self.schedule_topinfo()
         self.add_scheduled_job(
             self._gather_metrics_minute,
@@ -1740,6 +1745,19 @@ class Core:
         thread.start()
 
         return True
+
+    def _check_thread(self):
+        threads = [
+            ('Bleemeo connector', self.bleemeo_connector),
+            ('InfluxDB connector', self.influx_connector),
+            ('Graphite listenner', self.graphite_server),
+        ]
+        for (name, thread) in threads:
+            if thread is not None and not thread.is_alive():
+                # Re-check is_terminating to avoid race condition
+                if not self.is_terminating.is_set():
+                    logging.error('Thread %s crashed. Stopping agent', name)
+                    self.is_terminating.set()
 
     def _gather_metrics(self):
         """ Gather and send some metric missing from other sources
