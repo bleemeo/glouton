@@ -16,6 +16,7 @@
 #   limitations under the License.
 
 import ctypes
+from ctypes import (c_char_p, c_float, c_int, POINTER)
 import time
 import bleemeo_agent.type
 
@@ -25,23 +26,23 @@ _lib = ctypes.cdll.LoadLibrary(
 
 
 class _Tag(ctypes.Structure):
-    _fields_ = [('tag_name', ctypes.c_char_p),
-                ('tag_value', ctypes.c_char_p)]
+    _fields_ = [('tag_name', c_char_p),
+                ('tag_value', c_char_p)]
 
 
 class _MetricPoint(ctypes.Structure):
-    _fields_ = [('input_id', ctypes.c_int),
-                ('name', ctypes.c_char_p),
-                ('tag', ctypes.POINTER(_Tag)),
-                ('tag_count', ctypes.c_int),
-                ('metric_type', ctypes.c_int),
-                ('value', ctypes.c_float),
-                ('time', ctypes.c_int)]
+    _fields_ = [('input_id', c_int),
+                ('name', c_char_p),
+                ('tag', POINTER(_Tag)),
+                ('tag_count', c_int),
+                ('metric_type', c_int),
+                ('value', c_float),
+                ('time', c_int)]
 
 
 class _MetricPointVector(ctypes.Structure):
-    _fields_ = [('metric_point', ctypes.POINTER(_MetricPoint)),
-                ('metric_point_count', ctypes.c_int)]
+    _fields_ = [('metric_point', POINTER(_MetricPoint)),
+                ('metric_point_count', c_int)]
 
 
 def _wrap_function(_lib, funcname, restype, argtypes):
@@ -55,12 +56,12 @@ def _wrap_function(_lib, funcname, restype, argtypes):
 # Load function from C-lib
 _init_group = _wrap_function(_lib, 'InitGroup', int, None)
 _free_group = _wrap_function(
-    _lib, 'FreeGroup', None, [ctypes.c_int, ])
+    _lib, 'FreeGroup', None, [c_int, ])
 _add_simple_input = _wrap_function(
-    _lib, "AddSimpleInput", int, [ctypes.c_int, ctypes.c_char_p])
+    _lib, "AddSimpleInput", int, [c_int, c_char_p])
 _add_input_with_address = _wrap_function(
-    _lib, "AddInputWithAddress", int, [ctypes.c_int, ctypes.c_char_p, ctypes.c_char_p])
-_gather = _wrap_function(_lib, 'Gather', _MetricPointVector, [ctypes.c_int, ])
+    _lib, "AddInputWithAddress", int, [c_int, c_char_p, c_char_p])
+_gather = _wrap_function(_lib, 'Gather', _MetricPointVector, [c_int, ])
 _free_metric_point_vector = _wrap_function(
     _lib, 'FreeMetricPointVector', None, [_MetricPointVector, ])
 
