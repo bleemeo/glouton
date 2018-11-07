@@ -29,7 +29,7 @@ import (
 
 // Input countains input information about Mysql
 type Input struct {
-	mysqlInput telegraf.Input
+	telegraf.Input
 }
 
 // New initialise mysql.Input
@@ -40,31 +40,17 @@ func New(server string) *Input {
 		if ok {
 			slice := append(make([]string, 0), server)
 			mysqlInput.Servers = slice
-			return &Input{
-				mysqlInput: mysqlInput,
-			}
+			return &Input{mysqlInput}
 		}
 	}
-	return &Input{
-		mysqlInput: nil,
-	}
-}
-
-// SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
-	return input.mysqlInput.SampleConfig()
-}
-
-// Description returns a one-sentence description of the Input
-func (input *Input) Description() string {
-	return input.mysqlInput.Description()
+	return &Input{nil}
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
 	mysqlAccumulator := initAccumulator(acc)
-	err := input.mysqlInput.Gather(&mysqlAccumulator)
+	err := input.Input.Gather(&mysqlAccumulator)
 	return err
 }
 

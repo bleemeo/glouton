@@ -27,7 +27,7 @@ import (
 
 // Input countains input information about swap
 type Input struct {
-	swapInput telegraf.Input
+	telegraf.Input
 }
 
 // New initialise swap.Input
@@ -35,30 +35,16 @@ func New() *Input {
 	var input, ok = telegraf_inputs.Inputs["swap"]
 	if ok {
 		swapInput := input().(*swap.SwapStats)
-		return &Input{
-			swapInput: swapInput,
-		}
+		return &Input{swapInput}
 	}
-	return &Input{
-		swapInput: nil,
-	}
-}
-
-// SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
-	return input.swapInput.SampleConfig()
-}
-
-// Description returns a one-sentence description of the Input
-func (input *Input) Description() string {
-	return input.swapInput.Description()
+	return &Input{nil}
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
 	swapAccumulator := initAccumulator(acc)
-	err := input.swapInput.Gather(&swapAccumulator)
+	err := input.Input.Gather(&swapAccumulator)
 	return err
 }
 

@@ -27,7 +27,7 @@ import (
 
 // Input countains input information about disk
 type Input struct {
-	diskInput telegraf.Input
+	telegraf.Input
 }
 
 // New initialise disk.Input
@@ -35,30 +35,16 @@ func New() *Input {
 	var input, ok = telegraf_inputs.Inputs["disk"]
 	if ok {
 		diskInput := input().(*disk.DiskStats)
-		return &Input{
-			diskInput: diskInput,
-		}
+		return &Input{diskInput}
 	}
-	return &Input{
-		diskInput: nil,
-	}
-}
-
-// SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
-	return input.diskInput.SampleConfig()
-}
-
-// Description returns a one-sentence description of the Input
-func (input *Input) Description() string {
-	return input.diskInput.Description()
+	return &Input{nil}
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
 	diskAccumulator := initAccumulator(acc)
-	err := input.diskInput.Gather(&diskAccumulator)
+	err := input.Input.Gather(&diskAccumulator)
 	return err
 }
 

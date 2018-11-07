@@ -29,7 +29,7 @@ import (
 
 // Input countains input information about Mysql
 type Input struct {
-	nginxInput telegraf.Input
+	telegraf.Input
 }
 
 // New initialise nginx.Input
@@ -41,31 +41,17 @@ func New(url string) *Input {
 			slice := append(make([]string, 0), url)
 			nginxInput.Urls = slice
 			nginxInput.InsecureSkipVerify = false
-			return &Input{
-				nginxInput: nginxInput,
-			}
+			return &Input{nginxInput}
 		}
 	}
-	return &Input{
-		nginxInput: nil,
-	}
-}
-
-// SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
-	return input.nginxInput.SampleConfig()
-}
-
-// Description returns a one-sentence description of the Input
-func (input *Input) Description() string {
-	return input.nginxInput.Description()
+	return &Input{nil}
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
 	nginxAccumulator := initAccumulator(acc)
-	err := input.nginxInput.Gather(&nginxAccumulator)
+	err := input.Input.Gather(&nginxAccumulator)
 	return err
 }
 

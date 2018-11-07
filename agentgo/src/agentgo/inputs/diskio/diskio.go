@@ -33,8 +33,8 @@ type metricSave struct {
 
 // Input countains input information about diskio
 type Input struct {
-	diskioInput telegraf.Input
-	pastValues  map[string]map[string]metricSave
+	telegraf.Input
+	pastValues map[string]map[string]metricSave
 }
 
 // New initialise diskio.Input
@@ -43,30 +43,20 @@ func New() *Input {
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
 		return &Input{
-			diskioInput: diskioInput,
+			Input: diskioInput,
 		}
 	}
 	return &Input{
-		diskioInput: nil,
-		pastValues:  nil,
+		Input:      nil,
+		pastValues: nil,
 	}
-}
-
-// SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
-	return input.diskioInput.SampleConfig()
-}
-
-// Description returns a one-sentence description of the Input
-func (input *Input) Description() string {
-	return input.diskioInput.Description()
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
 	diskioAccumulator := initAccumulator(acc, input.pastValues)
-	err := input.diskioInput.Gather(&diskioAccumulator)
+	err := input.Input.Gather(&diskioAccumulator)
 	input.pastValues = diskioAccumulator.currentValues
 	return err
 }

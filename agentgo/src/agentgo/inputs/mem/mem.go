@@ -27,7 +27,7 @@ import (
 
 // Input countains input information about mem
 type Input struct {
-	memInput telegraf.Input
+	telegraf.Input
 }
 
 // New initialise mem.Input
@@ -35,30 +35,16 @@ func New() *Input {
 	var input, ok = telegraf_inputs.Inputs["mem"]
 	if ok {
 		memInput := input().(*mem.MemStats)
-		return &Input{
-			memInput: memInput,
-		}
+		return &Input{memInput}
 	}
-	return &Input{
-		memInput: nil,
-	}
-}
-
-// SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
-	return input.memInput.SampleConfig()
-}
-
-// Description returns a one-sentence description of the Input
-func (input *Input) Description() string {
-	return input.memInput.Description()
+	return &Input{nil}
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
 	memAccumulator := initAccumulator(acc)
-	err := input.memInput.Gather(&memAccumulator)
+	err := input.Input.Gather(&memAccumulator)
 	return err
 }
 

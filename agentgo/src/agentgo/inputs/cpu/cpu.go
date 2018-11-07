@@ -28,7 +28,7 @@ import (
 
 // Input countains input information about CPU
 type Input struct {
-	cpuInput telegraf.Input
+	telegraf.Input
 }
 
 // New initialise cpu.Input
@@ -38,30 +38,16 @@ func New() *Input {
 		cpuInput := input().(*cpu.CPUStats)
 		cpuInput.PerCPU = false
 		cpuInput.CollectCPUTime = false
-		return &Input{
-			cpuInput: cpuInput,
-		}
+		return &Input{cpuInput}
 	}
-	return &Input{
-		cpuInput: nil,
-	}
-}
-
-// SampleConfig returns the default configuration of the Input
-func (input *Input) SampleConfig() string {
-	return input.cpuInput.SampleConfig()
-}
-
-// Description returns a one-sentence description of the Input
-func (input *Input) Description() string {
-	return input.cpuInput.Description()
+	return &Input{nil}
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
 	cpuAccumulator := initAccumulator(acc)
-	err := input.cpuInput.Gather(&cpuAccumulator)
+	err := input.Input.Gather(&cpuAccumulator)
 	return err
 }
 
