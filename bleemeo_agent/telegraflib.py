@@ -76,7 +76,6 @@ class Telegraflib:
         _init_lib()
         self.inputs_id_map = {}
         self.input_group_id = _lib.InitGroup()
-        self.system_inputs_id_map = {}
         self.system_input_group_id = _lib.InitGroup()
         self.emit_metric = emit_metric
         self.is_terminated = is_terminated
@@ -87,22 +86,10 @@ class Telegraflib:
             raise ValueError(
                 "Impossible value for system_input_group_id: failed to initialize TelegrafLib")
 
-    def _add_system_input(self, input_name, input_informations=None):
+    def _add_system_input(self, input_name):
         input_id = _lib.AddSimpleInput(
             self.system_input_group_id, input_name.encode('utf-8'))
-        if input_id >= 0:
-            if input_informations is None:
-                input_informations = {}
-                input_informations["name"] = input_name
-            else:
-                try:
-                    if input_informations["name"] != input_name:
-                        raise ValueError("The input name is different in the input_information_name: {} != {}".format(
-                            input_name, input_informations["name"]))
-                except KeyError:
-                    input_informations["name"] = input_name
-            self.system_inputs_id_map[input_id] = input_informations
-        else:
+        if input_id < 0:
             raise ValueError(
                 "Impossible value of input_id: _add_system_input has fail: {}".format(input_name))
 
