@@ -26,9 +26,15 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/net"
 )
 
+type metricPoint struct {
+	value      uint64
+	metricTime time.Time
+}
+
 // Input countains input information about net
 type Input struct {
 	telegraf.Input
+	pastValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
 
 // New initialise met.Input
@@ -37,7 +43,10 @@ func New() (i *Input, err error) {
 	if ok {
 		netInput := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
-		i = &Input{netInput}
+		i = &Input{
+			netInput,
+			make(map[string]map[string]metricPoint),
+		}
 	} else {
 		err = errors.New("Telegraf don't have \"net\" input")
 	}
@@ -47,14 +56,20 @@ func New() (i *Input, err error) {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (i *Input) Gather(acc telegraf.Accumulator) error {
-	netAccumulator := accumulator{acc}
+	netAccumulator := accumulator{
+		acc,
+		i.pastValues,
+		make(map[string]map[string]metricPoint)}
 	err := i.Input.Gather(&netAccumulator)
+	i.pastValues = netAccumulator.currentValues
 	return err
 }
 
 // accumulator save the net metric from telegraf
 type accumulator struct {
-	accumulator telegraf.Accumulator
+	accumulator   telegraf.Accumulator
+	pastValues    map[string]map[string]metricPoint // item => metricName => metricPoint
+	currentValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
 
 // AddCounter adds a metric to the accumulator with the given measurement
@@ -69,21 +84,38 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 	item, ok := tags["interface"]
 	if ok {
 		finalTags["item"] = item
+		a.currentValues[item] = make(map[string]metricPoint)
 	}
+
 	for metricName, value := range fields {
+		var valuef uint64
 		finalMetricName := measurement + "_" + metricName
 		if finalMetricName == "net_bytes_sent" {
-			valuef := value.(uint64)
+			valuef = value.(uint64)
 			finalMetricName = "net_bits_sent"
 			valuef = 8 * valuef
-			finalFields[finalMetricName] = valuef
 		} else if finalMetricName == "net_bytes_recv" {
-			valuef := value.(uint64)
+			valuef = value.(uint64)
 			finalMetricName = "net_bits_recv"
 			valuef = 8 * valuef
+		} else {
+			valuef = value.(uint64)
+
+		}
+
+		var metricTime time.Time
+		if len(t) != 1 {
+			metricTime = time.Now()
+		} else {
+			metricTime = t[0]
+		}
+		pastMetricSave, ok := a.pastValues[item][finalMetricName]
+		a.currentValues[item][finalMetricName] = metricPoint{valuef, metricTime}
+		if ok {
+			valuef := (float64(valuef) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
 			finalFields[finalMetricName] = valuef
 		} else {
-			finalFields[finalMetricName] = value
+			continue
 		}
 	}
 	a.accumulator.AddGauge(measurement, finalFields, finalTags, t...)
