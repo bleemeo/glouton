@@ -56,9 +56,9 @@ import bleemeo_agent.config
 import bleemeo_agent.facts
 import bleemeo_agent.graphite
 import bleemeo_agent.services
+import bleemeo_agent.telegraflib
 import bleemeo_agent.type
 import bleemeo_agent.util
-import bleemeo_agent.telegraflib
 
 # Optional dependencies
 try:

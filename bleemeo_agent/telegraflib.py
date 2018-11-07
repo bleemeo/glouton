@@ -15,6 +15,9 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 
+# ctypes.Structure don't have public methods.
+# pylint: disable=too-few-public-methods
+
 import ctypes
 from ctypes import (c_char_p, c_float, c_int, POINTER)
 import os
@@ -24,8 +27,8 @@ import time
 import bleemeo_agent.type
 
 
-_lib = None
-_lock = threading.Lock()
+_lib = None  # pylint: disable=invalid-name
+_lock = threading.Lock()  # pylint: disable=invalid-name
 
 
 class _Tag(ctypes.Structure):
@@ -49,7 +52,7 @@ class _MetricPointVector(ctypes.Structure):
 
 
 def _init_lib():
-    global _lib
+    global _lib  # pylint: disable=invalid-name,global-statement
     with _lock:
         if _lib is not None:
             return
@@ -59,7 +62,7 @@ def _init_lib():
             lib_path = "libcabi.so"
         _lib = ctypes.cdll.LoadLibrary(lib_path)
 
-        _lib.InitGroup  # force load symbol
+        _lib.InitGroup  # force load symbol pylint: disable=pointless-statement
         _lib.FreeGroup.restype = None
         _lib.FreeGroup.argtypes = [c_int]
         _lib.AddSimpleInput.argtypes = [c_int, c_char_p]
@@ -75,8 +78,9 @@ def _init_lib():
 
 
 class Telegraflib:
+    # pylint: disable=too-many-instance-attributes
 
-    def __init__(
+    def __init__(  # pylint: disable=too-many-arguments
             self, is_terminated, emit_metric, network_blacklist,
             disk_mount_point, disk_blacklist, diskio_whitelist):
         self.emit_metric = emit_metric
@@ -93,10 +97,10 @@ class Telegraflib:
         self.system_input_group_id = _lib.InitGroup()
         if self.input_group_id < 0:
             raise ValueError(
-                "Impossible value for input_group_id: failed to initialize TelegrafLib")
+                "Failed to initialize Telegraf service input group")
         if self.system_input_group_id < 0:
             raise ValueError(
-                "Impossible value for system_input_group_id: failed to initialize TelegrafLib")
+                "Failed to initialize Telegraf system input group")
 
     def _add_system_input(self, input_name):
         if input_name == 'net':
@@ -123,7 +127,7 @@ class Telegraflib:
                 self.system_input_group_id, input_name.encode('utf-8'))
         if input_id < 0:
             raise ValueError(
-                "Impossible value of input_id: _add_system_input has fail: {}".format(input_name))
+                "_add_system_input has fail: {}".format(input_name))
 
     def _add_simple_input(self, input_name, input_informations=None):
         input_id = _lib.AddSimpleInput(
@@ -135,18 +139,25 @@ class Telegraflib:
             else:
                 try:
                     if input_informations["name"] != input_name:
-                        raise ValueError("The input name is different in the input_information_name: {} != {}".format(
-                            input_name, input_informations["name"]))
+                        raise ValueError(
+                            "The input name mistmatch: {} != {}".format(
+                                input_name, input_informations["name"]
+                            )
+                        )
                 except KeyError:
                     input_informations["name"] = input_name
             self.inputs_id_map[input_id] = input_informations
         else:
             raise ValueError(
-                "Impossible value of input_id: _add_simple_input has fail: {}".format(input_name))
+                "_add_simple_input has fail: {}".format(input_name))
 
-    def _add_input_with_address(self, input_name, input_address, input_informations=None):
+    def _add_input_with_address(
+            self, input_name, input_address, input_informations=None):
         input_id = _lib.AddInputWithAddress(
-            self.input_group_id, input_name.encode('utf-8'), input_address.encode('utf-8'))
+            self.input_group_id,
+            input_name.encode('utf-8'),
+            input_address.encode('utf-8')
+        )
         if input_id >= 0:
             if input_informations is None:
                 input_informations = {}
@@ -154,14 +165,17 @@ class Telegraflib:
             else:
                 try:
                     if input_informations["name"] != input_name:
-                        raise ValueError("The input name is different in the input_information_name: {} != {}".format(
-                            input_name, input_informations["name"]))
+                        raise ValueError(
+                            "The input name mistmatch: {} != {}".format(
+                                input_name, input_informations["name"]
+                            )
+                        )
                 except KeyError:
                     input_informations["name"] = input_name
             self.inputs_id_map[input_id] = input_informations
         else:
             raise ValueError(
-                "Impossible value of input_id: _add_input_with_address has fail: {}".format(input_name))
+                "_add_input_with_address has fail: {}".format(input_name))
 
     def update_discovery(self, services):
         _lib.FreeGroup(self.input_group_id)
@@ -169,7 +183,7 @@ class Telegraflib:
         self.input_group_id = _lib.InitGroup()
         if self.input_group_id < 0:
             raise ValueError(
-                "Impossible value for input_group_id: failed to initialize TelegrafLib")
+                "Failed to initialize Telegraf service input group")
         for (service_name, instance) in services:
             input_informations = {}
             if service_name == "redis":
