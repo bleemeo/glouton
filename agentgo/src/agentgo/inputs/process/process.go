@@ -67,27 +67,28 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "processes_blocked" {
+		switch metricName {
+		case "blocked":
 			finalMetricName = "process_status_blocked"
-		} else if finalMetricName == "processes_running" {
+		case "running":
 			finalMetricName = "process_status_running"
-		} else if finalMetricName == "processes_sleeping" {
+		case "sleeping":
 			finalMetricName = "process_status_sleeping"
-		} else if finalMetricName == "processes_stopped" {
+		case "stopped":
 			finalMetricName = "process_status_stopped"
-		} else if finalMetricName == "processes_total" {
+		case "total":
 			finalMetricName = "process_total"
-		} else if finalMetricName == "processes_zombies" {
+		case "zombies":
 			finalMetricName = "process_status_zombies"
-		} else if finalMetricName == "processes_dead" {
+		case "dead":
 			continue
-		} else if finalMetricName == "processes_idle" {
+		case "idle":
 			continue
-		} else if finalMetricName == "processes_paging" {
+		case "paging":
 			finalMetricName = "process_status_paging"
-		} else if finalMetricName == "processes_total_threads" {
+		case "total_threads":
 			finalMetricName = "process_total_threads"
-		} else if finalMetricName == "processes_unknown" {
+		case "unknown":
 			continue
 		}
 		finalFields[finalMetricName] = value

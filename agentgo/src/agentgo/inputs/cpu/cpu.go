@@ -77,24 +77,25 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 			finalMetricName = "cpu_wait"
 		}
 		finalFields[finalMetricName] = value
-		if finalMetricName == "cpu_user" {
+		switch finalMetricName {
+		case "cpu_user":
 			valuef := value.(float64)
 			cpuUsed += valuef
-		} else if finalMetricName == "cpu_nice" {
+		case "cpu_nice":
 			valuef := value.(float64)
 			cpuOther += valuef
-		} else if finalMetricName == "cpu_system" {
+		case "cpu_system":
 			valuef := value.(float64)
 			cpuUsed += valuef
-		} else if finalMetricName == "cpu_interrupt" {
-			valuef := value.(float64)
-			cpuUsed += valuef
-			cpuOther += valuef
-		} else if finalMetricName == "cpu_softirq" {
+		case "cpu_interrupt":
 			valuef := value.(float64)
 			cpuUsed += valuef
 			cpuOther += valuef
-		} else if finalMetricName == "cpu_steal" {
+		case "cpu_softirq":
+			valuef := value.(float64)
+			cpuUsed += valuef
+			cpuOther += valuef
+		case "cpu_steal":
 			valuef := value.(float64)
 			cpuUsed += valuef
 			cpuOther += valuef

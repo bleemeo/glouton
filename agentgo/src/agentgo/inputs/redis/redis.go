@@ -75,45 +75,31 @@ func (accumulator *accumulator) AddFields(measurement string, fields map[string]
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "redis_connected_slaves" {
-			finalFields["redis_current_connections_slaves"] = value
-		} else if finalMetricName == "redis_clients" {
-			finalFields["redis_current_connections_clients"] = value
-		} else if finalMetricName == "redis_evicted_keys" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_expired_keys" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_keyspace_hits" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_keyspace_misses" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_keyspace_hitrate" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_total_system_memory" {
-			finalFields["redis_memory"] = value
-		} else if finalMetricName == "redis_used_memory_lua" {
-			finalFields["redis_memory_lua"] = value
-		} else if finalMetricName == "redis_used_memory_peak" {
-			finalFields["redis_memory_peak"] = value
-		} else if finalMetricName == "redis_used_memory_rss" {
-			finalFields["redis_memory_rss"] = value
-		} else if finalMetricName == "redis_pubsub_channels" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_pubsub_patterns" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_total_connections_received" {
-			finalFields["redis_total_connections"] = value
-		} else if finalMetricName == "total_commands_processed" {
-			finalFields["redis_total_operations"] = value
-		} else if finalMetricName == "redis_total_commands_processed" {
-			finalFields["redis_total_operations"] = value
-		} else if finalMetricName == "redis_uptime" {
-			finalFields[finalMetricName] = value
-		} else if finalMetricName == "redis_rdb_changes_since_last_save" {
-			finalFields["redis_volatile_changes"] = value
-		} else {
+		switch metricName {
+		case "evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses", "keyspace_hitrate", "pubsub_channels", "pubsub_patterns", "uptime":
+			// Keep name unchanged.
+		case "connected_slaves":
+			finalMetricName = "redis_current_connections_slaves"
+		case "clients":
+			finalMetricName = "redis_current_connections_clients"
+		case "total_system_memory":
+			finalMetricName = "redis_memory"
+		case "used_memory_lua":
+			finalMetricName = "redis_memory_lua"
+		case "used_memory_peak":
+			finalMetricName = "redis_memory_peak"
+		case "used_memory_rss":
+			finalMetricName = "redis_memory_rss"
+		case "total_connections_received":
+			finalMetricName = "redis_total_connections"
+		case "total_commands_processed":
+			finalMetricName = "redis_total_operations"
+		case "rdb_changes_since_last_save":
+			finalMetricName = "redis_volatile_changes"
+		default:
 			continue
 		}
+		finalFields[finalMetricName] = value
 	}
 	accumulator.acc.AddFields(measurement, finalFields, nil, t...)
 }

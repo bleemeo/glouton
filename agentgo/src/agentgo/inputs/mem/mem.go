@@ -67,57 +67,20 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "mem_available_percent" {
+		switch metricName {
+		case "available_percent":
 			finalMetricName = "mem_available_perc"
-		} else if finalMetricName == "mem_used_percent" {
+		case "used_percent":
 			finalMetricName = "mem_used_perc"
-		} else if finalMetricName == "mem_active" {
+		// All next cases are metric ignored. They are on different case to
+		// avoid very long line.
+		case "active", "inactive", "wired", "commit_limit", "committed_as", "dirty", "high_free", "high_total":
 			continue
-		} else if finalMetricName == "mem_inactive" {
+		case "huge_page_size", "huge_pages_free", "huge_pages_total", "low_free", "low_total", "mapped", "page_tables":
 			continue
-		} else if finalMetricName == "mem_wired" {
+		case "shared", "swap_cached", "swap_free", "swap_total", "vmalloc_chunk", "vmalloc_total", "vmalloc_used":
 			continue
-		} else if finalMetricName == "mem_commit_limit" {
-			continue
-		} else if finalMetricName == "mem_committed_as" {
-			continue
-		} else if finalMetricName == "mem_dirty" {
-			continue
-		} else if finalMetricName == "mem_high_free" {
-			continue
-		} else if finalMetricName == "mem_high_total" {
-			continue
-		} else if finalMetricName == "mem_huge_page_size" {
-			continue
-		} else if finalMetricName == "mem_huge_pages_free" {
-			continue
-		} else if finalMetricName == "mem_huge_pages_total" {
-			continue
-		} else if finalMetricName == "mem_low_free" {
-			continue
-		} else if finalMetricName == "mem_low_total" {
-			continue
-		} else if finalMetricName == "mem_mapped" {
-			continue
-		} else if finalMetricName == "mem_page_tables" {
-			continue
-		} else if finalMetricName == "mem_shared" {
-			continue
-		} else if finalMetricName == "mem_swap_cached" {
-			continue
-		} else if finalMetricName == "mem_swap_free" {
-			continue
-		} else if finalMetricName == "mem_swap_total" {
-			continue
-		} else if finalMetricName == "mem_vmalloc_chunk" {
-			continue
-		} else if finalMetricName == "mem_vmalloc_total" {
-			continue
-		} else if finalMetricName == "mem_vmalloc_used" {
-			continue
-		} else if finalMetricName == "mem_write_back" {
-			continue
-		} else if finalMetricName == "mem_write_back_tmp" {
+		case "write_back", "write_back_tmp":
 			continue
 		}
 		finalFields[finalMetricName] = value
