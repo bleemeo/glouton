@@ -27,15 +27,15 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/diskio"
 )
 
-type metricSave struct {
-	value      interface{}
+type metricPoint struct {
+	value      uint64
 	metricTime time.Time
 }
 
 // Input countains input information about diskio
 type Input struct {
 	telegraf.Input
-	pastValues map[string]map[string]metricSave
+	pastValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
 
 // New initialise diskio.Input
@@ -56,7 +56,7 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 	diskioAccumulator := accumulator{
 		acc,
 		i.pastValues,
-		make(map[string]map[string]metricSave),
+		make(map[string]map[string]metricPoint),
 	}
 	err := i.Input.Gather(&diskioAccumulator)
 	i.pastValues = diskioAccumulator.currentValues
@@ -66,8 +66,8 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 // accumulator save the diskio metric from telegraf
 type accumulator struct {
 	accumulator   telegraf.Accumulator
-	pastValues    map[string]map[string]metricSave
-	currentValues map[string]map[string]metricSave
+	pastValues    map[string]map[string]metricPoint // item => metricName => metricPoint
+	currentValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
 
 // AddCounter adds a metric to the accumulator with the given measurement
@@ -90,7 +90,7 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 	item, ok := tags["name"]
 	if ok {
 		finalTags["item"] = item
-		a.currentValues[item] = make(map[string]metricSave)
+		a.currentValues[item] = make(map[string]metricPoint)
 	}
 
 	for metricName, value := range fields {
@@ -98,9 +98,9 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 		switch metricName {
 		case "read_bytes", "read_time", "reads", "write_bytes", "writes", "write_time", "io_time":
 			pastMetricSave, ok := a.pastValues[item][metricName]
-			a.currentValues[item][metricName] = metricSave{value, metricTime}
+			a.currentValues[item][metricName] = metricPoint{value.(uint64), metricTime}
 			if ok {
-				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value.(uint64))) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
+				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
 				if finalMetricName == "io_io_time" {
 					finalMetricName = "io_time"
 					// io_time is millisecond per second.
