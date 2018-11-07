@@ -73,9 +73,10 @@ import (
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
 	"agentgo/types"
-	"github.com/influxdata/telegraf"
 	"math/rand"
 	"unsafe"
+
+	"github.com/influxdata/telegraf"
 )
 
 var group = make(map[int]map[int]telegraf.Input)

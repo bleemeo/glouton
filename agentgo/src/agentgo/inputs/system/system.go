@@ -18,10 +18,11 @@ package system
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/system"
-	"time"
 )
 
 // Input countains input information about system

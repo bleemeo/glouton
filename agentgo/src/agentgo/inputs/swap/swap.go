@@ -18,10 +18,11 @@ package swap
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/swap"
-	"time"
 )
 
 // Input countains input information about swap

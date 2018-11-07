@@ -34,10 +34,11 @@ func initRedisInput(url string) (telegraf.Input, error) {
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
-	"time"
 )
 
 // Input countains input information about Redis

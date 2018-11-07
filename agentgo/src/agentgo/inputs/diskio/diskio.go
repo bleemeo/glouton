@@ -18,11 +18,12 @@ package diskio
 
 import (
 	"fmt"
+	"strings"
+	"time"
+
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/diskio"
-	"strings"
-	"time"
 )
 
 type metricSave struct {

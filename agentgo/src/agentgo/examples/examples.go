@@ -22,8 +22,9 @@ import (
 	input "agentgo/inputs/diskio"
 	"agentgo/types"
 	"fmt"
-	"github.com/influxdata/telegraf"
 	"time"
+
+	"github.com/influxdata/telegraf"
 )
 
 var inputsgroups = make(map[int]map[int]telegraf.Input)

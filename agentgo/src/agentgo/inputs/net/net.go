@@ -18,10 +18,11 @@ package net
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/net"
-	"time"
 )
 
 // Input countains input information about net
