@@ -46,7 +46,7 @@ func New() (i *Input, err error) {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
-	swapAccumulator := initAccumulator(acc)
+	swapAccumulator := accumulator{acc}
 	err := input.Input.Gather(&swapAccumulator)
 	return err
 }
@@ -54,13 +54,6 @@ func (input *Input) Gather(acc telegraf.Accumulator) error {
 // accumulator save the swap metric from telegraf
 type accumulator struct {
 	acc telegraf.Accumulator
-}
-
-// InitAccumulator initialize an accumulator
-func initAccumulator(acc telegraf.Accumulator) accumulator {
-	return accumulator{
-		acc: acc,
-	}
 }
 
 // AddGauge adds a metric to the accumulator with the given measurement

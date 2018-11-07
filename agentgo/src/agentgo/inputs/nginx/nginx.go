@@ -55,7 +55,7 @@ func New(url string) (i *Input, err error) {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
-	nginxAccumulator := initAccumulator(acc)
+	nginxAccumulator := accumulator{acc}
 	err := input.Input.Gather(&nginxAccumulator)
 	return err
 }
@@ -63,13 +63,6 @@ func (input *Input) Gather(acc telegraf.Accumulator) error {
 // accumulator save the nginx metric from telegraf
 type accumulator struct {
 	acc telegraf.Accumulator
-}
-
-// InitAccumulator initialize an accumulator
-func initAccumulator(acc telegraf.Accumulator) accumulator {
-	return accumulator{
-		acc: acc,
-	}
 }
 
 // AddFields adds a metric to the accumulator with the given measurement

@@ -53,7 +53,11 @@ func New() (i *Input, err error) {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
-	diskioAccumulator := initAccumulator(acc, input.pastValues)
+	diskioAccumulator := accumulator{
+		acc,
+		input.pastValues,
+		make(map[string]map[string]metricSave),
+	}
 	err := input.Input.Gather(&diskioAccumulator)
 	input.pastValues = diskioAccumulator.currentValues
 	return err
@@ -66,15 +70,6 @@ type accumulator struct {
 	currentValues map[string]map[string]metricSave
 }
 
-// InitAccumulator initialize an accumulator
-func initAccumulator(acc telegraf.Accumulator, pastValues map[string]map[string]metricSave) accumulator {
-	return accumulator{
-		acc:           acc,
-		pastValues:    pastValues,
-		currentValues: nil,
-	}
-}
-
 // AddCounter adds a metric to the accumulator with the given measurement
 // name, fields, and tags (and timestamp). If a timestamp is not provided,
 // then the accumulator sets it to "now".
@@ -83,9 +78,6 @@ func initAccumulator(acc telegraf.Accumulator, pastValues map[string]map[string]
 // it after passing to Add.
 // nolint: gocyclo
 func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	if accumulator.currentValues == nil {
-		accumulator.currentValues = make(map[string]map[string]metricSave)
-	}
 	var metricTime time.Time
 	if len(t) != 1 {
 		metricTime = time.Now()

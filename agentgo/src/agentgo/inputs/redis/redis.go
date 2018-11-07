@@ -54,7 +54,7 @@ func New(url string) (i *Input, err error) {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (input *Input) Gather(acc telegraf.Accumulator) error {
-	redisAccumulator := initAccumulator(acc)
+	redisAccumulator := accumulator{acc}
 	err := input.Input.Gather(&redisAccumulator)
 	return err
 }
@@ -62,13 +62,6 @@ func (input *Input) Gather(acc telegraf.Accumulator) error {
 // accumulator save the redis metric from telegraf
 type accumulator struct {
 	acc telegraf.Accumulator
-}
-
-// InitAccumulator initialize an accumulator
-func initAccumulator(acc telegraf.Accumulator) accumulator {
-	return accumulator{
-		acc: acc,
-	}
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
