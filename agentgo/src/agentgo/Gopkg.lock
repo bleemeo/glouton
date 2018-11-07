@@ -22,8 +22,8 @@
 [[projects]]
   name = "github.com/go-redis/redis"
   packages = [".","internal","internal/consistenthash","internal/hashtag","internal/pool","internal/proto","internal/singleflight","internal/util"]
-  revision = "1614e579ed966441b8e0c3ccea1dd0fbbd93a6ae"
-  version = "v6.14.0"
+  revision = "b3d9bf10f6666b2ee5100a6f3f84f4caf3b4e37d"
+  version = "v6.14.2"
 
 [[projects]]
   name = "github.com/go-sql-driver/mysql"
@@ -38,10 +38,10 @@
   version = "v0.2.3"
 
 [[projects]]
-  branch = "master"
   name = "github.com/influxdata/telegraf"
   packages = [".","filter","internal","internal/tls","plugins/inputs","plugins/inputs/cpu","plugins/inputs/disk","plugins/inputs/diskio","plugins/inputs/linux_sysctl_fs","plugins/inputs/mem","plugins/inputs/mysql","plugins/inputs/mysql/v1","plugins/inputs/net","plugins/inputs/nginx","plugins/inputs/processes","plugins/inputs/redis","plugins/inputs/swap","plugins/inputs/system"]
-  revision = "e7b50384cf13781ca2e0c332b08f656d23ed2bda"
+  revision = "f297910623fc8797618fe6b2ee3e393c1c41697c"
+  version = "1.8.3"
 
 [[projects]]
   name = "github.com/pmezard/go-difflib"
@@ -52,8 +52,14 @@
 [[projects]]
   name = "github.com/shirou/gopsutil"
   packages = ["cpu","disk","host","internal/common","load","mem","net","process"]
-  revision = "8048a2e9c5773235122027dd585cf821b2af1249"
-  version = "v2.18.07"
+  revision = "3ec50d2876a36047b2ca39f955ba88fb7a455e92"
+  version = "v2.18.10"
+
+[[projects]]
+  branch = "master"
+  name = "github.com/shirou/w32"
+  packages = ["."]
+  revision = "bb4de0191aa41b5507caa14b0650cdbddcd9280b"
 
 [[projects]]
   name = "github.com/stretchr/objx"
@@ -71,13 +77,13 @@
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "d99a578cf41bfccdeaf48b0845c823a4b8b0ad5e"
+  revision = "3a76605856fddce5718553cbb8bd50ca492a7274"
 
 [[projects]]
   name = "google.golang.org/appengine"
   packages = ["cloudsql"]
-  revision = "b1f26356af11148e710935ed1ac8a7f5702c7612"
-  version = "v1.1.0"
+  revision = "4a4468ece617fc8205e99368fa2200e9d1fad421"
+  version = "v1.3.0"
 
 [solve-meta]
   analyzer-name = "dep"
