@@ -46,6 +46,7 @@ except ImportError:
     APSCHEDULE_IS_3X = True
 
 import psutil
+import requests
 import six
 from six.moves import configparser
 import yaml
@@ -427,12 +428,17 @@ def main():
         core.run()
     finally:
         logging.info('Agent stopped')
+        core.is_terminating.set()
 
 
 def get_service_info(cmdline):
     """ Return service_info from KNOWN_PROCESS matching this command line
     """
-    arg0 = shlex.split(cmdline)[0]
+    try:
+        arg0 = shlex.split(cmdline)[0]
+    except ValueError:
+        arg0 = cmdline.split()[0]
+
     name = os.path.basename(arg0)
 
     if os.name == 'nt':
@@ -532,9 +538,9 @@ def _sanitize_service(
             name,
         )
         return None
-    elif (service_info.get('check_type') != 'nagios'
-          and 'port' not in service_info and not is_discovered_service
-          and 'jmx_port' not in service_info):
+    if (service_info.get('check_type') != 'nagios'
+            and 'port' not in service_info and not is_discovered_service
+            and 'jmx_port' not in service_info):
         # discovered services could exist without port, etc.
         # It means that no check will be performed but service object will
         # be created.
@@ -680,7 +686,7 @@ def disable_https_warning():
     # recent Debian version and virtualenv version) and fallback to urllib3
     # directly.
     try:
-        import requests.packages.urllib3 as urllib3
+        from requests.packages import urllib3
     except ImportError:
         import urllib3
 
@@ -708,7 +714,7 @@ def format_value(value, unit, unit_text):
     if unit is None or unit_text is None or unit == UNIT_UNIT:
         return '%.2f' % value
 
-    if unit == UNIT_BYTE or unit == UNIT_BIT:
+    if unit in (UNIT_BYTE, UNIT_BIT):
         scale = ['', 'K', 'M', 'G', 'T', 'P', 'E']
         current_scale = scale.pop(0)
         while abs(value) >= 1024 and scale:
@@ -890,6 +896,7 @@ class State:
 
         Currently store in a json file
     """
+
     def __init__(self, filename):
         self.filename = filename
         self._content = {}
@@ -1031,6 +1038,7 @@ class Core:
         self._telegraf_thread = None
         self._telegraf = None
         self.docker_client = None
+        self._docker_client_cond = threading.Condition()
         self.k8s_client = None
         self.k8s_pods = {}
         self.k8s_docker_to_pods = {}
@@ -1055,6 +1063,7 @@ class Core:
         self.discovered_services = {}
         self.services = {}
         self.metrics_unit = {}
+        self._trigger_condition = threading.Condition()
         self._trigger_discovery = False
         self._trigger_facts = False
         self._trigger_updates_count = False
@@ -1440,7 +1449,7 @@ class Core:
                             'system_pending_security_updates'):
             if (self.get_threshold(update_name, thresholds=old_thresholds) !=
                     self.get_threshold(update_name)):
-                self._trigger_updates_count = True
+                self.fire_triggers(updates_count=True)
 
         return self.thresholds
 
@@ -1473,15 +1482,15 @@ class Core:
         threads_started = False
         try:
             self.setup_signal()
-            self._docker_connect()
+            with self._docker_client_cond:
+                self._docker_connect()
             self._k8s_connect()
 
             self.schedule_tasks()
             if not self.start_threads():
                 self.is_terminating.set()
                 return
-            else:
-                threads_started = True
+            threads_started = True
             try:
                 self._scheduler.start()
                 # This loop is break by KeyboardInterrupt (ctrl+c or SIGTERM).
@@ -1495,12 +1504,13 @@ class Core:
         except KeyboardInterrupt:
             pass
         finally:
+            logging.debug('Stoping...')
             self.is_terminating.set()
             if threads_started:
                 self._telegraf_thread.join()
                 self.graphite_server.join()
                 if self.bleemeo_connector is not None:
-                    self.bleemeo_connector.join()
+                    self.bleemeo_connector.stop()
                 if self.influx_connector is not None:
                     self.influx_connector.join()
             self.cache.save()
@@ -1514,9 +1524,11 @@ class Core:
             self.is_terminating.set()
 
         def handler_hup(_signum, _frame):
-            self._trigger_discovery = True
-            self._trigger_updates_count = True
-            self._trigger_facts = True
+            self.fire_triggers(
+                updates_count=True,
+                discovery=True,
+                facts=True,
+            )
             if self.bleemeo_connector:
                 self.bleemeo_connector.trigger_full_sync = True
 
@@ -1528,6 +1540,8 @@ class Core:
 
     def _docker_connect(self):
         """ Try to connect to docker remote API
+
+            Assume _docker_client_cond is held
         """
         if docker is None:
             logging.debug(
@@ -1538,15 +1552,20 @@ class Core:
         if hasattr(docker, 'APIClient'):
             self.docker_client = docker.APIClient(
                 version=DOCKER_API_VERSION,
+                timeout=10,
             )
         else:
             self.docker_client = docker.Client(  # pylint: disable=no-member
                 version=DOCKER_API_VERSION,
+                timeout=10,
             )
         try:
             self.docker_client.ping()
-        except Exception:  # pylint: disable=broad-except
-            logging.debug('Docker ping failed. Assume Docker is not used')
+            self._docker_client_cond.notify_all()
+        except Exception as exc:  # pylint: disable=broad-except
+            logging.debug(
+                'Docker ping failed. Assume Docker is not used: %s', exc
+            )
             self.docker_client = None
 
     def _k8s_connect(self):
@@ -1563,21 +1582,31 @@ class Core:
             logging.error('Failed to initialize Kubernetes client: %s', exc)
 
     def _update_docker_info(self):
+        # pylint: disable=too-many-locals
         docker_containers = {}
         docker_containers_by_name = {}
         docker_networks = {}
         docker_containers_ignored = {}
 
-        if self.docker_client is None:
-            containers = []
-        else:
-            containers = self.docker_client.containers(all=True)
+        with self._docker_client_cond:
+            if self.docker_client is None:
+                self._docker_connect()
+            docker_client = self.docker_client
+
+        containers = []
+        if docker_client is not None:
+            try:
+                containers = docker_client.containers(all=True)
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException) as exc:
+                logging.info('Failed to list containers: %s', exc)
 
         for container in containers:
             docker_id = container['Id']
             try:
-                inspect = self.docker_client.inspect_container(docker_id)
-            except docker.errors.APIError:
+                inspect = docker_client.inspect_container(docker_id)
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
                 continue  # most probably container was removed
             labels = inspect.get('Config', {}).get('Labels', {})
             if labels is None:
@@ -1592,9 +1621,15 @@ class Core:
             docker_containers[docker_id] = inspect
             docker_containers_by_name[name] = inspect
 
-        if (hasattr(self.docker_client, 'networks') and
-                hasattr(self.docker_client, 'inspect_network')):
-            for network in self.docker_client.networks():
+        if (hasattr(docker_client, 'networks') and
+                hasattr(docker_client, 'inspect_network')):
+            networks = []
+            try:
+                containers = docker_client.containers(all=True)
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException) as exc:
+                logging.info('Failed to list Docker network: %s', exc)
+            for network in networks:
                 if 'Name' not in network:
                     continue
                 name = network['Name']
@@ -1602,7 +1637,7 @@ class Core:
                     # For this network, the list of containers is needed. This
                     # is not returned on listing, and require direct inspection
                     # of the network
-                    network = self.docker_client.inspect_network(name)
+                    network = docker_client.inspect_network(name)
 
                 docker_networks[name] = network
 
@@ -1657,6 +1692,10 @@ class Core:
             self._gather_metrics,
             seconds=10,
         )
+        self.add_scheduled_job(
+            self._check_thread,
+            seconds=60,
+        )
         self.schedule_topinfo()
         self.add_scheduled_job(
             self._gather_metrics_minute,
@@ -1667,10 +1706,6 @@ class Core:
             self._gather_update_metrics,
             seconds=3600,
             next_run_in=15,
-        )
-        self.add_scheduled_job(
-            self._check_triggers,
-            seconds=10,
         )
         self.add_scheduled_job(
             self.cache.save,
@@ -1723,7 +1758,25 @@ class Core:
         )
         self._telegraf_thread.start()
 
+        thread = threading.Thread(target=self._check_triggers)
+        thread.daemon = True
+        thread.start()
+
         return True
+
+    def _check_thread(self):
+        threads = [
+            ('Bleemeo connector', self.bleemeo_connector),
+            ('InfluxDB connector', self.influx_connector),
+            ('Graphite listenner', self.graphite_server),
+            ('Telegraf collector', self._telegraf_thread),
+        ]
+        for (name, thread) in threads:
+            if thread is not None and not thread.is_alive():
+                # Re-check is_terminating to avoid race condition
+                if not self.is_terminating.is_set():
+                    logging.error('Thread %s crashed. Stopping agent', name)
+                    self.is_terminating.set()
 
     def _gather_metrics(self):
         """ Gather and send some metric missing from other sources
@@ -1773,13 +1826,16 @@ class Core:
     def _gather_metrics_minute(self):
         """ Gather and send every minute some metric missing from other sources
         """
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
+
         for key in list(self.docker_containers.keys()):
             result = self.docker_containers.get(key)
             if (result is not None
                     and 'Health' in result['State']
-                    and self.docker_client is not None):
+                    and docker_client is not None):
 
-                self._docker_health_status(key)
+                self._docker_health_status(docker_client, key)
 
         # Some service have additional metrics. Currently only Postfix and exim
         # for mail queue size
@@ -1817,12 +1873,14 @@ class Core:
                 )
             )
 
-    def _docker_health_status(self, container_id):
+    def _docker_health_status(self, docker_client, container_id):
+        # pylint: disable=too-many-branches
         """ Send metric for docker container health status
         """
         try:
-            result = self.docker_client.inspect_container(container_id)
-        except docker.errors.APIError:
+            result = docker_client.inspect_container(container_id)
+        except (docker.errors.APIError,
+                requests.exceptions.RequestException):
             return  # most probably container was removed
 
         name = result['Name'].lstrip('/')
@@ -1831,20 +1889,42 @@ class Core:
         if 'Health' not in result['State']:
             return
 
+        now = datetime.datetime.utcnow().replace(tzinfo=datetime.timezone.utc)
+        try:
+            started_at = datetime.datetime.strptime(
+                result['State'].get('StartedAt', '').split('.')[0],
+                '%Y-%m-%dT%H:%M:%S',
+            ).replace(tzinfo=datetime.timezone.utc)
+        except (ValueError, AttributeError):
+            started_at = now
+
         docker_status = result.get('State', {}).get('Status', 'running')
+        health_status = result['State'].get('Health', {}).get('Status')
         if docker_status != 'running':
             status = bleemeo_agent.type.STATUS_CRITICAL
-        elif result['State']['Health'].get('Status') == 'healthy':
+        elif health_status == 'healthy':
             status = bleemeo_agent.type.STATUS_OK
-        elif result['State']['Health'].get('Status') == 'unhealthy':
+        elif health_status == 'starting':
+            if now - started_at < datetime.timedelta(minutes=1):
+                status = bleemeo_agent.type.STATUS_OK
+            else:
+                status = bleemeo_agent.type.STATUS_WARNING
+        elif health_status == 'unhealthy':
             status = bleemeo_agent.type.STATUS_CRITICAL
         else:
+            logging.debug(
+                'Docker container status is unknown: %r',
+                health_status,
+            )
             status = bleemeo_agent.type.STATUS_UNKNOWN
 
         logs = result['State']['Health'].get('Log', [])
         problem_origin = ''
         if docker_status != 'running':
             problem_origin = 'Container stopped'
+        elif (health_status == 'starting'
+              and status == bleemeo_agent.type.STATUS_WARNING):
+            problem_origin = 'Container is still starting'
         elif logs:
             problem_origin = logs[-1].get('Output')
             if problem_origin is None:
@@ -1886,42 +1966,84 @@ class Core:
             if metric_point.time >= cutoff and key not in deleted_metrics
         }
 
-    def fire_triggers(self, updates_count=None, discovery=None):
-        if updates_count:
-            self._trigger_updates_count = True
-        if discovery:
-            self._trigger_discovery = True
+    def fire_triggers(
+            self, updates_count=False, discovery=False, facts=False,
+            immediate=True):
+        with self._trigger_condition:
+            if updates_count:
+                self._trigger_updates_count = True
+            if discovery:
+                self._trigger_discovery = True
+            if facts:
+                self._trigger_facts = True
+            if immediate:
+                self._trigger_condition.notify()
 
     def _check_triggers(self):
-        if self._trigger_discovery:
-            self._discovery_job = self.trigger_job(self._discovery_job)
-            self._trigger_discovery = False
-        if self._trigger_updates_count:
-            self._gather_update_metrics_job = self.trigger_job(
-                self._gather_update_metrics_job
-            )
-            self._trigger_updates_count = False
-        if self._trigger_facts:
-            self._update_facts_job = self.trigger_job(self._update_facts_job)
-            self._trigger_facts = False
+        interrupted = False
+        next_discovery_at = None
+        while not self.is_terminating.is_set():
+            if interrupted:
+                self.is_terminating.wait(10)
 
-        netstat_file = self.config['agent.netstat_file']
-        try:
-            mtime = os.stat(netstat_file).st_mtime
-        except OSError:
-            mtime = 0
+            with self._trigger_condition:
+                if (not self._trigger_discovery
+                        and not self._trigger_updates_count
+                        and not self._trigger_facts):
+                    interrupted = self._trigger_condition.wait(10)
 
-        if mtime != self._netstat_output_mtime:
-            # Trigger discovery if netstat.out changed
-            self._trigger_discovery = True
-            self._netstat_output_mtime = mtime
+                if self.is_terminating.is_set():
+                    break
+
+                clock_now = bleemeo_agent.util.get_clock()
+                if self._trigger_discovery:
+                    # When something requested a discovery, run one immediately
+                    # but also request one in 1 minutes. The two discovery
+                    # allows to
+                    # * Immediately discovery service that start quickly
+                    # * Still discovery service that are slow to start
+                    if next_discovery_at is None:
+                        next_discovery_at = clock_now + 60
+                    else:
+                        next_discovery_at = max(
+                            next_discovery_at, clock_now + 60,
+                        )
+                    self._trigger_discovery = False
+                    self._discovery_job = self.trigger_job(self._discovery_job)
+                elif next_discovery_at and next_discovery_at < clock_now:
+                    next_discovery_at = None
+                    self._discovery_job = self.trigger_job(self._discovery_job)
+                if self._trigger_updates_count:
+                    self._gather_update_metrics_job = self.trigger_job(
+                        self._gather_update_metrics_job
+                    )
+                    self._trigger_updates_count = False
+                if self._trigger_facts:
+                    self._update_facts_job = self.trigger_job(
+                        self._update_facts_job
+                    )
+                    self._trigger_facts = False
+
+            netstat_file = self.config['agent.netstat_file']
+            try:
+                mtime = os.stat(netstat_file).st_mtime
+            except OSError:
+                mtime = 0
+
+            if mtime != self._netstat_output_mtime:
+                # Trigger discovery if netstat.out changed
+                self.fire_triggers(discovery=True)
+                self._netstat_output_mtime = mtime
 
     def update_discovery(self, first_run=False, deleted_services=None):
         # pylint: disable=too-many-locals
-        self._trigger_discovery = False
+        # pylint: disable=too-many-branches
+        gather_started_at = time.time()
+        with self._trigger_condition:
+            self._trigger_discovery = False
         self._update_docker_info()
         self._update_kubernetes_info()
-        discovered_running_services = self._run_discovery()
+        discovered_running_services = self._run_discovery(gather_started_at)
         if first_run:
             # Should only be needed on first run. In addition to avoid
             # possible race-condition, do not run this while
@@ -1984,6 +2106,15 @@ class Core:
             self.discovered_services = new_discovered_services
             self.state.set_complex_dict(
                 'discovered_services', self.discovered_services)
+
+        # Keep any last_kill_at that is less than 1 hour old
+        common_keys = set(services).intersection(set(self.services))
+        cutoff = bleemeo_agent.util.get_clock() - 3600
+        for key in common_keys:
+            last_kill_at = self.services[key].get('last_kill_at', 0)
+            if last_kill_at > cutoff:
+                services[key]['last_kill_at'] = last_kill_at
+
         self.services = services
 
         self.graphite_server.update_discovery()
@@ -2062,7 +2193,7 @@ class Core:
             in self.discovered_services.items()
         }
 
-    def _get_processes_map(self):
+    def _get_processes_map(self, gather_started_at):
         """ Return a mapping from PID to name and container in which
             process is running.
 
@@ -2075,7 +2206,10 @@ class Core:
         # outside docker, it's None
         processes = {}
 
-        for process in bleemeo_agent.util.get_top_info(self)['processes']:
+        top_info = bleemeo_agent.util.get_top_info(
+            self, gather_started_at, True
+        )
+        for process in top_info['processes']:
             processes[process['pid']] = process
 
         return processes
@@ -2233,12 +2367,13 @@ class Core:
         service_info['port'] = default_port
         service_info['address'] = default_address
 
-    def _run_discovery(self):
+    def _run_discovery(self, gather_started_at):
         # pylint: disable=too-many-branches
+        # pylint: disable=too-many-locals
         """ Try to discover some service based on known port/process
         """
         discovered_services = {}
-        processes = self._get_processes_map()
+        processes = self._get_processes_map(gather_started_at)
 
         netstat_info = self.get_netstat()
 
@@ -2326,6 +2461,8 @@ class Core:
         mysql_user = None
         mysql_password = None
 
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
         if not instance:
             # grab maintenace password from debian.cnf
             try:
@@ -2345,10 +2482,10 @@ class Core:
                 mysql_password = debian_cnf.get('client', 'password')
             except (configparser.NoSectionError, configparser.NoOptionError):
                 pass
-        else:
-            # MySQL is running inside a docker.
+        elif docker_client is not None:
+            # MySQL is running inside a docker and Docker connection is up.
             try:
-                container_info = self.docker_client.inspect_container(instance)
+                container_info = docker_client.inspect_container(instance)
                 for env in container_info['Config']['Env']:
                     # env has the form "VARIABLE=value"
                     if env.startswith('MYSQL_ROOT_PASSWORD='):
@@ -2356,7 +2493,8 @@ class Core:
                         mysql_password = env.replace(
                             'MYSQL_ROOT_PASSWORD=', ''
                         )
-            except docker.errors.APIError:
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
                 pass  # most probably container was removed
 
         service_info['username'] = mysql_user
@@ -2368,10 +2506,12 @@ class Core:
         user = None
         password = None
 
-        if instance:
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
+        if instance and docker_client is not None:
             # Only know to extract user/password from Docker container
             try:
-                container_info = self.docker_client.inspect_container(instance)
+                container_info = docker_client.inspect_container(instance)
                 for env in container_info['Config']['Env']:
                     # env has the form "VARIABLE=value"
                     if env.startswith('POSTGRES_PASSWORD='):
@@ -2380,7 +2520,8 @@ class Core:
                             user = 'postgres'
                     elif env.startswith('POSTGRES_USER='):
                         user = env.replace('POSTGRES_USER=', '')
-            except docker.errors.APIError:
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
                 pass  # most probably container was removed
 
         service_info['username'] = user
@@ -2393,28 +2534,40 @@ class Core:
 
         while True:
             reconnect_delay = 5
-            while self.docker_client is None:
-                time.sleep(reconnect_delay)
-                self._docker_connect()
-                reconnect_delay = min(60, reconnect_delay * 2)
-
-            try:
-                self.docker_client.ping()
-            except Exception:  # pylint: disable=broad-except
-                self.docker_client = None
-                continue
-
-            try:
-                try:
-                    generator = self.docker_client.events(
-                        decode=True, since=last_event_at,
+            with self._docker_client_cond:
+                while self.docker_client is None:
+                    self._docker_client_cond.wait(
+                        reconnect_delay,
                     )
-                except TypeError:
-                    # older version of docker-py does decode=True by default
-                    # (and don't have this option)
-                    # Also they don't have since option.
-                    generator = self.docker_client.events()
+                    reconnect_delay = min(60, reconnect_delay * 2)
 
+                    if self.docker_client is None:
+                        self._docker_connect()
+
+                try:
+                    self.docker_client.ping()
+                except Exception:  # pylint: disable=broad-except
+                    self.docker_client = None
+                    continue
+
+                try:
+                    try:
+                        generator = self.docker_client.events(
+                            decode=True, since=last_event_at,
+                        )
+                    except TypeError:
+                        # older version of docker-py does decode=True by
+                        # default (and don't have this option)
+                        # Also they don't have since option.
+                        generator = self.docker_client.events()
+                except Exception as exc:  # pylint: disable=broad-except
+                    logging.debug(
+                        'Unable to create the Docker event watcher: %s',
+                        exc,
+                    )
+                    continue
+
+            try:
                 for event in generator:
                     # even older version of docker-py does not support decoding
                     # at all
@@ -2429,6 +2582,7 @@ class Core:
                 logging.debug('Docker event watcher error', exc_info=True)
 
     def _process_docker_event(self, event):
+        # pylint: disable=too-many-branches
 
         if 'Action' in event:
             action = event['Action']
@@ -2450,7 +2604,9 @@ class Core:
 
         if (action in DOCKER_DISCOVERY_EVENTS
                 and event_type == 'container'):
-            self._trigger_discovery = True
+            self.fire_triggers(
+                discovery=True, immediate=action in ['start', 'die'],
+            )
             if action == 'destroy':
                 # Mark immediately any service from this container
                 # as inactive. It avoid that a service check detect
@@ -2459,10 +2615,31 @@ class Core:
                     if ('container_id' in service_info
                             and service_info['container_id'] == actor_id):
                         service_info['active'] = False
-
+            if action == 'die':
+                # Mark immediately any service from this container
+                # as "container_stopped". It will avoid error message to be
+                # "TCP connection refused" but directly "Container stopped"
+                for service_info in self.services.values():
+                    if ('container_id' in service_info
+                            and service_info['container_id'] == actor_id):
+                        service_info['container_running'] = False
+        elif (action == 'kill' and event_type == 'container'):
+            # Mark affected service as "received a kill", to allow to longer
+            # grace period before notification. Since kill come from the user,
+            # it means user did something and probably don't need notification.
+            clock_now = bleemeo_agent.util.get_clock()
+            for service_info in self.services.values():
+                if ('container_id' in service_info
+                        and service_info['container_id'] == actor_id):
+                    service_info['last_kill_at'] = clock_now
         elif (action.startswith('health_status:')
               and event_type == 'container'):
-            self._docker_health_status(actor_id)
+
+            # Read of (single) attribute is atomic, no lock needed
+            docker_client = self.docker_client
+
+            if docker_client is not None:
+                self._docker_health_status(docker_client, actor_id)
             # If an health_status event occure, it means that
             # docker container inspect changed.
             # Update the discovery date, so BleemeoConnector will
@@ -2800,11 +2977,17 @@ class Core:
         if docker is None:
             return None
 
+        # Read of (single) attribute is atomic, no lock needed
+        docker_client = self.docker_client
+        if docker_client is None:
+            return None
+
         try:
-            container_info = self.docker_client.inspect_container(
+            container_info = docker_client.inspect_container(
                 container_name,
             )
-        except docker.errors.APIError:
+        except (docker.errors.APIError,
+                requests.exceptions.RequestException):
             return None
 
         container_id = container_info.get('Id')
@@ -2822,7 +3005,7 @@ class Core:
             if config['IPAddress']:
                 if driver == 'bridge':
                     return config['IPAddress']
-                elif address_first_network is None:
+                if address_first_network is None:
                     address_first_network = config['IPAddress']
 
         docker_gwbridge = (
@@ -2917,8 +3100,6 @@ def install_thread_hook(raven_self):
         def run_with_except_hook(*args, **kw):
             try:
                 run_old(*args, **kw)
-            except (KeyboardInterrupt, SystemExit):
-                raise
             except Exception:
                 raven_self.captureException(exc_info=sys.exc_info())
                 raise

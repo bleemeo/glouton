@@ -15,6 +15,7 @@
 #   See the License for the specific language governing permissions and
 #   limitations under the License.
 #
+# pylint: disable=too-many-lines
 
 import datetime
 import json
@@ -35,6 +36,11 @@ from six.moves import urllib_parse
 
 import bleemeo_agent
 
+try:
+    import docker
+except ImportError:
+    docker = None
+
 
 # With generate_password, taken from Django project
 # Use the system PRNG if possible
@@ -49,6 +55,23 @@ try:
     import docker
 except ImportError:
     docker = None
+
+
+DOCKER_CGROUP_RE = re.compile(
+    r'^\d+:[^:]+:'
+    r'(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])'
+    r'(?P<docker_id>[0-9a-fA-F]+)'
+    r'(\.scope)?$',
+    re.MULTILINE,
+)
+
+
+def get_docker_id_from_cgroup(cgroup_data):
+    result = set()
+    for match in DOCKER_CGROUP_RE.finditer(cgroup_data):
+        result.add(match.group('docker_id'))
+
+    return result
 
 
 def decode_docker_top(docker_top):
@@ -216,7 +239,7 @@ def pstime_to_second(pstime):
         # format is MM:SS
         minute, second = pstime.split(':')
         return int(minute) * 60 + int(second)
-    elif pstime.count(':') == 2 and '-' in pstime:
+    if pstime.count(':') == 2 and '-' in pstime:
         # format is DD-HH:MM:SS
         day, rest = pstime.split('-')
         hour, minute, second = rest.split(':')
@@ -226,20 +249,19 @@ def pstime_to_second(pstime):
             int(minute) * 60 +
             int(second)
         )
-    elif pstime.count(':') == 2:
+    if pstime.count(':') == 2:
         # format is HH:MM:SS
         hour, minute, second = pstime.split(':')
         return int(hour) * 3600 + int(minute) * 60 + int(second)
-    elif 'h' in pstime:
+    if 'h' in pstime:
         # format is HHhMM
         hour, minute = pstime.split('h')
         return int(hour) * 3600 + int(minute) * 60
-    elif 'd' in pstime:
+    if 'd' in pstime:
         # format is DDdHH
         day, hour = pstime.split('d')
         return int(day) * 86400 + int(hour) * 3600
-    else:
-        raise ValueError('Unknown pstime format "%s"' % pstime)
+    raise ValueError('Unknown pstime format "%s"' % pstime)
 
 
 def format_uptime(uptime_seconds):
@@ -536,19 +558,30 @@ def get_pending_update(core):
     return (None, None)
 
 
-def get_top_info(core):
+def get_top_info(core, gather_started_at=None, for_discovery=False):
     # pylint: disable=too-many-branches
     """ Return informations needed to build a "top" view.
     """
-    gather_started_at = time.time()
+    if not gather_started_at:
+        gather_started_at = time.time()
 
     processes = {}
-    if core.docker_client is not None:
-        processes = _get_docker_process(core.docker_client)
+
+    # Read of (single) attribute is atomic, no lock needed
+    docker_client = core.docker_client
+    if docker_client is not None:
+        processes = _get_docker_process(docker_client)
 
     if (core.container is None
             or core.config['container.pid_namespace_host']):
-        _update_process_psutil(processes, gather_started_at)
+        if for_discovery:
+            # When used for services discovery, to additional check to ensure
+            # process belong or not to a containers.
+            _update_process_psutil(
+                processes, gather_started_at, core.docker_containers,
+            )
+        else:
+            _update_process_psutil(processes, gather_started_at)
 
     now = time.time()
     cpu_usage = psutil.cpu_times_percent()
@@ -784,7 +817,19 @@ def pull_raw_metric(core, name):
 def docker_restart(docker_client, container_name):
     """ Restart a Docker container
     """
+    if docker is None and docker_client is None:
+        logging.warning(
+            "Failed to restart Telegraf: missing docker-py dependencies"
+        )
+        return
+    if docker_client is None:
+        logging.warning(
+            "Failed to restart Telegraf: unable to communicate with Docker"
+        )
+        return
+
     docker_client.stop(container_name)
+
     for _ in range(10):
         time.sleep(0.2)
         container_info = docker_client.inspect_container(container_name)
@@ -833,37 +878,55 @@ def _get_docker_process(docker_client):
 
     processes = {}
 
-    for container in docker_client.containers():
-        # container has... nameS
-        # Also name start with "/". I think it may have mulitple name
-        # and/or other "/" with docker-in-docker.
-        container_name = container['Names'][0].lstrip('/')
-        docker_id = container['Id']
-        try:
+    try:
+        for container in docker_client.containers():
+            # container has... nameS
+            # Also name start with "/". I think it may have mulitple name
+            # and/or other "/" with docker-in-docker.
+            container_name = container['Names'][0].lstrip('/')
+            docker_id = container['Id']
             try:
-                docker_top = (
-                    docker_client.top(container_name, ps_args="waux")
-                )
-            except TypeError:
-                # Older version of Docker-py don't support ps_args option
-                docker_top = (
-                    docker_client.top(container_name)
-                )
-        except docker.errors.APIError:
-            # most probably container is restarting or just stopped
-            continue
+                try:
+                    docker_top = (
+                        docker_client.top(container_name, ps_args="waux")
+                    )
+                except TypeError:
+                    # Older version of Docker-py don't support ps_args option
+                    docker_top = (
+                        docker_client.top(container_name)
+                    )
+            except (docker.errors.APIError,
+                    requests.exceptions.RequestException):
+                # most probably container is restarting or just stopped
+                continue
 
-        for process in decode_docker_top(docker_top):
-            pid = process['pid']
-            processes[pid] = process
-            processes[pid]['instance'] = container_name
-            processes[pid]['docker_id'] = docker_id
+            for process in decode_docker_top(docker_top):
+                pid = process['pid']
+                processes[pid] = process
+                processes[pid]['instance'] = container_name
+                processes[pid]['docker_id'] = docker_id
+    except (docker.errors.APIError,
+            requests.exceptions.RequestException) as exc:
+        logging.info('Failed to get Docker containers list: %s', exc)
 
     return processes
 
 
-def _update_process_psutil(processes, only_started_before):
+def _update_process_psutil(
+        processes, only_started_before, docker_containers=None):
+    """ If docker_containers is not None, try to use cgroup to ensure process
+        without container are really without containers.
+    """
     # pylint: disable=too-many-branches
+    # pylint: disable=too-many-locals
+    # pylint: disable=too-many-statements
+
+    # Process creation time is accurate up to 1/SC_CLK_TCK seconds,
+    # usually 1/100th of seconds.
+    # Process must be started at least 1/100th before only_started_before.
+    # Keep some additional margin by doubling this value.
+    only_started_before -= 2/100
+
     for process in psutil.process_iter():
         try:
             if process.pid == 0:
@@ -871,7 +934,8 @@ def _update_process_psutil(processes, only_started_before):
                 # PID 0 is not used Linux don't use it.
                 # Other system are currently not supported.
                 continue
-            if process.create_time() > only_started_before:
+            create_time = process.create_time()
+            if create_time > only_started_before:
                 # Ignore process created very recently. This is done to avoid
                 # issue with process created in a container between the listing
                 # of container process and this update from psutil. Such
@@ -916,7 +980,7 @@ def _update_process_psutil(processes, only_started_before):
             cpu_times = process.cpu_times()
             process_info = {
                 'pid': process.pid,
-                'create_time': process.create_time(),
+                'create_time': create_time,
                 'cmdline': cmdline,
                 'name': name,
                 'memory_rss': process.memory_info().rss / 1024,
@@ -932,11 +996,44 @@ def _update_process_psutil(processes, only_started_before):
             except psutil.AccessDenied:
                 process_info['exe'] = ''
 
+            process_info['instance'] = ''
+
             # Keep instance if the process is running in a Docker
             if process.pid in processes:
                 process_info['instance'] = processes[process.pid]['instance']
-            else:
-                process_info['instance'] = ''
+            elif docker_containers is not None:
+                # Check /proc/pid/cgroup to be double sure that this process
+                # run outside any container.
+                docker_id = None
+                try:
+                    with open('/proc/%d/cgroup' % process.pid) as fileobj:
+                        cgroup_data = fileobj.read()
+
+                    docker_ids = get_docker_id_from_cgroup(cgroup_data)
+                    if len(docker_ids) == 1:
+                        docker_id = docker_ids.pop()
+                except (OSError, IOError):
+                    pass
+
+                if docker_id and docker_id in docker_containers:
+                    container = docker_containers[docker_id]
+                    container_name = container['Name'].lstrip('/')
+                    process_info['instance'] = container_name
+                    logging.debug(
+                        'Base on cgroup, process %d (%s) belong to '
+                        'container %r',
+                        process.pid,
+                        name,
+                        container_name,
+                    )
+                elif docker_id and create_time > time.time() - 3:
+                    logging.debug(
+                        'Skipping process %d (%s) created recently and seems '
+                        'to belong to a container',
+                        process.pid,
+                        name,
+                    )
+                    continue
 
             processes[process.pid] = process_info
         except psutil.NoSuchProcess:

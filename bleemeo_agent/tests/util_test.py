@@ -133,3 +133,38 @@ def test_psstat_to_status():
 
     for case in tests:
         assert bleemeo_agent.util.psstat_to_status(case[0]) == case[1]
+
+
+def test_docker_cgroup_re():
+    """ Test that DOCKER_CRGOUP_RE match expecte cgroup content
+    """
+
+    # minikube v0.28.2
+    kube_cgroup = """11:freezer:/kubepods/besteffort/pod8f469a2e-bcd6-11e8-abe9-080027ae1159/bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6
+10:perf_event:/kubepods/besteffort/pod8f469a2e-bcd6-11e8-abe9-080027ae1159/bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6
+[...]
+1:name=systemd:/kubepods/besteffort/pod8f469a2e-bcd6-11e8-abe9-080027ae1159/bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6
+    """
+    # Docker on Ubuntu
+    docker_cgroup = """12:pids:/docker/bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6
+11:hugetlb:/docker/bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6
+[...]
+1:cpuset:/docker/bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6
+"""
+    # Docker on CentOS
+    docker2_cgroup = """11:cpuset:/system.slice/docker-bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6.scope
+10:devices:/system.slice/docker-bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6.scope
+[...]
+1:name=systemd:/system.slice/docker-bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6.scope
+"""
+    want = set([
+        'bc4dd7f3f935c6798df001b908b05544fdadb29bc55e12635ea3558e0a4b87f6'
+    ])
+    result = bleemeo_agent.util.get_docker_id_from_cgroup(kube_cgroup)
+    assert result == want
+
+    result = bleemeo_agent.util.get_docker_id_from_cgroup(docker_cgroup)
+    assert result == want
+
+    result = bleemeo_agent.util.get_docker_id_from_cgroup(docker2_cgroup)
+    assert result == want

@@ -65,7 +65,7 @@ Metric = collections.namedtuple('Metric', (
     'thresholds',
     'unit',
     'unit_text',
-    'active',
+    'deactivated_at',
 ))
 MetricRegistrationReq = collections.namedtuple('MetricRegistrationReq', (
     'label',
@@ -142,10 +142,62 @@ def sort_docker_inspect(inspect):
     return inspect
 
 
+def _api_datetime_to_time(date_text):
+    """ Convert a textual date to an timestamp
+
+        >>> _api_datetime_to_time("2018-06-08T09:06:53.310377Z")
+        1528448813.310377
+        >>> _api_datetime_to_time(None)  # return None
+        >>> _api_datetime_to_time("2018-06-08T09:06:53Z")
+        1528448813.0
+    """
+    if not date_text:
+        return None
+
+    formats = [
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+        '%Y-%m-%dT%H:%M:%SZ',
+    ]
+    date = None
+    for fmt in formats:
+        try:
+            date = datetime.datetime.strptime(
+                date_text, fmt
+            ).replace(tzinfo=datetime.timezone.utc)
+            break
+        except ValueError:
+            pass
+
+    if date is None:
+        return None
+    if hasattr(date, 'timestamp'):
+        return date.timestamp()
+    epoc = datetime.datetime(1970, 1, 1, tzinfo=datetime.timezone.utc)
+    return (date - epoc).total_seconds()
+
+
 class ApiError(Exception):
     def __init__(self, response):
         super(ApiError, self).__init__()
         self.response = response
+
+    def __str__(self):
+        try:
+            content = self.response.content.decode('utf-8').replace(
+                '\r\n', '\n').replace('\n\r', '\n').replace('\n', ' ')
+        except UnicodeDecodeError:
+            content = repr(self.response.content)
+        if len(content) > 70:
+            content = '%s...' % content[:67]
+
+        return 'HTTP %s: %s' % (
+            self.response.status_code,
+            content,
+        )
+
+
+class AuthApiError(ApiError):
+    """ Fail to authenticate on API (bad username/password) """
 
 
 class BleemeoAPI:
@@ -174,12 +226,12 @@ class BleemeoAPI:
             timeout=10,
         )
         if response.status_code != 200:
-            logging.debug(
-                'Failed to retrieve JWT, status=%s, content=%s',
-                response.status_code,
-                response.text,
-            )
-            raise ApiError(response)
+            if response.status_code < 500:
+                err = AuthApiError(response)
+            else:
+                err = ApiError(response)
+            logging.debug('Failed to retrieve JWT: %s', err)
+            raise err
         return response.json()['token']
 
     def api_call(self, url, method='get', params=None, data=None):
@@ -331,7 +383,9 @@ class BleemeoCache:
     # Version 1: initial version
     # Version 2: Added docker_id to Containers
     # Version 3: Added active to Metric
-    CACHE_VERSION = 3
+    # Version 4: Changed field "active" (boolean) to "deactivated_at" (time) on
+    #            Metric
+    CACHE_VERSION = 4
 
     def __init__(self, state, skip_load=False):
         self._state = state
@@ -344,10 +398,10 @@ class BleemeoCache:
         self.current_config = None
         self.next_config_at = None
         self.registration_at = None
+        self.account_id = None
 
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
-        self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
         self.facts_by_key = {}
 
@@ -367,10 +421,12 @@ class BleemeoCache:
         new.current_config = self.current_config
         new.next_config_at = self.next_config_at
         new.registration_at = self.registration_at
+        new.account_id = self.account_id
         new.update_lookup_map()
         return new
 
     def _reload(self):
+        # pylint: disable=too-many-branches
         self._state.reload()
         cache = self._state.get("_bleemeo_cache")
 
@@ -389,6 +445,10 @@ class BleemeoCache:
                 '%Y-%m-%d %H:%M:%S.%f',
             ).replace(tzinfo=datetime.timezone.utc)
 
+        account_id = cache.get("account_id")
+        if account_id:
+            self.account_id = account_id
+
         for metric_uuid, values in cache['metrics'].items():
             values[6] = MetricThreshold(*values[6])
             if cache['version'] < 3:
@@ -396,6 +456,16 @@ class BleemeoCache:
                 # It will be fixed on next full synchronization that
                 # will happen quickly
                 values.append(True)
+            if cache['version'] < 4:
+                # The active boolean changed to a deactivated_at time
+                # convert active=True to deactivated_at=None
+                # and active=False to deactivated_at=now.
+                # It will be fixed on next full synchronization that
+                # will happen quickly
+                if values[9]:
+                    values[9] = None
+                else:
+                    values[9] = time.time()
             self.metrics[metric_uuid] = Metric(*values)
 
         for service_uuid, values in cache['services'].items():
@@ -430,7 +500,6 @@ class BleemeoCache:
     def update_lookup_map(self):
         self.metrics_by_labelitem = {}
         self.containers_by_name = {}
-        self.containers_by_docker_id = {}
         self.services_by_labelinstance = {}
         self.facts_by_key = {}
 
@@ -439,7 +508,6 @@ class BleemeoCache:
 
         for container in self.containers.values():
             self.containers_by_name[container.name] = container
-            self.containers_by_docker_id[container.docker_id] = container
 
         for service in self.services.values():
             key = (service.label, service.instance)
@@ -483,6 +551,7 @@ class BleemeoCache:
             'registration_at':
                 self.registration_at.strftime('%Y-%m-%d %H:%M:%S.%f')
                 if self.registration_at else None,
+            'account_id': self.account_id,
         }
         self._state.set('_bleemeo_cache', cache)
 
@@ -539,7 +608,7 @@ class BleemeoCache:
                 threshold,
                 None,
                 None,
-                True,
+                None,
             )
         services_uuid = self._state.get_complex_dict('services_uuid', {})
         for service_info in services_uuid.values():
@@ -586,14 +655,18 @@ class BleemeoConnector(threading.Thread):
         self._unregistered_metric_queue = queue.Queue()
         self.connected = False
         self._last_disconnects = []
+        self._successive_mqtt_errors = 0
         self._disable_until = 0
         self._mqtt_queue_size = 0
+        self._mqtt_thread = None
 
         self.trigger_full_sync = False
         self.trigger_fact_sync = 0
+        self._sync_loop_event = threading.Event()
         self.last_containers_removed = bleemeo_agent.util.get_clock()
         self.last_config_will_change_msg = bleemeo_agent.util.get_clock()
         self._bleemeo_cache = None
+        self._account_mismatch_notify_at = None
 
         self.mqtt_client = mqtt.Client()
 
@@ -633,14 +706,52 @@ class BleemeoConnector(threading.Thread):
             self.mqtt_client.subscribe(
                 'v1/agent/%s/notification' % self.agent_uuid
             )
+            self._successive_mqtt_errors = 0
             logging.info('MQTT connection established')
 
-    def on_disconnect(self, _client, _userdata, _result_code):
+    def on_disconnect(self, _client, _userdata, result_code):
         if self.connected:
             logging.info('MQTT connection lost')
         self._last_disconnects.append(bleemeo_agent.util.get_clock())
         self._last_disconnects = self._last_disconnects[-15:]
+        self._successive_mqtt_errors += 1
         self.connected = False
+
+        clock_now = bleemeo_agent.util.get_clock()
+        if self.core.started_at > clock_now - 60:
+            # Do not disable Bleemeo connector for MQTT disconnection
+            # on the first minute. We want the _sync_loop to run first.
+            return
+
+        if result_code == 1:
+            # code 1 is a generic code. It could be timeout,
+            # connection refused, bad protocol, etc
+            # The most likely error that would trigger successive errors is
+            # being unable to connect due to connection refused/dropped.
+            reason = 'unable to connect'
+        elif result_code == 0:
+            # code 0 is succesful disconnect, e.g. after call to disconnect
+            # This case should never cause successive errors
+            reason = 'unknown error'
+        else:
+            reason = (
+                'connection refused. Was this server deleted '
+                'on Bleemeo Cloud platform ?'
+            )
+        if self._successive_mqtt_errors > 10 and not self._disable_until:
+            logging.info(
+                'Too many MQTT retry: %s', reason
+            )
+            self._disable_until = (
+                clock_now + 300 + random.randint(0, 600)
+            )
+        elif self._successive_mqtt_errors > 3 and not self._disable_until:
+            logging.info(
+                'Too many MQTT retry: %s', reason
+            )
+            self._disable_until = (
+                clock_now + 60 + random.randint(0, 30)
+            )
 
     def on_message(self, _client, _userdata, msg):
         notify_topic = 'v1/agent/%s/notification' % self.agent_uuid
@@ -731,8 +842,7 @@ class BleemeoConnector(threading.Thread):
         while not self.core.is_terminating.is_set():
             clock_now = bleemeo_agent.util.get_clock()
             if (not _mqtt_reconnect_at and self._disable_until > clock_now):
-                self.mqtt_client.disconnect()
-                self.mqtt_client.loop_stop()
+                self._mqtt_stop(wait_delay=0)
                 _mqtt_reconnect_at = self._disable_until
             elif (not _mqtt_reconnect_at
                   and len(self._last_disconnects) >= 6
@@ -743,8 +853,7 @@ class BleemeoConnector(threading.Thread):
                     ' Disabling MQTT for %d seconds',
                     delay
                 )
-                self.mqtt_client.disconnect()
-                self.mqtt_client.loop_stop()
+                self._mqtt_stop(wait_delay=0)
                 _mqtt_reconnect_at = clock_now + delay
                 self.trigger_fact_sync = clock_now
             elif (not _mqtt_reconnect_at
@@ -756,8 +865,7 @@ class BleemeoConnector(threading.Thread):
                     ' Disabling MQTT for %d seconds',
                     delay,
                 )
-                self.mqtt_client.disconnect()
-                self.mqtt_client.loop_stop()
+                self._mqtt_stop(wait_delay=0)
                 _mqtt_reconnect_at = clock_now + delay
                 self._last_disconnects = []
                 self.trigger_fact_sync = clock_now
@@ -766,6 +874,11 @@ class BleemeoConnector(threading.Thread):
                 logging.info('Re-enabling MQTT connection')
                 _mqtt_reconnect_at = 0
                 self._mqtt_start()
+
+            if (self._mqtt_thread is not None
+                    and not self._mqtt_thread.is_alive()):
+                logging.error('Thread MQTT connector crashed. Stopping agent')
+                self.core.is_terminating.set()
 
             self._loop()
 
@@ -782,15 +895,16 @@ class BleemeoConnector(threading.Thread):
                 force=True
             )
 
-        # Wait up to 5 second for MQTT queue to be empty before disconnecting
-        deadline = bleemeo_agent.util.get_clock() + 5
-        while (self._mqtt_queue_size > 0
-               and bleemeo_agent.util.get_clock() < deadline):
-            time.sleep(0.1)
-
-        self.mqtt_client.disconnect()
-        self.mqtt_client.loop_stop()
+        self._mqtt_stop(wait_delay=5)
+        self._sync_loop_event.set()  # unblock sync_loop thread
         sync_thread.join(5)
+
+    def stop(self):
+        """ Stop and wait to completion of self
+        """
+        # Break _loop() immediatly
+        self._metric_queue.put(None)
+        self.join()
 
     def _ready_for_mqtt(self):
         """ Check for requirement needed before MQTT connection
@@ -886,13 +1000,14 @@ class BleemeoConnector(threading.Thread):
         self._mqtt_start()
 
     def _mqtt_start(self):
+        assert self._mqtt_thread is None
 
         mqtt_host = self.core.config['bleemeo.mqtt.host']
         mqtt_port = self.core.config['bleemeo.mqtt.port']
 
         try:
             logging.debug('Connecting to MQTT broker at %s', mqtt_host)
-            self.mqtt_client.connect(
+            self.mqtt_client.connect_async(
                 mqtt_host,
                 mqtt_port,
                 60,
@@ -900,7 +1015,27 @@ class BleemeoConnector(threading.Thread):
         except socket.error:
             pass
 
-        self.mqtt_client.loop_start()
+        self._mqtt_thread = threading.Thread(
+            target=self.mqtt_client.loop_forever,
+            kwargs={'retry_first_connection': True},
+        )
+        self._mqtt_thread.daemon = True
+        self._mqtt_thread.start()
+
+    def _mqtt_stop(self, wait_delay=5):
+        if wait_delay:
+            deadline = bleemeo_agent.util.get_clock() + wait_delay
+            while (self._mqtt_queue_size > 0
+                   and bleemeo_agent.util.get_clock() < deadline):
+                time.sleep(0.1)
+        else:
+            deadline = 0
+
+        self.mqtt_client.disconnect()
+        if self._mqtt_thread is not None:
+            remaining = max(0, deadline - bleemeo_agent.util.get_clock())
+            self._mqtt_thread.join(min(3, remaining))
+        self._mqtt_thread = None
 
     def _loop(self):
         # pylint: disable=too-many-branches
@@ -908,12 +1043,17 @@ class BleemeoConnector(threading.Thread):
             Bleemeo connector thread.
         """
         metrics = []
-        timeout = 3
+        timeout = 6
+        deadline = None
 
         try:
             while True:
                 metric_point = self._metric_queue.get(timeout=timeout)
-                timeout = 0.3  # Long wait only for the first get
+                if metric_point is None:
+                    break
+                if deadline is None:
+                    deadline = time.time() + 6
+                timeout = max(0, min(deadline - time.time(), 6))
                 short_item = (metric_point.item[:API_METRIC_ITEM_LENGTH])
                 if metric_point.service_instance:
                     short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
@@ -946,12 +1086,31 @@ class BleemeoConnector(threading.Thread):
                     bleemeo_metric['status'] = bleemeo_agent.type.STATUS_NAME[
                         metric_point.status_code
                     ]
+                    if metric_point.service_label:
+                        # If the service received a kill signal, give 5 minutes
+                        # of grace time after that kill signal.
+                        service_key = (
+                            metric_point.service_label,
+                            metric_point.service_instance,
+                        )
+                        last_kill_at = self.core.services.get(
+                            service_key, {}
+                        ).get(
+                            'last_kill_at', 0,
+                        )
+                        clock_now = bleemeo_agent.util.get_clock()
+                        grace_period = last_kill_at + 300 - clock_now
+                        # Ignore grace period shorter than 1 minute. Without
+                        # explicit grace period, a default of 1 minute will
+                        # be used.
+                        if grace_period > 60:
+                            bleemeo_metric['event_grace_period'] = grace_period
                 if metric_point.problem_origin:
                     bleemeo_metric['check_output'] = (
                         metric_point.problem_origin
                     )
                 metrics.append(bleemeo_metric)
-                if len(metrics) > 1000:
+                if len(metrics) > 2000:
                     break
         except queue.Empty:
             pass
@@ -986,6 +1145,10 @@ class BleemeoConnector(threading.Thread):
 
     def register(self):
         """ Register the agent to Bleemeo SaaS service
+
+            Return an error message or None if no error. Absence of error does
+            not necessary means registration was done. It may have been delayed
+            due to information not yet available.
         """
         base_url = self.bleemeo_base_url
         registration_url = urllib_parse.urljoin(base_url, '/v1/agent/')
@@ -993,14 +1156,14 @@ class BleemeoConnector(threading.Thread):
         fqdn = self.core.last_facts.get('fqdn')
         if not fqdn:
             logging.debug('Register delayed, fact fqdn not available')
-            return
+            return None
         name = self.core.config['bleemeo.initial_agent_name']
         if not name:
             name = fqdn
 
         registration_key = self.core.config['bleemeo.registration_key']
         payload = {
-            'account': self.account_id,
+            'account': self.core.config['bleemeo.account_id'],
             'initial_password': self.core.state.get('password'),
             'display_name': name,
             'fqdn': fqdn,
@@ -1015,7 +1178,10 @@ class BleemeoConnector(threading.Thread):
             response = requests.post(
                 registration_url,
                 data=json.dumps(payload),
-                auth=('%s@bleemeo.com' % self.account_id, registration_key),
+                auth=(
+                    '%s@bleemeo.com' % self.core.config['bleemeo.account_id'],
+                    registration_key
+                ),
                 headers={
                     'X-Requested-With': 'XMLHttpRequest',
                     'Content-type': 'application/json',
@@ -1036,19 +1202,25 @@ class BleemeoConnector(threading.Thread):
             self.core.state.set('agent_uuid', content['id'])
             logging.debug('Regisration successfull')
         elif content is not None:
-            logging.info(
-                'Registration failed: %s',
-                content
-            )
+            if 'Invalid username/password' in str(content):
+                return (
+                    'Wrong credential for registration. '
+                    'Configuration contains account_id=%s and '
+                    'registration_key starts with %s' % (
+                        self.core.config['bleemeo.account_id'],
+                        registration_key[:8],
+                    )
+                )
+            return 'Registration failed: %s' % content
         elif response is not None:
-            logging.debug(
-                'Registration failed, response is not a json: %s',
-                response.content[:100])
+            return 'Registration failed: %s' % content[:100]
         else:
-            logging.debug('Registration failed, unable to connect to API')
+            return 'Registration failed: unable to connect to API'
 
         if self.core.sentry_client and self.agent_uuid:
             self.core.sentry_client.site = self.agent_uuid
+
+        return None
 
     def _bleemeo_synchronizer(self):
         if self._ready_for_mqtt():
@@ -1082,16 +1254,107 @@ class BleemeoConnector(threading.Thread):
 
         last_metrics_count = 0
         successive_errors = 0
+        successive_auth_errors = 0
         last_duplicated_events = []
+        error_delay = 5
+        last_error = None
+        first_loop = True
+        interrupted = False
 
         while not self.core.is_terminating.is_set():
             duplicated_checked = False
 
-            if self.agent_uuid is None:
-                self.register()
+            if last_error is not None:
+                successive_errors += 1
+                if isinstance(last_error, AuthApiError):
+                    successive_auth_errors += 1
+                    if 'fqdn' in bleemeo_cache.facts_by_key:
+                        with_fqdn = (
+                            ' with fqdn %s' %
+                            bleemeo_cache.facts_by_key['fqdn'].value
+                        )
+                    else:
+                        with_fqdn = ''
+                    logging.info(
+                        'Synchronize with Bleemeo Cloud platform failed: '
+                        'Unable to log in with credentials from state.json. '
+                        'Using agent ID %s%s. '
+                        'Was this server deleted on Bleemeo Cloud platform ?',
+                        self.agent_uuid,
+                        with_fqdn,
+                    )
+                else:
+                    successive_auth_errors = 0
+                    logging.info(
+                        'Synchronize with Bleemeo Cloud platform failed: %s',
+                        last_error,
+                    )
+                delay = min(successive_errors * 15, 60)
+                clock_now = bleemeo_agent.util.get_clock()
+                if successive_auth_errors > 10 and not self._disable_until:
+                    logging.info(
+                        'Too many authentication failure. '
+                        'Is this agent deleted on Bleemeo Cloud ?',
+                    )
+                    self._disable_until = (
+                        clock_now + 300 + random.randint(0, 600)
+                    )
+                elif successive_auth_errors > 3 and not self._disable_until:
+                    logging.info(
+                        'Too many authentication failure. '
+                        'Is this agent deleted on Bleemeo Cloud ?',
+                    )
+                    self._disable_until = (
+                        clock_now + 60 + random.randint(0, 30)
+                    )
+                elif successive_errors >= 15 and not self._disable_until:
+                    error_delay = 30
+                    logging.info(
+                        'Too many errors, temporary disable Bleemeo connector'
+                    )
+                    self._disable_until = (
+                        clock_now + 300 + random.randint(0, 600)
+                    )
+            elif first_loop:
+                delay = 0
+            elif not self._disable_until:
+                successive_errors = 0
+                successive_auth_errors = 0
+                delay = 15
+
+            last_error = None
+            first_loop = False
+
+            clock_now = bleemeo_agent.util.get_clock()
+            if self._disable_until > clock_now:
+                logging.info(
+                    'Bleemeo connector is disabled for %d seconds',
+                    self._disable_until - clock_now,
+                )
+                self.core.is_terminating.wait(min(
+                    60, self._disable_until - clock_now,
+                ))
+                continue
+            elif self._disable_until:
+                logging.info('Re-enabling Bleemeo connector')
+                self._disable_until = 0
+                next_full_sync = 0
+
+            if interrupted:
+                self.core.is_terminating.wait(delay)
+            interrupted = self._sync_loop_event.wait(delay)
+            if interrupted:
+                # Wait a tiny bit, so other metrics in the same batch could
+                # arrive
+                self.core.is_terminating.wait(1)
+            self._sync_loop_event.clear()
+            if self.core.is_terminating.is_set():
+                break
 
             if self.agent_uuid is None:
-                self.core.is_terminating.wait(15)
+                last_error = self.register()
+
+            if self.agent_uuid is None:
                 continue
 
             if bleemeo_api is None:
@@ -1110,26 +1373,12 @@ class BleemeoConnector(threading.Thread):
                 time.sleep(random.randint(5, 15))
                 self.trigger_full_sync = False
 
-            clock_now = bleemeo_agent.util.get_clock()
-            if self._disable_until > clock_now:
-                logging.info(
-                    'Bleemeo connector is disabled for %d seconds',
-                    self._disable_until - clock_now,
-                )
-                self.core.is_terminating.wait(min(
-                    60, self._disable_until - clock_now,
-                ))
-                continue
-            elif self._disable_until:
-                logging.info('Re-enabling Bleemeo connector')
-                self._disable_until = 0
-                next_full_sync = 0
             with self._current_metrics_lock:
                 metrics_count = len(self._current_metrics)
 
-            has_error = False
             sync_run = False
             metrics_sync = False
+            clock_now = bleemeo_agent.util.get_clock()
 
             if (next_full_sync < clock_now
                     or last_sync <= self.last_config_will_change_msg):
@@ -1143,13 +1392,10 @@ class BleemeoConnector(threading.Thread):
                         continue
                     self._sync_agent(bleemeo_cache, bleemeo_api)
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize agent. API responded: %s',
-                        exc.response.content,
-                    )
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.debug('Unable to synchronize agent. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (next_full_sync < clock_now or
                     last_sync < self.core.last_facts_update or
@@ -1164,13 +1410,10 @@ class BleemeoConnector(threading.Thread):
                         continue
                     self._sync_facts(bleemeo_cache, bleemeo_api)
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize facts. API responded: %s',
-                        exc.response.content,
-                    )
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.debug('Unable to synchronize facts. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (next_full_sync <= clock_now or
                     last_sync <= self.last_containers_removed or
@@ -1194,13 +1437,10 @@ class BleemeoConnector(threading.Thread):
                     # For a pass of metric registrations
                     metrics_sync = True
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize services. API responded: %s',
-                        exc.response.content,
-                    )
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.debug('Unable to synchronize services. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (next_full_sync <= clock_now or
                     last_sync <= self.core.last_discovery_update):
@@ -1222,13 +1462,10 @@ class BleemeoConnector(threading.Thread):
                     # For a pass of metric registrations
                     metrics_sync = True
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize containers. API responded: %s',
-                        exc.response.content,
-                    )
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.debug('Unable to synchronize containers. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
             if (metrics_sync or
                     next_full_sync <= clock_now or
@@ -1262,15 +1499,12 @@ class BleemeoConnector(threading.Thread):
                     self._sync_metrics(bleemeo_cache, bleemeo_api, full)
                     last_metrics_count = metrics_count
                     sync_run = True
-                except ApiError as exc:
-                    logging.info(
-                        'Unable to synchronize metrics. API responded: %s',
-                        exc.response.content,
-                    )
-                    self.core.is_terminating.wait(5)
-                    has_error = True
+                except (ApiError, requests.exceptions.RequestException) as exc:
+                    logging.debug('Unable to synchronize metrics. %s', exc)
+                    self.core.is_terminating.wait(error_delay)
+                    last_error = exc
 
-            if next_full_sync < clock_now and not has_error:
+            if next_full_sync < clock_now and last_error is None:
                 next_full_sync = (
                     clock_now +
                     random.randint(3500, 3700)
@@ -1281,19 +1515,13 @@ class BleemeoConnector(threading.Thread):
                     next_full_sync - clock_now,
                 )
 
-            if sync_run and not has_error:
+            if sync_run and last_error is None:
                 last_sync = clock_now
-            if has_error:
-                successive_errors += 1
-                delay = min(successive_errors * 15, 60)
-            else:
-                successive_errors = 0
-                delay = 15
-            if sync_run:
-                self._unregistered_metric_queue_cleanup()
 
             self._bleemeo_cache = bleemeo_cache.copy()
-            self.core.is_terminating.wait(delay)
+
+            if sync_run:
+                self._unregistered_metric_queue_cleanup()
 
     @property
     def registration_at(self):
@@ -1307,7 +1535,10 @@ class BleemeoConnector(threading.Thread):
         response = bleemeo_api.api_call(
             'v1/agent/%s/' % self.agent_uuid,
             'patch',
-            params={'fields': 'tags,current_config,next_config_at,created_at'},
+            params={
+                'fields': 'tags,current_config,next_config_at'
+                          ',created_at,account'
+            },
             data=json.dumps({'tags': [
                 {'name': x} for x in tags if x and len(x) <= 100
             ]}),
@@ -1322,6 +1553,21 @@ class BleemeoConnector(threading.Thread):
                 data['created_at'],
                 '%Y-%m-%dT%H:%M:%S.%fZ',
             ).replace(tzinfo=datetime.timezone.utc)
+
+        if data['account']:
+            bleemeo_cache.account_id = data['account']
+            if (data['account'] != self.core.config['bleemeo.account_id'] and
+                    self._account_mismatch_notify_at is None):
+                self._account_mismatch_notify_at = (
+                    bleemeo_agent.util.get_clock()
+                )
+                logging.warning(
+                    'Account ID in configuration file ("%s") mismatch'
+                    ' the current account ID ("%s"). The Account ID from'
+                    ' configuration file will be ignored.',
+                    self.core.config['bleemeo.account_id'],
+                    data['account'],
+                )
 
         bleemeo_cache.tags = []
         for tag in data['tags']:
@@ -1395,7 +1641,7 @@ class BleemeoConnector(threading.Thread):
                 params={
                     'agent': self.agent_uuid,
                     'fields':
-                        'id,item,label,unit,unit_text,active'
+                        'id,item,label,unit,unit_text,deactivated_at'
                         ',threshold_low_warning,threshold_low_critical'
                         ',threshold_high_warning,threshold_high_critical'
                         ',service,container,status_of',
@@ -1421,7 +1667,7 @@ class BleemeoConnector(threading.Thread):
                     ),
                     data['unit'],
                     data['unit_text'],
-                    data['active'],
+                    _api_datetime_to_time(data['deactivated_at']),
                 )
                 new_metrics[metric.uuid] = metric
             bleemeo_cache.metrics = new_metrics
@@ -1470,7 +1716,9 @@ class BleemeoConnector(threading.Thread):
 
             if metric:
                 metric_last_seen[metric.uuid] = reg_req.last_seen
-                if (not metric.active
+                last_seen_time = time.time() - (clock_now - reg_req.last_seen)
+                if (metric.deactivated_at
+                        and last_seen_time > metric.deactivated_at
                         and reg_req.last_seen > clock_now - 600
                         and self._api_support_metric_update):
                     logging.debug(
@@ -1554,7 +1802,7 @@ class BleemeoConnector(threading.Thread):
                 method='post',
                 data=json.dumps(payload),
                 params={
-                    'fields': 'id,label,item,service,container,active,'
+                    'fields': 'id,label,item,service,container,deactivated_at,'
                               'threshold_low_warning,threshold_low_critical,'
                               'threshold_high_warning,threshold_high_critical,'
                               'unit,unit_text,agent,status_of,service,'
@@ -1594,7 +1842,7 @@ class BleemeoConnector(threading.Thread):
                 ),
                 data['unit'],
                 data['unit_text'],
-                data['active'],
+                _api_datetime_to_time(data['deactivated_at']),
             )
             bleemeo_cache.metrics[metric.uuid] = metric
             metric_last_seen[metric.uuid] = reg_req.last_seen
@@ -1666,9 +1914,12 @@ class BleemeoConnector(threading.Thread):
                 if metric.label == 'agent_sent_message':
                     # This metric is managed by Bleemeo Cloud platform
                     continue
+                if metric.label == 'agent_status':
+                    # This metric should always stay active
+                    continue
                 last_seen = metric_last_seen.get(metric.uuid)
                 if ((last_seen is None or last_seen < clock_now - 4200)
-                        and metric.active):
+                        and not metric.deactivated_at):
                     logging.debug(
                         'Mark inactive the metric %s: %s (%s)',
                         metric.uuid,
@@ -1801,11 +2052,13 @@ class BleemeoConnector(threading.Thread):
                 action_text = 'updated'
                 url = service_url + str(service.uuid) + '/'
                 expected_code = 200
+                active_changed = (service.active != payload['active'])
             else:
                 method = 'post'
                 action_text = 'registrered'
                 url = service_url
                 expected_code = 201
+                active_changed = False
 
             payload.update({
                 'account': self.account_id,
@@ -1854,6 +2107,19 @@ class BleemeoConnector(threading.Thread):
                     action_text,
                     service.uuid,
                 )
+            if active_changed:
+                # API will update all associated metrics and update their
+                # active status. Apply the same rule on local cache
+                if service.active:
+                    deactivated_at = None
+                else:
+                    deactivated_at = time.time()
+
+                for (metric_key, metric) in bleemeo_cache.metrics.items():
+                    if metric.service_uuid == service.uuid:
+                        bleemeo_cache.metrics[metric_key] = metric._replace(
+                            deactivated_at=deactivated_at,
+                        )
         bleemeo_cache.update_lookup_map()
 
         # Step 4: delete object present in API by not in local
@@ -1947,7 +2213,7 @@ class BleemeoConnector(threading.Thread):
             new_hash = hashlib.sha1(
                 json.dumps(inspect, sort_keys=True).encode('utf-8')
             ).hexdigest()
-            container = bleemeo_cache.containers_by_docker_id.get(docker_id)
+            container = bleemeo_cache.containers_by_name.get(name)
 
             if container is not None and container.inspect_hash == new_hash:
                 continue
@@ -2012,8 +2278,8 @@ class BleemeoConnector(threading.Thread):
         # Step 4: delete object present in API by not in local
         try:
             local_uuids = set(
-                bleemeo_cache.containers_by_docker_id[key].uuid
-                for key in local_containers
+                bleemeo_cache.containers_by_name[v['Name'].lstrip('/')].uuid
+                for v in local_containers.values()
             )
         except KeyError:
             logging.info(
@@ -2091,8 +2357,7 @@ class BleemeoConnector(threading.Thread):
             params={'agent': self.agent_uuid, 'page_size': 100},
         )
 
-        bleemeo_cache.facts = {}
-        bleemeo_cache.facts_by_key = {}
+        facts = {}
 
         for data in api_facts:
             fact = AgentFact(
@@ -2100,8 +2365,9 @@ class BleemeoConnector(threading.Thread):
                 data['key'],
                 data['value'],
             )
-            bleemeo_cache.facts[fact.uuid] = fact
-            bleemeo_cache.facts_by_key[fact.key] = fact
+            facts[fact.uuid] = fact
+        bleemeo_cache.facts = facts
+        bleemeo_cache.update_lookup_map()
 
     def _sync_facts(self, bleemeo_cache, bleemeo_api):
         # pylint: disable=too-many-locals
@@ -2295,6 +2561,8 @@ class BleemeoConnector(threading.Thread):
         item = metric_point.item
 
         with self._current_metrics_lock:
+            if (metric_name, item) not in self._current_metrics:
+                self._sync_loop_event.set()
             self._current_metrics[(metric_name, item)] = MetricRegistrationReq(
                 metric_name,
                 item,
@@ -2309,7 +2577,7 @@ class BleemeoConnector(threading.Thread):
 
     @property
     def account_id(self):
-        return self.core.config['bleemeo.account_id']
+        return self._bleemeo_cache.account_id
 
     @property
     def agent_uuid(self):

@@ -16,6 +16,7 @@
 #   limitations under the License.
 #
 
+import datetime
 import imaplib
 import logging
 import select
@@ -23,6 +24,7 @@ import shlex
 import smtplib
 import socket
 import struct
+import threading
 import time
 
 import requests
@@ -115,6 +117,7 @@ CHECKS_INFO = {
 
 # global variable with all checks created
 CHECKS = {}
+_CHECKS_LOCK = threading.Lock()
 
 
 def update_checks(core):
@@ -124,12 +127,13 @@ def update_checks(core):
     for key, service_info in core.services.items():
         (service_name, instance) = key
         checks_seen.add(key)
-        if key in CHECKS and CHECKS[key].service_info == service_info:
-            # check unchanged
-            continue
-        elif key in CHECKS:
-            CHECKS[key].stop()
-            del CHECKS[key]
+        with _CHECKS_LOCK:
+            if key in CHECKS and CHECKS[key].service_info == service_info:
+                # check unchanged
+                continue
+            elif key in CHECKS:
+                CHECKS[key].stop()
+                del CHECKS[key]
 
         if service_info.get('ignore_check', False):
             continue
@@ -145,7 +149,8 @@ def update_checks(core):
                 instance,
                 service_info,
             )
-            CHECKS[key] = new_check
+            with _CHECKS_LOCK:
+                CHECKS[key] = new_check
         except NotImplementedError:
             logging.debug(
                 'No check exists for service %s', service_name,
@@ -157,10 +162,11 @@ def update_checks(core):
                 exc_info=True
             )
 
-    deleted_checks = set(CHECKS.keys()) - checks_seen
-    for key in deleted_checks:
-        CHECKS[key].stop()
-        del CHECKS[key]
+    with _CHECKS_LOCK:
+        deleted_checks = set(CHECKS.keys()) - checks_seen
+        for key in deleted_checks:
+            CHECKS[key].stop()
+            del CHECKS[key]
 
 
 def periodic_check():
@@ -168,8 +174,9 @@ def periodic_check():
 
         * that all TCP socket are still openned
     """
-    for check in CHECKS.values():
-        check.check_sockets()
+    with _CHECKS_LOCK:
+        for check in CHECKS.values():
+            check.check_sockets()
 
 
 class Check:
@@ -206,6 +213,12 @@ class Check:
         if not self.check_info.get('check_type') and not self.extra_ports:
             raise NotImplementedError("No check for this service")
 
+        self.open_sockets_job = None
+        self._fast_check_job = None
+        self._last_status = None
+        self._lock = threading.Lock()
+        self._closed = False
+
         logging.debug(
             'Created new check for service %s',
             self.display_name
@@ -218,8 +231,6 @@ class Check:
             seconds=60,
             next_run_in=0,
         )
-        self.open_sockets_job = None
-        self._last_status = None
 
     def _initialize_tcp_sockets(self):
         tcp_sockets = {}
@@ -261,7 +272,11 @@ class Check:
             tcp_socket.settimeout(2)
             try:
                 tcp_socket.connect((address, port))
-                self.tcp_sockets[(address, port)] = tcp_socket
+                with self._lock:
+                    if self._closed:
+                        tcp_socket.close()
+                        return
+                    self.tcp_sockets[(address, port)] = tcp_socket
             except socket.error:
                 tcp_socket.close()
                 logging.debug(
@@ -273,12 +288,18 @@ class Check:
         if run_check:
             # open_socket failed, run check now
             # reschedule job to be run immediately
-            self.current_job = self.core.trigger_job(self.current_job)
+            with self._lock:
+                if not self._closed:
+                    self.current_job = self.core.trigger_job(self.current_job)
 
     def check_sockets(self):
         """ Check if some socket are closed
         """
         try_reopen = False
+
+        if self.open_sockets_job is not None:
+            # open_sockets is pending, wait for it before checking sockets
+            return
 
         sockets = {}
         for key, sock in self.tcp_sockets.items():
@@ -306,11 +327,21 @@ class Check:
                 try_reopen = True
 
         if try_reopen:
-            self.open_sockets()
+            with self._lock:
+                if self.open_sockets_job is not None:
+                    self.core.unschedule_job(self.open_sockets_job)
+                if self._closed:
+                    return
+                self.open_sockets_job = self.core.add_scheduled_job(
+                    self.open_sockets,
+                    seconds=0,
+                    next_run_in=0,
+                )
 
     def run_check(self):
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
+        # pylint: disable=too-many-locals
         now = time.time()
 
         key = (self.service, self.instance)
@@ -363,6 +394,52 @@ class Check:
         if return_code == STATUS_CHECK_NOT_RUN:
             return_code = bleemeo_agent.type.STATUS_OK
 
+        with self._lock:
+            if self._closed:
+                return
+
+        # Re-check if the container stopped during the check
+        current_service_info = self.core.services.get(key, {})
+        if (return_code != bleemeo_agent.type.STATUS_OK and
+                not current_service_info.get('container_running', True)):
+            (return_code, output) = (
+                bleemeo_agent.type.STATUS_CRITICAL,
+                'Container stopped: connection refused'
+            )
+        # If the container has just started few seconds ago (and check failed)
+        # ignore and retry soon
+        if return_code != bleemeo_agent.type.STATUS_OK:
+            container_id = current_service_info.get('container_id')
+            container = self.core.docker_containers.get(container_id)
+            try:
+                started_at = datetime.datetime.strptime(
+                    container['State'].get('StartedAt', '').split('.')[0],
+                    '%Y-%m-%dT%H:%M:%S',
+                ).replace(tzinfo=datetime.timezone.utc)
+            except (ValueError, AttributeError, TypeError):
+                started_at = None
+            cutoff = datetime.datetime.utcnow().replace(
+                tzinfo=datetime.timezone.utc,
+            ) - datetime.timedelta(seconds=10)
+            if started_at is not None and started_at > cutoff:
+                logging.debug(
+                    'check %s: return code is %s (output=%s). '
+                    'Ignore since container just started',
+                    self.display_name,
+                    return_code,
+                    output,
+                )
+                with self._lock:
+                    if self._fast_check_job is not None:
+                        self.core.unschedule_job(self._fast_check_job)
+                    if self._closed:
+                        return
+                    self._fast_check_job = self.core.add_scheduled_job(
+                        self.run_check,
+                        seconds=0,
+                        next_run_in=10,
+                    )
+                return
         if self.instance:
             logging.debug(
                 'check %s: return code is %s (output=%s)',
@@ -399,19 +476,29 @@ class Check:
                     self.tcp_sockets[key] = None
             if (self._last_status is None
                     or self._last_status == bleemeo_agent.type.STATUS_OK):
-                self.core.add_scheduled_job(
-                    self.run_check,
-                    seconds=0,
-                    next_run_in=30,
-                )
+                with self._lock:
+                    if self._fast_check_job is not None:
+                        self.core.unschedule_job(self._fast_check_job)
+                    if self._closed:
+                        return
+                    self._fast_check_job = self.core.add_scheduled_job(
+                        self.run_check,
+                        seconds=0,
+                        next_run_in=30,
+                    )
 
         if return_code == bleemeo_agent.type.STATUS_OK and self.tcp_sockets:
             # Make sure all socket are openned
-            self.open_sockets_job = self.core.add_scheduled_job(
-                self.open_sockets,
-                seconds=0,
-                next_run_in=5,
-            )
+            with self._lock:
+                if self.open_sockets_job is not None:
+                    self.core.unschedule_job(self.open_sockets_job)
+                if self._closed:
+                    return
+                self.open_sockets_job = self.core.add_scheduled_job(
+                    self.open_sockets,
+                    seconds=0,
+                    next_run_in=5,
+                )
 
         self._last_status = return_code
 
@@ -419,11 +506,14 @@ class Check:
         """ Unschedule this check
         """
         logging.debug('Stoping check %s', self.display_name)
-        self.core.unschedule_job(self.open_sockets_job)
-        self.core.unschedule_job(self.current_job)
-        for tcp_socket in self.tcp_sockets.values():
-            if tcp_socket is not None:
-                tcp_socket.close()
+        with self._lock:
+            self._closed = True
+            self.core.unschedule_job(self.open_sockets_job)
+            self.core.unschedule_job(self.current_job)
+            self.core.unschedule_job(self._fast_check_job)
+            for tcp_socket in self.tcp_sockets.values():
+                if tcp_socket is not None:
+                    tcp_socket.close()
 
     def check_nagios(self):
         (return_code, output) = bleemeo_agent.util.run_command_timeout(
@@ -665,7 +755,7 @@ class Check:
 
         end = bleemeo_agent.util.get_clock()
 
-        if stratum == 0 or stratum == 16:
+        if stratum in (0, 16):
             return (
                 bleemeo_agent.type.STATUS_CRITICAL,
                 'NTP server not (yet) synchronized'

@@ -137,12 +137,12 @@ def get_package_version(package_name, default=None, distribution=None):
     result = None
     if distribution is None or distribution == 'debian':
         result = _get_package_version_dpkg(package_name)
-        if result is not None:
+        if result is not None and result != "<none>":
             return result
 
     if distribution is None or distribution == 'centos':
         result = _get_package_version_rpm(package_name)
-        if result is not None:
+        if result is not None and result != "<none>":
             return result
 
     return default
@@ -166,9 +166,11 @@ def get_docker_version(core):
     api_version = None
     package_version = None
 
-    if core.docker_client is not None:
+    # Read of (single) attribute is atomic, no lock needed
+    docker_client = core.docker_client
+    if docker_client is not None:
         try:
-            versions = core.docker_client.version()
+            versions = docker_client.version()
             api_version = versions.get('ApiVersion')
             package_version = versions.get('Version')
             return (package_version, api_version)
@@ -176,10 +178,22 @@ def get_docker_version(core):
             logging.debug('error getting docker verion', exc_info=True)
 
     package_version = get_package_version(
-        'docker-engine',
+        'docker-ce',
         package_version,
         distribution=core.config['distribution'],
     )
+    if package_version is None:
+        package_version = get_package_version(
+            'docker-ee',
+            package_version,
+            distribution=core.config['distribution'],
+        )
+    if package_version is None:
+        package_version = get_package_version(
+            'docker-engine',
+            package_version,
+            distribution=core.config['distribution'],
+        )
     if package_version is None:
         package_version = get_package_version(
             'docker.io',
@@ -213,11 +227,16 @@ def _get_telegraf_version(core):
 
         # output is either "Telegraf - version 1.0.0"
         # or "Telegraf v1.2.0 (git: release-1.2 b2c[...])"
+        # or "Telegraf 1.8.2+bleemeo1 (git: bleemeo 7d9b8309)"
         prefix = 'Telegraf - version '
         if output.startswith(prefix):
             package_version = output[len(prefix):]
 
         match = re.match(r'Telegraf v([^ ]+) \(git: .*\)', output)
+        if match:
+            package_version = match.group(1)
+
+        match = re.match(r'Telegraf ([^ ]+) \(git: .*\)', output)
         if match:
             package_version = match.group(1)
 

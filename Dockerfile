@@ -6,7 +6,9 @@
 
 FROM ubuntu:18.04
 
-MAINTAINER Lionel Porcheron <lionel.porcheron@bleemeo.com>
+LABEL MAINTAINER="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
+
+ENV DEBIAN_FRONTEND noninteractive
 
 RUN apt-get -y update && apt-get -y dist-upgrade && apt-get install --no-install-recommends -y wget ca-certificates && \
     mkdir /etc/bleemeo && \

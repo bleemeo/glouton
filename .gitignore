@@ -21,3 +21,4 @@ agentgo/libcabi.so
 agentgo/libcabi.h
 .vscode/
 /VERSION
+.vscode

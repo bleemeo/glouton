@@ -36,12 +36,14 @@ def gather_exim_queue_size(instance, core):
 
         In all case, this will run "exim4 -bpc" (subprocess or docker exec)
     """
-    if instance and core.docker_client is not None:
-        result = core.docker_client.exec_create(
+    # Read of (single) attribute is atomic, no lock needed
+    docker_client = core.docker_client
+    if instance and docker_client is not None:
+        result = docker_client.exec_create(
             instance,
             ['exim4', '-bpc'],
         )
-        output = core.docker_client.exec_start(result['Id'])
+        output = docker_client.exec_start(result['Id'])
     elif not instance and not core.container:
         try:
             output = subprocess.check_output(
@@ -84,12 +86,14 @@ def gather_postfix_queue_size(instance, core):
 
         In all case, this will run "postqueue -p" (subprocess or docker exec)
     """
-    if instance and core.docker_client is not None:
-        result = core.docker_client.exec_create(
+    # Read of (single) attribute is atomic, no lock needed
+    docker_client = core.docker_client
+    if instance and docker_client is not None:
+        result = docker_client.exec_create(
             instance,
             ['postqueue', '-p'],
         )
-        output = core.docker_client.exec_start(result['Id'])
+        output = docker_client.exec_start(result['Id'])
     elif not instance and not core.container:
         try:
             output = subprocess.check_output(
