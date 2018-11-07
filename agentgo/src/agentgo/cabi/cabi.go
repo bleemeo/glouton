@@ -88,7 +88,7 @@ var (
 
 // InitGroup initialises a metric group and returns his ID
 //export InitGroup
-func InitGroup() int {
+func InitGroup() C.int {
 	lock.Lock()
 	defer lock.Unlock()
 	var id = rand.Intn(32767)
@@ -101,7 +101,7 @@ func InitGroup() int {
 		return -1
 	}
 	group[id] = make(map[int]telegraf.Input)
-	return id
+	return C.int(id)
 }
 
 // addInputToGroup add the input to the groupID and return the inputID of the input in the group
@@ -129,7 +129,7 @@ func addInputToGroup(groupID int, input telegraf.Input) int {
 // return the input ID in the group
 // A simple input is only define by its name
 //export AddSimpleInput
-func AddSimpleInput(groupID int, inputName *C.char) int { // nolint: gocyclo
+func AddSimpleInput(groupID C.int, inputName *C.char) C.int { // nolint: gocyclo
 	var input telegraf.Input
 	var err error
 	goInputName := C.GoString(inputName)
@@ -158,13 +158,13 @@ func AddSimpleInput(groupID int, inputName *C.char) int { // nolint: gocyclo
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return addInputToGroup(groupID, input)
+	return C.int(addInputToGroup(int(groupID), input))
 }
 
 // AddInputWithAddress add an input to the groupID
 // return the input ID in the group
 //export AddInputWithAddress
-func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
+func AddInputWithAddress(groupID C.int, inputName *C.char, server *C.char) C.int {
 	var input telegraf.Input
 	var err error
 	goInputName := C.GoString(inputName)
@@ -182,19 +182,19 @@ func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return addInputToGroup(groupID, input)
+	return C.int(addInputToGroup(int(groupID), input))
 }
 
 // FreeGroup deletes a collector
 // exit code 0 : the input group has been removed
 // exit code -1 : the input group did not exist
 //export FreeGroup
-func FreeGroup(groupID int) int {
+func FreeGroup(groupID C.int) C.int {
 	lock.Lock()
 	defer lock.Unlock()
-	_, ok := group[groupID]
+	_, ok := group[int(groupID)]
 	if ok {
-		delete(group, groupID)
+		delete(group, int(groupID))
 		return 0
 	}
 	return -1
@@ -204,14 +204,14 @@ func FreeGroup(groupID int) int {
 // exit code 0 : the input has been removed
 // exit code -1 : the input or the group did not exist
 //export FreeInput
-func FreeInput(groupID int, inputID int) int {
+func FreeInput(groupID C.int, inputID C.int) C.int {
 	lock.Lock()
 	defer lock.Unlock()
-	inputsGroup, ok := group[groupID]
+	inputsGroup, ok := group[int(groupID)]
 	if ok {
-		_, ok := inputsGroup[inputID]
+		_, ok := inputsGroup[int(inputID)]
 		if ok {
-			delete(inputsGroup, inputID)
+			delete(inputsGroup, int(inputID))
 			return 0
 		}
 	}
@@ -246,10 +246,10 @@ func freeMetricPoint(metricPoint C.MetricPoint) {
 
 // Gather returns associated metrics in a slice of groupID given in parameter.
 //export Gather
-func Gather(groupID int) C.MetricPointVector {
+func Gather(groupID C.int) C.MetricPointVector {
 	lock.Lock()
 	defer lock.Unlock()
-	var inputgroup, ok = group[groupID]
+	var inputgroup, ok = group[int(groupID)]
 	var result C.MetricPointVector
 	if !ok {
 		return result
