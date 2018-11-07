@@ -19,6 +19,7 @@
 package redis
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,17 +34,21 @@ type Input struct {
 }
 
 // New initialise redis.Input
-func New(url string) *Input {
+func New(url string) (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["redis"]
 	if ok {
 		redisInput, ok := input().(*redis.Redis)
 		if ok {
 			slice := append(make([]string, 0), url)
 			redisInput.Servers = slice
-			return &Input{redisInput}
+			i = &Input{redisInput}
+		} else {
+			err = errors.New("Telegraf \"redis\" input type is not redis.Redis")
 		}
+	} else {
+		err = errors.New("Telegraf don't have \"redis\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

@@ -17,6 +17,7 @@
 package mem
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,13 +32,15 @@ type Input struct {
 }
 
 // New initialise mem.Input
-func New() *Input {
+func New() (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mem"]
 	if ok {
 		memInput := input().(*mem.MemStats)
-		return &Input{memInput}
+		i = &Input{memInput}
+	} else {
+		err = errors.New("Telegraf don't have \"mem\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

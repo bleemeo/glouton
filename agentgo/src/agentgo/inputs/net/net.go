@@ -17,6 +17,7 @@
 package net
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,14 +32,16 @@ type Input struct {
 }
 
 // New initialise met.Input
-func New() *Input {
+func New() (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
-		return &Input{netInput}
+		i = &Input{netInput}
+	} else {
+		err = errors.New("Telegraf don't have \"net\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

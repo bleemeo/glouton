@@ -22,6 +22,7 @@ import (
 	input "agentgo/inputs/diskio"
 	"agentgo/types"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -30,8 +31,12 @@ import (
 var inputsgroups = make(map[int]map[int]telegraf.Input)
 
 func main() {
+	var err error
 	inputsgroups[1] = make(map[int]telegraf.Input)
-	inputsgroups[1][1] = input.New()
+	inputsgroups[1][1], err = input.New()
+	if err != nil {
+		log.Fatalf("failed to create input: %s", err)
+	}
 	for {
 		fmt.Println("----------------------------------------------------")
 		acc := types.Accumulator{}

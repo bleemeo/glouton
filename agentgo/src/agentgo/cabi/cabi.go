@@ -73,6 +73,7 @@ import (
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
 	"agentgo/types"
+	"fmt"
 	"math/rand"
 	"unsafe"
 
@@ -122,49 +123,56 @@ func addInputToGroup(groupID int, input telegraf.Input) int {
 // return the input ID in the group
 // A simple input is only define by its name
 //export AddSimpleInput
-func AddSimpleInput(groupID int, inputName *C.char) int {
+func AddSimpleInput(groupID int, inputName *C.char) int { // nolint: gocyclo
+	var input telegraf.Input
+	var err error
 	goInputName := C.GoString(inputName)
-	if goInputName == "cpu" {
-		input := cpu.New()
-		return addInputToGroup(groupID, input)
-	} else if goInputName == "mem" {
-		input := mem.New()
-		return addInputToGroup(groupID, input)
-	} else if goInputName == "swap" {
-		input := swap.New()
-		return addInputToGroup(groupID, input)
-	} else if goInputName == "system" {
-		input := system.New()
-		return addInputToGroup(groupID, input)
-	} else if goInputName == "process" {
-		input := process.New()
-		return addInputToGroup(groupID, input)
-	} else if goInputName == "net" {
-		input := net.New()
-		return addInputToGroup(groupID, input)
-	} else if goInputName == "diskio" {
-		input := diskio.New()
-		return addInputToGroup(groupID, input)
-	} else if goInputName == "disk" {
-		input := disk.New()
-		return addInputToGroup(groupID, input)
+	switch goInputName {
+	case "cpu":
+		input, err = cpu.New()
+	case "mem":
+		input, err = mem.New()
+	case "swap":
+		input, err = swap.New()
+	case "system":
+		input, err = system.New()
+	case "process":
+		input, err = process.New()
+	case "net":
+		input, err = net.New()
+	case "diskio":
+		input, err = diskio.New()
+	case "disk":
+		input, err = disk.New()
+	default:
+		err = fmt.Errorf("Input \"%s\" unknown", goInputName)
 	}
-	return -1
+	if err != nil {
+		return -1
+	}
+	return addInputToGroup(groupID, input)
 }
 
 // AddInputWithAddress add an input to the groupID
 // return the input ID in the group
 //export AddInputWithAddress
 func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
+	var input telegraf.Input
+	var err error
 	goInputName := C.GoString(inputName)
 	if goInputName == "redis" {
-		return addInputToGroup(groupID, redis.New(C.GoString(server)))
+		input, err = redis.New(C.GoString(server))
 	} else if goInputName == "nginx" {
-		return addInputToGroup(groupID, nginx.New(C.GoString(server)))
+		input, err = nginx.New(C.GoString(server))
 	} else if goInputName == "mysql" {
-		return addInputToGroup(groupID, mysql.New(C.GoString(server)))
+		input, err = mysql.New(C.GoString(server))
+	} else {
+		err = fmt.Errorf("Input \"%s\" unknown", goInputName)
 	}
-	return -1
+	if err != nil {
+		return -1
+	}
+	return addInputToGroup(groupID, input)
 }
 
 // FreeGroup deletes a collector

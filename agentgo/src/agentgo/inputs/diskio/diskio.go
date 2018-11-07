@@ -17,6 +17,7 @@
 package diskio
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -38,18 +39,15 @@ type Input struct {
 }
 
 // New initialise diskio.Input
-func New() *Input {
+func New() (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
-		return &Input{
-			Input: diskioInput,
-		}
+		i = &Input{Input: diskioInput}
+	} else {
+		err = errors.New("Telegraf don't have \"diskio\" input")
 	}
-	return &Input{
-		Input:      nil,
-		pastValues: nil,
-	}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

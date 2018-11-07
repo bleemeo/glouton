@@ -17,6 +17,7 @@
 package cpu
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -32,15 +33,17 @@ type Input struct {
 }
 
 // New initialise cpu.Input
-func New() *Input {
+func New() (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["cpu"]
 	if ok {
 		cpuInput := input().(*cpu.CPUStats)
 		cpuInput.PerCPU = false
 		cpuInput.CollectCPUTime = false
-		return &Input{cpuInput}
+		i = &Input{cpuInput}
+	} else {
+		err = errors.New("Telegraf don't have \"cpu\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

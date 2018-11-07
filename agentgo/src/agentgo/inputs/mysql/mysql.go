@@ -19,6 +19,7 @@
 package mysql
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,17 +34,21 @@ type Input struct {
 }
 
 // New initialise mysql.Input
-func New(server string) *Input {
+func New(server string) (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mysql"]
 	if ok {
 		mysqlInput, ok := input().(*mysql.Mysql)
 		if ok {
 			slice := append(make([]string, 0), server)
 			mysqlInput.Servers = slice
-			return &Input{mysqlInput}
+			i = &Input{mysqlInput}
+		} else {
+			err = errors.New("Telegraf \"mysql\" input type is not mysql.Mysql")
 		}
+	} else {
+		err = errors.New("Telegraf don't have \"mysql\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

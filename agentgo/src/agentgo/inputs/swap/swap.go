@@ -17,6 +17,7 @@
 package swap
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,13 +32,15 @@ type Input struct {
 }
 
 // New initialise swap.Input
-func New() *Input {
+func New() (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["swap"]
 	if ok {
 		swapInput := input().(*swap.SwapStats)
-		return &Input{swapInput}
+		i = &Input{swapInput}
+	} else {
+		err = errors.New("Telegraf don't have \"swap\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

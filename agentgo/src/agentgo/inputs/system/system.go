@@ -17,6 +17,7 @@
 package system
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,13 +32,15 @@ type Input struct {
 }
 
 // New initialise system.Input
-func New() *Input {
+func New() (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["system"]
 	if ok {
 		systemInput := input().(*system.SystemStats)
-		return &Input{systemInput}
+		i = &Input{systemInput}
+	} else {
+		err = errors.New("Telegraf don't have \"system\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

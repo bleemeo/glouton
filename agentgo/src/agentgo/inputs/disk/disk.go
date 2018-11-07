@@ -17,6 +17,7 @@
 package disk
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -31,13 +32,15 @@ type Input struct {
 }
 
 // New initialise disk.Input
-func New() *Input {
+func New() (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["disk"]
 	if ok {
 		diskInput := input().(*disk.DiskStats)
-		return &Input{diskInput}
+		i = &Input{diskInput}
+	} else {
+		err = errors.New("Telegraf don't have \"disk\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input

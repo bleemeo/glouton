@@ -19,6 +19,7 @@
 package nginx
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -33,7 +34,7 @@ type Input struct {
 }
 
 // New initialise nginx.Input
-func New(url string) *Input {
+func New(url string) (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["nginx"]
 	if ok {
 		nginxInput, ok := input().(*nginx.Nginx)
@@ -41,10 +42,14 @@ func New(url string) *Input {
 			slice := append(make([]string, 0), url)
 			nginxInput.Urls = slice
 			nginxInput.InsecureSkipVerify = false
-			return &Input{nginxInput}
+			i = &Input{nginxInput}
+		} else {
+			err = errors.New("Telegraf \"nginx\" input type is not nginx.Nginx")
 		}
+	} else {
+		err = errors.New("Telegraf don't have \"nginx\" input")
 	}
-	return &Input{nil}
+	return
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
