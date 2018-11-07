@@ -18,20 +18,6 @@
 
 package redis
 
-/*
-// initRedisInput initialize the redis input
-func initRedisInput(url string) (telegraf.Input, error) {
-	input := telegraf_inputs.Inputs["redis"]()
-	redisInput, ok := input.(*redis.Redis)
-	if ok {
-		slice := append(make([]string, 0), url)
-		redisInput.Servers = slice
-		return input, nil
-	}
-	return nil, errors.New("Failed to initialize redis input")
-}
-*/
-
 import (
 	"fmt"
 	"time"
