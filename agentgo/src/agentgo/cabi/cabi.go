@@ -75,16 +75,22 @@ import (
 	"agentgo/types"
 	"fmt"
 	"math/rand"
+	"sync"
 	"unsafe"
 
 	"github.com/influxdata/telegraf"
 )
 
-var group = make(map[int]map[int]telegraf.Input)
+var (
+	group = make(map[int]map[int]telegraf.Input)
+	lock  sync.Mutex
+)
 
 // InitGroup initialises a metric group and returns his ID
 //export InitGroup
 func InitGroup() int {
+	lock.Lock()
+	defer lock.Unlock()
 	var id = rand.Intn(32767)
 	var selectionNumber int
 	for _, ok := group[id]; ok == true && selectionNumber < 10; {
@@ -150,6 +156,8 @@ func AddSimpleInput(groupID int, inputName *C.char) int { // nolint: gocyclo
 	if err != nil {
 		return -1
 	}
+	lock.Lock()
+	defer lock.Unlock()
 	return addInputToGroup(groupID, input)
 }
 
@@ -172,6 +180,8 @@ func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
 	if err != nil {
 		return -1
 	}
+	lock.Lock()
+	defer lock.Unlock()
 	return addInputToGroup(groupID, input)
 }
 
@@ -180,6 +190,8 @@ func AddInputWithAddress(groupID int, inputName *C.char, server *C.char) int {
 // exit code -1 : the input group did not exist
 //export FreeGroup
 func FreeGroup(groupID int) int {
+	lock.Lock()
+	defer lock.Unlock()
 	_, ok := group[groupID]
 	if ok {
 		delete(group, groupID)
@@ -193,6 +205,8 @@ func FreeGroup(groupID int) int {
 // exit code -1 : the input or the group did not exist
 //export FreeInput
 func FreeInput(groupID int, inputID int) int {
+	lock.Lock()
+	defer lock.Unlock()
 	inputsGroup, ok := group[groupID]
 	if ok {
 		_, ok := inputsGroup[inputID]
@@ -233,21 +247,32 @@ func freeMetricPoint(metricPoint C.MetricPoint) {
 // Gather returns associated metrics in a slice of groupID given in parameter.
 //export Gather
 func Gather(groupID int) C.MetricPointVector {
+	lock.Lock()
+	defer lock.Unlock()
 	var inputgroup, ok = group[groupID]
 	var result C.MetricPointVector
 	if !ok {
 		return result
 	}
 	metrics := make(map[int][]types.MetricPoint)
+	var metricsLock sync.Mutex
+	var wg sync.WaitGroup
 
 	for inputID, input := range inputgroup {
-		accumulator := types.Accumulator{}
-		err := input.Gather(&accumulator)
-		if err != nil {
-			return result
-		}
-		metrics[inputID] = accumulator.GetMetricPointSlice()
+		wg.Add(1)
+		go func(inputID int, input telegraf.Input) {
+			defer wg.Done()
+			accumulator := types.Accumulator{}
+			err := input.Gather(&accumulator)
+			if err != nil {
+				return
+			}
+			metricsLock.Lock()
+			defer metricsLock.Unlock()
+			metrics[inputID] = accumulator.GetMetricPointSlice()
+		}(inputID, input)
 	}
+	wg.Wait()
 
 	var metricsLen int
 	for _, metricsSlice := range metrics {
