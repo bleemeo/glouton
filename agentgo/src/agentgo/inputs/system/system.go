@@ -99,7 +99,6 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-// nolint: gocyclo
 func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// AddCounter add system_uptime_format metric that we do not want.
 }
