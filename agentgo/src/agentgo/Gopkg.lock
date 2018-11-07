@@ -56,12 +56,6 @@
   version = "v2.18.07"
 
 [[projects]]
-  branch = "master"
-  name = "github.com/shirou/w32"
-  packages = ["."]
-  revision = "bb4de0191aa41b5507caa14b0650cdbddcd9280b"
-
-[[projects]]
   name = "github.com/stretchr/objx"
   packages = ["."]
   revision = "477a77ecc69700c7cdeb1fa9e129548e1c1c393c"
@@ -88,6 +82,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4f224f5912fd47e6fd98b2c4cdd03d8a64fd9ad622d74348077f12a3ca1ff32e"
+  inputs-digest = "02925feada10c17db5fb5eb4fd3b9c150688ae3e9091c7a6b59161103f497606"
   solver-name = "gps-cdcl"
   solver-version = 1
