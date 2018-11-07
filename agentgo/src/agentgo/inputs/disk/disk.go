@@ -19,6 +19,7 @@ package disk
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -29,14 +30,32 @@ import (
 // Input countains input information about disk
 type Input struct {
 	telegraf.Input
+	mountPoint string
+	blacklist  []string
 }
 
 // New initialise disk.Input
-func New() (i *Input, err error) {
+//
+// mountPoint is the root path to monitor. Useful when running inside a Docker.
+//
+// blacklist is a list of path-prefix to ignore. Path prefix means that "/mnt" and "/mnt/disk" both have "/mnt"
+// as prefix, but "/mnt-disk" does not.
+func New(mountPoint string, blacklist []string) (i *Input, err error) {
+	blacklistTrimed := make([]string, len(blacklist))
+	for i, v := range blacklist {
+		blacklistTrimed[i] = strings.TrimRight(v, "/")
+	}
 	var input, ok = telegraf_inputs.Inputs["disk"]
 	if ok {
 		diskInput := input().(*disk.DiskStats)
-		i = &Input{diskInput}
+		diskInput.IgnoreFS = []string{
+			"tmpfs", "devtmpfs", "devfs", "overlay", "aufs", "squashfs",
+		}
+		i = &Input{
+			diskInput,
+			strings.TrimRight(mountPoint, "/"),
+			blacklistTrimed,
+		}
 	} else {
 		err = errors.New("Telegraf don't have \"disk\" input")
 	}
@@ -46,7 +65,7 @@ func New() (i *Input, err error) {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (i *Input) Gather(acc telegraf.Accumulator) error {
-	diskAccumulator := accumulator{acc}
+	diskAccumulator := accumulator{acc, i.mountPoint, i.blacklist}
 	err := i.Input.Gather(&diskAccumulator)
 	return err
 }
@@ -54,6 +73,8 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 // accumulator save the disk metric from telegraf
 type accumulator struct {
 	accumulator telegraf.Accumulator
+	mountPoint  string
+	blacklist   []string
 }
 
 // AddGauge adds a metric to the accumulator with the given measurement
@@ -67,6 +88,17 @@ func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}
 	finalTags := make(map[string]string)
 	item, ok := tags["path"]
 	if ok {
+		if !strings.HasPrefix(item, a.mountPoint) {
+			// partition don't start with mountPoint, so it's a parition
+			// which is only inside the container. Ignore it
+			return
+		}
+		item = strings.TrimPrefix(item, a.mountPoint)
+		for _, v := range a.blacklist {
+			if v == item || strings.HasPrefix(item, v+"/") {
+				return
+			}
+		}
 		finalTags["item"] = item
 	}
 	for metricName, value := range fields {

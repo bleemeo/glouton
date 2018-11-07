@@ -129,7 +129,7 @@ func addInputToGroup(groupID int, input telegraf.Input) int {
 // return the input ID in the group
 // A simple input is only define by its name
 //export AddSimpleInput
-func AddSimpleInput(groupID C.int, inputName *C.char) C.int { // nolint: gocyclo
+func AddSimpleInput(groupID C.int, inputName *C.char) C.int {
 	var input telegraf.Input
 	var err error
 	goInputName := C.GoString(inputName)
@@ -144,15 +144,77 @@ func AddSimpleInput(groupID C.int, inputName *C.char) C.int { // nolint: gocyclo
 		input, err = system.New()
 	case "process":
 		input, err = process.New()
-	case "net":
-		input, err = net.New()
-	case "diskio":
-		input, err = diskio.New()
-	case "disk":
-		input, err = disk.New()
 	default:
 		err = fmt.Errorf("Input \"%s\" unknown", goInputName)
 	}
+	if err != nil {
+		return -1
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	return C.int(addInputToGroup(int(groupID), input))
+}
+
+// AddNetworkInput add the network input to groupID with configured blacklist.
+//
+// Any network interface whose name start with an entry from blacklist is ignored.
+//
+// Caller is responsible for freeing blacklistEntries that are copied by this method.
+//export AddNetworkInput
+func AddNetworkInput(groupID C.int, blacklistEntries **C.char, blacklistCount C.int) C.int {
+	blacklistSlice := make([]string, int(blacklistCount))
+	cBlacklistSlice := (*[1<<30 - 1]*C.char)(unsafe.Pointer(blacklistEntries))[:blacklistCount:blacklistCount]
+	for i, v := range cBlacklistSlice {
+		blacklistSlice[i] = C.GoString(v)
+	}
+	input, err := net.New(blacklistSlice)
+	if err != nil {
+		return -1
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	return C.int(addInputToGroup(int(groupID), input))
+}
+
+// AddDiskInput add the disk input to groupID with configured blacklist.
+//
+// Any path starting with with an entry from blacklist is ignored.
+//
+// mountPoint should be used when agent run in a container and it's the path where
+// the host / is mounter inside the containers. Use "" or "/" when running outside
+// any container.
+//
+// Caller is responsible for freeing blacklistEntries and mountPoint that are copied by this method.
+//export AddDiskInput
+func AddDiskInput(groupID C.int, mountPoint *C.char, blacklistEntries **C.char, blacklistCount C.int) C.int {
+	blacklistSlice := make([]string, int(blacklistCount))
+	cBlacklistSlice := (*[1<<30 - 1]*C.char)(unsafe.Pointer(blacklistEntries))[:blacklistCount:blacklistCount]
+	for i, v := range cBlacklistSlice {
+		blacklistSlice[i] = C.GoString(v)
+	}
+	input, err := disk.New(C.GoString(mountPoint), blacklistSlice)
+	if err != nil {
+		return -1
+	}
+	lock.Lock()
+	defer lock.Unlock()
+	return C.int(addInputToGroup(int(groupID), input))
+}
+
+// AddDiskIOInput add the diskio input to groupID with configured whitelist.
+//
+// whitelist is a list of regular expression. Any device whose name match an
+// entry from whitelist is monitored.
+//
+// Caller is responsible for freeing whitelistEntries that are copied by this method.
+//export AddDiskIOInput
+func AddDiskIOInput(groupID C.int, whitelistEntries **C.char, whitelistCount C.int) C.int {
+	whitelistSlice := make([]string, int(whitelistCount))
+	cwhitelistSlice := (*[1<<30 - 1]*C.char)(unsafe.Pointer(whitelistEntries))[:whitelistCount:whitelistCount]
+	for i, v := range cwhitelistSlice {
+		whitelistSlice[i] = C.GoString(v)
+	}
+	input, err := diskio.New(whitelistSlice)
 	if err != nil {
 		return -1
 	}

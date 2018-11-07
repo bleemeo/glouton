@@ -19,6 +19,7 @@ package diskio
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -35,15 +36,30 @@ type metricPoint struct {
 // Input countains input information about diskio
 type Input struct {
 	telegraf.Input
+	whitelist  []*regexp.Regexp
 	pastValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
 
 // New initialise diskio.Input
-func New() (i *Input, err error) {
+//
+// whitelist is a list of regular expretion for device to include
+func New(whitelist []string) (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
+	whitelistRE := make([]*regexp.Regexp, len(whitelist))
+	for index, v := range whitelist {
+		whitelistRE[index], err = regexp.Compile(v)
+		if err != nil {
+			err = fmt.Errorf("diskio whitelist RE compile fail: %s", err)
+			return
+		}
+	}
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
-		i = &Input{Input: diskioInput}
+		i = &Input{
+			diskioInput,
+			whitelistRE,
+			make(map[string]map[string]metricPoint),
+		}
 	} else {
 		err = errors.New("Telegraf don't have \"diskio\" input")
 	}
@@ -55,6 +71,7 @@ func New() (i *Input, err error) {
 func (i *Input) Gather(acc telegraf.Accumulator) error {
 	diskioAccumulator := accumulator{
 		acc,
+		i.whitelist,
 		i.pastValues,
 		make(map[string]map[string]metricPoint),
 	}
@@ -66,6 +83,7 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 // accumulator save the diskio metric from telegraf
 type accumulator struct {
 	accumulator   telegraf.Accumulator
+	whitelist     []*regexp.Regexp
 	pastValues    map[string]map[string]metricPoint // item => metricName => metricPoint
 	currentValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
@@ -89,6 +107,16 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 	finalTags := make(map[string]string)
 	item, ok := tags["name"]
 	if ok {
+		match := false
+		for _, r := range a.whitelist {
+			if r.MatchString(item) {
+				match = true
+				break
+			}
+		}
+		if !match {
+			return
+		}
 		finalTags["item"] = item
 		a.currentValues[item] = make(map[string]metricPoint)
 	}

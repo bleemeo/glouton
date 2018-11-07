@@ -63,6 +63,10 @@ def _init_lib():
         _lib.FreeGroup.restype = None
         _lib.FreeGroup.argtypes = [c_int]
         _lib.AddSimpleInput.argtypes = [c_int, c_char_p]
+        _lib.AddNetworkInput.argtypes = [c_int, POINTER(c_char_p), c_int]
+        _lib.AddDiskInput.argtypes = [
+            c_int, c_char_p, POINTER(c_char_p), c_int]
+        _lib.AddDiskIOInput.argtypes = [c_int, POINTER(c_char_p), c_int]
         _lib.AddInputWithAddress.argtypes = [c_int, c_char_p, c_char_p]
         _lib.Gather.restype = _MetricPointVector
         _lib.Gather.argtypes = [c_int]
@@ -72,13 +76,21 @@ def _init_lib():
 
 class Telegraflib:
 
-    def __init__(self, is_terminated, emit_metric):
+    def __init__(
+            self, is_terminated, emit_metric, network_blacklist,
+            disk_mount_point, disk_blacklist, diskio_whitelist):
+        self.emit_metric = emit_metric
+        self.is_terminated = is_terminated
+        self.network_blacklist = network_blacklist
+        if disk_mount_point is None:
+            disk_mount_point = "/"
+        self.disk_mount_point = disk_mount_point
+        self.disk_blacklist = disk_blacklist
+        self.diskio_whitelist = diskio_whitelist
         _init_lib()
         self.inputs_id_map = {}
         self.input_group_id = _lib.InitGroup()
         self.system_input_group_id = _lib.InitGroup()
-        self.emit_metric = emit_metric
-        self.is_terminated = is_terminated
         if self.input_group_id < 0:
             raise ValueError(
                 "Impossible value for input_group_id: failed to initialize TelegrafLib")
@@ -87,8 +99,28 @@ class Telegraflib:
                 "Impossible value for system_input_group_id: failed to initialize TelegrafLib")
 
     def _add_system_input(self, input_name):
-        input_id = _lib.AddSimpleInput(
-            self.system_input_group_id, input_name.encode('utf-8'))
+        if input_name == 'net':
+            c_array = (c_char_p * len(self.network_blacklist))()
+            c_array[:] = [x.encode('utf-8') for x in self.network_blacklist]
+            input_id = _lib.AddNetworkInput(
+                self.system_input_group_id, c_array, len(c_array))
+        elif input_name == 'disk':
+            c_array = (c_char_p * len(self.disk_blacklist))()
+            c_array[:] = [x.encode('utf-8') for x in self.disk_blacklist]
+            input_id = _lib.AddDiskInput(
+                self.system_input_group_id,
+                c_char_p(self.disk_mount_point.encode('utf-8')),
+                c_array,
+                len(c_array),
+            )
+        elif input_name == 'diskio':
+            c_array = (c_char_p * len(self.diskio_whitelist))()
+            c_array[:] = [x.encode('utf-8') for x in self.diskio_whitelist]
+            input_id = _lib.AddDiskIOInput(
+                self.system_input_group_id, c_array, len(c_array))
+        else:
+            input_id = _lib.AddSimpleInput(
+                self.system_input_group_id, input_name.encode('utf-8'))
         if input_id < 0:
             raise ValueError(
                 "Impossible value of input_id: _add_system_input has fail: {}".format(input_name))

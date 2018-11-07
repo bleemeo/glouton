@@ -1207,6 +1207,10 @@ class Core:
         self._telegraf = bleemeo_agent.telegraflib.Telegraflib(
             self.is_terminating,
             self.emit_metric,
+            self.config['network_interface_blacklist'],
+            self.config['df.host_mount_point'],
+            self.config['df.path_ignore'],
+            self.config['disk_monitor'],
         )
 
         return True

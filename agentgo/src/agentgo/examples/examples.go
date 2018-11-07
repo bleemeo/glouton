@@ -33,7 +33,7 @@ var inputsgroups = make(map[int]map[int]telegraf.Input)
 func main() {
 	var err error
 	inputsgroups[1] = make(map[int]telegraf.Input)
-	inputsgroups[1][1], err = input.New()
+	inputsgroups[1][1], err = input.New([]string{".*"})
 	if err != nil {
 		log.Fatalf("failed to create input: %s", err)
 	}

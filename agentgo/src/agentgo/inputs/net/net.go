@@ -19,6 +19,7 @@ package net
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -34,17 +35,21 @@ type metricPoint struct {
 // Input countains input information about net
 type Input struct {
 	telegraf.Input
+	blacklist  []string
 	pastValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
 
-// New initialise met.Input
-func New() (i *Input, err error) {
+// New initialise net.Input
+//
+// blacklist contains a list of interface name prefix to ignore
+func New(blacklist []string) (i *Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
 		i = &Input{
 			netInput,
+			blacklist,
 			make(map[string]map[string]metricPoint),
 		}
 	} else {
@@ -58,6 +63,7 @@ func New() (i *Input, err error) {
 func (i *Input) Gather(acc telegraf.Accumulator) error {
 	netAccumulator := accumulator{
 		acc,
+		i.blacklist,
 		i.pastValues,
 		make(map[string]map[string]metricPoint)}
 	err := i.Input.Gather(&netAccumulator)
@@ -68,6 +74,7 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 // accumulator save the net metric from telegraf
 type accumulator struct {
 	accumulator   telegraf.Accumulator
+	blacklist     []string
 	pastValues    map[string]map[string]metricPoint // item => metricName => metricPoint
 	currentValues map[string]map[string]metricPoint // item => metricName => metricPoint
 }
@@ -83,6 +90,11 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 	finalTags := make(map[string]string)
 	item, ok := tags["interface"]
 	if ok {
+		for _, b := range a.blacklist {
+			if strings.HasPrefix(item, b) {
+				return
+			}
+		}
 		finalTags["item"] = item
 		a.currentValues[item] = make(map[string]metricPoint)
 	}
