@@ -45,15 +45,15 @@ func New() (i *Input, err error) {
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc telegraf.Accumulator) error {
+func (i *Input) Gather(acc telegraf.Accumulator) error {
 	systemAccumulator := accumulator{acc}
-	err := input.Input.Gather(&systemAccumulator)
+	err := i.Input.Gather(&systemAccumulator)
 	return err
 }
 
 // accumulator save the system metric from telegraf
 type accumulator struct {
-	acc telegraf.Accumulator
+	accumulator telegraf.Accumulator
 }
 
 // AddGauge adds a metric to the accumulator with the given measurement
@@ -62,7 +62,7 @@ type accumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
@@ -73,7 +73,7 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		finalFields[finalMetricName] = value
 	}
-	accumulator.acc.AddGauge(measurement, finalFields, tags, t...)
+	a.accumulator.AddGauge(measurement, finalFields, tags, t...)
 }
 
 // AddCounter adds a metric to the accumulator with the given measurement
@@ -82,7 +82,7 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// AddCounter add system_uptime metric that we do not want.
 }
 
@@ -92,29 +92,29 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// AddCounter add system_uptime_format metric that we do not want.
 }
 
 // AddError add an error to the accumulator
-func (accumulator *accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+func (a *accumulator) AddError(err error) {
+	a.accumulator.AddError(err)
 }
 
 // This functions are useless for system metric.
 // They are not implemented
 
 // AddSummary is useless for system
-func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for system accumulator"))
+func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for system accumulator"))
 }
 
 // AddHistogram is useless for system
-func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for system accumulator"))
+func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for system accumulator"))
 }
 
 // SetPrecision is useless for system
-func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for system accumulator"))
+func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for system accumulator"))
 }

@@ -48,15 +48,15 @@ func New() (i *Input, err error) {
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc telegraf.Accumulator) error {
+func (i *Input) Gather(acc telegraf.Accumulator) error {
 	cpuAccumulator := accumulator{acc}
-	err := input.Input.Gather(&cpuAccumulator)
+	err := i.Input.Gather(&cpuAccumulator)
 	return err
 }
 
 // accumulator save the cpu metric from telegraf
 type accumulator struct {
-	acc telegraf.Accumulator
+	accumulator telegraf.Accumulator
 }
 
 // AddGauge adds a metric to the accumulator with the given measurement
@@ -65,7 +65,7 @@ type accumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	var cpuOther float64
 	var cpuUsed float64
@@ -103,38 +103,38 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 	}
 	finalFields["cpu_other"] = cpuOther
 	finalFields["cpu_used"] = cpuUsed
-	accumulator.acc.AddGauge(measurement, finalFields, nil, t...)
+	a.accumulator.AddGauge(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the Accumulator
-func (accumulator *accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+func (a *accumulator) AddError(err error) {
+	a.accumulator.AddError(err)
 }
 
 // This functions are useless for Cpu metric.
 // They are not implemented
 
 // AddFields is useless for Cpu
-func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddFields not implemented for cpu accumulator"))
+func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddFields not implemented for cpu accumulator"))
 }
 
 // AddCounter is useless for Cpu
-func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for cpu accumulator"))
+func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for cpu accumulator"))
 }
 
 // AddSummary is useless for Cpu
-func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for cpu accumulator"))
+func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for cpu accumulator"))
 }
 
 // AddHistogram is useless for Cpu
-func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for cpu accumulator"))
+func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for cpu accumulator"))
 }
 
 // SetPrecision is useless for Cpu
-func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for cpu accumulator"))
+func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for cpu accumulator"))
 }

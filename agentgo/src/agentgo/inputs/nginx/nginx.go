@@ -54,15 +54,15 @@ func New(url string) (i *Input, err error) {
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc telegraf.Accumulator) error {
+func (i *Input) Gather(acc telegraf.Accumulator) error {
 	nginxAccumulator := accumulator{acc}
-	err := input.Input.Gather(&nginxAccumulator)
+	err := i.Input.Gather(&nginxAccumulator)
 	return err
 }
 
 // accumulator save the nginx metric from telegraf
 type accumulator struct {
-	acc telegraf.Accumulator
+	accumulator telegraf.Accumulator
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
@@ -71,40 +71,40 @@ type accumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// TODO
-	accumulator.acc.AddFields(measurement, fields, tags, t...)
+	a.accumulator.AddFields(measurement, fields, tags, t...)
 }
 
 // AddError add an error to the accumulator
-func (accumulator *accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+func (a *accumulator) AddError(err error) {
+	a.accumulator.AddError(err)
 }
 
 // This functions are useless for nginx metric.
 // They are not implemented
 
 // AddGauge is useless for nginx
-func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddGauge not implemented for nginx accumulator"))
+func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddGauge not implemented for nginx accumulator"))
 }
 
 // AddCounter is useless for nginx
-func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for nginx accumulator"))
+func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for nginx accumulator"))
 }
 
 // AddSummary is useless for nginx
-func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for nginx accumulator"))
+func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for nginx accumulator"))
 }
 
 // AddHistogram is useless for nginx
-func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for nginx accumulator"))
+func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for nginx accumulator"))
 }
 
 // SetPrecision is useless for nginx
-func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for nginx accumulator"))
+func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for nginx accumulator"))
 }

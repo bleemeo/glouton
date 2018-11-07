@@ -45,15 +45,15 @@ func New() (i *Input, err error) {
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc telegraf.Accumulator) error {
+func (i *Input) Gather(acc telegraf.Accumulator) error {
 	processAccumulator := accumulator{acc}
-	err := input.Input.Gather(&processAccumulator)
+	err := i.Input.Gather(&processAccumulator)
 	return err
 }
 
 // accumulator save the process metric from telegraf
 type accumulator struct {
-	acc telegraf.Accumulator
+	accumulator telegraf.Accumulator
 }
 
 // AddGauge adds a metric to the accumulator with the given measurement
@@ -63,7 +63,7 @@ type accumulator struct {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 // nolint: gocyclo
-func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
@@ -93,38 +93,38 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		finalFields[finalMetricName] = value
 	}
-	accumulator.acc.AddGauge(measurement, finalFields, nil, t...)
+	a.accumulator.AddGauge(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the accumulator
-func (accumulator *accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+func (a *accumulator) AddError(err error) {
+	a.accumulator.AddError(err)
 }
 
 // This functions are useless for process metric.
 // They are not implemented
 
 // AddFields is useless for process
-func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddFields not implemented for process accumulator"))
+func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddFields not implemented for process accumulator"))
 }
 
 // AddCounter is useless for process
-func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for process accumulator"))
+func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for process accumulator"))
 }
 
 // AddSummary is useless for process
-func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for process accumulator"))
+func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for process accumulator"))
 }
 
 // AddHistogram is useless for process
-func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for process accumulator"))
+func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for process accumulator"))
 }
 
 // SetPrecision is useless for process
-func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for process accumulator"))
+func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for process accumulator"))
 }

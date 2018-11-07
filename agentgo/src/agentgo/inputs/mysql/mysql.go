@@ -53,15 +53,15 @@ func New(server string) (i *Input, err error) {
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc telegraf.Accumulator) error {
+func (i *Input) Gather(acc telegraf.Accumulator) error {
 	mysqlAccumulator := accumulator{acc}
-	err := input.Input.Gather(&mysqlAccumulator)
+	err := i.Input.Gather(&mysqlAccumulator)
 	return err
 }
 
 // accumulator save the mysql metric from telegraf
 type accumulator struct {
-	acc telegraf.Accumulator
+	accumulator telegraf.Accumulator
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
@@ -70,40 +70,40 @@ type accumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// TODO
-	accumulator.acc.AddFields(measurement, fields, tags, t...)
+	a.accumulator.AddFields(measurement, fields, tags, t...)
 }
 
 // AddError add an error to the accumulator
-func (accumulator *accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+func (a *accumulator) AddError(err error) {
+	a.accumulator.AddError(err)
 }
 
 // This functions are useless for mysql metric.
 // They are not implemented
 
 // AddGauge is useless for mysql
-func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddGauge not implemented for mysql accumulator"))
+func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddGauge not implemented for mysql accumulator"))
 }
 
 // AddCounter is useless for mysql
-func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for mysql accumulator"))
+func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for mysql accumulator"))
 }
 
 // AddSummary is useless for mysql
-func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for mysql accumulator"))
+func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for mysql accumulator"))
 }
 
 // AddHistogram is useless for mysql
-func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for mysql accumulator"))
+func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for mysql accumulator"))
 }
 
 // SetPrecision is useless for mysql
-func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for mysql accumulator"))
+func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for mysql accumulator"))
 }

@@ -69,48 +69,48 @@ type Accumulator struct {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (accumulator *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.addMetrics(measurement, fields, tags, Fields, t...)
+func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, Fields, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
-func (accumulator *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.addMetrics(measurement, fields, tags, Gauge, t...)
+func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, Gauge, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type
-func (accumulator *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.addMetrics(measurement, fields, tags, Counter, t...)
+func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, Counter, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type
-func (accumulator *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.addMetrics(measurement, fields, tags, Summary, t...)
+func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, Summary, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
-func (accumulator *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.addMetrics(measurement, fields, tags, Histogram, t...)
+func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, Histogram, t...)
 }
 
 // SetPrecision do nothing right now
-func (accumulator *Accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.AddError(fmt.Errorf("SetPrecision not implemented for types accumulator"))
+func (a *Accumulator) SetPrecision(precision, interval time.Duration) {
+	a.AddError(fmt.Errorf("SetPrecision not implemented for types accumulator"))
 }
 
 // AddError add an error to the Accumulator
-func (accumulator *Accumulator) AddError(err error) {
-	accumulator.errors = append(accumulator.errors, err)
+func (a *Accumulator) AddError(err error) {
+	a.errors = append(a.errors, err)
 }
 
 // GetMetricPointSlice return a slice of metrics containing by the accumulator
-func (accumulator Accumulator) GetMetricPointSlice() []MetricPoint {
-	return accumulator.metricPointSlice
+func (a Accumulator) GetMetricPointSlice() []MetricPoint {
+	return a.metricPointSlice
 }
 
 // GetErrors return a slice of errors containings by the accumulator
-func (accumulator Accumulator) GetErrors() []error {
-	return accumulator.errors
+func (a Accumulator) GetErrors() []error {
+	return a.errors
 }
 
 // convertInterface convert the interface type in float64
@@ -130,7 +130,7 @@ func convertInterface(value interface{}) (float64, error) {
 	}
 }
 
-func (accumulator *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, metricType int, t ...time.Time) {
+func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, metricType int, t ...time.Time) {
 	var metricTime time.Time
 	if len(t) == 1 {
 		metricTime = t[0]
@@ -140,7 +140,7 @@ func (accumulator *Accumulator) addMetrics(measurement string, fields map[string
 	for metricName, value := range fields {
 		valuef, err := convertInterface(value)
 		if err == nil {
-			accumulator.metricPointSlice = append(accumulator.metricPointSlice, MetricPoint{
+			a.metricPointSlice = append(a.metricPointSlice, MetricPoint{
 				Name:  metricName,
 				Tags:  tags,
 				Type:  metricType,
@@ -148,7 +148,7 @@ func (accumulator *Accumulator) addMetrics(measurement string, fields map[string
 				Time:  metricTime,
 			})
 		} else {
-			accumulator.AddError(err)
+			a.AddError(err)
 		}
 	}
 }

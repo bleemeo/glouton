@@ -53,15 +53,15 @@ func New(url string) (i *Input, err error) {
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc telegraf.Accumulator) error {
+func (i *Input) Gather(acc telegraf.Accumulator) error {
 	redisAccumulator := accumulator{acc}
-	err := input.Input.Gather(&redisAccumulator)
+	err := i.Input.Gather(&redisAccumulator)
 	return err
 }
 
 // accumulator save the redis metric from telegraf
 type accumulator struct {
-	acc telegraf.Accumulator
+	accumulator telegraf.Accumulator
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
@@ -71,7 +71,7 @@ type accumulator struct {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 // nolint: gocyclo
-func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		finalMetricName := measurement + "_" + metricName
@@ -101,38 +101,38 @@ func (accumulator *accumulator) AddFields(measurement string, fields map[string]
 		}
 		finalFields[finalMetricName] = value
 	}
-	accumulator.acc.AddFields(measurement, finalFields, nil, t...)
+	a.accumulator.AddFields(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the accumulator
-func (accumulator *accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+func (a *accumulator) AddError(err error) {
+	a.accumulator.AddError(err)
 }
 
 // This functions are useless for redis metric.
 // They are not implemented
 
 // AddGauge is useless for redis
-func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddGauge not implemented for redis accumulator"))
+func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddGauge not implemented for redis accumulator"))
 }
 
 // AddCounter is useless for redis
-func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for redis accumulator"))
+func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for redis accumulator"))
 }
 
 // AddSummary is useless for redis
-func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for redis accumulator"))
+func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for redis accumulator"))
 }
 
 // AddHistogram is useless for redis
-func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for redis accumulator"))
+func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for redis accumulator"))
 }
 
 // SetPrecision is useless for redis
-func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for redis accumulator"))
+func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for redis accumulator"))
 }

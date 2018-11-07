@@ -52,20 +52,20 @@ func New() (i *Input, err error) {
 
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
-func (input *Input) Gather(acc telegraf.Accumulator) error {
+func (i *Input) Gather(acc telegraf.Accumulator) error {
 	diskioAccumulator := accumulator{
 		acc,
-		input.pastValues,
+		i.pastValues,
 		make(map[string]map[string]metricSave),
 	}
-	err := input.Input.Gather(&diskioAccumulator)
-	input.pastValues = diskioAccumulator.currentValues
+	err := i.Input.Gather(&diskioAccumulator)
+	i.pastValues = diskioAccumulator.currentValues
 	return err
 }
 
 // accumulator save the diskio metric from telegraf
 type accumulator struct {
-	acc           telegraf.Accumulator
+	accumulator   telegraf.Accumulator
 	pastValues    map[string]map[string]metricSave
 	currentValues map[string]map[string]metricSave
 }
@@ -77,7 +77,7 @@ type accumulator struct {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 // nolint: gocyclo
-func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	var metricTime time.Time
 	if len(t) != 1 {
 		metricTime = time.Now()
@@ -90,15 +90,15 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 	item, ok := tags["name"]
 	if ok {
 		finalTags["item"] = item
-		accumulator.currentValues[item] = make(map[string]metricSave)
+		a.currentValues[item] = make(map[string]metricSave)
 	}
 
 	for metricName, value := range fields {
 		finalMetricName := strings.Replace(measurement+"_"+metricName, "disk", "", 1)
 		switch finalMetricName {
 		case "io_read_bytes", "io_read_time", "io_reads", "io_write_bytes", "io_writes", "io_write_time":
-			pastMetricSave, ok := accumulator.pastValues[item][finalMetricName]
-			accumulator.currentValues[item][finalMetricName] = metricSave{value, metricTime}
+			pastMetricSave, ok := a.pastValues[item][finalMetricName]
+			a.currentValues[item][finalMetricName] = metricSave{value, metricTime}
 			if ok {
 				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value.(uint64))) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
 				finalFields[finalMetricName] = valuef
@@ -107,8 +107,8 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 			}
 		case "io_io_time":
 			finalMetricName = "io_time"
-			pastMetricSave, ok := accumulator.pastValues[item][finalMetricName]
-			accumulator.currentValues[item][finalMetricName] = metricSave{value, metricTime}
+			pastMetricSave, ok := a.pastValues[item][finalMetricName]
+			a.currentValues[item][finalMetricName] = metricSave{value, metricTime}
 			if ok {
 				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value.(uint64))) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
 				finalFields[finalMetricName] = valuef
@@ -117,8 +117,8 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 				continue
 			}
 
-			pastIOUtilization, ok := accumulator.pastValues[item]["io_utilization"]
-			accumulator.currentValues[item]["io_utilization"] = metricSave{value.(uint64) * 1000, metricTime}
+			pastIOUtilization, ok := a.pastValues[item]["io_utilization"]
+			a.currentValues[item]["io_utilization"] = metricSave{value.(uint64) * 1000, metricTime}
 			if ok {
 				valuef := 100 * (float64(value.(uint64))*1000 - float64(pastIOUtilization.value.(uint64))) / metricTime.Sub(pastIOUtilization.metricTime).Seconds()
 				finalFields["io_utilization"] = valuef
@@ -132,38 +132,38 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 			finalFields[finalMetricName] = value
 		}
 	}
-	accumulator.acc.AddGauge(measurement, finalFields, finalTags, t...)
+	a.accumulator.AddGauge(measurement, finalFields, finalTags, t...)
 }
 
 // AddError add an error to the accumulator
-func (accumulator *accumulator) AddError(err error) {
-	accumulator.acc.AddError(err)
+func (a *accumulator) AddError(err error) {
+	a.accumulator.AddError(err)
 }
 
 // This functions are useless for diskio metric.
 // They are not implemented
 
 // AddFields is useless for diskio
-func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddFields not implemented for diskio accumulator"))
+func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddFields not implemented for diskio accumulator"))
 }
 
 // AddGauge is useless for diskio
-func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for diskio accumulator"))
+func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for diskio accumulator"))
 }
 
 // AddSummary is useless for diskio
-func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for diskio accumulator"))
+func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for diskio accumulator"))
 }
 
 // AddHistogram is useless for diskio
-func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for diskio accumulator"))
+func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for diskio accumulator"))
 }
 
 // SetPrecision is useless for diskio
-func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for diskio accumulator"))
+func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for diskio accumulator"))
 }
