@@ -95,37 +95,21 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 
 	for metricName, value := range fields {
 		finalMetricName := strings.Replace(measurement+"_"+metricName, "disk", "", 1)
-		switch finalMetricName {
-		case "io_read_bytes", "io_read_time", "io_reads", "io_write_bytes", "io_writes", "io_write_time":
-			pastMetricSave, ok := a.pastValues[item][finalMetricName]
-			a.currentValues[item][finalMetricName] = metricSave{value, metricTime}
+		switch metricName {
+		case "read_bytes", "read_time", "reads", "write_bytes", "writes", "write_time", "io_time":
+			pastMetricSave, ok := a.pastValues[item][metricName]
+			a.currentValues[item][metricName] = metricSave{value, metricTime}
 			if ok {
 				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value.(uint64))) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
+				if finalMetricName == "io_io_time" {
+					finalMetricName = "io_time"
+					// io_time is millisecond per second.
+					finalFields["io_utilization"] = valuef / 1000. * 100.
+				}
 				finalFields[finalMetricName] = valuef
 			} else {
 				continue
 			}
-		case "io_io_time":
-			finalMetricName = "io_time"
-			pastMetricSave, ok := a.pastValues[item][finalMetricName]
-			a.currentValues[item][finalMetricName] = metricSave{value, metricTime}
-			if ok {
-				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value.(uint64))) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
-				finalFields[finalMetricName] = valuef
-
-			} else {
-				continue
-			}
-
-			pastIOUtilization, ok := a.pastValues[item]["io_utilization"]
-			a.currentValues[item]["io_utilization"] = metricSave{value.(uint64) * 1000, metricTime}
-			if ok {
-				valuef := 100 * (float64(value.(uint64))*1000 - float64(pastIOUtilization.value.(uint64))) / metricTime.Sub(pastIOUtilization.metricTime).Seconds()
-				finalFields["io_utilization"] = valuef
-			} else {
-				continue
-			}
-
 		case "io_weighted_io_time", "io_iops_in_progress":
 			continue
 		default:
