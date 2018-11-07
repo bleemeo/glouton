@@ -174,6 +174,7 @@ class Telegraflib:
     def gather_metrics(self):
         self._init_system_inputs()
         while True:
+            loop_start = time.time()
             metrics_vector = _lib.Gather(self.input_group_id)
             for i in range(0, metrics_vector.metric_point_count):
                 metric_point = metrics_vector.metric_point[i]
@@ -186,7 +187,8 @@ class Telegraflib:
                 self.emit_metric(self._convert_metric_point(metric_point))
             _lib.FreeMetricPointVector(system_metrics_vector)
 
-            time.sleep(10)
+            delay = loop_start + 10 - time.time()
+            time.sleep(max(0, delay))
 
     def _convert_metric_point(self, metric_point):
         item = ""
