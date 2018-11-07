@@ -93,12 +93,12 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 			finalFields[finalMetricName] = value
 		}
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t...)
+	accumulator.acc.AddGauge(measurement, finalFields, finalTags, t...)
 }
 
 // AddError add an error to the accumulator
 func (accumulator *accumulator) AddError(err error) {
-	(accumulator.acc).AddError(err)
+	accumulator.acc.AddError(err)
 }
 
 // This functions are useless for net metric.
@@ -106,25 +106,25 @@ func (accumulator *accumulator) AddError(err error) {
 
 // AddFields is useless for net
 func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for net accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddFields not implemented for net accumulator"))
 }
 
 // AddGauge is useless for net
 func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for net accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for net accumulator"))
 }
 
 // AddSummary is useless for net
 func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for net accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for net accumulator"))
 }
 
 // AddHistogram is useless for net
 func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for net accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for net accumulator"))
 }
 
 // SetPrecision is useless for net
 func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for net accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for net accumulator"))
 }

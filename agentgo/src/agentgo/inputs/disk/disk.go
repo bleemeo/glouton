@@ -83,12 +83,12 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		finalFields[finalMetricName] = value
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, finalTags, t...)
+	accumulator.acc.AddGauge(measurement, finalFields, finalTags, t...)
 }
 
 // AddError add an error to the Accumulator
 func (accumulator *accumulator) AddError(err error) {
-	(accumulator.acc).AddError(err)
+	accumulator.acc.AddError(err)
 }
 
 // This functions are useless for disk metric.
@@ -96,25 +96,25 @@ func (accumulator *accumulator) AddError(err error) {
 
 // AddFields is useless for disk
 func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for disk accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddFields not implemented for disk accumulator"))
 }
 
 // AddCounter is useless for disk
 func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for disk accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for disk accumulator"))
 }
 
 // AddSummary is useless for disk
 func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for disk accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for disk accumulator"))
 }
 
 // AddHistogram is useless for disk
 func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for disk accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for disk accumulator"))
 }
 
 // SetPrecision is useless for disk
 func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for disk accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for disk accumulator"))
 }

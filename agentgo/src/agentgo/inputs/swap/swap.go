@@ -78,7 +78,7 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		finalFields[finalMetricName] = value
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, nil)
+	accumulator.acc.AddGauge(measurement, finalFields, nil)
 }
 
 // AddCounter adds a metric to the accumulator with the given measurement
@@ -93,12 +93,12 @@ func (accumulator *accumulator) AddCounter(measurement string, fields map[string
 		finalMetricName := measurement + "_" + metricName
 		finalFields[finalMetricName] = value
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, nil, t...)
+	accumulator.acc.AddGauge(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the accumulator
 func (accumulator *accumulator) AddError(err error) {
-	(accumulator.acc).AddError(err)
+	accumulator.acc.AddError(err)
 }
 
 // This functions are useless for swap metric.
@@ -106,20 +106,20 @@ func (accumulator *accumulator) AddError(err error) {
 
 // AddFields is useless for swap
 func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddFields not implemented for swap accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddFields not implemented for swap accumulator"))
 }
 
 // AddSummary is useless for swap
 func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for swap accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for swap accumulator"))
 }
 
 // AddHistogram is useless for swap
 func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for swap accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for swap accumulator"))
 }
 
 // SetPrecision is useless for swap
 func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for swap accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for swap accumulator"))
 }

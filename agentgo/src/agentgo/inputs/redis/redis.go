@@ -122,12 +122,12 @@ func (accumulator *accumulator) AddFields(measurement string, fields map[string]
 			continue
 		}
 	}
-	(accumulator.acc).AddFields(measurement, finalFields, nil, t...)
+	accumulator.acc.AddFields(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the accumulator
 func (accumulator *accumulator) AddError(err error) {
-	(accumulator.acc).AddError(err)
+	accumulator.acc.AddError(err)
 }
 
 // This functions are useless for redis metric.
@@ -135,25 +135,25 @@ func (accumulator *accumulator) AddError(err error) {
 
 // AddGauge is useless for redis
 func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddGauge not implemented for redis accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddGauge not implemented for redis accumulator"))
 }
 
 // AddCounter is useless for redis
 func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for redis accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for redis accumulator"))
 }
 
 // AddSummary is useless for redis
 func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for redis accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for redis accumulator"))
 }
 
 // AddHistogram is useless for redis
 func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for redis accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for redis accumulator"))
 }
 
 // SetPrecision is useless for redis
 func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for redis accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for redis accumulator"))
 }

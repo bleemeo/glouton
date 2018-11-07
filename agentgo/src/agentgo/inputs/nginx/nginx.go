@@ -80,12 +80,12 @@ func initAccumulator(acc telegraf.Accumulator) accumulator {
 // it after passing to Add.
 func (accumulator *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	// TODO
-	(accumulator.acc).AddFields(measurement, fields, tags, t...)
+	accumulator.acc.AddFields(measurement, fields, tags, t...)
 }
 
 // AddError add an error to the accumulator
 func (accumulator *accumulator) AddError(err error) {
-	(accumulator.acc).AddError(err)
+	accumulator.acc.AddError(err)
 }
 
 // This functions are useless for nginx metric.
@@ -93,25 +93,25 @@ func (accumulator *accumulator) AddError(err error) {
 
 // AddGauge is useless for nginx
 func (accumulator *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddGauge not implemented for nginx accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddGauge not implemented for nginx accumulator"))
 }
 
 // AddCounter is useless for nginx
 func (accumulator *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddCounter not implemented for nginx accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddCounter not implemented for nginx accumulator"))
 }
 
 // AddSummary is useless for nginx
 func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for nginx accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for nginx accumulator"))
 }
 
 // AddHistogram is useless for nginx
 func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for nginx accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for nginx accumulator"))
 }
 
 // SetPrecision is useless for nginx
 func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for nginx accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for nginx accumulator"))
 }

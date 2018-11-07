@@ -80,7 +80,7 @@ func (accumulator *accumulator) AddGauge(measurement string, fields map[string]i
 		}
 		finalFields[finalMetricName] = value
 	}
-	(accumulator.acc).AddGauge(measurement, finalFields, tags, t...)
+	accumulator.acc.AddGauge(measurement, finalFields, tags, t...)
 }
 
 // AddCounter adds a metric to the accumulator with the given measurement
@@ -105,7 +105,7 @@ func (accumulator *accumulator) AddFields(measurement string, fields map[string]
 
 // AddError add an error to the accumulator
 func (accumulator *accumulator) AddError(err error) {
-	(accumulator.acc).AddError(err)
+	accumulator.acc.AddError(err)
 }
 
 // This functions are useless for system metric.
@@ -113,15 +113,15 @@ func (accumulator *accumulator) AddError(err error) {
 
 // AddSummary is useless for system
 func (accumulator *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddSummary not implemented for system accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddSummary not implemented for system accumulator"))
 }
 
 // AddHistogram is useless for system
 func (accumulator *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	(accumulator.acc).AddError(fmt.Errorf("AddHistogram not implemented for system accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("AddHistogram not implemented for system accumulator"))
 }
 
 // SetPrecision is useless for system
 func (accumulator *accumulator) SetPrecision(precision, interval time.Duration) {
-	(accumulator.acc).AddError(fmt.Errorf("SetPrecision not implemented for system accumulator"))
+	accumulator.acc.AddError(fmt.Errorf("SetPrecision not implemented for system accumulator"))
 }
