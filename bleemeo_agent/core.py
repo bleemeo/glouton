@@ -1028,6 +1028,8 @@ class Core:
         self.bleemeo_connector = None
         self.influx_connector = None
         self.graphite_server = None
+        self._telegraf_thread = None
+        self._telegraf = None
         self.docker_client = None
         self.k8s_client = None
         self.k8s_pods = {}
@@ -1071,7 +1073,6 @@ class Core:
         self._update_facts_job = None
         self._gather_update_metrics_job = None
         self.config = None
-        self.telegraf = bleemeo_agent.telegraflib.Telegraflib(self.is_terminating, self.emit_metric)
 
     def _init(self):
         # pylint: disable=too-many-branches
@@ -1202,6 +1203,11 @@ class Core:
 
         if self.bleemeo_connector:
             self.bleemeo_connector.init()
+
+        self._telegraf = bleemeo_agent.telegraflib.Telegraflib(
+            self.is_terminating,
+            self.emit_metric,
+        )
 
         return True
 
@@ -1487,6 +1493,7 @@ class Core:
         finally:
             self.is_terminating.set()
             if threads_started:
+                self._telegraf_thread.join()
                 self.graphite_server.join()
                 if self.bleemeo_connector is not None:
                     self.bleemeo_connector.join()
@@ -1707,9 +1714,10 @@ class Core:
         thread.daemon = True
         thread.start()
 
-        metric_thread = threading.Thread(target=self.telegraf.gather_metrics)
-        metric_thread.daemon = True
-        metric_thread.start()
+        self._telegraf_thread = threading.Thread(
+            target=self._telegraf.gather_metrics
+        )
+        self._telegraf_thread.start()
 
         return True
 
@@ -1976,7 +1984,7 @@ class Core:
 
         self.graphite_server.update_discovery()
         bleemeo_agent.checker.update_checks(self)
-        self.telegraf.update_discovery(self.services)
+        self._telegraf.update_discovery(self.services)
 
         self.last_discovery_update = bleemeo_agent.util.get_clock()
 

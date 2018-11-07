@@ -72,7 +72,7 @@ def _init_lib():
 
 class Telegraflib:
 
-    def __init__(self, is_terminated=None, emit_metric=None):
+    def __init__(self, is_terminated, emit_metric):
         _init_lib()
         self.inputs_id_map = {}
         self.input_group_id = _lib.InitGroup()
@@ -160,7 +160,7 @@ class Telegraflib:
 
     def gather_metrics(self):
         self._init_system_inputs()
-        while True:
+        while not self.is_terminated.is_set():
             loop_start = time.time()
             metrics_vector = _lib.Gather(self.input_group_id)
             for i in range(0, metrics_vector.metric_point_count):
@@ -175,7 +175,7 @@ class Telegraflib:
             _lib.FreeMetricPointVector(system_metrics_vector)
 
             delay = loop_start + 10 - time.time()
-            time.sleep(max(0, delay))
+            self.is_terminated.wait(max(0, delay))
 
     def _convert_metric_point(self, metric_point):
         item = ""
