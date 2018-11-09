@@ -82,9 +82,24 @@ import (
 )
 
 var (
-	group = make(map[int]map[int]telegraf.Input)
-	lock  sync.Mutex
+	group     = make(map[int]map[int]telegraf.Input)
+	lastError error
+	lock      sync.Mutex
 )
+
+// LastError return the last error as a string
+//
+// Caller is responsible to free the string (using standard C free())
+//export LastError
+func LastError() *C.char {
+	lock.Lock()
+	defer lock.Unlock()
+
+	if lastError == nil {
+		return nil
+	}
+	return C.CString(lastError.Error())
+}
 
 // InitGroup initialises a metric group and returns his ID
 //export InitGroup
@@ -93,36 +108,42 @@ func InitGroup() C.int {
 	defer lock.Unlock()
 	var id = rand.Intn(32767)
 	var selectionNumber int
-	for _, ok := group[id]; ok == true && selectionNumber < 10; {
+	_, ok := group[id]
+	for ok == true && selectionNumber < 100 {
 		id = rand.Intn(32767)
+		_, ok = group[id]
 		selectionNumber++
 	}
-	if selectionNumber == 10 {
+	if selectionNumber == 100 {
+		lastError = fmt.Errorf("Too many groups (count=%d). Unable to find a free slot", len(group))
 		return -1
 	}
+
 	group[id] = make(map[int]telegraf.Input)
 	return C.int(id)
 }
 
 // addInputToGroup add the input to the groupID and return the inputID of the input in the group
-func addInputToGroup(groupID int, input telegraf.Input) int {
+func addInputToGroup(groupID int, input telegraf.Input) (inputID int, err error) {
 	var _, ok = group[groupID]
 	if !ok {
-		return -1
+		err = fmt.Errorf("Group %d not found", groupID)
+		return
 	}
-
-	var inputID = rand.Intn(32767)
-
+	inputID = rand.Intn(32767)
 	var selectionNumber int
-	for _, ok := group[groupID][inputID]; ok == true && selectionNumber < 10; {
+	_, ok = group[groupID][inputID]
+	for ok == true && selectionNumber < 100 {
 		inputID = rand.Intn(32767)
+		_, ok = group[groupID][inputID]
 		selectionNumber++
 	}
-	if selectionNumber == 10 {
-		return -1
+	if selectionNumber == 100 {
+		err = fmt.Errorf("Group %d has %d inputs. Unable to find a free slot", groupID, len(group[groupID]))
+		return
 	}
 	group[groupID][inputID] = input
-	return inputID
+	return
 }
 
 // AddSimpleInput add a simple input to the groupID
@@ -148,11 +169,17 @@ func AddSimpleInput(groupID C.int, inputName *C.char) C.int {
 		err = fmt.Errorf("Input \"%s\" unknown", goInputName)
 	}
 	if err != nil {
+		lastError = err
 		return -1
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return C.int(addInputToGroup(int(groupID), input))
+	id, err := addInputToGroup(int(groupID), input)
+	if err != nil {
+		lastError = err
+		return -1
+	}
+	return C.int(id)
 }
 
 // AddNetworkInput add the network input to groupID with configured blacklist.
@@ -169,11 +196,17 @@ func AddNetworkInput(groupID C.int, blacklistEntries **C.char, blacklistCount C.
 	}
 	input, err := net.New(blacklistSlice)
 	if err != nil {
+		lastError = err
 		return -1
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return C.int(addInputToGroup(int(groupID), input))
+	id, err := addInputToGroup(int(groupID), input)
+	if err != nil {
+		lastError = err
+		return -1
+	}
+	return C.int(id)
 }
 
 // AddDiskInput add the disk input to groupID with configured blacklist.
@@ -194,11 +227,17 @@ func AddDiskInput(groupID C.int, mountPoint *C.char, blacklistEntries **C.char, 
 	}
 	input, err := disk.New(C.GoString(mountPoint), blacklistSlice)
 	if err != nil {
+		lastError = err
 		return -1
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return C.int(addInputToGroup(int(groupID), input))
+	id, err := addInputToGroup(int(groupID), input)
+	if err != nil {
+		lastError = err
+		return -1
+	}
+	return C.int(id)
 }
 
 // AddDiskIOInput add the diskio input to groupID with configured whitelist.
@@ -216,11 +255,17 @@ func AddDiskIOInput(groupID C.int, whitelistEntries **C.char, whitelistCount C.i
 	}
 	input, err := diskio.New(whitelistSlice)
 	if err != nil {
+		lastError = err
 		return -1
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return C.int(addInputToGroup(int(groupID), input))
+	id, err := addInputToGroup(int(groupID), input)
+	if err != nil {
+		lastError = err
+		return -1
+	}
+	return C.int(id)
 }
 
 // AddInputWithAddress add an input to the groupID
@@ -240,11 +285,17 @@ func AddInputWithAddress(groupID C.int, inputName *C.char, server *C.char) C.int
 		err = fmt.Errorf("Input \"%s\" unknown", goInputName)
 	}
 	if err != nil {
+		lastError = err
 		return -1
 	}
 	lock.Lock()
 	defer lock.Unlock()
-	return C.int(addInputToGroup(int(groupID), input))
+	id, err := addInputToGroup(int(groupID), input)
+	if err != nil {
+		lastError = err
+		return -1
+	}
+	return C.int(id)
 }
 
 // FreeGroup deletes a collector
@@ -255,11 +306,12 @@ func FreeGroup(groupID C.int) C.int {
 	lock.Lock()
 	defer lock.Unlock()
 	_, ok := group[int(groupID)]
-	if ok {
-		delete(group, int(groupID))
-		return 0
+	if !ok {
+		lastError = fmt.Errorf("Group %d not found", int(groupID))
+		return -1
 	}
-	return -1
+	delete(group, int(groupID))
+	return 0
 }
 
 // FreeInput deletes an input in a group
@@ -270,14 +322,17 @@ func FreeInput(groupID C.int, inputID C.int) C.int {
 	lock.Lock()
 	defer lock.Unlock()
 	inputsGroup, ok := group[int(groupID)]
-	if ok {
-		_, ok := inputsGroup[int(inputID)]
-		if ok {
-			delete(inputsGroup, int(inputID))
-			return 0
-		}
+	if !ok {
+		lastError = fmt.Errorf("Group %d not found", int(groupID))
+		return -1
 	}
-	return -1
+	_, ok = inputsGroup[int(inputID)]
+	if !ok {
+		lastError = fmt.Errorf("Input %d in group %d not found", int(inputID), int(groupID))
+		return -1
+	}
+	delete(inputsGroup, int(inputID))
+	return 0
 }
 
 // FreeMetricPointVector free a C.MetricPointVector given in parameter
