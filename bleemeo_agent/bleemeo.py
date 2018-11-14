@@ -1947,6 +1947,11 @@ class BleemeoConnector(threading.Thread):
                         break
                     elif response.status_code != 200:
                         raise ApiError(response)
+                    else:
+                        bleemeo_cache.metrics[metric.uuid] = (
+                            metric._replace(deactivated_at=time.time())
+                        )
+            bleemeo_cache.update_lookup_map()
 
         self.core.update_thresholds(bleemeo_cache.get_core_thresholds())
         self.core.metrics_unit = bleemeo_cache.get_core_units()
