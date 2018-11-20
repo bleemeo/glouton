@@ -1471,7 +1471,7 @@ class Core:
         try:
             self.setup_signal()
             with self._docker_client_cond:
-                self._docker_connect()
+                self._docker_connect(timeout_retries=3)
             self._k8s_connect()
 
             self.schedule_tasks()
@@ -1525,7 +1525,7 @@ class Core:
         if os.name != 'nt':
             signal.signal(signal.SIGHUP, handler_hup)
 
-    def _docker_connect(self):
+    def _docker_connect(self, timeout_retries=1):
         """ Try to connect to docker remote API
 
             Assume _docker_client_cond is held
@@ -1546,12 +1546,26 @@ class Core:
                 version=DOCKER_API_VERSION,
                 timeout=10,
             )
-        try:
-            self.docker_client.ping()
-            self._docker_client_cond.notify_all()
-        except Exception as exc:  # pylint: disable=broad-except
+        for _ in range(timeout_retries):
+            try:
+                self.docker_client.ping()
+                self._docker_client_cond.notify_all()
+                break
+            except Exception as exc:  # pylint: disable=broad-except
+                if (not isinstance(exc, requests.exceptions.Timeout)
+                        or timeout_retries == 1):
+                    logging.debug(
+                        'Docker ping failed. Assume Docker is not used: %s',
+                        exc,
+                    )
+                    self.docker_client = None
+                    break
+                else:
+                    time.sleep(0.5)
+        else:
             logging.debug(
-                'Docker ping failed. Assume Docker is not used: %s', exc
+                'Docker timed-out after %d retry. Assume Docker is not used',
+                timeout_retries,
             )
             self.docker_client = None
 
@@ -1577,7 +1591,7 @@ class Core:
 
         with self._docker_client_cond:
             if self.docker_client is None:
-                self._docker_connect()
+                self._docker_connect(timeout_retries=5)
             docker_client = self.docker_client
 
         containers = []
