@@ -96,7 +96,6 @@ AgentConfig = collections.namedtuple('AgentConfig', (
     'docker_integration',
     'topinfo_period',
     'metrics_whitelist',
-    'metrics_blacklist',
 ))
 AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
@@ -385,7 +384,8 @@ class BleemeoCache:
     # Version 3: Added active to Metric
     # Version 4: Changed field "active" (boolean) to "deactivated_at" (time) on
     #            Metric
-    CACHE_VERSION = 4
+    # Version 5: Dropped blacklist from AgentConfig
+    CACHE_VERSION = 5
 
     def __init__(self, state, skip_load=False):
         self._state = state
@@ -480,7 +480,8 @@ class BleemeoCache:
         config = cache.get('current_config')
         if config:
             config[4] = set(config[4])
-            config[5] = set(config[5])
+            if cache['version'] < 5:
+                del config[5]
             self.current_config = AgentConfig(*config)
 
         next_config_at = cache.get('next_config_at')
@@ -1489,7 +1490,9 @@ class BleemeoConnector(threading.Thread):
                             for (key, value) in self._current_metrics.items()
                             if self.sent_metric(
                                 value.label,
-                                value.last_status is not None,
+                                value.service_label and value.label == (
+                                    value.service_label + '_status'
+                                ),
                                 bleemeo_cache,
                             )
                         }
@@ -1602,18 +1605,12 @@ class BleemeoConnector(threading.Thread):
         else:
             whitelist = set()
 
-        if data.get('metrics_blacklist', ''):
-            blacklist = set(data['metrics_blacklist'].split(','))
-        else:
-            blacklist = set()
-
         config = AgentConfig(
             data['id'],
             data['name'],
             data['docker_integration'],
             data['topinfo_period'],
             whitelist,
-            blacklist,
         )
         if bleemeo_cache.current_config == config:
             return
@@ -2325,7 +2322,7 @@ class BleemeoConnector(threading.Thread):
                 or value.container_name in bleemeo_cache.containers_by_name
             }
 
-    def sent_metric(self, metric_name, metric_has_status, bleemeo_cache=None):
+    def sent_metric(self, metric_name, is_service_status, bleemeo_cache=None):
         """ Return True if the metric should be sent to Bleemeo Cloud platform
         """
         if bleemeo_cache is None:
@@ -2333,16 +2330,12 @@ class BleemeoConnector(threading.Thread):
         if bleemeo_cache.current_config is None:
             return True
 
-        blacklist = bleemeo_cache.current_config.metrics_blacklist
-        if metric_name in blacklist:
-            return False
-
         whitelist = bleemeo_cache.current_config.metrics_whitelist
         if not whitelist:
             # Always sent metrics if whitelist is empty
             return True
 
-        if metric_has_status:
+        if is_service_status:
             return True
 
         if metric_name in whitelist:
@@ -2557,8 +2550,11 @@ class BleemeoConnector(threading.Thread):
         if self._duplicate_disable_until:
             return
         metric_name = metric_point.label
-        metric_has_status = metric_point.status_code is not None
-        if not self.sent_metric(metric_name, metric_has_status):
+        is_service_status = (
+            metric_point.service_label
+            and metric_point.label == metric_point.service_label + '_status'
+        )
+        if not self.sent_metric(metric_name, is_service_status):
             return
 
         if (self._bleemeo_cache.current_config is not None
