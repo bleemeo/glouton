@@ -96,6 +96,7 @@ AgentConfig = collections.namedtuple('AgentConfig', (
     'docker_integration',
     'topinfo_period',
     'metrics_whitelist',
+    'metric_resolution',
 ))
 AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
@@ -385,7 +386,8 @@ class BleemeoCache:
     # Version 4: Changed field "active" (boolean) to "deactivated_at" (time) on
     #            Metric
     # Version 5: Dropped blacklist from AgentConfig
-    CACHE_VERSION = 5
+    # Version 6: Added "metric_resolution" to AgentConfig
+    CACHE_VERSION = 6
 
     def __init__(self, state, skip_load=False):
         self._state = state
@@ -482,6 +484,9 @@ class BleemeoCache:
             config[4] = set(config[4])
             if cache['version'] < 5:
                 del config[5]
+            if cache['version'] < 6:
+                # Version 6 introduced metric_resolution
+                config.append(10)
             self.current_config = AgentConfig(*config)
 
         next_config_at = cache.get('next_config_at')
@@ -830,8 +835,9 @@ class BleemeoConnector(threading.Thread):
             self._bleemeo_cache = BleemeoCache(self.core.state, skip_load=True)
 
         if self._bleemeo_cache.current_config:
-            self.core.set_topinfo_period(
+            self.core.configure_resolution(
                 self._bleemeo_cache.current_config.topinfo_period,
+                self._bleemeo_cache.current_config.metric_resolution,
             )
 
     def run(self):
@@ -1605,18 +1611,26 @@ class BleemeoConnector(threading.Thread):
         else:
             whitelist = set()
 
+        try:
+            metric_resolution = int(data.get('metric_resolution', '10'))
+        except ValueError:
+            metric_resolution = 10
+
         config = AgentConfig(
             data['id'],
             data['name'],
             data['docker_integration'],
             data['topinfo_period'],
             whitelist,
+            metric_resolution,
         )
         if bleemeo_cache.current_config == config:
             return
         bleemeo_cache.current_config = config
 
-        self.core.set_topinfo_period(config.topinfo_period)
+        self.core.configure_resolution(
+            config.topinfo_period, config.metric_resolution
+        )
         self.core.fire_triggers(updates_count=True)
         logging.info('Changed to configuration %s', config.name)
 

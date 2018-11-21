@@ -594,7 +594,7 @@ class JmxConfig:
             "port": self.core.config['graphite.listener.port'],
             "host": self.core.config['graphite.listener.address'],
             "flushStrategy": "timeBased",
-            "flushDelayInSeconds": 10,
+            "flushDelayInSeconds": self.core.metric_resolution,
         }
         if output_config['host'] == '0.0.0.0':
             output_config['host'] = '127.0.0.1'
@@ -625,7 +625,7 @@ class JmxConfig:
                     'port': jmx_port,
                     'queries': [],
                     'outputWriters': [output_config],
-                    'runPeriodSeconds': 10,
+                    'runPeriodSeconds': self.core.metric_resolution,
                 }
 
                 if 'jmx_username' in service_info:
