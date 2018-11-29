@@ -22,7 +22,7 @@ from bleemeo_agent.graphite import _disk_path_rename
 
 def test_graphite_split_line():
 
-    # Simple collectd metric
+    # Simple metric
     (metric, value, timestamp) = bleemeo_agent.graphite.graphite_split_line(
         b'hostname_example_com.df-boot.df_complex-used 119843840 1459257933',
     )

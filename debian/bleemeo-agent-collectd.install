@@ -1,4 +1,0 @@
-#!/usr/bin/dh-exec
-packaging/common/collectd.conf => etc/collectd/collectd.conf.d/bleemeo.conf
-packaging/common/collectd-generated.conf => etc/collectd/collectd.conf.d/bleemeo-generated.conf
-packaging/common/bleemeo-collectd-graphite_metrics_source.conf => etc/bleemeo/agent.conf.d/30-graphite_metrics_source.conf

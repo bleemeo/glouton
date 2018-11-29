@@ -107,17 +107,6 @@ CONFIG_VARS = [
         'string',
         'sudo -n service telegraf restart'
     ),
-    (
-        'collectd.config_file',
-        'string',
-        '/etc/collectd/collectd.conf.d/bleemeo-generated.conf'
-    ),
-    ('collectd.docker_name', 'string', None),
-    (
-        'collectd.restart_command',
-        'string',
-        'sudo -n service collectd restart'
-    ),
     ('metric.pull', 'dict', {}),
     ('metric.prometheus', 'dict', {}),
     ('metric.softstatus_period_default', 'int', 5 * 60),

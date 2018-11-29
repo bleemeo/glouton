@@ -620,9 +620,6 @@ def get_facts(core):
         'agent_version': get_agent_version(core),
         'architecture': architecture,
         'fact_updated_at': datetime.datetime.utcnow().isoformat() + 'Z',
-        'collectd_version': get_package_version(
-            'collectd', distribution=core.config['distribution'],
-        ),
         'docker_api_version': docker_api_version,
         'docker_version': docker_version,
         'domain': domain,

@@ -24,7 +24,6 @@ import socket
 import threading
 import time
 
-import bleemeo_agent.collectd
 import bleemeo_agent.jmxtrans
 import bleemeo_agent.telegraf
 import bleemeo_agent.util
@@ -97,7 +96,8 @@ class GraphiteServer(threading.Thread):
 
     @property
     def metrics_source(self):
-        """ Return the current metrics source (collectd or telegraf)
+        """ Return the current metrics source (currently only telegraf
+            is supported)
         """
         return self.core.config['graphite.metrics_source']
 
@@ -146,9 +146,7 @@ class GraphiteServer(threading.Thread):
     def update_discovery(self):
         """ Update configuration after a service discovery was run
         """
-        if self.metrics_source == 'collectd':
-            bleemeo_agent.collectd.update_discovery(self.core)
-        elif self.metrics_source == 'telegraf':
+        if self.metrics_source == 'telegraf':
             bleemeo_agent.telegraf.update_discovery(self.core)
 
         if self.jmx_enabled:
@@ -214,7 +212,7 @@ class GraphiteServer(threading.Thread):
     def disk_path_rename(self, path):
         """ Rename (and possibly ignore) a disk partition
 
-            In case of collectd running in a container, it's used to show
+            In case of telegraf running in a container, it's used to show
             partition as seen by the host, instead of as seen by a container.
         """
         mount_point = self.core.config['df.host_mount_point']
@@ -233,7 +231,7 @@ class GraphiteClient(threading.Thread):
         self.socket = client_socket
         self.addr = client_addr
 
-        # Decode either Telegraf, Collectd or jmxtrans input.
+        # Decode either Telegraf or jmxtrans input.
         self.client_decoder = None
 
     def run(self):
@@ -295,9 +293,6 @@ class GraphiteClient(threading.Thread):
                 self.client_decoder = bleemeo_agent.telegraf.Telegraf(self)
             elif name.startswith('jmxtrans.') and self.server.jmx_enabled:
                 self.client_decoder = bleemeo_agent.jmxtrans.Jmxtrans(self)
-            elif (not name.startswith('telegraf.')
-                  and not name.startswith('jmxtrans.')):
-                self.client_decoder = bleemeo_agent.collectd.Collectd(self)
             else:
                 return
 
