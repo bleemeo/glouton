@@ -464,7 +464,6 @@ class Jmxtrans:
     def packet_finish(self):
         """ Called when graphite_client finished processing one TCP packet
         """
-        pass
 
     def flush(self, timestamp):
         for key, (jmx_metric, values) in self._sum_value.items():

@@ -153,14 +153,12 @@ class ComputationFail(Exception):
     """ Exceptions raised when computed metrics failed to be computed and
         should not be retried
     """
-    pass
 
 
 class MissingMetric(Exception):
     """ Exceptions raised when a metric needed for a computed metrics is
         not (yet) present. The computed metrics should be retried later.
     """
-    pass
 
 
 def compare_version(current_version, wanted_version):

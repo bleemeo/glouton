@@ -144,6 +144,7 @@ class Config:
 
     Also add "set" method that known about sub-dict.
     """
+
     def __init__(self, initial_dict=None):
         """ init function of Config class """
         if initial_dict is None:
