@@ -1227,14 +1227,17 @@ class Core:
         self._topinfo_period = topinfo_period
         self.metric_resolution = metric_resolution
         if self._topinfo_job is not None:
-            # Only reschedule topinfo job if already scheduled.
+            # Don't schedule the topinfo job before schedule_tasks()
             # This is needed because APscheduler 2.x does not allow to
             # unschedule a job while the scheduler it not yet started.
             self.schedule_topinfo()
         self.graphite_server.update_discovery()
         if self._gather_metrics_job is not None:
+            # As for topinfo, don't schedule before schedule_tasks()
             self.schedule_gather_metrics()
-        self._schedule_metric_pull()
+        if self._gather_metric_pull_jobs:
+            # As for topinfo, don't schedule before schedule_tasks()
+            self._schedule_metric_pull()
         logging.debug(
             'Changed topinfo frequency to every %d second', topinfo_period,
         )
