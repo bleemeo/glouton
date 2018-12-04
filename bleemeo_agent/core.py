@@ -1057,6 +1057,7 @@ class Core:
         self._discovery_job = None  # scheduled in schedule_tasks
         self._topinfo_job = None
         self._topinfo_period = 10
+        self.metric_resolution = 10
         self.discovered_services = {}
         self.services = {}
         self.metrics_unit = {}
@@ -1078,6 +1079,8 @@ class Core:
         self.thresholds = {}
         self._update_facts_job = None
         self._gather_update_metrics_job = None
+        self._gather_metrics_job = None
+        self._gather_metric_pull_jobs = []
         self.config = None
 
     def _init(self):
@@ -1220,15 +1223,23 @@ class Core:
         """
         return self.config['container.type']
 
-    def set_topinfo_period(self, period):
-        self._topinfo_period = period
+    def configure_resolution(self, topinfo_period, metric_resolution):
+        self._topinfo_period = topinfo_period
+        self.metric_resolution = metric_resolution
         if self._topinfo_job is not None:
             # Only reschedule topinfo job if already scheduled.
             # This is needed because APscheduler 2.x does not allow to
             # unschedule a job while the scheduler it not yet started.
             self.schedule_topinfo()
+        self.graphite_server.update_discovery()
+        if self._gather_metrics_job is not None:
+            self.schedule_gather_metrics()
+        self._schedule_metric_pull()
         logging.debug(
-            'Changed topinfo frequency to every %d second', period,
+            'Changed topinfo frequency to every %d second', topinfo_period,
+        )
+        logging.debug(
+            'Changed telegraf frequency to every %d second', metric_resolution,
         )
 
     def _config_logger(self):
@@ -1444,13 +1455,21 @@ class Core:
     def _schedule_metric_pull(self):
         """ Schedule metric which are pulled
         """
+        while self._gather_metric_pull_jobs:
+            job = self._gather_metric_pull_jobs.pop()
+            self.unschedule_job(job)
+
         for (name, config) in self.config['metric.pull'].items():
-            interval = config.get('interval', 10)
-            self.add_scheduled_job(
+            interval = max(
+                config.get('interval', 10),
+                self.metric_resolution,
+            )
+            job = self.add_scheduled_job(
                 bleemeo_agent.util.pull_raw_metric,
                 args=(self, name),
                 seconds=interval,
             )
+            self._gather_metric_pull_jobs.append(job)
 
     def run(self):
         # pylint: disable=too-many-branches
@@ -1689,10 +1708,7 @@ class Core:
             self.update_discovery,
             seconds=1 * 60 * 60 + 10 * 60,  # 1 hour 10 minutes
         )
-        self.add_scheduled_job(
-            self._gather_metrics,
-            seconds=10,
-        )
+        self.schedule_gather_metrics()
         self.add_scheduled_job(
             self._check_thread,
             seconds=60,
@@ -1726,6 +1742,16 @@ class Core:
         self._topinfo_job = self.add_scheduled_job(
             self.send_top_info,
             seconds=self._topinfo_period,
+        )
+
+    def schedule_gather_metrics(self):
+        if self._gather_metrics_job is not None:
+            self.unschedule_job(self._gather_metrics_job)
+            self._gather_metrics_job = None
+
+        self._gather_metrics_job = self.add_scheduled_job(
+            self._gather_metrics,
+            seconds=self.metric_resolution,
         )
 
     def start_threads(self):
