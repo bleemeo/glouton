@@ -257,6 +257,9 @@ class Check:
     def open_sockets(self):
         """ Try to open all closed sockets
         """
+        with self._lock:
+            self.open_sockets_job = None
+
         if self.check_info.get('disable_persistent_socket'):
             return
 

@@ -1302,6 +1302,7 @@ class Core:
             install_thread_hook(self.sentry_client)
 
     def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):
+        # pylint: disable=too-many-branches
         """ Schedule a recuring job using APScheduler
 
             It's a wrapper to add_job/add_interval_job+add_date_job depending
@@ -1350,6 +1351,8 @@ class Core:
                 **options
             )
         else:
+            if next_run_in is not None and next_run_in < 1.0:
+                next_run_in = 1
             if seconds is None or seconds == 0:
                 if next_run_in is None:
                     raise ValueError(
@@ -1365,9 +1368,6 @@ class Core:
                     **options
                 )
             else:
-                if next_run_in is not None and next_run_in < 1.0:
-                    next_run_in = 1
-
                 if next_run_in is not None:
                     options['start_date'] = (
                         datetime.datetime.now() +
