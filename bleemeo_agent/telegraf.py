@@ -488,9 +488,10 @@ class Telegraf:
                         value=100 - value,
                     )
                 )
-            self.computed_metrics_pending.add(
-                ('cpu_other', '', '', timestamp)
-            )
+            if name in ('cpu_used', 'cpu_user', 'cpu_system'):
+                self.computed_metrics_pending.add(
+                    ('cpu_other', '', '', timestamp)
+                )
         elif part[-2] == 'win_cpu':
             if part[2] != '_Total':
                 return
