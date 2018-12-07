@@ -234,7 +234,10 @@ class BleemeoAPI:
             raise err
         return response.json()['token']
 
-    def api_call(self, url, method='get', params=None, data=None):
+    def api_call(
+            self, url, method='get', params=None, data=None,
+            allow_redirects=True):
+        # pylint: disable=too-many-arguments
         headers = {
             'X-Requested-With': 'XMLHttpRequest',
             'User-Agent': self.user_agent,
@@ -256,6 +259,7 @@ class BleemeoAPI:
                 params=params,
                 data=data,
                 timeout=REQUESTS_TIMEOUT,
+                allow_redirects=allow_redirects,
             )
             if response.status_code == 401 and first_call:
                 # If authentication failed for the first call,
@@ -1600,27 +1604,36 @@ class BleemeoConnector(threading.Thread):
             return
 
         response = bleemeo_api.api_call(
-            '/v1/config/%s/' % config_uuid,
+            '/v1/accountconfig/%s/' % config_uuid,
+            allow_redirects=False
         )
+        if response.status_code == 302:
+            response = bleemeo_api.api_call(
+                '/v1/config/%s/' % config_uuid,
+            )
         if response.status_code >= 400:
             raise ApiError(response)
 
         data = response.json()
-        if data['metrics_whitelist']:
+        if data.get('metrics_agent_whitelist'):
+            whitelist = set(data['metrics_agent_whitelist'].split(','))
+        elif data.get('metrics_whitelist'):
             whitelist = set(data['metrics_whitelist'].split(','))
         else:
             whitelist = set()
 
         try:
-            metric_resolution = int(data.get('metric_resolution', '10'))
+            metric_resolution = int(data.get('metrics_agent_resolution', '10'))
         except ValueError:
             metric_resolution = 10
 
         config = AgentConfig(
             data['id'],
-            data['name'],
-            data['docker_integration'],
-            data['topinfo_period'],
+            data.get('name', 'no-name'),
+            data.get('docker_integration', True),
+            data.get(
+                'live_process_resolution', data.get('topinfo_period', 10)
+            ),
             whitelist,
             metric_resolution,
         )
