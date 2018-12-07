@@ -525,6 +525,11 @@ class Telegraf:
                 ('cpu_other', '', '', timestamp)
             )
         elif part[-2] == 'disk':
+            # Ignore fstype=rootfs. mountpoint for / is duplicated (at least on
+            # old Linux - like wheezy). One time as fstype=rootfs and one time
+            # with correct fstype.
+            if part[3] == 'rootfs':
+                return
             path = part[-3].replace('-', '/')
             path = self.graphite_server.disk_path_rename(path)
             if path is None:
