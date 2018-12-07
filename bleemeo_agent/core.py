@@ -1022,6 +1022,7 @@ class Core:
     # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-public-methods
     def __init__(self, run_as_windows_service=False):
+        # pylint: disable=too-many-statements
         self.run_as_windows_service = run_as_windows_service
 
         self.sentry_client = None
@@ -1082,6 +1083,7 @@ class Core:
         self._gather_metrics_job = None
         self._gather_metric_pull_jobs = []
         self.config = None
+        self._init_completed = False
 
     def _init(self):
         # pylint: disable=too-many-branches
@@ -1213,6 +1215,7 @@ class Core:
         if self.bleemeo_connector:
             self.bleemeo_connector.init()
 
+        self._init_completed = True
         return True
 
     @property
@@ -1231,7 +1234,8 @@ class Core:
             # This is needed because APscheduler 2.x does not allow to
             # unschedule a job while the scheduler it not yet started.
             self.schedule_topinfo()
-        self.graphite_server.update_discovery()
+        if self._init_completed:
+            self.graphite_server.update_discovery()
         if self._gather_metrics_job is not None:
             # As for topinfo, don't schedule before schedule_tasks()
             self.schedule_gather_metrics()
