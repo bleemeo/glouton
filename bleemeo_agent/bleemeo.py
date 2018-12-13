@@ -1187,10 +1187,6 @@ class BleemeoConnector(threading.Thread):
             'fqdn': fqdn,
         }
 
-        initial_config_name = self.core.config['bleemeo.initial_config_name']
-        if initial_config_name:
-            payload['initial_config_name'] = initial_config_name
-
         content = None
         try:
             response = requests.post(
