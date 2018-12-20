@@ -109,8 +109,12 @@ def gather_postfix_queue_size(instance, core):
         output = output.decode('utf-8')
 
     match = re.search(r'-- \d+ Kbytes in (\d+) Request.', output)
-    if match:
-        count = int(match.group(1))
+    match_zero = re.search(r'Mail queue is empty', output)
+    if match or match_zero:
+        if match:
+            count = int(match.group(1))
+        else:
+            count = 0
         core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label='postfix_queue_size',
