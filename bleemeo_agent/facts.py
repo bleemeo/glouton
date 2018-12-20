@@ -211,11 +211,22 @@ def get_docker_version(core):
 
 
 def _get_telegraf_version(core):
-    package_version = get_package_version(
-        'telegraf',
-        distribution=core.config['distribution'],
-    )
-    if package_version is None:
+    package_version = None
+    telegraf_container = core.config['telegraf.docker_name']
+    if telegraf_container:
+        output = bleemeo_agent.util.docker_exec(
+            core.docker_client,
+            telegraf_container,
+            ['telegraf', '-version'],
+        )
+    else:
+        package_version = get_package_version(
+            'telegraf',
+            distribution=core.config['distribution'],
+        )
+        if package_version is not None:
+            return package_version
+
         telegraf = 'telegraf'
         if os.name == 'nt':
             telegraf = bleemeo_agent.util.windows_telegraf_path(telegraf)
@@ -225,20 +236,20 @@ def _get_telegraf_version(core):
         except (subprocess.CalledProcessError, OSError, UnicodeDecodeError):
             return None
 
-        # output is either "Telegraf - version 1.0.0"
-        # or "Telegraf v1.2.0 (git: release-1.2 b2c[...])"
-        # or "Telegraf 1.8.2+bleemeo1 (git: bleemeo 7d9b8309)"
-        prefix = 'Telegraf - version '
-        if output.startswith(prefix):
-            package_version = output[len(prefix):]
+    # output is either "Telegraf - version 1.0.0"
+    # or "Telegraf v1.2.0 (git: release-1.2 b2c[...])"
+    # or "Telegraf 1.8.2+bleemeo1 (git: bleemeo 7d9b8309)"
+    prefix = 'Telegraf - version '
+    if output.startswith(prefix):
+        package_version = output[len(prefix):]
 
-        match = re.match(r'Telegraf v([^ ]+) \(git: .*\)', output)
-        if match:
-            package_version = match.group(1)
+    match = re.match(r'Telegraf v([^ ]+) \(git: .*\)', output)
+    if match:
+        package_version = match.group(1)
 
-        match = re.match(r'Telegraf ([^ ]+) \(git: .*\)', output)
-        if match:
-            package_version = match.group(1)
+    match = re.match(r'Telegraf ([^ ]+) \(git: .*\)', output)
+    if match:
+        package_version = match.group(1)
 
     return package_version
 
