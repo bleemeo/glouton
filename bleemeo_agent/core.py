@@ -106,15 +106,6 @@ DOCKER_DISCOVERY_EVENTS = [
     'destroy',
 ]
 
-
-# Bleemeo agent changed the name of some service
-SERVICE_RENAME = {
-    'jabber': 'ejabberd',
-    'imap': 'dovecot',
-    'smtp': ['exim', 'postfix'],
-    'mqtt': 'mosquitto',
-}
-
 KNOWN_PROCESS = {
     'asterisk': {
         'service': 'asterisk',
@@ -1739,7 +1730,7 @@ class Core:
 
         # Call jobs we want to run immediatly
         self.update_facts()
-        self.update_discovery(first_run=True)
+        self.update_discovery()
 
     def schedule_topinfo(self):
         if self._topinfo_job is not None:
@@ -2063,7 +2054,7 @@ class Core:
                 self.fire_triggers(discovery=True)
                 self._netstat_output_mtime = mtime
 
-    def update_discovery(self, first_run=False, deleted_services=None):
+    def update_discovery(self, deleted_services=None):
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         gather_started_at = time.time()
@@ -2072,11 +2063,6 @@ class Core:
         self._update_docker_info()
         self._update_kubernetes_info()
         discovered_running_services = self._run_discovery(gather_started_at)
-        if first_run:
-            # Should only be needed on first run. In addition to avoid
-            # possible race-condition, do not run this while
-            # Bleemeo._bleemeo_synchronize could run.
-            self._search_old_service(discovered_running_services)
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
         new_discovered_services = _purge_services(
@@ -2158,43 +2144,6 @@ class Core:
         for service_info in services.values():
             if service_info.get('stack', None) is None:
                 service_info['stack'] = self.config['stack']
-
-    def _search_old_service(self, running_service):
-        """ Search and rename any service that use an old name
-        """
-        for (service_name, instance) in list(self.discovered_services.keys()):
-            if service_name in SERVICE_RENAME:
-                new_name = SERVICE_RENAME[service_name]
-                if isinstance(new_name, (list, tuple)):
-                    # 2 services shared the same name (e.g. smtp=>postfix/exim)
-                    # Search for the new name in running service
-                    for candidate in new_name:
-                        if (candidate, instance) in running_service:
-                            self._rename_service(
-                                service_name,
-                                candidate,
-                                instance,
-                            )
-                            break
-                else:
-                    self._rename_service(service_name, new_name, instance)
-
-    def _rename_service(self, old_name, new_name, instance):
-        logging.info('Renaming service "%s" to "%s"', old_name, new_name)
-        old_key = (old_name, instance)
-        new_key = (new_name, instance)
-
-        self.discovered_services[new_key] = self.discovered_services[old_key]
-        del self.discovered_services[old_key]
-
-        if old_key in self.bleemeo_connector.services_uuid:
-            self.bleemeo_connector.services_uuid[new_key] = (
-                self.bleemeo_connector.services_uuid[old_key]
-            )
-            del self.bleemeo_connector.services_uuid[old_key]
-            self.state.set_complex_dict(
-                'services_uuid', self.bleemeo_connector.services_uuid
-            )
 
     def _apply_upgrade(self):
         # Bogus test caused "udp6" to be keeps in netstat extra_ports.
