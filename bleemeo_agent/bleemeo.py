@@ -681,7 +681,6 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client = mqtt.Client()
 
-        self._api_support_metric_update = True
         self._current_metrics = {}
         self._current_metrics_lock = threading.Lock()
         # Make sure this metrics exists and try to be registered
@@ -1653,10 +1652,6 @@ class BleemeoConnector(threading.Thread):
         clock_now = bleemeo_agent.util.get_clock()
         metric_url = 'v1/metric/'
 
-        if full:
-            # retry metric update
-            self._api_support_metric_update = True
-
         # Step 1: refresh cache from API
         if full:
             api_metrics = bleemeo_api.api_iterator(
@@ -1742,8 +1737,7 @@ class BleemeoConnector(threading.Thread):
                 last_seen_time = time.time() - (clock_now - reg_req.last_seen)
                 if (metric.deactivated_at
                         and last_seen_time > metric.deactivated_at
-                        and reg_req.last_seen > clock_now - 600
-                        and self._api_support_metric_update):
+                        and reg_req.last_seen > clock_now - 600):
                     logging.debug(
                         'Mark active the metric %s: %s (%s)',
                         metric.uuid,
@@ -1760,12 +1754,7 @@ class BleemeoConnector(threading.Thread):
                             'active': True,
                         }),
                     )
-                    if response.status_code == 403:
-                        self._api_support_metric_update = False
-                        logging.debug(
-                            'API does not yet support metric update.'
-                        )
-                    elif response.status_code != 200:
+                    if response.status_code != 200:
                         raise ApiError(response)
                 continue
 
@@ -1931,8 +1920,7 @@ class BleemeoConnector(threading.Thread):
 
         # Extra step: mark inactive metric (not seen for last hour + 10min)
         # But only if agent is running for at least 1 hours & 10 min
-        if (self.core.started_at < clock_now - 4200
-                and self._api_support_metric_update):
+        if self.core.started_at < clock_now - 4200:
             for metric in bleemeo_cache.metrics.values():
                 if metric.label == 'agent_sent_message':
                     # This metric is managed by Bleemeo Cloud platform
@@ -1959,13 +1947,7 @@ class BleemeoConnector(threading.Thread):
                             'active': False,
                         }),
                     )
-                    if response.status_code == 403:
-                        self._api_support_metric_update = False
-                        logging.debug(
-                            'API does not yet support metric update.'
-                        )
-                        break
-                    elif response.status_code != 200:
+                    if response.status_code != 200:
                         raise ApiError(response)
                     else:
                         bleemeo_cache.metrics[metric.uuid] = (
