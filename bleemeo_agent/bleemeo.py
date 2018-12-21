@@ -1756,6 +1756,9 @@ class BleemeoConnector(threading.Thread):
                     )
                     if response.status_code != 200:
                         raise ApiError(response)
+                    bleemeo_cache.metrics[metric.uuid] = (
+                        metric._replace(deactivated_at=None)
+                    )
                 continue
 
             payload = {
