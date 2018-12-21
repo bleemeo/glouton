@@ -718,6 +718,7 @@ class BleemeoConnector(threading.Thread):
             )
             self._successive_mqtt_errors = 0
             logging.info('MQTT connection established')
+            self.core.fire_triggers(facts=True)
 
     def on_disconnect(self, _client, _userdata, result_code):
         if self.connected:
