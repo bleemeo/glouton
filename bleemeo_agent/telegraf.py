@@ -521,9 +521,10 @@ class Telegraf:
                 self.computed_metrics_pending.add(
                     ('system_load1', '', '', timestamp)
                 )
-            self.computed_metrics_pending.add(
-                ('cpu_other', '', '', timestamp)
-            )
+            if name in ('cpu_used', 'cpu_user', 'cpu_system'):
+                self.computed_metrics_pending.add(
+                    ('cpu_other', '', '', timestamp)
+                )
         elif part[-2] == 'disk':
             # Ignore fstype=rootfs. mountpoint for / is duplicated (at least on
             # old Linux - like wheezy). One time as fstype=rootfs and one time
