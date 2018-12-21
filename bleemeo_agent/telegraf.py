@@ -626,8 +626,9 @@ class Telegraf:
                 name = 'io_reads'
             elif name == 'Disk_Writes_persec':
                 name = 'io_writes'
-            elif name == 'Percent_Disk_Time':
+            elif name == 'Percent_Idle_Time':
                 name = 'io_utilization'
+                value = 100 - value
                 self.core.emit_metric(
                     bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='io_time',
@@ -639,14 +640,6 @@ class Telegraf:
                         item=item,
                     )
                 )
-            elif name == 'Percent_Disk_Read_Time':
-                name = 'io_read_time'
-                # Like io_time/io_utilization
-                value = value * 1000. / 100.
-            elif name == 'Percent_Disk_Write_Time':
-                name = 'io_write_time'
-                # Like io_time/io_utilization
-                value = value * 1000. / 100.
             else:
                 return
         elif part[-2] == 'mem':
