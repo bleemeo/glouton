@@ -1490,6 +1490,7 @@ class Telegraf:
                 pass
 
         self.computed_metrics_pending.difference_update(processed)
+        new_item.difference_update(processed)
         if new_item:
             self.computed_metrics_pending.update(new_item)
             self._check_computed_metrics()
@@ -1550,7 +1551,7 @@ class Telegraf:
                     'Standby_Cache_Core_Bytes'):
                 value += get_metric(sub_type, item)
             new_item.add(
-                ('mem_free', '', None, timestamp)
+                ('mem_free', '', '', timestamp)
             )
         elif name == 'mem_used':
             total = get_metric('mem_total', '')
