@@ -1618,6 +1618,8 @@ class BleemeoConnector(threading.Thread):
         else:
             whitelist = set()
 
+        whitelist = set(x.strip() for x in whitelist)
+
         try:
             metric_resolution = int(data.get('metrics_agent_resolution', '10'))
         except ValueError:
