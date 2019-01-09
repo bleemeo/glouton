@@ -1858,7 +1858,10 @@ class Core:
 
         # Some service have additional metrics. Currently only Postfix and exim
         # for mail queue size
-        for (service_name, instance) in self.services:
+        for key, service_info in self.services.items():
+            if not service_info.get('active', True):
+                continue
+            (service_name, instance) = key
             if service_name == 'postfix':
                 bleemeo_agent.services.gather_postfix_queue_size(
                     instance, self,
