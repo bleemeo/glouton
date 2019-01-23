@@ -107,15 +107,6 @@ DOCKER_DISCOVERY_EVENTS = [
     'destroy',
 ]
 
-
-# Bleemeo agent changed the name of some service
-SERVICE_RENAME = {
-    'jabber': 'ejabberd',
-    'imap': 'dovecot',
-    'smtp': ['exim', 'postfix'],
-    'mqtt': 'mosquitto',
-}
-
 KNOWN_PROCESS = {
     'asterisk': {
         'service': 'asterisk',
@@ -1023,6 +1014,7 @@ class Core:
     # pylint: disable=too-many-instance-attributes
     # pylint: disable=too-many-public-methods
     def __init__(self, run_as_windows_service=False):
+        # pylint: disable=too-many-statements
         self.run_as_windows_service = run_as_windows_service
 
         self.sentry_client = None
@@ -1060,6 +1052,7 @@ class Core:
         self._discovery_job = None  # scheduled in schedule_tasks
         self._topinfo_job = None
         self._topinfo_period = 10
+        self.metric_resolution = 10
         self.discovered_services = {}
         self.services = {}
         self.metrics_unit = {}
@@ -1081,7 +1074,10 @@ class Core:
         self.thresholds = {}
         self._update_facts_job = None
         self._gather_update_metrics_job = None
+        self._gather_metrics_job = None
+        self._gather_metric_pull_jobs = []
         self.config = None
+        self._init_completed = False
 
     def _init(self):
         # pylint: disable=too-many-branches
@@ -1222,6 +1218,7 @@ class Core:
             self.config['disk_monitor'],
         )
 
+        self._init_completed = True
         return True
 
     @property
@@ -1232,15 +1229,27 @@ class Core:
         """
         return self.config['container.type']
 
-    def set_topinfo_period(self, period):
-        self._topinfo_period = period
+    def configure_resolution(self, topinfo_period, metric_resolution):
+        self._topinfo_period = topinfo_period
+        self.metric_resolution = metric_resolution
         if self._topinfo_job is not None:
-            # Only reschedule topinfo job if already scheduled.
+            # Don't schedule the topinfo job before schedule_tasks()
             # This is needed because APscheduler 2.x does not allow to
             # unschedule a job while the scheduler it not yet started.
             self.schedule_topinfo()
+        if self._init_completed:
+            self.graphite_server.update_discovery()
+        if self._gather_metrics_job is not None:
+            # As for topinfo, don't schedule before schedule_tasks()
+            self.schedule_gather_metrics()
+        if self._gather_metric_pull_jobs:
+            # As for topinfo, don't schedule before schedule_tasks()
+            self._schedule_metric_pull()
         logging.debug(
-            'Changed topinfo frequency to every %d second', period,
+            'Changed topinfo frequency to every %d second', topinfo_period,
+        )
+        logging.debug(
+            'Changed telegraf frequency to every %d second', metric_resolution,
         )
 
     def _config_logger(self):
@@ -1300,6 +1309,7 @@ class Core:
             install_thread_hook(self.sentry_client)
 
     def add_scheduled_job(self, func, seconds, args=None, next_run_in=None):
+        # pylint: disable=too-many-branches
         """ Schedule a recuring job using APScheduler
 
             It's a wrapper to add_job/add_interval_job+add_date_job depending
@@ -1348,6 +1358,8 @@ class Core:
                 **options
             )
         else:
+            if next_run_in is not None and next_run_in < 1.0:
+                next_run_in = 1
             if seconds is None or seconds == 0:
                 if next_run_in is None:
                     raise ValueError(
@@ -1363,9 +1375,6 @@ class Core:
                     **options
                 )
             else:
-                if next_run_in is not None and next_run_in < 1.0:
-                    next_run_in = 1
-
                 if next_run_in is not None:
                     options['start_date'] = (
                         datetime.datetime.now() +
@@ -1456,13 +1465,21 @@ class Core:
     def _schedule_metric_pull(self):
         """ Schedule metric which are pulled
         """
+        while self._gather_metric_pull_jobs:
+            job = self._gather_metric_pull_jobs.pop()
+            self.unschedule_job(job)
+
         for (name, config) in self.config['metric.pull'].items():
-            interval = config.get('interval', 10)
-            self.add_scheduled_job(
+            interval = max(
+                config.get('interval', 10),
+                self.metric_resolution,
+            )
+            job = self.add_scheduled_job(
                 bleemeo_agent.util.pull_raw_metric,
                 args=(self, name),
                 seconds=interval,
             )
+            self._gather_metric_pull_jobs.append(job)
 
     def run(self):
         # pylint: disable=too-many-branches
@@ -1483,7 +1500,7 @@ class Core:
         try:
             self.setup_signal()
             with self._docker_client_cond:
-                self._docker_connect()
+                self._docker_connect(timeout_retries=3)
             self._k8s_connect()
 
             self.schedule_tasks()
@@ -1538,7 +1555,7 @@ class Core:
         if os.name != 'nt':
             signal.signal(signal.SIGHUP, handler_hup)
 
-    def _docker_connect(self):
+    def _docker_connect(self, timeout_retries=1):
         """ Try to connect to docker remote API
 
             Assume _docker_client_cond is held
@@ -1559,12 +1576,26 @@ class Core:
                 version=DOCKER_API_VERSION,
                 timeout=10,
             )
-        try:
-            self.docker_client.ping()
-            self._docker_client_cond.notify_all()
-        except Exception as exc:  # pylint: disable=broad-except
+        for _ in range(timeout_retries):
+            try:
+                self.docker_client.ping()
+                self._docker_client_cond.notify_all()
+                break
+            except Exception as exc:  # pylint: disable=broad-except
+                if (not isinstance(exc, requests.exceptions.Timeout)
+                        or timeout_retries == 1):
+                    logging.debug(
+                        'Docker ping failed. Assume Docker is not used: %s',
+                        exc,
+                    )
+                    self.docker_client = None
+                    break
+                else:
+                    time.sleep(0.5)
+        else:
             logging.debug(
-                'Docker ping failed. Assume Docker is not used: %s', exc
+                'Docker timed-out after %d retry. Assume Docker is not used',
+                timeout_retries,
             )
             self.docker_client = None
 
@@ -1590,7 +1621,7 @@ class Core:
 
         with self._docker_client_cond:
             if self.docker_client is None:
-                self._docker_connect()
+                self._docker_connect(timeout_retries=5)
             docker_client = self.docker_client
 
         containers = []
@@ -1688,10 +1719,7 @@ class Core:
             self.update_discovery,
             seconds=1 * 60 * 60 + 10 * 60,  # 1 hour 10 minutes
         )
-        self.add_scheduled_job(
-            self._gather_metrics,
-            seconds=10,
-        )
+        self.schedule_gather_metrics()
         self.add_scheduled_job(
             self._check_thread,
             seconds=60,
@@ -1715,7 +1743,7 @@ class Core:
 
         # Call jobs we want to run immediatly
         self.update_facts()
-        self.update_discovery(first_run=True)
+        self.update_discovery()
 
     def schedule_topinfo(self):
         if self._topinfo_job is not None:
@@ -1725,6 +1753,16 @@ class Core:
         self._topinfo_job = self.add_scheduled_job(
             self.send_top_info,
             seconds=self._topinfo_period,
+        )
+
+    def schedule_gather_metrics(self):
+        if self._gather_metrics_job is not None:
+            self.unschedule_job(self._gather_metrics_job)
+            self._gather_metrics_job = None
+
+        self._gather_metrics_job = self.add_scheduled_job(
+            self._gather_metrics,
+            seconds=self.metric_resolution,
         )
 
     def start_threads(self):
@@ -1839,7 +1877,10 @@ class Core:
 
         # Some service have additional metrics. Currently only Postfix and exim
         # for mail queue size
-        for (service_name, instance) in self.services:
+        for key, service_info in self.services.items():
+            if not service_info.get('active', True):
+                continue
+            (service_name, instance) = key
             if service_name == 'postfix':
                 bleemeo_agent.services.gather_postfix_queue_size(
                     instance, self,
@@ -2035,7 +2076,7 @@ class Core:
                 self.fire_triggers(discovery=True)
                 self._netstat_output_mtime = mtime
 
-    def update_discovery(self, first_run=False, deleted_services=None):
+    def update_discovery(self, deleted_services=None):
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         gather_started_at = time.time()
@@ -2044,11 +2085,6 @@ class Core:
         self._update_docker_info()
         self._update_kubernetes_info()
         discovered_running_services = self._run_discovery(gather_started_at)
-        if first_run:
-            # Should only be needed on first run. In addition to avoid
-            # possible race-condition, do not run this while
-            # Bleemeo._bleemeo_synchronize could run.
-            self._search_old_service(discovered_running_services)
         new_discovered_services = copy.deepcopy(self.discovered_services)
 
         new_discovered_services = _purge_services(
@@ -2131,43 +2167,6 @@ class Core:
         for service_info in services.values():
             if service_info.get('stack', None) is None:
                 service_info['stack'] = self.config['stack']
-
-    def _search_old_service(self, running_service):
-        """ Search and rename any service that use an old name
-        """
-        for (service_name, instance) in list(self.discovered_services.keys()):
-            if service_name in SERVICE_RENAME:
-                new_name = SERVICE_RENAME[service_name]
-                if isinstance(new_name, (list, tuple)):
-                    # 2 services shared the same name (e.g. smtp=>postfix/exim)
-                    # Search for the new name in running service
-                    for candidate in new_name:
-                        if (candidate, instance) in running_service:
-                            self._rename_service(
-                                service_name,
-                                candidate,
-                                instance,
-                            )
-                            break
-                else:
-                    self._rename_service(service_name, new_name, instance)
-
-    def _rename_service(self, old_name, new_name, instance):
-        logging.info('Renaming service "%s" to "%s"', old_name, new_name)
-        old_key = (old_name, instance)
-        new_key = (new_name, instance)
-
-        self.discovered_services[new_key] = self.discovered_services[old_key]
-        del self.discovered_services[old_key]
-
-        if old_key in self.bleemeo_connector.services_uuid:
-            self.bleemeo_connector.services_uuid[new_key] = (
-                self.bleemeo_connector.services_uuid[old_key]
-            )
-            del self.bleemeo_connector.services_uuid[old_key]
-            self.state.set_complex_dict(
-                'services_uuid', self.bleemeo_connector.services_uuid
-            )
 
     def _apply_upgrade(self):
         # Bogus test caused "udp6" to be keeps in netstat extra_ports.

@@ -80,7 +80,6 @@ CONFIG_VARS = [
     ('bleemeo.mqtt.host', 'string', 'mqtt.bleemeo.com'),
     ('bleemeo.mqtt.port', 'int', 8883),
     ('bleemeo.mqtt.ssl', 'bool', True),
-    ('bleemeo.initial_config_name', 'string', None),
     ('bleemeo.initial_agent_name', 'string', ''),
     (
         'bleemeo.mqtt.cafile',
@@ -106,17 +105,6 @@ CONFIG_VARS = [
         'telegraf.restart_command',
         'string',
         'sudo -n service telegraf restart'
-    ),
-    (
-        'collectd.config_file',
-        'string',
-        '/etc/collectd/collectd.conf.d/bleemeo-generated.conf'
-    ),
-    ('collectd.docker_name', 'string', None),
-    (
-        'collectd.restart_command',
-        'string',
-        'sudo -n service collectd restart'
     ),
     ('metric.pull', 'dict', {}),
     ('metric.prometheus', 'dict', {}),
@@ -155,6 +143,7 @@ class Config:
 
     Also add "set" method that known about sub-dict.
     """
+
     def __init__(self, initial_dict=None):
         """ init function of Config class """
         if initial_dict is None:

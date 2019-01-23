@@ -2,9 +2,6 @@
 %define git_commit unknown
 %define build_date Thu Jan 01 1970
 
-# Collectd is disabled for now. It has issue with SELinux
-%bcond_with collectd
-
 %{?systemd_requires}
 
 Name:           bleemeo-agent
@@ -57,27 +54,6 @@ Bleemeo is a solution of Monitoring as a Service.
 This package contains the agent which send metric to
 the SaaS platform using Telegraf
 
-%if %{with collectd}
-%package collectd
-Summary:        Bleemeo agent with collectd
-Requires:       collectd
-Requires:       collectd-apache
-Requires:       collectd-bind
-Requires:       collectd-mysql
-Requires:       collectd-nginx
-Requires:       collectd-openldap
-Requires:       collectd-postgresql
-Requires:       collectd-redis
-Requires:       collectd-varnish
-Provides:       bleemeo-agent-collector = %{version}
-Conflicts:      bleemeo-agent-telegraf, bleemeo-agent-single
-
-%description collectd
-Bleemeo is a solution of Monitoring as a Service.
-This package contains the agent which send metric to
-the SaaS platform using collectd
-%endif
-
 %package single
 Summary:        Bleemeo agent for Docker images
 Provides:       bleemeo-agent-collector = %{version}
@@ -125,15 +101,6 @@ install -D -p -m 0644 packaging/common/telegraf.conf %{buildroot}%{_sysconfdir}/
 install -D -p -m 0644 packaging/common/telegraf-generated.conf %{buildroot}%{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
 install -D -p -m 0644 packaging/common/bleemeo-telegraf-graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
 
-%if %{with collectd}
-# -collectd
-install -D -p -m 0644 packaging/common/collectd.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo.conf
-install -D -p -m 0644 packaging/centos/collectd-bleemeo-centos.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-centos.conf
-install -D -p -m 0644 packaging/common/collectd-generated.conf %{buildroot}%{_sysconfdir}/collectd.d/bleemeo-generated.conf
-install -D -p -m 0644 packaging/common/bleemeo-collectd-graphite_metrics_source.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
-install -D -p -m 0644 packaging/centos/bleemeo-collectd.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/35-collectd.conf
-%endif
-
 # -jmx
 install -D -p -m 0644 packaging/centos/bleemeo-agent-jmx.service %{buildroot}%{_unitdir}/%{name}-jmx.service
 install -D -p -m 0640 packaging/common/jmxtrans-bleemeo-generated.json %{buildroot}%{_sharedstatedir}/jmxtrans/bleemeo-generated.json
@@ -158,14 +125,6 @@ install -D -p -m 0755 debian/bleemeo-agent-jmx.cron.daily %{buildroot}%{_sysconf
 %config(noreplace) %{_sysconfdir}/telegraf/telegraf.d/bleemeo.conf
 %config(noreplace) %{_sysconfdir}/telegraf/telegraf.d/bleemeo-generated.conf
 %config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/32-graphite_metrics_source.conf
-
-%if %{with collectd}
-%files collectd
-%config(noreplace) %{_sysconfdir}/collectd.d/bleemeo.conf
-%config(noreplace) %{_sysconfdir}/collectd.d/bleemeo-centos.conf
-%config(noreplace) %{_sysconfdir}/collectd.d/bleemeo-generated.conf
-%config(noreplace) %{_sysconfdir}/bleemeo/agent.conf.d/31-graphite_metrics_source.conf
-%endif
 
 %files single
 
@@ -242,32 +201,6 @@ if [ $1 -eq 1 ] ; then
     systemctl restart bleemeo-agent.service 2>/dev/null
 fi
 exit 0
-
-%if %{with collectd}
-%pre collectd
-getent group bleemeo >/dev/null || groupadd -r bleemeo
-getent passwd bleemeo >/dev/null || \
-    useradd -r -g bleemeo -d /var/lib/bleemeo -s /sbin/nologin \
-    -c "Bleemeo agent daemon" bleemeo
-usermod -aG docker bleemeo 2> /dev/null || true
-exit 0
-
-%post collectd
-chown bleemeo:bleemeo /etc/collectd.d/bleemeo-generated.conf
-chmod 0640 /etc/collectd.d/bleemeo-generated.conf
-
-# Bleemeo agent modify telegraf configuration.
-systemctl restart collectd.service
-
-if [ $1 -eq 1 ] ; then
-    # Bleemeo agent collectd modify its configuration.
-    # On first installation of bleemeo-agent-collectd, restart the agent
-    touch /var/lib/bleemeo/upgrade 2>/dev/null
-    systemctl reset-failed bleemeo-agent.service || true
-    systemctl restart bleemeo-agent.service 2>/dev/null
-fi
-exit 0
-%endif
 
 %post jmx
 chown bleemeo:jmxtrans /var/lib/jmxtrans/bleemeo-generated.json

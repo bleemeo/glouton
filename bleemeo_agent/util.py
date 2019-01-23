@@ -814,6 +814,27 @@ def pull_raw_metric(core, name):
             core.emit_metric(metric_point)
 
 
+def docker_exec(docker_client, container_name, command):
+    """ Run a command on given container and return output.
+    """
+    if docker is None and docker_client is None:
+        logging.debug(
+            'Unable to get Telegraf version: missing docker-py dependencies'
+        )
+        return ''
+    if docker_client is None:
+        logging.debug(
+            'Unable to get Telegraf version: unable to communicate with Docker'
+        )
+        return ''
+    result = docker_client.exec_create(
+        container_name,
+        command,
+    )
+    output = docker_client.exec_start(result['Id'])
+    return output.decode('utf-8')
+
+
 def docker_restart(docker_client, container_name):
     """ Restart a Docker container
     """

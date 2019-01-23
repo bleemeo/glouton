@@ -96,7 +96,7 @@ AgentConfig = collections.namedtuple('AgentConfig', (
     'docker_integration',
     'topinfo_period',
     'metrics_whitelist',
-    'metrics_blacklist',
+    'metric_resolution',
 ))
 AgentFact = collections.namedtuple('AgentFact', (
     'uuid', 'key', 'value',
@@ -234,7 +234,10 @@ class BleemeoAPI:
             raise err
         return response.json()['token']
 
-    def api_call(self, url, method='get', params=None, data=None):
+    def api_call(
+            self, url, method='get', params=None, data=None,
+            allow_redirects=True):
+        # pylint: disable=too-many-arguments
         headers = {
             'X-Requested-With': 'XMLHttpRequest',
             'User-Agent': self.user_agent,
@@ -256,6 +259,7 @@ class BleemeoAPI:
                 params=params,
                 data=data,
                 timeout=REQUESTS_TIMEOUT,
+                allow_redirects=allow_redirects,
             )
             if response.status_code == 401 and first_call:
                 # If authentication failed for the first call,
@@ -385,7 +389,9 @@ class BleemeoCache:
     # Version 3: Added active to Metric
     # Version 4: Changed field "active" (boolean) to "deactivated_at" (time) on
     #            Metric
-    CACHE_VERSION = 4
+    # Version 5: Dropped blacklist from AgentConfig
+    # Version 6: Added "metric_resolution" to AgentConfig
+    CACHE_VERSION = 6
 
     def __init__(self, state, skip_load=False):
         self._state = state
@@ -480,7 +486,11 @@ class BleemeoCache:
         config = cache.get('current_config')
         if config:
             config[4] = set(config[4])
-            config[5] = set(config[5])
+            if cache['version'] < 5:
+                del config[5]
+            if cache['version'] < 6:
+                # Version 6 introduced metric_resolution
+                config.append(10)
             self.current_config = AgentConfig(*config)
 
         next_config_at = cache.get('next_config_at')
@@ -656,7 +666,8 @@ class BleemeoConnector(threading.Thread):
         self.connected = False
         self._last_disconnects = []
         self._successive_mqtt_errors = 0
-        self._disable_until = 0
+        self._mqtt_reconnect_at = 0
+        self._duplicate_disable_until = 0
         self._mqtt_queue_size = 0
         self._mqtt_thread = None
 
@@ -670,7 +681,6 @@ class BleemeoConnector(threading.Thread):
 
         self.mqtt_client = mqtt.Client()
 
-        self._api_support_metric_update = True
         self._current_metrics = {}
         self._current_metrics_lock = threading.Lock()
         # Make sure this metrics exists and try to be registered
@@ -708,6 +718,7 @@ class BleemeoConnector(threading.Thread):
             )
             self._successive_mqtt_errors = 0
             logging.info('MQTT connection established')
+            self.core.fire_triggers(facts=True)
 
     def on_disconnect(self, _client, _userdata, result_code):
         if self.connected:
@@ -718,40 +729,56 @@ class BleemeoConnector(threading.Thread):
         self.connected = False
 
         clock_now = bleemeo_agent.util.get_clock()
-        if self.core.started_at > clock_now - 60:
-            # Do not disable Bleemeo connector for MQTT disconnection
-            # on the first minute. We want the _sync_loop to run first.
-            return
-
-        if result_code == 1:
-            # code 1 is a generic code. It could be timeout,
-            # connection refused, bad protocol, etc
-            # The most likely error that would trigger successive errors is
-            # being unable to connect due to connection refused/dropped.
-            reason = 'unable to connect'
-        elif result_code == 0:
-            # code 0 is succesful disconnect, e.g. after call to disconnect
-            # This case should never cause successive errors
-            reason = 'unknown error'
-        else:
-            reason = (
-                'connection refused. Was this server deleted '
-                'on Bleemeo Cloud platform ?'
+        if (self._successive_mqtt_errors > 3
+                and not self._mqtt_reconnect_at):
+            if result_code == 1:
+                # code 1 is a generic code. It could be timeout,
+                # connection refused, bad protocol, etc
+                # The most likely error that would trigger successive errors is
+                # being unable to connect due to connection refused/dropped.
+                reason = 'unable to connect'
+            elif result_code == 0:
+                # code 0 is succesful disconnect, e.g. after call to disconnect
+                # This case should never cause successive errors
+                reason = 'unknown error'
+            else:
+                reason = (
+                    'connection refused. Was this server deleted '
+                    'on Bleemeo Cloud platform ?'
+                )
+            delay = random.randint(
+                min(300, 20 * self._successive_mqtt_errors),
+                min(900, 60 * self._successive_mqtt_errors)
             )
-        if self._successive_mqtt_errors > 10 and not self._disable_until:
             logging.info(
-                'Too many MQTT retry: %s', reason
+                'Unable to connect to MQTT: %s.'
+                ' Disable MQTT for %d seconds',
+                reason,
+                delay,
             )
-            self._disable_until = (
-                clock_now + 300 + random.randint(0, 600)
-            )
-        elif self._successive_mqtt_errors > 3 and not self._disable_until:
+            self._mqtt_reconnect_at = clock_now + delay
+        elif (len(self._last_disconnects) >= 6
+              and self._last_disconnects[-6] > clock_now - 60
+              and not self._mqtt_reconnect_at):
+            delay = 60 + random.randint(-15, 15)
             logging.info(
-                'Too many MQTT retry: %s', reason
+                'Too many attempt to connect to MQTT on last minute.'
+                ' Disabling MQTT for %d seconds',
+                delay
             )
-            self._disable_until = (
-                clock_now + 60 + random.randint(0, 30)
+            self._mqtt_reconnect_at = clock_now + delay
+            self.trigger_fact_sync = clock_now
+        elif (len(self._last_disconnects) >= 15
+              and self._last_disconnects[-15] > clock_now - 600
+              and not self._mqtt_reconnect_at):
+            delay = 300 + random.randint(-60, 60)
+            logging.info(
+                'Too many attempt to connect to MQTT on last 10 minutes.'
+                ' Disabling MQTT for %d seconds',
+                delay,
             )
+            self._mqtt_reconnect_at = clock_now + delay
+            self.trigger_fact_sync = clock_now
 
     def on_message(self, _client, _userdata, msg):
         notify_topic = 'v1/agent/%s/notification' % self.agent_uuid
@@ -812,8 +839,9 @@ class BleemeoConnector(threading.Thread):
             self._bleemeo_cache = BleemeoCache(self.core.state, skip_load=True)
 
         if self._bleemeo_cache.current_config:
-            self.core.set_topinfo_period(
+            self.core.configure_resolution(
                 self._bleemeo_cache.current_config.topinfo_period,
+                self._bleemeo_cache.current_config.metric_resolution,
             )
 
     def run(self):
@@ -838,49 +866,9 @@ class BleemeoConnector(threading.Thread):
 
         self._mqtt_setup()
 
-        _mqtt_reconnect_at = 0
         while not self.core.is_terminating.is_set():
-            clock_now = bleemeo_agent.util.get_clock()
-            if (not _mqtt_reconnect_at and self._disable_until > clock_now):
-                self._mqtt_stop(wait_delay=0)
-                _mqtt_reconnect_at = self._disable_until
-            elif (not _mqtt_reconnect_at
-                  and len(self._last_disconnects) >= 6
-                  and self._last_disconnects[-6] > clock_now - 60):
-                delay = 60 + random.randint(-15, 15)
-                logging.info(
-                    'Too many attempt to connect to MQTT on last minute.'
-                    ' Disabling MQTT for %d seconds',
-                    delay
-                )
-                self._mqtt_stop(wait_delay=0)
-                _mqtt_reconnect_at = clock_now + delay
-                self.trigger_fact_sync = clock_now
-            elif (not _mqtt_reconnect_at
-                  and len(self._last_disconnects) >= 15
-                  and self._last_disconnects[-15] > clock_now - 600):
-                delay = 300 + random.randint(-60, 60)
-                logging.info(
-                    'Too many attempt to connect to MQTT on last 10 minutes.'
-                    ' Disabling MQTT for %d seconds',
-                    delay,
-                )
-                self._mqtt_stop(wait_delay=0)
-                _mqtt_reconnect_at = clock_now + delay
-                self._last_disconnects = []
-                self.trigger_fact_sync = clock_now
-            elif (_mqtt_reconnect_at and _mqtt_reconnect_at < clock_now
-                  and self._disable_until + 10 < clock_now):
-                logging.info('Re-enabling MQTT connection')
-                _mqtt_reconnect_at = 0
-                self._mqtt_start()
-
-            if (self._mqtt_thread is not None
-                    and not self._mqtt_thread.is_alive()):
-                logging.error('Thread MQTT connector crashed. Stopping agent')
-                self.core.is_terminating.set()
-
             self._loop()
+            self._mqtt_check()
 
         if self.connected and self.upgrade_in_progress:
             self.publish(
@@ -930,7 +918,12 @@ class BleemeoConnector(threading.Thread):
         if self.agent_uuid is None:
             logging.info('Agent not yet registered')
 
-        if not self.connected:
+        if not self.connected and self._mqtt_reconnect_at > clock_now:
+            logging.info(
+                'Bleemeo connection (MQTT) is disabled for %d seconds',
+                self._mqtt_reconnect_at - clock_now,
+            )
+        elif not self.connected:
             logging.info(
                 'Bleemeo connection (MQTT) is currently not established'
             )
@@ -1037,6 +1030,29 @@ class BleemeoConnector(threading.Thread):
             self._mqtt_thread.join(min(3, remaining))
         self._mqtt_thread = None
 
+    def _mqtt_check(self):
+        """ Check MQTT connection status
+
+            * Temporary disconnect if requested to.
+            * Reconnect when temporary disconnection expired
+            * Stop if abnormally disconnected
+        """
+        if (self._mqtt_thread is not None
+                and not self._mqtt_thread.is_alive()):
+            logging.error('Thread MQTT connector crashed. Stopping agent')
+            self.core.is_terminating.set()
+            return
+
+        clock_now = bleemeo_agent.util.get_clock()
+        if (self._mqtt_thread is not None
+                and self._mqtt_reconnect_at > clock_now):
+            self._mqtt_stop(wait_delay=0)
+        elif (self._mqtt_thread is None
+              and self._mqtt_reconnect_at < clock_now):
+            logging.info('Re-enabling MQTT connection')
+            self._mqtt_reconnect_at = 0
+            self._mqtt_start()
+
     def _loop(self):
         # pylint: disable=too-many-branches
         """ Call as long as agent is running. It's the "main" method for
@@ -1054,6 +1070,8 @@ class BleemeoConnector(threading.Thread):
                 if deadline is None:
                     deadline = time.time() + 6
                 timeout = max(0, min(deadline - time.time(), 6))
+                if self._duplicate_disable_until:
+                    continue
                 short_item = (metric_point.item[:API_METRIC_ITEM_LENGTH])
                 if metric_point.service_instance:
                     short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
@@ -1169,10 +1187,6 @@ class BleemeoConnector(threading.Thread):
             'fqdn': fqdn,
         }
 
-        initial_config_name = self.core.config['bleemeo.initial_config_name']
-        if initial_config_name:
-            payload['initial_config_name'] = initial_config_name
-
         content = None
         try:
             response = requests.post(
@@ -1254,7 +1268,6 @@ class BleemeoConnector(threading.Thread):
 
         last_metrics_count = 0
         successive_errors = 0
-        successive_auth_errors = 0
         last_duplicated_events = []
         error_delay = 5
         last_error = None
@@ -1267,7 +1280,6 @@ class BleemeoConnector(threading.Thread):
             if last_error is not None:
                 successive_errors += 1
                 if isinstance(last_error, AuthApiError):
-                    successive_auth_errors += 1
                     if 'fqdn' in bleemeo_cache.facts_by_key:
                         with_fqdn = (
                             ' with fqdn %s' %
@@ -1283,70 +1295,68 @@ class BleemeoConnector(threading.Thread):
                         self.agent_uuid,
                         with_fqdn,
                     )
+                    delay = random.randint(
+                        min(300, successive_errors * 10),
+                        min(900, successive_errors * 30),
+                    )
                 else:
-                    successive_auth_errors = 0
                     logging.info(
                         'Synchronize with Bleemeo Cloud platform failed: %s',
                         last_error,
                     )
-                delay = min(successive_errors * 15, 60)
-                clock_now = bleemeo_agent.util.get_clock()
-                if successive_auth_errors > 10 and not self._disable_until:
-                    logging.info(
-                        'Too many authentication failure. '
-                        'Is this agent deleted on Bleemeo Cloud ?',
+                    delay = random.randint(
+                        min(150, successive_errors * 5),
+                        min(300, successive_errors * 10),
                     )
-                    self._disable_until = (
-                        clock_now + 300 + random.randint(0, 600)
-                    )
-                elif successive_auth_errors > 3 and not self._disable_until:
-                    logging.info(
-                        'Too many authentication failure. '
-                        'Is this agent deleted on Bleemeo Cloud ?',
-                    )
-                    self._disable_until = (
-                        clock_now + 60 + random.randint(0, 30)
-                    )
-                elif successive_errors >= 15 and not self._disable_until:
-                    error_delay = 30
-                    logging.info(
-                        'Too many errors, temporary disable Bleemeo connector'
-                    )
-                    self._disable_until = (
-                        clock_now + 300 + random.randint(0, 600)
-                    )
+                delay = min(successive_errors * 15, 300)
+                error_delay = min(5 + successive_errors, 45)
             elif first_loop:
                 delay = 0
-            elif not self._disable_until:
+            elif not self._duplicate_disable_until:
                 successive_errors = 0
-                successive_auth_errors = 0
                 delay = 15
 
             last_error = None
             first_loop = False
 
             clock_now = bleemeo_agent.util.get_clock()
-            if self._disable_until > clock_now:
+            if self._duplicate_disable_until > clock_now:
                 logging.info(
                     'Bleemeo connector is disabled for %d seconds',
-                    self._disable_until - clock_now,
+                    self._duplicate_disable_until - clock_now,
                 )
                 self.core.is_terminating.wait(min(
-                    60, self._disable_until - clock_now,
+                    60, self._duplicate_disable_until - clock_now,
                 ))
                 continue
-            elif self._disable_until:
+            elif self._duplicate_disable_until:
                 logging.info('Re-enabling Bleemeo connector')
-                self._disable_until = 0
+                self._duplicate_disable_until = 0
                 next_full_sync = 0
 
-            if interrupted:
-                self.core.is_terminating.wait(delay)
-            interrupted = self._sync_loop_event.wait(delay)
+            clock_now = bleemeo_agent.util.get_clock()
+            deadline = clock_now + delay
+            while clock_now < deadline:
+                remain_delay = deadline - clock_now
+                if remain_delay > 60:
+                    logging.info(
+                        'Synchronize with Bleemeo Cloud platform still have to'
+                        ' wait %d seconds due to last error',
+                        remain_delay,
+                    )
+                if interrupted:
+                    self.core.is_terminating.wait(min(60, remain_delay))
+                else:
+                    interrupted = self._sync_loop_event.wait(
+                        min(60, remain_delay)
+                    )
+                clock_now = bleemeo_agent.util.get_clock()
+
             if interrupted:
                 # Wait a tiny bit, so other metrics in the same batch could
                 # arrive
                 self.core.is_terminating.wait(1)
+            interrupted = False
             self._sync_loop_event.clear()
             if self.core.is_terminating.is_set():
                 break
@@ -1388,7 +1398,7 @@ class BleemeoConnector(threading.Thread):
                             bleemeo_cache, bleemeo_api, last_duplicated_events,
                         )
                         duplicated_checked = True
-                    if self._disable_until:
+                    if self._duplicate_disable_until:
                         continue
                     self._sync_agent(bleemeo_cache, bleemeo_api)
                     sync_run = True
@@ -1406,7 +1416,7 @@ class BleemeoConnector(threading.Thread):
                             bleemeo_cache, bleemeo_api, last_duplicated_events,
                         )
                         duplicated_checked = True
-                    if self._disable_until:
+                    if self._duplicate_disable_until:
                         continue
                     self._sync_facts(bleemeo_cache, bleemeo_api)
                     sync_run = True
@@ -1424,7 +1434,7 @@ class BleemeoConnector(threading.Thread):
                             bleemeo_cache, bleemeo_api, last_duplicated_events
                         )
                         duplicated_checked = True
-                    if self._disable_until:
+                    if self._duplicate_disable_until:
                         continue
                     full = (
                         next_full_sync <= clock_now or
@@ -1450,7 +1460,7 @@ class BleemeoConnector(threading.Thread):
                             bleemeo_cache, bleemeo_api, last_duplicated_events,
                         )
                         duplicated_checked = True
-                    if self._disable_until:
+                    if self._duplicate_disable_until:
                         continue
                     full = (
                         next_full_sync <= clock_now or
@@ -1478,7 +1488,7 @@ class BleemeoConnector(threading.Thread):
                             bleemeo_cache, bleemeo_api, last_duplicated_events,
                         )
                         duplicated_checked = True
-                    if self._disable_until:
+                    if self._duplicate_disable_until:
                         continue
                     with self._current_metrics_lock:
                         self._current_metrics = {
@@ -1486,7 +1496,9 @@ class BleemeoConnector(threading.Thread):
                             for (key, value) in self._current_metrics.items()
                             if self.sent_metric(
                                 value.label,
-                                value.last_status is not None,
+                                value.service_label and value.label == (
+                                    value.service_label + '_status'
+                                ),
                                 bleemeo_cache,
                             )
                         }
@@ -1588,35 +1600,48 @@ class BleemeoConnector(threading.Thread):
             return
 
         response = bleemeo_api.api_call(
-            '/v1/config/%s/' % config_uuid,
+            '/v1/accountconfig/%s/' % config_uuid,
+            allow_redirects=False
         )
+        if response.status_code == 302:
+            response = bleemeo_api.api_call(
+                '/v1/config/%s/' % config_uuid,
+            )
         if response.status_code >= 400:
             raise ApiError(response)
 
         data = response.json()
-        if data['metrics_whitelist']:
+        if data.get('metrics_agent_whitelist'):
+            whitelist = set(data['metrics_agent_whitelist'].split(','))
+        elif data.get('metrics_whitelist'):
             whitelist = set(data['metrics_whitelist'].split(','))
         else:
             whitelist = set()
 
-        if data.get('metrics_blacklist', ''):
-            blacklist = set(data['metrics_blacklist'].split(','))
-        else:
-            blacklist = set()
+        whitelist = set(x.strip() for x in whitelist)
+
+        try:
+            metric_resolution = int(data.get('metrics_agent_resolution', '10'))
+        except ValueError:
+            metric_resolution = 10
 
         config = AgentConfig(
             data['id'],
-            data['name'],
-            data['docker_integration'],
-            data['topinfo_period'],
+            data.get('name', 'no-name'),
+            data.get('docker_integration', True),
+            data.get(
+                'live_process_resolution', data.get('topinfo_period', 10)
+            ),
             whitelist,
-            blacklist,
+            metric_resolution,
         )
         if bleemeo_cache.current_config == config:
             return
         bleemeo_cache.current_config = config
 
-        self.core.set_topinfo_period(config.topinfo_period)
+        self.core.configure_resolution(
+            config.topinfo_period, config.metric_resolution
+        )
         self.core.fire_triggers(updates_count=True)
         logging.info('Changed to configuration %s', config.name)
 
@@ -1629,10 +1654,6 @@ class BleemeoConnector(threading.Thread):
         logging.debug('Synchronize metrics (full=%s)', full)
         clock_now = bleemeo_agent.util.get_clock()
         metric_url = 'v1/metric/'
-
-        if full:
-            # retry metric update
-            self._api_support_metric_update = True
 
         # Step 1: refresh cache from API
         if full:
@@ -1719,8 +1740,7 @@ class BleemeoConnector(threading.Thread):
                 last_seen_time = time.time() - (clock_now - reg_req.last_seen)
                 if (metric.deactivated_at
                         and last_seen_time > metric.deactivated_at
-                        and reg_req.last_seen > clock_now - 600
-                        and self._api_support_metric_update):
+                        and reg_req.last_seen > clock_now - 600):
                     logging.debug(
                         'Mark active the metric %s: %s (%s)',
                         metric.uuid,
@@ -1737,13 +1757,11 @@ class BleemeoConnector(threading.Thread):
                             'active': True,
                         }),
                     )
-                    if response.status_code == 403:
-                        self._api_support_metric_update = False
-                        logging.debug(
-                            'API does not yet support metric update.'
-                        )
-                    elif response.status_code != 200:
+                    if response.status_code != 200:
                         raise ApiError(response)
+                    bleemeo_cache.metrics[metric.uuid] = (
+                        metric._replace(deactivated_at=None)
+                    )
                 continue
 
             payload = {
@@ -1908,8 +1926,7 @@ class BleemeoConnector(threading.Thread):
 
         # Extra step: mark inactive metric (not seen for last hour + 10min)
         # But only if agent is running for at least 1 hours & 10 min
-        if (self.core.started_at < clock_now - 4200
-                and self._api_support_metric_update):
+        if self.core.started_at < clock_now - 4200:
             for metric in bleemeo_cache.metrics.values():
                 if metric.label == 'agent_sent_message':
                     # This metric is managed by Bleemeo Cloud platform
@@ -1936,14 +1953,13 @@ class BleemeoConnector(threading.Thread):
                             'active': False,
                         }),
                     )
-                    if response.status_code == 403:
-                        self._api_support_metric_update = False
-                        logging.debug(
-                            'API does not yet support metric update.'
-                        )
-                        break
-                    elif response.status_code != 200:
+                    if response.status_code != 200:
                         raise ApiError(response)
+                    else:
+                        bleemeo_cache.metrics[metric.uuid] = (
+                            metric._replace(deactivated_at=time.time())
+                        )
+            bleemeo_cache.update_lookup_map()
 
         self.core.update_thresholds(bleemeo_cache.get_core_thresholds())
         self.core.metrics_unit = bleemeo_cache.get_core_units()
@@ -2317,7 +2333,7 @@ class BleemeoConnector(threading.Thread):
                 or value.container_name in bleemeo_cache.containers_by_name
             }
 
-    def sent_metric(self, metric_name, metric_has_status, bleemeo_cache=None):
+    def sent_metric(self, metric_name, is_service_status, bleemeo_cache=None):
         """ Return True if the metric should be sent to Bleemeo Cloud platform
         """
         if bleemeo_cache is None:
@@ -2325,16 +2341,12 @@ class BleemeoConnector(threading.Thread):
         if bleemeo_cache.current_config is None:
             return True
 
-        blacklist = bleemeo_cache.current_config.metrics_blacklist
-        if metric_name in blacklist:
-            return False
-
         whitelist = bleemeo_cache.current_config.metrics_whitelist
         if not whitelist:
             # Always sent metrics if whitelist is empty
             return True
 
-        if metric_has_status:
+        if is_service_status:
             return True
 
         if metric_name in whitelist:
@@ -2534,10 +2546,11 @@ class BleemeoConnector(threading.Thread):
                 delay = 900 + random.randint(-60, 60)
             else:
                 delay = 300 + random.randint(-60, 60)
-            self._disable_until = clock_now + delay
+            self._duplicate_disable_until = clock_now + delay
+            self._mqtt_reconnect_at = clock_now + delay
             break
 
-        if self._disable_until:
+        if self._duplicate_disable_until:
             self._bleemeo_cache = bleemeo_cache.copy()
             # Save cache so if agent is restarted in won't
             # complain of the same change on facts by another
@@ -2545,9 +2558,14 @@ class BleemeoConnector(threading.Thread):
             bleemeo_cache.save()
 
     def emit_metric(self, metric_point):
+        if self._duplicate_disable_until:
+            return
         metric_name = metric_point.label
-        metric_has_status = metric_point.status_code is not None
-        if not self.sent_metric(metric_name, metric_has_status):
+        is_service_status = (
+            metric_point.service_label
+            and metric_point.label == metric_point.service_label + '_status'
+        )
+        if not self.sent_metric(metric_name, is_service_status):
             return
 
         if (self._bleemeo_cache.current_config is not None
