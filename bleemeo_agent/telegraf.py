@@ -140,11 +140,6 @@ RABBITMQ_TELEGRAF_CONFIG = """
   password = "%(password)s"
 """
 
-REDIS_TELEGRAF_CONFIG = """
-[[inputs.redis]]
-  servers = ["tcp://%(address)s:%(port)s"]
-"""
-
 ZOOKEEPER_CONFIG = """
 [[inputs.zookeeper]]
   servers = ["%(address)s:%(port)s"]
@@ -471,28 +466,8 @@ class Telegraf:
         part = name.split('.')
 
         if part[-2] == 'cpu':
-            if part[-3] != 'cpu-total':
-                return
-
-            name = part[-1].replace('usage_', 'cpu_')
-            if name == 'cpu_irq':
-                name = 'cpu_interrupt'
-            elif name == 'cpu_iowait':
-                name = 'cpu_wait'
-
-            if name == 'cpu_idle':
-                self.core.emit_metric(
-                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
-                        label='cpu_used',
-                        time=timestamp,
-                        value=100 - value,
-                    )
-                )
-            if name in ('cpu_used', 'cpu_user', 'cpu_system'):
-                self.computed_metrics_pending.add(
-                    ('cpu_other', '', '', timestamp)
-                )
-        elif part[-2] == 'win_cpu':
+            return  # Moved to telegraflib
+        if part[-2] == 'win_cpu':
             if part[2] != '_Total':
                 return
 
@@ -526,20 +501,7 @@ class Telegraf:
                     ('cpu_other', '', '', timestamp)
                 )
         elif part[-2] == 'disk':
-            # Ignore fstype=rootfs. mountpoint for / is duplicated (at least on
-            # old Linux - like wheezy). One time as fstype=rootfs and one time
-            # with correct fstype.
-            if part[3] == 'rootfs':
-                return
-            path = part[-3].replace('-', '/')
-            path = self.graphite_server.disk_path_rename(path)
-            if path is None:
-                return
-            item = path
-
-            name = 'disk_' + part[-1]
-            if name == 'disk_used_percent':
-                name = 'disk_used_perc'
+            return  # Moved to telegraflib
         elif part[-2] == 'win_disk':
             item = part[2]
             name = part[-1]
@@ -568,34 +530,7 @@ class Telegraf:
             else:
                 return
         elif part[-2] == 'diskio':
-            item = part[2]
-            name = part[-1]
-            if not name.startswith('io_'):
-                name = 'io_' + name
-            if self.graphite_server.ignored_disk(item):
-                return
-            if name == 'io_weighted_io_time':
-                return
-
-            if name == 'io_iops_in_progress':
-                name = 'io_in_progress'
-            else:
-                value = self.get_derivate(name, item, timestamp, value)
-                if value is None:
-                    return
-
-            if name == 'io_time':
-                self.core.emit_metric(
-                    bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
-                        label='io_utilization',
-                        time=timestamp,
-                        # io_time is a number of ms spent doing IO(per seconds)
-                        # utilization is 100% when we spent 1000ms during one
-                        # second
-                        value=value / 1000. * 100.,
-                        item=item,
-                    )
-                )
+            return  # Moved to telegraflib
         elif part[-2] == 'win_diskio':
             item = part[2]
             name = part[-1]
@@ -644,25 +579,7 @@ class Telegraf:
             else:
                 return
         elif part[-2] == 'mem':
-            name = 'mem_' + part[-1]
-            if name in ('mem_used', 'mem_used_percent'):
-                # We don't use mem_used of telegraf (which is
-                # mem_total - mem_free)
-                # We prefere the "collectd one" (which is
-                # mem_total - (mem_free + mem_cached + mem_buffered + mem_slab)
-
-                # mem_used will be computed as mem_total - mem_available
-                return  # We don't use mem_used of telegraf.
-            if name == 'mem_available_percent':
-                name = 'mem_available_perc'
-            elif name in ('mem_buffered', 'mem_cached', 'mem_free'):
-                pass
-            elif name in ('mem_total', 'mem_available'):
-                self.computed_metrics_pending.add(
-                    ('mem_used', '', '', timestamp)
-                )
-            else:
-                return
+            return  # Moved to telegraflib
         elif part[-2] == 'win_mem':
             name = part[-1]
             if name == 'Available_Bytes':
@@ -703,16 +620,7 @@ class Telegraf:
             else:
                 return
         elif part[-2] == 'net' and part[-3] != 'all':
-            item = part[-3]
-            if self.graphite_server.network_interface_blacklist(item):
-                return
-
-            name = 'net_' + part[-1]
-            if name in ('net_bytes_recv', 'net_bytes_sent'):
-                name = name.replace('bytes', 'bits')
-                value = value * 8
-
-            derive = True
+            return  # Moved to telegraflib
         elif part[-2] == 'win_net':
             item = part[2]
             name = part[-1]
@@ -744,13 +652,7 @@ class Telegraf:
             else:
                 return
         elif part[-2] == 'swap':
-            if not self.core.last_facts.get('swap_present', False):
-                return
-            name = 'swap_' + part[-1]
-            if name.endswith('_percent'):
-                name = name.replace('_percent', '_perc')
-            if name in ('swap_in', 'swap_out'):
-                derive = True
+            return  # Moved to telegraflib
         elif part[-2] == 'win_swap':
             if not self.core.last_facts.get('swap_present', False):
                 return
@@ -777,13 +679,7 @@ class Telegraf:
                     )
                 )
         elif part[-2] == 'system':
-            name = 'system_' + part[-1]
-            if name == 'system_uptime':
-                name = 'uptime'
-            elif name == 'system_n_users':
-                name = 'users_logged'
-            elif name not in ('system_load1', 'system_load5', 'system_load15'):
-                return
+            return  # Moved to telegraflib
         elif part[-2] == 'win_system':
             name = part[-1]
             if name == 'System_Up_Time':
@@ -796,13 +692,7 @@ class Telegraf:
             else:
                 return
         elif part[-2] == 'processes':
-            if part[-1] in ['blocked', 'running', 'sleeping',
-                            'stopped', 'zombies', 'paging']:
-                name = 'process_status_%s' % part[-1]
-            elif part[-1] == 'total':
-                name = 'process_total'
-            else:
-                return
+            return  # Moved to telegraflib
         elif part[-2] == 'apache':
             service = 'apache'
             server_address = part[-3].replace('_', '.')
@@ -1021,55 +911,7 @@ class Telegraf:
             else:
                 item = instance + '_' + dbname
         elif part[-2] == 'redis':
-            service = 'redis'
-
-            # Prior to Telegraf 0.13.1, output was
-            # telegraf.$HOSTNAME.$PORT.$SERVER.redis.$METRIC
-            # Telegraf 0.13.1+, output is
-            # telegraf.$HOSTNAME.$PORT.$ROLE.$SERVER.redis.$METRIC
-
-            # Also, for both a $DATABASE may exists just after $HOSTNAME
-            # E.g for 0.13.1:
-            # telegraf.$HOSTNAME.$DATABASE.$PORT.$ROLE.$SERVER.redis.$METRIC
-            #
-            # $PORT is part[-4] or part[-5]
-            # $SERVER is always part[-3]
-            server_address = part[-3].replace('_', '.')
-            if part[-4] in ('master', 'slave'):
-                server_port = int(part[-5])
-            else:
-                server_port = int(part[-4])
-            try:
-                instance = self._get_service_instance(
-                    service, server_address, server_port
-                )
-            except KeyError:
-                return
-
-            name = 'redis_' + part[-1]
-
-            if name == 'redis_clients':
-                name = 'redis_current_connections_clients'
-            elif name == 'redis_connected_slaves':
-                name = 'redis_current_connections_slaves'
-            elif name.startswith('redis_used_memory'):
-                name = name.replace('redis_used_memory', 'redis_memory')
-            elif name == 'redis_total_connections_received':
-                name = 'redis_total_connections'
-                derive = True
-            elif name == 'redis_total_commands_processed':
-                name = 'redis_total_operations'
-                derive = True
-            elif name == 'redis_rdb_changes_since_last_save':
-                name = 'redis_volatile_changes'
-            elif name in ('redis_evicted_keys', 'redis_keyspace_hits',
-                          'redis_keyspace_misses', 'redis_expired_keys'):
-                derive = True
-            elif name in ('redis_uptime', 'redis_pubsub_patterns',
-                          'redis_pubsub_channels', 'redis_keyspace_hitrate'):
-                pass
-            else:
-                return
+            return  # Moved to telegraflib
         elif part[-2] == 'zookeeper':
             service = 'zookeeper'
 
@@ -1793,8 +1635,6 @@ def _get_telegraf_config(core):
                 and service_info.get('password') is not None):
             service_info.setdefault('username', 'postgres')
             telegraf_config += POSTGRESQL_TELEGRAF_CONFIG % service_info
-        if service_name == 'redis':
-            telegraf_config += REDIS_TELEGRAF_CONFIG % service_info
         if service_name == 'zookeeper':
             telegraf_config += ZOOKEEPER_CONFIG % service_info
 
