@@ -138,7 +138,7 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 			} else {
 				continue
 			}
-		case "io_weighted_io_time", "io_iops_in_progress":
+		case "weighted_io_time", "iops_in_progress":
 			continue
 		default:
 			finalFields[finalMetricName] = value
