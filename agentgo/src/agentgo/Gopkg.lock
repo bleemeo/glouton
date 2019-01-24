@@ -16,20 +16,20 @@
 [[projects]]
   name = "github.com/go-ole/go-ole"
   packages = [".","oleutil"]
-  revision = "a41e3c4b706f6ae8dfbff342b06e40fa4d2d0506"
-  version = "v1.2.1"
+  revision = "39dc8486bd0952279431257138bc428275b86797"
+  version = "v1.2.2"
 
 [[projects]]
   name = "github.com/go-redis/redis"
-  packages = [".","internal","internal/consistenthash","internal/hashtag","internal/pool","internal/proto","internal/singleflight","internal/util"]
-  revision = "b3d9bf10f6666b2ee5100a6f3f84f4caf3b4e37d"
-  version = "v6.14.2"
+  packages = [".","internal","internal/consistenthash","internal/hashtag","internal/pool","internal/proto","internal/util"]
+  revision = "22be8a3eaf992c828cecb69dc07348313bf08d2e"
+  version = "v6.15.1"
 
 [[projects]]
   name = "github.com/go-sql-driver/mysql"
   packages = ["."]
-  revision = "d523deb1b23d913de5bdada721a6071e71283618"
-  version = "v1.4.0"
+  revision = "72cd26f257d44c1114970e19afddcd812016007e"
+  version = "v1.4.1"
 
 [[projects]]
   name = "github.com/gobwas/glob"
@@ -52,8 +52,8 @@
 [[projects]]
   name = "github.com/shirou/gopsutil"
   packages = ["cpu","disk","host","internal/common","load","mem","net","process"]
-  revision = "3ec50d2876a36047b2ca39f955ba88fb7a455e92"
-  version = "v2.18.10"
+  revision = "ccc1c1016bc5d10e803189ee43417c50cdde7f1b"
+  version = "v2.18.12"
 
 [[projects]]
   branch = "master"
@@ -70,24 +70,24 @@
 [[projects]]
   name = "github.com/stretchr/testify"
   packages = ["assert","mock"]
-  revision = "f35b8ab0b5a2cef36673838d662e249dd9c94686"
-  version = "v1.2.2"
+  revision = "ffdc059bfe9ce6a4e144ba849dbedead332c6053"
+  version = "v1.3.0"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "3a76605856fddce5718553cbb8bd50ca492a7274"
+  revision = "b90733256f2e882e81d52f9126de08df5615afd9"
 
 [[projects]]
   name = "google.golang.org/appengine"
   packages = ["cloudsql"]
-  revision = "4a4468ece617fc8205e99368fa2200e9d1fad421"
-  version = "v1.3.0"
+  revision = "e9657d882bb81064595ca3b56cbe2546bbabf7b1"
+  version = "v1.4.0"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "02925feada10c17db5fb5eb4fd3b9c150688ae3e9091c7a6b59161103f497606"
+  inputs-digest = "f20ad08feeb17017c51a2957cabba563cc2b6b2d47021eca98566f0aa9f373e6"
   solver-name = "gps-cdcl"
   solver-version = 1

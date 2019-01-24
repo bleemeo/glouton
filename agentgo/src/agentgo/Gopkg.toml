@@ -1,3 +1,9 @@
 [[override]]
   source = "https://github.com/fsnotify/fsnotify/archive/v1.4.7.tar.gz"
   name = "gopkg.in/fsnotify.v1"
+
+# For Telegraf < 1.9 as this version introduce new method on Accumulator
+# interface that we do not yet implement.
+[[constraint]]
+  name = "github.com/influxdata/telegraf"
+  version = "<1.9"
