@@ -76,6 +76,7 @@ def get_docker_id_from_cgroup(cgroup_data):
 
 def decode_docker_top(docker_top):
     # pylint: disable=too-many-branches
+    # pylint: disable=too-many-statements
     """ Return a list of process dict from docker_client.top()
 
         Result of docker_client.top() is not always the same. On boot2docker,
@@ -101,6 +102,7 @@ def decode_docker_top(docker_top):
     time_index = None
     cmdline_index = None
     stat_index = None
+    ppid_index = None
     for (index, name) in enumerate(docker_top.get('Titles', [])):
         if name == 'PID':
             pid_index = index
@@ -116,6 +118,8 @@ def decode_docker_top(docker_top):
             time_index = index
         elif name == 'STAT':
             stat_index = index
+        elif name == 'PPID':
+            ppid_index = index
 
     if pid_index is None or cmdline_index is None:
         return result
@@ -146,6 +150,11 @@ def decode_docker_top(docker_top):
             pass
         if stat_index is not None:
             process['status'] = psstat_to_status(row[stat_index])
+        if ppid_index is not None:
+            try:
+                process['ppid'] = int(row[ppid_index])
+            except (TypeError, ValueError):
+                pass
         result.append(process)
 
     return result
@@ -575,7 +584,7 @@ def get_top_info(core, gather_started_at=None, for_discovery=False):
     if (core.container is None
             or core.config['container.pid_namespace_host']):
         if for_discovery:
-            # When used for services discovery, to additional check to ensure
+            # When used for services discovery, do additional check to ensure
             # process belong or not to a containers.
             _update_process_psutil(
                 processes, gather_started_at, core.docker_containers,
@@ -908,14 +917,15 @@ def _get_docker_process(docker_client):
             docker_id = container['Id']
             try:
                 try:
-                    docker_top = (
+                    docker_top_waux = (
                         docker_client.top(container_name, ps_args="waux")
                     )
                 except TypeError:
                     # Older version of Docker-py don't support ps_args option
-                    docker_top = (
-                        docker_client.top(container_name)
-                    )
+                    docker_top_waux = None
+                docker_top = (
+                    docker_client.top(container_name)
+                )
             except (docker.errors.APIError,
                     requests.exceptions.RequestException):
                 # most probably container is restarting or just stopped
@@ -926,6 +936,14 @@ def _get_docker_process(docker_client):
                 processes[pid] = process
                 processes[pid]['instance'] = container_name
                 processes[pid]['docker_id'] = docker_id
+            if docker_top_waux:
+                # Merge information coming from docker_top_waux
+                for process in decode_docker_top(docker_top_waux):
+                    pid = process['pid']
+                    if pid not in processes:
+                        processes[pid] = process
+                    else:
+                        processes[pid].update(process)
     except (docker.errors.APIError,
             requests.exceptions.RequestException) as exc:
         logging.info('Failed to get Docker containers list: %s', exc)
@@ -999,8 +1017,10 @@ def _update_process_psutil(
                 name = cmdline
 
             cpu_times = process.cpu_times()
-            process_info = {
+            process_info = processes.get(process.pid, {})
+            process_info.update({
                 'pid': process.pid,
+                'ppid': process.ppid(),
                 'create_time': create_time,
                 'cmdline': cmdline,
                 'name': name,
@@ -1011,18 +1031,14 @@ def _update_process_psutil(
                 'status': process.status(),
                 'username': username,
                 '_psutil': True,
-            }
+            })
             try:
                 process_info['exe'] = process.exe()
             except psutil.AccessDenied:
                 process_info['exe'] = ''
 
-            process_info['instance'] = ''
-
-            # Keep instance if the process is running in a Docker
-            if process.pid in processes:
-                process_info['instance'] = processes[process.pid]['instance']
-            elif docker_containers is not None:
+            process_info.setdefault('instance', '')
+            if docker_containers is not None:
                 # Check /proc/pid/cgroup to be double sure that this process
                 # run outside any container.
                 docker_id = None
