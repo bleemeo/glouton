@@ -673,6 +673,8 @@ class BleemeoConnector(threading.Thread):
 
         self.trigger_full_sync = False
         self.trigger_fact_sync = 0
+        self._update_metrics = set()
+        self._update_metrics_lock = threading.Lock()
         self._sync_loop_event = threading.Event()
         self.last_containers_removed = bleemeo_agent.util.get_clock()
         self.last_config_will_change_msg = bleemeo_agent.util.get_clock()
@@ -793,7 +795,11 @@ class BleemeoConnector(threading.Thread):
                 return
             if body['message_type'] == 'threshold-update':
                 logging.debug('Got "threshold-update" message from Bleemeo')
-                self.trigger_full_sync = True
+                if 'metric_uuid' in body:
+                    with self._update_metrics_lock:
+                        self._update_metrics.add(body['metric_uuid'])
+                else:
+                    self.trigger_full_sync = True
             if body['message_type'] == 'config-changed':
                 logging.debug('Got "config-changed" message from Bleemeo')
                 self.trigger_full_sync = True
@@ -1476,7 +1482,12 @@ class BleemeoConnector(threading.Thread):
                     self.core.is_terminating.wait(error_delay)
                     last_error = exc
 
+            with self._update_metrics_lock:
+                update_metrics = self._update_metrics
+                self._update_metrics = set()
+
             if (metrics_sync or
+                    update_metrics or
                     next_full_sync <= clock_now or
                     last_sync <= self.core.last_discovery_update or
                     last_metrics_count != metrics_count):
@@ -1505,7 +1516,9 @@ class BleemeoConnector(threading.Thread):
                         # After 3 successive_errors force a full sync.
                         successive_errors == 3
                     )
-                    self._sync_metrics(bleemeo_cache, bleemeo_api, full)
+                    self._sync_metrics(
+                        bleemeo_cache, bleemeo_api, update_metrics, full,
+                    )
                     last_metrics_count = metrics_count
                     sync_run = True
                 except (ApiError, requests.exceptions.RequestException) as exc:
@@ -1642,7 +1655,7 @@ class BleemeoConnector(threading.Thread):
         self.core.fire_triggers(updates_count=True)
         logging.info('Changed to configuration %s', config.name)
 
-    def _sync_metrics(self, bleemeo_cache, bleemeo_api, full=True):
+    def _sync_metrics(self, bleemeo_cache, bleemeo_api, update_metrics, full):
         # pylint: disable=too-many-locals
         # pylint: disable=too-many-branches
         # pylint: disable=too-many-statements
@@ -1651,6 +1664,12 @@ class BleemeoConnector(threading.Thread):
         logging.debug('Synchronize metrics (full=%s)', full)
         clock_now = bleemeo_agent.util.get_clock()
         metric_url = 'v1/metric/'
+
+        if len(update_metrics) > 0.03 * len(bleemeo_cache.metrics):
+            # If more than 3% of known metrics needs update, do a full update.
+            # 3% is arbitrary choose, based on assumption request for one page
+            # of (100) metrics is cheaper than 3 request for one metric.
+            full = True
 
         # Step 1: refresh cache from API
         if full:
@@ -1667,8 +1686,35 @@ class BleemeoConnector(threading.Thread):
             )
 
             old_metrics = bleemeo_cache.metrics
-            new_metrics = {}
+            bleemeo_cache.metrics = {}
+        elif update_metrics:
+            old_metrics = bleemeo_cache.metrics.copy()
 
+            api_metrics = []
+            for metric_uuid in update_metrics:
+                response = bleemeo_api.api_call(
+                    metric_url + metric_uuid + '/',
+                    params={
+                        'fields':
+                            'id,item,label,unit,unit_text,deactivated_at'
+                            ',threshold_low_warning,threshold_low_critical'
+                            ',threshold_high_warning,threshold_high_critical'
+                            ',service,container,status_of',
+                    },
+                )
+                if response.status_code == 404:
+                    if metric_uuid in bleemeo_cache.metrics:
+                        del bleemeo_cache.metrics[metric_uuid]
+                    continue
+                if response.status_code != 200:
+                    raise ApiError(response)
+
+                api_metrics.append(response.json())
+        else:
+            api_metrics = []
+            old_metrics = bleemeo_cache.metrics
+
+        if api_metrics:
             for data in api_metrics:
                 metric = Metric(
                     data['id'],
@@ -1687,11 +1733,8 @@ class BleemeoConnector(threading.Thread):
                     data['unit_text'],
                     _api_datetime_to_time(data['deactivated_at']),
                 )
-                new_metrics[metric.uuid] = metric
-            bleemeo_cache.metrics = new_metrics
+                bleemeo_cache.metrics[metric.uuid] = metric
             bleemeo_cache.update_lookup_map()
-        else:
-            old_metrics = bleemeo_cache.metrics
 
         # Step 2: delete local object that are deleted from API
         deleted_metrics = []
