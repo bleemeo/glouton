@@ -1533,8 +1533,6 @@ class Core:
                 discovery=True,
                 facts=True,
             )
-            if self.bleemeo_connector:
-                self.bleemeo_connector.trigger_full_sync = True
 
         if not self.run_as_windows_service:
             # Windows service don't use signal to shutdown
