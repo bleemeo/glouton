@@ -1308,7 +1308,6 @@ class BleemeoConnector(threading.Thread):
                         min(150, successive_errors * 5),
                         min(300, successive_errors * 10),
                     )
-                delay = min(successive_errors * 15, 300)
                 error_delay = min(5 + successive_errors, 45)
             elif first_loop:
                 delay = 0
