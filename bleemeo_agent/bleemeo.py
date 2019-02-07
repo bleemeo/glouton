@@ -1478,7 +1478,6 @@ class BleemeoConnector(threading.Thread):
 
             if (metrics_sync or
                     next_full_sync <= clock_now or
-                    last_sync <= self.last_containers_removed or
                     last_sync <= self.core.last_discovery_update or
                     last_metrics_count != metrics_count):
                 try:
@@ -1503,7 +1502,6 @@ class BleemeoConnector(threading.Thread):
                         }
                     full = (
                         next_full_sync <= clock_now or
-                        last_sync <= self.last_containers_removed or
                         # After 3 successive_errors force a full sync.
                         successive_errors == 3
                     )
@@ -2304,7 +2302,6 @@ class BleemeoConnector(threading.Thread):
         deleted_containers_from_state = (
             set(bleemeo_cache.containers) - local_uuids
         )
-        deleted_container_names = set()
         for container_uuid in deleted_containers_from_state:
             container = bleemeo_cache.containers[container_uuid]
             url = container_url + container_uuid + '/'
@@ -2320,8 +2317,19 @@ class BleemeoConnector(threading.Thread):
                 continue
             self.last_containers_removed = bleemeo_agent.util.get_clock()
             del bleemeo_cache.containers[container_uuid]
-            deleted_container_names.add(container.name)
             logging.debug('Container %s deleted', container.name)
+
+        if deleted_containers_from_state:
+            deleted_metrics = []
+            new_metrics = {}
+            for (metric_uuid, metric) in bleemeo_cache.metrics.items():
+                if metric.container_uuid in deleted_containers_from_state:
+                    deleted_metrics.append((metric.label, metric.item))
+                else:
+                    new_metrics[metric_uuid] = metric
+            bleemeo_cache.metrics = new_metrics
+            if deleted_metrics:
+                self.core.purge_metrics(deleted_metrics)
         bleemeo_cache.update_lookup_map()
 
         with self._current_metrics_lock:
