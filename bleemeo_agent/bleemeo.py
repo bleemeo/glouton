@@ -1779,7 +1779,7 @@ class BleemeoConnector(threading.Thread):
                 metric_last_seen[metric.uuid] = reg_req.last_seen
                 last_seen_time = time.time() - (clock_now - reg_req.last_seen)
                 if (metric.deactivated_at
-                        and last_seen_time > metric.deactivated_at
+                        and last_seen_time > metric.deactivated_at + 60
                         and reg_req.last_seen > clock_now - 600):
                     logging.debug(
                         'Mark active the metric %s: %s (%s)',
