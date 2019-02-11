@@ -22,7 +22,9 @@ done
 CREATEREPO_ROOT=/srv/www/packages.bleemeo.com/htdocs/bleemeo-agent/fedora
 CREATEREPO_DOCKER_CMD="docker run --rm -v ${CREATEREPO_ROOT}:${CREATEREPO_ROOT} -v ${HOME}/.rpmmacros:/root/.rpmmacros:ro -v ${HOME}/.gnupg:/root/.gnupg bleemeo/fedora-createrepo"
 
-FEDORA_SUPPORTED_VERSIONS="27 28 29"
+# FIXME: Fedora 28 and 29 does not build, see PRODUCT-866
+#FEDORA_SUPPORTED_VERSIONS="27 28 29"
+FEDORA_SUPPORTED_VERSIONS="27"
 FEDORA_SUPPORTED_ARCH="x86_64 armhfp"
 
 for fedora_version in ${FEDORA_SUPPORTED_VERSIONS}

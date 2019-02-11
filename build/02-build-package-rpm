@@ -66,5 +66,6 @@ build_fedora(){
 
 build_centos 7
 build_fedora 27
-build_fedora 28
-build_fedora 29
+# FIXME: Fedora 28 & 29 does not build at the moment, see PRODUCT-866
+#build_fedora 28
+#build_fedora 29
