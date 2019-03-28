@@ -248,10 +248,15 @@ class GraphiteClient(threading.Thread):
     def _process_client(self):
         remain = b''
         self.socket.settimeout(1)
+        pending_metrics = []
+        pending_first_time = 0
         while not self.core.is_terminating.is_set():
             try:
                 tmp = self.socket.recv(4096)
             except socket.timeout:
+                if pending_metrics:
+                    self._flush_metrics(pending_metrics)
+                    pending_metrics = []
                 continue
 
             if tmp == b'':
@@ -274,10 +279,27 @@ class GraphiteClient(threading.Thread):
                 if not metric.isprintable():
                     continue
 
-                self.emit_metric(metric, timestamp, value)
+                if not pending_metrics:
+                    pending_first_time = time.time()
+                pending_metrics.append(
+                    (timestamp, metric, value),
+                )
 
-            if self.client_decoder is not None:
-                self.client_decoder.packet_finish()
+            if pending_metrics and time.time() > pending_first_time + 3:
+                self._flush_metrics(pending_metrics)
+                pending_metrics = []
+
+        if pending_metrics:
+            self._flush_metrics(pending_metrics)
+            pending_metrics = []
+
+    def _flush_metrics(self, pending_metrics):
+        pending_metrics.sort()
+        for (timestamp, metric, value) in pending_metrics:
+            self.emit_metric(metric, timestamp, value)
+
+        if self.client_decoder is not None:
+            self.client_decoder.packet_finish()
 
     def emit_metric(self, name, timestamp, value):
         """ Rename a metric and pass it to core
