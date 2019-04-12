@@ -7,8 +7,8 @@ metadata:
   name: bleemeo-agent-credentials
 type:
 stringData:
-  BLEEMEO_AGENT_ACCOUNT: YOUR_ACCOUNT_ID
-  BLEEMEO_AGENT_REGISTRATION_KEY: YOUR_REGISTRATION_KEY
+  BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID: YOUR_ACCOUNT_ID
+  BLEEMEO_AGENT_BLEEMEO_REGISTRATION_KEY: YOUR_REGISTRATION_KEY
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -150,7 +150,7 @@ spec:
         envFrom:
         - secretRef:
             name: bleemeo-agent-credentials
-      - image: telegraf:1.6.2
+      - image: telegraf:1.10.1
         name: telegraf
         args:
         - sh
