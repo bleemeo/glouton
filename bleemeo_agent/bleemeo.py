@@ -1903,6 +1903,9 @@ class BleemeoConnector(threading.Thread):
                 _api_datetime_to_time(data['deactivated_at']),
             )
             bleemeo_cache.metrics[metric.uuid] = metric
+            bleemeo_cache.metrics_by_labelitem[(reg_req.label, short_item)] = (
+                metric
+            )
             metric_last_seen[metric.uuid] = reg_req.last_seen
             if metric.item:
                 logging.debug(
