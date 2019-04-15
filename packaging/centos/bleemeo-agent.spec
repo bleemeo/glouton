@@ -81,10 +81,10 @@ metrics.
 %autosetup
 
 %build
-%py3_build
+%py3_other_build
 
 %install
-%py3_install
+%py3_other_install
 
 install -D -p -m 0440 packaging/centos/bleemeo-agent.sudoers %{buildroot}%{_sysconfdir}/sudoers.d/bleemeo
 install -D -p -m 0644 packaging/common/bleemeo-05-system.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
