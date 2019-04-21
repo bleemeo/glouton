@@ -11,22 +11,22 @@ Summary:        Bleemeo agent
 
 Source0:        bleemeo-agent_%{version}.tar
 BuildArch:      noarch
-BuildRequires:  python34-devel, python34-setuptools >= 30.3.0
+BuildRequires:  python36-devel, python36-setuptools >= 30.3.0
 BuildRequires:  systemd
 
 Requires(pre):  shadow-utils
-Requires:       python34-psutil
-Requires:       python34-requests
-Requires:       python34-paho-mqtt
+Requires:       python36-psutil
+Requires:       python36-requests
+Requires:       python36-paho-mqtt
 Requires:       net-tools
 Requires:       ca-certificates
 Requires:       sudo
-Requires:       python34-docker-py
-Requires:       python34-APScheduler
-Requires:       python34-jinja2
-Requires:       python34-six
-Requires:       python34-PyYAML
-Requires:       python34-setuptools
+Requires:       python36-docker
+Requires:       python36-APScheduler
+Requires:       python36-jinja2
+Requires:       python36-six
+Requires:       python36-PyYAML
+Requires:       python36-setuptools
 Requires:       bleemeo-agent-collector
 Requires:       yum-plugin-post-transaction-actions
 #Recommends not available on centos 7
@@ -81,10 +81,10 @@ metrics.
 %autosetup
 
 %build
-%py3_other_build
+%py3_build
 
 %install
-%py3_other_install
+%py3_install
 
 install -D -p -m 0440 packaging/centos/bleemeo-agent.sudoers %{buildroot}%{_sysconfdir}/sudoers.d/bleemeo
 install -D -p -m 0644 packaging/common/bleemeo-05-system.conf %{buildroot}%{_sysconfdir}/bleemeo/agent.conf.d/05-system.conf
