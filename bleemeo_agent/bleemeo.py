@@ -1776,151 +1776,50 @@ class BleemeoConnector(threading.Thread):
             metric = bleemeo_cache.metrics_by_labelitem.get(key)
 
             if metric:
-                metric_last_seen[metric.uuid] = reg_req.last_seen
                 last_seen_time = time.time() - (clock_now - reg_req.last_seen)
                 if (metric.deactivated_at
                         and last_seen_time > metric.deactivated_at + 60
                         and reg_req.last_seen > clock_now - 600):
-                    logging.debug(
-                        'Mark active the metric %s: %s (%s)',
-                        metric.uuid,
-                        metric.label,
-                        metric.item,
+                    metric = self._reactivate_metric(bleemeo_api, metric)
+            else:
+                if reg_req.status_of_label:
+                    status_of_key = (reg_req.status_of_label, short_item)
+                    if status_of_key not in bleemeo_cache.metrics_by_labelitem:
+                        if count >= metrics_req_count:
+                            logging.debug(
+                                'Metric %s need the metric %s (for status_of)',
+                                reg_req.label,
+                                reg_req.status_of_label,
+                            )
+                        else:
+                            current_metrics.append(reg_req)
+                        continue
+                try:
+                    metric = self._register_metric(
+                        bleemeo_cache,
+                        bleemeo_api,
+                        reg_req,
+                        short_item,
+                        service_short_lookup,
                     )
-                    response = bleemeo_api.api_call(
-                        urllib_parse.urljoin(metric_url, '%s/' % metric.uuid),
-                        'patch',
-                        params={
-                            'fields': 'active',
-                        },
-                        data=json.dumps({
-                            'active': True,
-                        }),
-                    )
-                    if response.status_code != 200:
-                        raise ApiError(response)
-                    bleemeo_cache.metrics[metric.uuid] = (
-                        metric._replace(deactivated_at=None)
-                    )
+                except ApiError as error:
+                    metric = None
+                    if error.response.status_code >= 500:
+                        raise
+                    registration_error += 1
+                    last_error = error
+                    time.sleep(min(registration_error * 0.5, 5))
+                    if registration_error > 10:
+                        raise last_error
+                reg_count_before_update -= 1
+            if not metric:
                 continue
 
-            payload = {
-                'agent': self.agent_uuid,
-                'label': reg_req.label,
-            }
-            if reg_req.status_of_label:
-                status_of_key = (reg_req.status_of_label, short_item)
-                if status_of_key not in bleemeo_cache.metrics_by_labelitem:
-                    if count >= metrics_req_count:
-                        logging.debug(
-                            'Metric %s is status_of unregistered metric %s',
-                            reg_req.label,
-                            reg_req.status_of_label,
-                        )
-                    else:
-                        current_metrics.append(reg_req)
-                    continue
-                payload['status_of'] = (
-                    bleemeo_cache.metrics_by_labelitem[status_of_key].uuid
-                )
-            if reg_req.container_name:
-                container = bleemeo_cache.containers_by_name.get(
-                    reg_req.container_name,
-                )
-                if container is None:
-                    # Container not yet registered
-                    continue
-                payload['container'] = container.uuid
-            if reg_req.service_label:
-                key = (reg_req.service_label, reg_req.instance)
-                if key not in service_short_lookup:
-                    continue
-                short_key = service_short_lookup[key]
-                service = bleemeo_cache.services_by_labelinstance.get(
-                    short_key
-                )
-                if service is None:
-                    continue
-                payload['service'] = service.uuid
-
-            if reg_req.item:
-                payload['item'] = short_item
-
-            if reg_req.last_status is not None:
-                payload['last_status'] = reg_req.last_status
-                payload['last_status_changed_at'] = (
-                    datetime.datetime.utcnow()
-                    .replace(tzinfo=datetime.timezone.utc)
-                    .isoformat()
-                )
-                payload['problem_origins'] = [reg_req.last_problem_origins]
-
-            response = bleemeo_api.api_call(
-                metric_url,
-                method='post',
-                data=json.dumps(payload),
-                params={
-                    'fields': 'id,label,item,service,container,deactivated_at,'
-                              'threshold_low_warning,threshold_low_critical,'
-                              'threshold_high_warning,threshold_high_critical,'
-                              'unit,unit_text,agent,status_of,service,'
-                              'last_status,last_status_changed_at,'
-                              'problem_origins',
-                },
-            )
-            if 400 <= response.status_code < 500:
-                logging.debug(
-                    'Metric registration failed for %s. '
-                    'Server reported a client error: %s',
-                    reg_req.label,
-                    response.content,
-                )
-                registration_error += 1
-                last_error = ApiError(response)
-                time.sleep(min(registration_error * 0.5, 5))
-                if registration_error > 10:
-                    raise last_error  # pylint: disable=raising-bad-type
-                continue
-            elif response.status_code != 201:
-                raise ApiError(response)
-            data = response.json()
-
-            metric = Metric(
-                data['id'],
-                data['label'],
-                data['item'],
-                data['service'],
-                data['container'],
-                data['status_of'],
-                MetricThreshold(
-                    data['threshold_low_warning'],
-                    data['threshold_low_critical'],
-                    data['threshold_high_warning'],
-                    data['threshold_high_critical'],
-                ),
-                data['unit'],
-                data['unit_text'],
-                _api_datetime_to_time(data['deactivated_at']),
-            )
             bleemeo_cache.metrics[metric.uuid] = metric
             bleemeo_cache.metrics_by_labelitem[(reg_req.label, short_item)] = (
                 metric
             )
             metric_last_seen[metric.uuid] = reg_req.last_seen
-            if metric.item:
-                logging.debug(
-                    'Metric %s (item %s) registered with uuid %s',
-                    metric.label,
-                    metric.item,
-                    metric.uuid,
-                )
-            else:
-                logging.debug(
-                    'Metric %s registered with uuid %s',
-                    metric.label,
-                    metric.uuid,
-                )
-            reg_count_before_update -= 1
             if reg_count_before_update == 0:
                 bleemeo_cache.update_lookup_map()
                 self._bleemeo_cache = bleemeo_cache
@@ -2024,6 +1923,137 @@ class BleemeoConnector(threading.Thread):
 
         if last_error is not None:
             raise last_error  # pylint: disable=raising-bad-type
+
+    def _reactivate_metric(self, bleemeo_api, metric):
+        # pylint: disable=no-self-use
+        metric_url = 'v1/metric/'
+        logging.debug(
+            'Mark active the metric %s: %s (%s)',
+            metric.uuid,
+            metric.label,
+            metric.item,
+        )
+        response = bleemeo_api.api_call(
+            urllib_parse.urljoin(metric_url, '%s/' % metric.uuid),
+            'patch',
+            params={
+                'fields': 'active',
+            },
+            data=json.dumps({
+                'active': True,
+            }),
+        )
+        if response.status_code != 200:
+            raise ApiError(response)
+        return metric._replace(deactivated_at=None)
+
+    def _register_metric(
+            self, bleemeo_cache, bleemeo_api, reg_req, short_item,
+            service_short_lookup):
+        # pylint: disable=too-many-arguments
+        # pylint: disable=too-many-locals
+        # pylint: disable=too-many-return-statements
+        # pylint: disable=too-many-branches
+        metric_url = 'v1/metric/'
+        payload = {
+            'agent': self.agent_uuid,
+            'label': reg_req.label,
+        }
+        if reg_req.status_of_label:
+            status_of_key = (reg_req.status_of_label, short_item)
+            if status_of_key not in bleemeo_cache.metrics_by_labelitem:
+                return (None, None)
+            payload['status_of'] = (
+                bleemeo_cache.metrics_by_labelitem[status_of_key].uuid
+            )
+        if reg_req.container_name:
+            container = bleemeo_cache.containers_by_name.get(
+                reg_req.container_name,
+            )
+            if container is None:
+                # Container not yet registered
+                return None
+            payload['container'] = container.uuid
+        if reg_req.service_label:
+            key = (reg_req.service_label, reg_req.instance)
+            if key not in service_short_lookup:
+                return None
+            short_key = service_short_lookup[key]
+            service = bleemeo_cache.services_by_labelinstance.get(
+                short_key
+            )
+            if service is None:
+                return None
+            payload['service'] = service.uuid
+
+        if reg_req.item:
+            payload['item'] = short_item
+
+        if reg_req.last_status is not None:
+            payload['last_status'] = reg_req.last_status
+            payload['last_status_changed_at'] = (
+                datetime.datetime.utcnow()
+                .replace(tzinfo=datetime.timezone.utc)
+                .isoformat()
+            )
+            payload['problem_origins'] = [reg_req.last_problem_origins]
+
+        response = bleemeo_api.api_call(
+            metric_url,
+            method='post',
+            data=json.dumps(payload),
+            params={
+                'fields': 'id,label,item,service,container,deactivated_at,'
+                          'threshold_low_warning,threshold_low_critical,'
+                          'threshold_high_warning,threshold_high_critical,'
+                          'unit,unit_text,agent,status_of,service,'
+                          'last_status,last_status_changed_at,'
+                          'problem_origins',
+            },
+        )
+        if 400 <= response.status_code < 500:
+            logging.debug(
+                'Metric registration failed for %s. '
+                'Server reported a client error: %s',
+                reg_req.label,
+                response.content,
+            )
+            raise ApiError(response)
+        if response.status_code != 201:
+            raise ApiError(response)
+        data = response.json()
+
+        metric = Metric(
+            data['id'],
+            data['label'],
+            data['item'],
+            data['service'],
+            data['container'],
+            data['status_of'],
+            MetricThreshold(
+                data['threshold_low_warning'],
+                data['threshold_low_critical'],
+                data['threshold_high_warning'],
+                data['threshold_high_critical'],
+            ),
+            data['unit'],
+            data['unit_text'],
+            _api_datetime_to_time(data['deactivated_at']),
+        )
+        if metric.item:
+            logging.debug(
+                'Metric %s (item %s) registered with uuid %s',
+                metric.label,
+                metric.item,
+                metric.uuid,
+            )
+        else:
+            logging.debug(
+                'Metric %s registered with uuid %s',
+                metric.label,
+                metric.uuid,
+            )
+        return metric
 
     def _sync_services(self, bleemeo_cache, bleemeo_api, full=True):
         # pylint: disable=too-many-locals
