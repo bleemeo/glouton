@@ -61,6 +61,50 @@ def home():
     )
 
 
+def _prometheus_escape(value):
+    return value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+
+
+@app.route('/metrics')
+def metrics():
+    lines = []
+    for metric_point in app.core.last_metrics.values():
+        labels = []
+        if metric_point.item:
+            labels.append('item="%s"' % _prometheus_escape(metric_point.item))
+        if metric_point.service_label:
+            labels.append(
+                'service="%s"' % _prometheus_escape(metric_point.service_label)
+            )
+        if metric_point.service_instance:
+            # XXX: service_instance is put in container fields.
+            # service_instance should be equal to container_name but is not
+            # because we wanted to NOT associate service metrics with container
+            # to keep those metrics when a container was deleted.
+            labels.append(
+                'container="%s"' %
+                _prometheus_escape(metric_point.service_instance)
+            )
+        if metric_point.container_name:
+            labels.append(
+                'container="%s"' %
+                _prometheus_escape(metric_point.container_name)
+            )
+
+        if labels:
+            labels_text = "{%s}" % ','.join(labels)
+        else:
+            labels_text = ""
+        lines.append("%s%s %f %d\n" % (
+            metric_point.label,
+            labels_text,
+            metric_point.value,
+            metric_point.time * 1000,
+        ))
+    lines.sort()
+    return "".join(lines), 200, {'Content-Type': 'text/plain; version=0.0.4'}
+
+
 def _gather_checks_info():
     check_count_ok = 0
     check_count_warning = 0
