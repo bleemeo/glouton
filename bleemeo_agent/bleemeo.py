@@ -176,6 +176,29 @@ def _api_datetime_to_time(date_text):
     return (date - epoc).total_seconds()
 
 
+def _api_metric_to_internal(data):
+    """ Convert a API metric object to internal Metric object
+    """
+    metric = Metric(
+        data['id'],
+        data['label'],
+        data['item'],
+        data['service'],
+        data['container'],
+        data['status_of'],
+        MetricThreshold(
+            data['threshold_low_warning'],
+            data['threshold_low_critical'],
+            data['threshold_high_warning'],
+            data['threshold_high_critical'],
+        ),
+        data['unit'],
+        data['unit_text'],
+        _api_datetime_to_time(data['deactivated_at']),
+    )
+    return metric
+
+
 class ApiError(Exception):
     def __init__(self, response):
         super(ApiError, self).__init__()
@@ -1516,10 +1539,11 @@ class BleemeoConnector(threading.Thread):
                         # After 3 successive_errors force a full sync.
                         successive_errors == 3
                     )
-                    self._sync_metrics(
+                    sync_success = self._sync_metrics(
                         bleemeo_cache, bleemeo_api, update_metrics, full,
                     )
-                    last_metrics_count = metrics_count
+                    if sync_success:
+                        last_metrics_count = metrics_count
                     sync_run = True
                 except (ApiError, requests.exceptions.RequestException) as exc:
                     logging.debug('Unable to synchronize metrics. %s', exc)
@@ -1664,15 +1688,47 @@ class BleemeoConnector(threading.Thread):
         logging.debug('Synchronize metrics (full=%s)', full)
         clock_now = bleemeo_agent.util.get_clock()
         metric_url = 'v1/metric/'
+        sync_success = True
 
-        if len(update_metrics) > 0.03 * len(bleemeo_cache.metrics):
-            # If more than 3% of known metrics needs update, do a full update.
-            # 3% is arbitrary choose, based on assumption request for one page
-            # of (100) metrics is cheaper than 3 request for one metric.
+        with self._current_metrics_lock:
+            current_metrics = list(self._current_metrics.values())
+        # If one metric fail to register, it may block other metric that would
+        # register correctly. To reduce this risk, randomize the list, so on
+        # next run, the metric that failed to register may no longer block
+        # other.
+        random.shuffle(current_metrics)
+        current_metrics = _prioritize_metrics(current_metrics)
+
+        pending_registrations = []
+        for reg_req in current_metrics:
+            short_item = reg_req.item[:API_METRIC_ITEM_LENGTH]
+            if reg_req.service_label:
+                short_item = short_item[:API_SERVICE_INSTANCE_LENGTH]
+            key = (reg_req.label, short_item)
+            metric = bleemeo_cache.metrics_by_labelitem.get(key)
+            if metric is None:
+                pending_registrations.append(key)
+
+        active_metric_count = 0
+        for metric in bleemeo_cache.metrics.values():
+            if not metric.deactivated_at:
+                active_metric_count += 1
+
+        if len(update_metrics) > 0.03 * active_metric_count:
+            # If more than 3% of known active metrics needs update, do a full
+            # update. 3% is arbitrary choose, based on assumption request for
+            # one page of (100) metrics is cheaper than 3 request for
+            # one metric.
             full = True
 
+        inactive_full = False
+        if len(pending_registrations) > 0.03 * len(bleemeo_cache.metrics):
+            # If the number of registration exceed 3% of all known metrics,
+            # do a full update of inactive metrics.
+            inactive_full = True
+
         # Step 1: refresh cache from API
-        if full:
+        if full and inactive_full:
             api_metrics = bleemeo_api.api_iterator(
                 metric_url,
                 params={
@@ -1687,6 +1743,28 @@ class BleemeoConnector(threading.Thread):
 
             old_metrics = bleemeo_cache.metrics
             bleemeo_cache.metrics = {}
+        elif full:
+            api_metrics = bleemeo_api.api_iterator(
+                metric_url,
+                params={
+                    'agent': self.agent_uuid,
+                    'active': 'True',
+                    'fields':
+                        'id,item,label,unit,unit_text,deactivated_at'
+                        ',threshold_low_warning,threshold_low_critical'
+                        ',threshold_high_warning,threshold_high_critical'
+                        ',service,container,status_of',
+                },
+            )
+
+            old_metrics = bleemeo_cache.metrics
+            # We will only refetch active metrics, so keep inactive ones in the
+            # cache
+            bleemeo_cache.metrics = {
+                metric_uuid: metric
+                for (metric_uuid, metric) in bleemeo_cache.metrics.items()
+                if metric.deactivated_at
+            }
         elif update_metrics:
             old_metrics = bleemeo_cache.metrics.copy()
 
@@ -1712,28 +1790,35 @@ class BleemeoConnector(threading.Thread):
                 api_metrics.append(response.json())
         else:
             api_metrics = []
-            old_metrics = bleemeo_cache.metrics
+            old_metrics = bleemeo_cache.metrics.copy()
 
         if api_metrics:
             for data in api_metrics:
-                metric = Metric(
-                    data['id'],
-                    data['label'],
-                    data['item'],
-                    data['service'],
-                    data['container'],
-                    data['status_of'],
-                    MetricThreshold(
-                        data['threshold_low_warning'],
-                        data['threshold_low_critical'],
-                        data['threshold_high_warning'],
-                        data['threshold_high_critical'],
-                    ),
-                    data['unit'],
-                    data['unit_text'],
-                    _api_datetime_to_time(data['deactivated_at']),
-                )
+                metric = _api_metric_to_internal(data)
                 bleemeo_cache.metrics[metric.uuid] = metric
+            bleemeo_cache.update_lookup_map()
+
+        if not inactive_full:
+            for key in pending_registrations:
+                (label, item) = key
+                if key in bleemeo_cache.metrics_by_labelitem:
+                    continue
+                api_metrics = bleemeo_api.api_iterator(
+                    metric_url,
+                    params={
+                        'agent': self.agent_uuid,
+                        'label': label,
+                        'item': item,
+                        'fields':
+                            'id,item,label,unit,unit_text,deactivated_at'
+                            ',threshold_low_warning,threshold_low_critical'
+                            ',threshold_high_warning,threshold_high_critical'
+                            ',service,container,status_of',
+                    },
+                )
+                for data in api_metrics:
+                    metric = _api_metric_to_internal(data)
+                    bleemeo_cache.metrics[metric.uuid] = metric
             bleemeo_cache.update_lookup_map()
 
         # Step 2: delete local object that are deleted from API
@@ -1748,15 +1833,6 @@ class BleemeoConnector(threading.Thread):
         # Step 3: register/update object present in local but not in API
         registration_error = 0
         last_error = None
-        with self._current_metrics_lock:
-            current_metrics = list(self._current_metrics.values())
-        # If one metric fail to register, it may block other metric that would
-        # register correctly. To reduce this risk, randomize the list, so on
-        # next run, the metric that failed to register may no longer block
-        # other.
-        random.shuffle(current_metrics)
-
-        current_metrics = _prioritize_metrics(current_metrics)
 
         metric_last_seen = {}
         service_short_lookup = services_to_short_key(self.core.services)
@@ -1780,7 +1856,23 @@ class BleemeoConnector(threading.Thread):
                 if (metric.deactivated_at
                         and last_seen_time > metric.deactivated_at + 60
                         and reg_req.last_seen > clock_now - 600):
-                    metric = self._reactivate_metric(bleemeo_api, metric)
+                    try:
+                        metric = self._reactivate_metric(bleemeo_api, metric)
+                    except ApiError as error:
+                        if error.response.status_code != 404:
+                            raise
+                        # We need to re-run the _sync_metric to register the
+                        # metric. Calling _register_metric now may be wrong
+                        # if the metric is registered on API with another UUID
+                        sync_success = False
+                        logging.debug(
+                            'Metric %s: %s (%s) no longer exist on API',
+                            metric.uuid,
+                            metric.label,
+                            metric.item,
+                        )
+                        del bleemeo_cache.metrics[metric.uuid]
+                        continue
             else:
                 if reg_req.status_of_label:
                     status_of_key = (reg_req.status_of_label, short_item)
@@ -1921,8 +2013,24 @@ class BleemeoConnector(threading.Thread):
                     result[key] = value
             self._current_metrics = result
 
+        # Cleanup deactivated metrics that are deactivated for too long time.
+        # They may still exists on API but it's not an issue. Before
+        # registration we always make sure that have fresh list of inactive
+        # metrics.
+        # TODO: should be delete them from API ?
+        cutoff = (
+            time.time() - 86400 * 200
+        )
+        bleemeo_cache.metrics = {
+            metric_uuid: metric
+            for (metric_uuid, metric) in bleemeo_cache.metrics.items()
+            if not metric.deactivated_at or metric.deactivated_at > cutoff
+        }
+        bleemeo_cache.update_lookup_map()
+
         if last_error is not None:
             raise last_error  # pylint: disable=raising-bad-type
+        return sync_success
 
     def _reactivate_metric(self, bleemeo_api, metric):
         # pylint: disable=no-self-use
