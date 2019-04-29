@@ -227,12 +227,13 @@ class BleemeoAPI:
     """ class to handle communication with Bleemeo API
     """
 
-    def __init__(self, base_url, auth, user_agent):
+    def __init__(self, base_url, auth, user_agent, ssl_verify):
         self.auth = auth
         self.user_agent = user_agent
         self.base_url = base_url
         self.requests_session = requests.Session()
         self._jwt_token = None
+        self.ssl_verify = ssl_verify
 
     def _get_jwt(self):
         url = urllib_parse.urljoin(self.base_url, 'v1/jwt-auth/')
@@ -247,6 +248,7 @@ class BleemeoAPI:
                 'password': self.auth[1],
             }),
             timeout=10,
+            verify=self.ssl_verify,
         )
         if response.status_code != 200:
             if response.status_code < 500:
@@ -283,6 +285,7 @@ class BleemeoAPI:
                 data=data,
                 timeout=REQUESTS_TIMEOUT,
                 allow_redirects=allow_redirects,
+                verify=self.ssl_verify,
             )
             if response.status_code == 401 and first_call:
                 # If authentication failed for the first call,
@@ -1002,9 +1005,13 @@ class BleemeoConnector(threading.Thread):
                     '$INSTDIR',
                     bleemeo_agent.util.windows_instdir()
                 )
+            cert_reqs = None
+            if self.core.config['bleemeo.mqtt.ssl_insecure']:
+                cert_reqs = ssl.CERT_NONE
             self.mqtt_client.tls_set(
                 cafile,
                 tls_version=tls_version,
+                cert_reqs=cert_reqs,
             )
             self.mqtt_client.tls_insecure_set(
                 self.core.config['bleemeo.mqtt.ssl_insecure']
@@ -1231,6 +1238,7 @@ class BleemeoConnector(threading.Thread):
                     'User-Agent': self.core.http_user_agent,
                 },
                 timeout=REQUESTS_TIMEOUT,
+                verify=not self.core.config['bleemeo.api_ssl_insecure'],
             )
             content = response.json()
         except requests.exceptions.RequestException:
@@ -1400,6 +1408,7 @@ class BleemeoConnector(threading.Thread):
                     self.bleemeo_base_url,
                     (self.agent_username, self.agent_password),
                     self.core.http_user_agent,
+                    not self.core.config['bleemeo.api_ssl_insecure'],
                 )
 
             if (bleemeo_cache.next_config_at is not None and
