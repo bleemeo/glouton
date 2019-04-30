@@ -1005,14 +1005,17 @@ class BleemeoConnector(threading.Thread):
                     '$INSTDIR',
                     bleemeo_agent.util.windows_instdir()
                 )
-            cert_reqs = None
             if self.core.config['bleemeo.mqtt.ssl_insecure']:
-                cert_reqs = ssl.CERT_NONE
-            self.mqtt_client.tls_set(
-                cafile,
-                tls_version=tls_version,
-                cert_reqs=cert_reqs,
-            )
+                self.mqtt_client.tls_set(
+                    cafile,
+                    tls_version=tls_version,
+                    cert_reqs=ssl.CERT_NONE,
+                )
+            else:
+                self.mqtt_client.tls_set(
+                    cafile,
+                    tls_version=tls_version,
+                )
             self.mqtt_client.tls_insecure_set(
                 self.core.config['bleemeo.mqtt.ssl_insecure']
             )
