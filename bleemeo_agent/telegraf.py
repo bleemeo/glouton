@@ -455,7 +455,7 @@ class Telegraf:
             self._check_computed_metrics()
         self.last_timestamp = timestamp
 
-        item = ''
+        labels = {}
         service = None
         instance = ''
         container_name = ''
@@ -531,24 +531,25 @@ class Telegraf:
             # with correct fstype.
             if part[3] == 'rootfs':
                 return
+            labels['fstype'] = part[3]
             path = part[-3].replace('-', '/')
             path = self.graphite_server.disk_path_rename(path)
             if path is None:
                 return
-            item = path
+            labels['item'] = path
 
             name = 'disk_' + part[-1]
             if name == 'disk_used_percent':
                 name = 'disk_used_perc'
         elif part[-2] == 'win_disk':
-            item = part[2]
+            labels['item'] = part[2]
             name = part[-1]
-            if item == '_Total':
+            if labels['item'] == '_Total':
                 return
 
             # For Windows, assimilate disk (which are also named "C:", "D:"...
             # and (mounted) partition like C:
-            if self.graphite_server.ignored_disk(item):
+            if self.graphite_server.ignored_disk(labels['item']):
                 return
 
             if name == 'Percent_Free_Space':
@@ -557,22 +558,22 @@ class Telegraf:
 
                 # when disk_total is processed, disk_used is also emitted
                 self.computed_metrics_pending.add(
-                    ('disk_total', item, None, timestamp)
+                    ('disk_total', labels['item'], None, timestamp)
                 )
             elif name == 'Free_Megabytes':
                 name = 'disk_free'
                 value = value * 1024 * 1024
                 self.computed_metrics_pending.add(
-                    ('disk_total', item, None, timestamp)
+                    ('disk_total', labels['item'], None, timestamp)
                 )
             else:
                 return
         elif part[-2] == 'diskio':
-            item = part[2]
+            labels['item'] = part[2]
             name = part[-1]
             if not name.startswith('io_'):
                 name = 'io_' + name
-            if self.graphite_server.ignored_disk(item):
+            if self.graphite_server.ignored_disk(labels['item']):
                 return
             if name == 'io_weighted_io_time':
                 return
@@ -580,7 +581,9 @@ class Telegraf:
             if name == 'io_iops_in_progress':
                 name = 'io_in_progress'
             else:
-                value = self.get_derivate(name, item, timestamp, value)
+                value = self.get_derivate(
+                    name, labels['item'], timestamp, value
+                )
                 if value is None:
                     return
 
@@ -588,33 +591,33 @@ class Telegraf:
                 self.core.emit_metric(
                     bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='io_utilization',
+                        labels=labels,
                         time=timestamp,
                         # io_time is a number of ms spent doing IO(per seconds)
                         # utilization is 100% when we spent 1000ms during one
                         # second
                         value=value / 1000. * 100.,
-                        item=item,
                     )
                 )
         elif part[-2] == 'win_diskio':
-            item = part[2]
+            labels['item'] = part[2]
             name = part[-1]
-            if item == '_Total':
+            if labels['item'] == '_Total':
                 return
 
             # Item looks like "0_C:", "1_D:" or "0_C:_D:" (multiple partition
             # on one disk). Remove the number_ from item and take the smaller
             # letter.
-            if '_' in item:
-                item_part = item.split('_')
+            if '_' in labels['item']:
+                item_part = labels['item'].split('_')
                 number = item_part[0]
                 try:
                     int(number)
-                    item = sorted(item_part[1:])[0]
+                    labels['item'] = sorted(item_part[1:])[0]
                 except ValueError:
                     pass
 
-            if self.graphite_server.ignored_disk(item):
+            if self.graphite_server.ignored_disk(labels['item']):
                 return
 
             if name == 'Disk_Read_Bytes_persec':
@@ -633,12 +636,12 @@ class Telegraf:
                 self.core.emit_metric(
                     bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                         label='io_time',
+                        labels=labels,
                         time=timestamp,
                         # io_time is a number of ms spent doing IO(per seconds)
                         # utilization is 100% when we spent 1000ms during one
                         # second
                         value=value * 1000. / 100.,
-                        item=item,
                     )
                 )
             else:
@@ -703,9 +706,9 @@ class Telegraf:
             else:
                 return
         elif part[-2] == 'net' and part[-3] != 'all':
-            item = part[-3]
-            if self.graphite_server.network_interface_blacklist(item):
+            if self.graphite_server.network_interface_blacklist(part[-3]):
                 return
+            labels['item'] = part[-3]
 
             name = 'net_' + part[-1]
             if name in ('net_bytes_recv', 'net_bytes_sent'):
@@ -714,10 +717,10 @@ class Telegraf:
 
             derive = True
         elif part[-2] == 'win_net':
-            item = part[2]
-            name = part[-1]
-            if self.graphite_server.network_interface_blacklist(item):
+            if self.graphite_server.network_interface_blacklist(part[2]):
                 return
+            labels['item'] = part[2]
+            name = part[-1]
 
             if name == 'Bytes_Sent_persec':
                 name = 'net_bits_sent'
@@ -859,9 +862,9 @@ class Telegraf:
                 return
 
             if not instance:
-                item = proxy_name
+                labels['item'] = proxy_name
             else:
-                item = instance + '_' + proxy_name
+                labels['item'] = instance + '_' + proxy_name
         elif part[-2] == 'memcached':
             service = 'memcached'
             (server_address, server_port) = part[-3].split(':')
@@ -1017,9 +1020,10 @@ class Telegraf:
                 return
 
             if not instance:
-                item = dbname
+                labels['item'] = dbname
             else:
-                item = instance + '_' + dbname
+                labels['item'] = instance + '_' + dbname
+                labels['dbname'] = dbname
         elif part[-2] == 'redis':
             service = 'redis'
 
@@ -1282,7 +1286,7 @@ class Telegraf:
             container_tags = self.docker_container_tags(part, ["cpu"])
             if container_tags is None:
                 return
-            item = container_tags['container_name']
+            labels['item'] = container_tags['container_name']
 
             if container_tags.get('cpu') != 'cpu-total':
                 return
@@ -1297,7 +1301,7 @@ class Telegraf:
             container_tags = self.docker_container_tags(part, [])
             if container_tags is None:
                 return
-            item = container_tags['container_name']
+            labels['item'] = container_tags['container_name']
         elif part[-2] == 'docker_container_net':
             if part[-1] == 'rx_bytes':
                 name = 'docker_container_net_bits_recv'
@@ -1313,7 +1317,7 @@ class Telegraf:
             container_tags = self.docker_container_tags(part, ["network"])
             if container_tags is None:
                 return
-            item = container_tags['container_name']
+            labels['item'] = container_tags['container_name']
 
             if container_tags.get("network") != 'total':
                 return
@@ -1330,7 +1334,7 @@ class Telegraf:
             container_tags = self.docker_container_tags(part, ["device"])
             if container_tags is None:
                 return
-            item = container_tags['container_name']
+            labels['item'] = container_tags['container_name']
 
             if container_tags.get("device") != 'total':
                 return
@@ -1359,7 +1363,7 @@ class Telegraf:
             for i in part[2:-2]:
                 if i != url_mangled:
                     item_part.append(i)
-            item = '-'.join(item_part)
+            labels['item'] = '-'.join(item_part)
             if part[-1] == 'counter':
                 if name.endswith('_total'):
                     # Agent don't send a total, but a derivate.
@@ -1371,14 +1375,14 @@ class Telegraf:
                 derive = True
                 no_emit = True
                 self.computed_metrics_pending.add(
-                    ('prometheus_' + name, item, None, timestamp)
+                    ('prometheus_' + name, labels['item'], None, timestamp)
                 )
                 name = name + '_sum'
             elif part[-1] == 'count':
                 derive = True
                 no_emit = True
                 self.computed_metrics_pending.add(
-                    ('prometheus_' + name, item, None, timestamp)
+                    ('prometheus_' + name, labels['item'], None, timestamp)
                 )
                 name = name + '_count'
             elif part[-1] in ('5', '0', '1'):
@@ -1423,11 +1427,13 @@ class Telegraf:
         if name is None:
             return
 
-        if not item and service:
-            item = instance
+        if not labels.get('item', '') and service:
+            labels['item'] = instance
 
         if derive:
-            value = self.get_derivate(name, item, timestamp, value)
+            value = self.get_derivate(
+                name, labels.get('item', ''), timestamp, value,
+            )
             if value is None:
                 return
 
@@ -1435,17 +1441,14 @@ class Telegraf:
             service = ''
             instance = ''
 
-        if not item:
-            item = ''
-
         if container_name is None:
             container_name = ''
         self.core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
+                labels=labels,
                 time=timestamp,
                 value=value,
-                item=item,
                 service_label=service,
                 service_instance=instance,
                 container_name=container_name,
@@ -1530,9 +1533,11 @@ class Telegraf:
             self.core.emit_metric(
                 bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='disk_used',
+                    labels={
+                        'item': item,
+                    },
                     time=timestamp,
                     value=disk_used,
-                    item=item,
                 )
             )
         elif name == 'cpu_other':
@@ -1603,9 +1608,11 @@ class Telegraf:
             self.core.emit_metric(
                 bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='elasticsearch_jvm_gc_utilization',
+                    labels={
+                        'item': item,
+                    },
                     time=timestamp,
                     value=value / 10.,  # convert ms/s in %
-                    item=item,
                     service_label=service,
                     service_instance=instance,
                 )
@@ -1621,9 +1628,11 @@ class Telegraf:
             self.core.emit_metric(
                 bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='apache_busy_workers_perc',
+                    labels={
+                        'item': item,
+                    },
                     time=timestamp,
                     value=100 * value / max_worker,
-                    item=item,
                     service_label=service,
                     service_instance=instance,
                 )
@@ -1667,9 +1676,11 @@ class Telegraf:
         self.core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
+                labels={
+                    'item': item,
+                },
                 time=timestamp,
                 value=value,
-                item=item,
                 service_label=service,
                 service_instance=instance,
             )

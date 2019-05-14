@@ -63,9 +63,11 @@ def gather_exim_queue_size(instance, core):
         core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label='exim_queue_size',
+                labels={
+                    'item': instance,
+                },
                 time=time.time(),
                 value=float(count),
-                item=instance,
                 service_label='exim',
                 service_instance=instance,
             )
@@ -118,9 +120,11 @@ def gather_postfix_queue_size(instance, core):
         core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label='postfix_queue_size',
+                labels={
+                    'item': instance,
+                },
                 time=time.time(),
                 value=float(count),
-                item=instance,
                 service_label='postfix',
                 service_instance=instance,
             )

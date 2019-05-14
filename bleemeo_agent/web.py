@@ -70,8 +70,9 @@ def metrics():
     lines = []
     for metric_point in app.core.last_metrics.values():
         labels = []
-        if metric_point.item:
-            labels.append('item="%s"' % _prometheus_escape(metric_point.item))
+        item = metric_point.labels.get('item', '')
+        if item:
+            labels.append('item="%s"' % _prometheus_escape(item))
         if metric_point.service_label:
             labels.append(
                 'service="%s"' % _prometheus_escape(metric_point.service_label)
@@ -120,16 +121,17 @@ def _gather_checks_info():
             else:
                 check_count_critical += 1
             threshold = app.core.get_threshold(
-                metric_point.label, metric_point.item,
+                metric_point.label, metric_point.labels.get('item', ''),
             )
 
             pretty_name = metric_point.label
-            if metric_point.item:
-                pretty_name = '%s for %s' % (pretty_name, metric_point.item)
+            item = metric_point.labels.get('item', '')
+            if item:
+                pretty_name = '%s for %s' % (pretty_name, item)
             checks.append({
                 'name': metric_point.label,
                 'pretty_name': pretty_name,
-                'item': metric_point.item,
+                'item': item,
                 'status': bleemeo_agent.type.STATUS_NAME[
                     metric_point.status_code
                 ],

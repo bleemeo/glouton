@@ -816,9 +816,11 @@ def pull_raw_metric(core, name):
             item = metric_config.get('item', '')
             metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
+                labels={
+                    'item': item,
+                },
                 time=time.time(),
                 value=value,
-                item=item,
             )
             core.emit_metric(metric_point)
 

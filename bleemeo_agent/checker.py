@@ -461,9 +461,11 @@ class Check:
             item = ''
         metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label='%s_status' % self.service,
+            labels={
+                'item': item,
+            },
             time=now,
             value=float(return_code),
-            item=item,
             service_label=self.service,
             service_instance=instance,
             status_code=return_code,

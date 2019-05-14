@@ -54,18 +54,18 @@
 </div>
 <div class="row">
     <div class="col-xs-5">
-    {% for disk_metric in disks_used_perc|sort(attribute='item') %}
+    {% for disk_metric in disks_used_perc|sort(attribute='labels.item') %}
     {% with %}
-        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric.item, 0) %}
-        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric.item, 0) %}
+        {% set disk_free = core.get_last_metric_value('disk_free', disk_metric.labels.item, 0) %}
+        {% set disk_used = core.get_last_metric_value('disk_used', disk_metric.labels.item, 0) %}
         {% set disk_total_user = disk_used + disk_free %}
-        {% set disk_threshold = core.get_threshold(disk_metric.label, disk_metric.item) or {} %}
+        {% set disk_threshold = core.get_threshold(disk_metric.label, disk_metric.labels.item) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="disk-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#disk-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="disk-collapse-{{ loop.index }}">
                         <i class="fa fa-chevron-right"></i>
-                        {{ disk_metric.item }} disk space
+                        {{ disk_metric.labels.item }} disk space
                     </a>
                 </h4>
             </div>
@@ -91,7 +91,7 @@
         {% if mem_metric is not none %}
         {% set mem_total = core.get_last_metric_value('mem_total', '', 0) %}
         {% set mem_used = mem_metric.value / 100 * mem_total %}
-        {% set mem_threshold = core.get_threshold(mem_metric.label, mem_metric.item) or {} %}
+        {% set mem_threshold = core.get_threshold(mem_metric.label, mem_metric.labels.item) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="mem-heading">
                 <h4 class="panel-title">
@@ -120,14 +120,14 @@
     {% endwith %}
     {% for net_metric in nets_bits_recv|sort(attribute='item') %}
     {% with %}
-        {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric.item, 0) %}
+        {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric.labels.item, 0) %}
         {% set recv_bytes = net_metric.value %}
         <div>
             <div class="panel-heading" role="tab" id="net-heading-{{ loop.index }}">
                 <h4 class="panel-title">
                     <a role="button" data-toggle="collapse" href="#net-collapse-{{ loop.index }}" aria-expanded="false" aria-controls="net-collapse-{{ loop.index }}">
                         <i class="fa fa-chevron-right"></i>
-                        {{ net_metric.item }} traffic
+                        {{ net_metric.labels.item }} traffic
                     </a>
                 </h4>
             </div>
@@ -147,7 +147,7 @@
         {% set cpu_system = core.get_last_metric_value('cpu_system', '', 0) %}
         {% set cpu_used = cpu_metric.value %}
         {% set cpu_other = core.get_last_metric_value('cpu_other', '', 0) %}
-        {% set cpu_threshold = core.get_threshold(cpu_metric.label, cpu_metric.item) or {} %}
+        {% set cpu_threshold = core.get_threshold(cpu_metric.label, cpu_metric.labels.item) or {} %}
         <div>
             <div class="panel-heading" role="tab" id="cpu-heading">
                 <h4 class="panel-title">
