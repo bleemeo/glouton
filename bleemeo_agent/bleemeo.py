@@ -1908,16 +1908,13 @@ class BleemeoConnector(threading.Thread):
                         )
                         del bleemeo_cache.metrics[metric.uuid]
                         continue
-                # Update labels if labels coming from the agent changed.
+                # Only update labels if we have label not present on API.
                 # This is needed for the transition from (label, item) to
-                # (label, labels). Once once, labels will be set at
+                # (label, labels). Once done, labels will be set at
                 # registration time and never change.
-                api_labels = {
-                    k: v
-                    for (k, v) in metric.labels.items()
-                    if k in reg_req.labels
-                }
-                if api_labels != reg_req.labels and self._api_support_labels:
+                api_label_keys = set(metric.labels.keys())
+                new_label_keys = set(reg_req.labels.keys()) - api_label_keys
+                if new_label_keys and self._api_support_labels:
                     try:
                         metric = self._metric_update_labels(
                             bleemeo_api, metric, reg_req.labels
