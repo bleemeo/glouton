@@ -1765,7 +1765,7 @@ class BleemeoConnector(threading.Thread):
                 params={
                     'agent': self.agent_uuid,
                     'fields':
-                        'id,item,label,unit,unit_text,deactivated_at'
+                        'id,item,label,labels,unit,unit_text,deactivated_at'
                         ',threshold_low_warning,threshold_low_critical'
                         ',threshold_high_warning,threshold_high_critical'
                         ',service,container,status_of',
@@ -1781,7 +1781,7 @@ class BleemeoConnector(threading.Thread):
                     'agent': self.agent_uuid,
                     'active': 'True',
                     'fields':
-                        'id,item,label,unit,unit_text,deactivated_at'
+                        'id,item,label,labels,unit,unit_text,deactivated_at'
                         ',threshold_low_warning,threshold_low_critical'
                         ',threshold_high_warning,threshold_high_critical'
                         ',service,container,status_of',
@@ -1805,7 +1805,8 @@ class BleemeoConnector(threading.Thread):
                     metric_url + metric_uuid + '/',
                     params={
                         'fields':
-                            'id,item,label,unit,unit_text,deactivated_at'
+                            'id,item,label,labels,unit,unit_text'
+                            ',deactivated_at'
                             ',threshold_low_warning,threshold_low_critical'
                             ',threshold_high_warning,threshold_high_critical'
                             ',service,container,status_of',
@@ -2215,7 +2216,8 @@ class BleemeoConnector(threading.Thread):
             method='post',
             data=json.dumps(payload),
             params={
-                'fields': 'id,label,item,service,container,deactivated_at,'
+                'fields': 'id,label,labels,item,service,container'
+                          ',deactivated_at,'
                           'threshold_low_warning,threshold_low_critical,'
                           'threshold_high_warning,threshold_high_critical,'
                           'unit,unit_text,agent,status_of,service,'
