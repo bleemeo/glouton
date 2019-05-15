@@ -323,116 +323,6 @@ class Telegraf:
 
         raise KeyError('service not found')
 
-    def get_prometheus_exporter_name(self, metric_name, part):
-        """ Return the config of the Prometheus exporter
-        """
-        prometheus_configs = self.core.config['metric.prometheus']
-        for name, config in prometheus_configs.items():
-            url_mangled = telegraf_replace(config['url'])
-            if (metric_name.startswith('%s_' % name)
-                    and url_mangled in part):
-                return name
-        raise KeyError('prometheus config not found')
-
-    def docker_container_tags(self, part, extra_properties=None):
-        # pylint: disable=too-many-locals
-        """ Return a mapping of metrics tag from Telegraf
-
-            For docker container, Telegraf mix a fixed list of properties
-            with user tags. This list is a list of key-value but when wrote on
-            graphite it result in a list of value separated by "."
-
-            For example:
-
-            prefix=telegraf,host=xenial,a_custom_label=my_value,
-                container_image=redis,container_name=my_redis,
-                container_status=running,container_version=unknown,
-                engine_host=xenial
-
-            Result in:
-
-            telegraf.xenial.my_value.redis.my_redis.running.unkonwn.xenial
-
-            This method transform the graphite line in a mapping.
-        """
-        # This method works by:
-        # * Counting the number of element in the graphite line
-        # * Using Docker inspect, removing user-label
-        # * This allow to find the Telegraf version (since we known the number
-        #   of properties of any given version of Telegraf)
-        # * From there we have the name of properties & user labels, we can
-        #   revert the line.
-
-        if extra_properties is None:
-            extra_properties = []
-
-        for name, inspect in self.core.docker_containers_by_name.items():
-            labels = inspect.get('Config', {}).get('Labels', {})
-            if labels is None:
-                labels = {}
-
-            user_keys = [
-                key for (key, value) in labels.items()
-                if value != ''
-            ]
-
-            # part always ends with 2 element which are the plugin name and
-            # the measurement name. Ignore both of them.
-            properties_count = len(part) - len(user_keys) - 2
-            base_properties_count = properties_count - len(extra_properties)
-
-            base_properties = [
-                # Added in Telegraf <1.1.0
-                "prefix",
-                "host",
-                "container_image",
-                "container_name",
-                "container_version",
-                # Added in Telegraf 1.1.0
-                "engine_host",
-                # Added in Telegraf 1.7.0
-                "server_version",
-                # Added in Telegraf 1.8.0
-                "container_status",
-            ]
-
-            if base_properties_count < 5:
-                continue
-            if base_properties_count > len(base_properties):
-                continue
-
-            properties = (
-                base_properties[:base_properties_count] + extra_properties
-            )
-
-            label_keys_before = [
-                key for (key, value) in labels.items()
-                if key < "container_name" and value != ''
-            ]
-            position = 3 + len(label_keys_before)
-
-            # Docker only allow "_", "." and "-" as special char in
-            # container_name. Of those, only "." is replaced by "_"
-            tmp = name.replace('.', '_')
-
-            if len(part) <= position or part[position] != tmp:
-                continue
-
-            result = {}
-            # We don't care about host or prefix metrics
-            properties.remove("host")
-            properties.remove("prefix")
-            all_keys = properties + user_keys
-            all_keys.sort()
-            for (index, key) in enumerate(all_keys):
-                result[key] = part[index + 2]  # +2 due to host and prefix
-                if key == 'container_name':
-                    # use de-mangled name
-                    result[key] = name
-            return result
-
-        return None
-
     def close(self):
         self._check_computed_metrics()
 
@@ -463,18 +353,33 @@ class Telegraf:
         no_emit = False
 
         # name looks like
+        # telegraf.plugin.metric;label=value;label2=value2
         # telegraf.HOSTNAME.(ITEM_INFO)*.PLUGIN.METRIC
         # example:
-        # telegraf.xps-pierref.ext4./home.disk.total
-        # telegraf.xps-pierref.mem.used
-        # telegraf.xps-pierref.cpu-total.cpu.usage_steal
-        part = name.split('.')
+        # telegraf.disk.total;device=mapper-vg0-home;fstype=ext4;host=xps-pierref;mode=rw;path=-home
+        # telegraf.mem.used;host=xps-pierref
+        # telegraf.cpu.usage_steal;cpu=cpu-total;host=xps-pierref
+        if ';' not in name:
+            return
+        tmp = name.split(';')
+        names = tmp[0].split('.')
+        if len(names) != 3:
+            return
+        part = {
+            'telegraf_plugin': names[1],
+            'metric_name': names[2],
+        }
+        for label in tmp[1:]:
+            if '=' not in label:
+                return
+            label = label.split('=', 1)
+            part[label[0]] = label[1]
 
-        if part[-2] == 'cpu':
-            if part[-3] != 'cpu-total':
+        if part['telegraf_plugin'] == 'cpu':
+            if part['cpu'] != 'cpu-total':
                 return
 
-            name = part[-1].replace('usage_', 'cpu_')
+            name = part['metric_name'].replace('usage_', 'cpu_')
             if name == 'cpu_irq':
                 name = 'cpu_interrupt'
             elif name == 'cpu_iowait':
@@ -492,11 +397,11 @@ class Telegraf:
                 self.computed_metrics_pending.add(
                     ('cpu_other', '', '', timestamp)
                 )
-        elif part[-2] == 'win_cpu':
-            if part[2] != '_Total':
+        elif part['telegraf_plugin'] == 'win_cpu':
+            if part['Instance'] != '_Total':
                 return
 
-            name = part[-1]
+            name = part['metric_name']
             if name == 'Percent_Idle_Time':
                 name = 'cpu_idle'
             elif name == 'Percent_Interrupt_Time':
@@ -525,25 +430,25 @@ class Telegraf:
                 self.computed_metrics_pending.add(
                     ('cpu_other', '', '', timestamp)
                 )
-        elif part[-2] == 'disk':
+        elif part['telegraf_plugin'] == 'disk':
             # Ignore fstype=rootfs. mountpoint for / is duplicated (at least on
             # old Linux - like wheezy). One time as fstype=rootfs and one time
             # with correct fstype.
-            if part[3] == 'rootfs':
+            if part['fstype'] == 'rootfs':
                 return
-            labels['fstype'] = part[3]
-            path = part[-3].replace('-', '/')
+            labels['fstype'] = part['fstype']
+            path = part['path'].replace('-', '/')
             path = self.graphite_server.disk_path_rename(path)
             if path is None:
                 return
             labels['item'] = path
 
-            name = 'disk_' + part[-1]
+            name = 'disk_' + part['metric_name']
             if name == 'disk_used_percent':
                 name = 'disk_used_perc'
-        elif part[-2] == 'win_disk':
-            labels['item'] = part[2]
-            name = part[-1]
+        elif part['telegraf_plugin'] == 'win_disk':
+            labels['item'] = part['Instance']
+            name = part['metric_name']
             if labels['item'] == '_Total':
                 return
 
@@ -568,9 +473,9 @@ class Telegraf:
                 )
             else:
                 return
-        elif part[-2] == 'diskio':
-            labels['item'] = part[2]
-            name = part[-1]
+        elif part['telegraf_plugin'] == 'diskio':
+            labels['item'] = part['_name']
+            name = part['metric_name']
             if not name.startswith('io_'):
                 name = 'io_' + name
             if self.graphite_server.ignored_disk(labels['item']):
@@ -599,9 +504,9 @@ class Telegraf:
                         value=value / 1000. * 100.,
                     )
                 )
-        elif part[-2] == 'win_diskio':
-            labels['item'] = part[2]
-            name = part[-1]
+        elif part['telegraf_plugin'] == 'win_diskio':
+            labels['item'] = part['Instance']
+            name = part['metric_name']
             if labels['item'] == '_Total':
                 return
 
@@ -646,8 +551,8 @@ class Telegraf:
                 )
             else:
                 return
-        elif part[-2] == 'mem':
-            name = 'mem_' + part[-1]
+        elif part['telegraf_plugin'] == 'mem':
+            name = 'mem_' + part['metric_name']
             if name in ('mem_used', 'mem_used_percent'):
                 # We don't use mem_used of telegraf (which is
                 # mem_total - mem_free)
@@ -666,8 +571,8 @@ class Telegraf:
                 )
             else:
                 return
-        elif part[-2] == 'win_mem':
-            name = part[-1]
+        elif part['telegraf_plugin'] == 'win_mem':
+            name = part['metric_name']
             if name == 'Available_Bytes':
                 name = 'mem_available'
                 self.core.emit_metric(
@@ -705,22 +610,24 @@ class Telegraf:
                 )
             else:
                 return
-        elif part[-2] == 'net' and part[-3] != 'all':
-            if self.graphite_server.network_interface_blacklist(part[-3]):
+        elif part['telegraf_plugin'] == 'net' and part['interface'] != 'all':
+            interface = part['interface']
+            if self.graphite_server.network_interface_blacklist(interface):
                 return
-            labels['item'] = part[-3]
+            labels['item'] = interface
 
-            name = 'net_' + part[-1]
+            name = 'net_' + part['metric_name']
             if name in ('net_bytes_recv', 'net_bytes_sent'):
                 name = name.replace('bytes', 'bits')
                 value = value * 8
 
             derive = True
-        elif part[-2] == 'win_net':
-            if self.graphite_server.network_interface_blacklist(part[2]):
+        elif part['telegraf_plugin'] == 'win_net':
+            item = part['Instance']
+            if self.graphite_server.network_interface_blacklist(item):
                 return
-            labels['item'] = part[2]
-            name = part[-1]
+            labels['item'] = item
+            name = part['metric_name']
 
             if name == 'Bytes_Sent_persec':
                 name = 'net_bits_sent'
@@ -746,19 +653,19 @@ class Telegraf:
                 name = 'net_err_out'
             else:
                 return
-        elif part[-2] == 'swap':
+        elif part['telegraf_plugin'] == 'swap':
             if not self.core.last_facts.get('swap_present', False):
                 return
-            name = 'swap_' + part[-1]
+            name = 'swap_' + part['metric_name']
             if name.endswith('_percent'):
                 name = name.replace('_percent', '_perc')
             if name in ('swap_in', 'swap_out'):
                 derive = True
-        elif part[-2] == 'win_swap':
+        elif part['telegraf_plugin'] == 'win_swap':
             if not self.core.last_facts.get('swap_present', False):
                 return
 
-            name = part[-1]
+            name = part['metric_name']
             if name == 'Percent_Usage':
                 name = 'swap_used_perc'
                 if value == 0:
@@ -779,16 +686,16 @@ class Telegraf:
                         value=self.core.total_swap_size - swap_used,
                     )
                 )
-        elif part[-2] == 'system':
-            name = 'system_' + part[-1]
+        elif part['telegraf_plugin'] == 'system':
+            name = 'system_' + part['metric_name']
             if name == 'system_uptime':
                 name = 'uptime'
             elif name == 'system_n_users':
                 name = 'users_logged'
             elif name not in ('system_load1', 'system_load5', 'system_load15'):
                 return
-        elif part[-2] == 'win_system':
-            name = part[-1]
+        elif part['telegraf_plugin'] == 'win_system':
+            name = part['metric_name']
             if name == 'System_Up_Time':
                 name = 'uptime'
             elif name == 'Processor_Queue_Length':
@@ -798,18 +705,18 @@ class Telegraf:
                 )
             else:
                 return
-        elif part[-2] == 'processes':
-            if part[-1] in ['blocked', 'running', 'sleeping',
-                            'stopped', 'zombies', 'paging']:
-                name = 'process_status_%s' % part[-1]
-            elif part[-1] == 'total':
+        elif part['telegraf_plugin'] == 'processes':
+            if part['metric_name'] in ['blocked', 'running', 'sleeping',
+                                       'stopped', 'zombies', 'paging']:
+                name = 'process_status_%s' % part['metric_name']
+            elif part['metric_name'] == 'total':
                 name = 'process_total'
             else:
                 return
-        elif part[-2] == 'apache':
+        elif part['telegraf_plugin'] == 'apache':
             service = 'apache'
-            server_address = part[-3].replace('_', '.')
-            server_port = int(part[-4])
+            server_address = part['server'].replace('_', '.')
+            server_port = int(part['port'])
             try:
                 instance = self._get_service_instance(
                     service, server_address, server_port
@@ -817,7 +724,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = 'apache_' + part[-1]
+            name = 'apache_' + part['metric_name']
             if name == 'apache_IdleWorkers':
                 name = 'apache_idle_workers'
             elif name == 'apache_TotalAccesses':
@@ -838,25 +745,25 @@ class Telegraf:
                 self.computed_metrics_pending.add(
                     ('apache_max_workers', instance, instance, timestamp)
                 )
-        elif part[-2] == 'haproxy':
+        elif part['telegraf_plugin'] == 'haproxy':
             service = 'haproxy'
-            proxy_name = part[2]
-            if part[4] not in ('BACKEND', 'FRONTEND'):
+            proxy_name = part['proxy']
+            if part['sv'] not in ('BACKEND', 'FRONTEND'):
                 return
-            hostport = part[3].replace('_', '.')
+            hostport = part['server'].replace('_', '.')
             try:
                 instance = self._get_haproxy_instance(hostport)
             except KeyError:
                 return
 
-            if (part[-1] in ('stot', 'bin', 'bout', 'dreq', 'dresp', 'ereq',
-                             'econ', 'eresp', 'req_tot')):
+            if (part['metric_name'] in ('stot', 'bin', 'bout', 'dreq', 'dresp',
+                                        'ereq', 'econ', 'eresp', 'req_tot')):
                 derive = True
-                name = 'haproxy_' + part[-1]
-            elif (part[-1] in ('qcur', 'scur', 'qtime', 'ctime', 'rtime',
-                               'ttime')):
-                name = 'haproxy_' + part[-1]
-            elif part[-1] == 'active_servers':
+                name = 'haproxy_' + part['metric_name']
+            elif (part['metric_name'] in ('qcur', 'scur', 'qtime', 'ctime',
+                                          'rtime', 'ttime')):
+                name = 'haproxy_' + part['metric_name']
+            elif part['metric_name'] == 'active_servers':
                 name = 'haproxy_act'
             else:
                 return
@@ -865,9 +772,9 @@ class Telegraf:
                 labels['item'] = proxy_name
             else:
                 labels['item'] = instance + '_' + proxy_name
-        elif part[-2] == 'memcached':
+        elif part['telegraf_plugin'] == 'memcached':
             service = 'memcached'
-            (server_address, server_port) = part[-3].split(':')
+            (server_address, server_port) = part['server'].split(':')
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
@@ -877,7 +784,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = 'memcached_' + part[-1]
+            name = 'memcached_' + part['metric_name']
             if '_cmd_' in name:
                 name = name.replace('_cmd_', '_command_')
                 derive = True
@@ -904,9 +811,9 @@ class Telegraf:
                 derive = True
             elif name != 'memcached_uptime':
                 return
-        elif part[-2] in ('mysql', 'mysql_innodb'):
+        elif part['telegraf_plugin'] in ('mysql', 'mysql_innodb'):
             service = 'mysql'
-            (server_address, server_port) = part[-3].split(':')
+            (server_address, server_port) = part['server'].split(':')
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
@@ -916,7 +823,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = part[-2] + '_' + part[-1]
+            name = part['telegraf_plugin'] + '_' + part['metric_name']
             derive = True
             if name.startswith('mysql_qcache_'):
                 name = name.replace('qcache', 'cache_result_qcache')
@@ -960,10 +867,10 @@ class Telegraf:
                 name = 'mysql_innodb_history_list_len'
             else:
                 return
-        elif part[-2] == 'nginx':
+        elif part['telegraf_plugin'] == 'nginx':
             service = 'nginx'
-            server_address = part[-3].replace('_', '.')
-            server_port = int(part[-4])
+            server_address = part['server'].replace('_', '.')
+            server_port = int(part['port'])
             try:
                 instance = self._get_service_instance(
                     service, server_address, server_port
@@ -971,7 +878,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = 'nginx_connections_' + part[-1]
+            name = 'nginx_connections_' + part['metric_name']
             if name == 'nginx_connections_requests':
                 name = 'nginx_requests'
                 derive = True
@@ -980,14 +887,14 @@ class Telegraf:
                 derive = True
             elif name == 'nginx_connections_handled':
                 derive = True
-        elif part[-2] == 'postgresql':
+        elif part['telegraf_plugin'] == 'postgresql':
             service = 'postgresql'
-            dbname = part[2]
+            dbname = part['db']
 
             if dbname in ('template0', 'template1'):
                 return
 
-            connect_string = part[3]
+            connect_string = part['server']
             # connect string look like:
             # "host=172_17_0_4_port=5432_user=bleemeo_user_dbname=postgres"
             match = re.match(
@@ -1007,15 +914,17 @@ class Telegraf:
                 return
 
             derive = True
-            if part[-1] == 'xact_commit':
+            if part['metric_name'] == 'xact_commit':
                 name = 'postgresql_commit'
-            elif part[-1] == 'xact_rollback':
+            elif part['metric_name'] == 'xact_rollback':
                 name = 'postgresql_rollback'
-            elif (part[-1] in ('blks_read', 'blks_hit', 'tup_returned',
-                               'tup_fetched', 'tup_inserted', 'tup_updated',
-                               'tup_deleted', 'temp_files', 'temp_bytes',
-                               'blk_read_time', 'blk_write_time')):
-                name = 'postgresql_' + part[-1]
+            elif (part['metric_name'] in ('blks_read', 'blks_hit',
+                                          'tup_returned', 'tup_fetched',
+                                          'tup_inserted', 'tup_updated',
+                                          'tup_deleted', 'temp_files',
+                                          'temp_bytes', 'blk_read_time',
+                                          'blk_write_time')):
+                name = 'postgresql_' + part['metric_name']
             else:
                 return
 
@@ -1024,25 +933,10 @@ class Telegraf:
             else:
                 labels['item'] = instance + '_' + dbname
                 labels['dbname'] = dbname
-        elif part[-2] == 'redis':
+        elif part['telegraf_plugin'] == 'redis':
             service = 'redis'
-
-            # Prior to Telegraf 0.13.1, output was
-            # telegraf.$HOSTNAME.$PORT.$SERVER.redis.$METRIC
-            # Telegraf 0.13.1+, output is
-            # telegraf.$HOSTNAME.$PORT.$ROLE.$SERVER.redis.$METRIC
-
-            # Also, for both a $DATABASE may exists just after $HOSTNAME
-            # E.g for 0.13.1:
-            # telegraf.$HOSTNAME.$DATABASE.$PORT.$ROLE.$SERVER.redis.$METRIC
-            #
-            # $PORT is part[-4] or part[-5]
-            # $SERVER is always part[-3]
-            server_address = part[-3].replace('_', '.')
-            if part[-4] in ('master', 'slave'):
-                server_port = int(part[-5])
-            else:
-                server_port = int(part[-4])
+            server_address = part['server'].replace('_', '.')
+            server_port = int(part['port'])
             try:
                 instance = self._get_service_instance(
                     service, server_address, server_port
@@ -1050,7 +944,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = 'redis_' + part[-1]
+            name = 'redis_' + part['metric_name']
 
             if name == 'redis_clients':
                 name = 'redis_current_connections_clients'
@@ -1074,7 +968,7 @@ class Telegraf:
                 pass
             else:
                 return
-        elif part[-2] == 'zookeeper':
+        elif part['telegraf_plugin'] == 'zookeeper':
             service = 'zookeeper'
 
             # Telegraf 1.0.0 added "state" in tag. Which change position of
@@ -1084,8 +978,8 @@ class Telegraf:
             # telegraf.$HOSTNAME.$PORT.$SERVER.zookeeper.$METRIC
             # Telegraf 1.0.0+, output is:
             # telegraf.$HOSTNAME.$PORT.$SERVER.$STATE.zookeeper.$METRIC
-            server_address = part[3].replace('_', '.')
-            server_port = int(part[2])
+            server_address = part['server'].replace('_', '.')
+            server_port = int(part['port'])
             try:
                 instance = self._get_service_instance(
                     service, server_address, server_port
@@ -1093,7 +987,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = 'zookeeper_' + part[-1]
+            name = 'zookeeper_' + part['metric_name']
             if name.startswith('zookeeper_packets_'):
                 derive = True
             elif name in ('zookeeper_ephemerals_count',
@@ -1103,9 +997,9 @@ class Telegraf:
                 name = 'zookeeper_connections'
             else:
                 return
-        elif part[-2] == 'mongodb':
+        elif part['telegraf_plugin'] == 'mongodb':
             service = 'mongodb'
-            (server_address, server_port) = part[-3].split(':')
+            (server_address, server_port) = part['hostname'].split(':')
             server_address = server_address.replace('_', '.')
             server_port = int(server_port)
             try:
@@ -1115,7 +1009,7 @@ class Telegraf:
             except KeyError:
                 return
 
-            name = 'mongodb_' + part[-1]
+            name = 'mongodb_' + part['metric_name']
             if name in ('mongodb_open_connections', 'mongodb_queued_reads',
                         'mongodb_queued_writes', 'mongodb_active_reads',
                         'mongodb_active_writes'):
@@ -1126,32 +1020,26 @@ class Telegraf:
                 derive = True
             else:
                 return
-        elif part[-2].startswith('elasticsearch_'):
+        elif part['telegraf_plugin'].startswith('elasticsearch_'):
             service = 'elasticsearch'
-            # It can't rely only on part[3] (node_host), because this is the
+            # It can't rely only on part['node_host'], because this is the
             # host as think by ES (usually the "public" IP of the node). But
             # Agent use "127.0.0.1" for localhost.
-            # server_address = part[3].replace('_', '.')
+            # server_address = part['node_host'].replace('_', '.')
 
-            # tags for ES include variable length node_attribute.
-            # Use negative index to avoid issue.
-            # tags present are cluster_name, node_attribute,
-            # node_host, node_id, node_name
-            # So node_id is part[-4] (remember that plugin name and
-            # measurement name are after all tags).
-            node_id = part[-4]
+            node_id = part['node_id']
             try:
                 instance = self._get_elasticsearch_instance(node_id)
             except KeyError:
                 return
 
             name = None
-            if part[-2] == 'elasticsearch_indices':
-                if part[-1] == 'docs_count':
+            if part['telegraf_plugin'] == 'elasticsearch_indices':
+                if part['metric_name'] == 'docs_count':
                     name = 'elasticsearch_docs_count'
-                elif part[-1] == 'store_size_in_bytes':
+                elif part['metric_name'] == 'store_size_in_bytes':
                     name = 'elasticsearch_size'
-                elif part[-1] == 'search_query_total':
+                elif part['metric_name'] == 'search_query_total':
                     name = 'elasticsearch_search'
                     derive = True
                     self.computed_metrics_pending.add(
@@ -1162,7 +1050,7 @@ class Telegraf:
                             timestamp
                         )
                     )
-                elif part[-1] == 'search_query_time_in_millis':
+                elif part['metric_name'] == 'search_query_time_in_millis':
                     name = 'elasticsearch_search_time_total'
                     derive = True
                     no_emit = True
@@ -1174,12 +1062,13 @@ class Telegraf:
                             timestamp
                         )
                     )
-            elif part[-2] == 'elasticsearch_jvm':
-                if part[-1] == 'mem_heap_used_in_bytes':
+            elif part['telegraf_plugin'] == 'elasticsearch_jvm':
+                if part['metric_name'] == 'mem_heap_used_in_bytes':
                     name = 'elasticsearch_jvm_heap_used'
-                elif part[-1] == 'mem_non_heap_used_in_bytes':
+                elif part['metric_name'] == 'mem_non_heap_used_in_bytes':
                     name = 'elasticsearch_jvm_non_heap_used'
-                elif part[-1] == 'gc_collectors_old_collection_count':
+                elif part['metric_name'] == (
+                        'gc_collectors_old_collection_count'):
                     name = 'elasticsearch_jvm_gc_old'
                     no_emit = True
                     derive = True
@@ -1191,7 +1080,8 @@ class Telegraf:
                             timestamp
                         )
                     )
-                elif part[-1] == 'gc_collectors_young_collection_count':
+                elif part['metric_name'] == (
+                        'gc_collectors_young_collection_count'):
                     name = 'elasticsearch_jvm_gc_young'
                     no_emit = True
                     derive = True
@@ -1203,7 +1093,8 @@ class Telegraf:
                             timestamp
                         )
                     )
-                elif part[-1] == 'gc_collectors_old_collection_time_in_millis':
+                elif part['metric_name'] == (
+                        'gc_collectors_old_collection_time_in_millis'):
                     name = 'elasticsearch_jvm_gc_time_old'
                     no_emit = True
                     derive = True
@@ -1215,7 +1106,7 @@ class Telegraf:
                             timestamp
                         )
                     )
-                elif part[-1] == (
+                elif part['metric_name'] == (
                         'gc_collectors_young_collection_time_in_millis'):
                     name = 'elasticsearch_jvm_gc_time_young'
                     no_emit = True
@@ -1228,10 +1119,10 @@ class Telegraf:
                             timestamp
                         )
                     )
-        elif part[-2] == 'rabbitmq_overview':
+        elif part['telegraf_plugin'] == 'rabbitmq_overview':
             service = 'rabbitmq'
 
-            tmp = part[-3]
+            tmp = part['url']
             if not tmp.startswith('http:--'):
                 return  # unknown format
             tmp = tmp[len('http:--'):]
@@ -1245,34 +1136,34 @@ class Telegraf:
             except KeyError:
                 return
 
-            if part[-1] == 'messages':
+            if part['metric_name'] == 'messages':
                 name = 'rabbitmq_messages_count'
-            elif part[-1] == 'consumers':
+            elif part['metric_name'] == 'consumers':
                 name = 'rabbitmq_consumers'
-            elif part[-1] == 'connections':
+            elif part['metric_name'] == 'connections':
                 name = 'rabbitmq_connections'
-            elif part[-1] == 'queues':
+            elif part['metric_name'] == 'queues':
                 name = 'rabbitmq_queues'
-            elif part[-1] == 'messages_published':
+            elif part['metric_name'] == 'messages_published':
                 derive = True
                 name = 'rabbitmq_messages_published'
-            elif part[-1] == 'messages_delivered':
+            elif part['metric_name'] == 'messages_delivered':
                 derive = True
                 name = 'rabbitmq_messages_delivered'
-            elif part[-1] == 'messages_acked':
+            elif part['metric_name'] == 'messages_acked':
                 derive = True
                 name = 'rabbitmq_messages_acked'
-            elif part[-1] == 'messages_unacked':
+            elif part['metric_name'] == 'messages_unacked':
                 name = 'rabbitmq_messages_unacked_count'
             else:
                 return
-        elif part[-2] == 'docker':
-            if part[-1] == 'n_containers':
+        elif part['telegraf_plugin'] == 'docker':
+            if part['metric_name'] == 'n_containers':
                 name = 'docker_containers'
             else:
                 return
-        elif part[-2] == 'docker_container_cpu':
-            if part[-1] == 'usage_total':
+        elif part['telegraf_plugin'] == 'docker_container_cpu':
+            if part['metric_name'] == 'usage_total':
                 name = 'docker_container_cpu_used'
                 # Docker sends time in nanosecond. Convert it to seconds
                 value = value / 1000000000
@@ -1282,142 +1173,125 @@ class Telegraf:
                 value = value * 100
             else:
                 return
-
-            container_tags = self.docker_container_tags(part, ["cpu"])
-            if container_tags is None:
+            labels['item'] = part['container_name']
+            if labels['item'] not in self.core.docker_containers_by_name:
                 return
-            labels['item'] = container_tags['container_name']
 
-            if container_tags.get('cpu') != 'cpu-total':
+            if part.get('cpu') != 'cpu-total':
                 return
-        elif part[-2] == 'docker_container_mem':
-            if part[-1] == 'usage_percent':
+        elif part['telegraf_plugin'] == 'docker_container_mem':
+            if part['metric_name'] == 'usage_percent':
                 name = 'docker_container_mem_used_perc'
-            elif part[-1] == 'usage':
+            elif part['metric_name'] == 'usage':
                 name = 'docker_container_mem_used'
             else:
                 return
 
-            container_tags = self.docker_container_tags(part, [])
-            if container_tags is None:
+            labels['item'] = part['container_name']
+            if labels['item'] not in self.core.docker_containers_by_name:
                 return
-            labels['item'] = container_tags['container_name']
-        elif part[-2] == 'docker_container_net':
-            if part[-1] == 'rx_bytes':
+        elif part['telegraf_plugin'] == 'docker_container_net':
+            if part['metric_name'] == 'rx_bytes':
                 name = 'docker_container_net_bits_recv'
                 value = value * 8  # Convert bytes => bits
                 derive = True
-            elif part[-1] == 'tx_bytes':
+            elif part['metric_name'] == 'tx_bytes':
                 name = 'docker_container_net_bits_sent'
                 value = value * 8  # Convert bytes => bits
                 derive = True
             else:
                 return
 
-            container_tags = self.docker_container_tags(part, ["network"])
-            if container_tags is None:
+            labels['item'] = part['container_name']
+            if labels['item'] not in self.core.docker_containers_by_name:
                 return
-            labels['item'] = container_tags['container_name']
 
-            if container_tags.get("network") != 'total':
+            if part.get("network") != 'total':
                 return
-        elif part[-2] == 'docker_container_blkio':
-            if part[-1] == 'io_service_bytes_recursive_read':
+        elif part['telegraf_plugin'] == 'docker_container_blkio':
+            if part['metric_name'] == 'io_service_bytes_recursive_read':
                 name = 'docker_container_io_read_bytes'
                 derive = True
-            elif part[-1] == 'io_service_bytes_recursive_write':
+            elif part['metric_name'] == 'io_service_bytes_recursive_write':
                 name = 'docker_container_io_write_bytes'
                 derive = True
             else:
                 return
 
-            container_tags = self.docker_container_tags(part, ["device"])
-            if container_tags is None:
+            labels['item'] = part['container_name']
+            if labels['item'] not in self.core.docker_containers_by_name:
                 return
-            labels['item'] = container_tags['container_name']
 
-            if container_tags.get("device") != 'total':
+            if part.get("device") != 'total':
                 return
-        elif part[-2].startswith('prometheus_'):
-            name = part[-2][len('prometheus_'):]
-            try:
-                prometheus_name = self.get_prometheus_exporter_name(name, part)
-            except KeyError:
-                logging.debug(
-                    'Unknown prometheus exporter.'
-                    ' Is it configured in Bleemeo agent ?'
-                    ' And telegraf restarted after last telegraf'
-                    ' config update ?'
-                )
-                return
-            exporter_config = (
-                self.core.config['metric.prometheus'][prometheus_name]
-            )
+        elif part['telegraf_plugin'].startswith('prometheus_'):
+            name = part['telegraf_plugin'][len('prometheus_'):]
 
-            # tags will contains:
-            # * url
-            # * all prometheus label
-            # Remove host and url, keep other in item
-            url_mangled = telegraf_replace(exporter_config['url'])
             item_part = []
-            for i in part[2:-2]:
-                if i != url_mangled:
-                    item_part.append(i)
+            for (k, v) in sorted(part.items()):  # pylint: disable=invalid-name
+                if k in ['telegraf_plugin', 'metric_name', 'url', 'host']:
+                    continue
+                item_part.append(v)
+                labels[k] = v
             labels['item'] = '-'.join(item_part)
-            if part[-1] == 'counter':
+            if part['metric_name'] == 'counter':
                 if name.endswith('_total'):
                     # Agent don't send a total, but a derivate.
                     name = name[:-len('_total')]
                 derive = True
-            elif part[-1] == 'gauge':
+            elif part['metric_name'] == 'gauge':
                 pass
-            elif part[-1] == 'sum':
+            elif part['metric_name'] == 'sum':
                 derive = True
                 no_emit = True
                 self.computed_metrics_pending.add(
                     ('prometheus_' + name, labels['item'], None, timestamp)
                 )
                 name = name + '_sum'
-            elif part[-1] == 'count':
+            elif part['metric_name'] == 'count':
                 derive = True
                 no_emit = True
                 self.computed_metrics_pending.add(
                     ('prometheus_' + name, labels['item'], None, timestamp)
                 )
                 name = name + '_count'
-            elif part[-1] in ('5', '0', '1'):
+            elif part['metric_name'] in ('5', '0', '1'):
                 # This is used by quantile and histogram. (0 is in
                 # fact 0.1, 0.25...)
                 # Agent don't process them on use only sum and count.
                 return
             else:
                 logging.debug(
-                    'Unknown Prometheus metric: %s_%s', name, part[-1],
+                    'Unknown Prometheus metric: %s_%s',
+                    name,
+                    part['metric_name'],
                 )
                 return
-        elif part[-2] == 'phpfpm':
+        elif part['telegraf_plugin'] == 'phpfpm':
             service = 'phpfpm'
-            if ('phpfpm', part[2]) in self.core.services:
-                instance = part[2]
+            if ('phpfpm', part['pool']) in self.core.services:
+                instance = part['pool']
 
-            name = 'phpfpm_' + part[-1]
+            name = 'phpfpm_' + part['metric_name']
 
             if name in {'phpfpm_accepted_conn', 'phpfpm_slow_requests'}:
                 derive = True
-        elif (part[2] == 'counter'
+        elif (part.get('metric_type', '') == 'counter'
               and self.core.config['telegraf.statsd.enabled']):
             # statsd counter
             derive = True
-            name = 'statsd_' + part[3]
-        elif (part[2] == 'gauge'
+            name = 'statsd_' + part['telegraf_plugin']
+        elif (part.get('metric_type', '') == 'gauge'
               and self.core.config['telegraf.statsd.enabled']):
             # statsd gauge
-            name = 'statsd_' + part[3]
-        elif (part[2] == 'timing'
+            name = 'statsd_' + part['telegraf_plugin']
+        elif (part.get('metric_type', '') == 'timing'
               and self.core.config['telegraf.statsd.enabled']):
             # statsd timing
-            name = 'statsd_' + part[3] + '_' + part[4]
-            if part[4] == 'count':
+            name = (
+                'statsd_' + part['telegraf_plugin'] + '_' + part['metric_name']
+            )
+            if part['metric_name'] == 'count':
                 # count for timing are number of item per 10 seconds.
                 # We want a count per second.
                 value = value / 10
