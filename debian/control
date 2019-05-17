@@ -40,7 +40,7 @@ Package: bleemeo-agent-telegraf
 Architecture: all
 Multi-Arch: foreign
 Depends: ${misc:Depends}, ${python3:Depends},
-    telegraf,
+    telegraf (>= 1.7),
 Conflicts: bleemeo-agent-collectd, bleemeo-agent-single
 Breaks: bleemeo-agent (<<0.20160301.140200)
 Replaces: bleemeo-agent (<<0.20160301.140200)

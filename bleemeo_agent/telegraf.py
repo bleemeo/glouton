@@ -214,6 +214,7 @@ class Telegraf:
         self.computed_metrics_pending = set()
 
         self.last_timestamp = 0
+        self.last_depecated_telgraf_warning = 0
 
         self.core.add_scheduled_job(
             self._purge_metrics,
@@ -323,6 +324,249 @@ class Telegraf:
 
         raise KeyError('service not found')
 
+    def get_prometheus_exporter_name(self, metric_name, part):
+        """ Return the config of the Prometheus exporter
+        """
+        prometheus_configs = self.core.config['metric.prometheus']
+        for name, config in prometheus_configs.items():
+            url_mangled = telegraf_replace(config['url'])
+            if (metric_name.startswith('%s_' % name)
+                    and url_mangled in part):
+                return name
+        raise KeyError('prometheus config not found')
+
+    def docker_container_tags(self, part, extra_properties=None):
+        # pylint: disable=too-many-locals
+        """ Return a mapping of metrics tag from Telegraf
+
+            For docker container, Telegraf mix a fixed list of properties
+            with user tags. This list is a list of key-value but when wrote on
+            graphite it result in a list of value separated by "."
+
+            For example:
+
+            prefix=telegraf,host=xenial,a_custom_label=my_value,
+                container_image=redis,container_name=my_redis,
+                container_status=running,container_version=unknown,
+                engine_host=xenial
+
+            Result in:
+
+            telegraf.xenial.my_value.redis.my_redis.running.unkonwn.xenial
+
+            This method transform the graphite line in a mapping.
+        """
+        # This method works by:
+        # * Counting the number of element in the graphite line
+        # * Using Docker inspect, removing user-label
+        # * This allow to find the Telegraf version (since we known the number
+        #   of properties of any given version of Telegraf)
+        # * From there we have the name of properties & user labels, we can
+        #   revert the line.
+
+        if extra_properties is None:
+            extra_properties = []
+
+        for name, inspect in self.core.docker_containers_by_name.items():
+            labels = inspect.get('Config', {}).get('Labels', {})
+            if labels is None:
+                labels = {}
+
+            user_keys = [
+                key for (key, value) in labels.items()
+                if value != ''
+            ]
+
+            # part always ends with 2 element which are the plugin name and
+            # the measurement name. Ignore both of them.
+            properties_count = len(part) - len(user_keys) - 2
+            base_properties_count = properties_count - len(extra_properties)
+
+            base_properties = [
+                # Added in Telegraf <1.1.0
+                "prefix",
+                "host",
+                "container_image",
+                "container_name",
+                "container_version",
+                # Added in Telegraf 1.1.0
+                "engine_host",
+                # Added in Telegraf 1.7.0
+                "server_version",
+                # Added in Telegraf 1.8.0
+                "container_status",
+            ]
+
+            if base_properties_count < 5:
+                continue
+            if base_properties_count > len(base_properties):
+                continue
+
+            properties = (
+                base_properties[:base_properties_count] + extra_properties
+            )
+
+            label_keys_before = [
+                key for (key, value) in labels.items()
+                if key < "container_name" and value != ''
+            ]
+            position = 3 + len(label_keys_before)
+
+            # Docker only allow "_", "." and "-" as special char in
+            # container_name. Of those, only "." is replaced by "_"
+            tmp = name.replace('.', '_')
+
+            if len(part) <= position or part[position] != tmp:
+                continue
+
+            result = {}
+            # We don't care about host or prefix metrics
+            properties.remove("host")
+            properties.remove("prefix")
+            all_keys = properties + user_keys
+            all_keys.sort()
+            for (index, key) in enumerate(all_keys):
+                result[key] = part[index + 2]  # +2 due to host and prefix
+                if key == 'container_name':
+                    # use de-mangled name
+                    result[key] = name
+            return result
+
+        return None
+
+    def _telegraf_compatibility(self, name):
+        # pylint: disable=too-many-branches
+        # pylint: disable=too-many-statements
+        """ Parse old telegraf format without graphite_tag_support
+        """
+        if self.last_depecated_telgraf_warning < time.time() - 900:
+            self.last_depecated_telgraf_warning = time.time()
+            # TODO: adapt message based on installation format
+            logging.warning(
+                'Telegraf configuration is using depreacted option.'
+                ' Please upgrade telegraf and bleemeo-agent-telegraf package'
+            )
+        # name looks like
+        # telegraf.HOSTNAME.(ITEM_INFO)*.PLUGIN.METRIC
+        # example:
+        # telegraf.xps-pierref.ext4./home.disk.total
+        # telegraf.xps-pierref.mem.used
+        # telegraf.xps-pierref.cpu-total.cpu.usage_steal
+        part = name.split('.')
+        part_dict = {
+            'telegraf_plugin': part[-2],
+            'metric_name': part[-1],
+        }
+
+        if part[-2] == 'cpu':
+            part_dict['cpu'] = part[-3]
+        elif part[-2] == 'disk':
+            part_dict['fstype'] = part[3]
+            part_dict['path'] = part[-3]
+        elif part[-2] == 'diskio':
+            part_dict['_name'] = part[2]
+        elif part[-2] == 'net':
+            part_dict['interface'] = part[-3]
+        elif part[-2] == 'apache':
+            part_dict['server'] = part[-3]
+            part_dict['port'] = part[-4]
+        elif part[-2] == 'haproxy':
+            part_dict['proxy'] = part[2]
+            part_dict['server'] = part[3]
+            part_dict['sv'] = part[4]
+        elif part[-2] == 'memcached':
+            part_dict['server'] = part[-3]
+        elif part[-2] in ('mysql', 'mysql_innodb'):
+            part_dict['server'] = part[-3]
+        elif part[-2] == 'nginx':
+            part_dict['server'] = part[-3]
+            part_dict['port'] = part[-4]
+        elif part[-2] == 'postgresql':
+            part_dict['db'] = part[2]
+            part_dict['server'] = part[3]
+        elif part[-2] == 'redis':
+            # Prior to Telegraf 0.13.1, output was
+            # telegraf.$HOSTNAME.$PORT.$SERVER.redis.$METRIC
+            # Telegraf 0.13.1+, output is
+            # telegraf.$HOSTNAME.$PORT.$ROLE.$SERVER.redis.$METRIC
+
+            # Also, for both a $DATABASE may exists just after $HOSTNAME
+            # E.g for 0.13.1:
+            # telegraf.$HOSTNAME.$DATABASE.$PORT.$ROLE.$SERVER.redis.$METRIC
+            #
+            # $PORT is part[-4] or part[-5]
+            # $SERVER is always part[-3]
+            part_dict['server'] = part[-3]
+            if part[-4] in ('master', 'slave'):
+                part_dict['port'] = part[-5]
+            else:
+                part_dict['port'] = part[-4]
+        elif part[-2] == 'zookeeper':
+            part_dict['server'] = part[3]
+            part_dict['port'] = part[2]
+        elif part[-2] == 'mongodb':
+            part_dict['hostname'] = part[-3]
+        elif part[-2].startswith('elasticsearch_'):
+            part_dict['node_id'] = part[-4]
+        elif part[-2] == 'rabbitmq_overview':
+            part_dict['url'] = part[-3]
+        elif part[-2] == 'docker_container_cpu':
+            container_tags = self.docker_container_tags(part, ["cpu"])
+            if container_tags is None:
+                return {}
+            part_dict['container_name'] = container_tags['container_name']
+            if 'cpu' in container_tags:
+                part_dict['cpu'] = container_tags['cpu']
+        elif part[-2] == 'docker_container_mem':
+            container_tags = self.docker_container_tags(part, [])
+            if container_tags is None:
+                return {}
+            part_dict['container_name'] = container_tags['container_name']
+        elif part[-2] == 'docker_container_net':
+            container_tags = self.docker_container_tags(part, ["network"])
+            if container_tags is None:
+                return {}
+            part_dict['container_name'] = container_tags['container_name']
+            if 'network' in container_tags:
+                part_dict['network'] = container_tags['network']
+        elif part[-2] == 'docker_container_blkio':
+            container_tags = self.docker_container_tags(part, ["device"])
+            if container_tags is None:
+                return {}
+            part_dict['container_name'] = container_tags['container_name']
+            if 'device' in container_tags:
+                part_dict['device'] = container_tags['device']
+        elif part[-2].startswith('prometheus_'):
+            name = part[-2][len('prometheus_'):]
+            try:
+                prometheus_name = self.get_prometheus_exporter_name(name, part)
+            except KeyError:
+                logging.debug(
+                    'Unknown prometheus exporter.'
+                    ' Is it configured in Bleemeo agent ?'
+                    ' And telegraf restarted after last telegraf'
+                    ' config update ?'
+                )
+                return {}
+            exporter_config = (
+                self.core.config['metric.prometheus'][prometheus_name]
+            )
+
+            # tags will contains:
+            # * url
+            # * all prometheus label
+            # Remove host and url, keep other in item
+            url_mangled = telegraf_replace(exporter_config['url'])
+            item_part = []
+            for i in part[2:-2]:
+                if i != url_mangled:
+                    item_part.append(i)
+            part_dict['item'] = '-'.join(item_part)
+        elif part[-2] == 'phpfpm':
+            part_dict['pool'] = part[2]
+
+        return part_dict
+
     def close(self):
         self._check_computed_metrics()
 
@@ -352,28 +596,33 @@ class Telegraf:
         derive = False
         no_emit = False
 
-        # name looks like
-        # telegraf.plugin.metric;label=value;label2=value2
-        # telegraf.HOSTNAME.(ITEM_INFO)*.PLUGIN.METRIC
-        # example:
-        # telegraf.disk.total;device=mapper-vg0-home;fstype=ext4;host=xps-pierref;mode=rw;path=-home
-        # telegraf.mem.used;host=xps-pierref
-        # telegraf.cpu.usage_steal;cpu=cpu-total;host=xps-pierref
         if ';' not in name:
-            return
-        tmp = name.split(';')
-        names = tmp[0].split('.')
-        if len(names) != 3:
-            return
-        part = {
-            'telegraf_plugin': names[1],
-            'metric_name': names[2],
-        }
-        for label in tmp[1:]:
-            if '=' not in label:
+            # Compatibility with older version Telegraf/Telegraf config which
+            # don't include graphite_tag_support = true
+            part = self._telegraf_compatibility(name)
+            if not part:
                 return
-            label = label.split('=', 1)
-            part[label[0]] = label[1]
+        else:
+            # name looks like
+            # telegraf.plugin.metric;label=value;label2=value2
+            # telegraf.HOSTNAME.(ITEM_INFO)*.PLUGIN.METRIC
+            # example:
+            # telegraf.disk.total;device=mapper-vg0-home;fstype=ext4;host=[...]
+            # telegraf.mem.used;host=xps-pierref
+            # telegraf.cpu.usage_steal;cpu=cpu-total;host=xps-pierref
+            tmp = name.split(';')
+            names = tmp[0].split('.')
+            if len(names) != 3:
+                return
+            part = {
+                'telegraf_plugin': names[1],
+                'metric_name': names[2],
+            }
+            for label in tmp[1:]:
+                if '=' not in label:
+                    return
+                label = label.split('=', 1)
+                part[label[0]] = label[1]
 
         if part['telegraf_plugin'] == 'cpu':
             if part['cpu'] != 'cpu-total':
