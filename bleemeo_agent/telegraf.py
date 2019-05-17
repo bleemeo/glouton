@@ -441,10 +441,22 @@ class Telegraf:
         """
         if self.last_depecated_telgraf_warning < time.time() - 900:
             self.last_depecated_telgraf_warning = time.time()
-            # TODO: adapt message based on installation format
+            installation_format = self.core.last_facts.get(
+                'installation_format', ''
+            )
+            if 'Package' in installation_format:
+                logging.warning(
+                    'Telegraf configuration is using depreacted option.'
+                    ' Please upgrade package "telegraf" '
+                    'and "bleemeo-agent-telegraf".'
+                )
+            else:
+                logging.warning(
+                    'Telegraf configuration is using depreacted option.'
+                    ' Please upgrade Telegraf and its configuration.'
+                )
             logging.warning(
-                'Telegraf configuration is using depreacted option.'
-                ' Please upgrade telegraf and bleemeo-agent-telegraf package'
+                'See https://docs.bleemeo.com/agent/upgrade-agent/'
             )
         # name looks like
         # telegraf.HOSTNAME.(ITEM_INFO)*.PLUGIN.METRIC
