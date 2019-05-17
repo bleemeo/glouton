@@ -563,7 +563,7 @@ class Telegraf:
                     item_part.append(i)
             part_dict['item'] = '-'.join(item_part)
         elif part[-2] == 'phpfpm':
-            part_dict['pool'] = part[2]
+            part_dict['instance'] = part[2]
 
         return part_dict
 
@@ -1518,8 +1518,8 @@ class Telegraf:
                 return
         elif part['telegraf_plugin'] == 'phpfpm':
             service = 'phpfpm'
-            if ('phpfpm', part['pool']) in self.core.services:
-                instance = part['pool']
+            if ('phpfpm', part['instance']) in self.core.services:
+                instance = part['instance']
 
             name = 'phpfpm_' + part['metric_name']
 
