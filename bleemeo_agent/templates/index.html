@@ -118,7 +118,7 @@
         </div>
         {% endif %}
     {% endwith %}
-    {% for net_metric in nets_bits_recv|sort(attribute='item') %}
+    {% for net_metric in nets_bits_recv|sort(attribute='labels.item') %}
     {% with %}
         {% set sent_bytes = core.get_last_metric_value('net_bits_sent', net_metric.labels.item, 0) %}
         {% set recv_bytes = net_metric.value %}
