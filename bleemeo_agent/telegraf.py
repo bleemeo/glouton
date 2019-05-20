@@ -659,7 +659,7 @@ class Telegraf:
                     ('cpu_other', '', '', timestamp)
                 )
         elif part['telegraf_plugin'] == 'win_cpu':
-            if part['Instance'] != '_Total':
+            if part['instance'] != '_Total':
                 return
 
             name = part['metric_name']
@@ -708,7 +708,7 @@ class Telegraf:
             if name == 'disk_used_percent':
                 name = 'disk_used_perc'
         elif part['telegraf_plugin'] == 'win_disk':
-            labels['item'] = part['Instance']
+            labels['item'] = part['instance']
             name = part['metric_name']
             if labels['item'] == '_Total':
                 return
@@ -766,7 +766,7 @@ class Telegraf:
                     )
                 )
         elif part['telegraf_plugin'] == 'win_diskio':
-            labels['item'] = part['Instance']
+            labels['item'] = part['instance']
             name = part['metric_name']
             if labels['item'] == '_Total':
                 return
@@ -884,7 +884,7 @@ class Telegraf:
 
             derive = True
         elif part['telegraf_plugin'] == 'win_net':
-            item = part['Instance']
+            item = part['instance']
             if self.graphite_server.network_interface_blacklist(item):
                 return
             labels['item'] = item
