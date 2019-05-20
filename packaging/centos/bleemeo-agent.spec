@@ -45,7 +45,7 @@ the SaaS platform
 
 %package telegraf
 Summary:        Bleemeo agent with Telegraf
-Requires:       telegraf
+Requires:       telegraf >= 1.7
 Provides:       bleemeo-agent-collector = %{version}
 Conflicts:      bleemeo-agent-collectd, bleemeo-agent-single
 

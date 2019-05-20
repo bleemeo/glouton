@@ -775,7 +775,7 @@ def _check_soft_status(softstatus_state, metric, soft_status, period, now):
     if softstatus_state is None:
         softstatus_state = MetricSoftStatusState(
             metric.label,
-            metric.item,
+            metric.labels.get('item', ''),
             soft_status,
             None,
             None,
@@ -1952,9 +1952,11 @@ class Core:
 
         metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label='docker_container_health_status',
+            labels={
+                'item': name,
+            },
             time=time.time(),
             value=float(status),
-            item=name,
             container_name=name,
             status_code=status,
             problem_origin=problem_origin,
@@ -2717,7 +2719,7 @@ class Core:
     def _store_last_value(self, metric_point):
         """ Store the metric in self.last_matrics, replacing the previous value
         """
-        item = metric_point.item
+        item = metric_point.labels.get('item', '')
         measurement = metric_point.label
         self.last_metrics[(measurement, item)] = metric_point
 
@@ -2783,7 +2785,7 @@ class Core:
             and unknown respectively.
         """
         threshold = self.get_threshold(
-            metric_point.label, metric_point.item
+            metric_point.label, metric_point.labels.get('item', ''),
         )
 
         if threshold is None:
@@ -2842,7 +2844,7 @@ class Core:
             status_value = 2.0
 
         (unit, unit_text) = self.metrics_unit.get(
-            (metric_point.label, metric_point.item),
+            (metric_point.label, metric_point.labels.get('item', '')),
             (None, None),
         )
 
@@ -2886,7 +2888,7 @@ class Core:
 
             Return the new status
         """
-        key = (metric_point.label, metric_point.item)
+        key = (metric_point.label, metric_point.labels.get('item', ''))
         softstatus_state = self.cache.softstatus_by_labelitem.get(key)
 
         new_softstatus_state = _check_soft_status(

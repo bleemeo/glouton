@@ -81,6 +81,7 @@ data:
     [[outputs.graphite]]
       servers = ["localhost:2003"]
       prefix = "telegraf"
+      graphite_tag_support = true
     [[inputs.cpu]]
       percpu = true
       totalcpu = true

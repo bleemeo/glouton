@@ -814,11 +814,14 @@ def pull_raw_metric(core, name):
                 name)
         if value is not None:
             item = metric_config.get('item', '')
+            labels = {}
+            if item:
+                labels['item'] = item
             metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
+                labels=labels,
                 time=time.time(),
                 value=value,
-                item=item,
             )
             core.emit_metric(metric_point)
 
