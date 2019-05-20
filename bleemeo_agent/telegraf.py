@@ -1530,7 +1530,8 @@ class Telegraf:
                 return
         elif part['telegraf_plugin'] == 'phpfpm':
             service = 'phpfpm'
-            if ('phpfpm', part['instance']) in self.core.services:
+            if ('instance' in part
+                    and ('phpfpm', part['instance']) in self.core.services):
                 instance = part['instance']
 
             name = 'phpfpm_' + part['metric_name']
