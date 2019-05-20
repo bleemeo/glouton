@@ -455,15 +455,13 @@ class Check:
             )
         if self.instance:
             instance = self.instance
-            item = self.instance
+            labels = {'item': self.instance}
         else:
             instance = ''
-            item = ''
+            labels = {}
         metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label='%s_status' % self.service,
-            labels={
-                'item': item,
-            },
+            labels=labels,
             time=now,
             value=float(return_code),
             service_label=self.service,

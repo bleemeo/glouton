@@ -571,9 +571,10 @@ class Telegraf:
             url_mangled = telegraf_replace(exporter_config['url'])
             item_part = []
             for i in part[2:-2]:
-                if i != url_mangled:
+                if i != url_mangled and i:
                     item_part.append(i)
-            part_dict['item'] = '-'.join(item_part)
+            if item_part:
+                part_dict['item'] = '-'.join(item_part)
         elif part[-2] == 'phpfpm':
             part_dict['instance'] = part[2]
 
@@ -1492,9 +1493,12 @@ class Telegraf:
             for (k, v) in sorted(part.items()):  # pylint: disable=invalid-name
                 if k in ['telegraf_plugin', 'metric_name', 'url', 'host']:
                     continue
+                if not v:
+                    continue
                 item_part.append(v)
                 labels[k] = v
-            labels['item'] = '-'.join(item_part)
+            if item_part:
+                labels['item'] = '-'.join(item_part)
             if part['metric_name'] == 'counter':
                 if name.endswith('_total'):
                     # Agent don't send a total, but a derivate.
@@ -1506,14 +1510,24 @@ class Telegraf:
                 derive = True
                 no_emit = True
                 self.computed_metrics_pending.add(
-                    ('prometheus_' + name, labels['item'], None, timestamp)
+                    (
+                        'prometheus_' + name,
+                        labels.get('item', ''),
+                        None,
+                        timestamp
+                    )
                 )
                 name = name + '_sum'
             elif part['metric_name'] == 'count':
                 derive = True
                 no_emit = True
                 self.computed_metrics_pending.add(
-                    ('prometheus_' + name, labels['item'], None, timestamp)
+                    (
+                        'prometheus_' + name,
+                        labels.get('item', ''),
+                        None,
+                        timestamp
+                    )
                 )
                 name = name + '_count'
             elif part['metric_name'] in ('5', '0', '1'):
@@ -1563,7 +1577,7 @@ class Telegraf:
         if name is None:
             return
 
-        if not labels.get('item', '') and service:
+        if 'item' not in labels and service and instance:
             labels['item'] = instance
 
         if derive:
@@ -1739,14 +1753,15 @@ class Telegraf:
             gc_young = get_metric('elasticsearch_jvm_gc_time_young', item)
             value = gc_old + gc_young
 
+            labels = {}
             if not item:
                 item = ''
+            else:
+                labels['item'] = item
             self.core.emit_metric(
                 bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='elasticsearch_jvm_gc_utilization',
-                    labels={
-                        'item': item,
-                    },
+                    labels=labels,
                     time=timestamp,
                     value=value / 10.,  # convert ms/s in %
                     service_label=service,
@@ -1759,14 +1774,15 @@ class Telegraf:
             idle_worker = get_metric('apache_scoreboard_waiting', item)
             open_worker = get_metric('apache_scoreboard_open', item)
             value = max_worker - idle_worker - open_worker
+            labels = {}
             if not item:
                 item = ''
+            else:
+                labels['item'] = item
             self.core.emit_metric(
                 bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label='apache_busy_workers_perc',
-                    labels={
-                        'item': item,
-                    },
+                    labels=labels,
                     time=timestamp,
                     value=100 * value / max_worker,
                     service_label=service,
@@ -1804,17 +1820,18 @@ class Telegraf:
         else:
             logging.debug('Unknown computed metric %s', name)
             return
+        labels = {}
         if not item:
             item = ''
+        else:
+            labels['item'] = item
         if service is None:
             service = ''
             instance = ''
         self.core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
-                labels={
-                    'item': item,
-                },
+                labels=labels,
                 time=timestamp,
                 value=value,
                 service_label=service,

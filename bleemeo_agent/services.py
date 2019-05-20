@@ -58,14 +58,16 @@ def gather_exim_queue_size(instance, core):
     if isinstance(output, bytes):
         output = output.decode('utf-8')
 
+    labels = {}
+    if instance:
+        labels['item'] = instance
+
     try:
         count = int(output)
         core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label='exim_queue_size',
-                labels={
-                    'item': instance,
-                },
+                labels=labels,
                 time=time.time(),
                 value=float(count),
                 service_label='exim',
@@ -110,6 +112,10 @@ def gather_postfix_queue_size(instance, core):
     if isinstance(output, bytes):
         output = output.decode('utf-8')
 
+    labels = {}
+    if instance:
+        labels['item'] = instance
+
     match = re.search(r'-- \d+ Kbytes in (\d+) Request.', output)
     match_zero = re.search(r'Mail queue is empty', output)
     if match or match_zero:
@@ -120,9 +126,7 @@ def gather_postfix_queue_size(instance, core):
         core.emit_metric(
             bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label='postfix_queue_size',
-                labels={
-                    'item': instance,
-                },
+                labels=labels,
                 time=time.time(),
                 value=float(count),
                 service_label='postfix',

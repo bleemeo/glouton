@@ -179,9 +179,9 @@ def _api_datetime_to_time(date_text):
 def _api_metric_to_internal(data):
     """ Convert a API metric object to internal Metric object
     """
-    labels = {
-        'item': data.get('item', '')
-    }
+    labels = {}
+    if data.get('item', ''):
+        labels['item'] = data['item']
     if 'labels' in data:
         labels.update(data['labels'])
     metric = Metric(
@@ -506,7 +506,10 @@ class BleemeoCache:
                     values[9] = time.time()
             if cache['version'] < 7:
                 # Older version stored only item not all labels
-                values[2] = {'item': values[2]}
+                if values[2]:
+                    values[2] = {'item': values[2]}
+                else:
+                    values[2] = {}
             self.metrics[metric_uuid] = Metric(*values)
 
         for service_uuid, values in cache['services'].items():
@@ -643,13 +646,14 @@ class BleemeoCache:
             else:
                 service_uuid = None
 
-            if item is None:
-                item = ''
+            labels = {}
+            if item:
+                labels['item'] = item
 
             self.metrics[metric_uuid] = Metric(
                 metric_uuid,
                 metric_name,
-                {'item': item},
+                labels,
                 service_uuid,
                 None,
                 None,
@@ -1151,8 +1155,8 @@ class BleemeoConnector(threading.Thread):
                     'time': metric_point.time,
                     'value': metric_point.value,
                 }
-                if metric.labels.get('item', ''):
-                    bleemeo_metric['item'] = metric.labels.get('item', '')
+                if 'item' in metric.labels:
+                    bleemeo_metric['item'] = metric.labels['item']
                 if metric_point.status_code is not None:
                     bleemeo_metric['status'] = bleemeo_agent.type.STATUS_NAME[
                         metric_point.status_code
@@ -2010,11 +2014,11 @@ class BleemeoConnector(threading.Thread):
                 break
             elif response.status_code not in (204, 404):
                 raise ApiError(response)
-            if metric.labels.get('item', ''):
+            if 'item' in metric.labels:
                 logging.debug(
                     'Metric %s (%s) deleted',
                     metric.label,
-                    metric.labels.get('item', ''),
+                    metric.labels['item'],
                 )
             else:
                 logging.debug(
@@ -2135,7 +2139,7 @@ class BleemeoConnector(threading.Thread):
             urllib_parse.urljoin(metric_url, '%s/' % metric.uuid),
             'patch',
             params={
-                'fields': 'labels',
+                'fields': 'labels,item',
             },
             data=json.dumps({
                 'labels': new_labels,
@@ -2149,7 +2153,9 @@ class BleemeoConnector(threading.Thread):
                 'API does not yet support labels. Skipping updates',
             )
             self._api_support_labels = False
-            api_labels = {'item': labels.get('item', '')}
+            api_labels = {}
+            if data.get('item', ''):
+                api_labels['item'] = data['item']
         else:
             api_labels = data['labels']
         return metric._replace(labels=api_labels)
@@ -2165,9 +2171,7 @@ class BleemeoConnector(threading.Thread):
         payload = {
             'agent': self.agent_uuid,
             'label': reg_req.label,
-            'labels': {
-                k: v for (k, v) in reg_req.labels.items() if v
-            }
+            'labels': reg_req.labels,
         }
         if reg_req.status_of_label:
             status_of_key = (reg_req.status_of_label, short_item)
@@ -2235,11 +2239,11 @@ class BleemeoConnector(threading.Thread):
         data = response.json()
 
         metric = _api_metric_to_internal(data)
-        if metric.labels.get('item', ''):
+        if 'item' in metric.labels:
             logging.debug(
                 'Metric %s (item %s) registered with uuid %s',
                 metric.label,
-                metric.labels.get('item', ''),
+                metric.labels['item'],
                 metric.uuid,
             )
         else:

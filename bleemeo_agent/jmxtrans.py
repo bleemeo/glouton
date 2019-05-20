@@ -434,13 +434,15 @@ class Jmxtrans:
             else:
                 new_value = value
 
+            labels = {}
+            if item:
+                labels['item'] = item
+
             if jmx_metric.get('scale'):
                 new_value = new_value * jmx_metric['scale']
             metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=new_name,
-                labels={
-                    'item': item if item else '',
-                },
+                labels=labels,
                 time=timestamp,
                 value=new_value,
                 service_label=service_name,
@@ -470,11 +472,12 @@ class Jmxtrans:
     def flush(self, timestamp):
         for key, (jmx_metric, values) in self._sum_value.items():
             (name, item, service_name) = key
+            labels = {}
+            if item:
+                labels['item'] = item
             metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                 label=name,
-                labels={
-                    'item': item if item else '',
-                },
+                labels=labels,
                 time=timestamp,
                 value=sum(values),
                 service_label=service_name,
@@ -507,12 +510,14 @@ class Jmxtrans:
             else:
                 new_value = value / divisor[1]
 
+            labels = {}
+            if item:
+                labels['item'] = item
+
             if new_value is not None:
                 metric_point = bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
                     label=name,
-                    labels={
-                        'item': item if item else '',
-                    },
+                    labels=labels,
                     time=timestamp,
                     value=new_value,
                     service_label=service_name,
