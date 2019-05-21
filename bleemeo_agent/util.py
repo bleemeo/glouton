@@ -828,6 +828,8 @@ def pull_raw_metric(core, name):
 
 def docker_exec(docker_client, container_name, command):
     """ Run a command on given container and return output.
+
+        On error, returns an empty string
     """
     if docker is None and docker_client is None:
         logging.debug(
@@ -839,12 +841,22 @@ def docker_exec(docker_client, container_name, command):
             'Unable to get Telegraf version: unable to communicate with Docker'
         )
         return ''
-    result = docker_client.exec_create(
-        container_name,
-        command,
-    )
-    output = docker_client.exec_start(result['Id'])
-    return output.decode('utf-8')
+    try:
+        result = docker_client.exec_create(
+            container_name,
+            command,
+        )
+        output = docker_client.exec_start(result['Id'])
+    except (docker.errors.APIError,
+            requests.exceptions.RequestException):
+        logging.debug(
+            'Unable to run docker_exec on %s:', container_name, exc_info=True
+        )
+        return ''
+    try:
+        return output.decode('utf-8')
+    except UnicodeDecodeError:
+        return ''
 
 
 def docker_restart(docker_client, container_name):
