@@ -192,13 +192,22 @@ def telegraf_replace(value):
 
 
 def update_discovery(core):
+    updated = False
     try:
-        _write_config(core)
+        updated = _write_config(core)
     except Exception:  # pylint: disable=broad-except
         logging.warning(
             'Failed to write telegraf configuration. '
             'Continuing with current configuration')
         logging.debug('exception is:', exc_info=True)
+    if updated:
+        try:
+            _restart_telegraf(core)
+        except Exception:  # pylint: disable=broad-except
+            logging.warning(
+                'Failed to restart telegraf after configuration update. '
+                'Continuing with current configuration')
+            logging.debug('exception is:', exc_info=True)
 
 
 class Telegraf:
@@ -2029,7 +2038,7 @@ def _write_config(core):
 
         if telegraf_config == current_content:
             logging.debug('telegraf already configured')
-            return
+            return False
 
     # Don't simply use open. This file must have limited permission
     # since it may contains password
@@ -2037,5 +2046,5 @@ def _write_config(core):
     fileno = os.open(telegraf_config_path, open_flags, 0o600)
     with os.fdopen(fileno, 'w') as config_file:
         config_file.write(telegraf_config)
+    return True
 
-    _restart_telegraf(core)
