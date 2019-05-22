@@ -107,6 +107,18 @@ class GraphiteServer(threading.Thread):
         """
         return self.core.config['jmx.enabled']
 
+    def health_check(self):
+        clock_now = bleemeo_agent.util.get_clock()
+        no_data = (
+            self.data_last_seen_at is None
+            or clock_now - self.data_last_seen_at > 60
+        )
+        if no_data:
+            logging.info(
+                'Issue with metrics collector: no metric received from %s',
+                self.metrics_source,
+            )
+
     def run(self):
         bind_address = self.core.config['graphite.listener.address']
         bind_port = self.core.config['graphite.listener.port']

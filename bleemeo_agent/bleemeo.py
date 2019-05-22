@@ -698,6 +698,7 @@ class BleemeoCache:
 
 class BleemeoConnector(threading.Thread):
     # pylint: disable=too-many-instance-attributes
+    # pylint: disable=too-many-public-methods
 
     def __init__(self, core):
         super(BleemeoConnector, self).__init__()
@@ -894,11 +895,6 @@ class BleemeoConnector(threading.Thread):
             )
 
     def run(self):
-        self.core.add_scheduled_job(
-            self._bleemeo_health_check,
-            seconds=60,
-        )
-
         try:
             self.check_config_requirement()
         except StopIteration:
@@ -959,7 +955,7 @@ class BleemeoConnector(threading.Thread):
             agent_status is not None
         )
 
-    def _bleemeo_health_check(self):
+    def health_check(self):
         """ Check the Bleemeo connector works correctly. Log any issue found
         """
         clock_now = bleemeo_agent.util.get_clock()
@@ -992,13 +988,6 @@ class BleemeoConnector(threading.Thread):
             logging.info(
                 '%s metric points blocked due to metric not yet registered',
                 self._unregistered_metric_queue.qsize(),
-            )
-
-        if (self.core.graphite_server.data_last_seen_at is None or
-                clock_now - self.core.graphite_server.data_last_seen_at > 60):
-            logging.info(
-                'Issue with metrics collector: no metric received from %s',
-                self.core.graphite_server.metrics_source,
             )
 
     def _mqtt_setup(self):

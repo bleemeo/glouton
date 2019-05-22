@@ -2047,4 +2047,3 @@ def _write_config(core):
     with os.fdopen(fileno, 'w') as config_file:
         config_file.write(telegraf_config)
     return True
-

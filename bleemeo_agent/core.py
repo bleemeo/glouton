@@ -1706,7 +1706,7 @@ class Core:
         )
         self.schedule_gather_metrics()
         self.add_scheduled_job(
-            self._check_thread,
+            self._health_check,
             seconds=60,
         )
         self.schedule_topinfo()
@@ -1781,6 +1781,12 @@ class Core:
         thread.start()
 
         return True
+
+    def _health_check(self):
+        self._check_thread()
+        self.graphite_server.health_check()
+        if self.bleemeo_connector is not None:
+            self.bleemeo_connector.health_check()
 
     def _check_thread(self):
         threads = [
