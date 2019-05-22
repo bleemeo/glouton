@@ -107,6 +107,50 @@ class GraphiteServer(threading.Thread):
         """
         return self.core.config['jmx.enabled']
 
+    def health_check(self):
+        clock_now = bleemeo_agent.util.get_clock()
+        no_data = (
+            self.data_last_seen_at is None
+            or clock_now - self.data_last_seen_at > 60
+        )
+        if no_data:
+            logging.info(
+                'Issue with metrics collector: no metric received from %s',
+                self.metrics_source,
+            )
+        if self.metrics_source == 'telegraf':
+            telegraf_running = bleemeo_agent.util.is_process_running(
+                'telegraf',
+                self.core.top_info,
+            )
+            if (self.core.config['telegraf.statsd.enabled']
+                    and no_data
+                    and not telegraf_running):
+                stastd_port_used = bleemeo_agent.util.is_port_used(
+                    self.core.config['telegraf.statsd.address'],
+                    self.core.config['telegraf.statsd.port'],
+                    socket.SOCK_DGRAM
+                )
+                if stastd_port_used:
+                    logging.warning(
+                        'Telegraf seems not running and StatsD port (UDP %d)'
+                        ' is already used. Telegraf is configured to listen on'
+                        ' StatsD which explain why it fail to start.',
+                        self.core.config['telegraf.statsd.port'],
+                    )
+                    logging.warning(
+                        'The StatsD integration is now disabled. Restart the'
+                        ' agent to try re-enabling it.'
+                    )
+                    logging.warning(
+                        'See https://docs.bleemeo.com/agent/configuration/ to'
+                        ' permanently disable StatsD integration or using an'
+                        ' alternate port'
+                    )
+                    self.core.config['telegraf.statsd.enabled'] = False
+                    self.update_discovery()
+                    self.core.fire_triggers(facts=True)
+
     def run(self):
         bind_address = self.core.config['graphite.listener.address']
         bind_port = self.core.config['graphite.listener.port']
@@ -248,10 +292,15 @@ class GraphiteClient(threading.Thread):
     def _process_client(self):
         remain = b''
         self.socket.settimeout(1)
+        pending_metrics = []
+        pending_first_time = 0
         while not self.core.is_terminating.is_set():
             try:
                 tmp = self.socket.recv(4096)
             except socket.timeout:
+                if pending_metrics:
+                    self._flush_metrics(pending_metrics)
+                    pending_metrics = []
                 continue
 
             if tmp == b'':
@@ -274,10 +323,27 @@ class GraphiteClient(threading.Thread):
                 if not metric.isprintable():
                     continue
 
-                self.emit_metric(metric, timestamp, value)
+                if not pending_metrics:
+                    pending_first_time = time.time()
+                pending_metrics.append(
+                    (timestamp, metric, value),
+                )
 
-            if self.client_decoder is not None:
-                self.client_decoder.packet_finish()
+            if pending_metrics and time.time() > pending_first_time + 3:
+                self._flush_metrics(pending_metrics)
+                pending_metrics = []
+
+        if pending_metrics:
+            self._flush_metrics(pending_metrics)
+            pending_metrics = []
+
+    def _flush_metrics(self, pending_metrics):
+        pending_metrics.sort()
+        for (timestamp, metric, value) in pending_metrics:
+            self.emit_metric(metric, timestamp, value)
+
+        if self.client_decoder is not None:
+            self.client_decoder.packet_finish()
 
     def emit_metric(self, name, timestamp, value):
         """ Rename a metric and pass it to core

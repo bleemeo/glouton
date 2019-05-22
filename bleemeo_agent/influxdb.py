@@ -149,8 +149,8 @@ class InfluxDBConnector(threading.Thread):
             },
         }
 
-        if metric_point.item:
-            influx_metric['tags']['item'] = metric_point.item
+        if 'item' in metric_point.labels:
+            influx_metric['tags']['item'] = metric_point.labels['item']
         if metric_point.status_code is not None:
             influx_metric['tags']['status'] = (
                 bleemeo_agent.type.STATUS_NAME[metric_point.status_code]

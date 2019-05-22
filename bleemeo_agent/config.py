@@ -77,6 +77,7 @@ CONFIG_VARS = [
     ('bleemeo.account_id', 'string', None),
     ('bleemeo.registration_key', 'string', None),
     ('bleemeo.api_base', 'string', 'https://api.bleemeo.com/'),
+    ('bleemeo.api_ssl_insecure', 'bool', False),
     ('bleemeo.mqtt.host', 'string', 'mqtt.bleemeo.com'),
     ('bleemeo.mqtt.port', 'int', 8883),
     ('bleemeo.mqtt.ssl', 'bool', True),
@@ -93,7 +94,7 @@ CONFIG_VARS = [
     ('graphite.listener.port', 'int', 2003),
     ('telegraf.statsd.enabled', 'bool', True),
     ('telegraf.statsd.address', 'string', '127.0.0.1'),
-    ('telegraf.statsd.port', 'int', '8125'),
+    ('telegraf.statsd.port', 'int', 8125),
     (
         'telegraf.config_file',
         'string',

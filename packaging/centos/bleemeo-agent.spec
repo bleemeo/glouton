@@ -11,22 +11,22 @@ Summary:        Bleemeo agent
 
 Source0:        bleemeo-agent_%{version}.tar
 BuildArch:      noarch
-BuildRequires:  python34-devel, python34-setuptools >= 30.3.0
+BuildRequires:  python36-devel, python36-setuptools >= 30.3.0
 BuildRequires:  systemd
 
 Requires(pre):  shadow-utils
-Requires:       python34-psutil
-Requires:       python34-requests
-Requires:       python34-paho-mqtt
+Requires:       python36-psutil
+Requires:       python36-requests
+Requires:       python36-paho-mqtt
 Requires:       net-tools
 Requires:       ca-certificates
 Requires:       sudo
-Requires:       python34-docker-py
-Requires:       python34-APScheduler
-Requires:       python34-jinja2
-Requires:       python34-six
-Requires:       python34-PyYAML
-Requires:       python34-setuptools
+Requires:       python36-docker
+Requires:       python36-APScheduler
+Requires:       python36-jinja2
+Requires:       python36-six
+Requires:       python36-PyYAML
+Requires:       python36-setuptools
 Requires:       bleemeo-agent-collector
 Requires:       yum-plugin-post-transaction-actions
 #Recommends not available on centos 7
@@ -45,7 +45,7 @@ the SaaS platform
 
 %package telegraf
 Summary:        Bleemeo agent with Telegraf
-Requires:       telegraf
+Requires:       telegraf >= 1.7
 Provides:       bleemeo-agent-collector = %{version}
 Conflicts:      bleemeo-agent-collectd, bleemeo-agent-single
 

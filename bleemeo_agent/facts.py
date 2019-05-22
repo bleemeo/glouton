@@ -20,6 +20,7 @@ Module to gather facts about the server (OS familly/version, CPU type, ...)
 """
 
 import datetime
+import importlib
 import logging
 import os
 import platform
@@ -252,6 +253,14 @@ def _get_telegraf_version(core):
         package_version = match.group(1)
 
     return package_version
+
+
+def _get_package_version(package_name):
+    try:
+        module = importlib.import_module(package_name)
+        return getattr(module, '__version__', None)
+    except ImportError:
+        return None
 
 
 def read_os_release(core):
@@ -640,6 +649,11 @@ def get_facts(core):
         'hostname': hostname,
         'primary_address': primary_address,
         'primary_mac_address': primary_mac_address,
+        'paho_mqtt_version': _get_package_version('paho.mqtt'),
+        'docker_py_version': _get_package_version('docker'),
+        'requests_version': _get_package_version('requests'),
+        'psutil_version': _get_package_version('psutil'),
+        'statsd_enabled': str(core.config['telegraf.statsd.enabled']),
         'swap_present': _system_has_swap(),
         'telegraf_version': _get_telegraf_version(core),
         'timezone': get_file_content('/etc/timezone'),

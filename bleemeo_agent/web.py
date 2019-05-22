@@ -61,6 +61,51 @@ def home():
     )
 
 
+def _prometheus_escape(value):
+    return value.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n')
+
+
+@app.route('/metrics')
+def metrics():
+    lines = []
+    for metric_point in app.core.last_metrics.values():
+        labels = []
+        item = metric_point.labels.get('item', '')
+        if item:
+            labels.append('item="%s"' % _prometheus_escape(item))
+        if metric_point.service_label:
+            labels.append(
+                'service="%s"' % _prometheus_escape(metric_point.service_label)
+            )
+        if metric_point.service_instance:
+            # XXX: service_instance is put in container fields.
+            # service_instance should be equal to container_name but is not
+            # because we wanted to NOT associate service metrics with container
+            # to keep those metrics when a container was deleted.
+            labels.append(
+                'container="%s"' %
+                _prometheus_escape(metric_point.service_instance)
+            )
+        if metric_point.container_name:
+            labels.append(
+                'container="%s"' %
+                _prometheus_escape(metric_point.container_name)
+            )
+
+        if labels:
+            labels_text = "{%s}" % ','.join(labels)
+        else:
+            labels_text = ""
+        lines.append("%s%s %f %d\n" % (
+            metric_point.label,
+            labels_text,
+            metric_point.value,
+            metric_point.time * 1000,
+        ))
+    lines.sort()
+    return "".join(lines), 200, {'Content-Type': 'text/plain; version=0.0.4'}
+
+
 def _gather_checks_info():
     check_count_ok = 0
     check_count_warning = 0
@@ -76,16 +121,17 @@ def _gather_checks_info():
             else:
                 check_count_critical += 1
             threshold = app.core.get_threshold(
-                metric_point.label, metric_point.item,
+                metric_point.label, metric_point.labels.get('item', ''),
             )
 
             pretty_name = metric_point.label
-            if metric_point.item:
-                pretty_name = '%s for %s' % (pretty_name, metric_point.item)
+            item = metric_point.labels.get('item', '')
+            if item:
+                pretty_name = '%s for %s' % (pretty_name, item)
             checks.append({
                 'name': metric_point.label,
                 'pretty_name': pretty_name,
-                'item': metric_point.item,
+                'item': item,
                 'status': bleemeo_agent.type.STATUS_NAME[
                     metric_point.status_code
                 ],

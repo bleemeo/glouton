@@ -274,9 +274,13 @@ class Telegraflib:
                 item = (tag.tag_value).decode("utf-8")
         if metric_point.name.decode('utf-8').startswith("redis"):
             item = self.inputs_id_map[metric_point.input_id]["instance"]
+
+        labels = {}
+        if item:
+            labels['item'] = item
         return bleemeo_agent.type.DEFAULT_METRICPOINT._replace(
             label=metric_point.name.decode("utf-8"),
             value=metric_point.value,
-            item=item,
+            labels=labels,
             time=metric_point.time,
         )

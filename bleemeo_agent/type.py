@@ -41,9 +41,9 @@ MetricPoint = namedtuple(
     'MetricPoint',
     [
         'label',
+        'labels',
         'time',
         'value',
-        'item',
         'service_label',
         'service_instance',
         'container_name',
@@ -55,9 +55,9 @@ MetricPoint = namedtuple(
 
 DEFAULT_METRICPOINT = MetricPoint(
     label='',
+    labels={},
     time=0.0,
     value=0.0,
-    item='',
     service_label='',
     service_instance='',
     container_name='',
