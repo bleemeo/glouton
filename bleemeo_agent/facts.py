@@ -653,6 +653,7 @@ def get_facts(core):
         'docker_py_version': _get_package_version('docker'),
         'requests_version': _get_package_version('requests'),
         'psutil_version': _get_package_version('psutil'),
+        'statsd_enabled': str(core.config['telegraf.statsd.enabled']),
         'swap_present': _system_has_swap(),
         'telegraf_version': _get_telegraf_version(core),
         'timezone': get_file_content('/etc/timezone'),

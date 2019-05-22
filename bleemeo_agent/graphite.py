@@ -149,6 +149,7 @@ class GraphiteServer(threading.Thread):
                     )
                     self.core.config['telegraf.statsd.enabled'] = False
                     self.update_discovery()
+                    self.core.fire_triggers(facts=True)
 
     def run(self):
         bind_address = self.core.config['graphite.listener.address']
