@@ -118,6 +118,37 @@ class GraphiteServer(threading.Thread):
                 'Issue with metrics collector: no metric received from %s',
                 self.metrics_source,
             )
+        if self.metrics_source == 'telegraf':
+            telegraf_running = bleemeo_agent.util.is_process_running(
+                'telegraf',
+                self.core.top_info,
+            )
+            if (self.core.config['telegraf.statsd.enabled']
+                    and no_data
+                    and not telegraf_running):
+                stastd_port_used = bleemeo_agent.util.is_port_used(
+                    self.core.config['telegraf.statsd.address'],
+                    self.core.config['telegraf.statsd.port'],
+                    socket.SOCK_DGRAM
+                )
+                if stastd_port_used:
+                    logging.warning(
+                        'Telegraf seems not running and StatsD port (UDP %d)'
+                        ' is already used. Telegraf is configured to listen on'
+                        ' StatsD which explain why it fail to start.',
+                        self.core.config['telegraf.statsd.port'],
+                    )
+                    logging.warning(
+                        'The StatsD integration is now disabled. Restart the'
+                        ' agent to try re-enabling it.'
+                    )
+                    logging.warning(
+                        'See https://docs.bleemeo.com/agent/configuration/ to'
+                        ' permanently disable StatsD integration or using an'
+                        ' alternate port'
+                    )
+                    self.core.config['telegraf.statsd.enabled'] = False
+                    self.update_discovery()
 
     def run(self):
         bind_address = self.core.config['graphite.listener.address']

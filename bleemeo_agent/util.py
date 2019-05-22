@@ -24,6 +24,7 @@ import os
 import random
 import re
 import shlex
+import socket
 import subprocess
 import sys
 import threading
@@ -204,6 +205,66 @@ def get_clock():
     if sys.version_info[0] >= 3 and sys.version_info[1] >= 3:
         return time.monotonic()
     return time.time()
+
+
+def is_port_used(address, port, protocol):
+    """ Return True if the port is known to be used.
+
+        Return False in other case (including error)
+    """
+    try:
+        address = socket.gethostbyname(address)
+    except (socket.gaierror, TypeError, KeyError):
+        # gaierror => unable to resolv name
+        # TypeError => service_info['address'] is None (happen when
+        #              service is on a stopped container)
+        # KeyError => no 'address' in service_info (happen when service
+        #             is a customer defined using Nagios check).
+        pass
+    try:
+        for conn in psutil.net_connections():
+            if protocol != conn.type:
+                continue
+
+            if (conn.type not in (socket.SOCK_STREAM, socket.SOCK_DGRAM)
+                    or conn.family not in (socket.AF_INET, socket.AF_INET6)):
+                continue
+            if (conn.type == socket.SOCK_STREAM
+                    and conn.status != psutil.CONN_LISTEN):
+                continue
+            if (conn.type == socket.SOCK_DGRAM
+                    and conn.status != psutil.CONN_NONE):
+                continue
+
+            (other_address, other_port) = conn.laddr
+            if other_port != port:
+                continue
+
+            if address in ('0.0.0.0', '::'):
+                return True
+            if other_address in ('0.0.0.0', '::'):
+                return True
+            if address == other_address:
+                return True
+    except OSError:
+        pass
+
+    return False
+
+
+def is_process_running(process_name, top_info):
+    """ Return True if give process is known to be running
+
+        The search is done on top_info structuct returned by get_top_info
+    """
+    if not top_info:
+        return False
+
+    for process in top_info['processes']:
+        if process_name == process['name']:
+            return True
+
+    return False
 
 
 def psstat_to_status(psstat):

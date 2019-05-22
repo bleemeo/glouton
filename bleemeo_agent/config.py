@@ -94,7 +94,7 @@ CONFIG_VARS = [
     ('graphite.listener.port', 'int', 2003),
     ('telegraf.statsd.enabled', 'bool', True),
     ('telegraf.statsd.address', 'string', '127.0.0.1'),
-    ('telegraf.statsd.port', 'int', '8125'),
+    ('telegraf.statsd.port', 'int', 8125),
     (
         'telegraf.config_file',
         'string',
