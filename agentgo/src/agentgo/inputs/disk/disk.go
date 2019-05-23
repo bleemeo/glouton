@@ -94,6 +94,9 @@ func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}
 			return
 		}
 		item = strings.TrimPrefix(item, a.mountPoint)
+		if item == "" {
+			item = "/"
+		}
 		for _, v := range a.blacklist {
 			if v == item || strings.HasPrefix(item, v+"/") {
 				return
