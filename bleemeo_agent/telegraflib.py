@@ -226,6 +226,13 @@ class Telegraflib:
                 server_address = "tcp://%(address)s:%(port)s" % service_info
                 self._add_input_with_address(
                     "redis", server_address, input_informations)
+            if service_name == "nginx":
+                input_informations["name"] = service_name
+                input_informations["instance"] = instance
+                service_info = services[(service_name, instance)]
+                server_address = "http://%(address)s:%(port)s/nginx_status" % service_info
+                self._add_input_with_address(
+                    "nginx", server_address, input_informations)
 
     def _init_system_inputs(self):
         self._add_system_input("cpu")
@@ -273,6 +280,8 @@ class Telegraflib:
             if (tag.tag_name).decode("utf-8") == "item":
                 item = (tag.tag_value).decode("utf-8")
         if metric_point.name.decode('utf-8').startswith("redis"):
+            item = self.inputs_id_map[metric_point.input_id]["instance"]
+        if metric_point.name.decode('utf-8').startswith("nginx"):
             item = self.inputs_id_map[metric_point.input_id]["instance"]
 
         labels = {}

@@ -28,9 +28,15 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/nginx"
 )
 
+type metricPoint struct {
+	value      uint64
+	metricTime time.Time
+}
+
 // Input countains input information about Mysql
 type Input struct {
 	telegraf.Input
+	pastValues map[string]metricPoint // metricName => metricPoint
 }
 
 // New initialise nginx.Input
@@ -42,7 +48,10 @@ func New(url string) (i *Input, err error) {
 			slice := append(make([]string, 0), url)
 			nginxInput.Urls = slice
 			nginxInput.InsecureSkipVerify = false
-			i = &Input{nginxInput}
+			i = &Input{
+				nginxInput,
+				make(map[string]metricPoint),
+			}
 		} else {
 			err = errors.New("Telegraf \"nginx\" input type is not nginx.Nginx")
 		}
@@ -55,14 +64,21 @@ func New(url string) (i *Input, err error) {
 // Gather takes in an accumulator and adds the metrics that the Input
 // gathers. This is called every "interval"
 func (i *Input) Gather(acc telegraf.Accumulator) error {
-	nginxAccumulator := accumulator{acc}
+	nginxAccumulator := accumulator{
+		acc,
+		i.pastValues,
+		make(map[string]metricPoint),
+	}
 	err := i.Input.Gather(&nginxAccumulator)
+	i.pastValues = nginxAccumulator.currentValues
 	return err
 }
 
 // accumulator save the nginx metric from telegraf
 type accumulator struct {
-	accumulator telegraf.Accumulator
+	accumulator   telegraf.Accumulator
+	pastValues    map[string]metricPoint
+	currentValues map[string]metricPoint
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
@@ -72,8 +88,45 @@ type accumulator struct {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	// TODO
-	a.accumulator.AddFields(measurement, fields, tags, t...)
+	finalFields := make(map[string]interface{})
+	for metricName, value := range fields {
+		deriveValue := false
+		finalMetricName := measurement + "_" + metricName
+		switch metricName {
+		case "requests":
+			finalMetricName = "nginx_requests"
+			deriveValue = true
+		case "accepts":
+			finalMetricName = "nginx_connections_accepted"
+			deriveValue = true
+		case "handled":
+			deriveValue = true
+		case "reading", "writing", "waiting", "active":
+			//Keep name unchanged
+		default:
+			continue
+		}
+
+		if deriveValue {
+			var metricTime time.Time
+			if len(t) != 1 {
+				metricTime = time.Now()
+			} else {
+				metricTime = t[0]
+			}
+			pastMetricSave, ok := a.pastValues[finalMetricName]
+			a.currentValues[finalMetricName] = metricPoint{value.(uint64), metricTime}
+			if ok {
+				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
+				finalFields[finalMetricName] = valuef
+			} else {
+				continue
+			}
+		} else {
+			finalFields[finalMetricName] = value
+		}
+	}
+	a.accumulator.AddFields(measurement, finalFields, nil, t...)
 }
 
 // AddError add an error to the accumulator

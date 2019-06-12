@@ -106,16 +106,6 @@ MYSQL_TELEGRAF_CONFIG_1_3 = """
   gather_innodb_metrics = true
 """
 
-NGINX_TELEGRAF_CONFIG = """
-[[inputs.nginx]]
-  urls = ["http://%(address)s:%(port)s/nginx_status"]
-"""
-
-# Additional configuration if Telegraf >= 1.4.0
-NGINX_TELEGRAF_CONFIG_1_4 = """
-  insecure_skip_verify = true
-"""
-
 PHPFPM_TELEGRAF_CONFIG = """
 [[inputs.phpfpm]]
     urls = ["%(stats_url)s"]
@@ -1025,6 +1015,7 @@ class Telegraf:
             else:
                 return
         elif part['telegraf_plugin'] == 'nginx':
+            return
             service = 'nginx'
             server_address = part['server'].replace('_', '.')
             server_port = int(part['port'])
@@ -1811,10 +1802,6 @@ def _get_telegraf_config(core):
                 telegraf_config += MYSQL_TELEGRAF_CONFIG_1_3
         if service_name == 'mongodb':
             telegraf_config += MONGODB_TELEGRAF_CONFIG % service_info
-        if service_name == 'nginx':
-            telegraf_config += NGINX_TELEGRAF_CONFIG % service_info
-            if telegraf_version_gte(core, '1.4.0'):
-                telegraf_config += NGINX_TELEGRAF_CONFIG_1_4
         if (service_name == 'postgresql'
                 and service_info.get('password') is not None):
             service_info.setdefault('username', 'postgres')
