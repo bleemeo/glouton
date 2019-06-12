@@ -30,7 +30,7 @@ mkvirtualenv -p /usr/bin/python3 bleemeo-agent
 
 * Install Go, dep and gometalinter if not already installed:
 ```
-apt install golang go-dep
+sudo apt install golang go-dep
 
 go get -u gopkg.in/alecthomas/gometalinter.v2
 gometalinter.v2 --install
@@ -68,6 +68,8 @@ sudo apt-get update
 
 sudo apt-get install telegraf
 sudo install -m 0644 packaging/common/telegraf.conf /etc/telegraf/telegraf.d/bleemeo.conf
+sudo touch /etc/telegraf/telegraf.d/bleemeo-generated.conf
+sudo chown $USER /etc/telegraf/telegraf.d/bleemeo-generated.conf
 sudo service telegraf restart
 ```
 
