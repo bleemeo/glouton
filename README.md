@@ -28,27 +28,28 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
 mkvirtualenv -p /usr/bin/python3 bleemeo-agent
 ```
 
-* Install Go and dep if not already installed:
+* Install Golang 1.12, activate it and install golangci-lint:
 ```
-sudo apt install golang go-dep
-```
+sudo apt install golang-1.12
+export PATH=usr/lib/go-1.12/bin:$PATH
 
-* Install dependencies and build the Go libcabi:
-```
-(export GOPATH=$(pwd)/agentgo && cd agentgo/src/agentgo && dep ensure)
-(export GOPATH=$(pwd)/agentgo && go build -o agentgo/libcabi.so -buildmode=c-shared agentgo/cabi)
+(cd /tmp; GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1)
 ```
 
 * Run Golang linter:
 ```
-docker run --rm -v $(pwd):/src:ro -w /src -e GOPATH=/src/agentgo golangci/golangci-lint:v1.17.0 golangci-lint run agentgo/src/agentgo/...
+(cd agentgo/src/agentgo; ~/go/bin/golangci-lint run ./...)
 ```
 
 * Run Go tests:
 ```
-(export GOPATH=$(pwd)/agentgo && cd agentgo/ && go test agentgo/...)
+(cd agentgo/src/agentgo; go test agentgo/...)
 ```
 
+* Build the Go libcabi:
+```
+(cd agentgo/src/agentgo; go build -o ../../libcabi.so -buildmode=c-shared agentgo/cabi)
+```
 
 * Install `bleemeo-agent` with its dependencies:
 ```
