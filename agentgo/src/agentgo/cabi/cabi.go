@@ -109,7 +109,7 @@ func InitGroup() C.int {
 	var id = rand.Intn(32767)
 	var selectionNumber int
 	_, ok := group[id]
-	for ok == true && selectionNumber < 100 {
+	for ok && selectionNumber < 100 {
 		id = rand.Intn(32767)
 		_, ok = group[id]
 		selectionNumber++
@@ -133,7 +133,7 @@ func addInputToGroup(groupID int, input telegraf.Input) (inputID int, err error)
 	inputID = rand.Intn(32767)
 	var selectionNumber int
 	_, ok = group[groupID][inputID]
-	for ok == true && selectionNumber < 100 {
+	for ok && selectionNumber < 100 {
 		inputID = rand.Intn(32767)
 		_, ok = group[groupID][inputID]
 		selectionNumber++

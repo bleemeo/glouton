@@ -28,12 +28,9 @@ If you want to test and or develop on bleemeo-agent, here are the step to run fr
 mkvirtualenv -p /usr/bin/python3 bleemeo-agent
 ```
 
-* Install Go, dep and gometalinter if not already installed:
+* Install Go and dep if not already installed:
 ```
 sudo apt install golang go-dep
-
-go get -u gopkg.in/alecthomas/gometalinter.v2
-gometalinter.v2 --install
 ```
 
 * Install dependencies and build the Go libcabi:
@@ -42,10 +39,9 @@ gometalinter.v2 --install
 (export GOPATH=$(pwd)/agentgo && go build -o agentgo/libcabi.so -buildmode=c-shared agentgo/cabi)
 ```
 
-* Run gometalinter:
+* Run Golang linter:
 ```
-(export GOPATH=$(pwd)/agentgo && cd agentgo/src && gometalinter.v2 --vendor --fast --deadline=10m ./...)
-# You can remove the --fast option to have additional lint correction
+docker run --rm -v $(pwd):/src:ro -w /src -e GOPATH=/src/agentgo golangci/golangci-lint:v1.17.0 golangci-lint run agentgo/src/agentgo/...
 ```
 
 * Run Go tests:
