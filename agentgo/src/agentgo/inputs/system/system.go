@@ -115,6 +115,15 @@ func (a *accumulator) AddHistogram(measurement string, fields map[string]interfa
 }
 
 // SetPrecision is useless for system
-func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+func (a *accumulator) SetPrecision(precision time.Duration) {
 	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for system accumulator"))
+}
+
+func (a *accumulator) AddMetric(telegraf.Metric) {
+	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for system accumulator"))
+}
+
+func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for system accumulator"))
+	return nil
 }

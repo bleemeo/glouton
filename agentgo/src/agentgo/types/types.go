@@ -18,9 +18,13 @@
 
 package types
 
-import "time"
-import "fmt"
-import "reflect"
+import (
+	"fmt"
+	"reflect"
+	"time"
+
+	"github.com/influxdata/telegraf"
+)
 
 const (
 	// Fields type
@@ -94,8 +98,19 @@ func (a *Accumulator) AddHistogram(measurement string, fields map[string]interfa
 }
 
 // SetPrecision do nothing right now
-func (a *Accumulator) SetPrecision(precision, interval time.Duration) {
+func (a *Accumulator) SetPrecision(precision time.Duration) {
 	a.AddError(fmt.Errorf("SetPrecision not implemented for types accumulator"))
+}
+
+// AddMetric is not yet implemented
+func (a *Accumulator) AddMetric(telegraf.Metric) {
+	a.AddError(fmt.Errorf("AddMetric not implemented for types accumulator"))
+}
+
+// WithTracking is not yet implemented
+func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	a.AddError(fmt.Errorf("WithTracking not implemented for types accumulator"))
+	return nil
 }
 
 // AddError add an error to the Accumulator

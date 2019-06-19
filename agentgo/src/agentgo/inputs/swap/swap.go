@@ -113,6 +113,15 @@ func (a *accumulator) AddHistogram(measurement string, fields map[string]interfa
 }
 
 // SetPrecision is useless for swap
-func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+func (a *accumulator) SetPrecision(precision time.Duration) {
 	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for swap accumulator"))
+}
+
+func (a *accumulator) AddMetric(telegraf.Metric) {
+	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for swap accumulator"))
+}
+
+func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for swap accumulator"))
+	return nil
 }

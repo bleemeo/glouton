@@ -8,6 +8,12 @@
   version = "1.0.0"
 
 [[projects]]
+  branch = "master"
+  name = "github.com/alecthomas/units"
+  packages = ["."]
+  revision = "2efee857e7cfd4f3d0138cc3cbb1b4966962b93a"
+
+[[projects]]
   name = "github.com/davecgh/go-spew"
   packages = ["spew"]
   revision = "8991bc29aa16c548c550c7ff78260e27b9ab7c73"
@@ -16,14 +22,14 @@
 [[projects]]
   name = "github.com/go-ole/go-ole"
   packages = [".","oleutil"]
-  revision = "39dc8486bd0952279431257138bc428275b86797"
-  version = "v1.2.2"
+  revision = "97b6244175ae18ea6eef668034fd6565847501c9"
+  version = "v1.2.4"
 
 [[projects]]
   name = "github.com/go-redis/redis"
   packages = [".","internal","internal/consistenthash","internal/hashtag","internal/pool","internal/proto","internal/util"]
-  revision = "22be8a3eaf992c828cecb69dc07348313bf08d2e"
-  version = "v6.15.1"
+  revision = "75795aa4236dc7341eefac3bbe945e68c99ef9df"
+  version = "v6.15.3"
 
 [[projects]]
   name = "github.com/go-sql-driver/mysql"
@@ -40,8 +46,8 @@
 [[projects]]
   name = "github.com/influxdata/telegraf"
   packages = [".","filter","internal","internal/tls","plugins/inputs","plugins/inputs/cpu","plugins/inputs/disk","plugins/inputs/diskio","plugins/inputs/linux_sysctl_fs","plugins/inputs/mem","plugins/inputs/mysql","plugins/inputs/mysql/v1","plugins/inputs/net","plugins/inputs/nginx","plugins/inputs/processes","plugins/inputs/redis","plugins/inputs/swap","plugins/inputs/system"]
-  revision = "f297910623fc8797618fe6b2ee3e393c1c41697c"
-  version = "1.8.3"
+  revision = "c9d8f7b008f6865dc94477a184bb8b50132e861f"
+  version = "1.11.0"
 
 [[projects]]
   name = "github.com/pmezard/go-difflib"
@@ -52,8 +58,8 @@
 [[projects]]
   name = "github.com/shirou/gopsutil"
   packages = ["cpu","disk","host","internal/common","load","mem","net","process"]
-  revision = "ccc1c1016bc5d10e803189ee43417c50cdde7f1b"
-  version = "v2.18.12"
+  revision = "5335e3fd506df4cb63de0a8239c7461d23063be6"
+  version = "v2.19.05"
 
 [[projects]]
   branch = "master"
@@ -77,17 +83,18 @@
   branch = "master"
   name = "golang.org/x/sys"
   packages = ["unix","windows"]
-  revision = "b90733256f2e882e81d52f9126de08df5615afd9"
+  revision = "516e3c20635fbe39539f7ed361a15c51fec29cd8"
+  source = "https://github.com/golang/sys.git"
 
 [[projects]]
   name = "google.golang.org/appengine"
   packages = ["cloudsql"]
-  revision = "e9657d882bb81064595ca3b56cbe2546bbabf7b1"
-  version = "v1.4.0"
+  revision = "b2f4a3cf3c67576a2ee09e1fe62656a5086ce880"
+  version = "v1.6.1"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "f20ad08feeb17017c51a2957cabba563cc2b6b2d47021eca98566f0aa9f373e6"
+  inputs-digest = "5d8adf93c0e57a3a88b226aea451f7a3d3024630de1a4a03bf6f50755826ff64"
   solver-name = "gps-cdcl"
   solver-version = 1

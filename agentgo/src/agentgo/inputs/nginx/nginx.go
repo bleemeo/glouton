@@ -158,6 +158,15 @@ func (a *accumulator) AddHistogram(measurement string, fields map[string]interfa
 }
 
 // SetPrecision is useless for nginx
-func (a *accumulator) SetPrecision(precision, interval time.Duration) {
+func (a *accumulator) SetPrecision(precision time.Duration) {
 	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for nginx accumulator"))
+}
+
+func (a *accumulator) AddMetric(telegraf.Metric) {
+	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for nginx accumulator"))
+}
+
+func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for nginx accumulator"))
+	return nil
 }
