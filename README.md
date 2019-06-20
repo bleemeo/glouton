@@ -46,9 +46,9 @@ export PATH=usr/lib/go-1.12/bin:$PATH
 (cd agentgo/src/agentgo; go test agentgo/...)
 ```
 
-* Build the Go libcabi:
+* Run the Go daemon:
 ```
-(cd agentgo/src/agentgo; go build -o ../../libcabi.so -buildmode=c-shared agentgo/cabi)
+(cd agentgo/src/agentgo; go run agentgo)
 ```
 
 * Install `bleemeo-agent` with its dependencies:

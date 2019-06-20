@@ -43,6 +43,12 @@ const (
 	Histogram
 )
 
+// Point is the value of one metric at a given time
+type Point struct {
+	Time  time.Time
+	Value float64
+}
+
 // MetricPoint contains metric information and his value
 type MetricPoint struct {
 	// Name of the metric
