@@ -43,6 +43,15 @@ const (
 	Histogram
 )
 
+// Metric represent a metric object
+type Metric interface {
+	// Labels returns labels of the metric
+	Labels() map[string]string
+
+	// Points returns points between the two given time range (boundary are included).
+	Points(start, end time.Time) ([]Point, error)
+}
+
 // Point is the value of one metric at a given time
 type Point struct {
 	Time  time.Time

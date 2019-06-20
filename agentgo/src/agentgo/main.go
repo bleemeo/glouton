@@ -8,13 +8,33 @@ import (
 	"agentgo/inputs/disk"
 	"agentgo/inputs/mem"
 	"agentgo/store"
+	"agentgo/types"
 
 	"github.com/influxdata/telegraf"
 )
 
+type storeInterface interface {
+	Metrics(filters map[string]string) ([]types.Metric, error)
+}
+
+func stats(db storeInterface) {
+	for {
+		time.Sleep(60 * time.Second)
+		metrics, _ := db.Metrics(nil)
+		log.Printf("Count of metrics: %v", len(metrics))
+
+		metrics, _ = db.Metrics(map[string]string{"__name__": "cpu_used"})
+		for _, m := range metrics {
+			log.Printf("Details for metrics %v", m)
+			points, _ := m.Points(time.Now().Add(86400*time.Second), time.Now())
+			log.Printf("points count: %v", len(points))
+		}
+	}
+}
+
 func main() {
 	log.Println("Starting agent")
-	store := store.New()
+	db := store.New()
 
 	inputs := make([]telegraf.Input, 0)
 
@@ -36,24 +56,11 @@ func main() {
 	}
 	inputs = append(inputs, i3)
 
-	go func() {
-		for {
-			time.Sleep(60 * time.Second)
-			metrics, _ := store.Metrics(nil)
-			log.Printf("Count of metrics: %v", len(metrics))
-
-			metrics, _ = store.Metrics(map[string]string{"__name__": "cpu_used"})
-			for _, m := range metrics {
-				log.Printf("Details for metrics %v", m)
-				points, _ := m.Points(time.Now().Add(-75*time.Second), time.Now())
-				log.Printf("points count: %v", len(points))
-			}
-		}
-	}()
+	go stats(db)
 
 	for {
 		time.Sleep(10 * time.Second)
-		acc := store.Accumulator()
+		acc := db.Accumulator()
 		for _, i := range inputs {
 			err := i.Gather(acc)
 			if err != nil {

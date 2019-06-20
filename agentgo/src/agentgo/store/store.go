@@ -4,6 +4,7 @@
 package store
 
 import (
+	"log"
 	"sync"
 	"time"
 
@@ -14,23 +15,16 @@ import (
 //
 // See methods GetMetrics and GetMetricPoints
 type Store struct {
-	metrics map[int]Metric
+	metrics map[int]metric
 	points  map[int][]types.Point
 	lock    sync.Mutex
 	closed  bool
 }
 
-// Metric ...
-type Metric struct {
-	labels   map[string]string
-	store    *Store
-	metricID int
-}
-
 // New create a return a store. Store should be Close()d before leaving
 func New() *Store {
 	s := &Store{
-		metrics: make(map[int]Metric),
+		metrics: make(map[int]metric),
 		points:  make(map[int][]types.Point),
 	}
 	go s.run()
@@ -43,6 +37,61 @@ func (s *Store) Close() error {
 	defer s.lock.Unlock()
 	s.closed = true
 	return nil
+}
+
+// Metrics return a list of Metric matching given labels filter
+func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err error) {
+	result = make([]types.Metric, 0)
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	for _, m := range s.metrics {
+		if labelsMatch(m.labels, filters, false) {
+			result = append(result, m)
+		}
+	}
+	return
+}
+
+// Labels returns all label of the metric
+func (m metric) Labels() map[string]string {
+	labels := make(map[string]string)
+	for k, v := range m.labels {
+		labels[k] = v
+	}
+	return labels
+}
+
+// Points returns points between the two given time range (boundary are included).
+func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
+	m.store.lock.Lock()
+	defer m.store.lock.Unlock()
+	points := m.store.points[m.metricID]
+	result = make([]types.Point, 0)
+	for _, point := range points {
+		if start.Before(point.Time) && point.Time.Before(end) {
+			result = append(result, point)
+		}
+	}
+	return
+}
+
+type metric struct {
+	labels   map[string]string
+	store    *Store
+	metricID int
+}
+
+// Return true if filter match given labels
+func labelsMatch(labels, filter map[string]string, exact bool) bool {
+	if exact && len(labels) != len(filter) {
+		return false
+	}
+	for k, v := range filter {
+		if v2, ok := labels[k]; !ok || v2 != v {
+			return false
+		}
+	}
+	return true
 }
 
 // For background task for the store (like purging metrics) until store is closed
@@ -62,6 +111,7 @@ func (s *Store) runOnce() bool {
 	if s.closed {
 		return true
 	}
+	deletedPoints := 0
 	metricToDelete := make([]int, 0)
 	for metricID := range s.metrics {
 		points := s.points[metricID]
@@ -76,45 +126,21 @@ func (s *Store) runOnce() bool {
 		} else {
 			s.points[metricID] = newPoints
 		}
+		deletedPoints += len(points) - len(newPoints)
 	}
 	for _, metricID := range metricToDelete {
 		delete(s.metrics, metricID)
 		delete(s.points, metricID)
 	}
+	log.Printf("Deleted %d points", deletedPoints)
 	return false
-}
-
-// Return true if filter match given labels
-func labelsMatch(labels, filter map[string]string, exact bool) bool {
-	if exact && len(labels) != len(filter) {
-		return false
-	}
-	for k, v := range filter {
-		if v2, ok := labels[k]; !ok || v2 != v {
-			return false
-		}
-	}
-	return true
-}
-
-// Metrics return a list of Metric matching given labels filter
-func (s *Store) Metrics(filters map[string]string) (result []Metric, err error) {
-	result = make([]Metric, 0)
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	for _, m := range s.metrics {
-		if labelsMatch(m.labels, filters, false) {
-			result = append(result, m)
-		}
-	}
-	return
 }
 
 // metricsExact will return the metric that exactly match given labels.
 //
 // If the metric does not exists, create it.
 // The store lock is assumed to be held.
-func (s *Store) metricGetOrCreate(labels map[string]string) Metric {
+func (s *Store) metricGetOrCreate(labels map[string]string) metric {
 	for _, m := range s.metrics {
 		if labelsMatch(m.labels, labels, true) {
 			return m
@@ -133,7 +159,7 @@ func (s *Store) metricGetOrCreate(labels map[string]string) Metric {
 	for k, v := range labels {
 		copyLabels[k] = v
 	}
-	m := Metric{
+	m := metric{
 		labels:   copyLabels,
 		store:    s,
 		metricID: newID,
@@ -150,18 +176,4 @@ func (s *Store) addPoint(metricID int, point types.Point) {
 		s.points[metricID] = make([]types.Point, 0)
 	}
 	s.points[metricID] = append(s.points[metricID], point)
-}
-
-// Points returns points between the two given time range (boundary are included).
-func (m Metric) Points(start, end time.Time) (result []types.Point, err error) {
-	m.store.lock.Lock()
-	defer m.store.lock.Unlock()
-	points := m.store.points[m.metricID]
-	result = make([]types.Point, 0)
-	for _, point := range points {
-		if start.Before(point.Time) && point.Time.Before(end) {
-			result = append(result, point)
-		}
-	}
-	return
 }
