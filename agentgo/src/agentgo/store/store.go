@@ -4,6 +4,7 @@
 package store
 
 import (
+	"context"
 	"log"
 	"sync"
 	"time"
@@ -18,7 +19,6 @@ type Store struct {
 	metrics map[int]metric
 	points  map[int][]types.Point
 	lock    sync.Mutex
-	closed  bool
 }
 
 // New create a return a store. Store should be Close()d before leaving
@@ -27,16 +27,24 @@ func New() *Store {
 		metrics: make(map[int]metric),
 		points:  make(map[int][]types.Point),
 	}
-	go s.run()
 	return s
 }
 
-// Close closes the store performing finilization if needed
-func (s *Store) Close() error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.closed = true
-	return nil
+// Run will run the store until context is cancelled
+func (s *Store) Run(ctx context.Context) {
+	for {
+		s.run()
+		select {
+		case <-time.After(60 * time.Second):
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+// Close closes the store. Currently noop, but may write to persistence later
+func (s *Store) Close() {
+	log.Println("Store closed")
 }
 
 // Metrics return a list of Metric matching given labels filter
@@ -94,24 +102,11 @@ func labelsMatch(labels, filter map[string]string, exact bool) bool {
 	return true
 }
 
-// For background task for the store (like purging metrics) until store is closed
 func (s *Store) run() {
-	for {
-		shouldExit := s.runOnce()
-		if shouldExit {
-			break
-		}
-		time.Sleep(60 * time.Second)
-	}
-}
-
-func (s *Store) runOnce() bool {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if s.closed {
-		return true
-	}
 	deletedPoints := 0
+	totalPoints := 0
 	metricToDelete := make([]int, 0)
 	for metricID := range s.metrics {
 		points := s.points[metricID]
@@ -126,14 +121,14 @@ func (s *Store) runOnce() bool {
 		} else {
 			s.points[metricID] = newPoints
 		}
+		totalPoints += len(newPoints)
 		deletedPoints += len(points) - len(newPoints)
 	}
 	for _, metricID := range metricToDelete {
 		delete(s.metrics, metricID)
 		delete(s.points, metricID)
 	}
-	log.Printf("Deleted %d points", deletedPoints)
-	return false
+	log.Printf("Deleted %d points. Total point: %d", deletedPoints, totalPoints)
 }
 
 // metricsExact will return the metric that exactly match given labels.

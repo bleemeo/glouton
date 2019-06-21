@@ -1,12 +1,23 @@
 package main
 
 import (
+	"context"
 	"log"
+	"os"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
+	"agentgo/collector"
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/disk"
+	"agentgo/inputs/diskio"
 	"agentgo/inputs/mem"
+	"agentgo/inputs/net"
+	"agentgo/inputs/process"
+	"agentgo/inputs/swap"
+	"agentgo/inputs/system"
 	"agentgo/store"
 	"agentgo/types"
 
@@ -26,46 +37,58 @@ func stats(db storeInterface) {
 		metrics, _ = db.Metrics(map[string]string{"__name__": "cpu_used"})
 		for _, m := range metrics {
 			log.Printf("Details for metrics %v", m)
-			points, _ := m.Points(time.Now().Add(86400*time.Second), time.Now())
+			points, _ := m.Points(time.Now().Add(-86400*time.Second), time.Now())
 			log.Printf("points count: %v", len(points))
 		}
 	}
 }
 
+func panicOnError(i telegraf.Input, err error) telegraf.Input {
+	if err != nil {
+		log.Fatalf("%v", err)
+	}
+	return i
+}
+
 func main() {
 	log.Println("Starting agent")
 	db := store.New()
+	coll := collector.New(db.Accumulator())
 
-	inputs := make([]telegraf.Input, 0)
+	coll.AddInput(panicOnError(system.New()))
+	coll.AddInput(panicOnError(process.New()))
+	coll.AddInput(panicOnError(cpu.New()))
+	coll.AddInput(panicOnError(mem.New()))
+	coll.AddInput(panicOnError(swap.New()))
+	coll.AddInput(panicOnError(net.New(nil)))
+	coll.AddInput(panicOnError(disk.New("/", nil)))
+	coll.AddInput(panicOnError(diskio.New(
+		[]string{
+			"sd?",
+			"nvme.*",
+		},
+	)))
 
-	i1, err := cpu.New()
-	if err != nil {
-		log.Fatalf("Unable to initiazlied cpu input")
-	}
-	inputs = append(inputs, i1)
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
 
-	i2, err := mem.New()
-	if err != nil {
-		log.Fatalf("Unable to initiazlied mem input")
-	}
-	inputs = append(inputs, i2)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		db.Run(ctx)
+		db.Close()
+	}()
 
-	i3, err := disk.New("/", nil)
-	if err != nil {
-		log.Fatalf("Unable to initiazlied disk input")
-	}
-	inputs = append(inputs, i3)
-
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		coll.Run(ctx)
+	}()
 	go stats(db)
 
-	for {
-		time.Sleep(10 * time.Second)
-		acc := db.Accumulator()
-		for _, i := range inputs {
-			err := i.Gather(acc)
-			if err != nil {
-				log.Fatal(err)
-			}
-		}
-	}
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
+	<-c
+	cancel()
+	wg.Wait()
 }
