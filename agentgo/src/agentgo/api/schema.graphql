@@ -1,0 +1,21 @@
+type Label {
+  key: String!
+  value: String!
+}
+
+type Metric {
+  labels: [Label!]!
+}
+
+input Labels {
+  labels: [LabelInput]!
+}
+
+input LabelInput {
+  key: String!
+  value: String!
+}
+
+type Query {
+  metrics(input: Labels!): [Metric!]!
+}
