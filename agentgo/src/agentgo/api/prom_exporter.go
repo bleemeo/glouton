@@ -4,6 +4,7 @@ import (
 	"agentgo/types"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 )
@@ -41,6 +42,7 @@ func (a *API) promExporter(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Unable to get list of metrics: %v\n", err)
 	}
+	lines := make([]string, 0, len(metrics))
 	for _, m := range metrics {
 		labels := m.Labels()
 		name, ok := labels["__name__"]
@@ -52,6 +54,8 @@ func (a *API) promExporter(w http.ResponseWriter, _ *http.Request) {
 		if !ok {
 			continue
 		}
-		fmt.Fprintf(w, "%s%s %f %d\n", name, formatLabels(labels), lastPoint.Value, lastPoint.Time.UnixNano()/1000000)
+		lines = append(lines, fmt.Sprintf("%s%s %f %d\n", name, formatLabels(labels), lastPoint.Value, lastPoint.Time.UnixNano()/1000000))
 	}
+	sort.Strings(lines)
+	fmt.Fprintf(w, strings.Join(lines, ""))
 }
