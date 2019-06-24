@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"agentgo/api"
 	"agentgo/collector"
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/disk"
@@ -20,7 +21,6 @@ import (
 	"agentgo/inputs/system"
 	"agentgo/store"
 	"agentgo/types"
-	"agentgo/api"
 
 	"github.com/influxdata/telegraf"
 )
@@ -54,7 +54,7 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 func main() {
 	log.Println("Starting agent")
 	db := store.New()
-	api := api.New()
+	api := api.New(db)
 	coll := collector.New(db.Accumulator())
 
 	coll.AddInput(panicOnError(system.New()))
