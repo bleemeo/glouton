@@ -53,9 +53,8 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 
 func main() {
 	log.Println("Starting agent")
-	db := store.New()
 	api := api.New()
-	coll := collector.New(db.Accumulator())
+	coll := collector.New(store.DB.Accumulator())
 
 	coll.AddInput(panicOnError(system.New()))
 	coll.AddInput(panicOnError(process.New()))
@@ -77,8 +76,8 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		db.Run(ctx)
-		db.Close()
+		store.DB.Run(ctx)
+		store.DB.Close()
 	}()
 
 	wg.Add(1)
@@ -86,7 +85,7 @@ func main() {
 		defer wg.Done()
 		coll.Run(ctx)
 	}()
-	go stats(db)
+	go stats(store.DB)
 
 	log.Println("Starting API")
 	go api.Run()

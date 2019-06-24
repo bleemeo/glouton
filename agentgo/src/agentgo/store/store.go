@@ -12,6 +12,12 @@ import (
 	"agentgo/types"
 )
 
+var DB *Store
+
+func init() {
+	DB = New()
+}
+
 // Store implement an interface to retrive metrics and metric points.
 //
 // See methods GetMetrics and GetMetricPoints
