@@ -4,6 +4,8 @@ import (
 	"log"
 	"net/http"
 	"os"
+
+	"github.com/99designs/gqlgen/handler"
 )
 
 const defaultPort = "8015"
@@ -24,5 +26,7 @@ func New() *API {
 
 // Run : Starts our API
 func (api API) Run() {
+	http.Handle("/", handler.Playground("GraphQL playground", "/graphql"))
+	http.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{}})))
 	log.Fatal(http.ListenAndServe(":"+api.Port, nil))
 }
