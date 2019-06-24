@@ -71,7 +71,9 @@ func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator 
 
 // AddError add an error to the Accumulator
 func (a *accumulator) AddError(err error) {
-	log.Println(err)
+	if err != nil {
+		log.Printf("AddError(%v)", err)
+	}
 }
 
 func (a *accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
