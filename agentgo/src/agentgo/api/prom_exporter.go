@@ -33,6 +33,7 @@ func formatLabels(labels map[string]string) string {
 	if len(part) == 0 {
 		return ""
 	}
+	sort.Strings(part)
 	return fmt.Sprintf("{%s}", strings.Join(part, ","))
 }
 
