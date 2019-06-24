@@ -70,39 +70,39 @@ func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}
 	var cpuOther float64
 	var cpuUsed float64
 	for metricName, value := range fields {
-		finalMetricName := measurement + strings.Replace(metricName, "usage", "", -1)
-		if finalMetricName == "cpu_irq" {
-			finalMetricName = "cpu_interrupt"
-		} else if finalMetricName == "cpu_iowait" {
-			finalMetricName = "cpu_wait"
+		finalMetricName := strings.Replace(metricName, "usage_", "", -1)
+		if finalMetricName == "irq" {
+			finalMetricName = "interrupt"
+		} else if finalMetricName == "iowait" {
+			finalMetricName = "wait"
 		}
 		finalFields[finalMetricName] = value
 		switch finalMetricName {
-		case "cpu_user":
+		case "user":
 			valuef := value.(float64)
 			cpuUsed += valuef
-		case "cpu_nice":
+		case "nice":
 			valuef := value.(float64)
 			cpuOther += valuef
-		case "cpu_system":
+		case "system":
 			valuef := value.(float64)
 			cpuUsed += valuef
-		case "cpu_interrupt":
-			valuef := value.(float64)
-			cpuUsed += valuef
-			cpuOther += valuef
-		case "cpu_softirq":
+		case "interrupt":
 			valuef := value.(float64)
 			cpuUsed += valuef
 			cpuOther += valuef
-		case "cpu_steal":
+		case "softirq":
+			valuef := value.(float64)
+			cpuUsed += valuef
+			cpuOther += valuef
+		case "steal":
 			valuef := value.(float64)
 			cpuUsed += valuef
 			cpuOther += valuef
 		}
 	}
-	finalFields["cpu_other"] = cpuOther
-	finalFields["cpu_used"] = cpuUsed
+	finalFields["other"] = cpuOther
+	finalFields["used"] = cpuUsed
 	a.accumulator.AddGauge(measurement, finalFields, nil, t...)
 }
 

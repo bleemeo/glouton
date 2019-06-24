@@ -171,7 +171,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 		valuef, err := convertInterface(value)
 		if err == nil {
 			a.metricPointSlice = append(a.metricPointSlice, MetricPoint{
-				Name:  metricName,
+				Name:  measurement + "_" + metricName,
 				Tags:  tags,
 				Type:  metricType,
 				Value: valuef,

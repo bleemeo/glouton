@@ -105,9 +105,9 @@ func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}
 		finalTags["item"] = item
 	}
 	for metricName, value := range fields {
-		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "disk_used_percent" {
-			finalMetricName = "disk_used_perc"
+		finalMetricName := metricName
+		if finalMetricName == "used_percent" {
+			finalMetricName = "used_perc"
 		}
 		finalFields[finalMetricName] = value
 	}

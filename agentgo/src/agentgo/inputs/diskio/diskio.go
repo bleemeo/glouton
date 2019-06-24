@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
-	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -122,17 +121,17 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 	}
 
 	for metricName, value := range fields {
-		finalMetricName := strings.Replace(measurement+"_"+metricName, "disk", "", 1)
+		finalMetricName := metricName
 		switch metricName {
 		case "read_bytes", "read_time", "reads", "write_bytes", "writes", "write_time", "io_time":
 			pastMetricSave, ok := a.pastValues[item][metricName]
 			a.currentValues[item][metricName] = metricPoint{value.(uint64), metricTime}
 			if ok {
 				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
-				if finalMetricName == "io_io_time" {
-					finalMetricName = "io_time"
+				if finalMetricName == "io_time" {
+					finalMetricName = "time"
 					// io_time is millisecond per second.
-					finalFields["io_utilization"] = valuef / 1000. * 100.
+					finalFields["utilization"] = valuef / 1000. * 100.
 				}
 				finalFields[finalMetricName] = valuef
 			} else {
@@ -144,7 +143,7 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 			finalFields[finalMetricName] = value
 		}
 	}
-	a.accumulator.AddGauge(measurement, finalFields, finalTags, t...)
+	a.accumulator.AddGauge("io", finalFields, finalTags, t...)
 }
 
 // AddError add an error to the accumulator

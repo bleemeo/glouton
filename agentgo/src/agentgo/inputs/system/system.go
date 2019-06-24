@@ -65,10 +65,10 @@ type accumulator struct {
 func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
-		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "system_n_users" {
-			finalMetricName = "users_logged"
-		} else if finalMetricName == "system_n_cpus" {
+		finalMetricName := metricName
+		if finalMetricName == "n_users" {
+			finalMetricName = "logged"
+		} else if finalMetricName == "n_cpus" {
 			continue
 		}
 		finalFields[finalMetricName] = value

@@ -91,13 +91,13 @@ func (a *accumulator) AddFields(measurement string, fields map[string]interface{
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		deriveValue := false
-		finalMetricName := measurement + "_" + metricName
+		finalMetricName := metricName
 		switch metricName {
 		case "requests":
-			finalMetricName = "nginx_requests"
+			finalMetricName = "requests"
 			deriveValue = true
 		case "accepts":
-			finalMetricName = "nginx_connections_accepted"
+			finalMetricName = "connections_accepted"
 			deriveValue = true
 		case "handled":
 			deriveValue = true

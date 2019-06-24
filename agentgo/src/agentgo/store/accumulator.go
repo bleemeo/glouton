@@ -90,7 +90,7 @@ func (a *accumulator) addMetrics(measurement string, fields map[string]interface
 	a.store.lock.Lock()
 	defer a.store.lock.Unlock()
 	for name, value := range fields {
-		labels["__name__"] = name
+		labels["__name__"] = measurement + "_" + name
 		value, err := convertInterface(value)
 		if err != nil {
 			log.Panicf("convertInterface failed. Ignoring point: %s", err)

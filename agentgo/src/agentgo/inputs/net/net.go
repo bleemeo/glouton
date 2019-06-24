@@ -101,14 +101,14 @@ func (a *accumulator) AddCounter(measurement string, fields map[string]interface
 
 	for metricName, value := range fields {
 		var valuef uint64
-		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "net_bytes_sent" {
+		finalMetricName := metricName
+		if finalMetricName == "bytes_sent" {
 			valuef = value.(uint64)
-			finalMetricName = "net_bits_sent"
+			finalMetricName = "bits_sent"
 			valuef = 8 * valuef
-		} else if finalMetricName == "net_bytes_recv" {
+		} else if finalMetricName == "bytes_recv" {
 			valuef = value.(uint64)
-			finalMetricName = "net_bits_recv"
+			finalMetricName = "bits_recv"
 			valuef = 8 * valuef
 		} else {
 			valuef = value.(uint64)

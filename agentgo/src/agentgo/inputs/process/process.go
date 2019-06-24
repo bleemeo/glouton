@@ -66,28 +66,28 @@ type accumulator struct {
 func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
-		finalMetricName := measurement + "_" + metricName
+		finalMetricName := metricName
 		switch metricName {
 		case "blocked":
-			finalMetricName = "process_status_blocked"
+			finalMetricName = "status_blocked"
 		case "running":
-			finalMetricName = "process_status_running"
+			finalMetricName = "status_running"
 		case "sleeping":
-			finalMetricName = "process_status_sleeping"
+			finalMetricName = "status_sleeping"
 		case "stopped":
-			finalMetricName = "process_status_stopped"
+			finalMetricName = "status_stopped"
 		case "total":
-			finalMetricName = "process_total"
+			finalMetricName = "total"
 		case "zombies":
-			finalMetricName = "process_status_zombies"
+			finalMetricName = "status_zombies"
 		case "dead":
 			continue
 		case "idle":
 			continue
 		case "paging":
-			finalMetricName = "process_status_paging"
+			finalMetricName = "status_paging"
 		case "total_threads":
-			finalMetricName = "process_total_threads"
+			finalMetricName = "total_threads"
 		case "unknown":
 			continue
 		}

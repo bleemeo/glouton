@@ -91,32 +91,32 @@ func (a *accumulator) AddFields(measurement string, fields map[string]interface{
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
 		deriveValue := false
-		finalMetricName := measurement + "_" + metricName
+		finalMetricName := metricName
 		switch metricName {
 		case "evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses":
 			deriveValue = true
 		case "keyspace_hitrate", "pubsub_channels", "pubsub_patterns", "uptime":
 			// Keep name unchanged.
 		case "connected_slaves":
-			finalMetricName = "redis_current_connections_slaves"
+			finalMetricName = "current_connections_slaves"
 		case "clients":
-			finalMetricName = "redis_current_connections_clients"
+			finalMetricName = "current_connections_clients"
 		case "used_memory":
-			finalMetricName = "redis_memory"
+			finalMetricName = "memory"
 		case "used_memory_lua":
-			finalMetricName = "redis_memory_lua"
+			finalMetricName = "memory_lua"
 		case "used_memory_peak":
-			finalMetricName = "redis_memory_peak"
+			finalMetricName = "memory_peak"
 		case "used_memory_rss":
-			finalMetricName = "redis_memory_rss"
+			finalMetricName = "memory_rss"
 		case "total_connections_received":
-			finalMetricName = "redis_total_connections"
+			finalMetricName = "total_connections"
 			deriveValue = true
 		case "total_commands_processed":
-			finalMetricName = "redis_total_operations"
+			finalMetricName = "total_operations"
 			deriveValue = true
 		case "rdb_changes_since_last_save":
-			finalMetricName = "redis_volatile_changes"
+			finalMetricName = "volatile_changes"
 		default:
 			continue
 		}

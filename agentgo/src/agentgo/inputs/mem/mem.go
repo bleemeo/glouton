@@ -66,12 +66,12 @@ type accumulator struct {
 func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
-		finalMetricName := measurement + "_" + metricName
+		finalMetricName := metricName
 		switch metricName {
 		case "available_percent":
-			finalMetricName = "mem_available_perc"
+			finalMetricName = "available_perc"
 		case "used_percent":
-			finalMetricName = "mem_used_perc"
+			finalMetricName = "used_perc"
 		// All next cases are metric ignored. They are on different case to
 		// avoid very long line.
 		case "active", "inactive", "wired", "commit_limit", "committed_as", "dirty", "high_free", "high_total":

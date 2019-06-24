@@ -65,9 +65,9 @@ type accumulator struct {
 func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	finalFields := make(map[string]interface{})
 	for metricName, value := range fields {
-		finalMetricName := measurement + "_" + metricName
-		if finalMetricName == "swap_used_percent" {
-			finalMetricName = "swap_used_perc"
+		finalMetricName := metricName
+		if finalMetricName == "used_percent" {
+			finalMetricName = "used_perc"
 		}
 		finalFields[finalMetricName] = value
 	}
