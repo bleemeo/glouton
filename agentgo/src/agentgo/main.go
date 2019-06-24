@@ -20,6 +20,7 @@ import (
 	"agentgo/inputs/system"
 	"agentgo/store"
 	"agentgo/types"
+	"agentgo/api"
 
 	"github.com/influxdata/telegraf"
 )
@@ -53,6 +54,7 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 func main() {
 	log.Println("Starting agent")
 	db := store.New()
+	api := api.New()
 	coll := collector.New(db.Accumulator())
 
 	coll.AddInput(panicOnError(system.New()))
@@ -85,6 +87,9 @@ func main() {
 		coll.Run(ctx)
 	}()
 	go stats(db)
+
+	log.Println("Starting API")
+	go api.Run()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
