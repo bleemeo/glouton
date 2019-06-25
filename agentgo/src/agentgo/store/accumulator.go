@@ -103,15 +103,15 @@ func (a *accumulator) addMetrics(measurement string, fields map[string]interface
 
 // convertInterface convert the interface type in float64
 func convertInterface(value interface{}) (float64, error) {
-	switch value.(type) {
+	switch value := value.(type) {
 	case uint64:
-		return float64(value.(uint64)), nil
+		return float64(value), nil
 	case float64:
-		return value.(float64), nil
+		return value, nil
 	case int:
-		return float64(value.(int)), nil
+		return float64(value), nil
 	case int64:
-		return float64(value.(int64)), nil
+		return float64(value), nil
 	default:
 		var valueType = reflect.TypeOf(value)
 		return float64(0), fmt.Errorf("Value type not supported :(%v)", valueType)

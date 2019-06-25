@@ -37,7 +37,7 @@ func (c *Collector) AddInput(input telegraf.Input) int {
 	id := 1
 	_, ok := c.inputs[id]
 	for ok {
-		id = id + 1
+		id++
 		if id == 0 {
 			panic("too many inputs in the collectors. Unable to find new slot")
 		}

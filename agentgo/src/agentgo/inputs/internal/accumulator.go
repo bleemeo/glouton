@@ -38,7 +38,7 @@ type Accumulator struct {
 	// * completly drop this base (e.g. blacklisting for disk/network interface/...))
 	RenameGlobal func(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool)
 
-	// DerivatedMetrics is the list of metric counter to derivate
+	// DerivatedMetrics is the list of metric counter to derive
 	DerivatedMetrics []string
 
 	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
@@ -62,17 +62,17 @@ func (a *Accumulator) PrepareGather() {
 
 // convertToFloat convert the interface type in float64
 func convertToFloat(value interface{}) (valueFloat float64, err error) {
-	switch value.(type) {
+	switch value := value.(type) {
 	case uint64:
-		valueFloat = float64(value.(uint64))
+		valueFloat = float64(value)
 	case float64:
-		valueFloat = value.(float64)
+		valueFloat = value
 	case int:
-		valueFloat = float64(value.(int))
+		valueFloat = float64(value)
 	case int64:
-		valueFloat = float64(value.(int64))
+		valueFloat = float64(value)
 	case bool:
-		if value.(bool) {
+		if value {
 			valueFloat = 1.0
 		} else {
 			valueFloat = 0.0
@@ -86,10 +86,9 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 
 // rateAsFloat compute the delta/duration between two points
 func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error) {
-	switch pastPoint.Value.(type) {
+	switch pastValue := pastPoint.Value.(type) {
 	case uint64:
 		// Special case here. If pastPoint if bigger that currentPoint, the unsigned int will overflow.
-		pastValue := pastPoint.Value.(uint64)
 		currentValue := currentPoint.Value.(uint64)
 		if pastValue > currentValue {
 			value = -float64(pastValue - currentValue)
@@ -97,11 +96,11 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 			value = float64(currentValue - pastValue)
 		}
 	case int:
-		value = float64(currentPoint.Value.(int) - pastPoint.Value.(int))
+		value = float64(currentPoint.Value.(int) - pastValue)
 	case int64:
-		value = float64(currentPoint.Value.(int64) - pastPoint.Value.(int64))
+		value = float64(currentPoint.Value.(int64) - pastValue)
 	default:
-		pastValue, err := convertToFloat(pastPoint.Value)
+		pastValueFloat, err := convertToFloat(pastPoint.Value)
 		if err != nil {
 			return 0.0, err
 		}
@@ -109,9 +108,9 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 		if err != nil {
 			return 0.0, err
 		}
-		value = currentValue - pastValue
+		value = currentValue - pastValueFloat
 	}
-	value = value / float64(currentPoint.Time.Unix()-pastPoint.Time.Unix())
+	value /= float64(currentPoint.Time.Unix() - pastPoint.Time.Unix())
 	return
 }
 

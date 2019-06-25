@@ -12,7 +12,7 @@ import (
 	"agentgo/types"
 )
 
-// Store implement an interface to retrive metrics and metric points.
+// Store implement an interface to retrieve metrics and metric points.
 //
 // See methods GetMetrics and GetMetricPoints
 type Store struct {
@@ -145,7 +145,7 @@ func (s *Store) metricGetOrCreate(labels map[string]string) metric {
 	newID := 1
 	_, ok := s.metrics[newID]
 	for ok {
-		newID = newID + 1
+		newID++
 		if newID == 0 {
 			panic("too many metric in the store. Unable to find new slot")
 		}

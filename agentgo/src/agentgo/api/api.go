@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/99designs/gqlgen/handler"
 	"agentgo/types"
-)
 
+	"github.com/99designs/gqlgen/handler"
+)
 
 const defaultPort = "8015"
 
@@ -19,10 +19,10 @@ type storeInterface interface {
 // API : Structure that contains API's port
 type API struct {
 	Port string
-	db storeInterface
+	db   storeInterface
 }
 
-// New : Function that instanciate a new API's port from environment variable or from a default port
+// New : Function that instantiate a new API's port from environment variable or from a default port
 func New(db storeInterface) *API {
 	port := os.Getenv("PORT")
 	if port == "" {
