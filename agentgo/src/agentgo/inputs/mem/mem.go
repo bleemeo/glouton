@@ -42,7 +42,7 @@ func New() (i telegraf.Input, err error) {
 	return
 }
 
-func transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
 	for metricName, value := range fields {
 		switch metricName {
 		case "available_percent":

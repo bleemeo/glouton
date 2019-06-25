@@ -52,10 +52,9 @@ func New(whitelist []string) (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: diskioInput,
 			Accumulator: internal.Accumulator{
-				NewMeasurement:   "io",
+				RenameGlobal:     dt.renameGlobal,
 				DerivatedMetrics: []string{"read_bytes", "read_time", "reads", "write_bytes", "writes", "write_time", "io_time"},
 				TransformMetrics: dt.transformMetrics,
-				TransformTags:    dt.transformTags,
 			},
 		}
 	} else {
@@ -64,7 +63,8 @@ func New(whitelist []string) (i telegraf.Input, err error) {
 	return
 }
 
-func (dt diskIOTransformer) transformTags(tags map[string]string) (newTags map[string]string, drop bool) {
+func (dt diskIOTransformer) renameGlobal(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
+	newMeasurement = "io"
 	newTags = make(map[string]string)
 	item, ok := tags["name"]
 	if !ok {
@@ -86,7 +86,7 @@ func (dt diskIOTransformer) transformTags(tags map[string]string) (newTags map[s
 	return
 }
 
-func (dt diskIOTransformer) transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+func (dt diskIOTransformer) transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
 	if ioTime, ok := fields["io_time"]; ok {
 		delete(fields, "io_time")
 		fields["time"] = ioTime

@@ -37,8 +37,8 @@ func New() (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: cpuInput,
 			Accumulator: internal.Accumulator{
+				RenameGlobal:     renameGlobal,
 				TransformMetrics: transformMetrics,
-				TransformTags:    transformTags,
 			},
 		}
 	} else {
@@ -47,11 +47,11 @@ func New() (i telegraf.Input, err error) {
 	return
 }
 
-func transformTags(tags map[string]string) (map[string]string, bool) {
-	return nil, false
+func renameGlobal(measurement string, tags map[string]string) (string, map[string]string, bool) {
+	return measurement, nil, false
 }
 
-func transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
 	finalFields := make(map[string]float64)
 	var cpuOther float64
 	var cpuUsed float64

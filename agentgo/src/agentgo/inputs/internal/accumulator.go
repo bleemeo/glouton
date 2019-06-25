@@ -21,31 +21,31 @@ type metricPoint struct {
 //
 // Transformations are implemented via a callback function
 // The processing will be the following:
-// * Fields should be set (and not modified during run)
-// * PrepareGather should be called.
+// * PrepareGather must be called.
 // * The Gather() method should be called
-// * If TransformTags is set, it's applied. TransformTags must not mutate the map but create a new copy of the tags map.
+// * If TransformGlobal is set, it's applied. RenameTransform allow to rename measurement and alter tags. It could also completly drop
+//   a batch of metrics
 // * Any metrics matching DerivatedMetrics are derivated. Metric seen for the first time are dropped.
-// * Then TransformMetrics is called on a float64 version of fields (so TransformMetrics may mutate the map)
+// * Then TransformMetrics is called on a float64 version of fields. It may apply per-metric transformation
 type Accumulator struct {
 	Accumulator telegraf.Accumulator
 
-	// NewMeasurement (if set) is the overridden measurment name for all metric
-	NewMeasurement string
-
-	// NewMeasurementMap (if set) override the measurment for each metric. It map a metric name to the target measurment name.
-	// If a metric name is not in this map, the default measurement name (or NewMeasurement if set) is used.
-	NewMeasurementMap map[string]string
+	// RenameGlobal apply global rename on all metrics from one batch.
+	// It may:
+	// * change the measurement name (prefix of metric name)
+	// * alter tags (if tags are modified, a new *copy* of input tags map must be returned)
+	// * completly drop this base (e.g. blacklisting for disk/network interface/...))
+	RenameGlobal func(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool)
 
 	// DerivatedMetrics is the list of metric counter to derivate
 	DerivatedMetrics []string
 
-	// TransformTags take a list of tags and could change the name/value or even add/delete some tags.
-	// If the boolean is true, it will drop the whole Gather (useful for blacklisting from disk/network interface/...)
-	TransformTags func(tags map[string]string) (newTags map[string]string, drop bool)
+	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
+	// tags & measurement are given as indication and should not be mutated.
+	TransformMetrics func(measurement string, fields map[string]float64, tags map[string]string) map[string]float64
 
-	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points
-	TransformMetrics func(fields map[string]float64, tags map[string]string) map[string]float64
+	// RenameMetrics apply a per-metric rename of metric name and measurement. tags can't be mutated
+	RenameMetrics func(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string)
 
 	// map a flattened tags to a map[fieldName]value
 	currentValues map[string]map[string]metricPoint
@@ -160,10 +160,9 @@ func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[stri
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
 
 func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	newTags := tags
-	if a.TransformTags != nil {
+	if a.RenameGlobal != nil {
 		drop := false
-		newTags, drop = a.TransformTags(newTags)
+		measurement, tags, drop = a.RenameGlobal(measurement, tags)
 		if drop {
 			return
 		}
@@ -175,37 +174,29 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		metricTime = t[0]
 	}
 
-	newMeasurement := measurement
-	if a.NewMeasurement != "" {
-		newMeasurement = a.NewMeasurement
-	}
-
-	newFields := a.applyDerivate(fields, tags, metricTime)
+	floatFields := a.applyDerivate(fields, tags, metricTime)
 	if a.TransformMetrics != nil {
-		newFields = a.TransformMetrics(newFields, newTags)
+		floatFields = a.TransformMetrics(measurement, floatFields, tags)
 	}
 
-	if a.NewMeasurementMap != nil {
-		newFields2 := make(map[string]map[string]interface{})
-		for metricName, value := range newFields {
-			measurementName, ok := a.NewMeasurementMap[metricName]
-			if !ok {
-				measurementName = newMeasurement
+	fieldsPerMeasurements := make(map[string]map[string]interface{})
+	if a.RenameMetrics != nil {
+		for metricName, value := range floatFields {
+			newMeasurement, newMetricName := a.RenameMetrics(measurement, metricName, tags)
+			if _, ok := fieldsPerMeasurements[newMeasurement]; !ok {
+				fieldsPerMeasurements[newMeasurement] = make(map[string]interface{})
 			}
-			if _, ok := newFields2[measurementName]; !ok {
-				newFields2[measurementName] = make(map[string]interface{})
-			}
-			newFields2[measurementName][metricName] = value
-		}
-		for measurementName, fields := range newFields2 {
-			finalFunc(measurementName, fields, newTags, metricTime)
+			fieldsPerMeasurements[newMeasurement][newMetricName] = value
 		}
 	} else {
-		newFields2 := make(map[string]interface{})
-		for k, v := range newFields {
-			newFields2[k] = v
+		currentMap := make(map[string]interface{})
+		for k, v := range floatFields {
+			currentMap[k] = v
 		}
-		finalFunc(newMeasurement, newFields2, newTags, metricTime)
+		fieldsPerMeasurements[measurement] = currentMap
+	}
+	for measurementName, fields := range fieldsPerMeasurements {
+		finalFunc(measurementName, fields, tags, metricTime)
 	}
 }
 
