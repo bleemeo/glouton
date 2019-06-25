@@ -14,6 +14,7 @@ import (
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/disk"
 	"agentgo/inputs/diskio"
+	"agentgo/inputs/docker"
 	"agentgo/inputs/mem"
 	"agentgo/inputs/net"
 	"agentgo/inputs/process"
@@ -70,6 +71,7 @@ func main() {
 			"nvme.*",
 		},
 	)))
+	coll.AddInput(panicOnError(docker.New()))
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
