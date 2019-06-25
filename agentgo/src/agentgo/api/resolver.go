@@ -8,8 +8,8 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 ) // THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
 
-type Resolver struct{
-	api API
+type Resolver struct {
+	api *API
 }
 
 func (r *Resolver) Query() QueryResolver {

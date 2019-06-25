@@ -30,12 +30,12 @@ func New(db storeInterface) *API {
 	}
 	api := &API{Port: port, db: db}
 	http.HandleFunc("/metrics", api.promExporter)
+	http.Handle("/", handler.Playground("GraphQL playground", "/graphql"))
+	http.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	return api
 }
 
 // Run : Starts our API
 func (api API) Run() {
-	http.Handle("/", handler.Playground("GraphQL playground", "/graphql"))
-	http.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	log.Fatal(http.ListenAndServe(":"+api.Port, nil))
 }
