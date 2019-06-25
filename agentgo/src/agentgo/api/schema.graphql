@@ -3,11 +3,17 @@ type Label {
   value: String!
 }
 
-type Metric {
-  labels: [Label!]!
+type Point {
+  time: String!
+  value: String!
 }
 
-input Labels {
+type Metric {
+  labels: [Label!]!
+  points: [Point!]
+}
+
+input LabelsInput {
   labels: [LabelInput]!
 }
 
@@ -17,5 +23,6 @@ input LabelInput {
 }
 
 type Query {
-  metrics(input: Labels!): [Metric!]!
+  metrics(input: LabelsInput!): [Metric!]!
+  points(input: LabelsInput!, start: String!, end: String!): [Metric!]!
 }

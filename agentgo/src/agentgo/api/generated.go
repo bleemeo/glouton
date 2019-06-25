@@ -48,15 +48,23 @@ type ComplexityRoot struct {
 
 	Metric struct {
 		Labels func(childComplexity int) int
+		Points func(childComplexity int) int
+	}
+
+	Point struct {
+		Time  func(childComplexity int) int
+		Value func(childComplexity int) int
 	}
 
 	Query struct {
-		Metrics func(childComplexity int, input Labels) int
+		Metrics func(childComplexity int, input LabelsInput) int
+		Points  func(childComplexity int, input LabelsInput, start string, end string) int
 	}
 }
 
 type QueryResolver interface {
-	Metrics(ctx context.Context, input Labels) ([]*Metric, error)
+	Metrics(ctx context.Context, input LabelsInput) ([]*Metric, error)
+	Points(ctx context.Context, input LabelsInput, start string, end string) ([]*Metric, error)
 }
 
 type executableSchema struct {
@@ -95,6 +103,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Metric.Labels(childComplexity), true
 
+	case "Metric.points":
+		if e.complexity.Metric.Points == nil {
+			break
+		}
+
+		return e.complexity.Metric.Points(childComplexity), true
+
+	case "Point.time":
+		if e.complexity.Point.Time == nil {
+			break
+		}
+
+		return e.complexity.Point.Time(childComplexity), true
+
+	case "Point.value":
+		if e.complexity.Point.Value == nil {
+			break
+		}
+
+		return e.complexity.Point.Value(childComplexity), true
+
 	case "Query.metrics":
 		if e.complexity.Query.Metrics == nil {
 			break
@@ -105,7 +134,19 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Metrics(childComplexity, args["input"].(Labels)), true
+		return e.complexity.Query.Metrics(childComplexity, args["input"].(LabelsInput)), true
+
+	case "Query.points":
+		if e.complexity.Query.Points == nil {
+			break
+		}
+
+		args, err := ec.field_Query_points_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Query.Points(childComplexity, args["input"].(LabelsInput), args["start"].(string), args["end"].(string)), true
 
 	}
 	return 0, false
@@ -176,11 +217,17 @@ var parsedSchema = gqlparser.MustLoadSchema(
   value: String!
 }
 
-type Metric {
-  labels: [Label!]!
+type Point {
+  time: String!
+  value: String!
 }
 
-input Labels {
+type Metric {
+  labels: [Label!]!
+  points: [Point!]
+}
+
+input LabelsInput {
   labels: [LabelInput]!
 }
 
@@ -190,7 +237,8 @@ input LabelInput {
 }
 
 type Query {
-  metrics(input: Labels!): [Metric!]!
+  metrics(input: LabelsInput!): [Metric!]!
+  points(input: LabelsInput!, start: String!, end: String!): [Metric!]!
 }`},
 )
 
@@ -215,14 +263,44 @@ func (ec *executionContext) field_Query___type_args(ctx context.Context, rawArgs
 func (ec *executionContext) field_Query_metrics_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 Labels
+	var arg0 LabelsInput
 	if tmp, ok := rawArgs["input"]; ok {
-		arg0, err = ec.unmarshalNLabels2agentgoᚋapiᚐLabels(ctx, tmp)
+		arg0, err = ec.unmarshalNLabelsInput2agentgoᚋapiᚐLabelsInput(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
 	args["input"] = arg0
+	return args, nil
+}
+
+func (ec *executionContext) field_Query_points_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 LabelsInput
+	if tmp, ok := rawArgs["input"]; ok {
+		arg0, err = ec.unmarshalNLabelsInput2agentgoᚋapiᚐLabelsInput(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	var arg1 string
+	if tmp, ok := rawArgs["start"]; ok {
+		arg1, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["start"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["end"]; ok {
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["end"] = arg2
 	return args, nil
 }
 
@@ -339,6 +417,84 @@ func (ec *executionContext) _Metric_labels(ctx context.Context, field graphql.Co
 	return ec.marshalNLabel2ᚕᚖagentgoᚋapiᚐLabel(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Metric_points(ctx context.Context, field graphql.CollectedField, obj *Metric) graphql.Marshaler {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() { ec.Tracer.EndFieldExecution(ctx) }()
+	rctx := &graphql.ResolverContext{
+		Object:   "Metric",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp := ec.FieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Points, nil
+	})
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.([]*Point)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOPoint2ᚕᚖagentgoᚋapiᚐPoint(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Point_time(ctx context.Context, field graphql.CollectedField, obj *Point) graphql.Marshaler {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() { ec.Tracer.EndFieldExecution(ctx) }()
+	rctx := &graphql.ResolverContext{
+		Object:   "Point",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp := ec.FieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Time, nil
+	})
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Point_value(ctx context.Context, field graphql.CollectedField, obj *Point) graphql.Marshaler {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() { ec.Tracer.EndFieldExecution(ctx) }()
+	rctx := &graphql.ResolverContext{
+		Object:   "Point",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp := ec.FieldMiddleware(ctx, obj, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Value, nil
+	})
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Query_metrics(ctx context.Context, field graphql.CollectedField) graphql.Marshaler {
 	ctx = ec.Tracer.StartFieldExecution(ctx, field)
 	defer func() { ec.Tracer.EndFieldExecution(ctx) }()
@@ -359,7 +515,41 @@ func (ec *executionContext) _Query_metrics(ctx context.Context, field graphql.Co
 	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
 	resTmp := ec.FieldMiddleware(ctx, nil, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Metrics(rctx, args["input"].(Labels))
+		return ec.resolvers.Query().Metrics(rctx, args["input"].(LabelsInput))
+	})
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*Metric)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNMetric2ᚕᚖagentgoᚋapiᚐMetric(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_points(ctx context.Context, field graphql.CollectedField) graphql.Marshaler {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() { ec.Tracer.EndFieldExecution(ctx) }()
+	rctx := &graphql.ResolverContext{
+		Object:   "Query",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Query_points_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	rctx.Args = args
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp := ec.FieldMiddleware(ctx, nil, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Points(rctx, args["input"].(LabelsInput), args["start"].(string), args["end"].(string))
 	})
 	if resTmp == nil {
 		if !ec.HasError(rctx) {
@@ -1283,8 +1473,8 @@ func (ec *executionContext) unmarshalInputLabelInput(ctx context.Context, v inte
 	return it, nil
 }
 
-func (ec *executionContext) unmarshalInputLabels(ctx context.Context, v interface{}) (Labels, error) {
-	var it Labels
+func (ec *executionContext) unmarshalInputLabelsInput(ctx context.Context, v interface{}) (LabelsInput, error) {
+	var it LabelsInput
 	var asMap = v.(map[string]interface{})
 
 	for k, v := range asMap {
@@ -1357,6 +1547,40 @@ func (ec *executionContext) _Metric(ctx context.Context, sel ast.SelectionSet, o
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "points":
+			out.Values[i] = ec._Metric_points(ctx, field, obj)
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var pointImplementors = []string{"Point"}
+
+func (ec *executionContext) _Point(ctx context.Context, sel ast.SelectionSet, obj *Point) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, pointImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Point")
+		case "time":
+			out.Values[i] = ec._Point_time(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "value":
+			out.Values[i] = ec._Point_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -1392,6 +1616,20 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_metrics(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "points":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_points(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -1742,8 +1980,8 @@ func (ec *executionContext) unmarshalNLabelInput2ᚕᚖagentgoᚋapiᚐLabelInpu
 	return res, nil
 }
 
-func (ec *executionContext) unmarshalNLabels2agentgoᚋapiᚐLabels(ctx context.Context, v interface{}) (Labels, error) {
-	return ec.unmarshalInputLabels(ctx, v)
+func (ec *executionContext) unmarshalNLabelsInput2agentgoᚋapiᚐLabelsInput(ctx context.Context, v interface{}) (LabelsInput, error) {
+	return ec.unmarshalInputLabelsInput(ctx, v)
 }
 
 func (ec *executionContext) marshalNMetric2agentgoᚋapiᚐMetric(ctx context.Context, sel ast.SelectionSet, v Metric) graphql.Marshaler {
@@ -1795,6 +2033,20 @@ func (ec *executionContext) marshalNMetric2ᚖagentgoᚋapiᚐMetric(ctx context
 		return graphql.Null
 	}
 	return ec._Metric(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNPoint2agentgoᚋapiᚐPoint(ctx context.Context, sel ast.SelectionSet, v Point) graphql.Marshaler {
+	return ec._Point(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNPoint2ᚖagentgoᚋapiᚐPoint(ctx context.Context, sel ast.SelectionSet, v *Point) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Point(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNString2string(ctx context.Context, v interface{}) (string, error) {
@@ -2070,6 +2322,46 @@ func (ec *executionContext) unmarshalOLabelInput2ᚖagentgoᚋapiᚐLabelInput(c
 	}
 	res, err := ec.unmarshalOLabelInput2agentgoᚋapiᚐLabelInput(ctx, v)
 	return &res, err
+}
+
+func (ec *executionContext) marshalOPoint2ᚕᚖagentgoᚋapiᚐPoint(ctx context.Context, sel ast.SelectionSet, v []*Point) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		rctx := &graphql.ResolverContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithResolverContext(ctx, rctx)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNPoint2ᚖagentgoᚋapiᚐPoint(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+	return ret
 }
 
 func (ec *executionContext) unmarshalOString2string(ctx context.Context, v interface{}) (string, error) {

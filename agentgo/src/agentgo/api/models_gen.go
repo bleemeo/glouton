@@ -12,10 +12,16 @@ type LabelInput struct {
 	Value string `json:"value"`
 }
 
-type Labels struct {
+type LabelsInput struct {
 	Labels []*LabelInput `json:"labels"`
 }
 
 type Metric struct {
 	Labels []*Label `json:"labels"`
+	Points []*Point `json:"points"`
+}
+
+type Point struct {
+	Time  string `json:"time"`
+	Value string `json:"value"`
 }
