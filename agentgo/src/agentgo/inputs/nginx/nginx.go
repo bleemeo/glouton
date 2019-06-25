@@ -19,28 +19,16 @@
 package nginx
 
 import (
+	"agentgo/inputs/internal"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/nginx"
 )
 
-type metricPoint struct {
-	value      uint64
-	metricTime time.Time
-}
-
-// Input countains input information about Mysql
-type Input struct {
-	telegraf.Input
-	pastValues map[string]metricPoint // metricName => metricPoint
-}
-
 // New initialise nginx.Input
-func New(url string) (i *Input, err error) {
+func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["nginx"]
 	if ok {
 		nginxInput, ok := input().(*nginx.Nginx)
@@ -48,9 +36,12 @@ func New(url string) (i *Input, err error) {
 			slice := append(make([]string, 0), url)
 			nginxInput.Urls = slice
 			nginxInput.InsecureSkipVerify = false
-			i = &Input{
-				nginxInput,
-				make(map[string]metricPoint),
+			i = &internal.Input{
+				Input: nginxInput,
+				Accumulator: internal.Accumulator{
+					DerivatedMetrics: []string{"requests", "accepts", "handled"},
+					TransformMetrics: transformMetrics,
+				},
 			}
 		} else {
 			err = errors.New("Telegraf \"nginx\" input type is not nginx.Nginx")
@@ -61,112 +52,19 @@ func New(url string) (i *Input, err error) {
 	return
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
-func (i *Input) Gather(acc telegraf.Accumulator) error {
-	nginxAccumulator := accumulator{
-		acc,
-		i.pastValues,
-		make(map[string]metricPoint),
-	}
-	err := i.Input.Gather(&nginxAccumulator)
-	i.pastValues = nginxAccumulator.currentValues
-	return err
-}
-
-// accumulator save the nginx metric from telegraf
-type accumulator struct {
-	accumulator   telegraf.Accumulator
-	pastValues    map[string]metricPoint
-	currentValues map[string]metricPoint
-}
-
-// AddFields adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	finalFields := make(map[string]interface{})
-	for metricName, value := range fields {
-		deriveValue := false
-		finalMetricName := metricName
+func transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+	for metricName := range fields {
 		switch metricName {
-		case "requests":
-			finalMetricName = "requests"
-			deriveValue = true
-		case "accepts":
-			finalMetricName = "connections_accepted"
-			deriveValue = true
-		case "handled":
-			deriveValue = true
-		case "reading", "writing", "waiting", "active":
-			//Keep name unchanged
+		case "accepts", "handled", "requests", "reading", "writing", "waiting", "active":
+			// Keep those metrics
 		default:
-			continue
-		}
-
-		if deriveValue {
-			var metricTime time.Time
-			if len(t) != 1 {
-				metricTime = time.Now()
-			} else {
-				metricTime = t[0]
-			}
-			pastMetricSave, ok := a.pastValues[finalMetricName]
-			a.currentValues[finalMetricName] = metricPoint{value.(uint64), metricTime}
-			if ok {
-				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
-				finalFields[finalMetricName] = valuef
-			} else {
-				continue
-			}
-		} else {
-			finalFields[finalMetricName] = value
+			delete(fields, metricName)
 		}
 	}
-	a.accumulator.AddFields(measurement, finalFields, nil, t...)
-}
-
-// AddError add an error to the accumulator
-func (a *accumulator) AddError(err error) {
-	a.accumulator.AddError(err)
-}
-
-// This functions are useless for nginx metric.
-// They are not implemented
-
-// AddGauge is useless for nginx
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddGauge not implemented for nginx accumulator"))
-}
-
-// AddCounter is useless for nginx
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for nginx accumulator"))
-}
-
-// AddSummary is useless for nginx
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for nginx accumulator"))
-}
-
-// AddHistogram is useless for nginx
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for nginx accumulator"))
-}
-
-// SetPrecision is useless for nginx
-func (a *accumulator) SetPrecision(precision time.Duration) {
-	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for nginx accumulator"))
-}
-
-func (a *accumulator) AddMetric(telegraf.Metric) {
-	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for nginx accumulator"))
-}
-
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for nginx accumulator"))
-	return nil
+	value, ok := fields["accepts"]
+	if ok {
+		delete(fields, "accepts")
+		fields["connections_accepted"] = value
+	}
+	return fields
 }

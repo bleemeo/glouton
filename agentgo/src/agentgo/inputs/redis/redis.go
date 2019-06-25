@@ -19,37 +19,28 @@
 package redis
 
 import (
+	"agentgo/inputs/internal"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
-type metricPoint struct {
-	value      int64
-	metricTime time.Time
-}
-
-// Input countains input information about Redis
-type Input struct {
-	telegraf.Input
-	pastValues map[string]metricPoint // metricName => metricPoint
-}
-
 // New initialise redis.Input
-func New(url string) (i *Input, err error) {
+func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["redis"]
 	if ok {
 		redisInput, ok := input().(*redis.Redis)
 		if ok {
 			slice := append(make([]string, 0), url)
 			redisInput.Servers = slice
-			i = &Input{
-				redisInput,
-				make(map[string]metricPoint),
+			i = &internal.Input{
+				Input: redisInput,
+				Accumulator: internal.Accumulator{
+					DerivatedMetrics: []string{"evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses", "total_commands_processed", "total_connections_received"},
+					TransformMetrics: transformMetrics,
+				},
 			}
 		} else {
 			err = errors.New("Telegraf \"redis\" input type is not redis.Redis")
@@ -60,41 +51,13 @@ func New(url string) (i *Input, err error) {
 	return
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
-func (i *Input) Gather(acc telegraf.Accumulator) error {
-	redisAccumulator := accumulator{
-		acc,
-		i.pastValues,
-		make(map[string]metricPoint),
-	}
-	err := i.Input.Gather(&redisAccumulator)
-	i.pastValues = redisAccumulator.currentValues
-	return err
-}
-
-// accumulator save the redis metric from telegraf
-type accumulator struct {
-	accumulator   telegraf.Accumulator
-	pastValues    map[string]metricPoint
-	currentValues map[string]metricPoint
-}
-
-// AddFields adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-// nolint: gocyclo
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	finalFields := make(map[string]interface{})
+func transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+	newFields := make(map[string]float64)
 	for metricName, value := range fields {
-		deriveValue := false
 		finalMetricName := metricName
 		switch metricName {
 		case "evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses":
-			deriveValue = true
+			// Keep name unchanged.
 		case "keyspace_hitrate", "pubsub_channels", "pubsub_patterns", "uptime":
 			// Keep name unchanged.
 		case "connected_slaves":
@@ -111,75 +74,14 @@ func (a *accumulator) AddFields(measurement string, fields map[string]interface{
 			finalMetricName = "memory_rss"
 		case "total_connections_received":
 			finalMetricName = "total_connections"
-			deriveValue = true
 		case "total_commands_processed":
 			finalMetricName = "total_operations"
-			deriveValue = true
 		case "rdb_changes_since_last_save":
 			finalMetricName = "volatile_changes"
 		default:
 			continue
 		}
-		if deriveValue {
-			var metricTime time.Time
-			if len(t) != 1 {
-				metricTime = time.Now()
-			} else {
-				metricTime = t[0]
-			}
-			pastMetricSave, ok := a.pastValues[finalMetricName]
-			a.currentValues[finalMetricName] = metricPoint{value.(int64), metricTime}
-			if ok {
-				valuef := (float64(value.(int64)) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
-				finalFields[finalMetricName] = valuef
-			} else {
-				continue
-			}
-		} else {
-			finalFields[finalMetricName] = value
-		}
+		newFields[finalMetricName] = value
 	}
-	a.accumulator.AddFields(measurement, finalFields, nil, t...)
-}
-
-// AddError add an error to the accumulator
-func (a *accumulator) AddError(err error) {
-	a.accumulator.AddError(err)
-}
-
-// This functions are useless for redis metric.
-// They are not implemented
-
-// AddGauge is useless for redis
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddGauge not implemented for redis accumulator"))
-}
-
-// AddCounter is useless for redis
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for redis accumulator"))
-}
-
-// AddSummary is useless for redis
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for redis accumulator"))
-}
-
-// AddHistogram is useless for redis
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for redis accumulator"))
-}
-
-// SetPrecision is useless for redis
-func (a *accumulator) SetPrecision(precision time.Duration) {
-	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for redis accumulator"))
-}
-
-func (a *accumulator) AddMetric(telegraf.Metric) {
-	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for redis accumulator"))
-}
-
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for redis accumulator"))
-	return nil
+	return newFields
 }

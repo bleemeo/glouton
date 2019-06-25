@@ -17,19 +17,16 @@
 package disk
 
 import (
+	"agentgo/inputs/internal"
 	"errors"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/disk"
 )
 
-// Input countains input information about disk
-type Input struct {
-	telegraf.Input
+type diskTransformer struct {
 	mountPoint string
 	blacklist  []string
 }
@@ -40,7 +37,7 @@ type Input struct {
 //
 // blacklist is a list of path-prefix to ignore. Path prefix means that "/mnt" and "/mnt/disk" both have "/mnt"
 // as prefix, but "/mnt-disk" does not.
-func New(mountPoint string, blacklist []string) (i *Input, err error) {
+func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	blacklistTrimed := make([]string, len(blacklist))
 	for i, v := range blacklist {
 		blacklistTrimed[i] = strings.TrimRight(v, "/")
@@ -51,10 +48,16 @@ func New(mountPoint string, blacklist []string) (i *Input, err error) {
 		diskInput.IgnoreFS = []string{
 			"tmpfs", "devtmpfs", "devfs", "overlay", "aufs", "squashfs",
 		}
-		i = &Input{
-			diskInput,
+		dt := diskTransformer{
 			strings.TrimRight(mountPoint, "/"),
 			blacklistTrimed,
+		}
+		i = &internal.Input{
+			Input: diskInput,
+			Accumulator: internal.Accumulator{
+				TransformMetrics: dt.transformMetrics,
+				TransformTags:    dt.transformTags,
+			},
 		}
 	} else {
 		err = errors.New("Telegraf don't have \"disk\" input")
@@ -62,96 +65,38 @@ func New(mountPoint string, blacklist []string) (i *Input, err error) {
 	return
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
-func (i *Input) Gather(acc telegraf.Accumulator) error {
-	diskAccumulator := accumulator{acc, i.mountPoint, i.blacklist}
-	err := i.Input.Gather(&diskAccumulator)
-	return err
-}
-
-// accumulator save the disk metric from telegraf
-type accumulator struct {
-	accumulator telegraf.Accumulator
-	mountPoint  string
-	blacklist   []string
-}
-
-// AddGauge adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	finalFields := make(map[string]interface{})
-	finalTags := make(map[string]string)
+func (dt diskTransformer) transformTags(tags map[string]string) (newTags map[string]string, drop bool) {
+	newTags = make(map[string]string)
 	item, ok := tags["path"]
-	if ok {
-		if !strings.HasPrefix(item, a.mountPoint) {
-			// partition don't start with mountPoint, so it's a parition
-			// which is only inside the container. Ignore it
+	if !ok {
+		drop = true
+		return
+	}
+	if !strings.HasPrefix(item, dt.mountPoint) {
+		// partition don't start with mountPoint, so it's a parition
+		// which is only inside the container. Ignore it
+		drop = true
+		return
+	}
+	item = strings.TrimPrefix(item, dt.mountPoint)
+	if item == "" {
+		item = "/"
+	}
+	for _, v := range dt.blacklist {
+		if v == item || strings.HasPrefix(item, v+"/") {
+			drop = true
 			return
 		}
-		item = strings.TrimPrefix(item, a.mountPoint)
-		if item == "" {
-			item = "/"
-		}
-		for _, v := range a.blacklist {
-			if v == item || strings.HasPrefix(item, v+"/") {
-				return
-			}
-		}
-		finalTags["item"] = item
 	}
-	for metricName, value := range fields {
-		finalMetricName := metricName
-		if finalMetricName == "used_percent" {
-			finalMetricName = "used_perc"
-		}
-		finalFields[finalMetricName] = value
+	newTags["item"] = item
+	return
+}
+
+func (dt diskTransformer) transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+	usedPerc, ok := fields["used_percent"]
+	delete(fields, "used_percent")
+	if ok {
+		fields["used_perc"] = usedPerc
 	}
-	a.accumulator.AddGauge(measurement, finalFields, finalTags, t...)
-}
-
-// AddError add an error to the Accumulator
-func (a *accumulator) AddError(err error) {
-	a.accumulator.AddError(err)
-}
-
-// This functions are useless for disk metric.
-// They are not implemented
-
-// AddFields is useless for disk
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddFields not implemented for disk accumulator"))
-}
-
-// AddCounter is useless for disk
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for disk accumulator"))
-}
-
-// AddSummary is useless for disk
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for disk accumulator"))
-}
-
-// AddHistogram is useless for disk
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for disk accumulator"))
-}
-
-// SetPrecision is useless for disk
-func (a *accumulator) SetPrecision(precision time.Duration) {
-	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for disk accumulator"))
-}
-
-func (a *accumulator) AddMetric(telegraf.Metric) {
-	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for disk accumulator"))
-}
-
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for disk accumulator"))
-	return nil
+	return fields
 }

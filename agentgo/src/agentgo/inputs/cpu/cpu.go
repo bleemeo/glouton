@@ -18,55 +18,41 @@ package cpu
 
 import (
 	"errors"
-	"fmt"
 	"strings"
-	"time"
+
+	"agentgo/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/cpu"
 )
 
-// Input countains input information about CPU
-type Input struct {
-	telegraf.Input
-}
-
 // New initialise cpu.Input
-func New() (i *Input, err error) {
+func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["cpu"]
 	if ok {
 		cpuInput := input().(*cpu.CPUStats)
 		cpuInput.PerCPU = false
 		cpuInput.CollectCPUTime = false
-		i = &Input{cpuInput}
+		i = &internal.Input{
+			Input: cpuInput,
+			Accumulator: internal.Accumulator{
+				TransformMetrics: transformMetrics,
+				TransformTags:    transformTags,
+			},
+		}
 	} else {
 		err = errors.New("Telegraf don't have \"cpu\" input")
 	}
 	return
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
-func (i *Input) Gather(acc telegraf.Accumulator) error {
-	cpuAccumulator := accumulator{acc}
-	err := i.Input.Gather(&cpuAccumulator)
-	return err
+func transformTags(tags map[string]string) (map[string]string, bool) {
+	return nil, false
 }
 
-// accumulator save the cpu metric from telegraf
-type accumulator struct {
-	accumulator telegraf.Accumulator
-}
-
-// AddGauge adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	finalFields := make(map[string]interface{})
+func transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+	finalFields := make(map[string]float64)
 	var cpuOther float64
 	var cpuUsed float64
 	for metricName, value := range fields {
@@ -79,71 +65,23 @@ func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}
 		finalFields[finalMetricName] = value
 		switch finalMetricName {
 		case "user":
-			valuef := value.(float64)
-			cpuUsed += valuef
+			cpuUsed += value
 		case "nice":
-			valuef := value.(float64)
-			cpuOther += valuef
+			cpuOther += value
 		case "system":
-			valuef := value.(float64)
-			cpuUsed += valuef
+			cpuUsed += value
 		case "interrupt":
-			valuef := value.(float64)
-			cpuUsed += valuef
-			cpuOther += valuef
+			cpuUsed += value
+			cpuOther += value
 		case "softirq":
-			valuef := value.(float64)
-			cpuUsed += valuef
-			cpuOther += valuef
+			cpuUsed += value
+			cpuOther += value
 		case "steal":
-			valuef := value.(float64)
-			cpuUsed += valuef
-			cpuOther += valuef
+			cpuUsed += value
+			cpuOther += value
 		}
 	}
 	finalFields["other"] = cpuOther
 	finalFields["used"] = cpuUsed
-	a.accumulator.AddGauge(measurement, finalFields, nil, t...)
-}
-
-// AddError add an error to the Accumulator
-func (a *accumulator) AddError(err error) {
-	a.accumulator.AddError(err)
-}
-
-// This functions are useless for Cpu metric.
-// They are not implemented
-
-// AddFields is useless for Cpu
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddFields not implemented for cpu accumulator"))
-}
-
-// AddCounter is useless for Cpu
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for cpu accumulator"))
-}
-
-// AddSummary is useless for Cpu
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for cpu accumulator"))
-}
-
-// AddHistogram is useless for Cpu
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for cpu accumulator"))
-}
-
-// SetPrecision is useless for Cpu
-func (a *accumulator) SetPrecision(precision time.Duration) {
-	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for cpu accumulator"))
-}
-
-func (a *accumulator) AddMetric(telegraf.Metric) {
-	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for cpu accumulator"))
-}
-
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for cpu accumulator"))
-	return nil
+	return finalFields
 }

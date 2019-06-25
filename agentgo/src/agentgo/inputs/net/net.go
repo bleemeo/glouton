@@ -17,40 +17,37 @@
 package net
 
 import (
+	"agentgo/inputs/internal"
 	"errors"
-	"fmt"
 	"strings"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/net"
 )
 
-type metricPoint struct {
-	value      uint64
-	metricTime time.Time
-}
-
-// Input countains input information about net
-type Input struct {
-	telegraf.Input
-	blacklist  []string
-	pastValues map[string]map[string]metricPoint // item => metricName => metricPoint
+type netTransformer struct {
+	blacklist []string
 }
 
 // New initialise net.Input
 //
 // blacklist contains a list of interface name prefix to ignore
-func New(blacklist []string) (i *Input, err error) {
+func New(blacklist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["net"]
 	if ok {
 		netInput := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
-		i = &Input{
-			netInput,
+		nt := netTransformer{
 			blacklist,
-			make(map[string]map[string]metricPoint),
+		}
+		i = &internal.Input{
+			Input: netInput,
+			Accumulator: internal.Accumulator{
+				TransformTags:    nt.transformTags,
+				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent"},
+				TransformMetrics: nt.transformMetrics,
+			},
 		}
 	} else {
 		err = errors.New("Telegraf don't have \"net\" input")
@@ -58,119 +55,32 @@ func New(blacklist []string) (i *Input, err error) {
 	return
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
-func (i *Input) Gather(acc telegraf.Accumulator) error {
-	netAccumulator := accumulator{
-		acc,
-		i.blacklist,
-		i.pastValues,
-		make(map[string]map[string]metricPoint)}
-	err := i.Input.Gather(&netAccumulator)
-	i.pastValues = netAccumulator.currentValues
-	return err
-}
-
-// accumulator save the net metric from telegraf
-type accumulator struct {
-	accumulator   telegraf.Accumulator
-	blacklist     []string
-	pastValues    map[string]map[string]metricPoint // item => metricName => metricPoint
-	currentValues map[string]map[string]metricPoint // item => metricName => metricPoint
-}
-
-// AddCounter adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	finalFields := make(map[string]interface{})
-	finalTags := make(map[string]string)
+func (nt netTransformer) transformTags(tags map[string]string) (newTags map[string]string, drop bool) {
 	item, ok := tags["interface"]
-	if ok {
-		for _, b := range a.blacklist {
-			if strings.HasPrefix(item, b) {
-				return
-			}
-		}
-		finalTags["item"] = item
-		a.currentValues[item] = make(map[string]metricPoint)
+	newTags = make(map[string]string)
+	if !ok {
+		drop = true
+		return
 	}
+	for _, b := range nt.blacklist {
+		if strings.HasPrefix(item, b) {
+			drop = true
+			return
+		}
+	}
+	newTags["item"] = item
+	return
+}
 
+func (nt netTransformer) transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
 	for metricName, value := range fields {
-		var valuef uint64
-		finalMetricName := metricName
-		if finalMetricName == "bytes_sent" {
-			valuef = value.(uint64)
-			finalMetricName = "bits_sent"
-			valuef = 8 * valuef
-		} else if finalMetricName == "bytes_recv" {
-			valuef = value.(uint64)
-			finalMetricName = "bits_recv"
-			valuef = 8 * valuef
-		} else {
-			valuef = value.(uint64)
-
-		}
-
-		var metricTime time.Time
-		if len(t) != 1 {
-			metricTime = time.Now()
-		} else {
-			metricTime = t[0]
-		}
-		pastMetricSave, ok := a.pastValues[item][finalMetricName]
-		a.currentValues[item][finalMetricName] = metricPoint{valuef, metricTime}
-		if ok {
-			valuef := (float64(valuef) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
-			finalFields[finalMetricName] = valuef
-		} else {
-			continue
+		if metricName == "bytes_sent" {
+			delete(fields, "bytes_sent")
+			fields["bits_sent"] = value * 8
+		} else if metricName == "bytes_recv" {
+			delete(fields, "bytes_recv")
+			fields["bits_recv"] = value * 8
 		}
 	}
-	a.accumulator.AddGauge(measurement, finalFields, finalTags, t...)
-}
-
-// AddError add an error to the accumulator
-func (a *accumulator) AddError(err error) {
-	a.accumulator.AddError(err)
-}
-
-// This functions are useless for net metric.
-// They are not implemented
-
-// AddFields is useless for net
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddFields not implemented for net accumulator"))
-}
-
-// AddGauge is useless for net
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for net accumulator"))
-}
-
-// AddSummary is useless for net
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for net accumulator"))
-}
-
-// AddHistogram is useless for net
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for net accumulator"))
-}
-
-// SetPrecision is useless for net
-func (a *accumulator) SetPrecision(precision time.Duration) {
-	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for net accumulator"))
-}
-
-func (a *accumulator) AddMetric(telegraf.Metric) {
-	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for net accumulator"))
-}
-
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for net accumulator"))
-	return nil
+	return fields
 }

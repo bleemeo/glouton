@@ -17,32 +17,24 @@
 package diskio
 
 import (
+	"agentgo/inputs/internal"
 	"errors"
 	"fmt"
 	"regexp"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/diskio"
 )
 
-type metricPoint struct {
-	value      uint64
-	metricTime time.Time
-}
-
-// Input countains input information about diskio
-type Input struct {
-	telegraf.Input
-	whitelist  []*regexp.Regexp
-	pastValues map[string]map[string]metricPoint // item => metricName => metricPoint
+type diskIOTransformer struct {
+	whitelist []*regexp.Regexp
 }
 
 // New initialise diskio.Input
 //
 // whitelist is a list of regular expretion for device to include
-func New(whitelist []string) (i *Input, err error) {
+func New(whitelist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
 	whitelistRE := make([]*regexp.Regexp, len(whitelist))
 	for index, v := range whitelist {
@@ -54,10 +46,17 @@ func New(whitelist []string) (i *Input, err error) {
 	}
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
-		i = &Input{
-			diskioInput,
-			whitelistRE,
-			make(map[string]map[string]metricPoint),
+		dt := diskIOTransformer{
+			whitelist: whitelistRE,
+		}
+		i = &internal.Input{
+			Input: diskioInput,
+			Accumulator: internal.Accumulator{
+				NewMeasurement:   "io",
+				DerivatedMetrics: []string{"read_bytes", "read_time", "reads", "write_bytes", "writes", "write_time", "io_time"},
+				TransformMetrics: dt.transformMetrics,
+				TransformTags:    dt.transformTags,
+			},
 		}
 	} else {
 		err = errors.New("Telegraf don't have \"diskio\" input")
@@ -65,125 +64,36 @@ func New(whitelist []string) (i *Input, err error) {
 	return
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
-func (i *Input) Gather(acc telegraf.Accumulator) error {
-	diskioAccumulator := accumulator{
-		acc,
-		i.whitelist,
-		i.pastValues,
-		make(map[string]map[string]metricPoint),
-	}
-	err := i.Input.Gather(&diskioAccumulator)
-	i.pastValues = diskioAccumulator.currentValues
-	return err
-}
-
-// accumulator save the diskio metric from telegraf
-type accumulator struct {
-	accumulator   telegraf.Accumulator
-	whitelist     []*regexp.Regexp
-	pastValues    map[string]map[string]metricPoint // item => metricName => metricPoint
-	currentValues map[string]map[string]metricPoint // item => metricName => metricPoint
-}
-
-// AddCounter adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-// nolint: gocyclo
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	var metricTime time.Time
-	if len(t) != 1 {
-		metricTime = time.Now()
-	} else {
-		metricTime = t[0]
-	}
-
-	finalFields := make(map[string]interface{})
-	finalTags := make(map[string]string)
+func (dt diskIOTransformer) transformTags(tags map[string]string) (newTags map[string]string, drop bool) {
+	newTags = make(map[string]string)
 	item, ok := tags["name"]
-	if ok {
-		match := false
-		for _, r := range a.whitelist {
-			if r.MatchString(item) {
-				match = true
-				break
-			}
-		}
-		if !match {
-			return
-		}
-		finalTags["item"] = item
-		a.currentValues[item] = make(map[string]metricPoint)
+	if !ok {
+		drop = true
+		return
 	}
-
-	for metricName, value := range fields {
-		finalMetricName := metricName
-		switch metricName {
-		case "read_bytes", "read_time", "reads", "write_bytes", "writes", "write_time", "io_time":
-			pastMetricSave, ok := a.pastValues[item][metricName]
-			a.currentValues[item][metricName] = metricPoint{value.(uint64), metricTime}
-			if ok {
-				valuef := (float64(value.(uint64)) - float64(pastMetricSave.value)) / metricTime.Sub(pastMetricSave.metricTime).Seconds()
-				if finalMetricName == "io_time" {
-					finalMetricName = "time"
-					// io_time is millisecond per second.
-					finalFields["utilization"] = valuef / 1000. * 100.
-				}
-				finalFields[finalMetricName] = valuef
-			} else {
-				continue
-			}
-		case "weighted_io_time", "iops_in_progress":
-			continue
-		default:
-			finalFields[finalMetricName] = value
+	match := false
+	for _, r := range dt.whitelist {
+		if r.MatchString(item) {
+			match = true
+			break
 		}
 	}
-	a.accumulator.AddGauge("io", finalFields, finalTags, t...)
+	if !match {
+		drop = true
+		return
+	}
+	newTags["item"] = item
+	return
 }
 
-// AddError add an error to the accumulator
-func (a *accumulator) AddError(err error) {
-	a.accumulator.AddError(err)
-}
-
-// This functions are useless for diskio metric.
-// They are not implemented
-
-// AddFields is useless for diskio
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddFields not implemented for diskio accumulator"))
-}
-
-// AddGauge is useless for diskio
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddCounter not implemented for diskio accumulator"))
-}
-
-// AddSummary is useless for diskio
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for diskio accumulator"))
-}
-
-// AddHistogram is useless for diskio
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for diskio accumulator"))
-}
-
-// SetPrecision is useless for diskio
-func (a *accumulator) SetPrecision(precision time.Duration) {
-	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for diskio accumulator"))
-}
-
-func (a *accumulator) AddMetric(telegraf.Metric) {
-	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for diskio accumulator"))
-}
-
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for diskio accumulator"))
-	return nil
+func (dt diskIOTransformer) transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+	if ioTime, ok := fields["io_time"]; ok {
+		delete(fields, "io_time")
+		fields["time"] = ioTime
+		// io_time is millisecond per second.
+		fields["utilization"] = ioTime / 1000. * 100.
+	}
+	delete(fields, "weighted_io_time")
+	delete(fields, "iops_in_progress")
+	return fields
 }

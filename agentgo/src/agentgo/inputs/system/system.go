@@ -17,113 +17,41 @@
 package system
 
 import (
+	"agentgo/inputs/internal"
 	"errors"
-	"fmt"
-	"time"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/system"
 )
 
-// Input countains input information about system
-type Input struct {
-	telegraf.Input
-}
-
 // New initialise system.Input
-func New() (i *Input, err error) {
+func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["system"]
 	if ok {
 		systemInput := input().(*system.SystemStats)
-		i = &Input{systemInput}
+		i = &internal.Input{
+			Input: systemInput,
+			Accumulator: internal.Accumulator{
+				TransformMetrics: transformMetrics,
+				NewMeasurementMap: map[string]string{
+					"logged": "users",
+				},
+			},
+		}
 	} else {
 		err = errors.New("Telegraf don't have \"system\" input")
 	}
 	return
 }
 
-// Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
-func (i *Input) Gather(acc telegraf.Accumulator) error {
-	systemAccumulator := accumulator{acc}
-	err := i.Input.Gather(&systemAccumulator)
-	return err
-}
-
-// accumulator save the system metric from telegraf
-type accumulator struct {
-	accumulator telegraf.Accumulator
-}
-
-// AddGauge adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	finalFields := make(map[string]interface{})
-	for metricName, value := range fields {
-		finalMetricName := metricName
-		if finalMetricName == "n_users" {
-			finalMetricName = "logged"
-		} else if finalMetricName == "n_cpus" {
-			continue
-		}
-		finalFields[finalMetricName] = value
+func transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+	delete(fields, "n_cpus")
+	delete(fields, "uptime")
+	delete(fields, "uptime_format")
+	if value, ok := fields["n_users"]; ok {
+		delete(fields, "n_users")
+		fields["logged"] = value
 	}
-	a.accumulator.AddGauge(measurement, finalFields, tags, t...)
-}
-
-// AddCounter adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	// AddCounter add system_uptime metric that we do not want.
-}
-
-// AddFields adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	// AddCounter add system_uptime_format metric that we do not want.
-}
-
-// AddError add an error to the accumulator
-func (a *accumulator) AddError(err error) {
-	a.accumulator.AddError(err)
-}
-
-// This functions are useless for system metric.
-// They are not implemented
-
-// AddSummary is useless for system
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddSummary not implemented for system accumulator"))
-}
-
-// AddHistogram is useless for system
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.accumulator.AddError(fmt.Errorf("AddHistogram not implemented for system accumulator"))
-}
-
-// SetPrecision is useless for system
-func (a *accumulator) SetPrecision(precision time.Duration) {
-	a.accumulator.AddError(fmt.Errorf("SetPrecision not implemented for system accumulator"))
-}
-
-func (a *accumulator) AddMetric(telegraf.Metric) {
-	a.accumulator.AddError(fmt.Errorf("AddMetric not implemented for system accumulator"))
-}
-
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.accumulator.AddError(fmt.Errorf("WithTracking not implemented for system accumulator"))
-	return nil
+	return fields
 }
