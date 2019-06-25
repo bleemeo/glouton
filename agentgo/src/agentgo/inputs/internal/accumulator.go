@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -50,6 +51,7 @@ type Accumulator struct {
 	// map a flattened tags to a map[fieldName]value
 	currentValues map[string]map[string]metricPoint
 	pastValues    map[string]map[string]metricPoint
+	l             sync.Mutex
 }
 
 // PrepareGather should be called before each gather. It's mainly useful for delta computation.
@@ -69,6 +71,12 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 		valueFloat = float64(value.(int))
 	case int64:
 		valueFloat = float64(value.(int64))
+	case bool:
+		if value.(bool) {
+			valueFloat = 1.0
+		} else {
+			valueFloat = 0.0
+		}
 	default:
 		var valueType = reflect.TypeOf(value)
 		err = fmt.Errorf("Value type not supported: %v", valueType)
@@ -88,15 +96,20 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 		} else {
 			value = float64(currentValue - pastValue)
 		}
-	case float64:
-		value = currentPoint.Value.(float64) - pastPoint.Value.(float64)
 	case int:
 		value = float64(currentPoint.Value.(int) - pastPoint.Value.(int))
 	case int64:
 		value = float64(currentPoint.Value.(int64) - pastPoint.Value.(int64))
 	default:
-		var valueType = reflect.TypeOf(pastPoint.Value)
-		err = fmt.Errorf("Value type not supported :(%v)", valueType)
+		pastValue, err := convertToFloat(pastPoint.Value)
+		if err != nil {
+			return 0.0, err
+		}
+		currentValue, err := convertToFloat(currentPoint.Value)
+		if err != nil {
+			return 0.0, err
+		}
+		value = currentValue - pastValue
 	}
 	value = value / float64(currentPoint.Time.Unix()-pastPoint.Time.Unix())
 	return
@@ -113,6 +126,8 @@ func flattenTag(tags map[string]string) string {
 
 // applyDerivate compute the derivated value for metrics in DerivatedMetrics
 func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[string]string, metricTime time.Time) map[string]float64 {
+	a.l.Lock()
+	defer a.l.Unlock()
 	result := make(map[string]float64)
 	searchMetrics := make(map[string]bool)
 
