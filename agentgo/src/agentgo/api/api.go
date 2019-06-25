@@ -9,8 +9,6 @@ import (
 	"agentgo/types"
 )
 
-var globalDb storeInterface
-var globalAPI *API
 
 const defaultPort = "8015"
 
@@ -26,13 +24,11 @@ type API struct {
 
 // New : Function that instanciate a new API's port from environment variable or from a default port
 func New(db storeInterface) *API {
-	globalDb = db
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = defaultPort
 	}
 	api := &API{Port: port, db: db}
-	globalAPI = api
 	http.HandleFunc("/metrics", api.promExporter)
 	return api
 }

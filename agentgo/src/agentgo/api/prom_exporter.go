@@ -38,7 +38,7 @@ func formatLabels(labels map[string]string) string {
 }
 
 func (a *API) promExporter(w http.ResponseWriter, _ *http.Request) {
-	metrics, err := globalDb.Metrics(nil)
+	metrics, err := a.db.Metrics(nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(w, "Unable to get list of metrics: %v\n", err)
