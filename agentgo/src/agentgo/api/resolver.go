@@ -3,7 +3,6 @@ package api
 import (
 	"context"
 	"log"
-	"agentgo/store"
 ) // THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
 
 type Resolver struct{}
@@ -15,7 +14,6 @@ func (r *Resolver) Query() QueryResolver {
 type queryResolver struct{ *Resolver }
 
 func (r *queryResolver) Metrics(ctx context.Context, input Labels) ([]*Metric, error) {
-	log.Println(store.DB)
 	metricFilters := map[string]string{}
 	if len(input.Labels) > 0 {
 		for _, filter := range input.Labels {
@@ -23,7 +21,7 @@ func (r *queryResolver) Metrics(ctx context.Context, input Labels) ([]*Metric, e
 		}
 	}
 	log.Println(metricFilters)
-	metrics, _ := store.DB.Metrics(metricFilters)
+	metrics, _ := globalDb.Metrics(metricFilters)
 	log.Println(metrics)
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {

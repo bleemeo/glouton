@@ -12,12 +12,6 @@ import (
 	"agentgo/types"
 )
 
-var DB *Store
-
-func init() {
-	DB = New()
-}
-
 // Store implement an interface to retrive metrics and metric points.
 //
 // See methods GetMetrics and GetMetricPoints
@@ -41,7 +35,7 @@ func (s *Store) Run(ctx context.Context) {
 	for {
 		s.run()
 		select {
-		case <-time.After(60 * time.Second):
+		case <-time.After(10 * time.Second):
 		case <-ctx.Done():
 			return
 		}
