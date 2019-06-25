@@ -35,7 +35,7 @@ func (s *Store) Run(ctx context.Context) {
 	for {
 		s.run()
 		select {
-		case <-time.After(10 * time.Second):
+		case <-time.After(60 * time.Second):
 		case <-ctx.Done():
 			return
 		}
@@ -76,7 +76,8 @@ func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
 	points := m.store.points[m.metricID]
 	result = make([]types.Point, 0)
 	for _, point := range points {
-		if start.Before(point.Time) && point.Time.Before(end) {
+		pointTimeUTC := point.Time.UTC()
+		if start.Before(pointTimeUTC) && pointTimeUTC.Before(end) {
 			result = append(result, point)
 		}
 	}
