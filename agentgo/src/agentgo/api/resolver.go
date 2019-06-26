@@ -2,7 +2,6 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/vektah/gqlparser/gqlerror"
@@ -76,7 +75,7 @@ func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start str
 			return nil, gqlerror.Errorf("Can not retrieve points")
 		}
 		for _, point := range points {
-			pointRes := &Point{Time: point.Time.Format("2006-01-02T15:04:05.000Z"), Value: fmt.Sprintf("%f", point.Value)}
+			pointRes := &Point{Time: point.Time.UTC(), Value: point.Value}
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
 		metricsRes = append(metricsRes, metricRes)

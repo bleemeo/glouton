@@ -4,8 +4,8 @@ type Label {
 }
 
 type Point {
-  time: String!
-  value: String!
+  time: Time!
+  value: Float!
 }
 
 type Metric {
@@ -26,3 +26,5 @@ type Query {
   metrics(input: LabelsInput!): [Metric!]!
   points(input: LabelsInput!, start: String!, end: String!): [Metric!]!
 }
+
+scalar Time

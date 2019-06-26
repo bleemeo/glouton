@@ -2,6 +2,10 @@
 
 package api
 
+import (
+	"time"
+)
+
 type Label struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
@@ -22,6 +26,6 @@ type Metric struct {
 }
 
 type Point struct {
-	Time  string `json:"time"`
-	Value string `json:"value"`
+	Time  time.Time `json:"time"`
+	Value float64   `json:"value"`
 }
