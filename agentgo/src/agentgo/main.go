@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"agentgo/nrpe"
+
 	"agentgo/api"
 	"agentgo/collector"
 	"agentgo/inputs/cpu"
@@ -92,6 +94,8 @@ func main() {
 
 	log.Println("Starting API")
 	go api.Run()
+
+	go nrpe.Run(":1025")
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
