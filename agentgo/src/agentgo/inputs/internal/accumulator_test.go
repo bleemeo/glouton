@@ -37,9 +37,9 @@ func TestDefault(t *testing.T) {
 
 func TestRename(t *testing.T) {
 	called := false
-	transformMetrics := func(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
-		if tags["newTag"] != "value" {
-			t.Errorf("tags[newTag] == %#v, want %#v", tags["newTag"], "value")
+	transformMetrics := func(originalContext GatherContext, currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+		if currentContext.Tags["newTag"] != "value" {
+			t.Errorf("tags[newTag] == %#v, want %#v", currentContext.Tags["newTag"], "value")
 		}
 		for k, v := range fields {
 			if k == "metricDouble" {
@@ -58,12 +58,13 @@ func TestRename(t *testing.T) {
 		}
 		return fields
 	}
-	renameGlobal := func(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
-		newMeasurement = "cpu2"
-		newTags = map[string]string{
-			"newTag": "value",
-		}
-		return
+	renameGlobal := func(originalContext GatherContext) (newContext GatherContext, drop bool) {
+		return GatherContext{
+			Measurement: "cpu2",
+			Tags: map[string]string{
+				"newTag": "value",
+			},
+		}, false
 	}
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
 		if measurement != "cpu2" {
@@ -303,7 +304,7 @@ func TestMeasurementMap(t *testing.T) {
 		}
 		t.Errorf("fields == %v, want load1, logged or no_match", fields)
 	}
-	renameMetrics := func(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string) {
+	renameMetrics := func(originalContext GatherContext, currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 		newMetricName = metricName
 		switch metricName {
 		case "load1":

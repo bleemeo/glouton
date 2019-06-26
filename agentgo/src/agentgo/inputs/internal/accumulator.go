@@ -17,6 +17,12 @@ type metricPoint struct {
 	Time  time.Time
 }
 
+// GatherContext is the couple Measurement and tags
+type GatherContext struct {
+	Measurement string
+	Tags        map[string]string
+}
+
 // Accumulator implements telegraf.Accumulator with the capabilities to
 // renames metrics, apply transformation (including derivation of value).
 //
@@ -36,17 +42,17 @@ type Accumulator struct {
 	// * change the measurement name (prefix of metric name)
 	// * alter tags (if tags are modified, a new *copy* of input tags map must be returned)
 	// * completly drop this base (e.g. blacklisting for disk/network interface/...))
-	RenameGlobal func(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool)
+	RenameGlobal func(originalContext GatherContext) (newContext GatherContext, drop bool)
 
 	// DerivatedMetrics is the list of metric counter to derive
 	DerivatedMetrics []string
 
 	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
 	// tags & measurement are given as indication and should not be mutated.
-	TransformMetrics func(measurement string, fields map[string]float64, tags map[string]string) map[string]float64
+	TransformMetrics func(originalContext GatherContext, currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64
 
 	// RenameMetrics apply a per-metric rename of metric name and measurement. tags can't be mutated
-	RenameMetrics func(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string)
+	RenameMetrics func(originalContext GatherContext, currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string)
 
 	// map a flattened tags to a map[fieldName]value
 	currentValues map[string]map[string]metricPoint
@@ -174,9 +180,14 @@ func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[stri
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
 
 func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	originalContext := GatherContext{
+		Measurement: measurement,
+		Tags:        tags,
+	}
+	currentContext := originalContext
 	if a.RenameGlobal != nil {
 		drop := false
-		measurement, tags, drop = a.RenameGlobal(measurement, tags)
+		currentContext, drop = a.RenameGlobal(originalContext)
 		if drop {
 			return
 		}
@@ -188,15 +199,15 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		metricTime = t[0]
 	}
 
-	floatFields := a.applyDerivate(fields, tags, metricTime)
+	floatFields := a.applyDerivate(fields, currentContext.Tags, metricTime)
 	if a.TransformMetrics != nil {
-		floatFields = a.TransformMetrics(measurement, floatFields, tags)
+		floatFields = a.TransformMetrics(originalContext, currentContext, floatFields, fields)
 	}
 
 	fieldsPerMeasurements := make(map[string]map[string]interface{})
 	if a.RenameMetrics != nil {
 		for metricName, value := range floatFields {
-			newMeasurement, newMetricName := a.RenameMetrics(measurement, metricName, tags)
+			newMeasurement, newMetricName := a.RenameMetrics(originalContext, currentContext, metricName)
 			if _, ok := fieldsPerMeasurements[newMeasurement]; !ok {
 				fieldsPerMeasurements[newMeasurement] = make(map[string]interface{})
 			}
@@ -207,10 +218,10 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		for k, v := range floatFields {
 			currentMap[k] = v
 		}
-		fieldsPerMeasurements[measurement] = currentMap
+		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
 	for measurementName, fields := range fieldsPerMeasurements {
-		finalFunc(measurementName, fields, tags, metricTime)
+		finalFunc(measurementName, fields, currentContext.Tags, metricTime)
 	}
 }
 

@@ -65,10 +65,10 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	return
 }
 
-func (dt diskTransformer) renameGlobal(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
-	newMeasurement = measurement
-	newTags = make(map[string]string)
-	item, ok := tags["path"]
+func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+	newContext.Measurement = originalContext.Measurement
+	newContext.Tags = make(map[string]string)
+	item, ok := originalContext.Tags["path"]
 	if !ok {
 		drop = true
 		return
@@ -89,11 +89,11 @@ func (dt diskTransformer) renameGlobal(measurement string, tags map[string]strin
 			return
 		}
 	}
-	newTags["item"] = item
+	newContext.Tags["item"] = item
 	return
 }
 
-func (dt diskTransformer) transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
+func (dt diskTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	usedPerc, ok := fields["used_percent"]
 	delete(fields, "used_percent")
 	if ok {
