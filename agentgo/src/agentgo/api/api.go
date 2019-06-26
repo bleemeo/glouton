@@ -10,7 +10,6 @@ import (
 )
 
 var globalDb storeInterface
-var globalAPI *API
 
 const defaultPort = "8015"
 
@@ -32,7 +31,6 @@ func New(db storeInterface) *API {
 		port = defaultPort
 	}
 	api := &API{Port: port, db: db}
-	globalAPI = api
 	http.HandleFunc("/metrics", api.promExporter)
 	return api
 }
