@@ -25,6 +25,9 @@ require (
 	github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4
 	github.com/stretchr/objx v0.1.1
 	github.com/stretchr/testify v1.3.0
+	github.com/tidwall/gjson v1.2.1 // indirect
+	github.com/tidwall/match v1.0.1 // indirect
+	github.com/tidwall/pretty v1.0.0 // indirect
 	github.com/vektah/gqlparser v1.1.2
 	golang.org/x/sys v0.0.0-20190618155005-516e3c20635f
 	google.golang.org/appengine v1.6.1

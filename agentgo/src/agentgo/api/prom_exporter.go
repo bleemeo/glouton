@@ -4,6 +4,7 @@ import (
 	"agentgo/types"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -25,10 +26,11 @@ func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 }
 
 func formatLabels(labels map[string]string) string {
+	invalidNameChar := regexp.MustCompile("[^a-zA-Z0-9_]")
 	r := strings.NewReplacer("\\", "\\\\", "\"", "\\\"", "\n", "\\n")
 	part := make([]string, 0, len(labels))
 	for k, v := range labels {
-		part = append(part, fmt.Sprintf("%s=\"%s\"", k, r.Replace(v)))
+		part = append(part, fmt.Sprintf("%s=\"%s\"", invalidNameChar.ReplaceAllString(k, "_"), r.Replace(v)))
 	}
 	if len(part) == 0 {
 		return ""
