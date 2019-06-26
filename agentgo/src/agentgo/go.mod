@@ -11,6 +11,7 @@ require (
 	github.com/docker/docker v0.7.3-0.20180327123150-ed7b6428c133 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/go-ole/go-ole v1.2.4
 	github.com/go-redis/redis v0.0.0-20190503082931-75795aa4236d
 	github.com/go-sql-driver/mysql v1.4.1
@@ -19,6 +20,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0
+	github.com/rs/cors v1.6.0
 	github.com/shirou/gopsutil v0.0.0-20190601025009-5335e3fd506d
 	github.com/shirou/w32 v0.0.0-20160930032740-bb4de0191aa4
 	github.com/stretchr/objx v0.1.1
