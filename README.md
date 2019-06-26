@@ -31,7 +31,7 @@ mkvirtualenv -p /usr/bin/python3 bleemeo-agent
 * Install Golang 1.12, activate it and install golangci-lint:
 ```
 sudo apt install golang-1.12
-export PATH=usr/lib/go-1.12/bin:$PATH
+export PATH=/usr/lib/go-1.12/bin:$PATH
 
 (cd /tmp; GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1)
 ```
