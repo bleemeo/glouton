@@ -28,7 +28,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
 
-// Input countains input information about Mysql
+// Input contains input information about Mysql
 type Input struct {
 	telegraf.Input
 }

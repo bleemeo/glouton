@@ -5,11 +5,9 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/99designs/gqlgen/handler"
 	"agentgo/types"
+	"github.com/99designs/gqlgen/handler"
 )
-
-var globalDb storeInterface
 
 const defaultPort = "8015"
 
@@ -20,24 +18,23 @@ type storeInterface interface {
 // API : Structure that contains API's port
 type API struct {
 	Port string
-	db storeInterface
+	db   storeInterface
 }
 
-// New : Function that instanciate a new API's port from environment variable or from a default port
+// New : Function that instantiate a new API's port from environment variable or from a default port
 func New(db storeInterface) *API {
-	globalDb = db
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = defaultPort
 	}
 	api := &API{Port: port, db: db}
 	http.HandleFunc("/metrics", api.promExporter)
+	http.Handle("/", handler.Playground("GraphQL playground", "/graphql"))
+	http.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	return api
 }
 
 // Run : Starts our API
 func (api API) Run() {
-	http.Handle("/", handler.Playground("GraphQL playground", "/graphql"))
-	http.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	log.Fatal(http.ListenAndServe(":"+api.Port, nil))
 }

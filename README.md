@@ -43,12 +43,12 @@ export PATH=usr/lib/go-1.12/bin:$PATH
 
 * Run Go tests:
 ```
-(cd agentgo/src/agentgo; go test agentgo/...)
+(cd agentgo/src/agentgo; go test -race agentgo/...)
 ```
 
 * Run the Go daemon:
 ```
-(cd agentgo/src/agentgo; go run agentgo)
+(cd agentgo/src/agentgo; go run -race agentgo)
 ```
 
 * Install `bleemeo-agent` with its dependencies:

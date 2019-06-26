@@ -55,8 +55,8 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: diskInput,
 			Accumulator: internal.Accumulator{
+				RenameGlobal:     dt.renameGlobal,
 				TransformMetrics: dt.transformMetrics,
-				TransformTags:    dt.transformTags,
 			},
 		}
 	} else {
@@ -65,7 +65,8 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	return
 }
 
-func (dt diskTransformer) transformTags(tags map[string]string) (newTags map[string]string, drop bool) {
+func (dt diskTransformer) renameGlobal(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
+	newMeasurement = measurement
 	newTags = make(map[string]string)
 	item, ok := tags["path"]
 	if !ok {
@@ -92,7 +93,7 @@ func (dt diskTransformer) transformTags(tags map[string]string) (newTags map[str
 	return
 }
 
-func (dt diskTransformer) transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+func (dt diskTransformer) transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
 	usedPerc, ok := fields["used_percent"]
 	delete(fields, "used_percent")
 	if ok {

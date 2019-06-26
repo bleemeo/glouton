@@ -37,7 +37,7 @@ func TestDefault(t *testing.T) {
 
 func TestRename(t *testing.T) {
 	called := false
-	transformMetrics := func(fields map[string]float64, tags map[string]string) map[string]float64 {
+	transformMetrics := func(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
 		if tags["newTag"] != "value" {
 			t.Errorf("tags[newTag] == %#v, want %#v", tags["newTag"], "value")
 		}
@@ -58,10 +58,12 @@ func TestRename(t *testing.T) {
 		}
 		return fields
 	}
-	transformTags := func(tags map[string]string) (map[string]string, bool) {
-		return map[string]string{
+	renameGlobal := func(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
+		newMeasurement = "cpu2"
+		newTags = map[string]string{
 			"newTag": "value",
-		}, false
+		}
+		return
 	}
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
 		if measurement != "cpu2" {
@@ -90,9 +92,8 @@ func TestRename(t *testing.T) {
 		called = true
 	}
 	acc := Accumulator{
+		RenameGlobal:     renameGlobal,
 		TransformMetrics: transformMetrics,
-		TransformTags:    transformTags,
-		NewMeasurement:   "cpu2",
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -291,21 +292,32 @@ func TestMeasurementMap(t *testing.T) {
 			{"logged", "users"},
 			{"no_match", "newDefault"},
 		}
+		called++
 		for _, c := range cases {
 			if _, ok := fields[c.metricName]; ok {
 				if measurement != c.measurementName {
 					t.Errorf("measurement == %#v, want %#v", measurement, c.measurementName)
 				}
+				return
 			}
 		}
-		called++
+		t.Errorf("fields == %v, want load1, logged or no_match", fields)
+	}
+	renameMetrics := func(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string) {
+		newMetricName = metricName
+		switch metricName {
+		case "load1":
+			newMeasurement = "system"
+		case "n_logged":
+			newMeasurement = "users"
+			newMetricName = "logged"
+		default:
+			newMeasurement = "newDefault"
+		}
+		return
 	}
 	acc := Accumulator{
-		NewMeasurement: "newDefault",
-		NewMeasurementMap: map[string]string{
-			"load1":  "system",
-			"logged": "users",
-		},
+		RenameMetrics: renameMetrics,
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -313,12 +325,12 @@ func TestMeasurementMap(t *testing.T) {
 		"sys",
 		map[string]interface{}{
 			"load1":    20.0,
-			"logged":   42,
+			"n_logged": 42,
 			"no_match": 42.0,
 		},
 		nil,
 	)
 	if called != 3 {
-		t.Errorf("finalFunc was not three time")
+		t.Errorf("called == %v, want %v", called, 3)
 	}
 }

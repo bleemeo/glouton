@@ -34,9 +34,7 @@ func New() (i telegraf.Input, err error) {
 			Input: systemInput,
 			Accumulator: internal.Accumulator{
 				TransformMetrics: transformMetrics,
-				NewMeasurementMap: map[string]string{
-					"logged": "users",
-				},
+				RenameMetrics:    renameMetrics,
 			},
 		}
 	} else {
@@ -45,13 +43,19 @@ func New() (i telegraf.Input, err error) {
 	return
 }
 
-func transformMetrics(fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
 	delete(fields, "n_cpus")
 	delete(fields, "uptime")
 	delete(fields, "uptime_format")
-	if value, ok := fields["n_users"]; ok {
-		delete(fields, "n_users")
-		fields["logged"] = value
-	}
 	return fields
+}
+
+func renameMetrics(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string) {
+	newMetricName = metricName
+	newMeasurement = measurement
+	if metricName == "n_users" {
+		newMeasurement = "users"
+		newMetricName = "logged"
+	}
+	return
 }

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -21,35 +22,36 @@ type metricPoint struct {
 //
 // Transformations are implemented via a callback function
 // The processing will be the following:
-// * Fields should be set (and not modified during run)
-// * PrepareGather should be called.
+// * PrepareGather must be called.
 // * The Gather() method should be called
-// * If TransformTags is set, it's applied. TransformTags must not mutate the map but create a new copy of the tags map.
+// * If TransformGlobal is set, it's applied. RenameTransform allow to rename measurement and alter tags. It could also completly drop
+//   a batch of metrics
 // * Any metrics matching DerivatedMetrics are derivated. Metric seen for the first time are dropped.
-// * Then TransformMetrics is called on a float64 version of fields (so TransformMetrics may mutate the map)
+// * Then TransformMetrics is called on a float64 version of fields. It may apply per-metric transformation
 type Accumulator struct {
 	Accumulator telegraf.Accumulator
 
-	// NewMeasurement (if set) is the overridden measurment name for all metric
-	NewMeasurement string
+	// RenameGlobal apply global rename on all metrics from one batch.
+	// It may:
+	// * change the measurement name (prefix of metric name)
+	// * alter tags (if tags are modified, a new *copy* of input tags map must be returned)
+	// * completly drop this base (e.g. blacklisting for disk/network interface/...))
+	RenameGlobal func(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool)
 
-	// NewMeasurementMap (if set) override the measurment for each metric. It map a metric name to the target measurment name.
-	// If a metric name is not in this map, the default measurement name (or NewMeasurement if set) is used.
-	NewMeasurementMap map[string]string
-
-	// DerivatedMetrics is the list of metric counter to derivate
+	// DerivatedMetrics is the list of metric counter to derive
 	DerivatedMetrics []string
 
-	// TransformTags take a list of tags and could change the name/value or even add/delete some tags.
-	// If the boolean is true, it will drop the whole Gather (useful for blacklisting from disk/network interface/...)
-	TransformTags func(tags map[string]string) (newTags map[string]string, drop bool)
+	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
+	// tags & measurement are given as indication and should not be mutated.
+	TransformMetrics func(measurement string, fields map[string]float64, tags map[string]string) map[string]float64
 
-	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points
-	TransformMetrics func(fields map[string]float64, tags map[string]string) map[string]float64
+	// RenameMetrics apply a per-metric rename of metric name and measurement. tags can't be mutated
+	RenameMetrics func(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string)
 
 	// map a flattened tags to a map[fieldName]value
 	currentValues map[string]map[string]metricPoint
 	pastValues    map[string]map[string]metricPoint
+	l             sync.Mutex
 }
 
 // PrepareGather should be called before each gather. It's mainly useful for delta computation.
@@ -60,15 +62,21 @@ func (a *Accumulator) PrepareGather() {
 
 // convertToFloat convert the interface type in float64
 func convertToFloat(value interface{}) (valueFloat float64, err error) {
-	switch value.(type) {
+	switch value := value.(type) {
 	case uint64:
-		valueFloat = float64(value.(uint64))
+		valueFloat = float64(value)
 	case float64:
-		valueFloat = value.(float64)
+		valueFloat = value
 	case int:
-		valueFloat = float64(value.(int))
+		valueFloat = float64(value)
 	case int64:
-		valueFloat = float64(value.(int64))
+		valueFloat = float64(value)
+	case bool:
+		if value {
+			valueFloat = 1.0
+		} else {
+			valueFloat = 0.0
+		}
 	default:
 		var valueType = reflect.TypeOf(value)
 		err = fmt.Errorf("Value type not supported: %v", valueType)
@@ -78,27 +86,31 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 
 // rateAsFloat compute the delta/duration between two points
 func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error) {
-	switch pastPoint.Value.(type) {
+	switch pastValue := pastPoint.Value.(type) {
 	case uint64:
 		// Special case here. If pastPoint if bigger that currentPoint, the unsigned int will overflow.
-		pastValue := pastPoint.Value.(uint64)
 		currentValue := currentPoint.Value.(uint64)
 		if pastValue > currentValue {
 			value = -float64(pastValue - currentValue)
 		} else {
 			value = float64(currentValue - pastValue)
 		}
-	case float64:
-		value = currentPoint.Value.(float64) - pastPoint.Value.(float64)
 	case int:
-		value = float64(currentPoint.Value.(int) - pastPoint.Value.(int))
+		value = float64(currentPoint.Value.(int) - pastValue)
 	case int64:
-		value = float64(currentPoint.Value.(int64) - pastPoint.Value.(int64))
+		value = float64(currentPoint.Value.(int64) - pastValue)
 	default:
-		var valueType = reflect.TypeOf(pastPoint.Value)
-		err = fmt.Errorf("Value type not supported :(%v)", valueType)
+		pastValueFloat, err := convertToFloat(pastPoint.Value)
+		if err != nil {
+			return 0.0, err
+		}
+		currentValue, err := convertToFloat(currentPoint.Value)
+		if err != nil {
+			return 0.0, err
+		}
+		value = currentValue - pastValueFloat
 	}
-	value = value / float64(currentPoint.Time.Unix()-pastPoint.Time.Unix())
+	value /= float64(currentPoint.Time.Unix() - pastPoint.Time.Unix())
 	return
 }
 
@@ -113,6 +125,8 @@ func flattenTag(tags map[string]string) string {
 
 // applyDerivate compute the derivated value for metrics in DerivatedMetrics
 func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[string]string, metricTime time.Time) map[string]float64 {
+	a.l.Lock()
+	defer a.l.Unlock()
 	result := make(map[string]float64)
 	searchMetrics := make(map[string]bool)
 
@@ -160,10 +174,9 @@ func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[stri
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
 
 func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	newTags := tags
-	if a.TransformTags != nil {
+	if a.RenameGlobal != nil {
 		drop := false
-		newTags, drop = a.TransformTags(newTags)
+		measurement, tags, drop = a.RenameGlobal(measurement, tags)
 		if drop {
 			return
 		}
@@ -175,37 +188,29 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		metricTime = t[0]
 	}
 
-	newMeasurement := measurement
-	if a.NewMeasurement != "" {
-		newMeasurement = a.NewMeasurement
-	}
-
-	newFields := a.applyDerivate(fields, tags, metricTime)
+	floatFields := a.applyDerivate(fields, tags, metricTime)
 	if a.TransformMetrics != nil {
-		newFields = a.TransformMetrics(newFields, newTags)
+		floatFields = a.TransformMetrics(measurement, floatFields, tags)
 	}
 
-	if a.NewMeasurementMap != nil {
-		newFields2 := make(map[string]map[string]interface{})
-		for metricName, value := range newFields {
-			measurementName, ok := a.NewMeasurementMap[metricName]
-			if !ok {
-				measurementName = newMeasurement
+	fieldsPerMeasurements := make(map[string]map[string]interface{})
+	if a.RenameMetrics != nil {
+		for metricName, value := range floatFields {
+			newMeasurement, newMetricName := a.RenameMetrics(measurement, metricName, tags)
+			if _, ok := fieldsPerMeasurements[newMeasurement]; !ok {
+				fieldsPerMeasurements[newMeasurement] = make(map[string]interface{})
 			}
-			if _, ok := newFields2[measurementName]; !ok {
-				newFields2[measurementName] = make(map[string]interface{})
-			}
-			newFields2[measurementName][metricName] = value
-		}
-		for measurementName, fields := range newFields2 {
-			finalFunc(measurementName, fields, newTags, metricTime)
+			fieldsPerMeasurements[newMeasurement][newMetricName] = value
 		}
 	} else {
-		newFields2 := make(map[string]interface{})
-		for k, v := range newFields {
-			newFields2[k] = v
+		currentMap := make(map[string]interface{})
+		for k, v := range floatFields {
+			currentMap[k] = v
 		}
-		finalFunc(newMeasurement, newFields2, newTags, metricTime)
+		fieldsPerMeasurements[measurement] = currentMap
+	}
+	for measurementName, fields := range fieldsPerMeasurements {
+		finalFunc(measurementName, fields, tags, metricTime)
 	}
 }
 
