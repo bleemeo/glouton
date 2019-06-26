@@ -40,6 +40,7 @@ func formatLabels(labels map[string]string) string {
 }
 
 func (a *API) promExporter(w http.ResponseWriter, _ *http.Request) {
+	invalidNameChar := regexp.MustCompile("[^a-zA-Z0-9_]")
 	metrics, err := a.db.Metrics(nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -57,7 +58,13 @@ func (a *API) promExporter(w http.ResponseWriter, _ *http.Request) {
 		if !ok {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s%s %f %d\n", name, formatLabels(labels), lastPoint.Value, lastPoint.Time.UnixNano()/1000000))
+		lines = append(lines, fmt.Sprintf(
+			"%s%s %f %d\n",
+			invalidNameChar.ReplaceAllString(name, "_"),
+			formatLabels(labels),
+			lastPoint.Value,
+			lastPoint.Time.UnixNano()/1000000,
+		))
 	}
 	sort.Strings(lines)
 	fmt.Fprintf(w, strings.Join(lines, ""))
