@@ -33,7 +33,7 @@ func New(db storeInterface) *API {
 		port = defaultPort
 	}
 	router.Use(cors.New(cors.Options{
-		AllowedOrigins:   []string{"http://localhost:3015"},
+		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            true,
 	}).Handler)
