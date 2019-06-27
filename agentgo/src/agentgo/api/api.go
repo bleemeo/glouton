@@ -20,9 +20,9 @@ type storeInterface interface {
 
 // API : Structure that contains API's port
 type API struct {
-	Port string
+	Port   string
 	router *chi.Mux
-	db   storeInterface
+	db     storeInterface
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
