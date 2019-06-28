@@ -38,8 +38,8 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 		var errMetrics error
 		metrics, errMetrics = r.api.db.Metrics(map[string]string{})
 		if errMetrics != nil {
-				return nil, gqlerror.Errorf("Can not retrieve metrics")
-			}
+			return nil, gqlerror.Errorf("Can not retrieve metrics")
+		}
 	}
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {
