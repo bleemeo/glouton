@@ -34,6 +34,12 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 			}
 			metrics = append(metrics, newMetrics...)
 		}
+	} else {
+		var errMetrics error
+		metrics, errMetrics = r.api.db.Metrics(map[string]string{})
+		if errMetrics != nil {
+				return nil, gqlerror.Errorf("Can not retrieve metrics")
+			}
 	}
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {
@@ -62,6 +68,8 @@ func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start str
 			}
 			metrics = append(metrics, newMetrics...)
 		}
+	} else {
+		return nil, gqlerror.Errorf("Can not retrieve points for every metrics")
 	}
 	layout := "2006-01-02T15:04:05.000Z"
 	finalStart := ""
