@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"agentgo/types"
 	"github.com/vektah/gqlparser/gqlerror"
 ) // THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
 
@@ -21,15 +22,17 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve metrics at this moment. Please try later")
 	}
-	metricFilters := map[string]string{}
+	metrics := []types.Metric{}
 	if len(input.Labels) > 0 {
 		for _, filter := range input.Labels {
+			metricFilters := map[string]string{}
 			metricFilters[filter.Key] = filter.Value
+			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
+			if errMetrics != nil {
+				return nil, gqlerror.Errorf("Can not retrieve metrics")
+			}
+			metrics = append(metrics, newMetrics...)
 		}
-	}
-	metrics, errMetrics := r.api.db.Metrics(metricFilters)
-	if errMetrics != nil {
-		return nil, gqlerror.Errorf("Can not retrieve metrics")
 	}
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {
@@ -43,25 +46,34 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 	}
 	return metricsRes, nil
 }
-func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start string, end string) ([]*Metric, error) {
+func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start string, end string, minutes int) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
-	metricFilters := map[string]string{}
+	metrics := []types.Metric{}
 	if len(input.Labels) > 0 {
 		for _, filter := range input.Labels {
+			metricFilters := map[string]string{}
 			metricFilters[filter.Key] = filter.Value
+			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
+			if errMetrics != nil {
+				return nil, gqlerror.Errorf("Can not retrieve metrics")
+			}
+			metrics = append(metrics, newMetrics...)
 		}
-	} else {
-		return nil, gqlerror.Errorf("Please add at least one metric filter")
 	}
-	metrics, errMetrics := r.api.db.Metrics(metricFilters)
 	layout := "2006-01-02T15:04:05.000Z"
-	timeStart, errTimeStart := time.Parse(layout, start)
-	timeEnd, errTimeEnd := time.Parse(layout, end)
-	if errMetrics != nil || errTimeStart != nil || errTimeEnd != nil {
-		return nil, gqlerror.Errorf("Can not retrieve points")
+	finalStart := ""
+	finalEnd := ""
+	if minutes != 0 {
+		finalEnd = time.Now().UTC().Format(layout)
+		finalStart = time.Now().UTC().Add(time.Duration(-minutes) * time.Minute).Format(layout)
+	} else {
+		finalStart = start
+		finalEnd = end
 	}
+	timeStart, _ := time.Parse(layout, finalStart)
+	timeEnd, _ := time.Parse(layout, finalEnd)
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {
 		metricRes := &Metric{}

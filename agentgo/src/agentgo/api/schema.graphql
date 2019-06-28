@@ -24,7 +24,7 @@ input LabelInput {
 
 type Query {
   metrics(input: LabelsInput!): [Metric!]!
-  points(input: LabelsInput!, start: String!, end: String!): [Metric!]!
+  points(input: LabelsInput!, start: String!, end: String!, minutes: Int!): [Metric!]!
 }
 
 scalar Time

@@ -59,13 +59,13 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Metrics func(childComplexity int, input LabelsInput) int
-		Points  func(childComplexity int, input LabelsInput, start string, end string) int
+		Points  func(childComplexity int, input LabelsInput, start string, end string, minutes int) int
 	}
 }
 
 type QueryResolver interface {
 	Metrics(ctx context.Context, input LabelsInput) ([]*Metric, error)
-	Points(ctx context.Context, input LabelsInput, start string, end string) ([]*Metric, error)
+	Points(ctx context.Context, input LabelsInput, start string, end string, minutes int) ([]*Metric, error)
 }
 
 type executableSchema struct {
@@ -147,7 +147,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Points(childComplexity, args["input"].(LabelsInput), args["start"].(string), args["end"].(string)), true
+		return e.complexity.Query.Points(childComplexity, args["input"].(LabelsInput), args["start"].(string), args["end"].(string), args["minutes"].(int)), true
 
 	}
 	return 0, false
@@ -239,7 +239,7 @@ input LabelInput {
 
 type Query {
   metrics(input: LabelsInput!): [Metric!]!
-  points(input: LabelsInput!, start: String!, end: String!): [Metric!]!
+  points(input: LabelsInput!, start: String!, end: String!, minutes: Int!): [Metric!]!
 }
 
 scalar Time
@@ -305,6 +305,14 @@ func (ec *executionContext) field_Query_points_args(ctx context.Context, rawArgs
 		}
 	}
 	args["end"] = arg2
+	var arg3 int
+	if tmp, ok := rawArgs["minutes"]; ok {
+		arg3, err = ec.unmarshalNInt2int(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["minutes"] = arg3
 	return args, nil
 }
 
@@ -553,7 +561,7 @@ func (ec *executionContext) _Query_points(ctx context.Context, field graphql.Col
 	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
 	resTmp := ec.FieldMiddleware(ctx, nil, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Points(rctx, args["input"].(LabelsInput), args["start"].(string), args["end"].(string))
+		return ec.resolvers.Query().Points(rctx, args["input"].(LabelsInput), args["start"].(string), args["end"].(string), args["minutes"].(int))
 	})
 	if resTmp == nil {
 		if !ec.HasError(rctx) {
@@ -1919,6 +1927,20 @@ func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v inter
 
 func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
 	res := graphql.MarshalFloat(v)
+	if res == graphql.Null {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+	}
+	return res
+}
+
+func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
+	return graphql.UnmarshalInt(v)
+}
+
+func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	res := graphql.MarshalInt(v)
 	if res == graphql.Null {
 		if !ec.HasError(graphql.GetResolverContext(ctx)) {
 			ec.Errorf(ctx, "must not be null")
