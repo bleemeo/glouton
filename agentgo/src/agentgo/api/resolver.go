@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"agentgo/types"
+
 	"github.com/vektah/gqlparser/gqlerror"
 ) // THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
 
