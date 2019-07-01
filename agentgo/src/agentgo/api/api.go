@@ -39,7 +39,7 @@ func New(db storeInterface) *API {
 	}).Handler)
 	api := &API{Port: port, db: db}
 	http.HandleFunc("/metrics", api.promExporter)
-	router.Handle("/", handler.Playground("GraphQL playground", "/graphql"))
+	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	api.router = router
 	return api
