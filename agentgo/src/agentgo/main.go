@@ -63,7 +63,16 @@ func main() {
 	coll.AddInput(panicOnError(cpu.New()))
 	coll.AddInput(panicOnError(mem.New()))
 	coll.AddInput(panicOnError(swap.New()))
-	coll.AddInput(panicOnError(net.New(nil)))
+	coll.AddInput(panicOnError(net.New(
+		[]string{
+			"docker",
+			"lo",
+			"veth",
+			"virbr",
+			"vnet",
+			"isatap",
+		},
+	)))
 	coll.AddInput(panicOnError(disk.New("/", nil)))
 	coll.AddInput(panicOnError(diskio.New(
 		[]string{

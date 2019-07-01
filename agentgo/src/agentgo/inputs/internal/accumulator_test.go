@@ -2,6 +2,7 @@ package internal
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -37,9 +38,9 @@ func TestDefault(t *testing.T) {
 
 func TestRename(t *testing.T) {
 	called := false
-	transformMetrics := func(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
-		if tags["newTag"] != "value" {
-			t.Errorf("tags[newTag] == %#v, want %#v", tags["newTag"], "value")
+	transformMetrics := func(originalContext GatherContext, currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+		if currentContext.Tags["newTag"] != "value" {
+			t.Errorf("tags[newTag] == %#v, want %#v", currentContext.Tags["newTag"], "value")
 		}
 		for k, v := range fields {
 			if k == "metricDouble" {
@@ -58,12 +59,13 @@ func TestRename(t *testing.T) {
 		}
 		return fields
 	}
-	renameGlobal := func(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
-		newMeasurement = "cpu2"
-		newTags = map[string]string{
-			"newTag": "value",
-		}
-		return
+	renameGlobal := func(originalContext GatherContext) (newContext GatherContext, drop bool) {
+		return GatherContext{
+			Measurement: "cpu2",
+			Tags: map[string]string{
+				"newTag": "value",
+			},
+		}, false
 	}
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
 		if measurement != "cpu2" {
@@ -159,6 +161,93 @@ func TestDerive(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
 		DerivatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint"},
+	}
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc1,
+		"cpu",
+		map[string]interface{}{
+			"metricNoDerive":    42.0,
+			"metricDeriveFloat": 10.0,
+			"metricDeriveInt":   10,
+			"metricDeriveUint":  uint64(1000020),
+		},
+		nil,
+		t0,
+	)
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc2,
+		"cpu",
+		map[string]interface{}{
+			"metricNoDerive":    12.0,
+			"metricDeriveFloat": 23.0,
+			"metricDeriveInt":   0,
+			"metricDeriveUint":  uint64(1000000),
+		},
+		nil,
+		t1,
+	)
+	if !called1 {
+		t.Errorf("finalFunc1 was not called")
+	}
+	if !called2 {
+		t.Errorf("finalFunc2 was not called")
+	}
+}
+
+func TestDeriveFunc(t *testing.T) {
+	called1 := false
+	called2 := false
+	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		cases := []struct {
+			name  string
+			value float64
+		}{
+			{"metricNoDerive", 42.0},
+		}
+		if len(fields) != len(cases) {
+			t.Errorf("len(fields) == %v, want %v", len(fields), len(cases))
+		}
+		for _, c := range cases {
+			if fields[c.name] != c.value {
+				t.Errorf("fields[%#v] == %v, want %v", c.name, fields[c.name], c.value)
+			}
+		}
+		called1 = true
+	}
+	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		cases := []struct {
+			name  string
+			value float64
+		}{
+			{"metricNoDerive", 12.0},
+			{"metricDeriveFloat", 1.3},
+			{"metricDeriveInt", -1.0},
+			{"metricDeriveUint", -2.0},
+		}
+		if len(fields) != len(cases) {
+			t.Errorf("len(fields) == %v, want %v", len(fields), len(cases))
+		}
+		for _, c := range cases {
+			got := fields[c.name].(float64)
+			if math.Abs(got-c.value) > 0.001 {
+				t.Errorf("fields[%#v] == %v, want %v", c.name, fields[c.name], c.value)
+			}
+		}
+		called2 = true
+	}
+	shouldDerivateMetrics := func(originalContext GatherContext, currentContext GatherContext, metricName string) bool {
+		if strings.HasSuffix(metricName, "nt") {
+			return true
+		}
+		return false
+	}
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+	acc := Accumulator{
+		DerivatedMetrics:      []string{"metricDeriveFloat"},
+		ShouldDerivateMetrics: shouldDerivateMetrics,
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -303,7 +392,7 @@ func TestMeasurementMap(t *testing.T) {
 		}
 		t.Errorf("fields == %v, want load1, logged or no_match", fields)
 	}
-	renameMetrics := func(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string) {
+	renameMetrics := func(originalContext GatherContext, currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 		newMetricName = metricName
 		switch metricName {
 		case "load1":

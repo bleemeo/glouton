@@ -43,16 +43,16 @@ func New() (i telegraf.Input, err error) {
 	return
 }
 
-func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	delete(fields, "n_cpus")
 	delete(fields, "uptime")
 	delete(fields, "uptime_format")
 	return fields
 }
 
-func renameMetrics(measurement string, metricName string, tags map[string]string) (newMeasurement string, newMetricName string) {
+func renameMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 	newMetricName = metricName
-	newMeasurement = measurement
+	newMeasurement = currentContext.Measurement
 	if metricName == "n_users" {
 		newMeasurement = "users"
 		newMetricName = "logged"
