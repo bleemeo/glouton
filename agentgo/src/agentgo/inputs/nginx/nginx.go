@@ -53,18 +53,16 @@ func New(url string) (i telegraf.Input, err error) {
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
-	for metricName := range fields {
+	newFields := make(map[string]float64)
+	for metricName, value := range fields {
 		switch metricName {
-		case "accepts", "handled", "requests", "reading", "writing", "waiting", "active":
-			// Keep those metrics
+		case "accepts":
+			newFields["nginx_connections_accepted"] = value
+		case "handled", "active", "waiting", "reading", "writing":
+			newFields["connection_"+metricName] = value
 		default:
-			delete(fields, metricName)
+			newFields[metricName] = value
 		}
 	}
-	value, ok := fields["accepts"]
-	if ok {
-		delete(fields, "accepts")
-		fields["connections_accepted"] = value
-	}
-	return fields
+	return newFields
 }
