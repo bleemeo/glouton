@@ -54,7 +54,7 @@ func New(url string) (i telegraf.Input, err error) {
 }
 
 func shouldDerivateMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) bool {
-	if strings.HasPrefix(metricName, "_cmd_") {
+	if strings.HasPrefix(metricName, "cmd_") {
 		return true
 	}
 	if strings.HasSuffix(metricName, "_misses") {
