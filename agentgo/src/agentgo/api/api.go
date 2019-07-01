@@ -35,7 +35,7 @@ func New(db storeInterface) *API {
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
-		Debug:            true,
+		Debug:            false,
 	}).Handler)
 	api := &API{Port: port, db: db}
 	http.HandleFunc("/metrics", api.promExporter)
