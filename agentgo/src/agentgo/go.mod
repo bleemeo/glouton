@@ -31,4 +31,5 @@ require (
 	github.com/vektah/gqlparser v1.1.2
 	golang.org/x/sys v0.0.0-20190618155005-516e3c20635f
 	google.golang.org/appengine v1.6.1
+	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
 )
