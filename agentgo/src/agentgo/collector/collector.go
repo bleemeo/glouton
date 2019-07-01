@@ -45,6 +45,12 @@ func (c *Collector) AddInput(input telegraf.Input) int {
 	}
 	c.inputs[id] = input
 
+	if si, ok := input.(telegraf.ServiceInput); ok {
+		if err := si.Start(nil); err != nil {
+			panic("Failed to start input")
+		}
+	}
+
 	return id
 }
 
@@ -52,6 +58,12 @@ func (c *Collector) AddInput(input telegraf.Input) int {
 func (c *Collector) RemoveInput(id int) {
 	c.l.Lock()
 	defer c.l.Unlock()
+
+	if input, ok := c.inputs[id]; ok {
+		if si, ok := input.(telegraf.ServiceInput); ok {
+			si.Stop()
+		}
+	}
 
 	delete(c.inputs, id)
 }

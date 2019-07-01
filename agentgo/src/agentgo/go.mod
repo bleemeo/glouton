@@ -17,6 +17,7 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1
 	github.com/gobwas/glob v0.2.3
 	github.com/influxdata/telegraf v0.0.0-20190611181903-c9d8f7b008f6
+	github.com/jackc/pgx v3.5.0+incompatible // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0
