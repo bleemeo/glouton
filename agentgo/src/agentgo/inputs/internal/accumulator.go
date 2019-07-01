@@ -47,6 +47,10 @@ type Accumulator struct {
 	// DerivatedMetrics is the list of metric counter to derive
 	DerivatedMetrics []string
 
+	// ShouldDerivateMetrics indicate if a metric should be derivated. It's an alternate way to DerivatedMetrics.
+	// If both ShouldDerivateMetrics and DerivatedMetrics are set, only metrics not found in DerivatedMetrics are passed to ShouldDerivateMetrics
+	ShouldDerivateMetrics func(originalContext GatherContext, currentContext GatherContext, metricName string) bool
+
 	// TransformMetrics take a list of metrics and could change the name/value or even add/delete some points.
 	// tags & measurement are given as indication and should not be mutated.
 	TransformMetrics func(originalContext GatherContext, currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64
@@ -130,7 +134,7 @@ func flattenTag(tags map[string]string) string {
 }
 
 // applyDerivate compute the derivated value for metrics in DerivatedMetrics
-func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[string]string, metricTime time.Time) map[string]float64 {
+func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContext GatherContext, fields map[string]interface{}, metricTime time.Time) map[string]float64 {
 	a.l.Lock()
 	defer a.l.Unlock()
 	result := make(map[string]float64)
@@ -140,7 +144,7 @@ func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[stri
 		searchMetrics[m] = true
 	}
 
-	flatTag := flattenTag(tags)
+	flatTag := flattenTag(currentContext.Tags)
 
 	if _, ok := a.currentValues[flatTag]; !ok {
 		a.currentValues[flatTag] = make(map[string]metricPoint)
@@ -151,7 +155,15 @@ func (a *Accumulator) applyDerivate(fields map[string]interface{}, tags map[stri
 			// we ignore string without error
 			continue
 		}
-		if _, ok := searchMetrics[metricName]; !ok {
+		derive := false
+		if _, ok := searchMetrics[metricName]; ok {
+			derive = true
+		}
+		if !derive && a.ShouldDerivateMetrics != nil && a.ShouldDerivateMetrics(originalContext, currentContext, metricName) {
+			derive = true
+		}
+
+		if !derive {
 			valueFloat, err := convertToFloat(value)
 			if err == nil {
 				result[metricName] = valueFloat
@@ -199,7 +211,7 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		metricTime = t[0]
 	}
 
-	floatFields := a.applyDerivate(fields, currentContext.Tags, metricTime)
+	floatFields := a.applyDerivate(originalContext, currentContext, fields, metricTime)
 	if a.TransformMetrics != nil {
 		floatFields = a.TransformMetrics(originalContext, currentContext, floatFields, fields)
 	}

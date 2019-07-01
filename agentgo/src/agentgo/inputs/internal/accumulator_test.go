@@ -2,6 +2,7 @@ package internal
 
 import (
 	"math"
+	"strings"
 	"testing"
 	"time"
 )
@@ -160,6 +161,93 @@ func TestDerive(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
 		DerivatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint"},
+	}
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc1,
+		"cpu",
+		map[string]interface{}{
+			"metricNoDerive":    42.0,
+			"metricDeriveFloat": 10.0,
+			"metricDeriveInt":   10,
+			"metricDeriveUint":  uint64(1000020),
+		},
+		nil,
+		t0,
+	)
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc2,
+		"cpu",
+		map[string]interface{}{
+			"metricNoDerive":    12.0,
+			"metricDeriveFloat": 23.0,
+			"metricDeriveInt":   0,
+			"metricDeriveUint":  uint64(1000000),
+		},
+		nil,
+		t1,
+	)
+	if !called1 {
+		t.Errorf("finalFunc1 was not called")
+	}
+	if !called2 {
+		t.Errorf("finalFunc2 was not called")
+	}
+}
+
+func TestDeriveFunc(t *testing.T) {
+	called1 := false
+	called2 := false
+	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		cases := []struct {
+			name  string
+			value float64
+		}{
+			{"metricNoDerive", 42.0},
+		}
+		if len(fields) != len(cases) {
+			t.Errorf("len(fields) == %v, want %v", len(fields), len(cases))
+		}
+		for _, c := range cases {
+			if fields[c.name] != c.value {
+				t.Errorf("fields[%#v] == %v, want %v", c.name, fields[c.name], c.value)
+			}
+		}
+		called1 = true
+	}
+	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		cases := []struct {
+			name  string
+			value float64
+		}{
+			{"metricNoDerive", 12.0},
+			{"metricDeriveFloat", 1.3},
+			{"metricDeriveInt", -1.0},
+			{"metricDeriveUint", -2.0},
+		}
+		if len(fields) != len(cases) {
+			t.Errorf("len(fields) == %v, want %v", len(fields), len(cases))
+		}
+		for _, c := range cases {
+			got := fields[c.name].(float64)
+			if math.Abs(got-c.value) > 0.001 {
+				t.Errorf("fields[%#v] == %v, want %v", c.name, fields[c.name], c.value)
+			}
+		}
+		called2 = true
+	}
+	shouldDerivateMetrics := func(originalContext GatherContext, currentContext GatherContext, metricName string) bool {
+		if strings.HasSuffix(metricName, "nt") {
+			return true
+		}
+		return false
+	}
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+	acc := Accumulator{
+		DerivatedMetrics:      []string{"metricDeriveFloat"},
+		ShouldDerivateMetrics: shouldDerivateMetrics,
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
