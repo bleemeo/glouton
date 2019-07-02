@@ -166,7 +166,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 				return nil, gqlerror.Errorf("Can not retrieve Containers's Metrics")
 			}
 			if metrics != nil && len(metrics) > 0 {
-				points, errMetricsPoints := metrics[0].Points(time.Now().UTC().Add(time.Duration(-60*time.Second)), time.Now().UTC())
+				points, errMetricsPoints := metrics[0].Points(time.Now().UTC().Add(time.Duration(-1)*time.Minute), time.Now().UTC())
 				if errMetricsPoints != nil {
 					return nil, gqlerror.Errorf("Can not retrieve Metics's Points")
 				}
