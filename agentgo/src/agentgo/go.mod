@@ -8,7 +8,7 @@ require (
 	github.com/alecthomas/units v0.0.0-20151022065526-2efee857e7cf
 	github.com/davecgh/go-spew v1.1.1
 	github.com/docker/distribution v2.7.1+incompatible // indirect
-	github.com/docker/docker v0.7.3-0.20180327123150-ed7b6428c133 // indirect
+	github.com/docker/docker v0.7.3-0.20180327123150-ed7b6428c133
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/go-chi/chi v4.0.2+incompatible

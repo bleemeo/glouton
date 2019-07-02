@@ -11,6 +11,7 @@ import (
 
 	"agentgo/api"
 	"agentgo/collector"
+	"agentgo/facts"
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/disk"
 	"agentgo/inputs/diskio"
@@ -58,6 +59,8 @@ func main() {
 	api := api.New(db)
 	coll := collector.New(db.Accumulator())
 
+	dockerFact := facts.NewDocker()
+
 	coll.AddInput(panicOnError(system.New()))
 	coll.AddInput(panicOnError(process.New()))
 	coll.AddInput(panicOnError(cpu.New()))
@@ -90,6 +93,12 @@ func main() {
 		defer wg.Done()
 		db.Run(ctx)
 		db.Close()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		dockerFact.Run(ctx)
 	}()
 
 	wg.Add(1)
