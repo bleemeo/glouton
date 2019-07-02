@@ -9,8 +9,27 @@ type Point {
 }
 
 type Metric {
+  name: String!
   labels: [Label!]!
   points: [Point!]
+}
+
+type Container {
+  command: String!
+  createdAt: Time
+  id: String!
+  image: String!
+  inspectJSON: String!
+  name: String!
+  startedAt: Time
+  state: String!
+  finishedAt: Time
+  ioWriteBytes: Float!
+  ioReadBytes: Float!
+  netBitsRecv: Float!
+  netBitsSent: Float!
+  memUsedPerc: Float!
+  cpuUsedPerc: Float!
 }
 
 input LabelsInput {
@@ -22,9 +41,15 @@ input LabelInput {
   value: String!
 }
 
+input Pagination {
+  offset: Int!
+  limit: Int!
+}
+
 type Query {
   metrics(input: LabelsInput!): [Metric!]!
   points(input: LabelsInput!, start: String!, end: String!, minutes: Int!): [Metric!]!
+  containers(input: Pagination): [Container!]!
 }
 
 scalar Time

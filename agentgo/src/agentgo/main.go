@@ -56,10 +56,9 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 func main() {
 	log.Println("Starting agent")
 	db := store.New()
-	api := api.New(db)
-	coll := collector.New(db.Accumulator())
-
 	dockerFact := facts.NewDocker()
+	api := api.New(db, dockerFact)
+	coll := collector.New(db.Accumulator())
 
 	coll.AddInput(panicOnError(system.New()))
 	coll.AddInput(panicOnError(process.New()))

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"agentgo/types"
+	"agentgo/facts"
 
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"
@@ -26,7 +27,7 @@ type API struct {
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider) *API {
 	router := chi.NewRouter()
 	port := os.Getenv("PORT")
 	if port == "" {
@@ -40,7 +41,7 @@ func New(db storeInterface) *API {
 	api := &API{Port: port, db: db}
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
-	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api, dockerFact: dockerFact}})))
 	api.router = router
 	return api
 }
