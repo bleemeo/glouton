@@ -23,7 +23,7 @@ require (
 	github.com/gorilla/websocket v1.4.0 // indirect
 	github.com/gotestyourself/gotestyourself v2.2.0+incompatible // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
-	github.com/influxdata/telegraf v0.0.0-20190611181903-c9d8f7b008f6
+	github.com/influxdata/telegraf v0.10.2-0.20190625201339-f91de60d370c
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v3.5.0+incompatible // indirect
 	github.com/lib/pq v1.1.1 // indirect
@@ -31,7 +31,7 @@ require (
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/rs/cors v1.6.0
 	github.com/satori/go.uuid v1.2.0 // indirect
-	github.com/shirou/gopsutil v0.0.0-20190601025009-5335e3fd506d
+	github.com/shirou/gopsutil v2.19.6+incompatible
 	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/tidwall/gjson v1.3.0 // indirect
