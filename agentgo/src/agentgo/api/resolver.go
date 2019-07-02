@@ -127,7 +127,6 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 		"docker_container_mem_used_perc",
 		"docker_container_cpu_used",
 	}
-	layout := "2006-01-02T15:04:05.000Z"
 
 	sort.Slice(containers, func(i, j int) bool {
 		return strings.Compare(containers[i].Name(), containers[j].Name()) < 0
@@ -145,9 +144,9 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 		}
 	}
 	for _, container := range containersSliced {
-		createdAt, _ := time.Parse(layout, container.CreatedAt().Format(layout))
-		startedAt, _ := time.Parse(layout, container.StartedAt().Format(layout))
-		finishedAt, _ := time.Parse(layout, container.FinishedAt().Format(layout))
+		createdAt := container.CreatedAt()
+		startedAt := container.StartedAt()
+		finishedAt := container.FinishedAt()
 		c := &Container{
 			Command:     container.Command(),
 			CreatedAt:   &createdAt,
