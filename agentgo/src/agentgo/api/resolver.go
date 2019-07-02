@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"log"
 
 	"agentgo/facts"
 	"agentgo/types"
@@ -34,7 +35,7 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 			metricFilters[filter.Key] = filter.Value
 			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
 			if errMetrics != nil {
-				return nil, gqlerror.Errorf("Can not retrieve metrics")
+				log.Fatalf("Can not retrieve metrics")
 			}
 			metrics = append(metrics, newMetrics...)
 		}
@@ -42,7 +43,7 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 		var errMetrics error
 		metrics, errMetrics = r.api.db.Metrics(map[string]string{})
 		if errMetrics != nil {
-			return nil, gqlerror.Errorf("Can not retrieve metrics")
+			log.Fatalf("Can not retrieve metrics")
 		}
 	}
 	metricsRes := []*Metric{}
@@ -68,12 +69,12 @@ func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start str
 			metricFilters[filter.Key] = filter.Value
 			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
 			if errMetrics != nil {
-				return nil, gqlerror.Errorf("Can not retrieve metrics")
+				log.Fatalf("Can not retrieve metrics")
 			}
 			metrics = append(metrics, newMetrics...)
 		}
 	} else {
-		return nil, gqlerror.Errorf("Can not retrieve points for every metrics")
+		log.Fatalf("Can not retrieve points for every metrics")
 	}
 	layout := "2006-01-02T15:04:05.000Z"
 	finalStart := ""
@@ -97,7 +98,7 @@ func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start str
 		}
 		points, errPoints := metric.Points(timeStart, timeEnd)
 		if errPoints != nil {
-			return nil, gqlerror.Errorf("Can not retrieve points")
+			log.Fatalf("Can not retrieve points")
 		}
 		for _, point := range points {
 			pointRes := &Point{Time: point.Time.UTC(), Value: point.Value}
@@ -114,7 +115,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 	duration, _ := time.ParseDuration("1h")
 	containers, errContainers := r.dockerFact.Containers(ctx, duration)
 	if errContainers != nil {
-		return nil, gqlerror.Errorf("Can not retrieve Containers")
+		log.Fatalf("Can not retrieve Containers")
 	}
 	containersRes := []*Container{}
 	containerMetrics := []string{
@@ -163,12 +164,12 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 			metricFilters["__name__"] = m
 			metrics, errContainersMetrics := r.api.db.Metrics(metricFilters)
 			if errContainersMetrics != nil {
-				return nil, gqlerror.Errorf("Can not retrieve Containers's Metrics")
+				log.Fatalf("Can not retrieve Containers's Metrics")
 			}
 			if metrics != nil && len(metrics) > 0 {
 				points, errMetricsPoints := metrics[0].Points(time.Now().UTC().Add(time.Duration(-1)*time.Minute), time.Now().UTC())
 				if errMetricsPoints != nil {
-					return nil, gqlerror.Errorf("Can not retrieve Metics's Points")
+					log.Fatalf("Can not retrieve Metrics's Points")
 				}
 				var point float64
 				if points != nil && len(points) > 0 {
