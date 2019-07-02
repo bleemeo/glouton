@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"os"
 
-	"agentgo/types"
 	"agentgo/facts"
+	"agentgo/types"
 
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"
