@@ -2,18 +2,18 @@ package api
 
 import (
 	"context"
-	"time"
 	"sort"
 	"strings"
+	"time"
 
-	"agentgo/types"
 	"agentgo/facts"
+	"agentgo/types"
 
 	"github.com/vektah/gqlparser/gqlerror"
 ) // THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
 
 type Resolver struct {
-	api *API
+	api        *API
 	dockerFact *facts.DockerProvider
 }
 
@@ -133,8 +133,8 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 	containersSliced := containers
 	if input != nil {
 		if len(containers) > input.Offset {
-			to := input.Offset+input.Limit
-			if len(containers) <= input.Offset + input.Limit {
+			to := input.Offset + input.Limit
+			if len(containers) <= input.Offset+input.Limit {
 				to = len(containers)
 			}
 			containersSliced = containers[input.Offset:to]
@@ -147,15 +147,15 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 		startedAt, _ := time.Parse(layout, container.StartedAt().Format(layout))
 		finishedAt, _ := time.Parse(layout, container.FinishedAt().Format(layout))
 		c := &Container{
-			Command: container.Command(),
-			CreatedAt: &createdAt,
-			ID: container.ID(),
-			Image: container.Image(),
+			Command:     container.Command(),
+			CreatedAt:   &createdAt,
+			ID:          container.ID(),
+			Image:       container.Image(),
 			InspectJSON: container.InspectJSON(),
-			Name: container.Name(),
-			StartedAt: &startedAt,
-			State: container.State(),
-			FinishedAt: &finishedAt,
+			Name:        container.Name(),
+			StartedAt:   &startedAt,
+			State:       container.State(),
+			FinishedAt:  &finishedAt,
 		}
 		for _, m := range containerMetrics {
 			metricFilters := map[string]string{}
@@ -166,28 +166,28 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 				return nil, gqlerror.Errorf("Can not retrieve Containers's Metrics")
 			}
 			if metrics != nil && len(metrics) > 0 {
-				points, errMetricsPoints := metrics[0].Points(time.Now().UTC().Add(time.Duration(-60 * time.Second)), time.Now().UTC())
+				points, errMetricsPoints := metrics[0].Points(time.Now().UTC().Add(time.Duration(-60*time.Second)), time.Now().UTC())
 				if errMetricsPoints != nil {
 					return nil, gqlerror.Errorf("Can not retrieve Metics's Points")
 				}
 				var point float64
 				if points != nil && len(points) > 0 {
-					point = points[len(points) - 1].Value
+					point = points[len(points)-1].Value
 				}
 				switch m {
-					case "docker_container_io_write_bytes":
-						c.IoWriteBytes = point
-					case "docker_container_io_read_bytes":
-						c.IoReadBytes = point
-					case "docker_container_net_bits_recv":
-						c.NetBitsRecv = point
-					case "docker_container_net_bits_sent":
-						c.NetBitsSent = point
-					case "docker_container_mem_used_perc":
-						c.MemUsedPerc = point
-					case "docker_container_cpu_used":
-						c.CPUUsedPerc = point
-				} 
+				case "docker_container_io_write_bytes":
+					c.IoWriteBytes = point
+				case "docker_container_io_read_bytes":
+					c.IoReadBytes = point
+				case "docker_container_net_bits_recv":
+					c.NetBitsRecv = point
+				case "docker_container_net_bits_sent":
+					c.NetBitsSent = point
+				case "docker_container_mem_used_perc":
+					c.MemUsedPerc = point
+				case "docker_container_cpu_used":
+					c.CPUUsedPerc = point
+				}
 			}
 		}
 		containersRes = append(containersRes, c)
