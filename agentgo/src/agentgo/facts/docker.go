@@ -254,8 +254,7 @@ func isDockerRunning() bool {
 
 func notifyError(err error, lastErrorNotify time.Time, reconnectAttempt int) time.Time {
 	if time.Since(lastErrorNotify) < time.Hour && reconnectAttempt > 1 {
-		log.Printf("I would skip this notif")
-		// return lastErrorNotify
+		return lastErrorNotify
 	}
 	if strings.Contains(fmt.Sprintf("%v", err), "permission denied") {
 		log.Println(
