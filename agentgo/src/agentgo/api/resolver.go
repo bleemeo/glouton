@@ -18,6 +18,8 @@ type Resolver struct {
 	dockerFact *facts.DockerProvider
 }
 
+const layout = "2006-01-02T15:04:05.000Z"
+
 func (r *Resolver) Query() QueryResolver {
 	return &queryResolver{r}
 }
@@ -76,7 +78,6 @@ func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start str
 	} else {
 		log.Fatalf("Can not retrieve points for every metrics")
 	}
-	layout := "2006-01-02T15:04:05.000Z"
 	finalStart := ""
 	finalEnd := ""
 	if minutes != 0 {
