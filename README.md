@@ -36,6 +36,11 @@ export PATH=/usr/lib/go-1.12/bin:$PATH
 (cd /tmp; GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1)
 ```
 
+* Run go generate if generated files need update (GraphQL schema update):
+```
+(cd agentgo/src/agentgo; go generate agentgo/...)
+```
+
 * Run Golang linter:
 ```
 (cd agentgo/src/agentgo; ~/go/bin/golangci-lint run ./...)
