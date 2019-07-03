@@ -45,7 +45,7 @@ input Pagination {
 type Query {
   metrics(labels: [LabelInput!]!): [Metric!]!
   points(labels: [LabelInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
-  containers(input: Pagination): [Container!]!
+  containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
 }
 
 scalar Time

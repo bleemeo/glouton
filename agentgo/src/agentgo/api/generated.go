@@ -77,7 +77,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Containers func(childComplexity int, input *Pagination) int
+		Containers func(childComplexity int, input *Pagination, allContainers bool, search string) int
 		Metrics    func(childComplexity int, labels []*LabelInput) int
 		Points     func(childComplexity int, labels []*LabelInput, start string, end string, minutes int) int
 	}
@@ -86,7 +86,7 @@ type ComplexityRoot struct {
 type QueryResolver interface {
 	Metrics(ctx context.Context, labels []*LabelInput) ([]*Metric, error)
 	Points(ctx context.Context, labels []*LabelInput, start string, end string, minutes int) ([]*Metric, error)
-	Containers(ctx context.Context, input *Pagination) ([]*Container, error)
+	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error)
 }
 
 type executableSchema struct {
@@ -268,7 +268,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Containers(childComplexity, args["input"].(*Pagination)), true
+		return e.complexity.Query.Containers(childComplexity, args["input"].(*Pagination), args["allContainers"].(bool), args["search"].(string)), true
 
 	case "Query.metrics":
 		if e.complexity.Query.Metrics == nil {
@@ -390,7 +390,7 @@ input Pagination {
 type Query {
   metrics(labels: [LabelInput!]!): [Metric!]!
   points(labels: [LabelInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
-  containers(input: Pagination): [Container!]!
+  containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
 }
 
 scalar Time
@@ -426,6 +426,22 @@ func (ec *executionContext) field_Query_containers_args(ctx context.Context, raw
 		}
 	}
 	args["input"] = arg0
+	var arg1 bool
+	if tmp, ok := rawArgs["allContainers"]; ok {
+		arg1, err = ec.unmarshalNBoolean2bool(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["allContainers"] = arg1
+	var arg2 string
+	if tmp, ok := rawArgs["search"]; ok {
+		arg2, err = ec.unmarshalNString2string(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["search"] = arg2
 	return args, nil
 }
 
@@ -1433,7 +1449,7 @@ func (ec *executionContext) _Query_containers(ctx context.Context, field graphql
 	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Containers(rctx, args["input"].(*Pagination))
+		return ec.resolvers.Query().Containers(rctx, args["input"].(*Pagination), args["allContainers"].(bool), args["search"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)

@@ -115,7 +115,7 @@ func (r *queryResolver) Points(ctx context.Context, labels []*LabelInput, start 
 	}
 	return metricsRes, nil
 }
-func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*Container, error) {
+func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error) {
 	if r.dockerFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
@@ -138,68 +138,70 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination) ([]*C
 	sort.Slice(containers, func(i, j int) bool {
 		return strings.Compare(containers[i].Name(), containers[j].Name()) < 0
 	})
-	containersSliced := containers
+	for _, container := range containers {
+		if (allContainers || container.State() == "running") && (strings.Contains(container.Name(), search) || strings.Contains(container.Image(), search) || strings.Contains(container.ID(), search) || strings.Contains(container.Command(), search)) {
+			createdAt := container.CreatedAt()
+			startedAt := container.StartedAt()
+			finishedAt := container.FinishedAt()
+			c := &Container{
+				Command:     container.Command(),
+				CreatedAt:   &createdAt,
+				ID:          container.ID(),
+				Image:       container.Image(),
+				InspectJSON: container.InspectJSON(),
+				Name:        container.Name(),
+				StartedAt:   &startedAt,
+				State:       container.State(),
+				FinishedAt:  &finishedAt,
+			}
+			for _, m := range containerMetrics {
+				metricFilters := map[string]string{}
+				metricFilters["item"] = container.Name()
+				metricFilters["__name__"] = m
+				metrics, errContainersMetrics := r.api.db.Metrics(metricFilters)
+				if errContainersMetrics != nil {
+					log.Fatalf("Can not retrieve Containers's Metrics")
+				}
+				if metrics != nil && len(metrics) > 0 {
+					points, errMetricsPoints := metrics[0].Points(time.Now().UTC().Add(time.Duration(-1)*time.Minute), time.Now().UTC())
+					if errMetricsPoints != nil {
+						log.Println(errMetricsPoints)
+						return nil, gqlerror.Errorf("Can not retrieve Metrics's Points")
+					}
+					var point float64
+					if points != nil && len(points) > 0 {
+						point = points[len(points)-1].Value
+					}
+					switch m {
+					case "docker_container_io_write_bytes":
+						c.IoWriteBytes = point
+					case "docker_container_io_read_bytes":
+						c.IoReadBytes = point
+					case "docker_container_net_bits_recv":
+						c.NetBitsRecv = point
+					case "docker_container_net_bits_sent":
+						c.NetBitsSent = point
+					case "docker_container_mem_used_perc":
+						c.MemUsedPerc = point
+					case "docker_container_cpu_used":
+						c.CPUUsedPerc = point
+					}
+				}
+			}
+			containersRes = append(containersRes, c)
+		}
+	}
+	containersSliced := containersRes
 	if input != nil {
-		if len(containers) > input.Offset {
+		if len(containersRes) > input.Offset {
 			to := input.Offset + input.Limit
-			if len(containers) <= input.Offset+input.Limit {
-				to = len(containers)
+			if len(containersRes) <= input.Offset+input.Limit {
+				to = len(containersRes)
 			}
-			containersSliced = containers[input.Offset:to]
-		} else if len(containers) <= input.Offset {
-			containersSliced = []facts.Container{}
+			containersSliced = containersRes[input.Offset:to]
+		} else if len(containersRes) <= input.Offset {
+			containersSliced = []*Container{}
 		}
 	}
-	for _, container := range containersSliced {
-		createdAt := container.CreatedAt()
-		startedAt := container.StartedAt()
-		finishedAt := container.FinishedAt()
-		c := &Container{
-			Command:     container.Command(),
-			CreatedAt:   &createdAt,
-			ID:          container.ID(),
-			Image:       container.Image(),
-			InspectJSON: container.InspectJSON(),
-			Name:        container.Name(),
-			StartedAt:   &startedAt,
-			State:       container.State(),
-			FinishedAt:  &finishedAt,
-		}
-		for _, m := range containerMetrics {
-			metricFilters := map[string]string{}
-			metricFilters["item"] = container.Name()
-			metricFilters["__name__"] = m
-			metrics, errContainersMetrics := r.api.db.Metrics(metricFilters)
-			if errContainersMetrics != nil {
-				log.Fatalf("Can not retrieve Containers's Metrics")
-			}
-			if metrics != nil && len(metrics) > 0 {
-				points, errMetricsPoints := metrics[0].Points(time.Now().UTC().Add(time.Duration(-1)*time.Minute), time.Now().UTC())
-				if errMetricsPoints != nil {
-					log.Println(errMetricsPoints)
-					return nil, gqlerror.Errorf("Can not retrieve Metrics's Points")
-				}
-				var point float64
-				if points != nil && len(points) > 0 {
-					point = points[len(points)-1].Value
-				}
-				switch m {
-				case "docker_container_io_write_bytes":
-					c.IoWriteBytes = point
-				case "docker_container_io_read_bytes":
-					c.IoReadBytes = point
-				case "docker_container_net_bits_recv":
-					c.NetBitsRecv = point
-				case "docker_container_net_bits_sent":
-					c.NetBitsSent = point
-				case "docker_container_mem_used_perc":
-					c.MemUsedPerc = point
-				case "docker_container_cpu_used":
-					c.CPUUsedPerc = point
-				}
-			}
-		}
-		containersRes = append(containersRes, c)
-	}
-	return containersRes, nil
+	return containersSliced, nil
 }
