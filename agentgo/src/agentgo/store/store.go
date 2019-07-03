@@ -77,7 +77,7 @@ func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
 	result = make([]types.Point, 0)
 	for _, point := range points {
 		pointTimeUTC := point.Time.UTC()
-		if start.Before(pointTimeUTC) && pointTimeUTC.Before(end) {
+		if !pointTimeUTC.Before(start) && !pointTimeUTC.After(end) {
 			result = append(result, point)
 		}
 	}
