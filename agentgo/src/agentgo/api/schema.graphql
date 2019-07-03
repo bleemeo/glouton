@@ -32,10 +32,6 @@ type Container {
   cpuUsedPerc: Float!
 }
 
-input LabelsInput {
-  labels: [LabelInput]!
-}
-
 input LabelInput {
   key: String!
   value: String!
@@ -47,8 +43,8 @@ input Pagination {
 }
 
 type Query {
-  metrics(input: LabelsInput!): [Metric!]!
-  points(input: LabelsInput!, start: String!, end: String!, minutes: Int!): [Metric!]!
+  metrics(labels: [LabelInput!]!): [Metric!]!
+  points(labels: [LabelInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination): [Container!]!
 }
 

@@ -34,10 +34,6 @@ type LabelInput struct {
 	Value string `json:"value"`
 }
 
-type LabelsInput struct {
-	Labels []*LabelInput `json:"labels"`
-}
-
 type Metric struct {
 	Name   string   `json:"name"`
 	Labels []*Label `json:"labels"`

@@ -28,13 +28,13 @@ func (r *Resolver) Query() QueryResolver {
 
 type queryResolver struct{ *Resolver }
 
-func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metric, error) {
+func (r *queryResolver) Metrics(ctx context.Context, labels []*LabelInput) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve metrics at this moment. Please try later")
 	}
 	metrics := []types.Metric{}
-	if len(input.Labels) > 0 {
-		for _, filter := range input.Labels {
+	if len(labels) > 0 {
+		for _, filter := range labels {
 			metricFilters := map[string]string{}
 			metricFilters[filter.Key] = filter.Value
 			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
@@ -62,13 +62,13 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 	}
 	return metricsRes, nil
 }
-func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start string, end string, minutes int) ([]*Metric, error) {
+func (r *queryResolver) Points(ctx context.Context, labels []*LabelInput, start string, end string, minutes int) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 	metrics := []types.Metric{}
-	if len(input.Labels) > 0 {
-		for _, filter := range input.Labels {
+	if len(labels) > 0 {
+		for _, filter := range labels {
 			metricFilters := map[string]string{}
 			metricFilters[filter.Key] = filter.Value
 			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
