@@ -128,7 +128,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 	duration, _ := time.ParseDuration("1h")
-	containers, err := r.dockerFact.Containers(ctx, duration)
+	containers, err := r.dockerFact.Containers(ctx, duration, false)
 	if err != nil {
 		log.Println(err)
 		return nil, gqlerror.Errorf("Can not retrieve Containers")

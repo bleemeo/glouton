@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
 	docker "github.com/docker/docker/client"
 	"github.com/shirou/gopsutil/process"
 )
@@ -53,7 +54,10 @@ func NewDocker() *DockerProvider {
 // Containers returns the list of container present on this system.
 //
 // It may use a cached value as old as maxAge
-func (d *DockerProvider) Containers(ctx context.Context, maxAge time.Duration) (containers []Container, err error) {
+//
+// If includeIgnored is false, Containers that has bleemeo.enable=false labels
+// are not listed.
+func (d *DockerProvider) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []Container, err error) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
@@ -66,7 +70,9 @@ func (d *DockerProvider) Containers(ctx context.Context, maxAge time.Duration) (
 
 	containers = make([]Container, 0, len(d.containers))
 	for _, c := range d.containers {
-		containers = append(containers, c)
+		if includeIgnored || !c.Ignore() {
+			containers = append(containers, c)
+		}
 	}
 	return
 }
@@ -156,6 +162,16 @@ func (c Container) CreatedAt() time.Time {
 // ID returns the Container ID
 func (c Container) ID() string {
 	return c.inspect.ID
+}
+
+// Ignore returns true if this container should be ignored by Bleemeo agent
+func (c Container) Ignore() bool {
+	return ignoreContainer(c.inspect)
+}
+
+// IsRunning returns true if this container is running
+func (c Container) IsRunning() bool {
+	return c.inspect.State != nil && c.inspect.State.Running
 }
 
 // Image returns the Docker container image
@@ -287,6 +303,23 @@ func (d *DockerProvider) getClient(ctx context.Context) (cl *docker.Client, err 
 	return
 }
 
+func (d *DockerProvider) top(ctx context.Context, containerID string) (top container.ContainerTopOKBody, topWaux container.ContainerTopOKBody, err error) {
+	d.l.Lock()
+	cl, err := d.getClient(ctx)
+	if err != nil {
+		d.l.Unlock()
+		return
+	}
+	d.l.Unlock()
+
+	top, err = cl.ContainerTop(ctx, containerID, nil)
+	if err != nil {
+		return
+	}
+	topWaux, err = cl.ContainerTop(ctx, containerID, []string{"waux"})
+	return
+}
+
 func (d *DockerProvider) updateContainers(ctx context.Context) error {
 	cl, err := d.getClient(ctx)
 	if err != nil {
@@ -308,7 +341,6 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		}
 		if ignoreContainer(inspect) {
 			ignoredID[c.ID] = nil
-			continue
 		}
 		containers[c.ID] = Container{
 			inspect: inspect,

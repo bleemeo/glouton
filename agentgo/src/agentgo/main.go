@@ -57,6 +57,8 @@ func main() {
 	log.Println("Starting agent")
 	db := store.New()
 	dockerFact := facts.NewDocker()
+	psFact := facts.NewProcess(dockerFact)
+	_ = psFact
 	api := api.New(db, dockerFact)
 	coll := collector.New(db.Accumulator())
 
