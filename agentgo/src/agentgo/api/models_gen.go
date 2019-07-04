@@ -40,6 +40,10 @@ type Metric struct {
 	Points []*Point `json:"points"`
 }
 
+type MetricInput struct {
+	Labels []*LabelInput `json:"labels"`
+}
+
 type Pagination struct {
 	Offset int `json:"offset"`
 	Limit  int `json:"limit"`

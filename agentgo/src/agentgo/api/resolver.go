@@ -28,21 +28,25 @@ func (r *Resolver) Query() QueryResolver {
 
 type queryResolver struct{ *Resolver }
 
-func (r *queryResolver) Metrics(ctx context.Context, labels []*LabelInput) ([]*Metric, error) {
+func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve metrics at this moment. Please try later")
 	}
 	metrics := []types.Metric{}
-	if len(labels) > 0 {
-		for _, filter := range labels {
-			metricFilters := map[string]string{}
-			metricFilters[filter.Key] = filter.Value
-			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
-			if errMetrics != nil {
-				log.Println(errMetrics)
-				return nil, gqlerror.Errorf("Can not retrieve metrics")
+	if len(metricsFilter) > 0 {
+		for _, mf := range metricsFilter {
+			if len(mf.Labels) > 0 {
+				metricFilters := map[string]string{}
+				for _, label := range mf.Labels {
+					metricFilters[label.Key] = label.Value
+				}
+				newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
+				if errMetrics != nil {
+					log.Println(errMetrics)
+					return nil, gqlerror.Errorf("Can not retrieve metrics")
+				}
+				metrics = append(metrics, newMetrics...)
 			}
-			metrics = append(metrics, newMetrics...)
 		}
 	} else {
 		var errMetrics error
@@ -64,21 +68,25 @@ func (r *queryResolver) Metrics(ctx context.Context, labels []*LabelInput) ([]*M
 	}
 	return metricsRes, nil
 }
-func (r *queryResolver) Points(ctx context.Context, labels []*LabelInput, start string, end string, minutes int) ([]*Metric, error) {
+func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 	metrics := []types.Metric{}
-	if len(labels) > 0 {
-		for _, filter := range labels {
-			metricFilters := map[string]string{}
-			metricFilters[filter.Key] = filter.Value
-			newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
-			if errMetrics != nil {
-				log.Println(errMetrics)
-				return nil, gqlerror.Errorf("Can not retrieve metrics")
+	if len(metricsFilter) > 0 {
+		for _, mf := range metricsFilter {
+			if len(mf.Labels) > 0 {
+				metricFilters := map[string]string{}
+				for _, label := range mf.Labels {
+					metricFilters[label.Key] = label.Value
+				}
+				newMetrics, errMetrics := r.api.db.Metrics(metricFilters)
+				if errMetrics != nil {
+					log.Println(errMetrics)
+					return nil, gqlerror.Errorf("Can not retrieve metrics")
+				}
+				metrics = append(metrics, newMetrics...)
 			}
-			metrics = append(metrics, newMetrics...)
 		}
 	} else {
 		return nil, gqlerror.Errorf("Can not retrieve points for every metrics")

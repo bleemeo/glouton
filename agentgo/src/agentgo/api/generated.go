@@ -78,14 +78,14 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Containers func(childComplexity int, input *Pagination, allContainers bool, search string) int
-		Metrics    func(childComplexity int, labels []*LabelInput) int
-		Points     func(childComplexity int, labels []*LabelInput, start string, end string, minutes int) int
+		Metrics    func(childComplexity int, metricsFilter []*MetricInput) int
+		Points     func(childComplexity int, metricsFilter []*MetricInput, start string, end string, minutes int) int
 	}
 }
 
 type QueryResolver interface {
-	Metrics(ctx context.Context, labels []*LabelInput) ([]*Metric, error)
-	Points(ctx context.Context, labels []*LabelInput, start string, end string, minutes int) ([]*Metric, error)
+	Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error)
+	Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error)
 	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error)
 }
 
@@ -280,7 +280,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Metrics(childComplexity, args["labels"].([]*LabelInput)), true
+		return e.complexity.Query.Metrics(childComplexity, args["metricsFilter"].([]*MetricInput)), true
 
 	case "Query.points":
 		if e.complexity.Query.Points == nil {
@@ -292,7 +292,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Points(childComplexity, args["labels"].([]*LabelInput), args["start"].(string), args["end"].(string), args["minutes"].(int)), true
+		return e.complexity.Query.Points(childComplexity, args["metricsFilter"].([]*MetricInput), args["start"].(string), args["end"].(string), args["minutes"].(int)), true
 
 	}
 	return 0, false
@@ -382,14 +382,18 @@ input LabelInput {
   value: String!
 }
 
+input MetricInput {
+  labels: [LabelInput!]!
+}
+
 input Pagination {
   offset: Int!
   limit: Int!
 }
 
 type Query {
-  metrics(labels: [LabelInput!]!): [Metric!]!
-  points(labels: [LabelInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
+  metrics(metricsFilter: [MetricInput!]!): [Metric!]!
+  points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
 }
 
@@ -448,28 +452,28 @@ func (ec *executionContext) field_Query_containers_args(ctx context.Context, raw
 func (ec *executionContext) field_Query_metrics_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 []*LabelInput
-	if tmp, ok := rawArgs["labels"]; ok {
-		arg0, err = ec.unmarshalNLabelInput2ᚕᚖagentgoᚋapiᚐLabelInput(ctx, tmp)
+	var arg0 []*MetricInput
+	if tmp, ok := rawArgs["metricsFilter"]; ok {
+		arg0, err = ec.unmarshalNMetricInput2ᚕᚖagentgoᚋapiᚐMetricInput(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["labels"] = arg0
+	args["metricsFilter"] = arg0
 	return args, nil
 }
 
 func (ec *executionContext) field_Query_points_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
-	var arg0 []*LabelInput
-	if tmp, ok := rawArgs["labels"]; ok {
-		arg0, err = ec.unmarshalNLabelInput2ᚕᚖagentgoᚋapiᚐLabelInput(ctx, tmp)
+	var arg0 []*MetricInput
+	if tmp, ok := rawArgs["metricsFilter"]; ok {
+		arg0, err = ec.unmarshalNMetricInput2ᚕᚖagentgoᚋapiᚐMetricInput(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["labels"] = arg0
+	args["metricsFilter"] = arg0
 	var arg1 string
 	if tmp, ok := rawArgs["start"]; ok {
 		arg1, err = ec.unmarshalNString2string(ctx, tmp)
@@ -1361,7 +1365,7 @@ func (ec *executionContext) _Query_metrics(ctx context.Context, field graphql.Co
 	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Metrics(rctx, args["labels"].([]*LabelInput))
+		return ec.resolvers.Query().Metrics(rctx, args["metricsFilter"].([]*MetricInput))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -1405,7 +1409,7 @@ func (ec *executionContext) _Query_points(ctx context.Context, field graphql.Col
 	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Points(rctx, args["labels"].([]*LabelInput), args["start"].(string), args["end"].(string), args["minutes"].(int))
+		return ec.resolvers.Query().Points(rctx, args["metricsFilter"].([]*MetricInput), args["start"].(string), args["end"].(string), args["minutes"].(int))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2717,6 +2721,24 @@ func (ec *executionContext) unmarshalInputLabelInput(ctx context.Context, obj in
 	return it, nil
 }
 
+func (ec *executionContext) unmarshalInputMetricInput(ctx context.Context, obj interface{}) (MetricInput, error) {
+	var it MetricInput
+	var asMap = obj.(map[string]interface{})
+
+	for k, v := range asMap {
+		switch k {
+		case "labels":
+			var err error
+			it.Labels, err = ec.unmarshalNLabelInput2ᚕᚖagentgoᚋapiᚐLabelInput(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputPagination(ctx context.Context, obj interface{}) (Pagination, error) {
 	var it Pagination
 	var asMap = obj.(map[string]interface{})
@@ -3477,6 +3499,38 @@ func (ec *executionContext) marshalNMetric2ᚖagentgoᚋapiᚐMetric(ctx context
 		return graphql.Null
 	}
 	return ec._Metric(ctx, sel, v)
+}
+
+func (ec *executionContext) unmarshalNMetricInput2agentgoᚋapiᚐMetricInput(ctx context.Context, v interface{}) (MetricInput, error) {
+	return ec.unmarshalInputMetricInput(ctx, v)
+}
+
+func (ec *executionContext) unmarshalNMetricInput2ᚕᚖagentgoᚋapiᚐMetricInput(ctx context.Context, v interface{}) ([]*MetricInput, error) {
+	var vSlice []interface{}
+	if v != nil {
+		if tmp1, ok := v.([]interface{}); ok {
+			vSlice = tmp1
+		} else {
+			vSlice = []interface{}{v}
+		}
+	}
+	var err error
+	res := make([]*MetricInput, len(vSlice))
+	for i := range vSlice {
+		res[i], err = ec.unmarshalNMetricInput2ᚖagentgoᚋapiᚐMetricInput(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) unmarshalNMetricInput2ᚖagentgoᚋapiᚐMetricInput(ctx context.Context, v interface{}) (*MetricInput, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalNMetricInput2agentgoᚋapiᚐMetricInput(ctx, v)
+	return &res, err
 }
 
 func (ec *executionContext) marshalNPoint2agentgoᚋapiᚐPoint(ctx context.Context, sel ast.SelectionSet, v Point) graphql.Marshaler {
