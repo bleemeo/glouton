@@ -308,18 +308,20 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 	pp.l.Unlock()
 
 	newProcessesMap := make(map[int]Process)
-	dockerProcesses, err := pp.dp.processes(ctx, 0)
-	if err != nil {
-		pp.l.Lock()
-		return err
+	if pp.dp != nil {
+		dockerProcesses, err := pp.dp.processes(ctx, 0)
+		if err != nil {
+			pp.l.Lock()
+			return err
+		}
+		for _, p := range dockerProcesses {
+			newProcessesMap[p.PID] = p
+		}
 	}
 	psProcesses, err := pp.psutil.processes(ctx, 0)
 	if err != nil {
 		pp.l.Lock()
 		return err
-	}
-	for _, p := range dockerProcesses {
-		newProcessesMap[p.PID] = p
 	}
 	for _, p := range psProcesses {
 		if p.CreateTime.After(onlyStartedBefore) {
@@ -333,24 +335,45 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 			newProcessesMap[p.PID] = p
 		}
 	}
-	if id2name, err := pp.dp.containerID2Name(ctx, 10*time.Second); err == nil {
-		for pid, p := range newProcessesMap {
-			if p.ContainerID == "" {
-				// Using cgroup, make sure process is not running in a container
-				candidateID := pp.containerIDFromCGroup(pid)
-				if n, ok := id2name[candidateID]; ok {
-					log.Printf("DBG: Base on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, n)
-					p.ContainerID = candidateID
-					newProcessesMap[pid] = p
-				} else if candidateID != "" && time.Since(p.CreateTime) < 3*time.Second {
-					log.Printf("DBG: Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
-					delete(newProcessesMap, pid)
+	if pp.dp != nil {
+		if id2name, err := pp.dp.containerID2Name(ctx, 10*time.Second); err == nil {
+			for pid, p := range newProcessesMap {
+				if p.ContainerID == "" && pp.containerIDFromCGroup != nil {
+					// Using cgroup, make sure process is not running in a container
+					candidateID := pp.containerIDFromCGroup(pid)
+					if n, ok := id2name[candidateID]; ok {
+						log.Printf("DBG: Based on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, n)
+						p.ContainerID = candidateID
+						newProcessesMap[pid] = p
+					} else if candidateID != "" && time.Since(p.CreateTime) < 3*time.Second {
+						log.Printf("DBG: Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
+						delete(newProcessesMap, pid)
+					}
 				}
 			}
 		}
 	}
 
 	pp.l.Lock()
+
+	// Update CPU percent
+	for pid, p := range newProcessesMap {
+		if oldP, ok := pp.processes[pid]; ok && oldP.CreateTime == p.CreateTime {
+			deltaT := time.Since(pp.lastProcessesUpdate)
+			deltaCPU := p.CPUTime - oldP.CPUTime
+			if deltaCPU > 0 && deltaT > 0 {
+				p.CPUPercent = deltaCPU / deltaT.Seconds() * 100
+				newProcessesMap[pid] = p
+			}
+		} else if !p.CreateTime.IsZero() {
+			deltaT := time.Since(p.CreateTime)
+			deltaCPU := p.CPUTime
+			if deltaCPU > 0 && deltaT > 0 {
+				p.CPUPercent = deltaCPU / deltaT.Seconds() * 100
+				newProcessesMap[pid] = p
+			}
+		}
+	}
 
 	pp.processes = newProcessesMap
 	pp.lastProcessesUpdate = time.Now()

@@ -2,6 +2,7 @@ package facts
 
 import (
 	"context"
+	"math"
 	"reflect"
 	"testing"
 	"time"
@@ -187,11 +188,13 @@ func TestUpdateProcesses(t *testing.T) {
 					PID:         12,
 					Name:        "redis",
 					ContainerID: "redis-container-id",
+					CPUTime:     44.2,
 				},
 				{
 					PID:         42,
 					Name:        "mysql",
 					ContainerID: "mysql-container-id",
+					CPUPercent:  42.6,
 				},
 			},
 			containerID2NameResult: map[string]string{
@@ -206,6 +209,7 @@ func TestUpdateProcesses(t *testing.T) {
 					Name:        "init",
 					CreateTime:  t0,
 					ContainerID: "",
+					CPUTime:     999,
 				},
 				{
 					PID:         12,
@@ -245,30 +249,169 @@ func TestUpdateProcesses(t *testing.T) {
 			Name:        "redis2",
 			ContainerID: "redis-container-id",
 			CreateTime:  t0,
+			CPUTime:     44.2,
+			CPUPercent:  1.227, // 44.2s over 1h
 		},
 		{
 			PID:         42,
 			Name:        "mysql",
 			ContainerID: "mysql-container-id",
+			CPUTime:     0,
+			CPUPercent:  42.6,
 		},
 		{
 			PID:         1,
 			Name:        "init",
 			ContainerID: "",
 			CreateTime:  t0,
+			CPUTime:     999,
+			CPUPercent:  27.75, // 999s over 1h
 		},
 		{
 			PID:         1337,
 			Name:        "golang",
 			ContainerID: "golang-container-id",
 			CreateTime:  t0,
+			CPUTime:     0,
+			CPUPercent:  0,
 		},
 	}
 	if len(pp.processes) != len(cases) {
 		t.Errorf("len(pp.processe) == %v, want %v", len(pp.processes), len(cases))
 	}
+	if pp.lastProcessesUpdate.After(time.Now()) || time.Since(pp.lastProcessesUpdate) > time.Second {
+		t.Errorf("pp.lastProcessesUpdate = %v, want %v", pp.lastProcessesUpdate, time.Now())
+	}
+	epsilon := 0.01
 	for _, c := range cases {
 		got := pp.processes[c.PID]
+		if math.Abs(got.CPUPercent-c.CPUPercent) < epsilon {
+			got.CPUPercent = c.CPUPercent
+		}
+		if !reflect.DeepEqual(got, c) {
+			t.Errorf("pp.processes[%v] == %v, want %v", c.PID, got, c)
+		}
+	}
+}
+
+func TestDeltaCPUPercent(t *testing.T) {
+
+	// In this test:
+	// * t0 is the date of create of most process
+	// * t1 is the date used to fill pp.processes and pp.lastProcessesUpdate as if updateProcesses was called on t1
+	// * t2 is the date one new process is created
+	// * t3 (now) is the date when updateProcesses is called (and use value from mockDockerProcess)
+	// * we will check that CPU percent is updated based on t2 - t1 interval.
+
+	t3 := time.Now()
+	t0 := t3.Add(-time.Hour)
+	t1 := t3.Add(-time.Minute)
+	t2 := t3.Add(-20 * time.Second)
+	pp := ProcessProvider{
+		lastProcessesUpdate: t1,
+		processes: map[int]Process{
+			1: {
+				PID:        1,
+				Name:       "init",
+				CreateTime: t0,
+				CPUTime:    0.012,
+			},
+			2: {
+				PID:        2,
+				Name:       "redis",
+				CreateTime: t0,
+				CPUTime:    0.0,
+			},
+			3: {
+				PID:        3,
+				Name:       "busy",
+				CreateTime: t0,
+				CPUTime:    13.37,
+			},
+			4: {
+				PID:        4,
+				Name:       "disapear",
+				CreateTime: t0,
+				CPUTime:    75.6,
+			},
+		},
+		psutil: mockDockerProcess{
+			processesResult: []Process{
+				{
+					PID:        1,
+					Name:       "init",
+					CreateTime: t0,
+					CPUTime:    0.012, // unchanged => 0%
+				},
+				{
+					PID:        2,
+					Name:       "redis",
+					CreateTime: t0,
+					CPUTime:    42.0, // +42 => 70%
+				},
+				{
+					PID:        3,
+					Name:       "busy",
+					CreateTime: t0,
+					CPUTime:    92.37, // +79 => 131.6%
+				},
+				{
+					PID:        4,
+					Name:       "new-with-name-pid",
+					CreateTime: t2,
+					CPUTime:    78.6, // new process. +78.6 in 20s => 392.9%
+				},
+			},
+		},
+	}
+	pp.l.Lock()
+	err := pp.updateProcesses(context.Background())
+	pp.l.Unlock()
+	if err != nil {
+		t.Error(err)
+	}
+	cases := []Process{
+		{
+			PID:        1,
+			Name:       "init",
+			CreateTime: t0,
+			CPUTime:    0.012, // unchanged => 0%
+			CPUPercent: 0.0,
+		},
+		{
+			PID:        2,
+			Name:       "redis",
+			CreateTime: t0,
+			CPUTime:    42.0, // +42s over 1min => 70%
+			CPUPercent: 70.0,
+		},
+		{
+			PID:        3,
+			Name:       "busy",
+			CreateTime: t0,
+			CPUTime:    92.37, // +79 over 1min => 131.666%
+			CPUPercent: 131.666,
+		},
+		{
+			PID:        4,
+			Name:       "new-with-name-pid",
+			CreateTime: t2,
+			CPUTime:    78.6, // new process. +78.6 in 20s => 393%
+			CPUPercent: 393,
+		},
+	}
+	if len(pp.processes) != len(cases) {
+		t.Errorf("len(pp.processe) == %v, want %v", len(pp.processes), len(cases))
+	}
+	if pp.lastProcessesUpdate.After(time.Now()) || time.Since(pp.lastProcessesUpdate) > time.Second {
+		t.Errorf("pp.lastProcessesUpdate = %v, want %v", pp.lastProcessesUpdate, t3)
+	}
+	epsilon := 0.01
+	for _, c := range cases {
+		got := pp.processes[c.PID]
+		if math.Abs(got.CPUPercent-c.CPUPercent) < epsilon {
+			got.CPUPercent = c.CPUPercent
+		}
 		if !reflect.DeepEqual(got, c) {
 			t.Errorf("pp.processes[%v] == %v, want %v", c.PID, got, c)
 		}
