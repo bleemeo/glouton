@@ -3,7 +3,6 @@ package api
 import (
 	"log"
 	"net/http"
-	"os"
 
 	"agentgo/facts"
 	"agentgo/types"
@@ -13,32 +12,26 @@ import (
 	"github.com/rs/cors"
 )
 
-const defaultPort = "8015"
-
 type storeInterface interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 }
 
 // API : Structure that contains API's port
 type API struct {
-	Port   string
-	router *chi.Mux
-	db     storeInterface
+	bindAddress string
+	router      *chi.Mux
+	db          storeInterface
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface, dockerFact *facts.DockerProvider) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, bindAddress string) *API {
 	router := chi.NewRouter()
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = defaultPort
-	}
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-	api := &API{Port: port, db: db}
+	api := &API{bindAddress: bindAddress, db: db}
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api, dockerFact: dockerFact}})))
@@ -48,5 +41,6 @@ func New(db storeInterface, dockerFact *facts.DockerProvider) *API {
 
 // Run : Starts our API
 func (api API) Run() {
-	log.Fatal(http.ListenAndServe(":"+api.Port, api.router))
+	log.Printf("Starting API on %s", api.bindAddress)
+	log.Fatal(http.ListenAndServe(api.bindAddress, api.router))
 }

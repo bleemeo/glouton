@@ -57,6 +57,12 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 
 func main() {
 	log.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
+
+	apiBindAddress := os.Getenv("API_ADDRESS")
+	if apiBindAddress == "" {
+		apiBindAddress = ":8015"
+	}
+
 	db := store.New()
 	dockerFact := facts.NewDocker()
 	psFact := facts.NewProcess(dockerFact)
@@ -69,7 +75,7 @@ func main() {
 	factProvider.AddCallback(dockerFact.DockerFact)
 	factProvider.SetFact("installation_format", "golang")
 	factProvider.SetFact("statsd_enabled", "false")
-	api := api.New(db, dockerFact)
+	api := api.New(db, dockerFact, apiBindAddress)
 	coll := collector.New(db.Accumulator())
 
 	coll.AddInput(panicOnError(system.New()))
@@ -119,7 +125,6 @@ func main() {
 	}()
 	go stats(db)
 
-	log.Println("Starting API")
 	go api.Run()
 
 	f, _ := factProvider.Facts(ctx, 0)
