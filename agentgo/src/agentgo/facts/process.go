@@ -269,7 +269,7 @@ func psTime2Second(psTime string) (int, error) {
 		}
 		return int(day)*86400 + int(hour)*3600, nil
 	}
-	return 0, fmt.Errorf("Unknown pstime format \"%s\"", psTime)
+	return 0, fmt.Errorf("unknown pstime format %#v", psTime)
 }
 
 func psStat2Status(psStat string) string {

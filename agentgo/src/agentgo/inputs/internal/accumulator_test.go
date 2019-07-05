@@ -238,10 +238,7 @@ func TestDeriveFunc(t *testing.T) {
 		called2 = true
 	}
 	shouldDerivateMetrics := func(originalContext GatherContext, currentContext GatherContext, metricName string) bool {
-		if strings.HasSuffix(metricName, "nt") {
-			return true
-		}
-		return false
+		return strings.HasSuffix(metricName, "nt")
 	}
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)

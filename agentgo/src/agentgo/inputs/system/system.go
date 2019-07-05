@@ -38,7 +38,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"system\" input")
+		err = errors.New("input system is not enabled in Telegraf")
 	}
 	return
 }

@@ -46,10 +46,10 @@ func New(server string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"mysql\" input type is not mysql.Mysql")
+			err = errors.New("input MySQL is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"mysql\" input")
+		err = errors.New("input MySQL is not enabled in Telegraf")
 	}
 	return
 }

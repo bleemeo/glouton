@@ -43,10 +43,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"elasticsearch\" input type is not elasticsearch.Elasticsearch")
+			err = errors.New("input Elasticsearch is not the exepcted type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"elasticsearch\" input")
+		err = errors.New("input Elasticsearch not enabled in Telegraf")
 	}
 	return
 }

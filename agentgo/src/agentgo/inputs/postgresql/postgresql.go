@@ -47,10 +47,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"postgresql\" input type is not postgresql.postgresql")
+			err = errors.New("input PostgreSQL is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"postgresql\" input")
+		err = errors.New("input PostgreSQL is not enabled in Telegraf")
 	}
 	return
 }

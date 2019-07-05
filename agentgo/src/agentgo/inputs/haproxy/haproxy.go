@@ -44,7 +44,7 @@ func New(url string) (i telegraf.Input, err error) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					err = fmt.Errorf("Panic during creation of HAproxy input: %v", r)
+					err = fmt.Errorf("error during creation of HAproxy input: %v", r)
 				}
 			}()
 			reflectSet(url, haproxyInput)
@@ -61,7 +61,7 @@ func New(url string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"haproxy\" input")
+		err = errors.New("input HAProxy not enabled in Telegraf")
 	}
 	return
 }

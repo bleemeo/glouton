@@ -43,10 +43,10 @@ func New() (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"docker\" input type is not docker.Docker")
+			err = errors.New("input Docker is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"docker\" input")
+		err = errors.New("input Docker not enabled in Telegraf")
 	}
 	return
 }

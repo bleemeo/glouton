@@ -45,10 +45,10 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"rabbitmq\" input type is not rabbitmq.rabbitmq")
+			err = errors.New("input RabbitMQ is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"rabbitmq\" input")
+		err = errors.New("input RabbitMQ is not enabled in Telegraf")
 	}
 	return
 }

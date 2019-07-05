@@ -43,10 +43,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"apache\" input type is not apache.Apache")
+			err = errors.New("input Apache is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"apache\" input")
+		err = errors.New("input Apache not enabled in Telegraf")
 	}
 	return
 }

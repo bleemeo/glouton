@@ -50,7 +50,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"net\" input")
+		err = errors.New("input net is not enabled in Telegraf")
 	}
 	return
 }

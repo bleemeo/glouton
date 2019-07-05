@@ -44,10 +44,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"nginx\" input type is not nginx.Nginx")
+			err = errors.New("input nginx is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"nginx\" input")
+		err = errors.New("input nginx is not enabled in Telegraf")
 	}
 	return
 }

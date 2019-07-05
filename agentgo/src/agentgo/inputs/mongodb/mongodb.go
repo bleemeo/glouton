@@ -43,10 +43,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"mongodb\" input type is not mongodb.Mongodb")
+			err = errors.New("input MongoDB is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"mongodb\" input")
+		err = errors.New("input MongoDB is not enabled in Telegraf")
 	}
 	return
 }

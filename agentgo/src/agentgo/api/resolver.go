@@ -167,14 +167,14 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 					log.Println(err)
 					return nil, gqlerror.Errorf("Can not retrieve Containers")
 				}
-				if metrics != nil && len(metrics) > 0 {
+				if len(metrics) > 0 {
 					points, err := metrics[0].Points(time.Now().UTC().Add(-15*time.Minute), time.Now().UTC())
 					if err != nil {
 						log.Println(err)
 						return nil, gqlerror.Errorf("Can not retrieve Containers")
 					}
 					var point float64
-					if points != nil && len(points) > 0 {
+					if len(points) > 0 {
 						point = points[len(points)-1].Value
 					}
 					switch m {

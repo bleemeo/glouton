@@ -89,7 +89,7 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 		}
 	default:
 		var valueType = reflect.TypeOf(value)
-		err = fmt.Errorf("Value type not supported: %v", valueType)
+		err = fmt.Errorf("value type not supported: %v", valueType)
 	}
 	return
 }

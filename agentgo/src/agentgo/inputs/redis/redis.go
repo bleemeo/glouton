@@ -43,10 +43,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"redis\" input type is not redis.Redis")
+			err = errors.New("input Redis is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"redis\" input")
+		err = errors.New("input Redis is not enabled in Telegraf")
 	}
 	return
 }

@@ -60,7 +60,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"disk\" input")
+		err = errors.New("input disk not enabled in Telegraf")
 	}
 	return
 }

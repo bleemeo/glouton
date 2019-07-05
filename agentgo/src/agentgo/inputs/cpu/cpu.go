@@ -42,7 +42,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"cpu\" input")
+		err = errors.New("input cpu not enabled in Telegraf")
 	}
 	return
 }

@@ -109,9 +109,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 
 	// get a copy of callbacks while lock is held
 	callbacks := make([]FactCallback, len(f.callbacks))
-	for i, c := range f.callbacks {
-		callbacks[i] = c
-	}
+	copy(callbacks, f.callbacks)
 
 	// unlock during slow operation
 	f.l.Unlock()
@@ -348,7 +346,11 @@ func macAddressByAddress(ctx context.Context, ipAddress string) string {
 }
 
 func urlContent(ctx context.Context, url string) string {
-	resp, err := http.Get(url) //nolint:gosec
+	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		return ""
+	}
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return ""
 	}

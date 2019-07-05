@@ -58,7 +58,7 @@ func New(whitelist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"diskio\" input")
+		err = errors.New("input diskio not enabled in Telegraf")
 	}
 	return
 }

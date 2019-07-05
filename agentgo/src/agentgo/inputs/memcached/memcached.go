@@ -45,10 +45,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"memcached\" input type is not memcached.Memcached")
+			err = errors.New("input Memcached is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"memcached\" input")
+		err = errors.New("input Memcached is not enabled in Telegraf")
 	}
 	return
 }
