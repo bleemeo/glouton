@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -23,6 +24,7 @@ import (
 	"agentgo/inputs/system"
 	"agentgo/store"
 	"agentgo/types"
+	"agentgo/version"
 
 	"github.com/influxdata/telegraf"
 )
@@ -54,11 +56,19 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 }
 
 func main() {
-	log.Println("Starting agent")
+	log.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 	db := store.New()
 	dockerFact := facts.NewDocker()
 	psFact := facts.NewProcess(dockerFact)
 	_ = psFact
+	factProvider := facts.NewFacter(
+		"",
+		"/",
+		"https://myip.bleemeo.com",
+	)
+	factProvider.AddCallback(dockerFact.DockerFact)
+	factProvider.SetFact("installation_format", "golang")
+	factProvider.SetFact("statsd_enabled", "false")
 	api := api.New(db, dockerFact)
 	coll := collector.New(db.Accumulator())
 
@@ -111,6 +121,16 @@ func main() {
 
 	log.Println("Starting API")
 	go api.Run()
+
+	f, _ := factProvider.Facts(ctx, 0)
+	keys := make([]string, 0)
+	for k := range f {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		log.Printf("%v = %v", k, f[k])
+	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)

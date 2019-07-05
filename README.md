@@ -56,6 +56,22 @@ export PATH=/usr/lib/go-1.12/bin:$PATH
 (cd agentgo/src/agentgo; go run -race agentgo)
 ```
 
+* Prepare a release:
+   * Optionally, try to update dependencies: `(cd agentgo/src/agentgo; go get -u)`
+   * Run Go generate
+   * Run go mod tidy to cleanup go.mod/go.sum
+```
+(cd agentgo/src/agentgo; go mod tidy)
+```
+   * Run golangci-lint and Go tests
+
+* Build the release:
+```
+VERSION=`TZ=UTC date +%y.%m.%d.%H%M%S`
+BUILD_HASH=`git rev-parse --short HEAD`
+(cd agentgo/src/agentgo; go build -o ../../../agent-go -ldflags "-X agentgo/version.Version=$VERSION -X agentgo/version.BuildHash=$BUILD_HASH" agentgo)
+```
+
 * Install `bleemeo-agent` with its dependencies:
 ```
 pip install -U setuptools

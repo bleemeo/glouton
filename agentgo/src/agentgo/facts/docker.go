@@ -22,6 +22,8 @@ type DockerProvider struct {
 
 	client           *docker.Client
 	reconnectAttempt int
+	dockerVersion    string
+	dockerAPIVersion string
 
 	notifyC     chan DockerEvent
 	lastEventAt time.Time
@@ -107,6 +109,28 @@ func (d *DockerProvider) Container(ctx context.Context, containerID string, maxA
 	}
 	container = Container{inspect: inspect}
 	return
+}
+
+// DockerFact returns few facts from Docker. It should be usable as FactCallback
+func (d *DockerProvider) DockerFact(ctx context.Context, currentFact map[string]string) map[string]string {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	// Just call getClient to ensure connection is established. When connecting
+	// fields version and apiVersion are updated
+	_, err := d.getClient(ctx)
+	if err != nil {
+		return nil
+	}
+
+	if d.dockerVersion == "" {
+		return nil
+	}
+
+	facts := make(map[string]string)
+	facts["docker_version"] = d.dockerVersion
+	facts["docker_api_version"] = d.dockerAPIVersion
+	return facts
 }
 
 // Events returns the channel on which Docker events are sent
@@ -296,7 +320,17 @@ func (d *DockerProvider) getClient(ctx context.Context) (cl *docker.Client, err 
 	}
 	if _, err = cl.Ping(ctx); err != nil {
 		d.client = nil
+		d.dockerVersion = ""
+		d.dockerAPIVersion = ""
 		return
+	}
+	if d.client == nil {
+		// New connection, update dockerVersion/dockerAPIVersion
+		v, err := cl.ServerVersion(ctx)
+		if err == nil {
+			d.dockerAPIVersion = v.APIVersion
+			d.dockerVersion = v.Version
+		}
 	}
 	d.client = cl
 	d.reconnectAttempt = 0
