@@ -20,8 +20,6 @@ type Resolver struct {
 	dockerFact *facts.DockerProvider
 }
 
-const layout = "2006-01-02T15:04:05Z"
-
 func (r *Resolver) Query() QueryResolver {
 	return &queryResolver{r}
 }
@@ -94,14 +92,14 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 	finalStart := ""
 	finalEnd := ""
 	if minutes != 0 {
-		finalEnd = time.Now().UTC().Format(layout)
-		finalStart = time.Now().UTC().Add(time.Duration(-minutes) * time.Minute).Format(layout)
+		finalEnd = time.Now().UTC().Format(time.RFC3339)
+		finalStart = time.Now().UTC().Add(time.Duration(-minutes) * time.Minute).Format(time.RFC3339)
 	} else {
 		finalStart = start
 		finalEnd = end
 	}
-	timeStart, _ := time.Parse(layout, finalStart)
-	timeEnd, _ := time.Parse(layout, finalEnd)
+	timeStart, _ := time.Parse(time.RFC3339, finalStart)
+	timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {
 		metricRes := &Metric{}
