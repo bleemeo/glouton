@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"log"
 	"net/http"
+	"time"
 
 	"agentgo/facts"
 	"agentgo/types"
@@ -16,11 +18,16 @@ type storeInterface interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 }
 
+type dockerInterface interface {
+	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
+}
+
 // API : Structure that contains API's port
 type API struct {
 	bindAddress string
-	router      *chi.Mux
+	router      http.Handler
 	db          storeInterface
+	dockerFact  dockerInterface
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
@@ -31,10 +38,10 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, bindAddress string
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-	api := &API{bindAddress: bindAddress, db: db}
+	api := &API{bindAddress: bindAddress, db: db, dockerFact: dockerFact}
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
-	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api, dockerFact: dockerFact}})))
+	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	api.router = router
 	return api
 }

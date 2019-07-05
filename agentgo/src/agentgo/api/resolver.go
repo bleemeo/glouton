@@ -9,15 +9,13 @@ import (
 	"strings"
 	"time"
 
-	"agentgo/facts"
 	"agentgo/types"
 
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
 type Resolver struct {
-	api        *API
-	dockerFact *facts.DockerProvider
+	api *API
 }
 
 func (r *Resolver) Query() QueryResolver {
@@ -122,11 +120,11 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 	return metricsRes, nil
 }
 func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error) {
-	if r.dockerFact == nil {
+	if r.api.dockerFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 	duration, _ := time.ParseDuration("1h")
-	containers, err := r.dockerFact.Containers(ctx, duration, false)
+	containers, err := r.api.dockerFact.Containers(ctx, duration, false)
 	if err != nil {
 		log.Println(err)
 		return nil, gqlerror.Errorf("Can not retrieve Containers")
