@@ -123,8 +123,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	if r.api.dockerFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
-	duration, _ := time.ParseDuration("1h")
-	containers, err := r.api.dockerFact.Containers(ctx, duration, false)
+	containers, err := r.api.dockerFact.Containers(ctx, time.Hour, false)
 	if err != nil {
 		log.Println(err)
 		return nil, gqlerror.Errorf("Can not retrieve Containers")
@@ -143,7 +142,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 		return strings.Compare(containers[i].Name(), containers[j].Name()) < 0
 	})
 	for _, container := range containers {
-		if (allContainers || container.State() == "running") && (strings.Contains(container.Name(), search) || strings.Contains(container.Image(), search) || strings.Contains(container.ID(), search) || strings.Contains(container.Command(), search)) {
+		if (allContainers || container.IsRunning()) && (strings.Contains(container.Name(), search) || strings.Contains(container.Image(), search) || strings.Contains(container.ID(), search) || strings.Contains(container.Command(), search)) {
 			createdAt := container.CreatedAt()
 			startedAt := container.StartedAt()
 			finishedAt := container.FinishedAt()
@@ -159,16 +158,17 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 				FinishedAt:  &finishedAt,
 			}
 			for _, m := range containerMetrics {
-				metricFilters := map[string]string{}
-				metricFilters["item"] = container.Name()
-				metricFilters["__name__"] = m
+				metricFilters := map[string]string{
+					"item":     container.Name(),
+					"__name__": m,
+				}
 				metrics, err := r.api.db.Metrics(metricFilters)
 				if err != nil {
 					log.Println(err)
 					return nil, gqlerror.Errorf("Can not retrieve Containers")
 				}
 				if metrics != nil && len(metrics) > 0 {
-					points, err := metrics[0].Points(time.Now().UTC().Add(time.Duration(-1)*time.Minute), time.Now().UTC())
+					points, err := metrics[0].Points(time.Now().UTC().Add(-1*time.Minute), time.Now().UTC())
 					if err != nil {
 						log.Println(err)
 						return nil, gqlerror.Errorf("Can not retrieve Containers")
@@ -196,17 +196,16 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 			containersRes = append(containersRes, c)
 		}
 	}
-	containersSliced := containersRes
 	if input != nil {
 		if len(containersRes) > input.Offset {
 			to := input.Offset + input.Limit
 			if len(containersRes) <= input.Offset+input.Limit {
 				to = len(containersRes)
 			}
-			containersSliced = containersRes[input.Offset:to]
+			containersRes = containersRes[input.Offset:to]
 		} else if len(containersRes) <= input.Offset {
-			containersSliced = []*Container{}
+			containersRes = []*Container{}
 		}
 	}
-	return containersSliced, nil
+	return containersRes, nil
 }
