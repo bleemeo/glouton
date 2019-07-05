@@ -105,6 +105,15 @@ func main() {
 
 	go api.Run()
 
+	// This tasks do action that discovery would done (but since discovery is
+	// not yet implemented)
+	go func() {
+		for {
+			<-dockerFact.Events()
+			_, _ = dockerFact.Containers(ctx, 0, false)
+		}
+	}()
+
 	f, _ := factProvider.Facts(ctx, 0)
 	keys := make([]string, 0)
 	for k := range f {
