@@ -8,7 +8,6 @@ import (
 	"sort"
 	"sync"
 	"syscall"
-	"time"
 
 	"agentgo/api"
 	"agentgo/collector"
@@ -23,30 +22,10 @@ import (
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
 	"agentgo/store"
-	"agentgo/types"
 	"agentgo/version"
 
 	"github.com/influxdata/telegraf"
 )
-
-type storeInterface interface {
-	Metrics(filters map[string]string) ([]types.Metric, error)
-}
-
-func stats(db storeInterface) {
-	for {
-		time.Sleep(60 * time.Second)
-		metrics, _ := db.Metrics(nil)
-		log.Printf("Count of metrics: %v", len(metrics))
-
-		metrics, _ = db.Metrics(map[string]string{"__name__": "cpu_used"})
-		for _, m := range metrics {
-			log.Printf("Details for metrics %v", m)
-			points, _ := m.Points(time.Now().Add(-86400*time.Second), time.Now())
-			log.Printf("points count: %v", len(points))
-		}
-	}
-}
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
 	if err != nil {
@@ -123,7 +102,6 @@ func main() {
 		defer wg.Done()
 		coll.Run(ctx)
 	}()
-	go stats(db)
 
 	go api.Run()
 

@@ -35,7 +35,7 @@ func (s *Store) Run(ctx context.Context) {
 	for {
 		s.run()
 		select {
-		case <-time.After(10 * time.Second):
+		case <-time.After(300 * time.Second):
 		case <-ctx.Done():
 			return
 		}
@@ -129,7 +129,7 @@ func (s *Store) run() {
 		delete(s.metrics, metricID)
 		delete(s.points, metricID)
 	}
-	log.Printf("Deleted %d points. Total point: %d", deletedPoints, totalPoints)
+	log.Printf("DBG: deleted %d points. Total point: %d", deletedPoints, totalPoints)
 }
 
 // metricsExact will return the metric that exactly match given labels.
