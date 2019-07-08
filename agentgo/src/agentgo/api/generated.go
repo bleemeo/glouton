@@ -79,7 +79,7 @@ type ComplexityRoot struct {
 	Process struct {
 		CPUPercent  func(childComplexity int) int
 		CPUTime     func(childComplexity int) int
-		CmdLine     func(childComplexity int) int
+		Cmdline     func(childComplexity int) int
 		ContainerID func(childComplexity int) int
 		CreateTime  func(childComplexity int) int
 		Executable  func(childComplexity int) int
@@ -289,12 +289,12 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Process.CPUTime(childComplexity), true
 
-	case "Process.cmd_line":
-		if e.complexity.Process.CmdLine == nil {
+	case "Process.cmdline":
+		if e.complexity.Process.Cmdline == nil {
 			break
 		}
 
-		return e.complexity.Process.CmdLine(childComplexity), true
+		return e.complexity.Process.Cmdline(childComplexity), true
 
 	case "Process.container_id":
 		if e.complexity.Process.ContainerID == nil {
@@ -494,7 +494,7 @@ type Process {
   pid: Int!
   ppid: Int!
   create_time: Time!
-  cmd_line: String!
+  cmdline: String!
   name: String!
   memory_rss: Int!
   cpu_percent: Float!
@@ -1593,7 +1593,7 @@ func (ec *executionContext) _Process_create_time(ctx context.Context, field grap
 	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Process_cmd_line(ctx context.Context, field graphql.CollectedField, obj *Process) (ret graphql.Marshaler) {
+func (ec *executionContext) _Process_cmdline(ctx context.Context, field graphql.CollectedField, obj *Process) (ret graphql.Marshaler) {
 	ctx = ec.Tracer.StartFieldExecution(ctx, field)
 	defer func() {
 		if r := recover(); r != nil {
@@ -1612,7 +1612,7 @@ func (ec *executionContext) _Process_cmd_line(ctx context.Context, field graphql
 	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.CmdLine, nil
+		return obj.Cmdline, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3614,8 +3614,8 @@ func (ec *executionContext) _Process(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "cmd_line":
-			out.Values[i] = ec._Process_cmd_line(ctx, field, obj)
+		case "cmdline":
+			out.Values[i] = ec._Process_cmdline(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}

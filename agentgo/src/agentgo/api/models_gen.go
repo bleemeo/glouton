@@ -58,7 +58,7 @@ type Process struct {
 	Pid         int       `json:"pid"`
 	Ppid        int       `json:"ppid"`
 	CreateTime  time.Time `json:"create_time"`
-	CmdLine     string    `json:"cmd_line"`
+	Cmdline     string    `json:"cmdline"`
 	Name        string    `json:"name"`
 	MemoryRss   int       `json:"memory_rss"`
 	CPUPercent  float64   `json:"cpu_percent"`

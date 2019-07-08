@@ -226,7 +226,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*
 			Pid:         process.PID,
 			Ppid:        process.PPID,
 			CreateTime:  process.CreateTime,
-			CmdLine:     strings.Join(process.CmdLine, " "),
+			Cmdline:     strings.Join(process.CmdLine, " "),
 			Name:        process.Name,
 			MemoryRss:   int(process.MemoryRSS),
 			CPUPercent:  process.CPUPercent,

@@ -36,7 +36,7 @@ type Process {
   pid: Int!
   ppid: Int!
   create_time: Time!
-  cmd_line: String!
+  cmdline: String!
   name: String!
   memory_rss: Int!
   cpu_percent: Float!
