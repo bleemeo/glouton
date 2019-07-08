@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"hash/crc32"
 	"io"
 	"log"
@@ -31,7 +30,7 @@ func handleConnection(c net.Conn) {
 		c.Close()
 		return
 	}
-	fmt.Printf("packet_type : %v, buffer : %v\n", a.packetType, a.buffer)
+	log.Printf("packet_type : %v, buffer : %v\n", a.packetType, a.buffer)
 
 	var answer reducedPacket
 	answer.buffer = "connection successful"
@@ -114,7 +113,7 @@ func encodeV2(answer packetStructV2) ([]byte, error) {
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, &answer.packetVersion)
 	if err != nil {
-		fmt.Println("binary.Write failed for packet_version:", err)
+		log.Println("binary.Write failed for packet_version:", err)
 		return b, err
 	}
 	copy(b[:2], buf.Bytes())
@@ -122,23 +121,23 @@ func encodeV2(answer packetStructV2) ([]byte, error) {
 	buf = new(bytes.Buffer)
 	err = binary.Write(buf, binary.BigEndian, &answer.packetType)
 	if err != nil {
-		fmt.Println("binary.Write failed for packet_type:", err)
+		log.Println("binary.Write failed for packet_type:", err)
 		return b, err
 	}
 	copy(b[2:4], buf.Bytes())
-	return b, err
+	return b, nil
 }
 
 func encodeV3(answer reducedPacket) ([]byte, error) {
 	packetVersion := int16(3)
 	answer.packetType = 2
-	bufferLength := int32(1017)
-	b2 := make([]byte, 19+bufferLength)
+	bufferLength := int32(len(answer.buffer))
+	b2 := make([]byte, 19+len(answer.buffer))
 
 	buf2 := new(bytes.Buffer)
 	err := binary.Write(buf2, binary.BigEndian, &packetVersion)
 	if err != nil {
-		fmt.Println("binary.Write failed for packet_version:", err)
+		log.Println("binary.Write failed for packet_version:", err)
 		return b2, err
 	}
 	copy(b2[:2], buf2.Bytes())
@@ -146,7 +145,7 @@ func encodeV3(answer reducedPacket) ([]byte, error) {
 	buf2 = new(bytes.Buffer)
 	err = binary.Write(buf2, binary.BigEndian, &answer.packetType)
 	if err != nil {
-		fmt.Println("binary.Write failed for packet_type:", err)
+		log.Println("binary.Write failed for packet_type:", err)
 		return b2, err
 	}
 	copy(b2[2:4], buf2.Bytes())
@@ -154,10 +153,11 @@ func encodeV3(answer reducedPacket) ([]byte, error) {
 	buf2 = new(bytes.Buffer)
 	err = binary.Write(buf2, binary.BigEndian, &bufferLength)
 	if err != nil {
-		fmt.Println("binary.Write failed for buffer_length:", err)
+		log.Println("binary.Write failed for buffer_length:", err)
 		return b2, err
 	}
 	copy(b2[12:16], buf2.Bytes())
+	b2[9] = 1 //result code = 1
 
 	buf2 = new(bytes.Buffer)
 	copy(b2[16:16+len(answer.buffer)], []byte(answer.buffer))
@@ -165,18 +165,18 @@ func encodeV3(answer reducedPacket) ([]byte, error) {
 	buf2 = new(bytes.Buffer)
 	err = binary.Write(buf2, binary.BigEndian, &crc32Value)
 	if err != nil {
-		fmt.Println("binary.Write failed for crc32_value:", err)
+		log.Println("binary.Write failed for crc32_value:", err)
 		return b2, err
 	}
 	copy(b2[4:8], buf2.Bytes())
-	return b2, err
+	return b2, nil
 }
 
 //Run start a connection with a nrpe server
 func Run(port string) {
 	l, err := net.Listen("tcp4", port)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 		return
 	}
 	defer l.Close()
@@ -184,7 +184,7 @@ func Run(port string) {
 	for {
 		c, err := l.Accept()
 		if err != nil {
-			fmt.Println(err)
+			log.Println(err)
 			return
 		}
 		go handleConnection(c)
