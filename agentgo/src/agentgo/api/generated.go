@@ -60,6 +60,11 @@ type ComplexityRoot struct {
 		State        func(childComplexity int) int
 	}
 
+	Fact struct {
+		Name  func(childComplexity int) int
+		Value func(childComplexity int) int
+	}
+
 	Label struct {
 		Key   func(childComplexity int) int
 		Value func(childComplexity int) int
@@ -93,6 +98,7 @@ type ComplexityRoot struct {
 
 	Query struct {
 		Containers func(childComplexity int, input *Pagination, allContainers bool, search string) int
+		Facts      func(childComplexity int) int
 		Metrics    func(childComplexity int, metricsFilter []*MetricInput) int
 		Points     func(childComplexity int, metricsFilter []*MetricInput, start string, end string, minutes int) int
 		Processes  func(childComplexity int, containerID *string) int
@@ -104,6 +110,7 @@ type QueryResolver interface {
 	Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error)
 	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error)
 	Processes(ctx context.Context, containerID *string) ([]*Process, error)
+	Facts(ctx context.Context) ([]*Fact, error)
 }
 
 type executableSchema struct {
@@ -225,6 +232,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Container.State(childComplexity), true
+
+	case "Fact.name":
+		if e.complexity.Fact.Name == nil {
+			break
+		}
+
+		return e.complexity.Fact.Name(childComplexity), true
+
+	case "Fact.value":
+		if e.complexity.Fact.Value == nil {
+			break
+		}
+
+		return e.complexity.Fact.Value(childComplexity), true
 
 	case "Label.key":
 		if e.complexity.Label.Key == nil {
@@ -371,6 +392,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Containers(childComplexity, args["input"].(*Pagination), args["allContainers"].(bool), args["search"].(string)), true
 
+	case "Query.facts":
+		if e.complexity.Query.Facts == nil {
+			break
+		}
+
+		return e.complexity.Query.Facts(childComplexity), true
+
 	case "Query.metrics":
 		if e.complexity.Query.Metrics == nil {
 			break
@@ -505,6 +533,11 @@ type Process {
   container_id: String!
 }
 
+type Fact {
+  name: String!
+  value: String!
+}
+
 input LabelInput {
   key: String!
   value: String!
@@ -524,6 +557,7 @@ type Query {
   points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
   processes(containerId: String): [Process!]!
+  facts: [Fact!]!
 }
 
 scalar Time
@@ -1224,6 +1258,80 @@ func (ec *executionContext) _Container_cpuUsedPerc(ctx context.Context, field gr
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Fact_name(ctx context.Context, field graphql.CollectedField, obj *Fact) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Fact",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Name, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Fact_value(ctx context.Context, field graphql.CollectedField, obj *Fact) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Fact",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Value, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Label_key(ctx context.Context, field graphql.CollectedField, obj *Label) (ret graphql.Marshaler) {
@@ -2100,6 +2208,43 @@ func (ec *executionContext) _Query_processes(ctx context.Context, field graphql.
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNProcess2ᚕᚖagentgoᚋapiᚐProcess(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_facts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Query",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Facts(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*Fact)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNFact2ᚕᚖagentgoᚋapiᚐFact(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -3490,6 +3635,38 @@ func (ec *executionContext) _Container(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var factImplementors = []string{"Fact"}
+
+func (ec *executionContext) _Fact(ctx context.Context, sel ast.SelectionSet, obj *Fact) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, factImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Fact")
+		case "name":
+			out.Values[i] = ec._Fact_name(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "value":
+			out.Values[i] = ec._Fact_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var labelImplementors = []string{"Label"}
 
 func (ec *executionContext) _Label(ctx context.Context, sel ast.SelectionSet, obj *Label) graphql.Marshaler {
@@ -3736,6 +3913,20 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 					}
 				}()
 				res = ec._Query_processes(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
+		case "facts":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_facts(ctx, field)
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
@@ -4064,6 +4255,57 @@ func (ec *executionContext) marshalNContainer2ᚖagentgoᚋapiᚐContainer(ctx c
 		return graphql.Null
 	}
 	return ec._Container(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNFact2agentgoᚋapiᚐFact(ctx context.Context, sel ast.SelectionSet, v Fact) graphql.Marshaler {
+	return ec._Fact(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNFact2ᚕᚖagentgoᚋapiᚐFact(ctx context.Context, sel ast.SelectionSet, v []*Fact) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		rctx := &graphql.ResolverContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithResolverContext(ctx, rctx)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNFact2ᚖagentgoᚋapiᚐFact(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+	return ret
+}
+
+func (ec *executionContext) marshalNFact2ᚖagentgoᚋapiᚐFact(ctx context.Context, sel ast.SelectionSet, v *Fact) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Fact(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNFloat2float64(ctx context.Context, v interface{}) (float64, error) {

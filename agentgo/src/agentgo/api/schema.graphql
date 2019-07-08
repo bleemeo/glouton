@@ -47,6 +47,11 @@ type Process {
   container_id: String!
 }
 
+type Fact {
+  name: String!
+  value: String!
+}
+
 input LabelInput {
   key: String!
   value: String!
@@ -66,6 +71,7 @@ type Query {
   points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
   processes(containerId: String): [Process!]!
+  facts: [Fact!]!
 }
 
 scalar Time

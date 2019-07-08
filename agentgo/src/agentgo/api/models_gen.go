@@ -24,6 +24,11 @@ type Container struct {
 	CPUUsedPerc  float64    `json:"cpuUsedPerc"`
 }
 
+type Fact struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type Label struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`

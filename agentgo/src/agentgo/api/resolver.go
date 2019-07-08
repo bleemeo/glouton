@@ -240,3 +240,24 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*
 	}
 	return processesRes, nil
 }
+
+func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
+	if r.api.factProvider == nil {
+		return nil, gqlerror.Errorf("Can not retrieve facts at this moment. Please try later")
+	}
+	duration, _ := time.ParseDuration("1h")
+	facts, err := r.api.factProvider.Facts(ctx, duration)
+	if err != nil {
+		log.Println(err)
+		return nil, gqlerror.Errorf("Can not retrieve facts")
+	}
+	factsRes := []*Fact{}
+	for k, v := range facts {
+		f := &Fact{
+			Name: k,
+			Value: v,
+		}
+		factsRes = append(factsRes, f)
+	}
+	return factsRes, nil
+}
