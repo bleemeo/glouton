@@ -60,6 +60,11 @@ type ComplexityRoot struct {
 		State        func(childComplexity int) int
 	}
 
+	Containers struct {
+		Containers func(childComplexity int) int
+		Count      func(childComplexity int) int
+	}
+
 	Fact struct {
 		Name  func(childComplexity int) int
 		Value func(childComplexity int) int
@@ -108,7 +113,7 @@ type ComplexityRoot struct {
 type QueryResolver interface {
 	Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error)
 	Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error)
-	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error)
+	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error)
 	Processes(ctx context.Context, containerID *string) ([]*Process, error)
 	Facts(ctx context.Context) ([]*Fact, error)
 }
@@ -232,6 +237,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Container.State(childComplexity), true
+
+	case "Containers.containers":
+		if e.complexity.Containers.Containers == nil {
+			break
+		}
+
+		return e.complexity.Containers.Containers(childComplexity), true
+
+	case "Containers.count":
+		if e.complexity.Containers.Count == nil {
+			break
+		}
+
+		return e.complexity.Containers.Count(childComplexity), true
 
 	case "Fact.name":
 		if e.complexity.Fact.Name == nil {
@@ -518,6 +537,11 @@ type Container {
   cpuUsedPerc: Float!
 }
 
+type Containers {
+  count: Int!
+  containers: [Container!]!
+}
+
 type Process {
   pid: Int!
   ppid: Int!
@@ -555,7 +579,7 @@ input Pagination {
 type Query {
   metrics(metricsFilter: [MetricInput!]!): [Metric!]!
   points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
-  containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
+  containers(input: Pagination, allContainers: Boolean!, search: String!): Containers!
   processes(containerId: String): [Process!]!
   facts: [Fact!]!
 }
@@ -1258,6 +1282,80 @@ func (ec *executionContext) _Container_cpuUsedPerc(ctx context.Context, field gr
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Containers_count(ctx context.Context, field graphql.CollectedField, obj *Containers) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Containers",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Count, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Containers_containers(ctx context.Context, field graphql.CollectedField, obj *Containers) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Containers",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Containers, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*Container)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNContainer2ᚕᚖagentgoᚋapiᚐContainer(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Fact_name(ctx context.Context, field graphql.CollectedField, obj *Fact) (ret graphql.Marshaler) {
@@ -2160,10 +2258,10 @@ func (ec *executionContext) _Query_containers(ctx context.Context, field graphql
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*Container)
+	res := resTmp.(*Containers)
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
-	return ec.marshalNContainer2ᚕᚖagentgoᚋapiᚐContainer(ctx, field.Selections, res)
+	return ec.marshalNContainers2ᚖagentgoᚋapiᚐContainers(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_processes(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -3635,6 +3733,38 @@ func (ec *executionContext) _Container(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var containersImplementors = []string{"Containers"}
+
+func (ec *executionContext) _Containers(ctx context.Context, sel ast.SelectionSet, obj *Containers) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, containersImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Containers")
+		case "count":
+			out.Values[i] = ec._Containers_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "containers":
+			out.Values[i] = ec._Containers_containers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var factImplementors = []string{"Fact"}
 
 func (ec *executionContext) _Fact(ctx context.Context, sel ast.SelectionSet, obj *Fact) graphql.Marshaler {
@@ -4255,6 +4385,20 @@ func (ec *executionContext) marshalNContainer2ᚖagentgoᚋapiᚐContainer(ctx c
 		return graphql.Null
 	}
 	return ec._Container(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNContainers2agentgoᚋapiᚐContainers(ctx context.Context, sel ast.SelectionSet, v Containers) graphql.Marshaler {
+	return ec._Containers(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNContainers2ᚖagentgoᚋapiᚐContainers(ctx context.Context, sel ast.SelectionSet, v *Containers) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Containers(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalNFact2agentgoᚋapiᚐFact(ctx context.Context, sel ast.SelectionSet, v Fact) graphql.Marshaler {

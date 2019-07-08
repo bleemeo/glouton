@@ -119,7 +119,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 	}
 	return metricsRes, nil
 }
-func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error) {
+func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error) {
 	if r.api.dockerFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve containers at this moment. Please try later")
 	}
@@ -141,7 +141,11 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	sort.Slice(containers, func(i, j int) bool {
 		return strings.Compare(containers[i].Name(), containers[j].Name()) < 0
 	})
+	nbContainers := 0
 	for _, container := range containers {
+		if allContainers || container.IsRunning() {
+			nbContainers++
+		}
 		if (allContainers || container.IsRunning()) && (strings.Contains(container.Name(), search) || strings.Contains(container.Image(), search) || strings.Contains(container.ID(), search) || strings.Contains(container.Command(), search)) {
 			createdAt := container.CreatedAt()
 			startedAt := container.StartedAt()
@@ -207,7 +211,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 			containersRes = []*Container{}
 		}
 	}
-	return containersRes, nil
+	return &Containers{Containers: containersRes, Count: nbContainers}, nil
 }
 
 func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*Process, error) {

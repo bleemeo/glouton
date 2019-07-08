@@ -24,6 +24,11 @@ type Container struct {
 	CPUUsedPerc  float64    `json:"cpuUsedPerc"`
 }
 
+type Containers struct {
+	Count      int          `json:"count"`
+	Containers []*Container `json:"containers"`
+}
+
 type Fact struct {
 	Name  string `json:"name"`
 	Value string `json:"value"`
