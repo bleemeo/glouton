@@ -24,11 +24,11 @@ type dockerInterface interface {
 
 // API : Structure that contains API's port
 type API struct {
-	bindAddress string
-	router      http.Handler
-	db          storeInterface
-	dockerFact  dockerInterface
-	psFact *facts.ProcessProvider
+	bindAddress  string
+	router       http.Handler
+	db           storeInterface
+	dockerFact   dockerInterface
+	psFact       *facts.ProcessProvider
 	factProvider *facts.FactProvider
 }
 
