@@ -44,6 +44,27 @@ func TestDecode(t *testing.T) {
 	}
 }
 
+func TestDecodecrc32(t *testing.T) {
+	nrpePacketCopy := make([]byte, len(nrpePacket))
+	copy(nrpePacketCopy, nrpePacket)
+	nrpePacketCopy[6] = 0x2d
+	cases := []struct {
+		in   io.Reader
+		want reducedPacket
+	}{
+		{bytes.NewReader(nrpePacketCopy), reducedPacket{1, 0, "check_load"}},
+	}
+	for _, c := range cases {
+		got, err := decode(c.in)
+		if got != c.want {
+			t.Errorf("decode(nrpePacket) == %v, want %v", got, c.want)
+		}
+		if err != nil {
+			t.Error(err)
+		}
+	}
+}
+
 func TestDecodeEncodeV3(t *testing.T) {
 	cases := []struct {
 		in   reducedPacket
