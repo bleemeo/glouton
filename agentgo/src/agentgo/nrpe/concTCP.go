@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"hash/crc32"
 	"io"
+	"log"
 	"net"
 )
 
@@ -26,16 +27,18 @@ type reducedPacket struct {
 func handleConnection(c net.Conn) {
 	a, err := decode(c)
 	if err != nil {
+		log.Println(err)
 		c.Close()
 		return
 	}
-	fmt.Printf("packet_type : %v\nbuffer : %v\n", a.packetType, a.buffer)
+	fmt.Printf("packet_type : %v, buffer : %v\n", a.packetType, a.buffer)
 
 	var answer reducedPacket
 	answer.buffer = "connection successful"
 
 	b, err := encodeV3(answer)
 	if err != nil {
+		log.Println(err)
 		c.Close()
 		return
 	}
@@ -89,12 +92,14 @@ func decode(r io.Reader) (reducedPacket, error) {
 		err = errors.New("binary.Read failed for packet_type")
 		return a, err
 	}
-	copy(b, d)
-	b[4] = 0
-	b[5] = 0
-	b[6] = 0
-	b[7] = 0
-	if crc32.ChecksumIEEE(b) != crc32value {
+	v := make([]byte, 19+bufferlength)
+	copy(v[:16], b)
+	copy(v[16:], d)
+	v[4] = 0
+	v[5] = 0
+	v[6] = 0
+	v[7] = 0
+	if crc32.ChecksumIEEE(v) != crc32value {
 		return a, errors.New("wrong value for crc32")
 	}
 
@@ -125,7 +130,7 @@ func encodeV2(answer packetStructV2) ([]byte, error) {
 }
 
 func encodeV3(answer reducedPacket) ([]byte, error) {
-	packetVersion := int32(3)
+	packetVersion := int16(3)
 	answer.packetType = 2
 	bufferLength := int32(1017)
 	b2 := make([]byte, 19+bufferLength)
