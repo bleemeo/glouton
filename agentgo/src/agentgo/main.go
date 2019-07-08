@@ -54,7 +54,7 @@ func main() {
 	factProvider.AddCallback(dockerFact.DockerFact)
 	factProvider.SetFact("installation_format", "golang")
 	factProvider.SetFact("statsd_enabled", "false")
-	api := api.New(db, dockerFact, apiBindAddress)
+	api := api.New(db, dockerFact, psFact, factProvider, apiBindAddress)
 	coll := collector.New(db.Accumulator())
 
 	coll.AddInput(panicOnError(system.New()))

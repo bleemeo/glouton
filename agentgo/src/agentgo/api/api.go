@@ -28,17 +28,19 @@ type API struct {
 	router      http.Handler
 	db          storeInterface
 	dockerFact  dockerInterface
+	psFact *facts.ProcessProvider
+	factProvider *facts.FactProvider
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface, dockerFact *facts.DockerProvider, bindAddress string) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-	api := &API{bindAddress: bindAddress, db: db, dockerFact: dockerFact}
+	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider}
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))

@@ -53,3 +53,18 @@ type Point struct {
 	Time  time.Time `json:"time"`
 	Value float64   `json:"value"`
 }
+
+type Process struct {
+	Pid         int       `json:"pid"`
+	Ppid        int       `json:"ppid"`
+	CreateTime  time.Time `json:"create_time"`
+	CmdLine     string    `json:"cmd_line"`
+	Name        string    `json:"name"`
+	MemoryRss   int       `json:"memory_rss"`
+	CPUPercent  float64   `json:"cpu_percent"`
+	CPUTime     float64   `json:"cpu_time"`
+	Status      string    `json:"status"`
+	Username    string    `json:"username"`
+	Executable  string    `json:"executable"`
+	ContainerID string    `json:"container_id"`
+}

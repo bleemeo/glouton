@@ -15,7 +15,7 @@ import (
 )
 
 type Resolver struct {
-	api *API
+	api        *API
 }
 
 func (r *Resolver) Query() QueryResolver {
@@ -121,7 +121,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 }
 func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error) {
 	if r.api.dockerFact == nil {
-		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
+		return nil, gqlerror.Errorf("Can not retrieve containers at this moment. Please try later")
 	}
 	containers, err := r.api.dockerFact.Containers(ctx, time.Hour, false)
 	if err != nil {
@@ -208,4 +208,35 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 		}
 	}
 	return containersRes, nil
+}
+
+func (r *queryResolver) Processes(ctx context.Context, containerID *string, search *string) ([]*Process, error) {
+	if r.api.psFact == nil {
+		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
+	}
+	duration, _ := time.ParseDuration("1h")
+	processes, err := r.api.psFact.Processes(ctx, duration)
+	if err != nil {
+		log.Println(err)
+		return nil, gqlerror.Errorf("Can not retrieve processes")
+	}
+	processesRes := []*Process{}
+	for _, process := range processes {
+		p := &Process{
+			Pid: process.PID,
+			Ppid: process.PPID,
+			CreateTime: process.CreateTime,
+			CmdLine: strings.Join(process.CmdLine, " "),
+			Name: process.Name,
+			MemoryRss: int(process.MemoryRSS),
+			CPUPercent: process.CPUPercent,
+			CPUTime: process.CPUTime,
+			Status: process.Status,
+			Username: process.Username,
+			Executable: process.Executable,
+			ContainerID: process.ContainerID,
+		}
+		processesRes = append(processesRes, p)
+	}
+	return processesRes, nil
 }
