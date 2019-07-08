@@ -65,7 +65,7 @@ type Query {
   metrics(metricsFilter: [MetricInput!]!): [Metric!]!
   points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
-  processes(containerId: String, search: String): [Process!]!
+  processes(containerId: String): [Process!]!
 }
 
 scalar Time

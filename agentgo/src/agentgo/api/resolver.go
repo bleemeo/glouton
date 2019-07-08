@@ -210,7 +210,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	return containersRes, nil
 }
 
-func (r *queryResolver) Processes(ctx context.Context, containerID *string, search *string) ([]*Process, error) {
+func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*Process, error) {
 	if r.api.psFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
 	}

@@ -95,7 +95,7 @@ type ComplexityRoot struct {
 		Containers func(childComplexity int, input *Pagination, allContainers bool, search string) int
 		Metrics    func(childComplexity int, metricsFilter []*MetricInput) int
 		Points     func(childComplexity int, metricsFilter []*MetricInput, start string, end string, minutes int) int
-		Processes  func(childComplexity int, containerID *string, search *string) int
+		Processes  func(childComplexity int, containerID *string) int
 	}
 }
 
@@ -103,7 +103,7 @@ type QueryResolver interface {
 	Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error)
 	Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error)
 	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) ([]*Container, error)
-	Processes(ctx context.Context, containerID *string, search *string) ([]*Process, error)
+	Processes(ctx context.Context, containerID *string) ([]*Process, error)
 }
 
 type executableSchema struct {
@@ -405,7 +405,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Query.Processes(childComplexity, args["containerId"].(*string), args["search"].(*string)), true
+		return e.complexity.Query.Processes(childComplexity, args["containerId"].(*string)), true
 
 	}
 	return 0, false
@@ -523,7 +523,7 @@ type Query {
   metrics(metricsFilter: [MetricInput!]!): [Metric!]!
   points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): [Container!]!
-  processes(containerId: String, search: String): [Process!]!
+  processes(containerId: String): [Process!]!
 }
 
 scalar Time
@@ -641,14 +641,6 @@ func (ec *executionContext) field_Query_processes_args(ctx context.Context, rawA
 		}
 	}
 	args["containerId"] = arg0
-	var arg1 *string
-	if tmp, ok := rawArgs["search"]; ok {
-		arg1, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
-		if err != nil {
-			return nil, err
-		}
-	}
-	args["search"] = arg1
 	return args, nil
 }
 
@@ -2092,7 +2084,7 @@ func (ec *executionContext) _Query_processes(ctx context.Context, field graphql.
 	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Query().Processes(rctx, args["containerId"].(*string), args["search"].(*string))
+		return ec.resolvers.Query().Processes(rctx, args["containerId"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
