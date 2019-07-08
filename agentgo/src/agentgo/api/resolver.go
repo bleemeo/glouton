@@ -254,7 +254,7 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 	factsRes := []*Fact{}
 	for k, v := range facts {
 		f := &Fact{
-			Name: k,
+			Name:  k,
 			Value: v,
 		}
 		factsRes = append(factsRes, f)
