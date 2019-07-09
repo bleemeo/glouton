@@ -228,21 +228,23 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*
 	}
 	processesRes := []*Process{}
 	for _, process := range processes {
-		p := &Process{
-			Pid:         process.PID,
-			Ppid:        process.PPID,
-			CreateTime:  process.CreateTime,
-			Cmdline:     strings.Join(process.CmdLine, " "),
-			Name:        process.Name,
-			MemoryRss:   int(process.MemoryRSS),
-			CPUPercent:  process.CPUPercent,
-			CPUTime:     process.CPUTime,
-			Status:      process.Status,
-			Username:    process.Username,
-			Executable:  process.Executable,
-			ContainerID: process.ContainerID,
+		if containerID == nil || *containerID == process.ContainerID {
+			p := &Process{
+				Pid:         process.PID,
+				Ppid:        process.PPID,
+				CreateTime:  process.CreateTime,
+				Cmdline:     strings.Join(process.CmdLine, " "),
+				Name:        process.Name,
+				MemoryRss:   int(process.MemoryRSS),
+				CPUPercent:  process.CPUPercent,
+				CPUTime:     process.CPUTime,
+				Status:      process.Status,
+				Username:    process.Username,
+				Executable:  process.Executable,
+				ContainerID: process.ContainerID,
+			}
+			processesRes = append(processesRes, p)
 		}
-		processesRes = append(processesRes, p)
 	}
 	return processesRes, nil
 }
