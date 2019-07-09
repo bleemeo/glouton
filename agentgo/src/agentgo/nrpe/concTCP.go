@@ -77,6 +77,13 @@ func decode(r io.Reader) (reducedPacket, error) {
 		return a, err
 	}
 
+	buf = bytes.NewReader(b[8:10])
+	err = binary.Read(buf, binary.BigEndian, &a.resultCode)
+	if err != nil {
+		err = errors.New("binary.Read failed for result_code")
+		return a, err
+	}
+
 	d := make([]byte, bufferlength+3)
 	r.Read(d)
 	i := bytes.IndexByte(d, 0x0)
