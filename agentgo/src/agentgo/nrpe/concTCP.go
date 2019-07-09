@@ -157,7 +157,14 @@ func encodeV3(answer reducedPacket) ([]byte, error) {
 		return b2, err
 	}
 	copy(b2[12:16], buf2.Bytes())
-	b2[9] = 1 //result code = 1
+
+	buf2 = new(bytes.Buffer)
+	err = binary.Write(buf2, binary.BigEndian, &answer.resultCode)
+	if err != nil {
+		log.Println("binary.Write failed for result_code:", err)
+		return b2, err
+	}
+	copy(b2[8:10], buf2.Bytes())
 
 	buf2 = new(bytes.Buffer)
 	copy(b2[16:16+len(answer.buffer)], []byte(answer.buffer))
