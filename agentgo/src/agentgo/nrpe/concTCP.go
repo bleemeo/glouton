@@ -58,37 +58,18 @@ func decode(r io.Reader) (reducedPacket, error) {
 		err = errors.New("binary.Read failed for packet_version")
 		return a, err
 	}
+
+	if packetVersion == 3 {
+		buf = bytes.NewReader(b[12:16])
+		err = binary.Read(buf, binary.BigEndian, &bufferlength)
+		if err != nil {
+			err = errors.New("binary.Read failed for buffer_length")
+			return a, err
+		}
+	}
 	if packetVersion == 2 {
-		err = errors.New("invalid packet version")
-		return a, err
+		bufferlength = 1017
 	}
-
-	buf = bytes.NewReader(b[2:4])
-	err = binary.Read(buf, binary.BigEndian, &a.packetType)
-	if err != nil {
-		err = errors.New("binary.Read failed for packet_type")
-		return a, err
-	}
-
-	buf = bytes.NewReader(b[12:16])
-	err = binary.Read(buf, binary.BigEndian, &bufferlength)
-	if err != nil {
-		err = errors.New("binary.Read failed for buffer_length")
-		return a, err
-	}
-
-	buf = bytes.NewReader(b[8:10])
-	err = binary.Read(buf, binary.BigEndian, &a.resultCode)
-	if err != nil {
-		err = errors.New("binary.Read failed for result_code")
-		return a, err
-	}
-
-	d := make([]byte, bufferlength+3)
-	r.Read(d)
-	i := bytes.IndexByte(d, 0x0)
-	d = d[:i]
-	a.buffer = string(d)
 
 	//test value CRC32
 	var crc32value uint32
@@ -98,6 +79,8 @@ func decode(r io.Reader) (reducedPacket, error) {
 		err = errors.New("binary.Read failed for packet_type")
 		return a, err
 	}
+	d := make([]byte, bufferlength+3)
+	r.Read(d)
 	v := make([]byte, 19+bufferlength)
 	copy(v[:16], b)
 	copy(v[16:], d)
@@ -107,6 +90,29 @@ func decode(r io.Reader) (reducedPacket, error) {
 	v[7] = 0
 	if crc32.ChecksumIEEE(v) != crc32value {
 		return a, errors.New("wrong value for crc32")
+	}
+	//affectation du buffer
+	i := bytes.IndexByte(d, 0x0)
+	d = d[:i]
+	if packetVersion == 3 {
+		a.buffer = string(d)
+	}
+	if packetVersion == 2 {
+		a.buffer = string(b[10:]) + string(d)
+	}
+
+	buf = bytes.NewReader(b[2:4])
+	err = binary.Read(buf, binary.BigEndian, &a.packetType)
+	if err != nil {
+		err = errors.New("binary.Read failed for packet_type")
+		return a, err
+	}
+
+	buf = bytes.NewReader(b[8:10])
+	err = binary.Read(buf, binary.BigEndian, &a.resultCode)
+	if err != nil {
+		err = errors.New("binary.Read failed for result_code")
+		return a, err
 	}
 
 	return a, nil
