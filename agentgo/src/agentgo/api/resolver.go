@@ -142,11 +142,13 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 		return strings.Compare(containers[i].Name(), containers[j].Name()) < 0
 	})
 	nbContainers := 0
+	nbCurrentContainers := 0
 	for _, container := range containers {
 		if allContainers || container.IsRunning() {
 			nbContainers++
 		}
 		if (allContainers || container.IsRunning()) && (strings.Contains(container.Name(), search) || strings.Contains(container.Image(), search) || strings.Contains(container.ID(), search) || strings.Contains(container.Command(), search)) {
+			nbCurrentContainers++
 			createdAt := container.CreatedAt()
 			startedAt := container.StartedAt()
 			finishedAt := container.FinishedAt()
@@ -211,7 +213,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 			containersRes = []*Container{}
 		}
 	}
-	return &Containers{Containers: containersRes, Count: nbContainers}, nil
+	return &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers}, nil
 }
 
 func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*Process, error) {

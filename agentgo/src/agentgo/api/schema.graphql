@@ -34,6 +34,7 @@ type Container {
 
 type Containers {
   count: Int!
+  currentCount: Int!
   containers: [Container!]!
 }
 

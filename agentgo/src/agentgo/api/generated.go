@@ -61,8 +61,9 @@ type ComplexityRoot struct {
 	}
 
 	Containers struct {
-		Containers func(childComplexity int) int
-		Count      func(childComplexity int) int
+		Containers   func(childComplexity int) int
+		Count        func(childComplexity int) int
+		CurrentCount func(childComplexity int) int
 	}
 
 	Fact struct {
@@ -251,6 +252,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Containers.Count(childComplexity), true
+
+	case "Containers.currentCount":
+		if e.complexity.Containers.CurrentCount == nil {
+			break
+		}
+
+		return e.complexity.Containers.CurrentCount(childComplexity), true
 
 	case "Fact.name":
 		if e.complexity.Fact.Name == nil {
@@ -539,6 +547,7 @@ type Container {
 
 type Containers {
   count: Int!
+  currentCount: Int!
   containers: [Container!]!
 }
 
@@ -1304,6 +1313,43 @@ func (ec *executionContext) _Containers_count(ctx context.Context, field graphql
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
 		return obj.Count, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Containers_currentCount(ctx context.Context, field graphql.CollectedField, obj *Containers) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Containers",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CurrentCount, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3746,6 +3792,11 @@ func (ec *executionContext) _Containers(ctx context.Context, sel ast.SelectionSe
 			out.Values[i] = graphql.MarshalString("Containers")
 		case "count":
 			out.Values[i] = ec._Containers_count(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "currentCount":
+			out.Values[i] = ec._Containers_currentCount(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}

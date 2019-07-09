@@ -25,8 +25,9 @@ type Container struct {
 }
 
 type Containers struct {
-	Count      int          `json:"count"`
-	Containers []*Container `json:"containers"`
+	Count        int          `json:"count"`
+	CurrentCount int          `json:"currentCount"`
+	Containers   []*Container `json:"containers"`
 }
 
 type Fact struct {
