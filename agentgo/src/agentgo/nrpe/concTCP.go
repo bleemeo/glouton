@@ -132,6 +132,27 @@ func encodeV2(answer packetStructV2) ([]byte, error) {
 		return b, err
 	}
 	copy(b[2:4], buf.Bytes())
+
+	buf = new(bytes.Buffer)
+	err = binary.Write(buf, binary.BigEndian, &answer.resultCode)
+	if err != nil {
+		log.Println("binary.Write failed for result_code:", err)
+		return b, err
+	}
+	copy(b[8:10], buf.Bytes())
+
+	buf = new(bytes.Buffer)
+	copy(b[16:16+len(answer.buffer)], []byte(answer.buffer))
+
+	crc32Value := crc32.ChecksumIEEE(b)
+	buf = new(bytes.Buffer)
+	err = binary.Write(buf, binary.BigEndian, &crc32Value)
+	if err != nil {
+		log.Println("binary.Write failed for crc32_value:", err)
+		return b, err
+	}
+	copy(b[4:8], buf.Bytes())
+
 	return b, nil
 }
 
@@ -175,6 +196,7 @@ func encodeV3(answer reducedPacket) ([]byte, error) {
 
 	buf2 = new(bytes.Buffer)
 	copy(b2[16:16+len(answer.buffer)], []byte(answer.buffer))
+
 	crc32Value := crc32.ChecksumIEEE(b2)
 	buf2 = new(bytes.Buffer)
 	err = binary.Write(buf2, binary.BigEndian, &crc32Value)
