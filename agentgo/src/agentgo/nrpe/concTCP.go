@@ -39,25 +39,25 @@ func handleConnection(c net.Conn) {
 }
 
 func decode(r io.Reader) (reducedPacket, error) {
-	b := make([]byte, 16)
-	r.Read(b)
+	readPacketHead := make([]byte, 16)
+	r.Read(readPacketHead)
 	var packetVersion int16
 	var bufferlength int32
-	var a reducedPacket
+	var decodedPacket reducedPacket
 
-	buf := bytes.NewReader(b[:2])
+	buf := bytes.NewReader(readPacketHead[:2])
 	err := binary.Read(buf, binary.BigEndian, &packetVersion)
 	if err != nil {
 		err = errors.New("binary.Read failed for packet_version")
-		return a, err
+		return decodedPacket, err
 	}
 
 	if packetVersion == 3 {
-		buf = bytes.NewReader(b[12:16])
+		buf = bytes.NewReader(readPacketHead[12:16])
 		err = binary.Read(buf, binary.BigEndian, &bufferlength)
 		if err != nil {
 			err = errors.New("binary.Read failed for buffer_length")
-			return a, err
+			return decodedPacket, err
 		}
 	}
 	if packetVersion == 2 {
@@ -66,139 +66,139 @@ func decode(r io.Reader) (reducedPacket, error) {
 
 	//test value CRC32
 	var crc32value uint32
-	buf = bytes.NewReader(b[4:8])
+	buf = bytes.NewReader(readPacketHead[4:8])
 	err = binary.Read(buf, binary.BigEndian, &crc32value)
 	if err != nil {
 		err = errors.New("binary.Read failed for packet_type")
-		return a, err
+		return decodedPacket, err
 	}
-	d := make([]byte, bufferlength+3)
-	r.Read(d)
-	v := make([]byte, 19+bufferlength)
-	copy(v[:16], b)
-	copy(v[16:], d)
-	v[4] = 0
-	v[5] = 0
-	v[6] = 0
-	v[7] = 0
-	if crc32.ChecksumIEEE(v) != crc32value {
-		return a, errors.New("wrong value for crc32")
+	readPacketBuffer := make([]byte, bufferlength+3)
+	r.Read(readPacketBuffer)
+	completeReadPacket := make([]byte, 19+bufferlength)
+	copy(completeReadPacket[:16], readPacketHead)
+	copy(completeReadPacket[16:], readPacketBuffer)
+	completeReadPacket[4] = 0
+	completeReadPacket[5] = 0
+	completeReadPacket[6] = 0
+	completeReadPacket[7] = 0
+	if crc32.ChecksumIEEE(completeReadPacket) != crc32value {
+		return decodedPacket, errors.New("wrong value for crc32")
 	}
 	//affectation du buffer
-	i := bytes.IndexByte(d, 0x0)
-	d = d[:i]
+	i := bytes.IndexByte(readPacketBuffer, 0x0)
+	readPacketBuffer = readPacketBuffer[:i]
 	if packetVersion == 3 {
-		a.buffer = string(d)
+		decodedPacket.buffer = string(readPacketBuffer)
 	}
 	if packetVersion == 2 {
-		a.buffer = string(b[10:]) + string(d)
+		decodedPacket.buffer = string(readPacketHead[10:]) + string(readPacketBuffer)
 	}
 
-	buf = bytes.NewReader(b[2:4])
-	err = binary.Read(buf, binary.BigEndian, &a.packetType)
+	buf = bytes.NewReader(readPacketHead[2:4])
+	err = binary.Read(buf, binary.BigEndian, &decodedPacket.packetType)
 	if err != nil {
 		err = errors.New("binary.Read failed for packet_type")
-		return a, err
+		return decodedPacket, err
 	}
 
-	buf = bytes.NewReader(b[8:10])
-	err = binary.Read(buf, binary.BigEndian, &a.resultCode)
+	buf = bytes.NewReader(readPacketHead[8:10])
+	err = binary.Read(buf, binary.BigEndian, &decodedPacket.resultCode)
 	if err != nil {
 		err = errors.New("binary.Read failed for result_code")
-		return a, err
+		return decodedPacket, err
 	}
 
-	return a, nil
+	return decodedPacket, nil
 }
 
-func encodeV2(answer reducedPacket, randBytes [2]byte) ([]byte, error) {
-	answer.packetType = 2
+func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
+	decodedPacket.packetType = 2
 
-	b := make([]byte, 1036)
-	b[1] = 0x02 //version 2 encoding
+	encodedPacket := make([]byte, 1036)
+	encodedPacket[1] = 0x02 //version 2 encoding
 
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, &answer.packetType)
+	err := binary.Write(buf, binary.BigEndian, &decodedPacket.packetType)
 	if err != nil {
 		log.Println("binary.Write failed for packet_type:", err)
-		return b, err
+		return encodedPacket, err
 	}
-	copy(b[2:4], buf.Bytes())
+	copy(encodedPacket[2:4], buf.Bytes())
 
 	buf = new(bytes.Buffer)
-	err = binary.Write(buf, binary.BigEndian, &answer.resultCode)
+	err = binary.Write(buf, binary.BigEndian, &decodedPacket.resultCode)
 	if err != nil {
 		log.Println("binary.Write failed for result_code:", err)
-		return b, err
+		return encodedPacket, err
 	}
-	copy(b[8:10], buf.Bytes())
+	copy(encodedPacket[8:10], buf.Bytes())
 
-	copy(b[10:10+len(answer.buffer)], []byte(answer.buffer))
-	b[1034] = randBytes[0] //rand bytes encoding
-	b[1035] = randBytes[1]
+	copy(encodedPacket[10:10+len(decodedPacket.buffer)], []byte(decodedPacket.buffer))
+	encodedPacket[1034] = randBytes[0] //random bytes encoding
+	encodedPacket[1035] = randBytes[1]
 
-	crc32Value := crc32.ChecksumIEEE(b)
+	crc32Value := crc32.ChecksumIEEE(encodedPacket)
 	buf = new(bytes.Buffer)
 	err = binary.Write(buf, binary.BigEndian, &crc32Value)
 	if err != nil {
 		log.Println("binary.Write failed for crc32_value:", err)
-		return b, err
+		return encodedPacket, err
 	}
-	copy(b[4:8], buf.Bytes())
+	copy(encodedPacket[4:8], buf.Bytes())
 
-	return b, nil
+	return encodedPacket, nil
 }
 
-func encodeV3(answer reducedPacket) ([]byte, error) {
+func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 	packetVersion := int16(3)
-	answer.packetType = 2
-	bufferLength := int32(len(answer.buffer))
-	b2 := make([]byte, 19+len(answer.buffer))
+	decodedPacket.packetType = 2
+	bufferLength := int32(len(decodedPacket.buffer))
+	encodedPacket := make([]byte, 19+len(decodedPacket.buffer))
 
-	buf2 := new(bytes.Buffer)
-	err := binary.Write(buf2, binary.BigEndian, &packetVersion)
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, &packetVersion)
 	if err != nil {
 		log.Println("binary.Write failed for packet_version:", err)
-		return b2, err
+		return encodedPacket, err
 	}
-	copy(b2[:2], buf2.Bytes())
+	copy(encodedPacket[:2], buf.Bytes())
 
-	buf2 = new(bytes.Buffer)
-	err = binary.Write(buf2, binary.BigEndian, &answer.packetType)
+	buf = new(bytes.Buffer)
+	err = binary.Write(buf, binary.BigEndian, &decodedPacket.packetType)
 	if err != nil {
 		log.Println("binary.Write failed for packet_type:", err)
-		return b2, err
+		return encodedPacket, err
 	}
-	copy(b2[2:4], buf2.Bytes())
+	copy(encodedPacket[2:4], buf.Bytes())
 
-	buf2 = new(bytes.Buffer)
-	err = binary.Write(buf2, binary.BigEndian, &bufferLength)
+	buf = new(bytes.Buffer)
+	err = binary.Write(buf, binary.BigEndian, &bufferLength)
 	if err != nil {
 		log.Println("binary.Write failed for buffer_length:", err)
-		return b2, err
+		return encodedPacket, err
 	}
-	copy(b2[12:16], buf2.Bytes())
+	copy(encodedPacket[12:16], buf.Bytes())
 
-	buf2 = new(bytes.Buffer)
-	err = binary.Write(buf2, binary.BigEndian, &answer.resultCode)
+	buf = new(bytes.Buffer)
+	err = binary.Write(buf, binary.BigEndian, &decodedPacket.resultCode)
 	if err != nil {
 		log.Println("binary.Write failed for result_code:", err)
-		return b2, err
+		return encodedPacket, err
 	}
-	copy(b2[8:10], buf2.Bytes())
+	copy(encodedPacket[8:10], buf.Bytes())
 
-	buf2 = new(bytes.Buffer)
-	copy(b2[16:16+len(answer.buffer)], []byte(answer.buffer))
+	buf = new(bytes.Buffer)
+	copy(encodedPacket[16:16+len(decodedPacket.buffer)], []byte(decodedPacket.buffer))
 
-	crc32Value := crc32.ChecksumIEEE(b2)
-	buf2 = new(bytes.Buffer)
-	err = binary.Write(buf2, binary.BigEndian, &crc32Value)
+	crc32Value := crc32.ChecksumIEEE(encodedPacket)
+	buf = new(bytes.Buffer)
+	err = binary.Write(buf, binary.BigEndian, &crc32Value)
 	if err != nil {
 		log.Println("binary.Write failed for crc32_value:", err)
-		return b2, err
+		return encodedPacket, err
 	}
-	copy(b2[4:8], buf2.Bytes())
-	return b2, nil
+	copy(encodedPacket[4:8], buf.Bytes())
+	return encodedPacket, nil
 }
 
 //Run start a connection with a nrpe server
