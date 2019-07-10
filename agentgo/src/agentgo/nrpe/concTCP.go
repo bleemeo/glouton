@@ -115,7 +115,7 @@ func encodeV2(answer reducedPacket, randBytes [2]byte) ([]byte, error) {
 	answer.packetType = 2
 
 	b := make([]byte, 1036)
-	b[1] = 0x02
+	b[1] = 0x02 //version 2 encoding
 
 	buf := new(bytes.Buffer)
 	err := binary.Write(buf, binary.BigEndian, &answer.packetType)
@@ -134,7 +134,7 @@ func encodeV2(answer reducedPacket, randBytes [2]byte) ([]byte, error) {
 	copy(b[8:10], buf.Bytes())
 
 	copy(b[10:10+len(answer.buffer)], []byte(answer.buffer))
-	b[1034] = randBytes[0]
+	b[1034] = randBytes[0] //rand bytes encoding
 	b[1035] = randBytes[1]
 
 	crc32Value := crc32.ChecksumIEEE(b)
