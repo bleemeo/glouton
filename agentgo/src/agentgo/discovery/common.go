@@ -31,12 +31,16 @@ type Service struct {
 // nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[string]discoveryInfo{
+		"haproxy": {
+			IgnoreHighPort: true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
+		},
 		"memcached": {
 			ServicePort:     11211,
 			ServiceProtocol: "tcp",
 		},
-		"haproxy": {
-			IgnoreHighPort: true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
+		"redis": {
+			ServicePort:     6379,
+			ServiceProtocol: "tcp",
 		},
 	}
 )

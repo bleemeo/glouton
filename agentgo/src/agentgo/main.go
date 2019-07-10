@@ -83,7 +83,7 @@ func main() {
 	coll.AddInput(panicOnError(docker.New()))
 
 	disc := discovery.New(
-		discovery.NewDynamic(psFact, netstat),
+		discovery.NewDynamic(psFact, netstat, dockerFact),
 		coll,
 		nil,
 	)
@@ -128,15 +128,6 @@ func main() {
 	}()
 
 	go api.Run()
-
-	// This tasks do action that discovery would done (but since discovery is
-	// not yet implemented)
-	go func() {
-		for {
-			<-dockerFact.Events()
-			_, _ = dockerFact.Containers(ctx, 0, false)
-		}
-	}()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)

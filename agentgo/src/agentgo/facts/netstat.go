@@ -42,16 +42,6 @@ func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]net.Ad
 				continue
 			}
 			address := c.Laddr.IP
-			// We currently only with IPv4. Convert IPv6 address to IPv4 one.
-			if address == "::" {
-				address = "0.0.0.0"
-			}
-			if address == "::1" {
-				address = "127.0.0.1"
-			}
-			if strings.Contains(address, ":") {
-				continue
-			}
 			protocol := ""
 			switch {
 			case c.Type == syscall.SOCK_STREAM:
@@ -61,10 +51,14 @@ func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]net.Ad
 			default:
 				continue
 			}
+			if c.Family == syscall.AF_INET6 {
+				protocol += "6"
+			}
 
 			netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], listenAddress{
 				network: protocol,
-				address: fmt.Sprintf("%s:%d", address, c.Laddr.Port),
+				address: address,
+				port:    int(c.Laddr.Port),
 			})
 		}
 	}
@@ -84,13 +78,17 @@ var (
 type listenAddress struct {
 	network string
 	address string
+	port    int
 }
 
 func (l listenAddress) Network() string {
 	return l.network
 }
 func (l listenAddress) String() string {
-	return l.address
+	if l.network == "unix" {
+		return l.address
+	}
+	return fmt.Sprintf("%s:%d", l.address, l.port)
 }
 
 func decodeNetstatFile(data string) map[int][]net.Addr {
@@ -126,24 +124,6 @@ func decodeNetstatFile(data string) map[int][]net.Addr {
 			port = 0
 		}
 
-		// socket with "tcp6" or "udp6" are usually IPv6 + IPv4. We currently only with IPv4.
-		// Convert IPv6 address to IPv4 one and "tcp6/udp6" to "tcp/udp"
-		if protocol == "tcp6" || protocol == "udp6" {
-			if address == "::" {
-				address = "0.0.0.0"
-			}
-			if address == "::1" {
-				address = "127.0.0.1"
-			}
-			if strings.Contains(address, ":") {
-				// It's still an IPv6 address, we don't know how to convert it to IPv4
-				continue
-			}
-			protocol = protocol[:3]
-		}
-		if protocol == "tcp" || protocol == "udp" {
-			address = fmt.Sprintf("%s:%d", address, port)
-		}
 		addresses := result[int(pid)]
 		if addresses == nil {
 			addresses = make([]net.Addr, 0)
@@ -151,24 +131,29 @@ func decodeNetstatFile(data string) map[int][]net.Addr {
 		result[int(pid)] = addAddress(addresses, listenAddress{
 			network: protocol,
 			address: address,
+			port:    int(port),
 		})
 	}
 	return result
 }
 
-func addAddress(addresses []net.Addr, newAddr net.Addr) []net.Addr {
+func addAddress(addresses []net.Addr, newAddr listenAddress) []net.Addr {
 	duplicate := false
-	if newAddr.Network() != "unix" {
-		address, portStr, err := net.SplitHostPort(newAddr.String())
-		if err != nil {
-			log.Printf("DBG: unable to split host/port for %#v: %v", newAddr.String(), err)
-			return addresses
+	if newAddr.network != "unix" {
+		if newAddr.network == "tcp6" || newAddr.network == "udp6" {
+			if newAddr.address == "::" {
+				newAddr.address = "0.0.0.0"
+			}
+			if newAddr.address == "::1" {
+				newAddr.address = "127.0.0.1"
+			}
+			if strings.Contains(newAddr.address, ":") {
+				// It's still an IPv6 address, we don't know how to convert it to IPv4
+				return addresses
+			}
+			newAddr.network = newAddr.network[:3]
 		}
-		port, err := strconv.ParseInt(portStr, 10, 0)
-		if err != nil {
-			log.Printf("DBG: unable to parse port %#v: %v", portStr, err)
-			return addresses
-		}
+
 		for i, v := range addresses {
 			if v.Network() != newAddr.Network() {
 				continue
@@ -180,13 +165,13 @@ func addAddress(addresses []net.Addr, newAddr net.Addr) []net.Addr {
 			}
 			otherPort, err := strconv.ParseInt(otherPortStr, 10, 0)
 			if err != nil {
-				log.Printf("DBG: unable to parse port %#v: %v", portStr, err)
+				log.Printf("DBG: unable to parse port %#v: %v", otherPortStr, err)
 				return addresses
 			}
-			if otherPort == port {
+			if int(otherPort) == newAddr.port {
 				duplicate = true
 				// We prefere 127.* address
-				if strings.HasPrefix(address, "127.") {
+				if strings.HasPrefix(newAddr.address, "127.") {
 					addresses[i] = newAddr
 				}
 				break

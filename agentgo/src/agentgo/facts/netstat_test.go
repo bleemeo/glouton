@@ -69,26 +69,26 @@ unix  2      [ ACC ]     SEQPACKET  LISTENING     18666    1/init               
 
 	want := map[int][]listenAddress{
 		5534: {
-			{network: "tcp", address: "127.0.0.1:46319"},
+			{network: "tcp", address: "127.0.0.1", port: 46319},
 		},
 		1281: {
-			{network: "tcp", address: "0.0.0.0:111"},
-			{network: "udp", address: "0.0.0.0:609"},
+			{network: "tcp", address: "0.0.0.0", port: 111},
+			{network: "udp", address: "0.0.0.0", port: 609},
 		},
 		3541: {
-			{network: "tcp", address: "172.17.0.1:9100"},
+			{network: "tcp", address: "172.17.0.1", port: 9100},
 		},
 		14250: {
-			{network: "tcp", address: "127.0.0.1:631"}, // tcp6 as assumed to be tcp6+4. We only work with tcp4 for now
+			{network: "tcp", address: "127.0.0.1", port: 631}, // tcp6 as assumed to be tcp6+4. We only work with tcp4 for now
 		},
 		1375: {
-			{network: "udp", address: "0.0.0.0:5353"},
+			{network: "udp", address: "0.0.0.0", port: 5353},
 		},
 		2158: {
-			{network: "udp", address: "192.168.122.1:53"},
+			{network: "udp", address: "192.168.122.1", port: 53},
 		},
 		1560: {
-			{network: "udp", address: "0.0.0.0:8125"},
+			{network: "udp", address: "0.0.0.0", port: 8125},
 		},
 		5108: {
 			{network: "unix", address: "@/tmp/.ICE-unix/5108"},

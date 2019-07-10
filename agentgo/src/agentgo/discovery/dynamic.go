@@ -21,19 +21,25 @@ import (
 type DynamicDiscovery struct {
 	l sync.Mutex
 
-	ps      processFact
-	netstat netstatProvider
+	ps            processFact
+	netstat       netstatProvider
+	containerInfo containerInfoProvider
 
 	lastDiscoveryUpdate time.Time
 	services            []Service
 }
 
+type containerInfoProvider interface {
+	ContainerNetworkInfo(containerID string) (ipAddress string, listenAddresses []net.Addr)
+}
+
 // NewDynamic create a new dynamic service discovery which use information from
 // processess and netstat to discovery services
-func NewDynamic(ps processFact, netstat netstatProvider) *DynamicDiscovery {
+func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider) *DynamicDiscovery {
 	return &DynamicDiscovery{
-		ps:      ps,
-		netstat: netstat,
+		ps:            ps,
+		netstat:       netstat,
+		containerInfo: containerInfo,
 	}
 }
 
@@ -55,8 +61,9 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 // nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]string{
-		"memcached": "memcached",
-		"haproxy":   "haproxy",
+		"haproxy":      "haproxy",
+		"memcached":    "memcached",
+		"redis-server": "redis",
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string
@@ -86,16 +93,12 @@ type netstatProvider interface {
 }
 
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
-	dd.l.Unlock()
-
 	processes, err := dd.ps.Processes(ctx, maxAge)
 	if err != nil {
-		dd.l.Lock()
 		return err
 	}
 	netstat, err := dd.netstat.Netstat(ctx)
 	if err != nil {
-		dd.l.Lock()
 		return err
 	}
 
@@ -138,7 +141,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if service.ContainerID == "" {
 			service.ListenAddresses = netstat[pid]
 		} else {
-			panic("not yet done")
+			service.IPAddress, service.ListenAddresses = dd.containerInfo.ContainerNetworkInfo(service.ContainerID)
 		}
 		if len(service.ListenAddresses) > 0 {
 			service.hasNetstatInfo = true
@@ -155,7 +158,6 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		servicesMap[key] = service
 	}
 
-	dd.l.Lock()
 	dd.lastDiscoveryUpdate = time.Now()
 	services := make([]Service, 0, len(servicesMap))
 	for _, v := range servicesMap {
@@ -167,9 +169,6 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 
 func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discoveryInfo) {
 	defaultAddress := "127.0.0.1"
-	if service.ContainerID != "" {
-		panic("TODO")
-	}
 	newListenAddresses := service.ListenAddresses[:0]
 	for _, a := range service.ListenAddresses {
 		if a.Network() == "unix" {
@@ -196,10 +195,12 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 		}
 	}
 	service.ListenAddresses = newListenAddresses
-	service.IPAddress = defaultAddress
+	if service.ContainerID == "" {
+		service.IPAddress = defaultAddress
+	}
 	if len(service.ListenAddresses) == 0 && di.ServicePort != 0 {
 		// If netstat seems to have failed, always add the main service port
-		service.ListenAddresses = append(service.ListenAddresses, listenAddress{network: di.ServiceProtocol, address: fmt.Sprintf("%s:%d", defaultAddress, di.ServicePort)})
+		service.ListenAddresses = append(service.ListenAddresses, listenAddress{network: di.ServiceProtocol, address: fmt.Sprintf("%s:%d", service.IPAddress, di.ServicePort)})
 	}
 }
 
