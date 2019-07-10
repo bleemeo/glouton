@@ -10,13 +10,6 @@ import (
 	"net"
 )
 
-type packetStructV2 struct {
-	packetVersion int16
-	packetType    int16
-	crc32Value    uint32
-	resultCode    int16
-	buffer        string
-}
 type reducedPacket struct {
 	packetType int16
 	resultCode int16
@@ -118,21 +111,14 @@ func decode(r io.Reader) (reducedPacket, error) {
 	return a, nil
 }
 
-func encodeV2(answer packetStructV2) ([]byte, error) {
-	answer.packetVersion = 2
+func encodeV2(answer reducedPacket, randBytes [2]byte) ([]byte, error) {
 	answer.packetType = 2
 
-	b := make([]byte, 10)
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, &answer.packetVersion)
-	if err != nil {
-		log.Println("binary.Write failed for packet_version:", err)
-		return b, err
-	}
-	copy(b[:2], buf.Bytes())
+	b := make([]byte, 1036)
+	b[1] = 0x02
 
-	buf = new(bytes.Buffer)
-	err = binary.Write(buf, binary.BigEndian, &answer.packetType)
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.BigEndian, &answer.packetType)
 	if err != nil {
 		log.Println("binary.Write failed for packet_type:", err)
 		return b, err
@@ -147,8 +133,9 @@ func encodeV2(answer packetStructV2) ([]byte, error) {
 	}
 	copy(b[8:10], buf.Bytes())
 
-	buf = new(bytes.Buffer)
-	copy(b[16:16+len(answer.buffer)], []byte(answer.buffer))
+	copy(b[10:10+len(answer.buffer)], []byte(answer.buffer))
+	b[1034] = randBytes[0]
+	b[1035] = randBytes[1]
 
 	crc32Value := crc32.ChecksumIEEE(b)
 	buf = new(bytes.Buffer)
