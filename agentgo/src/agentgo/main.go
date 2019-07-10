@@ -8,9 +8,11 @@ import (
 	"sort"
 	"sync"
 	"syscall"
+	"time"
 
 	"agentgo/api"
 	"agentgo/collector"
+	"agentgo/discovery"
 	"agentgo/facts"
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/disk"
@@ -45,7 +47,7 @@ func main() {
 	db := store.New()
 	dockerFact := facts.NewDocker()
 	psFact := facts.NewProcess(dockerFact)
-	_ = psFact
+	netstat := &facts.NetstatProvider{}
 	factProvider := facts.NewFacter(
 		"",
 		"/",
@@ -81,6 +83,12 @@ func main() {
 	)))
 	coll.AddInput(panicOnError(docker.New()))
 
+	disc := discovery.New(
+		discovery.NewDynamic(psFact, netstat),
+		coll,
+		nil,
+	)
+
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -89,6 +97,23 @@ func main() {
 		defer wg.Done()
 		db.Run(ctx)
 		db.Close()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			_, err := disc.Discovery(ctx, 0)
+			if err != nil {
+				log.Printf("DBG: error during discovery: %v", err)
+			}
+			select {
+			case <-time.After(60 * time.Second):
+			case <-ctx.Done():
+				return
+
+			}
+		}
 	}()
 
 	wg.Add(1)
