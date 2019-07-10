@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"sort"
 	"sync"
 	"syscall"
 	"time"
@@ -138,16 +137,6 @@ func main() {
 			_, _ = dockerFact.Containers(ctx, 0, false)
 		}
 	}()
-
-	f, _ := factProvider.Facts(ctx, 0)
-	keys := make([]string, 0)
-	for k := range f {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-	for _, k := range keys {
-		log.Printf("%v = %v", k, f[k])
-	}
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
