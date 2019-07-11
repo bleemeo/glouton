@@ -6,9 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	"agentgo/discovery"
 	"agentgo/facts"
 	"agentgo/types"
-	"agentgo/discovery"
 
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"
