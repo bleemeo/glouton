@@ -119,13 +119,18 @@ type ComplexityRoot struct {
 		ListenAddresses func(childComplexity int) int
 		Name            func(childComplexity int) int
 	}
+
+	Topinfo struct {
+		Processes func(childComplexity int) int
+		UpdatedAt func(childComplexity int) int
+	}
 }
 
 type QueryResolver interface {
 	Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error)
 	Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error)
 	Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error)
-	Processes(ctx context.Context, containerID *string) ([]*Process, error)
+	Processes(ctx context.Context, containerID *string) (*Topinfo, error)
 	Facts(ctx context.Context) ([]*Fact, error)
 	Services(ctx context.Context, isActive bool) ([]*Service, error)
 }
@@ -527,6 +532,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Service.Name(childComplexity), true
 
+	case "Topinfo.processes":
+		if e.complexity.Topinfo.Processes == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.Processes(childComplexity), true
+
+	case "Topinfo.updatedAt":
+		if e.complexity.Topinfo.UpdatedAt == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.UpdatedAt(childComplexity), true
+
 	}
 	return 0, false
 }
@@ -631,6 +650,11 @@ type Process {
   container_id: String!
 }
 
+type Topinfo {
+  updatedAt: Time!
+  processes: [Process!]!
+}
+
 type Service {
   name: String!
   containerId: String!
@@ -663,7 +687,7 @@ type Query {
   metrics(metricsFilter: [MetricInput!]!): [Metric!]!
   points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): Containers!
-  processes(containerId: String): [Process!]!
+  processes(containerId: String): Topinfo!
   facts: [Fact!]!
   services(isActive: Boolean!): [Service!]!
 }
@@ -2437,10 +2461,10 @@ func (ec *executionContext) _Query_processes(ctx context.Context, field graphql.
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*Process)
+	res := resTmp.(*Topinfo)
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
-	return ec.marshalNProcess2ᚕᚖagentgoᚋapiᚐProcess(ctx, field.Selections, res)
+	return ec.marshalNTopinfo2ᚖagentgoᚋapiᚐTopinfo(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_facts(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -2819,6 +2843,80 @@ func (ec *executionContext) _Service_active(ctx context.Context, field graphql.C
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Topinfo",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.UpdatedAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(time.Time)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_processes(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Topinfo",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Processes, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*Process)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNProcess2ᚕᚖagentgoᚋapiᚐProcess(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -4549,6 +4647,38 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 	return out
 }
 
+var topinfoImplementors = []string{"Topinfo"}
+
+func (ec *executionContext) _Topinfo(ctx context.Context, sel ast.SelectionSet, obj *Topinfo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, topinfoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Topinfo")
+		case "updatedAt":
+			out.Values[i] = ec._Topinfo_updatedAt(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "processes":
+			out.Values[i] = ec._Topinfo_processes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var __DirectiveImplementors = []string{"__Directive"}
 
 func (ec *executionContext) ___Directive(ctx context.Context, sel ast.SelectionSet, obj *introspection.Directive) graphql.Marshaler {
@@ -5289,6 +5419,20 @@ func (ec *executionContext) marshalNTime2timeᚐTime(ctx context.Context, sel as
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) marshalNTopinfo2agentgoᚋapiᚐTopinfo(ctx context.Context, sel ast.SelectionSet, v Topinfo) graphql.Marshaler {
+	return ec._Topinfo(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNTopinfo2ᚖagentgoᚋapiᚐTopinfo(ctx context.Context, sel ast.SelectionSet, v *Topinfo) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Topinfo(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalN__Directive2githubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐDirective(ctx context.Context, sel ast.SelectionSet, v introspection.Directive) graphql.Marshaler {

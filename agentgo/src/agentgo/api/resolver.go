@@ -228,12 +228,12 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 
 // Processes returns a list of processes
 // They can be filtered by container's ID
-func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*Process, error) {
+func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*Topinfo, error) {
 	if r.api.psFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
 	}
 	duration, _ := time.ParseDuration("1h")
-	processes, err := r.api.psFact.Processes(ctx, duration)
+	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, duration)
 	if err != nil {
 		log.Printf("DBG2: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve processes")
@@ -258,7 +258,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*
 			processesRes = append(processesRes, p)
 		}
 	}
-	return processesRes, nil
+	return &Topinfo{UpdatedAt: updatedAt, Processes: processesRes}, nil
 }
 
 // Facts returns a list of facts discovered by agent

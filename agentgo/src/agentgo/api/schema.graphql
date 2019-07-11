@@ -53,6 +53,11 @@ type Process {
   container_id: String!
 }
 
+type Topinfo {
+  updatedAt: Time!
+  processes: [Process!]!
+}
+
 type Service {
   name: String!
   containerId: String!
@@ -85,7 +90,7 @@ type Query {
   metrics(metricsFilter: [MetricInput!]!): [Metric!]!
   points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
   containers(input: Pagination, allContainers: Boolean!, search: String!): Containers!
-  processes(containerId: String): [Process!]!
+  processes(containerId: String): Topinfo!
   facts: [Fact!]!
   services(isActive: Boolean!): [Service!]!
 }

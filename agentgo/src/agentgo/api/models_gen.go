@@ -88,3 +88,8 @@ type Service struct {
 	ExePath         string   `json:"exePath"`
 	Active          bool     `json:"active"`
 }
+
+type Topinfo struct {
+	UpdatedAt time.Time  `json:"updatedAt"`
+	Processes []*Process `json:"processes"`
+}
