@@ -189,8 +189,8 @@ func (d *DockerProvider) Run(ctx context.Context) {
 			lastErrorNotify = notifyError(err, lastErrorNotify, d.reconnectAttempt)
 		}
 		sleepDelay := 5 * math.Pow(2, float64(d.reconnectAttempt))
-		if sleepDelay > 5 {
-			sleepDelay = 5
+		if sleepDelay > 60 {
+			sleepDelay = 60
 		}
 		d.l.Unlock()
 		select {
