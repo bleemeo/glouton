@@ -43,18 +43,24 @@ func handleConnection(c net.Conn, cb callback) {
 		c.Close()
 		return
 	}
-	c.Write(encodedAnswer)
+	_, err = c.Write(encodedAnswer)
+	if err != nil {
+		log.Println(err)
+	}
 	c.Close()
 }
 
 func decode(r io.Reader) (reducedPacket, error) {
 	packetHead := make([]byte, 16)
-	r.Read(packetHead)
+	_, err := r.Read(packetHead)
+	if err != nil {
+		log.Println(err)
+	}
 	var bufferlength int32
 	var decodedPacket reducedPacket
 
 	buf := bytes.NewReader(packetHead)
-	err := binary.Read(buf, binary.BigEndian, &decodedPacket.packetVersion)
+	err = binary.Read(buf, binary.BigEndian, &decodedPacket.packetVersion)
 	if err != nil {
 		err = errors.New("binary.Read failed for packet_version")
 		return decodedPacket, err
@@ -94,7 +100,10 @@ func decode(r io.Reader) (reducedPacket, error) {
 	}
 
 	packetBuffer := make([]byte, bufferlength+3)
-	r.Read(packetBuffer)
+	_, err = r.Read(packetBuffer)
+	if err != nil {
+		log.Println(err)
+	}
 	//test value CRC32
 	completePacket := make([]byte, 19+bufferlength)
 	copy(completePacket[:16], packetHead)
