@@ -303,12 +303,12 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				netAddrs = append(netAddrs, addr.String())
 			}
 			s := &Service{
-				Name:  service.Name,
-				ContainerID: service.ContainerID,
-				IPAddress: service.IPAddress,
+				Name:            service.Name,
+				ContainerID:     service.ContainerID,
+				IPAddress:       service.IPAddress,
 				ListenAddresses: netAddrs,
-				ExePath: service.ExePath,
-				Active: service.Active,
+				ExePath:         service.ExePath,
+				Active:          service.Active,
 			}
 			servicesRes = append(servicesRes, s)
 		}
