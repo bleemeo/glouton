@@ -11,6 +11,7 @@ import (
 
 	"agentgo/api"
 	"agentgo/collector"
+	"agentgo/debouncer"
 	"agentgo/discovery"
 	"agentgo/facts"
 	"agentgo/inputs/cpu"
@@ -89,22 +90,10 @@ func main() {
 		nil,
 	)
 
-	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		db.Run(ctx)
-		db.Close()
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var dockerInputID int
-		dockerInputPresent := false
-		for {
+	dockerInputPresent := false
+	dockerInputID := 0
+	discoveryTrigger := debouncer.New(
+		func(ctx context.Context) {
 			_, err := disc.Discovery(ctx, 0)
 			if err != nil {
 				log.Printf("DBG: error during discovery: %v", err)
@@ -124,11 +113,53 @@ func main() {
 				coll.RemoveInput(dockerInputID)
 				dockerInputPresent = false
 			}
+		},
+		10*time.Second,
+	)
+	discoveryTrigger.Trigger()
+
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		db.Run(ctx)
+		db.Close()
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		discoveryTrigger.Run(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
 			select {
-			case <-time.After(60 * time.Second):
 			case <-ctx.Done():
 				return
+			case <-ticker.C:
+				discoveryTrigger.Trigger()
+			}
+		}
+	}()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case ev := <-dockerFact.Events():
+				if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
+					discoveryTrigger.Trigger()
+				}
+			case <-ctx.Done():
+				return
 			}
 		}
 	}()
@@ -148,8 +179,15 @@ func main() {
 	go api.Run()
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	<-c
-	cancel()
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	for s := range c {
+		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
+			cancel()
+			break
+		}
+		if s == syscall.SIGHUP {
+			discoveryTrigger.Trigger()
+		}
+	}
 	wg.Wait()
 }
