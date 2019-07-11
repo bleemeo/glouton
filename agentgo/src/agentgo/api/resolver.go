@@ -297,7 +297,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 	}
 	servicesRes := []*Service{}
 	for _, service := range services {
-		if !isActive || service.Active == true {
+		if !isActive || service.Active {
 			netAddrs := []string{}
 			for _, addr := range service.ListenAddresses {
 				netAddrs = append(netAddrs, addr.String())
