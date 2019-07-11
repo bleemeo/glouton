@@ -79,3 +79,12 @@ type Process struct {
 	Executable  string    `json:"executable"`
 	ContainerID string    `json:"container_id"`
 }
+
+type Service struct {
+	Name            string   `json:"name"`
+	ContainerID     string   `json:"containerId"`
+	IPAddress       string   `json:"ipAddress"`
+	ListenAddresses []string `json:"listenAddresses"`
+	ExePath         string   `json:"exePath"`
+	Active          bool     `json:"active"`
+}

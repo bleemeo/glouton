@@ -56,8 +56,13 @@ func main() {
 	factProvider.AddCallback(dockerFact.DockerFact)
 	factProvider.SetFact("installation_format", "golang")
 	factProvider.SetFact("statsd_enabled", "false")
-	api := api.New(db, dockerFact, psFact, factProvider, apiBindAddress)
 	coll := collector.New(db.Accumulator())
+	disc := discovery.New(
+		discovery.NewDynamic(psFact, netstat, dockerFact),
+		coll,
+		nil,
+	)
+	api := api.New(db, dockerFact, psFact, factProvider, apiBindAddress, disc)
 
 	coll.AddInput(panicOnError(system.New()), "system")
 	coll.AddInput(panicOnError(process.New()), "process")
@@ -83,12 +88,6 @@ func main() {
 			"nvme.*",
 		},
 	)), "diskio")
-
-	disc := discovery.New(
-		discovery.NewDynamic(psFact, netstat, dockerFact),
-		coll,
-		nil,
-	)
 
 	dockerInputPresent := false
 	dockerInputID := 0

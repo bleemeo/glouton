@@ -8,6 +8,7 @@ import (
 
 	"agentgo/facts"
 	"agentgo/types"
+	"agentgo/discovery"
 
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"
@@ -30,17 +31,18 @@ type API struct {
 	dockerFact   dockerInterface
 	psFact       *facts.ProcessProvider
 	factProvider *facts.FactProvider
+	disc         *discovery.Discovery
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider}
+	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc}
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))

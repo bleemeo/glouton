@@ -53,6 +53,15 @@ type Process {
   container_id: String!
 }
 
+type Service {
+  name: String!
+  containerId: String!
+  ipAddress: String!
+  listenAddresses: [String!]!
+  exePath: String!
+  active: Boolean!
+}
+
 type Fact {
   name: String!
   value: String!
@@ -78,6 +87,7 @@ type Query {
   containers(input: Pagination, allContainers: Boolean!, search: String!): Containers!
   processes(containerId: String): [Process!]!
   facts: [Fact!]!
+  services(isActive: Boolean!): [Service!]!
 }
 
 scalar Time

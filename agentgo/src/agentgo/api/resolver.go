@@ -269,3 +269,34 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 	}
 	return factsRes, nil
 }
+
+func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service, error) {
+	if r.api.disc == nil {
+		return nil, gqlerror.Errorf("Can not retrieve services at this moment. Please try later")
+	}
+	duration, _ := time.ParseDuration("1h")
+	services, err := r.api.disc.Discovery(ctx, duration)
+	if err != nil {
+		log.Println(err)
+		return nil, gqlerror.Errorf("Can not retrieve facts")
+	}
+	servicesRes := []*Service{}
+	for _, service := range services {
+		if !isActive || service.Active == true {
+			netAddrs := []string{}
+			for _, addr := range service.ListenAddresses {
+				netAddrs = append(netAddrs, addr.String())
+			}
+			s := &Service{
+				Name:  service.Name,
+				ContainerID: service.ContainerID,
+				IPAddress: service.IPAddress,
+				ListenAddresses: netAddrs,
+				ExePath: service.ExePath,
+				Active: service.Active,
+			}
+			servicesRes = append(servicesRes, s)
+		}
+	}
+	return servicesRes, nil
+}
