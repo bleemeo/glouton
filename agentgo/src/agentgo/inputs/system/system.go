@@ -45,7 +45,6 @@ func New() (i telegraf.Input, err error) {
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	delete(fields, "n_cpus")
-	delete(fields, "uptime")
 	delete(fields, "uptime_format")
 	return fields
 }
@@ -56,6 +55,9 @@ func renameMetrics(originalContext internal.GatherContext, currentContext intern
 	if metricName == "n_users" {
 		newMeasurement = "users"
 		newMetricName = "logged"
+	}
+	if metricName == "uptime" {
+		newMeasurement = ""
 	}
 	return
 }

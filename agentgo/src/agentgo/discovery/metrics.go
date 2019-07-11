@@ -79,7 +79,7 @@ func (d *Discovery) createInput(service Service) error {
 		}
 	case "redis":
 		if address := addressForPort(service, di); address != "" {
-			input, err := redis.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
+			input, err := redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
 			if err != nil {
 				return err
 			}
