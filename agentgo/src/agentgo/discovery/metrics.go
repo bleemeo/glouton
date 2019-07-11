@@ -95,7 +95,7 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil
 	}
-	inputID := d.coll.AddInput(input)
+	inputID := d.coll.AddInput(input, service.Name)
 	key := nameContainer{
 		name:        service.Name,
 		containerID: service.ContainerID,

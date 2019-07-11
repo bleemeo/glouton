@@ -12,9 +12,10 @@ import (
 
 // Collector implement running Gather on inputs every fixed time interval
 type Collector struct {
-	acc    telegraf.Accumulator
-	inputs map[int]telegraf.Input
-	l      sync.Mutex
+	acc        telegraf.Accumulator
+	inputs     map[int]telegraf.Input
+	inputNames map[int]string
+	l          sync.Mutex
 }
 
 // New returns a Collector with default option
@@ -23,14 +24,15 @@ type Collector struct {
 // 10 seconds.
 func New(acc telegraf.Accumulator) *Collector {
 	c := &Collector{
-		acc:    acc,
-		inputs: make(map[int]telegraf.Input),
+		acc:        acc,
+		inputs:     make(map[int]telegraf.Input),
+		inputNames: make(map[int]string),
 	}
 	return c
 }
 
 // AddInput add an input to this collector and return an ID
-func (c *Collector) AddInput(input telegraf.Input) int {
+func (c *Collector) AddInput(input telegraf.Input, shortName string) int {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -44,6 +46,7 @@ func (c *Collector) AddInput(input telegraf.Input) int {
 		_, ok = c.inputs[id]
 	}
 	c.inputs[id] = input
+	c.inputNames[id] = shortName
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
@@ -66,6 +69,7 @@ func (c *Collector) RemoveInput(id int) {
 	}
 
 	delete(c.inputs, id)
+	delete(c.inputNames, id)
 }
 
 // Run will run the collections until context is cancelled
@@ -83,15 +87,17 @@ func (c *Collector) Run(ctx context.Context) {
 func (c *Collector) run() {
 	c.l.Lock()
 	inputsCopy := make([]telegraf.Input, 0)
-	for _, v := range c.inputs {
+	inputsNameCopy := make([]string, 0)
+	for id, v := range c.inputs {
 		inputsCopy = append(inputsCopy, v)
+		inputsNameCopy = append(inputsNameCopy, c.inputNames[id])
 	}
 	c.l.Unlock()
 
-	for _, i := range inputsCopy {
-		err := i.Gather(c.acc)
+	for i, input := range inputsCopy {
+		err := input.Gather(c.acc)
 		if err != nil {
-			log.Fatal(err)
+			log.Printf("Input %s failed: %v", inputsNameCopy[i], err)
 		}
 	}
 }

@@ -72,7 +72,7 @@ func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator 
 // AddError add an error to the Accumulator
 func (a *accumulator) AddError(err error) {
 	if err != nil {
-		log.Printf("AddError(%v)", err)
+		log.Printf("DBG: Add error called with: %v", err)
 	}
 }
 

@@ -58,11 +58,11 @@ func main() {
 	api := api.New(db, dockerFact, psFact, factProvider, apiBindAddress)
 	coll := collector.New(db.Accumulator())
 
-	coll.AddInput(panicOnError(system.New()))
-	coll.AddInput(panicOnError(process.New()))
-	coll.AddInput(panicOnError(cpu.New()))
-	coll.AddInput(panicOnError(mem.New()))
-	coll.AddInput(panicOnError(swap.New()))
+	coll.AddInput(panicOnError(system.New()), "system")
+	coll.AddInput(panicOnError(process.New()), "process")
+	coll.AddInput(panicOnError(cpu.New()), "cpu")
+	coll.AddInput(panicOnError(mem.New()), "mem")
+	coll.AddInput(panicOnError(swap.New()), "swap")
 	coll.AddInput(panicOnError(net.New(
 		[]string{
 			"docker",
@@ -72,15 +72,17 @@ func main() {
 			"vnet",
 			"isatap",
 		},
-	)))
-	coll.AddInput(panicOnError(disk.New("/", nil)))
+	)),
+		"net",
+	)
+	coll.AddInput(panicOnError(disk.New("/", nil)), "disk")
 	coll.AddInput(panicOnError(diskio.New(
 		[]string{
 			"sd?",
 			"nvme.*",
 		},
-	)))
-	coll.AddInput(panicOnError(docker.New()))
+	)), "diskio")
+	coll.AddInput(panicOnError(docker.New()), "docker")
 
 	disc := discovery.New(
 		discovery.NewDynamic(psFact, netstat, dockerFact),

@@ -274,7 +274,7 @@ func (a *Accumulator) AddMetric(telegraf.Metric) {
 // AddError reports an error.
 func (a *Accumulator) AddError(err error) {
 	if a.Accumulator == nil {
-		log.Fatalf("%v", err)
+		log.Printf("AddError(%v)", err)
 	} else {
 		a.Accumulator.AddError(err)
 	}
