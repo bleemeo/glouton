@@ -24,6 +24,8 @@ func (r *Resolver) Query() QueryResolver {
 
 type queryResolver struct{ *Resolver }
 
+// Metrics returns a list of metrics
+// They can be filtered with an array of metrics which contains an array of labels
 func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve metrics at this moment. Please try later")
@@ -64,6 +66,10 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 	}
 	return metricsRes, nil
 }
+
+// Points returns metrics's points between a time interval
+// This interval could be between a start and end dates or X minutes from now
+// Metrics can also be filtered (See : 'Metrics' query) 
 func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
@@ -119,6 +125,10 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 	}
 	return metricsRes, nil
 }
+
+// Containers returns containers information
+// These containers could be paginated and filtered by a search input or allContainers flag
+// If there is a search filter, it will check search is contained in container's name / Image name / ID / command
 func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error) {
 	if r.api.dockerFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve containers at this moment. Please try later")
@@ -216,6 +226,8 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	return &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers}, nil
 }
 
+// Processes returns a list of processes
+// They can be filtered by container's ID
 func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*Process, error) {
 	if r.api.psFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
@@ -249,6 +261,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) ([]*
 	return processesRes, nil
 }
 
+// Facts returns a list of facts discovered by agent
 func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 	if r.api.factProvider == nil {
 		return nil, gqlerror.Errorf("Can not retrieve facts at this moment. Please try later")
@@ -270,6 +283,8 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 	return factsRes, nil
 }
 
+// Services returns a list services discovered by agent
+// They can be filtered by active flag
 func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service, error) {
 	if r.api.disc == nil {
 		return nil, gqlerror.Errorf("Can not retrieve services at this moment. Please try later")
