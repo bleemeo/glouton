@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"agentgo/inputs/apache"
+	"agentgo/inputs/elasticsearch"
 	"agentgo/inputs/memcached"
 	"agentgo/inputs/modify"
 	"agentgo/inputs/redis"
@@ -80,6 +81,10 @@ func (d *Discovery) createInput(service Service) error {
 				statusURL = fmt.Sprintf("http://%s/server-status?auto", address)
 			}
 			input, err = apache.New(statusURL)
+		}
+	case "elasticsearch":
+		if address := addressForPort(service, di); address != "" {
+			input, err = elasticsearch.New(fmt.Sprintf("http://%s:%d", address, di.ServicePort))
 		}
 	case "memcached":
 		if address := addressForPort(service, di); address != "" {

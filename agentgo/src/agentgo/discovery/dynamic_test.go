@@ -191,6 +191,15 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				IPAddress:       "172.17.0.49",
 			},
 		},
+		{
+			testName: "java-process",
+			cmdLine:  []string{"/opt/jdk-11.0.1/bin/java", "-Xms1g", "-Xmx1g", "-XX:+UseConcMarkSweepGC", "[...]", "/usr/share/elasticsearch/lib/*", "org.elasticsearch.bootstrap.Elasticsearch"},
+			want: Service{
+				Name:            "elasticsearch",
+				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:9200"}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
 	}
 
 	ctx := context.Background()

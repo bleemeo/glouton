@@ -61,17 +61,23 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 // nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]string{
+		"apache2":      "apache",
 		"haproxy":      "haproxy",
+		"httpd":        "apache",
 		"memcached":    "memcached",
 		"redis-server": "redis",
-		"apache2":      "apache",
-		"httpd":        "apache",
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string
 		ServiceName         string
 		Interpreter         string
-	}{}
+	}{
+		{
+			CmdLineMustContains: []string{"org.elasticsearch.bootstrap.Elasticsearch"},
+			ServiceName:         "elasticsearch",
+			Interpreter:         "java",
+		},
+	}
 )
 
 type listenAddress struct {

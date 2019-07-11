@@ -36,6 +36,10 @@ var (
 			ServicePort:     80,
 			ServiceProtocol: "tcp",
 		},
+		"elasticsearch": {
+			ServicePort:     9200,
+			ServiceProtocol: "tcp",
+		},
 		"haproxy": {
 			IgnoreHighPort: true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
 		},
