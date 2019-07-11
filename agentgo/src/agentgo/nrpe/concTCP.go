@@ -16,7 +16,9 @@ type reducedPacket struct {
 	buffer     string
 }
 
-func handleConnection(c net.Conn) {
+type callback func(command string) (string, int16)
+
+func handleConnection(c net.Conn, cb callback) {
 	decodedRequest, err := decode(c)
 	if err != nil {
 		log.Println(err)
@@ -26,7 +28,7 @@ func handleConnection(c net.Conn) {
 	log.Printf("packet_type : %v, buffer : %v\n", decodedRequest.packetType, decodedRequest.buffer)
 
 	var answer reducedPacket
-	answer.buffer = "connection successful"
+	answer.buffer, answer.resultCode = cb(decodedRequest.buffer)
 
 	encodedAnswer, err := encodeV3(answer)
 	if err != nil {
@@ -37,10 +39,6 @@ func handleConnection(c net.Conn) {
 	c.Write(encodedAnswer)
 	c.Close()
 }
-
-/*func response(command string, c net.Conn) (answer string, resultCode int16) {
-	request, err := encodeV3(reducedPacket{1, 0, command})
-}*/
 
 func decode(r io.Reader) (reducedPacket, error) {
 	packetHead := make([]byte, 16)
@@ -207,7 +205,7 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 }
 
 //Run start a connection with a nrpe server
-func Run(port string) {
+func Run(port string, cb callback) {
 	l, err := net.Listen("tcp4", port)
 	if err != nil {
 		log.Println(err)
@@ -221,6 +219,6 @@ func Run(port string) {
 			log.Println(err)
 			return
 		}
-		go handleConnection(c)
+		go handleConnection(c, cb)
 	}
 }

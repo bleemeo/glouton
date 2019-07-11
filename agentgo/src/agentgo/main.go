@@ -9,8 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"agentgo/nrpe"
-
 	"agentgo/api"
 	"agentgo/collector"
 	"agentgo/inputs/cpu"
@@ -22,6 +20,7 @@ import (
 	"agentgo/inputs/process"
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
+	"agentgo/nrpe"
 	"agentgo/store"
 	"agentgo/types"
 
@@ -30,6 +29,12 @@ import (
 
 type storeInterface interface {
 	Metrics(filters map[string]string) ([]types.Metric, error)
+}
+
+func response(command string) (string, int16) {
+	answer := command + " ok"
+	resultCode := int16(1)
+	return answer, resultCode
 }
 
 func stats(db storeInterface) {
@@ -95,7 +100,7 @@ func main() {
 	log.Println("Starting API")
 	go api.Run()
 
-	go nrpe.Run(":1025")
+	go nrpe.Run(":1025", response)
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
