@@ -104,8 +104,8 @@ func TestPsStat2Status(t *testing.T) {
 		want string
 	}{
 		{"D", "disk-sleep"},
-		{"I", "?"},
-		{"I<", "?"},
+		{"I", "idle"},
+		{"I<", "idle"},
 		{"R+", "running"},
 		{"Rl", "running"},
 		{"S", "sleeping"},
@@ -120,7 +120,7 @@ func TestPsStat2Status(t *testing.T) {
 	for _, c := range cases {
 		got := psStat2Status(c.in)
 		if got != c.want {
-			t.Errorf("psTime2second(%#v) == %#v, want %#v", c.in, got, c.want)
+			t.Errorf("psStat2Status(%#v) == %#v, want %#v", c.in, got, c.want)
 		}
 	}
 }

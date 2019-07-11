@@ -291,6 +291,8 @@ func psStat2Status(psStat string) string {
 		return "dead"
 	case 'Z':
 		return "zombie"
+	case 'I':
+		return "idle"
 	default:
 		return "?"
 	}
@@ -504,7 +506,7 @@ func (z psutilLister) processes(ctx context.Context, maxAge time.Duration) (proc
 			Name:       name,
 			MemoryRSS:  memoryInfo.RSS / 1024,
 			CPUTime:    cpuTimes.Total(),
-			Status:     status,
+			Status:     psStat2Status(status),
 			Username:   userName,
 			Executable: executable,
 		}
