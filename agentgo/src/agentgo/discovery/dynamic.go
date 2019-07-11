@@ -124,10 +124,11 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 		service := Service{
-			Name:        serviceName,
-			ContainerID: process.ContainerID,
-			ExePath:     process.Executable,
-			Active:      true,
+			Name:          serviceName,
+			ContainerID:   process.ContainerID,
+			ContainerName: process.ContainerName,
+			ExePath:       process.Executable,
+			Active:        true,
 		}
 
 		key := nameContainer{

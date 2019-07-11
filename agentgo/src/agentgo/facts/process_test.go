@@ -59,7 +59,7 @@ func TestDecodeDocker(t *testing.T) {
 			Titles: []string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"}},
 	}
 	for i, c := range cases {
-		got := decodeDocker(c, "theDockerID")
+		got := decodeDocker(c, "theDockerID", "theDockerName")
 		if len(got) != 1 {
 			t.Errorf("Case #%v: len(got) == %v, want 1", i, len(got))
 		}

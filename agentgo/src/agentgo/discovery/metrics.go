@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"agentgo/inputs/memcached"
+	"agentgo/inputs/modify"
 	"agentgo/inputs/redis"
 	"fmt"
 	"log"
@@ -72,6 +73,9 @@ func (d *Discovery) createInput(service Service) error {
 	case "memcached":
 		if address := addressForPort(service, di); address != "" {
 			input, err := memcached.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
+			if service.ContainerName != "" {
+				input = modify.AddItem(input, service.ContainerName)
+			}
 			if err != nil {
 				return err
 			}
@@ -80,6 +84,9 @@ func (d *Discovery) createInput(service Service) error {
 	case "redis":
 		if address := addressForPort(service, di); address != "" {
 			input, err := redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
+			if service.ContainerName != "" {
+				input = modify.AddItem(input, service.ContainerName)
+			}
 			if err != nil {
 				return err
 			}

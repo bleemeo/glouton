@@ -20,6 +20,7 @@ type nameContainer struct {
 type Service struct {
 	Name            string
 	ContainerID     string
+	ContainerName   string
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
 	ListenAddresses []net.Addr
 	ExePath         string

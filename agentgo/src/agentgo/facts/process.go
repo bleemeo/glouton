@@ -39,18 +39,19 @@ type ProcessProvider struct {
 
 // Process describe one Process
 type Process struct {
-	PID         int
-	PPID        int
-	CreateTime  time.Time
-	CmdLine     []string
-	Name        string
-	MemoryRSS   uint64
-	CPUPercent  float64
-	CPUTime     float64
-	Status      string
-	Username    string
-	Executable  string
-	ContainerID string
+	PID           int
+	PPID          int
+	CreateTime    time.Time
+	CmdLine       []string
+	Name          string
+	MemoryRSS     uint64
+	CPUPercent    float64
+	CPUTime       float64
+	Status        string
+	Username      string
+	Executable    string
+	ContainerID   string
+	ContainerName string
 }
 
 // NewProcess creates a new Process provider
@@ -113,7 +114,7 @@ func containerIDFromCGroupData(data string) string {
 	return containerID
 }
 
-func decodeDocker(top container.ContainerTopOKBody, containerID string) []Process {
+func decodeDocker(top container.ContainerTopOKBody, containerID string, containerName string) []Process {
 	userIndex := -1
 	pidIndex := -1
 	pcpuIndex := -1
@@ -155,10 +156,11 @@ func decodeDocker(top container.ContainerTopOKBody, containerID string) []Proces
 		}
 		cmdLine := strings.Split(row[cmdlineIndex], " ")
 		process := Process{
-			PID:         pid,
-			CmdLine:     cmdLine,
-			Name:        filepath.Base(cmdLine[0]),
-			ContainerID: containerID,
+			PID:           pid,
+			CmdLine:       cmdLine,
+			Name:          filepath.Base(cmdLine[0]),
+			ContainerID:   containerID,
+			ContainerName: containerName,
 		}
 		if userIndex != -1 {
 			process.Username = row[userIndex]
@@ -338,6 +340,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 		}
 		if pOld, ok := newProcessesMap[p.PID]; ok {
 			p.ContainerID = pOld.ContainerID
+			p.ContainerName = pOld.ContainerName
 			pOld.update(p)
 			newProcessesMap[p.PID] = pOld
 		} else {
@@ -353,6 +356,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 					if n, ok := id2name[candidateID]; ok {
 						log.Printf("DBG: Based on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, n)
 						p.ContainerID = candidateID
+						p.ContainerName = n
 						newProcessesMap[pid] = p
 					} else if candidateID != "" && time.Since(p.CreateTime) < 3*time.Second {
 						log.Printf("DBG: Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
@@ -423,6 +427,9 @@ func (p *Process) update(other Process) {
 	}
 	if other.ContainerID != "" {
 		p.ContainerID = other.ContainerID
+	}
+	if other.ContainerName != "" {
+		p.ContainerName = other.ContainerName
 	}
 }
 
@@ -568,8 +575,8 @@ func (d *dockerProcessImpl) processes(ctx context.Context, maxAge time.Duration)
 			log.Printf("%#v", err)
 			return
 		}
-		processes1 := decodeDocker(top, c.ID())
-		processes2 := decodeDocker(topWaux, c.ID())
+		processes1 := decodeDocker(top, c.ID(), c.Name())
+		processes2 := decodeDocker(topWaux, c.ID(), c.Name())
 		for _, p := range processes1 {
 			processesMap[p.PID] = p
 		}
