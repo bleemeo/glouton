@@ -11,9 +11,10 @@ import (
 )
 
 type reducedPacket struct {
-	packetType int16
-	resultCode int16
-	buffer     string
+	packetVersion int16
+	packetType    int16
+	resultCode    int16
+	buffer        string
 }
 
 type callback func(command string) (string, int16)
@@ -25,12 +26,18 @@ func handleConnection(c net.Conn, cb callback) {
 		c.Close()
 		return
 	}
-	log.Printf("packet_type : %v, buffer : %v\n", decodedRequest.packetType, decodedRequest.buffer)
+	log.Printf("packet_version : %v, packet_type : %v, buffer : %v\n", decodedRequest.packetVersion, decodedRequest.packetType, decodedRequest.buffer)
 
 	var answer reducedPacket
 	answer.buffer, answer.resultCode = cb(decodedRequest.buffer)
+	answer.packetVersion = decodedRequest.packetVersion
 
-	encodedAnswer, err := encodeV3(answer)
+	var encodedAnswer []byte
+	if answer.packetVersion == 3 {
+		encodedAnswer, err = encodeV3(answer)
+	} else {
+		encodedAnswer, err = encodeV2(answer, [2]byte{0x51, 0x53})
+	}
 	if err != nil {
 		log.Println(err)
 		c.Close()
@@ -43,12 +50,11 @@ func handleConnection(c net.Conn, cb callback) {
 func decode(r io.Reader) (reducedPacket, error) {
 	packetHead := make([]byte, 16)
 	r.Read(packetHead)
-	var packetVersion int16
 	var bufferlength int32
 	var decodedPacket reducedPacket
 
 	buf := bytes.NewReader(packetHead)
-	err := binary.Read(buf, binary.BigEndian, &packetVersion)
+	err := binary.Read(buf, binary.BigEndian, &decodedPacket.packetVersion)
 	if err != nil {
 		err = errors.New("binary.Read failed for packet_version")
 		return decodedPacket, err
@@ -70,7 +76,7 @@ func decode(r io.Reader) (reducedPacket, error) {
 		return decodedPacket, err
 	}
 
-	if packetVersion == 3 {
+	if decodedPacket.packetVersion == 3 {
 		var uselessvariable int16
 		err = binary.Read(buf, binary.BigEndian, &uselessvariable)
 		if err != nil {
@@ -83,7 +89,7 @@ func decode(r io.Reader) (reducedPacket, error) {
 			return decodedPacket, err
 		}
 	}
-	if packetVersion == 2 {
+	if decodedPacket.packetVersion == 2 {
 		bufferlength = 1017
 	}
 
@@ -102,11 +108,11 @@ func decode(r io.Reader) (reducedPacket, error) {
 	}
 
 	i := bytes.IndexByte(packetBuffer, 0x0)
-	if packetVersion == 3 {
+	if decodedPacket.packetVersion == 3 {
 		packetBuffer = packetBuffer[:i]
 		decodedPacket.buffer = string(packetBuffer)
 	}
-	if packetVersion == 2 {
+	if decodedPacket.packetVersion == 2 {
 		packetBuffer = packetBuffer[:i]
 		decodedPacket.buffer = string(packetHead[10:]) + string(packetBuffer)
 	}
@@ -153,13 +159,12 @@ func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
 }
 
 func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
-	packetVersion := int16(3)
 	decodedPacket.packetType = 2
 	bufferLength := int32(len(decodedPacket.buffer))
 	encodedPacket := make([]byte, 19+len(decodedPacket.buffer))
 
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, &packetVersion)
+	err := binary.Write(buf, binary.BigEndian, &decodedPacket.packetVersion)
 	if err != nil {
 		log.Println("binary.Write failed for packet_version:", err)
 		return encodedPacket, err

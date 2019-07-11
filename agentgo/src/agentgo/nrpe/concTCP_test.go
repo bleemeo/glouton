@@ -11,11 +11,11 @@ func TestDecode(t *testing.T) {
 		in   io.Reader
 		want reducedPacket
 	}{
-		{bytes.NewReader(requestCheckLoad), reducedPacket{1, 0, "check_load"}},
-		{bytes.NewReader(requestCheckUsers), reducedPacket{1, 0, "check_users"}},
-		{bytes.NewReader(requestBig), reducedPacket{1, 0, Answer}},
-		{bytes.NewReader(answer4), reducedPacket{2, 1, Answer}},
-		{bytes.NewReader(requestCheckBig), reducedPacket{1, 17769, "check_big"}}, //17769 result_code not interesting for requests
+		{bytes.NewReader(requestCheckLoad), reducedPacket{3, 1, 0, "check_load"}},
+		{bytes.NewReader(requestCheckUsers), reducedPacket{3, 1, 0, "check_users"}},
+		{bytes.NewReader(requestBig), reducedPacket{3, 1, 0, Answer}},
+		{bytes.NewReader(answer4), reducedPacket{3, 2, 1, Answer}},
+		{bytes.NewReader(requestCheckBig), reducedPacket{2, 1, 17769, "check_big"}}, //17769 result_code not interesting for requests
 	}
 	for _, c := range cases {
 		got, err := decode(c.in)
@@ -44,7 +44,7 @@ func TestDecodecrc32(t *testing.T) {
 }
 
 func TestDecodeEncodeV3(t *testing.T) {
-	cases := reducedPacket{2, 0, "connection successful"}
+	cases := reducedPacket{3, 2, 0, "connection successful"}
 
 	inter, _ := encodeV3(cases)
 	got, err := decode(bytes.NewReader(inter))
@@ -63,7 +63,7 @@ func TestEncodeV2(t *testing.T) {
 		inbyte   [2]byte
 		want     []byte
 	}{
-		{reducedPacket{2, 1, "WARNING - load average: 0.12, 0.11, 0.12|load1=0.120;0.150;0.300;0; load5=0.107;0.100;0.250;0; load15=0.125;0.050;0.200;0; "}, [2]byte{0x53, 0x51}, answerV2},
+		{reducedPacket{2, 2, 1, "WARNING - load average: 0.12, 0.11, 0.12|load1=0.120;0.150;0.300;0; load5=0.107;0.100;0.250;0; load15=0.125;0.050;0.200;0; "}, [2]byte{0x53, 0x51}, answerV2},
 	}
 	for _, c := range cases {
 		got, err := encodeV2(c.inPacket, c.inbyte)
@@ -88,9 +88,9 @@ func TestEncodeV3(t *testing.T) {
 		in   reducedPacket
 		want []byte
 	}{
-		{reducedPacket{1, 1, "WARNING - load average: 0.02, 0.07, 0.06|load1=0.022;0.150;0.300;0; load5=0.068;0.100;0.250;0; load15=0.060;0.050;0.200;0; "}, answer1},
-		{reducedPacket{1, 0, "USERS OK - 1 users currently logged in |users=1;5;10;0"}, answer2},
-		{reducedPacket{2, 1, Answer}, answer4},
+		{reducedPacket{3, 1, 1, "WARNING - load average: 0.02, 0.07, 0.06|load1=0.022;0.150;0.300;0; load5=0.068;0.100;0.250;0; load15=0.060;0.050;0.200;0; "}, answer1},
+		{reducedPacket{3, 1, 0, "USERS OK - 1 users currently logged in |users=1;5;10;0"}, answer2},
+		{reducedPacket{3, 2, 1, Answer}, answer4},
 	}
 	for _, c := range cases {
 		got, err := encodeV3(c.in)
