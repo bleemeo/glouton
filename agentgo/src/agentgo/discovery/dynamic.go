@@ -64,6 +64,8 @@ var (
 		"haproxy":      "haproxy",
 		"memcached":    "memcached",
 		"redis-server": "redis",
+		"apache2":      "apache",
+		"httpd":        "apache",
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string

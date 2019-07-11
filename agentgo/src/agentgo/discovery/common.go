@@ -32,6 +32,10 @@ type Service struct {
 // nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[string]discoveryInfo{
+		"apache": {
+			ServicePort:     80,
+			ServiceProtocol: "tcp",
+		},
 		"haproxy": {
 			IgnoreHighPort: true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
 		},

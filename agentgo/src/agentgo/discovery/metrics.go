@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"agentgo/inputs/apache"
 	"agentgo/inputs/memcached"
 	"agentgo/inputs/modify"
 	"agentgo/inputs/redis"
@@ -69,31 +70,37 @@ func (d *Discovery) createInput(service Service) error {
 	log.Printf("DBG2: Add input for service %v on container %s", service.Name, service.ContainerID)
 	di := servicesDiscoveryInfo[service.Name]
 
+	var input telegraf.Input
+	var err error
 	switch service.Name {
+	case "apache":
+		if address := addressForPort(service, di); address != "" {
+			statusURL := fmt.Sprintf("http://%s:%d/server-status?auto", address, di.ServicePort)
+			if di.ServicePort == 80 {
+				statusURL = fmt.Sprintf("http://%s/server-status?auto", address)
+			}
+			input, err = apache.New(statusURL)
+		}
 	case "memcached":
 		if address := addressForPort(service, di); address != "" {
-			input, err := memcached.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
-			if service.ContainerName != "" {
-				input = modify.AddItem(input, service.ContainerName)
-			}
-			if err != nil {
-				return err
-			}
-			return d.addInput(input, service)
+			input, err = memcached.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
 		}
 	case "redis":
 		if address := addressForPort(service, di); address != "" {
-			input, err := redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
-			if service.ContainerName != "" {
-				input = modify.AddItem(input, service.ContainerName)
-			}
-			if err != nil {
-				return err
-			}
-			return d.addInput(input, service)
+			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
 		}
 	default:
 		log.Printf("DBG: service type %s don't support metrics", service.Name)
+	}
+
+	if input != nil {
+		if service.ContainerName != "" {
+			input = modify.AddItem(input, service.ContainerName)
+		}
+		if err != nil {
+			return err
+		}
+		return d.addInput(input, service)
 	}
 
 	return nil
