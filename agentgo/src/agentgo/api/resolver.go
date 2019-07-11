@@ -69,7 +69,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 
 // Points returns metrics's points between a time interval
 // This interval could be between a start and end dates or X minutes from now
-// Metrics can also be filtered (See : 'Metrics' query) 
+// Metrics can also be filtered (See: 'Metrics' query) 
 func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
