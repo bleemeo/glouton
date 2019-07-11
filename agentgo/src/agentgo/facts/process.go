@@ -70,6 +70,14 @@ func NewProcess(dockerProvider *DockerProvider) *ProcessProvider {
 //
 // It may use a cached value as old as maxAge.
 func (pp *ProcessProvider) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]Process, err error) {
+	processes, _, err = pp.ProcessesWithTime(ctx, maxAge)
+	return
+}
+
+// ProcessesWithTime returns the list of processes present on this system and the date of last update
+//
+// It the same as Processes but also return the date of last update
+func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Duration) (processes map[int]Process, updateAt time.Time, err error) {
 	pp.l.Lock()
 	defer pp.l.Unlock()
 
@@ -79,8 +87,7 @@ func (pp *ProcessProvider) Processes(ctx context.Context, maxAge time.Duration) 
 			return
 		}
 	}
-
-	return pp.processes, nil
+	return pp.processes, pp.lastProcessesUpdate, nil
 }
 
 func containerIDFromCGroup(pid int) string {
