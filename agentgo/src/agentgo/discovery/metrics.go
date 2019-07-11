@@ -54,6 +54,7 @@ func (d *Discovery) removeInput(key nameContainer) {
 		return
 	}
 	if inputID, ok := d.activeInput[key]; ok {
+		log.Printf("DBG2: Remove input for service %v on container %s", key.name, key.containerID)
 		delete(d.activeInput, key)
 		d.coll.RemoveInput(inputID)
 	}

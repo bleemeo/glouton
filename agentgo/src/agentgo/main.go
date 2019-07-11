@@ -82,7 +82,6 @@ func main() {
 			"nvme.*",
 		},
 	)), "diskio")
-	coll.AddInput(panicOnError(docker.New()), "docker")
 
 	disc := discovery.New(
 		discovery.NewDynamic(psFact, netstat, dockerFact),
@@ -103,10 +102,27 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		var dockerInputID int
+		dockerInputPresent := false
 		for {
 			_, err := disc.Discovery(ctx, 0)
 			if err != nil {
 				log.Printf("DBG: error during discovery: %v", err)
+			}
+			hasConnection := dockerFact.HasConnection(ctx)
+			if hasConnection && !dockerInputPresent {
+				i, err := docker.New()
+				if err != nil {
+					log.Printf("DBG: error when creating Docker input: %v", err)
+				} else {
+					log.Printf("DBG2: Enable Docker metrics")
+					dockerInputID = coll.AddInput(i, "docker")
+					dockerInputPresent = true
+				}
+			} else if !hasConnection && dockerInputPresent {
+				log.Printf("DBG2: Disable Docker metrics")
+				coll.RemoveInput(dockerInputID)
+				dockerInputPresent = false
 			}
 			select {
 			case <-time.After(60 * time.Second):

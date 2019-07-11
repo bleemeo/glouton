@@ -539,6 +539,9 @@ func (d *dockerProcessImpl) processes(ctx context.Context, maxAge time.Duration)
 	processesMap := make(map[int]Process)
 	containers, err := d.dockerProvider.Containers(ctx, maxAge, true)
 	if err != nil {
+		if !d.dockerProvider.HasConnection(ctx) {
+			err = nil
+		}
 		return
 	}
 	for _, c := range containers {

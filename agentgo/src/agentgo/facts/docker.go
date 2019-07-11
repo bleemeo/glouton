@@ -155,6 +155,26 @@ func (d *DockerProvider) Events() <-chan DockerEvent {
 	return d.notifyC
 }
 
+// HasConnection returns whether or not a connection is currently established with Docker.
+//
+// It use the cached connection, no new connection are established. Use Containers() to establish new connection if needed.
+// The existing connection from the cache is tested. So HasConnection may be used to validate that Docker is still available.
+func (d *DockerProvider) HasConnection(ctx context.Context) bool {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	if d.client == nil {
+		return false
+	}
+	if _, err := d.client.Ping(ctx); err != nil {
+		d.client = nil
+		d.dockerVersion = ""
+		d.dockerAPIVersion = ""
+		return false
+	}
+	return true
+}
+
 // Run will run connect and listen to Docker event until context is cancelled
 //
 // Any error (unable to connect due to permission issue or Docker down) are not returned

@@ -66,6 +66,8 @@ func (c *Collector) RemoveInput(id int) {
 		if si, ok := input.(telegraf.ServiceInput); ok {
 			si.Stop()
 		}
+	} else {
+		log.Printf("DBG2: called RemoveInput with unexisting ID %d", id)
 	}
 
 	delete(c.inputs, id)
