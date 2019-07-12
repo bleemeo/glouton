@@ -75,7 +75,7 @@ func (d *DockerProvider) Containers(ctx context.Context, maxAge time.Duration, i
 
 	containers = make([]Container, 0, len(d.containers))
 	for _, c := range d.containers {
-		if includeIgnored || !c.Ignore() {
+		if includeIgnored || !c.Ignored() {
 			containers = append(containers, c)
 		}
 	}
@@ -214,8 +214,8 @@ func (c Container) ID() string {
 	return c.inspect.ID
 }
 
-// Ignore returns true if this container should be ignored by Bleemeo agent
-func (c Container) Ignore() bool {
+// Ignored returns true if this container should be ignored by Bleemeo agent
+func (c Container) Ignored() bool {
 	return ignoreContainer(c.inspect)
 }
 

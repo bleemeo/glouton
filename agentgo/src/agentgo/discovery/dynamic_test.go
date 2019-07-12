@@ -68,6 +68,10 @@ func (mc mockContainer) PrimaryAddress() string {
 	return mc.ipAddress
 }
 
+func (mc mockContainer) Ignored() bool {
+	return false
+}
+
 func TestServiceByCommand(t *testing.T) {
 	cases := []struct {
 		in   []string

@@ -33,6 +33,7 @@ type container interface {
 	Env() []string
 	PrimaryAddress() string
 	ListenAddresses() []net.Addr
+	Ignored() bool
 }
 
 type containerInfoProvider interface {
@@ -173,6 +174,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if service.ContainerID != "" {
 			service.container, ok = dd.containerInfo.Container(service.ContainerID)
 			if !ok {
+				continue
+			}
+			if service.container.Ignored() {
 				continue
 			}
 		}
