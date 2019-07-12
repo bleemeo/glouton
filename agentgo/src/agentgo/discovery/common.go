@@ -24,6 +24,9 @@ type Service struct {
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
 	ListenAddresses []net.Addr
 	ExePath         string
+	// ExtraAttributes contains additional service-dependant attribute. It may be password for MySQL, URL for HAProxy, ...
+	// Both configuration and dynamic discovery may set value here.
+	ExtraAttributes map[string]string
 	Active          bool
 
 	hasNetstatInfo bool
@@ -46,6 +49,27 @@ var (
 		"memcached": {
 			ServicePort:     11211,
 			ServiceProtocol: "tcp",
+		},
+		"mongodb": {
+			ServicePort:     27017,
+			ServiceProtocol: "tcp",
+		},
+		"mysql": {
+			ServicePort:     3306,
+			ServiceProtocol: "tcp",
+		},
+		"nginx": {
+			ServicePort:     80,
+			ServiceProtocol: "tcp",
+		},
+		"postgresql": {
+			ServicePort:     5432,
+			ServiceProtocol: "tcp",
+		},
+		"rabbitmq": {
+			ServicePort:     5672,
+			ServiceProtocol: "tcp",
+			IgnoreHighPort:  true,
 		},
 		"redis": {
 			ServicePort:     6379,

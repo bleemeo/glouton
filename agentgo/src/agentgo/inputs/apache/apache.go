@@ -34,7 +34,7 @@ func New(url string) (i telegraf.Input, err error) {
 		if ok {
 			slice := append(make([]string, 0), url)
 			apacheInput.Urls = slice
-			apacheInput.InsecureSkipVerify = false
+			apacheInput.InsecureSkipVerify = true
 			i = &internal.Input{
 				Input: apacheInput,
 				Accumulator: internal.Accumulator{

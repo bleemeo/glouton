@@ -94,6 +94,21 @@ func (d *DockerProvider) Container(containerID string) (container Container, fou
 	return c, ok
 }
 
+// ContainerEnv returns the container environment of given container ID.
+//
+// The Container ID must be the full ID (not only first 8 char).
+//
+// The information will come from cache exclusively. Use Containers() to refresh the cache if needed.
+func (d *DockerProvider) ContainerEnv(containerID string) (env []string) {
+	d.l.Lock()
+	defer d.l.Unlock()
+	c, ok := d.containers[containerID]
+	if !ok {
+		return nil
+	}
+	return c.Env()
+}
+
 // ContainerNetworkInfo returns the IP addresses and listening port of provided containerID
 //
 // The information will come from cache exclusively. Use Containers() to refresh the cache if needed.
@@ -218,6 +233,14 @@ func (c Container) CreatedAt() time.Time {
 		return result
 	}
 	return result
+}
+
+// Env returns the Container environment
+func (c Container) Env() []string {
+	if c.inspect.Config == nil {
+		return make([]string, 0)
+	}
+	return c.inspect.Config.Env
 }
 
 // ID returns the Container ID

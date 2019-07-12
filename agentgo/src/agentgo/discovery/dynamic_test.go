@@ -40,6 +40,7 @@ func (mn mockNetstat) Netstat(ctx context.Context) (netstat map[int][]net.Addr, 
 type mockContainerInfo struct {
 	ipAddress       map[string]string
 	listenAddresses map[string][]listenAddress
+	env             []string
 }
 
 func (mci mockContainerInfo) ContainerNetworkInfo(containerID string) (ipAddress string, listenAddresses []net.Addr) {
@@ -50,6 +51,10 @@ func (mci mockContainerInfo) ContainerNetworkInfo(containerID string) (ipAddress
 		listenAddresses = append(listenAddresses, v)
 	}
 	return ip, listenAddresses
+}
+
+func (mci mockContainerInfo) ContainerEnv(containerID string) []string {
+	return mci.env
 }
 
 func TestServiceByCommand(t *testing.T) {
@@ -127,6 +132,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		netstatAddresses   []listenAddress
 		containerAddresses []listenAddress
 		containerIP        string
+		containerEnv       []string
 		want               Service
 	}{
 		{
@@ -200,6 +206,29 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				IPAddress:       "127.0.0.1",
 			},
 		},
+		{
+			testName:     "mysql-container",
+			containerID:  "1234",
+			containerIP:  "172.17.0.49",
+			cmdLine:      []string{"mysqld"},
+			containerEnv: []string{"MYSQL_ROOT_PASSWORD=secret"},
+			want: Service{
+				Name:            "mysql",
+				ContainerID:     "1234",
+				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "172.17.0.49:3306"}},
+				IPAddress:       "172.17.0.49",
+				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
+			},
+		},
+		{
+			testName: "erlang-process",
+			cmdLine:  []string{"/usr/lib/erlang/erts-9.3.3.3/bin/beam.smp", "-W", "w", "[...]", "-noinput", "-s", "rabbit", "boot", "-sname", "[...]"},
+			want: Service{
+				Name:            "rabbitmq",
+				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:5672"}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
 	}
 
 	ctx := context.Background()
@@ -224,6 +253,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				listenAddresses: map[string][]listenAddress{
 					c.containerID: c.containerAddresses,
 				},
+				env: c.containerEnv,
 			},
 		}
 
@@ -245,6 +275,12 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		}
 		if !reflect.DeepEqual(srv[0].ListenAddresses, c.want.ListenAddresses) {
 			t.Errorf("Case %s: ListenAddresses == %v, want %v", c.testName, srv[0].ListenAddresses, c.want.ListenAddresses)
+		}
+		if c.want.ExtraAttributes == nil {
+			c.want.ExtraAttributes = make(map[string]string)
+		}
+		if !reflect.DeepEqual(srv[0].ExtraAttributes, c.want.ExtraAttributes) {
+			t.Errorf("Case %s: ExtraAttributes == %v, want %v", c.testName, srv[0].ExtraAttributes, c.want.ExtraAttributes)
 		}
 	}
 }

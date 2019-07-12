@@ -60,7 +60,15 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		drop = true
 		return
 	}
-	newContext = originalContext
+	newContext = internal.GatherContext{
+		Measurement: originalContext.Measurement,
+		Tags:        make(map[string]string),
+	}
+	for k, v := range originalContext.Tags {
+		newContext.Tags[k] = v
+	}
+	newContext.Tags["item"] = originalContext.Tags["db"]
+
 	return
 }
 

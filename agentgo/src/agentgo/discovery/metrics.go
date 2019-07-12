@@ -5,6 +5,12 @@ import (
 	"agentgo/inputs/elasticsearch"
 	"agentgo/inputs/memcached"
 	"agentgo/inputs/modify"
+	"agentgo/inputs/mongodb"
+	"agentgo/inputs/mysql"
+	"agentgo/inputs/nginx"
+	"agentgo/inputs/phpfpm"
+	"agentgo/inputs/postgresql"
+	"agentgo/inputs/rabbitmq"
 	"agentgo/inputs/redis"
 	"fmt"
 	"log"
@@ -63,6 +69,7 @@ func (d *Discovery) removeInput(key nameContainer) {
 	}
 }
 
+//nolint: gocyclo
 func (d *Discovery) createInput(service Service) error {
 	if !service.Active {
 		return nil
@@ -89,6 +96,52 @@ func (d *Discovery) createInput(service Service) error {
 	case "memcached":
 		if address := addressForPort(service, di); address != "" {
 			input, err = memcached.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
+		}
+	case "mongodb":
+		if address := addressForPort(service, di); address != "" {
+			input, err = mongodb.New(fmt.Sprintf("mongodb://%s:%d", address, di.ServicePort))
+		}
+	case "mysql":
+		if address := addressForPort(service, di); address != "" && service.ExtraAttributes["password"] != "" {
+			username := service.ExtraAttributes["username"]
+			if username == "" {
+				username = "root"
+			}
+			input, err = mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.ExtraAttributes["password"], address, di.ServicePort))
+		}
+	case "nginx":
+		if address := addressForPort(service, di); address != "" {
+			input, err = nginx.New(fmt.Sprintf("http://%s:%d/nginx_status", address, di.ServicePort))
+		}
+	case "phpfpm":
+		statsURL := urlForPHPFPM(service)
+		if statsURL != "" {
+			input, err = phpfpm.New(statsURL)
+		}
+	case "postgresql":
+		if address := addressForPort(service, di); address != "" && service.ExtraAttributes["password"] != "" {
+			username := service.ExtraAttributes["username"]
+			if username == "" {
+				username = "postgres"
+			}
+			input, err = postgresql.New(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", address, di.ServicePort, username, service.ExtraAttributes["password"]))
+		}
+	case "rabbitmq":
+		if address := addressForPort(service, di); address != "" {
+			username := service.ExtraAttributes["username"]
+			password := service.ExtraAttributes["password"]
+			mgmtPort := service.ExtraAttributes["mgmt_port"]
+			if username == "" {
+				username = "guest"
+			}
+			if password == "" {
+				password = "guest"
+			}
+			if mgmtPort == "" {
+				mgmtPort = "15672"
+			}
+			url := fmt.Sprintf("http://%s:%s", service.IPAddress, mgmtPort)
+			input, err = rabbitmq.New(url, username, password)
 		}
 	case "redis":
 		if address := addressForPort(service, di); address != "" {
@@ -147,6 +200,23 @@ func addressForPort(service Service, di discoveryInfo) string {
 		if int(port) == di.ServicePort {
 			return address
 		}
+	}
+	return ""
+}
+
+func urlForPHPFPM(service Service) string {
+	url := service.ExtraAttributes["stats_url"]
+	if url != "" {
+		return url
+	}
+	if service.ExtraAttributes["port"] != "" && service.IPAddress != "" {
+		return fmt.Sprintf("fcgi://%s:%s/status", service.IPAddress, service.ExtraAttributes["port"])
+	}
+	for _, v := range service.ListenAddresses {
+		if v.Network() != "tcp" {
+			continue
+		}
+		return fmt.Sprintf("fcgi://%s/status", v.String())
 	}
 	return ""
 }

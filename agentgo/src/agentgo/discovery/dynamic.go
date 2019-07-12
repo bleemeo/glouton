@@ -31,6 +31,7 @@ type DynamicDiscovery struct {
 
 type containerInfoProvider interface {
 	ContainerNetworkInfo(containerID string) (ipAddress string, listenAddresses []net.Addr)
+	ContainerEnv(containerID string) []string
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
@@ -65,6 +66,11 @@ var (
 		"haproxy":      "haproxy",
 		"httpd":        "apache",
 		"memcached":    "memcached",
+		"mongod":       "mongodb",
+		"mysqld":       "mysql",
+		"nginx:":       "nginx",
+		"php-fpm:":     "phpfpm",
+		"postgres":     "postgresql",
 		"redis-server": "redis",
 	}
 	knownIntepretedProcess = []struct {
@@ -76,6 +82,11 @@ var (
 			CmdLineMustContains: []string{"org.elasticsearch.bootstrap.Elasticsearch"},
 			ServiceName:         "elasticsearch",
 			Interpreter:         "java",
+		},
+		{
+			CmdLineMustContains: []string{"-s rabbit"},
+			ServiceName:         "rabbitmq",
+			Interpreter:         "erlang",
 		},
 	}
 )
@@ -160,7 +171,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 
 		dd.updateListenAddresses(&service, di)
 
-		// TODO: some service may need additionnal information, like password
+		dd.fillExtraAttributes(&service)
 		// TODO: jmx ?
 
 		log.Printf("DBG2: Discovered service %v", service)
@@ -213,6 +224,36 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	}
 }
 
+func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
+	if service.ExtraAttributes == nil {
+		service.ExtraAttributes = make(map[string]string)
+	}
+	if service.Name == "mysql" {
+		if service.ContainerID != "" {
+			for _, e := range dd.containerInfo.ContainerEnv(service.ContainerID) {
+				if strings.HasPrefix(e, "MYSQL_ROOT_PASSWORD=") {
+					service.ExtraAttributes["username"] = "root"
+					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "MYSQL_ROOT_PASSWORD=")
+				}
+			}
+		} else {
+			log.Printf("DBG2: TODO use sudo -n cat /etc/mysql/debian.cnf")
+		}
+	}
+	if service.Name == "postgresql" {
+		if service.ContainerID != "" {
+			for _, e := range dd.containerInfo.ContainerEnv(service.ContainerID) {
+				if strings.HasPrefix(e, "POSTGRES_PASSWORD=") {
+					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "POSTGRES_PASSWORD=")
+				}
+				if strings.HasPrefix(e, "POSTGRES_USER=") {
+					service.ExtraAttributes["user"] = strings.TrimPrefix(e, "POSTGRES_USER=")
+				}
+			}
+		}
+	}
+}
+
 func serviceByCommand(cmdLine []string) (serviceName string, found bool) {
 	name := filepath.Base(cmdLine[0])
 	if runtime.GOOS == "windows" {
@@ -246,7 +287,10 @@ func serviceByCommand(cmdLine []string) (serviceName string, found bool) {
 
 	if name == "java" || name == "python" || name == "erl" || strings.HasPrefix(name, "beam") {
 		for _, candidate := range knownIntepretedProcess {
-			if name != candidate.Interpreter && (candidate.Interpreter != "beam" || !strings.HasPrefix(name, "beam")) {
+			if candidate.Interpreter == "erlang" && name != "erl" && !strings.HasPrefix(name, "beam") {
+				continue
+			}
+			if candidate.Interpreter != "erlang" && name != candidate.Interpreter {
 				continue
 			}
 			match := true
