@@ -19,11 +19,12 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
+	github.com/golang/protobuf v1.3.2 // indirect
 	github.com/google/go-cmp v0.3.0 // indirect
 	github.com/gorilla/websocket v1.4.0 // indirect
 	github.com/gotestyourself/gotestyourself v2.2.0+incompatible // indirect
 	github.com/hashicorp/golang-lru v0.5.1 // indirect
-	github.com/influxdata/telegraf v0.10.2-0.20190625201339-f91de60d370c
+	github.com/influxdata/telegraf v0.10.2-0.20190709181136-a80d173f6c86
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v3.5.0+incompatible // indirect
 	github.com/lib/pq v1.1.1 // indirect
@@ -38,9 +39,9 @@ require (
 	github.com/vektah/gqlparser v1.1.2
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4 // indirect
 	golang.org/x/net v0.0.0-20190628185345-da137c7871d7 // indirect
-	golang.org/x/sys v0.0.0-20190626221950-04f50cda93cb // indirect
+	golang.org/x/sys v0.0.0-20190712062909-fae7ac547cb7 // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
-	gopkg.in/yaml.v3 v3.0.0-20190502103701-55513cacd4ae
+	gopkg.in/yaml.v3 v3.0.0-20190709130402-674ba3eaed22
 	gotest.tools v2.2.0+incompatible // indirect
 )
