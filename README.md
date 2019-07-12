@@ -53,7 +53,7 @@ export PATH=/usr/lib/go-1.12/bin:$PATH
 
 * Run the Go daemon:
 ```
-(cd agentgo/src/agentgo; go run -race agentgo)
+(cd agentgo/src/agentgo; GORACE="halt_on_error=1" go run -race agentgo)
 ```
 
 * Prepare a release:
