@@ -109,3 +109,52 @@ func TestEncodeV3(t *testing.T) {
 		}
 	}
 }
+
+func response(command string) (string, int16) {
+	answer := command + " ok"
+	resultCode := int16(1)
+	return answer, resultCode
+}
+
+type ReaderWriter struct {
+	reader io.Reader
+	writer *bytes.Buffer
+}
+
+func (rw ReaderWriter) Read(b []byte) (int, error) {
+	return rw.reader.Read(b)
+}
+func (rw ReaderWriter) Write(b []byte) (int, error) {
+	return rw.writer.Write(b)
+}
+func (rw ReaderWriter) Close() error {
+	return nil
+}
+func responsewarning(command string) (string, int16) {
+	answer := "WARNING - load average: 0.02, 0.07, 0.06|load1=0.022;0.150;0.300;0; load5=0.068;0.100;0.250;0; load15=0.060;0.050;0.200;0; "
+	resultCode := int16(1)
+	return answer, resultCode
+}
+
+func TestHandleConnection(t *testing.T) {
+	cases := []struct {
+		in   ReaderWriter
+		want []byte
+	}{
+		{ReaderWriter{bytes.NewReader(requestCheckLoad), new(bytes.Buffer)}, answer1},
+	}
+	for _, c := range cases {
+		handleConnection(c.in, responsewarning)
+		got := c.in.writer.Bytes()
+		if len(got) != len(c.want) {
+			t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
+			break
+		}
+		for i := 0; i < len(got); i++ {
+			if got[i] != c.want[i] {
+				t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
+				break
+			}
+		}
+	}
+}

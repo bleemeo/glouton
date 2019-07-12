@@ -19,7 +19,7 @@ type reducedPacket struct {
 
 type callback func(command string) (string, int16)
 
-func handleConnection(c net.Conn, cb callback) {
+func handleConnection(c io.ReadWriteCloser, cb callback) {
 	decodedRequest, err := decode(c)
 	if err != nil {
 		log.Println(err)
