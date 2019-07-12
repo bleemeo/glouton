@@ -109,40 +109,6 @@ func (d *DockerProvider) ContainerEnv(containerID string) (env []string) {
 	return c.Env()
 }
 
-// ContainerNetworkInfo returns the IP addresses and listening port of provided containerID
-//
-// The information will come from cache exclusively. Use Containers() to refresh the cache if needed.
-func (d *DockerProvider) ContainerNetworkInfo(containerID string) (ipAddress string, listenAddresses []net.Addr) {
-	d.l.Lock()
-	defer d.l.Unlock()
-	c, ok := d.containers[containerID]
-	if !ok {
-		return
-	}
-	if c.inspect.Config == nil {
-		return
-	}
-	if c.PrimaryAddress() == "" {
-		return
-	}
-	exposedPorts := make([]net.Addr, 0)
-	for v := range c.inspect.Config.ExposedPorts {
-		tmp := strings.Split(string(v), "/")
-		if len(tmp) != 2 {
-			continue
-		}
-		portStr := tmp[0]
-		protocol := tmp[1]
-		port, err := strconv.ParseInt(portStr, 10, 0)
-		if err != nil {
-			log.Printf("DBG: unable to parse port %#v: %v", portStr, err)
-			continue
-		}
-		exposedPorts = append(exposedPorts, listenAddress{network: protocol, address: c.PrimaryAddress(), port: int(port)})
-	}
-	return c.PrimaryAddress(), exposedPorts
-}
-
 // DockerFact returns few facts from Docker. It should be usable as FactCallback
 func (d *DockerProvider) DockerFact(ctx context.Context, currentFact map[string]string) map[string]string {
 	d.l.Lock()
@@ -278,6 +244,32 @@ func (c Container) InspectJSON() string {
 		return ""
 	}
 	return string(result)
+}
+
+// ListenAddresses returns the addresseses this container listen on
+func (c Container) ListenAddresses() []net.Addr {
+	if c.inspect.Config == nil {
+		return nil
+	}
+	if c.PrimaryAddress() == "" {
+		return nil
+	}
+	exposedPorts := make([]net.Addr, 0)
+	for v := range c.inspect.Config.ExposedPorts {
+		tmp := strings.Split(string(v), "/")
+		if len(tmp) != 2 {
+			continue
+		}
+		portStr := tmp[0]
+		protocol := tmp[1]
+		port, err := strconv.ParseInt(portStr, 10, 0)
+		if err != nil {
+			log.Printf("DBG: unable to parse port %#v: %v", portStr, err)
+			continue
+		}
+		exposedPorts = append(exposedPorts, listenAddress{network: protocol, address: c.PrimaryAddress(), port: int(port)})
+	}
+	return exposedPorts
 }
 
 // Name returns the Container name

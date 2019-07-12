@@ -29,18 +29,23 @@ type DynamicDiscovery struct {
 	services            []Service
 }
 
+type container interface {
+	Env() []string
+	PrimaryAddress() string
+	ListenAddresses() []net.Addr
+}
+
 type containerInfoProvider interface {
-	ContainerNetworkInfo(containerID string) (ipAddress string, listenAddresses []net.Addr)
-	ContainerEnv(containerID string) []string
+	Container(containerID string) (c container, found bool)
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
 // processess and netstat to discovery services
-func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider) *DynamicDiscovery {
+func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider) *DynamicDiscovery {
 	return &DynamicDiscovery{
 		ps:            ps,
 		netstat:       netstat,
-		containerInfo: containerInfo,
+		containerInfo: (*dockerWrapper)(containerInfo),
 	}
 }
 
@@ -111,6 +116,13 @@ type netstatProvider interface {
 	Netstat(ctx context.Context) (netstat map[int][]net.Addr, err error)
 }
 
+type dockerWrapper facts.DockerProvider
+
+func (dw *dockerWrapper) Container(containerID string) (c container, found bool) {
+	c, found = (*facts.DockerProvider)(dw).Container(containerID)
+	return
+}
+
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
 	processes, err := dd.ps.Processes(ctx, maxAge)
 	if err != nil {
@@ -158,10 +170,17 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 
+		if service.ContainerID != "" {
+			service.container, ok = dd.containerInfo.Container(service.ContainerID)
+			if !ok {
+				continue
+			}
+		}
+
 		if service.ContainerID == "" {
 			service.ListenAddresses = netstat[pid]
 		} else {
-			service.IPAddress, service.ListenAddresses = dd.containerInfo.ContainerNetworkInfo(service.ContainerID)
+			service.ListenAddresses = service.container.ListenAddresses()
 		}
 		if len(service.ListenAddresses) > 0 {
 			service.hasNetstatInfo = true
@@ -189,6 +208,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 
 func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discoveryInfo) {
 	defaultAddress := "127.0.0.1"
+	if service.container != nil {
+		defaultAddress = service.container.PrimaryAddress()
+	}
 	newListenAddresses := service.ListenAddresses[:0]
 	for _, a := range service.ListenAddresses {
 		if a.Network() == "unix" {
@@ -215,9 +237,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 		}
 	}
 	service.ListenAddresses = newListenAddresses
-	if service.ContainerID == "" {
-		service.IPAddress = defaultAddress
-	}
+	service.IPAddress = defaultAddress
 	if len(service.ListenAddresses) == 0 && di.ServicePort != 0 {
 		// If netstat seems to have failed, always add the main service port
 		service.ListenAddresses = append(service.ListenAddresses, listenAddress{network: di.ServiceProtocol, address: fmt.Sprintf("%s:%d", service.IPAddress, di.ServicePort)})
@@ -229,8 +249,8 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 		service.ExtraAttributes = make(map[string]string)
 	}
 	if service.Name == "mysql" {
-		if service.ContainerID != "" {
-			for _, e := range dd.containerInfo.ContainerEnv(service.ContainerID) {
+		if service.container != nil {
+			for _, e := range service.container.Env() {
 				if strings.HasPrefix(e, "MYSQL_ROOT_PASSWORD=") {
 					service.ExtraAttributes["username"] = "root"
 					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "MYSQL_ROOT_PASSWORD=")
@@ -241,8 +261,8 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 		}
 	}
 	if service.Name == "postgresql" {
-		if service.ContainerID != "" {
-			for _, e := range dd.containerInfo.ContainerEnv(service.ContainerID) {
+		if service.container != nil {
+			for _, e := range service.container.Env() {
 				if strings.HasPrefix(e, "POSTGRES_PASSWORD=") {
 					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "POSTGRES_PASSWORD=")
 				}

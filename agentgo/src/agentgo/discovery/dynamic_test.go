@@ -38,23 +38,34 @@ func (mn mockNetstat) Netstat(ctx context.Context) (netstat map[int][]net.Addr, 
 }
 
 type mockContainerInfo struct {
-	ipAddress       map[string]string
-	listenAddresses map[string][]listenAddress
+	containers map[string]mockContainer
+}
+
+type mockContainer struct {
+	ipAddress       string
+	listenAddresses []listenAddress
 	env             []string
 }
 
-func (mci mockContainerInfo) ContainerNetworkInfo(containerID string) (ipAddress string, listenAddresses []net.Addr) {
-	ip := mci.ipAddress[containerID]
-
-	listenAddresses = make([]net.Addr, 0)
-	for _, v := range mci.listenAddresses[containerID] {
-		listenAddresses = append(listenAddresses, v)
-	}
-	return ip, listenAddresses
+func (mci mockContainerInfo) Container(containerID string) (container container, found bool) {
+	c, ok := mci.containers[containerID]
+	return c, ok
 }
 
-func (mci mockContainerInfo) ContainerEnv(containerID string) []string {
-	return mci.env
+func (mc mockContainer) ListenAddresses() []net.Addr {
+	listenAddresses := make([]net.Addr, 0)
+	for _, v := range mc.listenAddresses {
+		listenAddresses = append(listenAddresses, v)
+	}
+	return listenAddresses
+}
+
+func (mc mockContainer) Env() []string {
+	return mc.env
+}
+
+func (mc mockContainer) PrimaryAddress() string {
+	return mc.ipAddress
 }
 
 func TestServiceByCommand(t *testing.T) {
@@ -247,13 +258,13 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				42: c.netstatAddresses,
 			}},
 			containerInfo: mockContainerInfo{
-				ipAddress: map[string]string{
-					c.containerID: c.containerIP,
+				containers: map[string]mockContainer{
+					c.containerID: {
+						ipAddress:       c.containerIP,
+						listenAddresses: c.containerAddresses,
+						env:             c.containerEnv,
+					},
 				},
-				listenAddresses: map[string][]listenAddress{
-					c.containerID: c.containerAddresses,
-				},
-				env: c.containerEnv,
 			},
 		}
 

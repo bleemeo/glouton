@@ -30,6 +30,7 @@ type Service struct {
 	Active          bool
 
 	hasNetstatInfo bool
+	container      container
 }
 
 // nolint:gochecknoglobals
