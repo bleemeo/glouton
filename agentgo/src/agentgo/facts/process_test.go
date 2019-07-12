@@ -268,12 +268,13 @@ func TestUpdateProcesses(t *testing.T) {
 			CPUPercent:  27.75, // 999s over 1h
 		},
 		{
-			PID:         1337,
-			Name:        "golang",
-			ContainerID: "golang-container-id",
-			CreateTime:  t0,
-			CPUTime:     0,
-			CPUPercent:  0,
+			PID:           1337,
+			Name:          "golang",
+			ContainerID:   "golang-container-id",
+			ContainerName: "golang-name",
+			CreateTime:    t0,
+			CPUTime:       0,
+			CPUPercent:    0,
 		},
 	}
 	if len(pp.processes) != len(cases) {
