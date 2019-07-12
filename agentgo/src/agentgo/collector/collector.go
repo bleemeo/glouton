@@ -76,14 +76,28 @@ func (c *Collector) RemoveInput(id int) {
 
 // Run will run the collections until context is cancelled
 func (c *Collector) Run(ctx context.Context) {
+	c.sleepToAlign(10 * time.Second)
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 	for {
 		c.run()
 		select {
-		case <-time.After(10 * time.Second):
+		case <-ticker.C:
 		case <-ctx.Done():
 			return
 		}
 	}
+}
+
+// sleep such are time.Now() is aligned on a multiple of interval
+func (c *Collector) sleepToAlign(interval time.Duration) {
+	now := time.Now()
+	previousMultiple := now.Truncate(interval)
+	if previousMultiple == now {
+		return
+	}
+	nextMultiple := previousMultiple.Add(interval)
+	time.Sleep(nextMultiple.Sub(now))
 }
 
 func (c *Collector) run() {
@@ -95,11 +109,22 @@ func (c *Collector) run() {
 		inputsNameCopy = append(inputsNameCopy, c.inputNames[id])
 	}
 	c.l.Unlock()
+	var wg sync.WaitGroup
 
+	t0 := time.Now()
 	for i, input := range inputsCopy {
-		err := input.Gather(c.acc)
-		if err != nil {
-			log.Printf("Input %s failed: %v", inputsNameCopy[i], err)
-		}
+		i := i
+		input := input
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			err := input.Gather(c.acc)
+			if err != nil {
+				log.Printf("Input %s failed: %v", inputsNameCopy[i], err)
+			}
+		}()
 	}
+	wg.Wait()
+	delta := time.Since(t0)
+	log.Printf("DBG-METRIC: Gather took %v", delta)
 }
