@@ -36,7 +36,7 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 	if answer.packetVersion == 3 {
 		encodedAnswer, err = encodeV3(answer)
 	} else {
-		encodedAnswer, err = encodeV2(answer, [2]byte{0x51, 0x53})
+		encodedAnswer, err = encodeV2(answer, [2]byte{0x53, 0x51})
 	}
 	if err != nil {
 		log.Println(err)

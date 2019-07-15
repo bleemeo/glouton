@@ -73,7 +73,7 @@ func TestEncodeV2(t *testing.T) {
 		}
 		for i := 0; i < 1034; i++ {
 			if got[i] != c.want[i] {
-				t.Errorf("encodeV3(%v) == %v, want %v", c.inPacket, got, c.want)
+				t.Errorf("encodeV2(%v) == %v, want %v", c.inPacket, got, c.want)
 				break
 			}
 		}
@@ -110,12 +110,6 @@ func TestEncodeV3(t *testing.T) {
 	}
 }
 
-func response(command string) (string, int16) {
-	answer := command + " ok"
-	resultCode := int16(1)
-	return answer, resultCode
-}
-
 type ReaderWriter struct {
 	reader io.Reader
 	writer *bytes.Buffer
@@ -130,8 +124,14 @@ func (rw ReaderWriter) Write(b []byte) (int, error) {
 func (rw ReaderWriter) Close() error {
 	return nil
 }
-func responsewarning(command string) (string, int16) {
+
+func responsewarningv3(command string) (string, int16) {
 	answer := "WARNING - load average: 0.02, 0.07, 0.06|load1=0.022;0.150;0.300;0; load5=0.068;0.100;0.250;0; load15=0.060;0.050;0.200;0; "
+	resultCode := int16(1)
+	return answer, resultCode
+}
+func responsewarningv2(command string) (string, int16) {
+	answer := "WARNING - load average: 0.12, 0.11, 0.12|load1=0.120;0.150;0.300;0; load5=0.107;0.100;0.250;0; load15=0.125;0.050;0.200;0; "
 	resultCode := int16(1)
 	return answer, resultCode
 }
@@ -144,10 +144,32 @@ func TestHandleConnection(t *testing.T) {
 		{ReaderWriter{bytes.NewReader(requestCheckLoad), new(bytes.Buffer)}, answer1},
 	}
 	for _, c := range cases {
-		handleConnection(c.in, responsewarning)
+		handleConnection(c.in, responsewarningv3)
 		got := c.in.writer.Bytes()
 		if len(got) != len(c.want) {
 			t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
+			break
+		}
+		for i := 0; i < len(got); i++ {
+			if got[i] != c.want[i] {
+				t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
+				break
+			}
+		}
+	}
+}
+func TestHandleConnectionv2(t *testing.T) {
+	cases := []struct {
+		in   ReaderWriter
+		want []byte
+	}{
+		{ReaderWriter{bytes.NewReader(requestCheckBig), new(bytes.Buffer)}, answerV2},
+	}
+	for _, c := range cases {
+		handleConnection(c.in, responsewarningv2)
+		got := c.in.writer.Bytes()
+		if len(got) != len(c.want) {
+			t.Errorf("length wrong")
 			break
 		}
 		for i := 0; i < len(got); i++ {
