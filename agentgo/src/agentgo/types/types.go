@@ -39,6 +39,21 @@ func (s Status) IsSet() bool {
 	return s != StatusUnset
 }
 
+func (s Status) String() string {
+	switch s {
+	case StatusUnset:
+		return "unset"
+	case StatusOk:
+		return "ok"
+	case StatusWarning:
+		return "warning"
+	case StatusCritical:
+		return "critical"
+	default:
+		return "unknown"
+	}
+}
+
 // NagiosCode return the Nagios value for a Status
 func (s Status) NagiosCode() int {
 	switch s {

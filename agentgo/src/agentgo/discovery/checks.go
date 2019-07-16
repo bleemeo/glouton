@@ -58,10 +58,27 @@ func (d *Discovery) createCheck(service Service) error {
 		}
 		tcpAddresses = append(tcpAddresses, a.String())
 	}
+	var tcpSend, tcpExpect []byte
+	switch service.Name {
+	case MemcachedService:
+		tcpSend = []byte("version\r\n")
+		tcpExpect = []byte("VERSION")
+	case "rabbitmq":
+		tcpSend = []byte("PINGAMQP")
+		tcpExpect = []byte("AMQP")
+	case "redis":
+		tcpSend = []byte("PING\n")
+		tcpExpect = []byte("+PONG")
+	case "zookeeper":
+		tcpSend = []byte("ruok\n")
+		tcpExpect = []byte("imok")
+	}
 	if primaryAddress != "" || len(tcpAddresses) > 0 {
 		tcpCheck := check.NewTCP(
 			primaryAddress,
 			tcpAddresses,
+			tcpSend,
+			tcpExpect,
 			fmt.Sprintf("%s_status", service.Name),
 			service.ContainerName,
 			d.acc,
