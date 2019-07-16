@@ -14,13 +14,31 @@ type Discoverer interface {
 }
 
 type nameContainer struct {
-	name        string
+	name        ServiceName
 	containerID string
 }
 
+// ServiceName is the name of a supported service
+type ServiceName string
+
+// List of known service names
+const (
+	ApacheService        ServiceName = "apache"
+	ElasticSearchService ServiceName = "elasticsearch"
+	HAProxyService       ServiceName = "haproxy"
+	MemcachedService     ServiceName = "memcached"
+	MongoDBService       ServiceName = "mongodb"
+	MySQLService         ServiceName = "mysql"
+	NginxService         ServiceName = "nginx"
+	PHPFPMService        ServiceName = "phpfpm"
+	PostgreSQLService    ServiceName = "postgresql"
+	RabbitMQService      ServiceName = "rabbitmq"
+	RedisService         ServiceName = "redis"
+)
+
 // Service is the information found about a given service
 type Service struct {
-	Name            string
+	Name            ServiceName
 	ContainerID     string
 	ContainerName   string
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
@@ -37,44 +55,44 @@ type Service struct {
 
 // nolint:gochecknoglobals
 var (
-	servicesDiscoveryInfo = map[string]discoveryInfo{
-		"apache": {
+	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
+		ApacheService: {
 			ServicePort:     80,
 			ServiceProtocol: "tcp",
 		},
-		"elasticsearch": {
+		ElasticSearchService: {
 			ServicePort:     9200,
 			ServiceProtocol: "tcp",
 		},
-		"haproxy": {
+		HAProxyService: {
 			IgnoreHighPort: true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
 		},
-		"memcached": {
+		MemcachedService: {
 			ServicePort:     11211,
 			ServiceProtocol: "tcp",
 		},
-		"mongodb": {
+		MongoDBService: {
 			ServicePort:     27017,
 			ServiceProtocol: "tcp",
 		},
-		"mysql": {
+		MySQLService: {
 			ServicePort:     3306,
 			ServiceProtocol: "tcp",
 		},
-		"nginx": {
+		NginxService: {
 			ServicePort:     80,
 			ServiceProtocol: "tcp",
 		},
-		"postgresql": {
+		PostgreSQLService: {
 			ServicePort:     5432,
 			ServiceProtocol: "tcp",
 		},
-		"rabbitmq": {
+		RabbitMQService: {
 			ServicePort:     5672,
 			ServiceProtocol: "tcp",
 			IgnoreHighPort:  true,
 		},
-		"redis": {
+		RedisService: {
 			ServicePort:     6379,
 			ServiceProtocol: "tcp",
 		},

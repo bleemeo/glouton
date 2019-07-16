@@ -81,7 +81,7 @@ func (d *Discovery) createInput(service Service) error {
 	var input telegraf.Input
 	var err error
 	switch service.Name {
-	case "apache":
+	case ApacheService:
 		if address := addressForPort(service, di); address != "" {
 			statusURL := fmt.Sprintf("http://%s:%d/server-status?auto", address, di.ServicePort)
 			if di.ServicePort == 80 {
@@ -89,19 +89,19 @@ func (d *Discovery) createInput(service Service) error {
 			}
 			input, err = apache.New(statusURL)
 		}
-	case "elasticsearch":
+	case ElasticSearchService:
 		if address := addressForPort(service, di); address != "" {
 			input, err = elasticsearch.New(fmt.Sprintf("http://%s:%d", address, di.ServicePort))
 		}
-	case "memcached":
+	case MemcachedService:
 		if address := addressForPort(service, di); address != "" {
 			input, err = memcached.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
 		}
-	case "mongodb":
+	case MongoDBService:
 		if address := addressForPort(service, di); address != "" {
 			input, err = mongodb.New(fmt.Sprintf("mongodb://%s:%d", address, di.ServicePort))
 		}
-	case "mysql":
+	case MySQLService:
 		if address := addressForPort(service, di); address != "" && service.ExtraAttributes["password"] != "" {
 			username := service.ExtraAttributes["username"]
 			if username == "" {
@@ -109,16 +109,16 @@ func (d *Discovery) createInput(service Service) error {
 			}
 			input, err = mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.ExtraAttributes["password"], address, di.ServicePort))
 		}
-	case "nginx":
+	case NginxService:
 		if address := addressForPort(service, di); address != "" {
 			input, err = nginx.New(fmt.Sprintf("http://%s:%d/nginx_status", address, di.ServicePort))
 		}
-	case "phpfpm":
+	case PHPFPMService:
 		statsURL := urlForPHPFPM(service)
 		if statsURL != "" {
 			input, err = phpfpm.New(statsURL)
 		}
-	case "postgresql":
+	case PostgreSQLService:
 		if address := addressForPort(service, di); address != "" && service.ExtraAttributes["password"] != "" {
 			username := service.ExtraAttributes["username"]
 			if username == "" {
@@ -126,7 +126,7 @@ func (d *Discovery) createInput(service Service) error {
 			}
 			input, err = postgresql.New(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", address, di.ServicePort, username, service.ExtraAttributes["password"]))
 		}
-	case "rabbitmq":
+	case RabbitMQService:
 		if address := addressForPort(service, di); address != "" {
 			username := service.ExtraAttributes["username"]
 			password := service.ExtraAttributes["password"]
@@ -143,7 +143,7 @@ func (d *Discovery) createInput(service Service) error {
 			url := fmt.Sprintf("http://%s:%s", service.IPAddress, mgmtPort)
 			input, err = rabbitmq.New(url, username, password)
 		}
-	case "redis":
+	case RedisService:
 		if address := addressForPort(service, di); address != "" {
 			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
 		}
@@ -168,7 +168,7 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil
 	}
-	inputID := d.coll.AddInput(input, service.Name)
+	inputID := d.coll.AddInput(input, string(service.Name))
 	key := nameContainer{
 		name:        service.Name,
 		containerID: service.ContainerID,

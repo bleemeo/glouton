@@ -302,7 +302,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 			for _, addr := range service.ListenAddresses {
 				netAddrs = append(netAddrs, addr.String())
 			}
-			metrics, err := r.api.db.Metrics(map[string]string{"__name__": service.Name + "_status"})
+			metrics, err := r.api.db.Metrics(map[string]string{"__name__": string(service.Name) + "_status"})
 			if err != nil {
 				log.Printf("DBG2: %v", err)
 				return nil, gqlerror.Errorf("Can not retrieve services")
@@ -317,7 +317,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				return nil, gqlerror.Errorf("Can not retrieve services")
 			}
 			s := &Service{
-				Name:            service.Name,
+				Name:            string(service.Name),
 				ContainerID:     service.ContainerID,
 				IPAddress:       service.IPAddress,
 				ListenAddresses: netAddrs,

@@ -67,31 +67,31 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 
 // nolint:gochecknoglobals
 var (
-	knownProcesses = map[string]string{
-		"apache2":      "apache",
-		"haproxy":      "haproxy",
-		"httpd":        "apache",
-		"memcached":    "memcached",
-		"mongod":       "mongodb",
-		"mysqld":       "mysql",
-		"nginx:":       "nginx",
-		"php-fpm:":     "phpfpm",
-		"postgres":     "postgresql",
-		"redis-server": "redis",
+	knownProcesses = map[string]ServiceName{
+		"apache2":      ApacheService,
+		"haproxy":      HAProxyService,
+		"httpd":        ApacheService,
+		"memcached":    MemcachedService,
+		"mongod":       MongoDBService,
+		"mysqld":       MySQLService,
+		"nginx:":       NginxService,
+		"php-fpm:":     PHPFPMService,
+		"postgres":     PostgreSQLService,
+		"redis-server": RedisService,
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string
-		ServiceName         string
+		ServiceName         ServiceName
 		Interpreter         string
 	}{
 		{
 			CmdLineMustContains: []string{"org.elasticsearch.bootstrap.Elasticsearch"},
-			ServiceName:         "elasticsearch",
+			ServiceName:         ElasticSearchService,
 			Interpreter:         "java",
 		},
 		{
 			CmdLineMustContains: []string{"-s rabbit"},
-			ServiceName:         "rabbitmq",
+			ServiceName:         RabbitMQService,
 			Interpreter:         "erlang",
 		},
 	}
@@ -278,7 +278,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 	}
 }
 
-func serviceByCommand(cmdLine []string) (serviceName string, found bool) {
+func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	name := filepath.Base(cmdLine[0])
 	if runtime.GOOS == "windows" {
 		name = strings.ToLower(name)

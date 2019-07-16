@@ -75,11 +75,11 @@ func (mc mockContainer) Ignored() bool {
 func TestServiceByCommand(t *testing.T) {
 	cases := []struct {
 		in   []string
-		want string
+		want ServiceName
 	}{
 		{
 			in:   []string{"/usr/bin/memcached", "-m", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1", "-P", "/var/run/memcached/memcached.pid"},
-			want: "memcached",
+			want: MemcachedService,
 		},
 	}
 
@@ -128,8 +128,8 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 	if len(srv) != 1 {
 		t.Errorf("len(srv) == %v, want 1", len(srv))
 	}
-	if srv[0].Name != "memcached" {
-		t.Errorf("Name == %#v, want %#v", srv[0].Name, "memcached")
+	if srv[0].Name != MemcachedService {
+		t.Errorf("Name == %#v, want %#v", srv[0].Name, MemcachedService)
 	}
 	want := []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:11211"}}
 	if !reflect.DeepEqual(srv[0].ListenAddresses, want) {
@@ -156,7 +156,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerID:      "",
 			netstatAddresses: []listenAddress{{network: "tcp", address: "0.0.0.0:11211"}},
 			want: Service{
-				Name:            "memcached",
+				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "0.0.0.0:11211"}},
 				IPAddress:       "127.0.0.1",
@@ -168,7 +168,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerID:      "",
 			netstatAddresses: nil,
 			want: Service{
-				Name:            "memcached",
+				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:11211"}},
 				IPAddress:       "127.0.0.1",
@@ -180,7 +180,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerID:      "",
 			netstatAddresses: []listenAddress{{network: "tcp", address: "192.168.1.1:11211"}},
 			want: Service{
-				Name:            "memcached",
+				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "192.168.1.1:11211"}},
 				IPAddress:       "192.168.1.1",
