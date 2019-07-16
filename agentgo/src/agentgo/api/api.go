@@ -49,27 +49,10 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 
 	boxHTML := packr.New("html", "./static")
 
-	// There is a bug about serving directory with packr2 and golang v1.12.4
-	// (https://github.com/gobuffalo/packr/issues/198)
-	// The bug has been fixed but not yet released
-	router.HandleFunc("/logo", func(w http.ResponseWriter, _ *http.Request) {
-		image, err := boxHTML.Find("img/logo.png")
-		if err != nil {
-			log.Printf("DBG2: %v", err)
-		}
-		logError(w.Write(image))
-	})
-	router.Handle("/test", http.FileServer(boxHTML))
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
-	router.HandleFunc("/*", func(w http.ResponseWriter, _ *http.Request) {
-		html, err := boxHTML.Find("index.html")
-		if err != nil {
-			log.Printf("DBG2: %v", err)
-		}
-		logError(w.Write(html))
-	})
+	router.Handle("/*", http.FileServer(boxHTML))
 	api.router = router
 	return api
 }

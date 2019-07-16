@@ -18,7 +18,7 @@ require (
 	github.com/go-redis/redis v0.0.0-20190503082931-75795aa4236d // indirect
 	github.com/go-sql-driver/mysql v1.4.1 // indirect
 	github.com/gobuffalo/logger v1.0.1 // indirect
-	github.com/gobuffalo/packr/v2 v2.5.2
+	github.com/gobuffalo/packr/v2 v2.5.3-0.20190708182234-662c20c19dde
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/golang/protobuf v1.3.2 // indirect
