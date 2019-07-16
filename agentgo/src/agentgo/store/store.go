@@ -17,7 +17,7 @@ import (
 // See methods GetMetrics and GetMetricPoints
 type Store struct {
 	metrics map[int]metric
-	points  map[int][]types.Point
+	points  map[int][]types.PointStatus
 	lock    sync.Mutex
 }
 
@@ -25,7 +25,7 @@ type Store struct {
 func New() *Store {
 	s := &Store{
 		metrics: make(map[int]metric),
-		points:  make(map[int][]types.Point),
+		points:  make(map[int][]types.PointStatus),
 	}
 	return s
 }
@@ -70,11 +70,11 @@ func (m metric) Labels() map[string]string {
 }
 
 // Points returns points between the two given time range (boundary are included).
-func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
+func (m metric) Points(start, end time.Time) (result []types.PointStatus, err error) {
 	m.store.lock.Lock()
 	defer m.store.lock.Unlock()
 	points := m.store.points[m.metricID]
-	result = make([]types.Point, 0)
+	result = make([]types.PointStatus, 0)
 	for _, point := range points {
 		pointTimeUTC := point.Time.UTC()
 		if !pointTimeUTC.Before(start) && !pointTimeUTC.After(end) {
@@ -86,6 +86,7 @@ func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
 
 type metric struct {
 	labels   map[string]string
+	statusOf int
 	store    *Store
 	metricID int
 }
@@ -111,7 +112,7 @@ func (s *Store) run() {
 	metricToDelete := make([]int, 0)
 	for metricID := range s.metrics {
 		points := s.points[metricID]
-		newPoints := make([]types.Point, 0)
+		newPoints := make([]types.PointStatus, 0)
 		for _, p := range points {
 			if time.Since(p.Time) < time.Hour {
 				newPoints = append(newPoints, p)
@@ -132,11 +133,12 @@ func (s *Store) run() {
 	log.Printf("DBG: deleted %d points. Total point: %d", deletedPoints, totalPoints)
 }
 
-// metricsExact will return the metric that exactly match given labels.
+// metricGetOrCreate will return the metric that exactly match given labels.
 //
-// If the metric does not exists, create it.
+// If the metric does not exists, it's created.
+// statusOf is only used at creation.
 // The store lock is assumed to be held.
-func (s *Store) metricGetOrCreate(labels map[string]string) metric {
+func (s *Store) metricGetOrCreate(labels map[string]string, statusOf int) metric {
 	for _, m := range s.metrics {
 		if labelsMatch(m.labels, labels, true) {
 			return m
@@ -158,6 +160,7 @@ func (s *Store) metricGetOrCreate(labels map[string]string) metric {
 	m := metric{
 		labels:   copyLabels,
 		store:    s,
+		statusOf: statusOf,
 		metricID: newID,
 	}
 	s.metrics[newID] = m
@@ -167,9 +170,9 @@ func (s *Store) metricGetOrCreate(labels map[string]string) metric {
 // addPoint appends point for given metric
 //
 // The store lock is assumed to be held
-func (s *Store) addPoint(metricID int, point types.Point) {
+func (s *Store) addPoint(metricID int, point types.PointStatus) {
 	if _, ok := s.points[metricID]; !ok {
-		s.points[metricID] = make([]types.Point, 0)
+		s.points[metricID] = make([]types.PointStatus, 0)
 	}
 	s.points[metricID] = append(s.points[metricID], point)
 }

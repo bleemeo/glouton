@@ -157,7 +157,7 @@ func TestMetricsSimple(t *testing.T) {
 		"__name__": "measurement_fieldFloat",
 	}
 	db := New()
-	m := db.metricGetOrCreate(labels)
+	m := db.metricGetOrCreate(labels, 0)
 
 	if _, ok := db.metrics[m.metricID]; !ok {
 		t.Errorf("db.metrics[%v] == nil, want it to exists", m.metricID)
@@ -190,9 +190,9 @@ func TestMetricsMultiple(t *testing.T) {
 		"fstype":   "ext4",
 	}
 	db := New()
-	db.metricGetOrCreate(labels1)
-	db.metricGetOrCreate(labels2)
-	db.metricGetOrCreate(labels3)
+	db.metricGetOrCreate(labels1, 0)
+	db.metricGetOrCreate(labels2, 0)
+	db.metricGetOrCreate(labels3, 0)
 
 	metrics, err := db.Metrics(labels1)
 	if err != nil {
@@ -235,14 +235,14 @@ func TestPoints(t *testing.T) {
 		"__name__": "cpu_used",
 	}
 	db := New()
-	m := db.metricGetOrCreate(labels)
+	m := db.metricGetOrCreate(labels, 0)
 
 	t0 := time.Now().Add(-60 * time.Second)
 	t1 := t0.Add(10 * time.Second)
 	t2 := t0.Add(20 * time.Second)
-	p0 := types.Point{Time: t0, Value: 42.0}
-	p1 := types.Point{Time: t1, Value: -88}
-	p2 := types.Point{Time: t2, Value: 13.37}
+	p0 := types.PointStatus{Point: types.Point{Time: t0, Value: 42.0}}
+	p1 := types.PointStatus{Point: types.Point{Time: t1, Value: -88}}
+	p2 := types.PointStatus{Point: types.Point{Time: t2, Value: 13.37}}
 	db.addPoint(m.metricID, p0)
 
 	if len(db.points) != 1 {
@@ -252,7 +252,7 @@ func TestPoints(t *testing.T) {
 		t.Errorf("len(db.points[%v]) == %v, want %v", m.metricID, len(db.points[m.metricID]), 1)
 	}
 	if !reflect.DeepEqual(db.points[m.metricID][0], p0) {
-		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], 1)
+		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], p0)
 	}
 
 	db.addPoint(m.metricID, p1)

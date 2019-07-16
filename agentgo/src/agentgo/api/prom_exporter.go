@@ -19,7 +19,7 @@ func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 	for _, p := range points {
 		ok = true
 		if p.Time.After(point.Time) {
-			point = p
+			point = p.Point
 		}
 	}
 	return
