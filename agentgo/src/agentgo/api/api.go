@@ -1,5 +1,7 @@
 package api
 
+//go:generate go run github.com/gobuffalo/packr/v2/packr2
+
 import (
 	"context"
 	"log"
@@ -12,6 +14,7 @@ import (
 
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"
+	"github.com/gobuffalo/packr/v2"
 	"github.com/rs/cors"
 )
 
@@ -43,9 +46,30 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 		Debug:            false,
 	}).Handler)
 	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc}
+
+	boxHTML := packr.New("html", "./static")
+
+	// There is a bug about serving directory with packr2 and golang v1.12.4
+	// (https://github.com/gobuffalo/packr/issues/198)
+	// The bug has been fixed but not yet released
+	router.HandleFunc("/logo", func(w http.ResponseWriter, _ *http.Request) {
+		image, err := boxHTML.Find("img/logo.png")
+		if err != nil {
+			log.Printf("DBG2: %v", err)
+		}
+		w.Write(image)
+	})
+	router.Handle("/test", http.FileServer(boxHTML))
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+	router.HandleFunc("/*", func(w http.ResponseWriter, _ *http.Request) {
+		html, err := boxHTML.Find("index.html")
+		if err != nil {
+			log.Printf("DBG2: %v", err)
+		}
+		w.Write(html)
+	})
 	api.router = router
 	return api
 }
