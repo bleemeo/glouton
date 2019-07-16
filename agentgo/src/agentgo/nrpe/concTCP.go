@@ -239,7 +239,8 @@ func Run(ctx context.Context, port string, cb callback) {
 	for {
 		err := l.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
-			log.Printf("Nrpe: setDeadline failed: %v", err)
+			log.Printf("Nrpe: setDeadline on listener failed: %v", err)
+			break
 		}
 		c, err := l.AcceptTCP()
 		if ctx.Err() != nil {
@@ -251,6 +252,15 @@ func Run(ctx context.Context, port string, cb callback) {
 		if err != nil {
 			log.Printf("Nrpe accept failed: %v", err)
 			break
+		}
+
+		err = c.SetDeadline(time.Now().Add(time.Second))
+		if err != nil {
+			log.Printf("Nrpe: setDeadline on connection failed: %v", err)
+			break
+		}
+		if errConn, ok := err.(net.Error); ok && errConn.Timeout() {
+			continue
 		}
 
 		wg.Add(1)
