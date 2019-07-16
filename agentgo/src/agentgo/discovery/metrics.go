@@ -213,7 +213,7 @@ func urlForPHPFPM(service Service) string {
 		return fmt.Sprintf("fcgi://%s:%s/status", service.IPAddress, service.ExtraAttributes["port"])
 	}
 	for _, v := range service.ListenAddresses {
-		if v.Network() != "tcp" {
+		if v.Network() != tcpPortocol {
 			continue
 		}
 		return fmt.Sprintf("fcgi://%s/status", v.String())

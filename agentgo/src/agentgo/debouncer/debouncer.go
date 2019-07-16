@@ -76,9 +76,13 @@ func (dd *Debouncer) run(ctx context.Context, fromTimer bool) {
 
 	if dd.trigger && discoveryAgo >= dd.delay {
 		dd.trigger = false
-		dd.l.Unlock()
-		dd.target(ctx)
-		dd.l.Lock()
+		dd.runTarget(ctx)
 		dd.lastRun = time.Now()
 	}
+}
+
+func (dd *Debouncer) runTarget(ctx context.Context) {
+	dd.l.Unlock()
+	defer dd.l.Lock()
+	dd.target(ctx)
 }

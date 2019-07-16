@@ -21,8 +21,9 @@ type Discovery struct {
 	servicesMap         map[nameContainer]Service
 	lastDiscoveryUpdate time.Time
 
-	activeInput map[nameContainer]int
-	coll        Collector
+	activeInput           map[nameContainer]int
+	activeCheckCancelFunc map[nameContainer]func()
+	coll                  Collector
 }
 
 // Collector will gather metrics for added inputs
@@ -42,11 +43,20 @@ func New(dynamicDiscovery Discoverer, coll Collector, initialServices []Service)
 		servicesMap[key] = v
 	}
 	return &Discovery{
-		dynamicDiscovery: dynamicDiscovery,
-		servicesMap:      servicesMap,
-		coll:             coll,
-		activeInput:      make(map[nameContainer]int),
+		dynamicDiscovery:      dynamicDiscovery,
+		servicesMap:           servicesMap,
+		coll:                  coll,
+		activeInput:           make(map[nameContainer]int),
+		activeCheckCancelFunc: make(map[nameContainer]func()),
 	}
+}
+
+// Close stop & cleanup inputs & check created by the discovery
+func (d *Discovery) Close() {
+	d.l.Lock()
+	defer d.l.Unlock()
+	_ = d.configureMetricInputs(d.servicesMap, nil)
+	_ = d.configureChecks(d.servicesMap, nil)
 }
 
 // Discovery detect service on the system and return a list of Service object.
@@ -66,6 +76,10 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 		err = d.configureMetricInputs(d.servicesMap, servicesMap)
 		if err != nil {
 			log.Printf("Unable to update metric inputs: %v", err)
+		}
+		err = d.configureChecks(d.servicesMap, servicesMap)
+		if err != nil {
+			log.Printf("Unable to update metric checks: %v", err)
 		}
 		d.servicesMap = servicesMap
 		d.lastDiscoveryUpdate = time.Now()

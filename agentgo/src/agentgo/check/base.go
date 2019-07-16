@@ -85,7 +85,6 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus checkError) check
 	// if successful, ensure socket are open
 	// if fail, ensure socket are closed
 	// if just fail (ok -> critical), do a fast check
-	log.Printf("DBG2: do check")
 	result := bc.doCheck(ctx)
 	if ctx.Err() != nil {
 		return previousStatus

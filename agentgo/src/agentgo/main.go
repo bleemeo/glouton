@@ -188,5 +188,6 @@ func main() {
 			discoveryTrigger.Trigger()
 		}
 	}
+	disc.Close()
 	wg.Wait()
 }
