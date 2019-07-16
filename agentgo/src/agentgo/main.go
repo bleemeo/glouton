@@ -100,7 +100,11 @@ func main() {
 	log.Println("Starting API")
 	go api.Run()
 
-	go nrpe.Run(":1025", response)
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		nrpe.Run(ctx, ":1025", response)
+	}()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)

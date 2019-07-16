@@ -2,12 +2,15 @@ package nrpe
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"hash/crc32"
 	"io"
 	"log"
 	"net"
+	"sync"
+	"time"
 )
 
 type reducedPacket struct {
@@ -219,20 +222,42 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 }
 
 //Run start a connection with a nrpe server
-func Run(port string, cb callback) {
-	l, err := net.Listen("tcp4", port)
+func Run(ctx context.Context, port string, cb callback) {
+	tcpAdress, err := net.ResolveTCPAddr("tcp4", port)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	l, err := net.ListenTCP("tcp4", tcpAdress)
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	defer l.Close()
 
+	var wg sync.WaitGroup
 	for {
-		c, err := l.Accept()
+		err := l.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
-			log.Println(err)
-			return
+			log.Printf("Nrpe: setDeadline failed: %v", err)
 		}
-		go handleConnection(c, cb)
+		c, err := l.AcceptTCP()
+		if ctx.Err() != nil {
+			break
+		}
+		if errNet, ok := err.(net.Error); ok && errNet.Timeout() {
+			continue
+		}
+		if err != nil {
+			log.Printf("Nrpe accept failed: %v", err)
+			break
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			handleConnection(c, cb)
+		}()
 	}
+	wg.Wait()
 }
