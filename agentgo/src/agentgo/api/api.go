@@ -64,9 +64,3 @@ func (api API) Run() {
 		log.Printf("Failed to start API server: %v", err)
 	}
 }
-
-func logError(_ int, err error) {
-	if err != nil {
-		log.Printf("DBG: Write failed %v", err)
-	}
-}
