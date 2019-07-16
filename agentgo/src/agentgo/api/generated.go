@@ -118,6 +118,7 @@ type ComplexityRoot struct {
 		IPAddress       func(childComplexity int) int
 		ListenAddresses func(childComplexity int) int
 		Name            func(childComplexity int) int
+		Status          func(childComplexity int) int
 	}
 
 	Topinfo struct {
@@ -532,6 +533,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Service.Name(childComplexity), true
 
+	case "Service.status":
+		if e.complexity.Service.Status == nil {
+			break
+		}
+
+		return e.complexity.Service.Status(childComplexity), true
+
 	case "Topinfo.processes":
 		if e.complexity.Topinfo.Processes == nil {
 			break
@@ -662,6 +670,7 @@ type Service {
   listenAddresses: [String!]!
   exePath: String!
   active: Boolean!
+  status: Float!
 }
 
 type Fact {
@@ -2845,6 +2854,43 @@ func (ec *executionContext) _Service_active(ctx context.Context, field graphql.C
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Service_status(ctx context.Context, field graphql.CollectedField, obj *Service) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Service",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Status, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Topinfo_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
 	ctx = ec.Tracer.StartFieldExecution(ctx, field)
 	defer func() {
@@ -4633,6 +4679,11 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "active":
 			out.Values[i] = ec._Service_active(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "status":
+			out.Values[i] = ec._Service_status(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}

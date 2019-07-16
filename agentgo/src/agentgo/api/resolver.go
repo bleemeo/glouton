@@ -302,6 +302,20 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 			for _, addr := range service.ListenAddresses {
 				netAddrs = append(netAddrs, addr.String())
 			}
+			metrics, err := r.api.db.Metrics(map[string]string{"__name__": service.Name + "_status"})
+			if err != nil {
+				log.Printf("DBG2: %v", err)
+				return nil, gqlerror.Errorf("Can not retrieve services")
+			}
+			finalEnd := time.Now().UTC().Format(time.RFC3339)
+			finalStart := time.Now().UTC().Add(time.Duration(-1) * time.Minute).Format(time.RFC3339)
+			timeStart, _ := time.Parse(time.RFC3339, finalStart)
+			timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
+			points, err := metrics[0].Points(timeStart, timeEnd)
+			if err != nil {
+				log.Printf("DBG2: %v", err)
+				return nil, gqlerror.Errorf("Can not retrieve services")
+			}
 			s := &Service{
 				Name:            service.Name,
 				ContainerID:     service.ContainerID,
@@ -309,6 +323,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				ListenAddresses: netAddrs,
 				ExePath:         service.ExePath,
 				Active:          service.Active,
+				Status:          points[len(points)-1].Value,
 			}
 			servicesRes = append(servicesRes, s)
 		}

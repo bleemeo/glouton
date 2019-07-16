@@ -65,7 +65,7 @@ func (api API) Run() {
 	}
 }
 
-func logError(n int, err error) {
+func logError(_ int, err error) {
 	if err != nil {
 		log.Printf("DBG: Write failed %v", err)
 	}

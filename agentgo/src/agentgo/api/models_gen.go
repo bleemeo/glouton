@@ -87,6 +87,7 @@ type Service struct {
 	ListenAddresses []string `json:"listenAddresses"`
 	ExePath         string   `json:"exePath"`
 	Active          bool     `json:"active"`
+	Status          float64  `json:"status"`
 }
 
 type Topinfo struct {
