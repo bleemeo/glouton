@@ -57,7 +57,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 		if err != nil {
 			log.Printf("DBG2: %v", err)
 		}
-		w.Write(image)
+		logError(w.Write(image))
 	})
 	router.Handle("/test", http.FileServer(boxHTML))
 	router.HandleFunc("/metrics", api.promExporter)
@@ -68,7 +68,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 		if err != nil {
 			log.Printf("DBG2: %v", err)
 		}
-		w.Write(html)
+		logError(w.Write(html))
 	})
 	api.router = router
 	return api
@@ -79,5 +79,11 @@ func (api API) Run() {
 	log.Printf("Starting API on %s", api.bindAddress)
 	if err := http.ListenAndServe(api.bindAddress, api.router); err != http.ErrServerClosed {
 		log.Printf("Failed to start API server: %v", err)
+	}
+}
+
+func logError(n int, err error) {
+	if err != nil {
+		log.Printf('DBG: Write failed %v', err)
 	}
 }
