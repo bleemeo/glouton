@@ -21,8 +21,7 @@ But for a release, we have to serve UI from '/'. See line 52 at api.go that expl
   window.BleemeoConfig={
     "STATIC_CDN_URL": "http://localhost:3015/"// "{{ static_cdn_url }}",
   };
-  const store=window.AgentPanel.createStore()
-  window.AgentPanel.start(store)
+  window.AgentPanel.start()
 </script>
 
 </html>
