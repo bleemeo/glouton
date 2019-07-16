@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"agentgo/types"
 	"context"
 	"log"
 	"sync"
@@ -24,6 +25,7 @@ type Discovery struct {
 	activeInput           map[nameContainer]int
 	activeCheckCancelFunc map[nameContainer]func()
 	coll                  Collector
+	acc                   Accumulator
 }
 
 // Collector will gather metrics for added inputs
@@ -32,8 +34,13 @@ type Collector interface {
 	RemoveInput(int)
 }
 
+// Accumulator will gather metrics point for added checks
+type Accumulator interface {
+	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
+}
+
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, initialServices []Service) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, initialServices []Service, acc Accumulator) *Discovery {
 	servicesMap := make(map[nameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
 		key := nameContainer{
@@ -46,6 +53,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, initialServices []Service)
 		dynamicDiscovery:      dynamicDiscovery,
 		servicesMap:           servicesMap,
 		coll:                  coll,
+		acc:                   acc,
 		activeInput:           make(map[nameContainer]int),
 		activeCheckCancelFunc: make(map[nameContainer]func()),
 	}

@@ -64,6 +64,7 @@ func (d *Discovery) createCheck(service Service) error {
 			tcpAddresses,
 			fmt.Sprintf("%s_status", service.Name),
 			service.ContainerName,
+			d.acc,
 		)
 		d.addCheck(tcpCheck.Run, service)
 	}
@@ -72,6 +73,9 @@ func (d *Discovery) createCheck(service Service) error {
 }
 
 func (d *Discovery) addCheck(runFunc func(context.Context), service Service) {
+	if d.acc == nil {
+		return
+	}
 	key := nameContainer{
 		name:        service.Name,
 		containerID: service.ContainerID,

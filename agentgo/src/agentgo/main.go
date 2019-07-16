@@ -61,6 +61,7 @@ func main() {
 		discovery.NewDynamic(psFact, netstat, dockerFact),
 		coll,
 		nil,
+		db.Accumulator(),
 	)
 	api := api.New(db, dockerFact, psFact, factProvider, apiBindAddress, disc)
 

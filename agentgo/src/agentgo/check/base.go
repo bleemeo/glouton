@@ -6,17 +6,12 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"agentgo/types"
 )
 
-const (
-	statusOk       = 0
-	statusCritical = 2
-	statusUnknown  = 3
-)
-
-type checkError struct {
-	status      int
-	description string
+type accumulator interface {
+	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
 }
 
 // baseCheck perform a check (using doCheck function) and maintain TCP connection open to detect service failure quickly
@@ -24,9 +19,8 @@ type baseCheck struct {
 	metricName   string
 	item         string
 	tcpAddresses []string
-	doCheck      func(ctx context.Context) checkError
-	//sendData     []byte
-	//expectedData []byte
+	doCheck      func(ctx context.Context) types.StatusDescription
+	acc          accumulator
 
 	timer    *time.Timer
 	dialer   *net.Dialer
@@ -36,12 +30,13 @@ type baseCheck struct {
 }
 
 // NewTCP ...
-func newBase(tcpAddresses []string, metricName string, item string, doCheck func(context.Context) checkError) *baseCheck {
+func newBase(tcpAddresses []string, metricName string, item string, doCheck func(context.Context) types.StatusDescription, acc accumulator) *baseCheck {
 	return &baseCheck{
 		metricName:   metricName,
 		item:         item,
 		tcpAddresses: tcpAddresses,
 		doCheck:      doCheck,
+		acc:          acc,
 
 		dialer:   &net.Dialer{},
 		timer:    time.NewTimer(0),
@@ -56,9 +51,9 @@ func (bc *baseCheck) Run(ctx context.Context) {
 	// when port goes from open to close, back to step 1
 	// If step 1 fail => trigger check
 	// trigger check every minutes (or 30 seconds)
-	result := checkError{
-		status:      statusOk,
-		description: "initial status - description is ignored",
+	result := types.StatusDescription{
+		CurrentStatus:     types.StatusOk,
+		StatusDescription: "initial status - description is ignored",
 	}
 	for {
 		select {
@@ -80,7 +75,7 @@ func (bc *baseCheck) Run(ctx context.Context) {
 	}
 }
 
-func (bc *baseCheck) check(ctx context.Context, previousStatus checkError) checkError {
+func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescription) types.StatusDescription {
 	// do the check
 	// if successful, ensure socket are open
 	// if fail, ensure socket are closed
@@ -90,13 +85,13 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus checkError) check
 		return previousStatus
 	}
 	timerDone := false
-	if result.status != statusOk {
+	if result.CurrentStatus != types.StatusOk {
 		if bc.cancel != nil {
 			bc.cancel()
 			bc.wg.Wait()
 			bc.cancel = nil
 		}
-		if previousStatus.status == statusOk {
+		if previousStatus.CurrentStatus == types.StatusOk {
 			bc.timer.Reset(30 * time.Second)
 			timerDone = true
 		}
@@ -108,6 +103,19 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus checkError) check
 		bc.timer.Reset(time.Minute)
 	}
 	log.Printf("DBG2: check for %#v on %#v: %v", bc.metricName, bc.item, result)
+	labels := make(map[string]string)
+	if bc.item != "" {
+		labels["item"] = bc.item
+	}
+	bc.acc.AddFieldsWithStatus(
+		"",
+		map[string]interface{}{
+			bc.metricName: result.CurrentStatus.NagiosCode(),
+		},
+		labels,
+		map[string]types.StatusDescription{bc.metricName: result},
+		false,
+	)
 	return result
 }
 
