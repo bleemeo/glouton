@@ -116,7 +116,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte) t
 		log.Printf("DBG: Unable to set Deadline: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
-			StatusDescription: fmt.Sprintf("Checker error. Unable to set Deadline"),
+			StatusDescription: "Checker error. Unable to set Deadline",
 		}
 	}
 

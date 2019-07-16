@@ -29,7 +29,6 @@ type baseCheck struct {
 	wg       sync.WaitGroup
 }
 
-// NewTCP ...
 func newBase(tcpAddresses []string, metricName string, item string, doCheck func(context.Context) types.StatusDescription, acc accumulator) *baseCheck {
 	return &baseCheck{
 		metricName:   metricName,
@@ -139,22 +138,26 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 
 func (bc *baseCheck) openSocket(ctx context.Context, addr string) {
 	for ctx.Err() == nil {
-		bc.openSocketOnce(ctx, addr)
+		longSleep := bc.openSocketOnce(ctx, addr)
+		delay := 10 * time.Second
+		if !longSleep {
+			delay = time.Second
+		}
 		select {
-		case <-time.After(10 * time.Second):
+		case <-time.After(delay):
 		case <-ctx.Done():
 		}
 	}
 }
 
-func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) {
+func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep bool) {
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 	conn, err := bc.dialer.DialContext(ctx2, "tcp", addr)
 	if err != nil {
 		log.Printf("DBG2: fail to open TCP connection to %#v: %v", addr, err)
 		bc.triggerC <- nil
-		return
+		return true
 	}
 	defer conn.Close()
 	buffer := make([]byte, 4096)
@@ -162,8 +165,7 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) {
 		err := conn.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
 			log.Printf("DBG2: Unable to SetDeadline() for %#v: %v", addr, err)
-			bc.triggerC <- nil
-			return
+			return false
 		}
 		_, err = conn.Read(buffer)
 		if err != nil {
@@ -171,8 +173,8 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) {
 				continue
 			}
 			log.Printf("DBG2: Unable to Read() from %#v: %v", addr, err)
-			bc.triggerC <- nil
-			return
+			return false
 		}
 	}
+	return false
 }

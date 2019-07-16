@@ -64,7 +64,7 @@ func (d *Discovery) Close() {
 	d.l.Lock()
 	defer d.l.Unlock()
 	_ = d.configureMetricInputs(d.servicesMap, nil)
-	_ = d.configureChecks(d.servicesMap, nil)
+	d.configureChecks(d.servicesMap, nil)
 }
 
 // Discovery detect service on the system and return a list of Service object.
@@ -85,10 +85,7 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 		if err != nil {
 			log.Printf("Unable to update metric inputs: %v", err)
 		}
-		err = d.configureChecks(d.servicesMap, servicesMap)
-		if err != nil {
-			log.Printf("Unable to update metric checks: %v", err)
-		}
+		d.configureChecks(d.servicesMap, servicesMap)
 		d.servicesMap = servicesMap
 		d.lastDiscoveryUpdate = time.Now()
 	}

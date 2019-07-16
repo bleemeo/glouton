@@ -26,6 +26,7 @@ const (
 	ApacheService        ServiceName = "apache"
 	ElasticSearchService ServiceName = "elasticsearch"
 	HAProxyService       ServiceName = "haproxy"
+	InfluxDBService      ServiceName = "influxdb"
 	MemcachedService     ServiceName = "memcached"
 	MongoDBService       ServiceName = "mongodb"
 	MySQLService         ServiceName = "mysql"
@@ -34,6 +35,8 @@ const (
 	PostgreSQLService    ServiceName = "postgresql"
 	RabbitMQService      ServiceName = "rabbitmq"
 	RedisService         ServiceName = "redis"
+	SquidService         ServiceName = "squid"
+	ZookeeperService     ServiceName = "zookeeper"
 )
 
 // Service is the information found about a given service
