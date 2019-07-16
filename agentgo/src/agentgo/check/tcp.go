@@ -24,19 +24,23 @@ type TCPCheck struct {
 	expect []byte
 }
 
-// NewTCP ...
-func NewTCP(address string, otherAddresses []string, send []byte, expect []byte, metricName string, item string, acc accumulator) *TCPCheck {
+// NewTCP create a new TCP check.
+//
+// All addresses use the format "IP:port".
+//
+// If set, on the main address it will send specified byte and expect the specified byte.
+//
+// For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
+// be immediately run.
+func NewTCP(address string, persitentAddresses []string, send []byte, expect []byte, metricName string, item string, acc accumulator) *TCPCheck {
 
 	tc := &TCPCheck{
 		mainAddress:    address,
-		otherAddresses: otherAddresses,
+		otherAddresses: persitentAddresses,
 		send:           send,
 		expect:         expect,
 	}
-	addresses := make([]string, len(otherAddresses), len(otherAddresses)+1)
-	copy(addresses, otherAddresses)
-	addresses = append(addresses, address)
-	tc.baseCheck = newBase(addresses, metricName, item, tc.doCheck, acc)
+	tc.baseCheck = newBase(persitentAddresses, metricName, item, tc.doCheck, acc)
 	return tc
 }
 
@@ -55,6 +59,9 @@ func (tc *TCPCheck) doCheck(ctx context.Context) types.StatusDescription {
 		return result
 	}
 	for _, addr := range tc.otherAddresses {
+		if addr == tc.mainAddress {
+			continue
+		}
 		if subResult := checkTCP(ctx, addr, nil, nil); subResult.CurrentStatus != types.StatusOk {
 			return subResult
 		} else if !result.CurrentStatus.IsSet() {
