@@ -239,11 +239,15 @@ func certTemplate() (*x509.Certificate, error) {
 
 	tmpl := x509.Certificate{
 		SerialNumber:          serialNumber,
-		Subject:               pkix.Name{Organization: []string{"Yhat, Inc."}},
+		Subject:               pkix.Name{Organization: []string{"Bleemeo"}},
 		SignatureAlgorithm:    x509.SHA256WithRSA,
+		IsCA:                  true,
 		NotBefore:             time.Now(),
-		NotAfter:              time.Now().Add(time.Hour), // valid for an hour
+		NotAfter:              time.Now().Add(365 * 24 * time.Hour), // valid for an hour
 		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+		IPAddresses:           []net.IP{net.ParseIP("127.0.0.1")},
 	}
 	return &tmpl, nil
 }
@@ -275,11 +279,7 @@ func generateCert() *tls.Config {
 	if err != nil {
 		log.Fatalf("creating cert template: %v", err)
 	}
-	// describe what the certificate will be used for
-	rootCertTmpl.IsCA = true
-	rootCertTmpl.KeyUsage = x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature
-	rootCertTmpl.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth}
-	rootCertTmpl.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+
 	_, rootCertPEM, err := createCert(rootCertTmpl, rootCertTmpl, &rootKey.PublicKey, rootKey)
 	if err != nil {
 		log.Fatalf("error creating cert: %v", err)
@@ -309,84 +309,50 @@ func Run(ctx context.Context, port string, cb callback, generateSSL bool) {
 		return
 	}
 	l, err := net.ListenTCP("tcp4", tcpAdress)
+
 	if err != nil {
 		log.Println(err)
 		return
 	}
 	defer l.Close()
-
+	lWrap := net.Listener(l)
 	if generateSSL {
-		lWrap := tls.NewListener(l, generateCert())
-		var wg sync.WaitGroup
-		for {
-			err := l.SetDeadline(time.Now().Add(time.Second))
-			if err != nil {
-				log.Printf("Nrpe: setDeadline on listener failed: %v", err)
-				break
-			}
-			c, err := lWrap.Accept()
-			if ctx.Err() != nil {
-				break
-			}
-			if errNet, ok := err.(net.Error); ok && errNet.Timeout() {
-				continue
-			}
-			if err != nil {
-				log.Printf("Nrpe accept failed: %v", err)
-				break
-			}
-
-			err = c.SetDeadline(time.Now().Add(time.Second * 10))
-			if err != nil {
-				log.Printf("Nrpe: setDeadline on connection failed: %v", err)
-				break
-			}
-			if errConn, ok := err.(net.Error); ok && errConn.Timeout() {
-				continue
-			}
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				handleConnection(c, cb)
-			}()
-		}
-		wg.Wait()
-	} else {
-		var wg sync.WaitGroup
-		for {
-			err := l.SetDeadline(time.Now().Add(time.Second))
-			if err != nil {
-				log.Printf("Nrpe: setDeadline on listener failed: %v", err)
-				break
-			}
-			c, err := l.AcceptTCP()
-			if ctx.Err() != nil {
-				break
-			}
-			if errNet, ok := err.(net.Error); ok && errNet.Timeout() {
-				continue
-			}
-			if err != nil {
-				log.Printf("Nrpe accept failed: %v", err)
-				break
-			}
-
-			err = c.SetDeadline(time.Now().Add(time.Second * 10))
-			if err != nil {
-				log.Printf("Nrpe: setDeadline on connection failed: %v", err)
-				break
-			}
-			if errConn, ok := err.(net.Error); ok && errConn.Timeout() {
-				continue
-			}
-
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				handleConnection(c, cb)
-			}()
-		}
-		wg.Wait()
+		lWrap = tls.NewListener(l, generateCert())
 	}
+
+	var wg sync.WaitGroup
+	for {
+		err := l.SetDeadline(time.Now().Add(time.Second))
+		if err != nil {
+			log.Printf("Nrpe: setDeadline on listener failed: %v", err)
+			break
+		}
+		c, err := lWrap.Accept()
+		if ctx.Err() != nil {
+			break
+		}
+		if errNet, ok := err.(net.Error); ok && errNet.Timeout() {
+			continue
+		}
+		if err != nil {
+			log.Printf("Nrpe accept failed: %v", err)
+			break
+		}
+
+		err = c.SetDeadline(time.Now().Add(time.Second * 10))
+		if err != nil {
+			log.Printf("Nrpe: setDeadline on connection failed: %v", err)
+			break
+		}
+		if errConn, ok := err.(net.Error); ok && errConn.Timeout() {
+			continue
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			handleConnection(c, cb)
+		}()
+	}
+	wg.Wait()
 }
