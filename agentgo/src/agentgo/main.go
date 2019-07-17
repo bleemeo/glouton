@@ -103,7 +103,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		nrpe.Run(ctx, ":1025", response)
+		nrpe.Run(ctx, ":1025", response, true)
 	}()
 
 	c := make(chan os.Signal, 1)
