@@ -70,6 +70,12 @@ export PATH=/usr/lib/go-1.12/bin:$PATH
 
 - Run golangci-lint and Go tests
 
+- Copy production JS files from bleemeo-agent-ui
+
+```
+copy -r <path-to-bleemeo-agent-ui>/dist/js agentgo/src/agentgo/api.static
+```
+
 - Build the release:
 
 ```
