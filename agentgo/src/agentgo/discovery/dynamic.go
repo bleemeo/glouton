@@ -69,15 +69,32 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 var (
 	knownProcesses = map[string]ServiceName{
 		"apache2":      ApacheService,
+		"asterisk":     AsteriskService,
+		"dovecot":      DovecoteService,
+		"exim4":        EximService,
+		"exim":         EximService,
+		"freeradius":   FreeradiusService,
 		"haproxy":      HAProxyService,
 		"httpd":        ApacheService,
+		"influxd":      InfluxDBService,
+		"libvirtd":     LibvirtService,
+		"master":       PostfixService,
 		"memcached":    MemcachedService,
 		"mongod":       MongoDBService,
+		"mosquitto":    MosquittoService, //nolint:misspell
 		"mysqld":       MySQLService,
+		"named":        BindService,
 		"nginx:":       NginxService,
+		"ntpd":         NTPService,
+		"openvpn":      OpenVPNService,
 		"php-fpm:":     PHPFPMService,
 		"postgres":     PostgreSQLService,
 		"redis-server": RedisService,
+		"slapd":        OpenLDAPService,
+		"squid3":       SquidService,
+		"squid":        SquidService,
+		"varnishd":     VarnishService,
+		"uwsgi":        UWSGIService,
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string
@@ -85,14 +102,54 @@ var (
 		Interpreter         string
 	}{
 		{
+			CmdLineMustContains: []string{"org.apache.cassandra.service.CassandraDaemon"},
+			ServiceName:         CassandraService,
+			Interpreter:         "java",
+		},
+		{
 			CmdLineMustContains: []string{"org.elasticsearch.bootstrap.Elasticsearch"},
 			ServiceName:         ElasticSearchService,
+			Interpreter:         "java",
+		},
+		{
+			CmdLineMustContains: []string{"org.apache.zookeeper.server.quorum.QuorumPeerMain"},
+			ServiceName:         ZookeeperService,
 			Interpreter:         "java",
 		},
 		{
 			CmdLineMustContains: []string{"-s rabbit"},
 			ServiceName:         RabbitMQService,
 			Interpreter:         "erlang",
+		},
+		{
+			CmdLineMustContains: []string{"-s ejabberd"},
+			ServiceName:         EjabberService,
+			Interpreter:         "erlang",
+		},
+		{
+			CmdLineMustContains: []string{"com.atlassian.stash.internal.catalina.startup.Bootstrap"},
+			ServiceName:         BitBucketService,
+			Interpreter:         "java",
+		},
+		{
+			CmdLineMustContains: []string{"com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher"},
+			ServiceName:         BitBucketService,
+			Interpreter:         "java",
+		},
+		{
+			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap", "jira"},
+			ServiceName:         JIRAService,
+			Interpreter:         "java",
+		},
+		{
+			CmdLineMustContains: []string{"org.apache.catalina.startup.Bootstrap", "confluence"},
+			ServiceName:         ConfluenceService,
+			Interpreter:         "java",
+		},
+		{
+			CmdLineMustContains: []string{"salt-master"},
+			ServiceName:         SaltMasterService,
+			Interpreter:         "python",
 		},
 	}
 )
