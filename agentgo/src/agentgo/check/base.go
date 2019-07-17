@@ -156,7 +156,10 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep
 	conn, err := bc.dialer.DialContext(ctx2, "tcp", addr)
 	if err != nil {
 		log.Printf("DBG2: fail to open TCP connection to %#v: %v", addr, err)
-		bc.triggerC <- nil
+		select {
+		case bc.triggerC <- nil:
+		default:
+		}
 		return true
 	}
 	defer conn.Close()
