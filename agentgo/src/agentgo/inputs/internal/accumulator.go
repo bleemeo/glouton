@@ -33,6 +33,7 @@ type GatherContext struct {
 // * If TransformGlobal is set, it's applied. RenameTransform allow to rename measurement and alter tags. It could also completly drop
 //   a batch of metrics
 // * Any metrics matching DerivatedMetrics are derivated. Metric seen for the first time are dropped.
+//   Derivation is only applied to Counter values, that is something that only go upward. If value does downward, it's skipped.
 // * Then TransformMetrics is called on a float64 version of fields. It may apply per-metric transformation
 type Accumulator struct {
 	Accumulator telegraf.Accumulator
@@ -180,9 +181,12 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 		a.currentValues[flatTag][metricName] = currentPoint
 		if ok {
 			valueFloat, err := rateAsFloat(pastMetricPoint, currentPoint)
-			if err == nil {
+			switch {
+			case err == nil && valueFloat >= 0:
 				result[metricName] = valueFloat
-			} else {
+			case err == nil:
+				continue
+			default:
 				a.AddError(err)
 			}
 		} else {

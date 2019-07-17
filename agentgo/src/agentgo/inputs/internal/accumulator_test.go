@@ -143,8 +143,8 @@ func TestDerive(t *testing.T) {
 		}{
 			{"metricNoDerive", 12.0},
 			{"metricDeriveFloat", 1.3},
-			{"metricDeriveInt", -1.0},
-			{"metricDeriveUint", -2.0},
+			{"metricDeriveInt", 1.0},
+			{"metricDeriveUint", 2.0},
 		}
 		if len(fields) != len(cases) {
 			t.Errorf("len(fields) == %v, want %v", len(fields), len(cases))
@@ -160,7 +160,7 @@ func TestDerive(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		DerivatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint"},
+		DerivatedMetrics: []string{"metricDeriveFloat", "metricDeriveInt", "metricDeriveUint", "metricDeriveBack", "metricDeriveBack2"},
 	}
 	acc.PrepareGather()
 	acc.processMetrics(
@@ -169,8 +169,10 @@ func TestDerive(t *testing.T) {
 		map[string]interface{}{
 			"metricNoDerive":    42.0,
 			"metricDeriveFloat": 10.0,
-			"metricDeriveInt":   10,
-			"metricDeriveUint":  uint64(1000020),
+			"metricDeriveInt":   0,
+			"metricDeriveUint":  uint64(1000000),
+			"metricDeriveBack":  100.0,
+			"metricDeriveBack2": uint64(100),
 		},
 		nil,
 		t0,
@@ -182,8 +184,10 @@ func TestDerive(t *testing.T) {
 		map[string]interface{}{
 			"metricNoDerive":    12.0,
 			"metricDeriveFloat": 23.0,
-			"metricDeriveInt":   0,
-			"metricDeriveUint":  uint64(1000000),
+			"metricDeriveInt":   10,
+			"metricDeriveUint":  uint64(1000020),
+			"metricDeriveBack":  42.0,
+			"metricDeriveBack2": uint64(42),
 		},
 		nil,
 		t1,
@@ -223,8 +227,8 @@ func TestDeriveFunc(t *testing.T) {
 		}{
 			{"metricNoDerive", 12.0},
 			{"metricDeriveFloat", 1.3},
-			{"metricDeriveInt", -1.0},
-			{"metricDeriveUint", -2.0},
+			{"metricDeriveInt", 1.0},
+			{"metricDeriveUint", 2.0},
 		}
 		if len(fields) != len(cases) {
 			t.Errorf("len(fields) == %v, want %v", len(fields), len(cases))
@@ -253,8 +257,8 @@ func TestDeriveFunc(t *testing.T) {
 		map[string]interface{}{
 			"metricNoDerive":    42.0,
 			"metricDeriveFloat": 10.0,
-			"metricDeriveInt":   10,
-			"metricDeriveUint":  uint64(1000020),
+			"metricDeriveInt":   0,
+			"metricDeriveUint":  uint64(1000000),
 		},
 		nil,
 		t0,
@@ -266,8 +270,8 @@ func TestDeriveFunc(t *testing.T) {
 		map[string]interface{}{
 			"metricNoDerive":    12.0,
 			"metricDeriveFloat": 23.0,
-			"metricDeriveInt":   0,
-			"metricDeriveUint":  uint64(1000000),
+			"metricDeriveInt":   10,
+			"metricDeriveUint":  uint64(1000020),
 		},
 		nil,
 		t1,
