@@ -16,9 +16,7 @@ import (
 // TCPCheck perform a TCP check
 type TCPCheck struct {
 	*baseCheck
-	mainAddress    string
-	otherAddresses []string
-	checkForMain   func(ctx context.Context) types.StatusDescription
+	mainAddress string
 
 	send   []byte
 	expect []byte
@@ -35,45 +33,19 @@ type TCPCheck struct {
 func NewTCP(address string, persitentAddresses []string, send []byte, expect []byte, metricName string, item string, acc accumulator) *TCPCheck {
 
 	tc := &TCPCheck{
-		mainAddress:    address,
-		otherAddresses: persitentAddresses,
-		send:           send,
-		expect:         expect,
+		mainAddress: address,
+		send:        send,
+		expect:      expect,
 	}
-	tc.baseCheck = newBase(persitentAddresses, metricName, item, tc.doCheck, acc)
+	tc.baseCheck = newBase(address, persitentAddresses, true, tc.doCheck, metricName, item, acc)
 	return tc
 }
 
 func (tc *TCPCheck) doCheck(ctx context.Context) types.StatusDescription {
-	var result types.StatusDescription
-	if tc.checkForMain != nil {
-		if result = tc.checkForMain(ctx); result.CurrentStatus != types.StatusOk {
-			return result
-		}
-	} else if tc.mainAddress != "" {
-		if result = checkTCP(ctx, tc.mainAddress, tc.send, tc.expect); result.CurrentStatus != types.StatusOk {
-			return result
-		}
+	if tc.mainAddress == "" {
+		return types.StatusDescription{}
 	}
-	if result.CurrentStatus == types.StatusCritical || result.CurrentStatus == types.StatusUnknown {
-		return result
-	}
-	for _, addr := range tc.otherAddresses {
-		if addr == tc.mainAddress {
-			continue
-		}
-		if subResult := checkTCP(ctx, addr, nil, nil); subResult.CurrentStatus != types.StatusOk {
-			return subResult
-		} else if !result.CurrentStatus.IsSet() {
-			result = subResult
-		}
-	}
-	if !result.CurrentStatus.IsSet() {
-		return types.StatusDescription{
-			CurrentStatus: types.StatusOk,
-		}
-	}
-	return result
+	return checkTCP(ctx, tc.mainAddress, tc.send, tc.expect)
 }
 
 func checkTCP(ctx context.Context, address string, send []byte, expect []byte) types.StatusDescription {

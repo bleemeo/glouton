@@ -14,28 +14,47 @@ type accumulator interface {
 	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
 }
 
-// baseCheck perform a check (using doCheck function) and maintain TCP connection open to detect service failure quickly
+// baseCheck perform a service.
+//
+// The check does:
+// * use mainCheck to perform the primary check (protocol specific)
+// * open & close a TCP connection on all tcpAddresses (with exclusion of mainTCPAddress if set)
+//
+// tcpAddresses is supposed to contains mainTCPAddress
+//
+// If persistentConnection is active, when check successed, this checker will maintain a TCP connection
+// to each tcpAddresses to detect service failture quickly.
+//
+// The check is run at the first of:
+// * One minute after last check
+// * 30 seconds after checks change to not Ok (to quickly recover from a service restart)
+// * (if persistentConnection is active) after a TCP connection is broken
 type baseCheck struct {
-	metricName   string
-	item         string
-	tcpAddresses []string
-	doCheck      func(ctx context.Context) types.StatusDescription
-	acc          accumulator
+	metricName     string
+	item           string
+	mainTCPAddress string
+	tcpAddresses   []string
+	mainCheck      func(ctx context.Context) types.StatusDescription
+	acc            accumulator
 
 	timer    *time.Timer
 	dialer   *net.Dialer
 	triggerC chan interface{}
 	cancel   func()
 	wg       sync.WaitGroup
+
+	persistentConnection bool
 }
 
-func newBase(tcpAddresses []string, metricName string, item string, doCheck func(context.Context) types.StatusDescription, acc accumulator) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, item string, acc accumulator) *baseCheck {
 	return &baseCheck{
-		metricName:   metricName,
-		item:         item,
-		tcpAddresses: tcpAddresses,
-		doCheck:      doCheck,
-		acc:          acc,
+		metricName:           metricName,
+		item:                 item,
+		mainTCPAddress:       mainTCPAddress,
+		tcpAddresses:         tcpAddresses,
+		persistentConnection: persistentConnection,
+		mainCheck:            mainCheck,
+		acc:                  acc,
 
 		dialer:   &net.Dialer{},
 		timer:    time.NewTimer(0),
@@ -115,6 +134,30 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescr
 		map[string]types.StatusDescription{bc.metricName: result},
 		false,
 	)
+	return result
+}
+
+func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {
+	if bc.mainCheck != nil {
+		if result = bc.mainCheck(ctx); result.CurrentStatus != types.StatusOk {
+			return result
+		}
+	}
+	for _, addr := range bc.tcpAddresses {
+		if addr == bc.mainTCPAddress {
+			continue
+		}
+		if subResult := checkTCP(ctx, addr, nil, nil); subResult.CurrentStatus != types.StatusOk {
+			return subResult
+		} else if !result.CurrentStatus.IsSet() {
+			result = subResult
+		}
+	}
+	if !result.CurrentStatus.IsSet() {
+		return types.StatusDescription{
+			CurrentStatus: types.StatusOk,
+		}
+	}
 	return result
 }
 

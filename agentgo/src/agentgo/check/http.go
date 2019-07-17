@@ -28,15 +28,25 @@ type HTTPCheck struct {
 //
 // If expectedStatusCode is 0, StatusCode below 400 will generate Ok, between 400 and 499 => warning and above 500 => critical
 // If expectedStatusCode is not 0, StatusCode must match the value or result will be critical
-func NewHTTP(url string, persitentAddresses []string, expectedStatusCode int, metricName string, item string, acc accumulator) *HTTPCheck {
+func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode int, metricName string, item string, acc accumulator) *HTTPCheck {
 	myTransport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
 			InsecureSkipVerify: true, //nolint:gosec
 		},
 	}
+	mainTCPAddress := ""
+	if u, err := url.Parse(urlValue); err != nil {
+		port := u.Port()
+		if port == "" && u.Scheme == "http" {
+			port = "80"
+		} else if port == "" && u.Scheme == "https" {
+			port = "443"
+		}
+		mainTCPAddress = fmt.Sprintf("%s:%s", u.Hostname(), port)
+	}
 	hc := &HTTPCheck{
-		url:                url,
+		url:                urlValue,
 		expectedStatusCode: expectedStatusCode,
 		client: &http.Client{
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -45,7 +55,7 @@ func NewHTTP(url string, persitentAddresses []string, expectedStatusCode int, me
 			Transport: myTransport,
 		},
 	}
-	hc.baseCheck = newBase(persitentAddresses, metricName, item, hc.doCheck, acc)
+	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, true, hc.doCheck, metricName, item, acc)
 	return hc
 }
 
