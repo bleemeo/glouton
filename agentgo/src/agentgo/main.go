@@ -27,6 +27,9 @@ import (
 	"agentgo/version"
 
 	"github.com/influxdata/telegraf"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
@@ -38,6 +41,14 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 
 func main() {
 	log.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
+	go func() {
+		debugAddress := os.Getenv("DBG_ADDRESS")
+		if debugAddress == "" {
+			debugAddress = "localhost:6060"
+		}
+		log.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
+		log.Println(http.ListenAndServe(debugAddress, nil))
+	}()
 
 	apiBindAddress := os.Getenv("API_ADDRESS")
 	if apiBindAddress == "" {
