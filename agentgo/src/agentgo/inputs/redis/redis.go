@@ -43,15 +43,15 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"redis\" input type is not redis.Redis")
+			err = errors.New("input Redis is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"redis\" input")
+		err = errors.New("input Redis is not enabled in Telegraf")
 	}
 	return
 }
 
-func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 	for metricName, value := range fields {
 		finalMetricName := metricName

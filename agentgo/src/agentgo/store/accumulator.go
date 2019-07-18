@@ -10,15 +10,17 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-type accumulator struct {
+// Accumulator store points in the Store and optionally add extra information like
+// service association and container association
+type Accumulator struct {
 	store *Store
 }
 
 // Accumulator returns an Accumulator compatible with our input collector.
 //
 // This accumlator will store point in the Store
-func (s *Store) Accumulator() telegraf.Accumulator {
-	return &accumulator{
+func (s *Store) Accumulator() *Accumulator {
+	return &Accumulator{
 		store: s,
 	}
 }
@@ -29,54 +31,63 @@ func (s *Store) Accumulator() telegraf.Accumulator {
 // Create a point with a value, decorating it with tags
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
-func (a *accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, nil, false, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
-func (a *accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, nil, false, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type
-func (a *accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, nil, false, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type
-func (a *accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, nil, false, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
-func (a *accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, nil, false, t...)
 }
 
 // SetPrecision do nothing right now
-func (a *accumulator) SetPrecision(precision time.Duration) {
+func (a *Accumulator) SetPrecision(precision time.Duration) {
 	a.AddError(fmt.Errorf("SetPrecision not implemented"))
 }
 
 // AddMetric is not yet implemented
-func (a *accumulator) AddMetric(telegraf.Metric) {
+func (a *Accumulator) AddMetric(telegraf.Metric) {
 	a.AddError(fmt.Errorf("AddMetric not implemented"))
 }
 
 // WithTracking is not yet implemented
-func (a *accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
 	a.AddError(fmt.Errorf("WithTracking not implemented"))
 	return nil
 }
 
 // AddError add an error to the Accumulator
-func (a *accumulator) AddError(err error) {
+func (a *Accumulator) AddError(err error) {
 	if err != nil {
-		log.Printf("AddError(%v)", err)
+		log.Printf("DBG: Add error called with: %v", err)
 	}
 }
 
-func (a *accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+// AddFieldsWithStatus have extra fields for the status of each points
+//
+// It works like AddFields, but:
+// * If a metric in fields also have an entry in statuses, a status for this point will be set
+// * If createStatusOf is true, each metric which has a statuses will also generate an additional metrics named "$NAME_status"
+func (a *Accumulator) AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, statuses, createStatusOf, t...)
+}
+
+func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time) {
 	labels := make(map[string]string)
 	for k, v := range tags {
 		labels[k] = v
@@ -90,14 +101,31 @@ func (a *accumulator) addMetrics(measurement string, fields map[string]interface
 	a.store.lock.Lock()
 	defer a.store.lock.Unlock()
 	for name, value := range fields {
-		labels["__name__"] = measurement + "_" + name
+		if measurement == "" {
+			labels["__name__"] = name
+		} else {
+			labels["__name__"] = measurement + "_" + name
+		}
 		value, err := convertInterface(value)
 		if err != nil {
 			log.Panicf("convertInterface failed. Ignoring point: %s", err)
 			continue
 		}
-		metric := a.store.metricGetOrCreate(labels)
-		a.store.addPoint(metric.metricID, types.Point{Time: ts, Value: value})
+		metric := a.store.metricGetOrCreate(labels, 0)
+		point := types.PointStatus{
+			Point: types.Point{Time: ts, Value: value},
+		}
+		if status, ok := statuses[name]; ok {
+			point.StatusDescription = status
+			if createStatusOf {
+				copyPoint := point
+				copyPoint.Value = float64(point.CurrentStatus.NagiosCode())
+				labels["__name__"] += "_status"
+				metric2 := a.store.metricGetOrCreate(labels, metric.metricID)
+				a.store.addPoint(metric2.metricID, copyPoint)
+			}
+		}
+		a.store.addPoint(metric.metricID, point)
 	}
 }
 
@@ -114,6 +142,6 @@ func convertInterface(value interface{}) (float64, error) {
 		return float64(value), nil
 	default:
 		var valueType = reflect.TypeOf(value)
-		return float64(0), fmt.Errorf("Value type not supported :(%v)", valueType)
+		return float64(0), fmt.Errorf("value type not supported :(%v)", valueType)
 	}
 }

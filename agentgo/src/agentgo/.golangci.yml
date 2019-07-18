@@ -1,5 +1,4 @@
 linters:
   enable-all: true
-  fast: true
   disable:
     - lll

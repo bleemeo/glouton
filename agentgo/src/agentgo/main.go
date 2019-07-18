@@ -11,6 +11,9 @@ import (
 
 	"agentgo/api"
 	"agentgo/collector"
+	"agentgo/debouncer"
+	"agentgo/discovery"
+	"agentgo/facts"
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/disk"
 	"agentgo/inputs/diskio"
@@ -22,34 +25,18 @@ import (
 	"agentgo/inputs/system"
 	"agentgo/nrpe"
 	"agentgo/store"
-	"agentgo/types"
+	"agentgo/version"
 
 	"github.com/influxdata/telegraf"
-)
 
-type storeInterface interface {
-	Metrics(filters map[string]string) ([]types.Metric, error)
-}
+	"net/http"
+	_ "net/http/pprof"
+)
 
 func response(ctx context.Context, command string) (string, int16) {
 	answer := command + " ok"
 	resultCode := int16(1)
 	return answer, resultCode
-}
-
-func stats(db storeInterface) {
-	for {
-		time.Sleep(60 * time.Second)
-		metrics, _ := db.Metrics(nil)
-		log.Printf("Count of metrics: %v", len(metrics))
-
-		metrics, _ = db.Metrics(map[string]string{"__name__": "cpu_used"})
-		for _, m := range metrics {
-			log.Printf("Details for metrics %v", m)
-			points, _ := m.Points(time.Now().Add(-86400*time.Second), time.Now())
-			log.Printf("points count: %v", len(points))
-		}
-	}
 }
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
@@ -60,25 +47,94 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 }
 
 func main() {
-	log.Println("Starting agent")
-	db := store.New()
-	api := api.New(db)
-	coll := collector.New(db.Accumulator())
+	log.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
+	go func() {
+		debugAddress := os.Getenv("DBG_ADDRESS")
+		if debugAddress == "" {
+			debugAddress = "localhost:6060"
+		}
+		log.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
+		log.Println(http.ListenAndServe(debugAddress, nil))
+	}()
 
-	coll.AddInput(panicOnError(system.New()))
-	coll.AddInput(panicOnError(process.New()))
-	coll.AddInput(panicOnError(cpu.New()))
-	coll.AddInput(panicOnError(mem.New()))
-	coll.AddInput(panicOnError(swap.New()))
-	coll.AddInput(panicOnError(net.New(nil)))
-	coll.AddInput(panicOnError(disk.New("/", nil)))
+	apiBindAddress := os.Getenv("API_ADDRESS")
+	if apiBindAddress == "" {
+		apiBindAddress = ":8015"
+	}
+
+	db := store.New()
+	dockerFact := facts.NewDocker()
+	psFact := facts.NewProcess(dockerFact)
+	netstat := &facts.NetstatProvider{}
+	factProvider := facts.NewFacter(
+		"",
+		"/",
+		"https://myip.bleemeo.com",
+	)
+	factProvider.AddCallback(dockerFact.DockerFact)
+	factProvider.SetFact("installation_format", "golang")
+	factProvider.SetFact("statsd_enabled", "false")
+	coll := collector.New(db.Accumulator())
+	disc := discovery.New(
+		discovery.NewDynamic(psFact, netstat, dockerFact),
+		coll,
+		nil,
+		db.Accumulator(),
+	)
+	api := api.New(db, dockerFact, psFact, factProvider, apiBindAddress, disc)
+
+	coll.AddInput(panicOnError(system.New()), "system")
+	coll.AddInput(panicOnError(process.New()), "process")
+	coll.AddInput(panicOnError(cpu.New()), "cpu")
+	coll.AddInput(panicOnError(mem.New()), "mem")
+	coll.AddInput(panicOnError(swap.New()), "swap")
+	coll.AddInput(panicOnError(net.New(
+		[]string{
+			"docker",
+			"lo",
+			"veth",
+			"virbr",
+			"vnet",
+			"isatap",
+		},
+	)),
+		"net",
+	)
+	coll.AddInput(panicOnError(disk.New("/", nil)), "disk")
 	coll.AddInput(panicOnError(diskio.New(
 		[]string{
 			"sd?",
 			"nvme.*",
 		},
-	)))
-	coll.AddInput(panicOnError(docker.New()))
+	)), "diskio")
+
+	dockerInputPresent := false
+	dockerInputID := 0
+	discoveryTrigger := debouncer.New(
+		func(ctx context.Context) {
+			_, err := disc.Discovery(ctx, 0)
+			if err != nil {
+				log.Printf("DBG: error during discovery: %v", err)
+			}
+			hasConnection := dockerFact.HasConnection(ctx)
+			if hasConnection && !dockerInputPresent {
+				i, err := docker.New()
+				if err != nil {
+					log.Printf("DBG: error when creating Docker input: %v", err)
+				} else {
+					log.Printf("DBG2: Enable Docker metrics")
+					dockerInputID = coll.AddInput(i, "docker")
+					dockerInputPresent = true
+				}
+			} else if !hasConnection && dockerInputPresent {
+				log.Printf("DBG2: Disable Docker metrics")
+				coll.RemoveInput(dockerInputID)
+				dockerInputPresent = false
+			}
+		},
+		10*time.Second,
+	)
+	discoveryTrigger.Trigger()
 
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
@@ -93,11 +149,51 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
+		discoveryTrigger.Run(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				discoveryTrigger.Trigger()
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for {
+			select {
+			case ev := <-dockerFact.Events():
+				if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
+					discoveryTrigger.Trigger()
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		dockerFact.Run(ctx)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		coll.Run(ctx)
 	}()
-	go stats(db)
 
-	log.Println("Starting API")
 	go api.Run()
 
 	wg.Add(1)
@@ -107,8 +203,16 @@ func main() {
 	}()
 
 	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT)
-	<-c
-	cancel()
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	for s := range c {
+		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
+			cancel()
+			break
+		}
+		if s == syscall.SIGHUP {
+			discoveryTrigger.Trigger()
+		}
+	}
+	disc.Close()
 	wg.Wait()
 }

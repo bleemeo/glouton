@@ -1,11 +1,18 @@
 package api
 
+//go:generate go run github.com/99designs/gqlgen
+
 import (
 	"context"
+	"log"
+	"sort"
+	"strings"
 	"time"
 
+	"agentgo/types"
+
 	"github.com/vektah/gqlparser/gqlerror"
-) // THIS CODE IS A STARTING POINT ONLY. IT WILL NOT BE UPDATED WITH SCHEMA CHANGES.
+)
 
 type Resolver struct {
 	api *API
@@ -17,19 +24,35 @@ func (r *Resolver) Query() QueryResolver {
 
 type queryResolver struct{ *Resolver }
 
-func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metric, error) {
+// Metrics returns a list of metrics
+// They can be filtered with an array of metrics which contains an array of labels
+func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve metrics at this moment. Please try later")
 	}
-	metricFilters := map[string]string{}
-	if len(input.Labels) > 0 {
-		for _, filter := range input.Labels {
-			metricFilters[filter.Key] = filter.Value
+	metrics := []types.Metric{}
+	if len(metricsFilter) > 0 {
+		for _, mf := range metricsFilter {
+			if len(mf.Labels) > 0 {
+				metricFilters := map[string]string{}
+				for _, label := range mf.Labels {
+					metricFilters[label.Key] = label.Value
+				}
+				newMetrics, err := r.api.db.Metrics(metricFilters)
+				if err != nil {
+					log.Printf("DBG2: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve metrics")
+				}
+				metrics = append(metrics, newMetrics...)
+			}
 		}
-	}
-	metrics, errMetrics := r.api.db.Metrics(metricFilters)
-	if errMetrics != nil {
-		return nil, gqlerror.Errorf("Can not retrieve metrics")
+	} else {
+		var err error
+		metrics, err = r.api.db.Metrics(map[string]string{})
+		if err != nil {
+			log.Printf("DBG2: %v", err)
+			return nil, gqlerror.Errorf("Can not retrieve metrics")
+		}
 	}
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {
@@ -43,25 +66,44 @@ func (r *queryResolver) Metrics(ctx context.Context, input LabelsInput) ([]*Metr
 	}
 	return metricsRes, nil
 }
-func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start string, end string) ([]*Metric, error) {
+
+// Points returns metrics's points between a time interval
+// This interval could be between a start and end dates or X minutes from now
+// Metrics can also be filtered
+func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
 	if r.api.db == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
-	metricFilters := map[string]string{}
-	if len(input.Labels) > 0 {
-		for _, filter := range input.Labels {
-			metricFilters[filter.Key] = filter.Value
+	metrics := []types.Metric{}
+	if len(metricsFilter) > 0 {
+		for _, mf := range metricsFilter {
+			if len(mf.Labels) > 0 {
+				metricFilters := map[string]string{}
+				for _, label := range mf.Labels {
+					metricFilters[label.Key] = label.Value
+				}
+				newMetrics, err := r.api.db.Metrics(metricFilters)
+				if err != nil {
+					log.Printf("DBG2: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve metrics")
+				}
+				metrics = append(metrics, newMetrics...)
+			}
 		}
 	} else {
-		return nil, gqlerror.Errorf("Please add at least one metric filter")
+		return nil, gqlerror.Errorf("Can not retrieve points for every metrics")
 	}
-	metrics, errMetrics := r.api.db.Metrics(metricFilters)
-	layout := "2006-01-02T15:04:05.000Z"
-	timeStart, errTimeStart := time.Parse(layout, start)
-	timeEnd, errTimeEnd := time.Parse(layout, end)
-	if errMetrics != nil || errTimeStart != nil || errTimeEnd != nil {
-		return nil, gqlerror.Errorf("Can not retrieve points")
+	finalStart := ""
+	finalEnd := ""
+	if minutes != 0 {
+		finalEnd = time.Now().UTC().Format(time.RFC3339)
+		finalStart = time.Now().UTC().Add(time.Duration(-minutes) * time.Minute).Format(time.RFC3339)
+	} else {
+		finalStart = start
+		finalEnd = end
 	}
+	timeStart, _ := time.Parse(time.RFC3339, finalStart)
+	timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
 	metricsRes := []*Metric{}
 	for _, metric := range metrics {
 		metricRes := &Metric{}
@@ -70,8 +112,9 @@ func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start str
 			label := &Label{Key: key, Value: value}
 			metricRes.Labels = append(metricRes.Labels, label)
 		}
-		points, errPoints := metric.Points(timeStart, timeEnd)
-		if errPoints != nil {
+		points, err := metric.Points(timeStart, timeEnd)
+		if err != nil {
+			log.Printf("DBG2: %v", err)
 			return nil, gqlerror.Errorf("Can not retrieve points")
 		}
 		for _, point := range points {
@@ -81,4 +124,213 @@ func (r *queryResolver) Points(ctx context.Context, input LabelsInput, start str
 		metricsRes = append(metricsRes, metricRes)
 	}
 	return metricsRes, nil
+}
+
+// Containers returns containers information
+// These containers could be paginated and filtered by a search input or allContainers flag
+// If there is a search filter, it will check search is contained in container's name / Image name / ID / command
+func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error) {
+	if r.api.dockerFact == nil {
+		return nil, gqlerror.Errorf("Can not retrieve containers at this moment. Please try later")
+	}
+	containers, err := r.api.dockerFact.Containers(ctx, time.Hour, false)
+	if err != nil {
+		log.Printf("DBG2: %v", err)
+		return nil, gqlerror.Errorf("Can not retrieve Containers")
+	}
+	containersRes := []*Container{}
+	containerMetrics := []string{
+		"docker_container_io_write_bytes",
+		"docker_container_io_read_bytes",
+		"docker_container_net_bits_recv",
+		"docker_container_net_bits_sent",
+		"docker_container_mem_used_perc",
+		"docker_container_cpu_used",
+	}
+
+	sort.Slice(containers, func(i, j int) bool {
+		return strings.Compare(containers[i].Name(), containers[j].Name()) < 0
+	})
+	nbContainers := 0
+	nbCurrentContainers := 0
+	for _, container := range containers {
+		if allContainers || container.IsRunning() {
+			nbContainers++
+		}
+		if (allContainers || container.IsRunning()) && (strings.Contains(container.Name(), search) || strings.Contains(container.Image(), search) || strings.Contains(container.ID(), search) || strings.Contains(container.Command(), search)) {
+			nbCurrentContainers++
+			createdAt := container.CreatedAt()
+			startedAt := container.StartedAt()
+			finishedAt := container.FinishedAt()
+			c := &Container{
+				Command:     container.Command(),
+				CreatedAt:   &createdAt,
+				ID:          container.ID(),
+				Image:       container.Image(),
+				InspectJSON: container.InspectJSON(),
+				Name:        container.Name(),
+				StartedAt:   &startedAt,
+				State:       container.State(),
+				FinishedAt:  &finishedAt,
+			}
+			for _, m := range containerMetrics {
+				metricFilters := map[string]string{
+					"item":     container.Name(),
+					"__name__": m,
+				}
+				metrics, err := r.api.db.Metrics(metricFilters)
+				if err != nil {
+					log.Printf("DBG2: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve Containers")
+				}
+				if len(metrics) > 0 {
+					points, err := metrics[0].Points(time.Now().UTC().Add(-15*time.Minute), time.Now().UTC())
+					if err != nil {
+						log.Printf("DBG2: %v", err)
+						return nil, gqlerror.Errorf("Can not retrieve Containers")
+					}
+					var point float64
+					if len(points) > 0 {
+						point = points[len(points)-1].Value
+					}
+					switch m {
+					case "docker_container_io_write_bytes":
+						c.IoWriteBytes = point
+					case "docker_container_io_read_bytes":
+						c.IoReadBytes = point
+					case "docker_container_net_bits_recv":
+						c.NetBitsRecv = point
+					case "docker_container_net_bits_sent":
+						c.NetBitsSent = point
+					case "docker_container_mem_used_perc":
+						c.MemUsedPerc = point
+					case "docker_container_cpu_used":
+						c.CPUUsedPerc = point
+					}
+				}
+			}
+			containersRes = append(containersRes, c)
+		}
+	}
+	if input != nil {
+		if len(containersRes) > input.Offset {
+			to := input.Offset + input.Limit
+			if len(containersRes) <= input.Offset+input.Limit {
+				to = len(containersRes)
+			}
+			containersRes = containersRes[input.Offset:to]
+		} else if len(containersRes) <= input.Offset {
+			containersRes = []*Container{}
+		}
+	}
+	return &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers}, nil
+}
+
+// Processes returns a list of processes
+// They can be filtered by container's ID
+func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*Topinfo, error) {
+	if r.api.psFact == nil {
+		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
+	}
+	duration, _ := time.ParseDuration("1h")
+	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, duration)
+	if err != nil {
+		log.Printf("DBG2: %v", err)
+		return nil, gqlerror.Errorf("Can not retrieve processes")
+	}
+	processesRes := []*Process{}
+	for _, process := range processes {
+		if containerID == nil || *containerID == process.ContainerID {
+			p := &Process{
+				Pid:         process.PID,
+				Ppid:        process.PPID,
+				CreateTime:  process.CreateTime,
+				Cmdline:     strings.Join(process.CmdLine, " "),
+				Name:        process.Name,
+				MemoryRss:   int(process.MemoryRSS),
+				CPUPercent:  process.CPUPercent,
+				CPUTime:     process.CPUTime,
+				Status:      process.Status,
+				Username:    process.Username,
+				Executable:  process.Executable,
+				ContainerID: process.ContainerID,
+			}
+			processesRes = append(processesRes, p)
+		}
+	}
+	return &Topinfo{UpdatedAt: updatedAt, Processes: processesRes}, nil
+}
+
+// Facts returns a list of facts discovered by agent
+func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
+	if r.api.factProvider == nil {
+		return nil, gqlerror.Errorf("Can not retrieve facts at this moment. Please try later")
+	}
+	duration, _ := time.ParseDuration("1h")
+	facts, err := r.api.factProvider.Facts(ctx, duration)
+	if err != nil {
+		log.Printf("DBG2: %v", err)
+		return nil, gqlerror.Errorf("Can not retrieve facts")
+	}
+	factsRes := []*Fact{}
+	for k, v := range facts {
+		f := &Fact{
+			Name:  k,
+			Value: v,
+		}
+		factsRes = append(factsRes, f)
+	}
+	return factsRes, nil
+}
+
+// Services returns a list services discovered by agent
+// They can be filtered by active flag
+func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service, error) {
+	if r.api.disc == nil {
+		return nil, gqlerror.Errorf("Can not retrieve services at this moment. Please try later")
+	}
+	duration, _ := time.ParseDuration("1h")
+	services, err := r.api.disc.Discovery(ctx, duration)
+	if err != nil {
+		log.Printf("DBG2: %v", err)
+		return nil, gqlerror.Errorf("Can not retrieve facts")
+	}
+	servicesRes := []*Service{}
+	for _, service := range services {
+		if !isActive || service.Active {
+			netAddrs := []string{}
+			for _, addr := range service.ListenAddresses {
+				netAddrs = append(netAddrs, addr.String())
+			}
+			metrics, err := r.api.db.Metrics(map[string]string{"__name__": string(service.Name) + "_status"})
+			var point float64
+			if len(metrics) > 0 {
+				if err != nil {
+					log.Printf("DBG2: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve services")
+				}
+				finalEnd := time.Now().UTC().Format(time.RFC3339)
+				finalStart := time.Now().UTC().Add(time.Duration(-1) * time.Minute).Format(time.RFC3339)
+				timeStart, _ := time.Parse(time.RFC3339, finalStart)
+				timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
+				points, err := metrics[0].Points(timeStart, timeEnd)
+				if err != nil {
+					log.Printf("DBG2: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve services")
+				}
+				point = points[len(points)-1].Value
+			}
+			s := &Service{
+				Name:            string(service.Name),
+				ContainerID:     service.ContainerID,
+				IPAddress:       service.IPAddress,
+				ListenAddresses: netAddrs,
+				ExePath:         service.ExePath,
+				Active:          service.Active,
+				Status:          point,
+			}
+			servicesRes = append(servicesRes, s)
+		}
+	}
+	return servicesRes, nil
 }

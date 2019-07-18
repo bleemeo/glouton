@@ -16,3 +16,20 @@ func (i *Input) Gather(acc telegraf.Accumulator) error {
 	err := i.Input.Gather(&i.Accumulator)
 	return err
 }
+
+// Start the ServiceInput.  The Accumulator may be retained and used until
+// Stop returns.
+func (i *Input) Start(acc telegraf.Accumulator) error {
+	i.Accumulator.Accumulator = acc
+	if si, ok := i.Input.(telegraf.ServiceInput); ok {
+		return si.Start(&i.Accumulator)
+	}
+	return nil
+}
+
+// Stop stops the services and closes any necessary channels and connections
+func (i *Input) Stop() {
+	if si, ok := i.Input.(telegraf.ServiceInput); ok {
+		si.Stop()
+	}
+}

@@ -214,7 +214,6 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 	}
 	copy(encodedPacket[8:10], buf.Bytes())
 
-	buf = new(bytes.Buffer)
 	copy(encodedPacket[16:16+len(decodedPacket.buffer)], []byte(decodedPacket.buffer))
 
 	crc32Value := crc32.ChecksumIEEE(encodedPacket)
@@ -349,9 +348,6 @@ func Run(ctx context.Context, port string, cb callback, useTLS bool) {
 		if err != nil {
 			log.Printf("Nrpe: setDeadline on connection failed: %v", err)
 			break
-		}
-		if errConn, ok := err.(net.Error); ok && errConn.Timeout() {
-			continue
 		}
 
 		wg.Add(1)

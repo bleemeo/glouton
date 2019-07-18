@@ -50,15 +50,15 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"net\" input")
+		err = errors.New("input net is not enabled in Telegraf")
 	}
 	return
 }
 
-func (nt netTransformer) renameGlobal(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
-	newMeasurement = measurement
-	item, ok := tags["interface"]
-	newTags = make(map[string]string)
+func (nt netTransformer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+	newContext.Measurement = originalContext.Measurement
+	item, ok := originalContext.Tags["interface"]
+	newContext.Tags = make(map[string]string)
 	if !ok {
 		drop = true
 		return
@@ -69,11 +69,11 @@ func (nt netTransformer) renameGlobal(measurement string, tags map[string]string
 			return
 		}
 	}
-	newTags["item"] = item
+	newContext.Tags["item"] = item
 	return
 }
 
-func (nt netTransformer) transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
+func (nt netTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	for metricName, value := range fields {
 		if metricName == "bytes_sent" {
 			delete(fields, "bytes_sent")

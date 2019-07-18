@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<!-- For now, We fetch Bleemeo Agent UI from http://localhost:3015/ for development purpose.
+But for a release, we have to serve UI from '/'. See line 52 at api.go that explains why I can not serve Javascript directory -->
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>Bleemeo Panel</title>
+  <link rel="icon" href="/static/img/logo.png" />
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css"
+    integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
+  <script type="text/javascript" src="/static/js/panel-bleemeo-main.js"></script>
+</head>
+
+<body>
+  <div id="main" />
+</body>
+<script type="text/javascript">
+  window.BleemeoConfig={
+    "STATIC_CDN_URL": "/"
+  };
+  window.AgentPanel.start()
+</script>
+
+</html>

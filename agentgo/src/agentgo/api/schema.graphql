@@ -9,12 +9,68 @@ type Point {
 }
 
 type Metric {
+  name: String!
   labels: [Label!]!
   points: [Point!]
 }
 
-input LabelsInput {
-  labels: [LabelInput]!
+type Container {
+  command: String!
+  createdAt: Time
+  id: String!
+  image: String!
+  inspectJSON: String!
+  name: String!
+  startedAt: Time
+  state: String!
+  finishedAt: Time
+  ioWriteBytes: Float!
+  ioReadBytes: Float!
+  netBitsRecv: Float!
+  netBitsSent: Float!
+  memUsedPerc: Float!
+  cpuUsedPerc: Float!
+}
+
+type Containers {
+  count: Int!
+  currentCount: Int!
+  containers: [Container!]!
+}
+
+type Process {
+  pid: Int!
+  ppid: Int!
+  create_time: Time!
+  cmdline: String!
+  name: String!
+  memory_rss: Int!
+  cpu_percent: Float!
+  cpu_time: Float!
+  status: String!
+  username: String!
+  executable: String!
+  container_id: String!
+}
+
+type Topinfo {
+  updatedAt: Time!
+  processes: [Process!]!
+}
+
+type Service {
+  name: String!
+  containerId: String!
+  ipAddress: String!
+  listenAddresses: [String!]!
+  exePath: String!
+  active: Boolean!
+  status: Float!
+}
+
+type Fact {
+  name: String!
+  value: String!
 }
 
 input LabelInput {
@@ -22,9 +78,22 @@ input LabelInput {
   value: String!
 }
 
+input MetricInput {
+  labels: [LabelInput!]!
+}
+
+input Pagination {
+  offset: Int!
+  limit: Int!
+}
+
 type Query {
-  metrics(input: LabelsInput!): [Metric!]!
-  points(input: LabelsInput!, start: String!, end: String!): [Metric!]!
+  metrics(metricsFilter: [MetricInput!]!): [Metric!]!
+  points(metricsFilter: [MetricInput!]!, start: String!, end: String!, minutes: Int!): [Metric!]!
+  containers(input: Pagination, allContainers: Boolean!, search: String!): Containers!
+  processes(containerId: String): Topinfo!
+  facts: [Fact!]!
+  services(isActive: Boolean!): [Service!]!
 }
 
 scalar Time

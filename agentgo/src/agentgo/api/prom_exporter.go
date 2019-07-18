@@ -4,6 +4,7 @@ import (
 	"agentgo/types"
 	"fmt"
 	"net/http"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -18,17 +19,18 @@ func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 	for _, p := range points {
 		ok = true
 		if p.Time.After(point.Time) {
-			point = p
+			point = p.Point
 		}
 	}
 	return
 }
 
 func formatLabels(labels map[string]string) string {
+	invalidNameChar := regexp.MustCompile("[^a-zA-Z0-9_]")
 	r := strings.NewReplacer("\\", "\\\\", "\"", "\\\"", "\n", "\\n")
 	part := make([]string, 0, len(labels))
 	for k, v := range labels {
-		part = append(part, fmt.Sprintf("%s=\"%s\"", k, r.Replace(v)))
+		part = append(part, fmt.Sprintf("%s=\"%s\"", invalidNameChar.ReplaceAllString(k, "_"), r.Replace(v)))
 	}
 	if len(part) == 0 {
 		return ""
@@ -38,6 +40,7 @@ func formatLabels(labels map[string]string) string {
 }
 
 func (a *API) promExporter(w http.ResponseWriter, _ *http.Request) {
+	invalidNameChar := regexp.MustCompile("[^a-zA-Z0-9_]")
 	metrics, err := a.db.Metrics(nil)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -55,7 +58,13 @@ func (a *API) promExporter(w http.ResponseWriter, _ *http.Request) {
 		if !ok {
 			continue
 		}
-		lines = append(lines, fmt.Sprintf("%s%s %f %d\n", name, formatLabels(labels), lastPoint.Value, lastPoint.Time.UnixNano()/1000000))
+		lines = append(lines, fmt.Sprintf(
+			"%s%s %f %d\n",
+			invalidNameChar.ReplaceAllString(name, "_"),
+			formatLabels(labels),
+			lastPoint.Value,
+			lastPoint.Time.UnixNano()/1000000,
+		))
 	}
 	sort.Strings(lines)
 	fmt.Fprintf(w, strings.Join(lines, ""))

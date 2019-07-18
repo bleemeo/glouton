@@ -42,16 +42,19 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"cpu\" input")
+		err = errors.New("input cpu not enabled in Telegraf")
 	}
 	return
 }
 
-func renameGlobal(measurement string, tags map[string]string) (string, map[string]string, bool) {
-	return measurement, nil, false
+func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+	return internal.GatherContext{
+		Measurement: originalContext.Measurement,
+		Tags:        nil,
+	}, false
 }
 
-func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	finalFields := make(map[string]float64)
 	var cpuOther float64
 	var cpuUsed float64

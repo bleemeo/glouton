@@ -35,7 +35,7 @@ func New(url string) (i telegraf.Input, err error) {
 		if ok {
 			slice := append(make([]string, 0), url)
 			nginxInput.Urls = slice
-			nginxInput.InsecureSkipVerify = false
+			nginxInput.InsecureSkipVerify = true
 			i = &internal.Input{
 				Input: nginxInput,
 				Accumulator: internal.Accumulator{
@@ -44,27 +44,25 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"nginx\" input type is not nginx.Nginx")
+			err = errors.New("input nginx is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"nginx\" input")
+		err = errors.New("input nginx is not enabled in Telegraf")
 	}
 	return
 }
 
-func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
-	for metricName := range fields {
+func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	newFields := make(map[string]float64)
+	for metricName, value := range fields {
 		switch metricName {
-		case "accepts", "handled", "requests", "reading", "writing", "waiting", "active":
-			// Keep those metrics
+		case "accepts":
+			newFields["nginx_connections_accepted"] = value
+		case "handled", "active", "waiting", "reading", "writing":
+			newFields["connection_"+metricName] = value
 		default:
-			delete(fields, metricName)
+			newFields[metricName] = value
 		}
 	}
-	value, ok := fields["accepts"]
-	if ok {
-		delete(fields, "accepts")
-		fields["connections_accepted"] = value
-	}
-	return fields
+	return newFields
 }

@@ -6,7 +6,7 @@
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
-// http://www.docker.org/licenses/LICENSE-2.0
+// http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
 // distributed under the License is distributed on an "AS IS" BASIS,
@@ -43,21 +43,21 @@ func New() (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("Telegraf \"docker\" input type is not docker.Docker")
+			err = errors.New("input Docker is not the expected type")
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"docker\" input")
+		err = errors.New("input Docker not enabled in Telegraf")
 	}
 	return
 }
 
-func renameGlobal(measurement string, tags map[string]string) (newMeasurement string, newTags map[string]string, drop bool) {
-	newMeasurement = measurement
-	newTags = make(map[string]string)
-	if name, ok := tags["container_name"]; ok {
-		newTags["item"] = name
+func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+	newContext.Measurement = originalContext.Measurement
+	newContext.Tags = make(map[string]string)
+	if name, ok := originalContext.Tags["container_name"]; ok {
+		newContext.Tags["item"] = name
 	}
-	if enable, ok := tags["bleemeo.enable"]; ok {
+	if enable, ok := originalContext.Tags["bleemeo.enable"]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
 		case "0", "off", "false", "no":
@@ -65,27 +65,27 @@ func renameGlobal(measurement string, tags map[string]string) (newMeasurement st
 			return
 		}
 	}
-	switch measurement {
+	switch originalContext.Measurement {
 	case "docker_container_cpu":
-		if tags["cpu"] != "cpu-total" {
+		if originalContext.Tags["cpu"] != "cpu-total" {
 			drop = true
 		}
 	case "docker_container_net":
-		if tags["network"] != "total" {
+		if originalContext.Tags["network"] != "total" {
 			drop = true
 		}
 	case "docker_container_blkio":
-		if tags["device"] != "total" {
+		if originalContext.Tags["device"] != "total" {
 			drop = true
 		}
-		newMeasurement = "docker_container_io"
+		newContext.Measurement = "docker_container_io"
 	}
 	return
 }
 
-func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
-	switch measurement {
+	switch currentContext.Measurement {
 	case "docker":
 		if value, ok := fields["n_containers"]; ok {
 			newFields["containers"] = value

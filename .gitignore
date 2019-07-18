@@ -22,3 +22,5 @@ agentgo/libcabi.h
 .vscode/
 /VERSION
 .vscode
+/agent-go
+*-packr.go

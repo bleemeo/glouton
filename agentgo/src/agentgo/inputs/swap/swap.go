@@ -37,12 +37,12 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("Telegraf don't have \"swap\" input")
+		err = errors.New("input swap is not enabled in Telegraf")
 	}
 	return
 }
 
-func transformMetrics(measurement string, fields map[string]float64, tags map[string]string) map[string]float64 {
+func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	if value, ok := fields["used_percent"]; ok {
 		delete(fields, "used_percent")
 		fields["used_perc"] = value
