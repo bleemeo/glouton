@@ -50,15 +50,16 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
 
-	log.Println(boxAssets.List())
-
 	router.HandleFunc("/metrics", api.promExporter)
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		html, _ := boxHTML.Find("index.html")
-		logError(w.Write(html))
+		_, err := w.Write(html)
+		if err != nil {
+			log.Printf("DBG2: fail to serve index.html: %v", err)
+		}
 	})
 	api.router = router
 	return api
@@ -71,10 +72,4 @@ func (api API) Run(_ context.Context) error {
 		return err
 	}
 	return nil
-}
-
-func logError(_ int, err error) {
-	if err != nil {
-		log.Printf("DBG2: %v", err)
-	}
 }

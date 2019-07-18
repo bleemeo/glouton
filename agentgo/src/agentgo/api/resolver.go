@@ -40,7 +40,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 				}
 				newMetrics, err := r.api.db.Metrics(metricFilters)
 				if err != nil {
-					log.Printf("DBG2: %v", err)
+					log.Printf("DBG2: Can not retrieve metrics: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve metrics")
 				}
 				metrics = append(metrics, newMetrics...)
@@ -50,7 +50,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 		var err error
 		metrics, err = r.api.db.Metrics(map[string]string{})
 		if err != nil {
-			log.Printf("DBG2: %v", err)
+			log.Printf("DBG2: Can not retrieve metrics: %v", err)
 			return nil, gqlerror.Errorf("Can not retrieve metrics")
 		}
 	}
@@ -84,7 +84,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 				}
 				newMetrics, err := r.api.db.Metrics(metricFilters)
 				if err != nil {
-					log.Printf("DBG2: %v", err)
+					log.Printf("DBG2: Can not retrieve metrics: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve metrics")
 				}
 				metrics = append(metrics, newMetrics...)
@@ -114,7 +114,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 		}
 		points, err := metric.Points(timeStart, timeEnd)
 		if err != nil {
-			log.Printf("DBG2: %v", err)
+			log.Printf("DBG2: Can not retrieve points: %v", err)
 			return nil, gqlerror.Errorf("Can not retrieve points")
 		}
 		for _, point := range points {
@@ -135,8 +135,8 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	}
 	containers, err := r.api.dockerFact.Containers(ctx, time.Hour, false)
 	if err != nil {
-		log.Printf("DBG2: %v", err)
-		return nil, gqlerror.Errorf("Can not retrieve Containers")
+		log.Printf("DBG2: Can not retrieve containers: %v", err)
+		return nil, gqlerror.Errorf("Can not retrieve containers")
 	}
 	containersRes := []*Container{}
 	containerMetrics := []string{
@@ -180,14 +180,14 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 				}
 				metrics, err := r.api.db.Metrics(metricFilters)
 				if err != nil {
-					log.Printf("DBG2: %v", err)
-					return nil, gqlerror.Errorf("Can not retrieve Containers")
+					log.Printf("DBG2: Can not retrieve metrics: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve metrics")
 				}
 				if len(metrics) > 0 {
 					points, err := metrics[0].Points(time.Now().UTC().Add(-15*time.Minute), time.Now().UTC())
 					if err != nil {
-						log.Printf("DBG2: %v", err)
-						return nil, gqlerror.Errorf("Can not retrieve Containers")
+						log.Printf("DBG2: Can not retrieve points: %v", err)
+						return nil, gqlerror.Errorf("Can not retrieve points")
 					}
 					var point float64
 					if len(points) > 0 {
@@ -235,7 +235,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 	duration, _ := time.ParseDuration("1h")
 	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, duration)
 	if err != nil {
-		log.Printf("DBG2: %v", err)
+		log.Printf("DBG2: Can not retrieve processes: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve processes")
 	}
 	processesRes := []*Process{}
@@ -269,7 +269,7 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 	duration, _ := time.ParseDuration("1h")
 	facts, err := r.api.factProvider.Facts(ctx, duration)
 	if err != nil {
-		log.Printf("DBG2: %v", err)
+		log.Printf("DBG2: Can not retrieve facts: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve facts")
 	}
 	factsRes := []*Fact{}
@@ -292,7 +292,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 	duration, _ := time.ParseDuration("1h")
 	services, err := r.api.disc.Discovery(ctx, duration)
 	if err != nil {
-		log.Printf("DBG2: %v", err)
+		log.Printf("DBG2: Can not retrieve facts: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve facts")
 	}
 	servicesRes := []*Service{}
@@ -306,7 +306,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 			var point float64
 			if len(metrics) > 0 {
 				if err != nil {
-					log.Printf("DBG2: %v", err)
+					log.Printf("DBG2: Can not retrieve services: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve services")
 				}
 				finalEnd := time.Now().UTC().Format(time.RFC3339)
@@ -315,7 +315,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
 				points, err := metrics[0].Points(timeStart, timeEnd)
 				if err != nil {
-					log.Printf("DBG2: %v", err)
+					log.Printf("DBG2: Can not retrieve services: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve services")
 				}
 				point = points[len(points)-1].Value
