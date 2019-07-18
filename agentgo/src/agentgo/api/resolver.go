@@ -232,8 +232,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 	if r.api.psFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
 	}
-	duration, _ := time.ParseDuration("1h")
-	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, duration)
+	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, time.Hour)
 	if err != nil {
 		log.Printf("DBG2: Can not retrieve processes: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve processes")
@@ -266,8 +265,7 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 	if r.api.factProvider == nil {
 		return nil, gqlerror.Errorf("Can not retrieve facts at this moment. Please try later")
 	}
-	duration, _ := time.ParseDuration("1h")
-	facts, err := r.api.factProvider.Facts(ctx, duration)
+	facts, err := r.api.factProvider.Facts(ctx, time.Hour)
 	if err != nil {
 		log.Printf("DBG2: Can not retrieve facts: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve facts")
@@ -289,8 +287,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 	if r.api.disc == nil {
 		return nil, gqlerror.Errorf("Can not retrieve services at this moment. Please try later")
 	}
-	duration, _ := time.ParseDuration("1h")
-	services, err := r.api.disc.Discovery(ctx, duration)
+	services, err := r.api.disc.Discovery(ctx, time.Hour)
 	if err != nil {
 		log.Printf("DBG2: Can not retrieve facts: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve facts")
