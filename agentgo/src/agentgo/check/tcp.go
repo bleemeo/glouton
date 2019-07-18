@@ -18,8 +18,9 @@ type TCPCheck struct {
 	*baseCheck
 	mainAddress string
 
-	send   []byte
-	expect []byte
+	send     []byte
+	expect   []byte
+	closeMsg []byte
 }
 
 // NewTCP create a new TCP check.
@@ -28,16 +29,18 @@ type TCPCheck struct {
 //
 // If set, on the main address it will send specified byte and expect the specified byte.
 //
-// For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
-// be immediately run.
-func NewTCP(address string, persitentAddresses []string, send []byte, expect []byte, metricName string, item string, acc accumulator) *TCPCheck {
+// On tcpAddresses (which are supposed to contains addresse) a TCP connection is openned and closed on each check.
+//
+// If persistentConnection is set, a persistent TCP connection will be openned to detect service incident quickyl.
+func NewTCP(address string, tcpAddresses []string, persistentConnection bool, send []byte, expect []byte, closeMsg []byte, metricName string, item string, acc accumulator) *TCPCheck {
 
 	tc := &TCPCheck{
 		mainAddress: address,
 		send:        send,
 		expect:      expect,
+		closeMsg:    closeMsg,
 	}
-	tc.baseCheck = newBase(address, persitentAddresses, true, tc.doCheck, metricName, item, acc)
+	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, tc.doCheck, metricName, item, acc)
 	return tc
 }
 
@@ -45,10 +48,10 @@ func (tc *TCPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	if tc.mainAddress == "" {
 		return types.StatusDescription{}
 	}
-	return checkTCP(ctx, tc.mainAddress, tc.send, tc.expect)
+	return checkTCP(ctx, tc.mainAddress, tc.send, tc.expect, tc.closeMsg)
 }
 
-func checkTCP(ctx context.Context, address string, send []byte, expect []byte) types.StatusDescription {
+func checkTCP(ctx context.Context, address string, send []byte, expect []byte, closeMsg []byte) types.StatusDescription {
 	_, portStr, err := net.SplitHostPort(address)
 	if err != nil {
 		return types.StatusDescription{
@@ -132,6 +135,22 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte) t
 				StatusDescription: fmt.Sprintf("TCP port %d, unexpected response %#v", port, string(firstBytes)),
 			}
 		}
+	}
+
+	if len(closeMsg) > 0 {
+		// Write the close message, but ignore any errors
+		_, _ = conn.Write(closeMsg)
+		readBuffer := make([]byte, 4096)
+		err = conn.SetDeadline(time.Now().Add(1 * time.Second))
+		if err != nil {
+			log.Printf("DBG: Unable to set Deadline: %v", err)
+			return types.StatusDescription{
+				CurrentStatus:     types.StatusUnknown,
+				StatusDescription: "Checker error. Unable to set Deadline",
+			}
+		}
+		// Give a 1 second delay for the server to close the connection
+		_, _ = conn.Read(readBuffer)
 	}
 
 	return types.StatusDescription{

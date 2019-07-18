@@ -49,10 +49,23 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	switch service.Name {
-	case MemcachedService, RabbitMQService, RedisService, ZookeeperService:
+	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
 		d.createTCPCheck(service, di, primaryIP, tcpAddresses)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
 		d.createHTTPCheck(service, di, primaryIP, tcpAddresses)
+	case NTPService:
+		if primaryIP != "" {
+			check := check.NewNTP(
+				fmt.Sprintf("%s:%d", primaryIP, di.ServicePort),
+				tcpAddresses,
+				fmt.Sprintf("%s_status", service.Name),
+				service.ContainerName,
+				d.acc,
+			)
+			d.addCheck(check.Run, service)
+		} else {
+			d.createTCPCheck(service, di, primaryIP, tcpAddresses)
+		}
 	default:
 		d.createTCPCheck(service, di, primaryIP, tcpAddresses)
 	}
@@ -65,8 +78,12 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 		primaryAddress = fmt.Sprintf("%s:%d", primaryIP, di.ServicePort)
 	}
 
-	var tcpSend, tcpExpect []byte
+	var tcpSend, tcpExpect, tcpClose []byte
 	switch service.Name {
+	case DovecoteService:
+		tcpSend = []byte("001 NOOP\n")
+		tcpExpect = []byte("001 OK")
+		tcpClose = []byte("002 LOGOUT\n")
 	case MemcachedService:
 		tcpSend = []byte("version\r\n")
 		tcpExpect = []byte("VERSION")
@@ -84,8 +101,10 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 		tcpCheck := check.NewTCP(
 			primaryAddress,
 			tcpAddresses,
+			!di.DisablePersistentConnection,
 			tcpSend,
 			tcpExpect,
+			tcpClose,
 			fmt.Sprintf("%s_status", service.Name),
 			service.ContainerName,
 			d.acc,

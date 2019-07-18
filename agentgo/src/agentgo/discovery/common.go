@@ -158,6 +158,9 @@ var (
 			ServicePort:     389,
 			ServiceProtocol: "tcp",
 		},
+		OpenVPNService: {
+			DisablePersistentConnection: true,
+		},
 		PostfixService: {
 			ServicePort:     25,
 			ServiceProtocol: "tcp",
@@ -196,7 +199,8 @@ var (
 )
 
 type discoveryInfo struct {
-	ServicePort     int
-	ServiceProtocol string // "tcp", "udp" or "unix"
-	IgnoreHighPort  bool
+	ServicePort                 int
+	ServiceProtocol             string // "tcp", "udp" or "unix"
+	IgnoreHighPort              bool
+	DisablePersistentConnection bool
 }

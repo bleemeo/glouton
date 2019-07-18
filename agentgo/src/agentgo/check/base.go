@@ -147,7 +147,7 @@ func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescriptio
 		if addr == bc.mainTCPAddress {
 			continue
 		}
-		if subResult := checkTCP(ctx, addr, nil, nil); subResult.CurrentStatus != types.StatusOk {
+		if subResult := checkTCP(ctx, addr, nil, nil, nil); subResult.CurrentStatus != types.StatusOk {
 			return subResult
 		} else if !result.CurrentStatus.IsSet() {
 			result = subResult
