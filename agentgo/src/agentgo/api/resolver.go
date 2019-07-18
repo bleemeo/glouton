@@ -304,7 +304,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 			}
 			metrics, err := r.api.db.Metrics(map[string]string{"__name__": string(service.Name) + "_status"})
 			var point float64
-			if metrics != nil && len(metrics) > 0 {
+			if len(metrics) > 0 {
 				if err != nil {
 					log.Printf("DBG2: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve services")

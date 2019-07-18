@@ -58,7 +58,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		html, _ := boxHTML.Find("index.html")
-		w.Write(html)
+		logError(w.Write(html))
 	})
 	api.router = router
 	return api
@@ -69,5 +69,11 @@ func (api API) Run() {
 	log.Printf("Starting API on %s", api.bindAddress)
 	if err := http.ListenAndServe(api.bindAddress, api.router); err != http.ErrServerClosed {
 		log.Printf("Failed to start API server: %v", err)
+	}
+}
+
+func logError(_ int, err error) {
+	if err != nil {
+		log.Printf("DBG2: %v", err)
 	}
 }
