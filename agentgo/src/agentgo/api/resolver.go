@@ -303,18 +303,22 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				netAddrs = append(netAddrs, addr.String())
 			}
 			metrics, err := r.api.db.Metrics(map[string]string{"__name__": string(service.Name) + "_status"})
-			if err != nil {
-				log.Printf("DBG2: %v", err)
-				return nil, gqlerror.Errorf("Can not retrieve services")
-			}
-			finalEnd := time.Now().UTC().Format(time.RFC3339)
-			finalStart := time.Now().UTC().Add(time.Duration(-1) * time.Minute).Format(time.RFC3339)
-			timeStart, _ := time.Parse(time.RFC3339, finalStart)
-			timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
-			points, err := metrics[0].Points(timeStart, timeEnd)
-			if err != nil {
-				log.Printf("DBG2: %v", err)
-				return nil, gqlerror.Errorf("Can not retrieve services")
+			var point float64
+			if metrics != nil && len(metrics) > 0 {
+				if err != nil {
+					log.Printf("DBG2: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve services")
+				}
+				finalEnd := time.Now().UTC().Format(time.RFC3339)
+				finalStart := time.Now().UTC().Add(time.Duration(-1) * time.Minute).Format(time.RFC3339)
+				timeStart, _ := time.Parse(time.RFC3339, finalStart)
+				timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
+				points, err := metrics[0].Points(timeStart, timeEnd)
+				if err != nil {
+					log.Printf("DBG2: %v", err)
+					return nil, gqlerror.Errorf("Can not retrieve services")
+				}
+				point = points[len(points)-1].Value
 			}
 			s := &Service{
 				Name:            string(service.Name),
@@ -323,7 +327,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				ListenAddresses: netAddrs,
 				ExePath:         service.ExePath,
 				Active:          service.Active,
-				Status:          points[len(points)-1].Value,
+				Status:          point,
 			}
 			servicesRes = append(servicesRes, s)
 		}
