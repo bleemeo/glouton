@@ -31,7 +31,7 @@ type storeInterface interface {
 	Metrics(filters map[string]string) ([]types.Metric, error)
 }
 
-func response(command string) (string, int16) {
+func response(ctx context.Context, command string) (string, int16) {
 	answer := command + " ok"
 	resultCode := int16(1)
 	return answer, resultCode
