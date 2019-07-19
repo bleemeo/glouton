@@ -107,6 +107,15 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 	defer conn.Close()
 
+	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
+	if err != nil {
+		log.Printf("DBG: Unable to set Deadline: %v", err)
+		return types.StatusDescription{
+			CurrentStatus:     types.StatusUnknown,
+			StatusDescription: "Checker error. Unable to set Deadline",
+		}
+	}
+
 	dst, err := net.ResolveUDPAddr("udp", nc.mainAddress)
 	if err != nil {
 		log.Printf("DBG: Unable to resolve UDP address: %v", err)
