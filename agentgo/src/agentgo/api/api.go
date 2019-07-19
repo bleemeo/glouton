@@ -65,11 +65,12 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 }
 
 // Run : Starts our API
-func (api API) Run() {
+func (api API) Run(_ context.Context) error {
 	log.Printf("Starting API on %s", api.bindAddress)
 	if err := http.ListenAndServe(api.bindAddress, api.router); err != http.ErrServerClosed {
-		log.Printf("Failed to start API server: %v", err)
+		return err
 	}
+	return nil
 }
 
 func logError(_ int, err error) {

@@ -75,7 +75,7 @@ func (c *Collector) RemoveInput(id int) {
 }
 
 // Run will run the collections until context is cancelled
-func (c *Collector) Run(ctx context.Context) {
+func (c *Collector) Run(ctx context.Context) error {
 	c.sleepToAlign(10 * time.Second)
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -84,7 +84,7 @@ func (c *Collector) Run(ctx context.Context) {
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
-			return
+			return nil
 		}
 	}
 }

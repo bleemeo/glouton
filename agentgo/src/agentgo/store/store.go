@@ -31,20 +31,21 @@ func New() *Store {
 }
 
 // Run will run the store until context is cancelled
-func (s *Store) Run(ctx context.Context) {
+func (s *Store) Run(ctx context.Context) error {
 	for {
 		s.run()
 		select {
 		case <-time.After(300 * time.Second):
 		case <-ctx.Done():
-			return
+			return nil
 		}
 	}
 }
 
 // Close closes the store. Currently noop, but may write to persistence later
-func (s *Store) Close() {
+func (s *Store) Close() error {
 	log.Println("Store closed")
+	return nil
 }
 
 // Metrics return a list of Metric matching given labels filter

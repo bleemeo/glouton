@@ -1,6 +1,7 @@
 package discovery
 
 import (
+	"agentgo/task"
 	"agentgo/types"
 	"context"
 	"log"
@@ -9,6 +10,11 @@ import (
 
 	"github.com/influxdata/telegraf"
 )
+
+// Accumulator will gather metrics point for added checks
+type Accumulator interface {
+	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
+}
 
 // Discovery implement the full discovery mecanisme. It will take informations
 // from both the dynamic discovery (service currently running) and previously
@@ -22,10 +28,11 @@ type Discovery struct {
 	servicesMap         map[nameContainer]Service
 	lastDiscoveryUpdate time.Time
 
-	activeInput           map[nameContainer]int
-	activeCheckCancelFunc map[nameContainer]func()
-	coll                  Collector
-	acc                   Accumulator
+	acc          Accumulator
+	activeInput  map[nameContainer]int
+	activeCheck  map[nameContainer]int
+	coll         Collector
+	taskRegistry Registry
 }
 
 // Collector will gather metrics for added inputs
@@ -34,13 +41,14 @@ type Collector interface {
 	RemoveInput(int)
 }
 
-// Accumulator will gather metrics point for added checks
-type Accumulator interface {
-	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
+// Registry will contains checks
+type Registry interface {
+	AddTask(task task.Runner, shortName string) int
+	RemoveTask(int)
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, initialServices []Service, acc Accumulator) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, initialServices []Service, acc Accumulator) *Discovery {
 	servicesMap := make(map[nameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
 		key := nameContainer{
@@ -50,12 +58,13 @@ func New(dynamicDiscovery Discoverer, coll Collector, initialServices []Service,
 		servicesMap[key] = v
 	}
 	return &Discovery{
-		dynamicDiscovery:      dynamicDiscovery,
-		servicesMap:           servicesMap,
-		coll:                  coll,
-		acc:                   acc,
-		activeInput:           make(map[nameContainer]int),
-		activeCheckCancelFunc: make(map[nameContainer]func()),
+		dynamicDiscovery: dynamicDiscovery,
+		servicesMap:      servicesMap,
+		coll:             coll,
+		taskRegistry:     taskRegistry,
+		acc:              acc,
+		activeInput:      make(map[nameContainer]int),
+		activeCheck:      make(map[nameContainer]int),
 	}
 }
 

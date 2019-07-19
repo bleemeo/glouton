@@ -24,6 +24,7 @@ import (
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
 	"agentgo/store"
+	"agentgo/task"
 	"agentgo/version"
 
 	"github.com/influxdata/telegraf"
@@ -55,7 +56,9 @@ func main() {
 		apiBindAddress = ":8015"
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	db := store.New()
+	taskRegistry := task.NewRegistry(ctx)
 	dockerFact := facts.NewDocker()
 	psFact := facts.NewProcess(dockerFact)
 	netstat := &facts.NetstatProvider{}
@@ -71,6 +74,7 @@ func main() {
 	disc := discovery.New(
 		discovery.NewDynamic(psFact, netstat, dockerFact),
 		coll,
+		taskRegistry,
 		nil,
 		db.Accumulator(),
 	)
@@ -129,22 +133,13 @@ func main() {
 	)
 	discoveryTrigger.Trigger()
 
+	taskRegistry.AddTask(db, "store")
+	taskRegistry.AddTask(discoveryTrigger, "discovery")
+	taskRegistry.AddTask(dockerFact, "docker")
+	taskRegistry.AddTask(coll, "collector")
+	taskRegistry.AddTask(api, "api")
+
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		db.Run(ctx)
-		db.Close()
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		discoveryTrigger.Run(ctx)
-	}()
-
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -174,20 +169,6 @@ func main() {
 			}
 		}
 	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		dockerFact.Run(ctx)
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		coll.Run(ctx)
-	}()
-
-	go api.Run()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)

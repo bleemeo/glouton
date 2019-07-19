@@ -63,7 +63,7 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 }
 
 // Run execute the TCP check
-func (bc *baseCheck) Run(ctx context.Context) {
+func (bc *baseCheck) Run(ctx context.Context) error {
 	// Open connectionS to address
 	// when openned, keep checking that port stay open
 	// when port goes from open to close, back to step 1
@@ -81,7 +81,7 @@ func (bc *baseCheck) Run(ctx context.Context) {
 				bc.cancel = nil
 			}
 			bc.wg.Wait()
-			return
+			return nil
 		case <-bc.triggerC:
 			if !bc.timer.Stop() {
 				<-bc.timer.C

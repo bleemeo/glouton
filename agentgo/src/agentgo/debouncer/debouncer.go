@@ -29,7 +29,7 @@ func New(target func(context.Context), delay time.Duration) *Debouncer {
 }
 
 // Run perform the call to target() when trigger is called
-func (dd *Debouncer) Run(ctx context.Context) {
+func (dd *Debouncer) Run(ctx context.Context) error {
 	dd.run(ctx, false)
 	for ctx.Err() == nil {
 		select {
@@ -44,6 +44,7 @@ func (dd *Debouncer) Run(ctx context.Context) {
 	if !dd.timer.Stop() {
 		<-dd.timer.C
 	}
+	return nil
 }
 
 // Trigger will run the target() either immediately or after a delay if previous target() was just run.

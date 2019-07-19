@@ -160,7 +160,7 @@ func (d *DockerProvider) HasConnection(ctx context.Context) bool {
 //
 // Any error (unable to connect due to permission issue or Docker down) are not returned
 // by Run but could be retrieved with LastError
-func (d *DockerProvider) Run(ctx context.Context) {
+func (d *DockerProvider) Run(ctx context.Context) error {
 	var lastErrorNotify time.Time
 	for {
 		err := d.run(ctx)
@@ -178,7 +178,7 @@ func (d *DockerProvider) Run(ctx context.Context) {
 		case <-time.After(time.Duration(sleepDelay) * time.Second):
 		case <-ctx.Done():
 			close(d.notifyC)
-			return
+			return nil
 		}
 	}
 }

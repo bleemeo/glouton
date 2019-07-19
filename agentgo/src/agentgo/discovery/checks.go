@@ -2,7 +2,7 @@ package discovery
 
 import (
 	"agentgo/check"
-	"context"
+	"agentgo/task"
 	"fmt"
 	"log"
 )
@@ -24,10 +24,13 @@ func (d *Discovery) configureChecks(oldServices, services map[nameContainer]Serv
 }
 
 func (d *Discovery) removeCheck(key nameContainer) {
-	if cancel, ok := d.activeCheckCancelFunc[key]; ok {
+	if d.taskRegistry == nil {
+		return
+	}
+	if checkID, ok := d.activeCheck[key]; ok {
 		log.Printf("DBG2: Remove check for service %v on container %s", key.name, key.containerID)
-		cancel()
-		delete(d.activeCheckCancelFunc, key)
+		delete(d.activeCheck, key)
+		d.taskRegistry.RemoveTask(checkID)
 	}
 }
 
@@ -62,7 +65,7 @@ func (d *Discovery) createCheck(service Service) {
 				service.ContainerName,
 				d.acc,
 			)
-			d.addCheck(check.Run, service)
+			d.addCheck(check, service)
 		} else {
 			d.createTCPCheck(service, di, primaryIP, tcpAddresses)
 		}
@@ -109,7 +112,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 			service.ContainerName,
 			d.acc,
 		)
-		d.addCheck(tcpCheck.Run, service)
+		d.addCheck(tcpCheck, service)
 	} else {
 		log.Printf("DBG: No check for service type %#v", service.Name)
 	}
@@ -138,26 +141,17 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryIP
 		service.ContainerName,
 		d.acc,
 	)
-	d.addCheck(httpCheck.Run, service)
+	d.addCheck(httpCheck, service)
 }
 
-func (d *Discovery) addCheck(runFunc func(context.Context), service Service) {
-	if d.acc == nil {
+func (d *Discovery) addCheck(task task.Runner, service Service) {
+	if d.acc == nil || d.taskRegistry == nil {
 		return
 	}
 	key := nameContainer{
 		name:        service.Name,
 		containerID: service.ContainerID,
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	waitC := make(chan interface{})
-	cancelWait := func() {
-		cancel()
-		<-waitC
-	}
-	go func() {
-		defer close(waitC)
-		runFunc(ctx)
-	}()
-	d.activeCheckCancelFunc[key] = cancelWait
+	id := d.taskRegistry.AddTask(task, fmt.Sprintf("check for %s", service.Name))
+	d.activeCheck[key] = id
 }
