@@ -15,6 +15,8 @@ import (
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"
 	"github.com/gobuffalo/packr/v2"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 )
 
@@ -50,7 +52,13 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
 
-	router.HandleFunc("/metrics", api.promExporter)
+	reg := prometheus.NewPedanticRegistry()
+	reg.MustRegister(
+		api,
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+	)
+	router.Handle("/metrics", promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg})))
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
