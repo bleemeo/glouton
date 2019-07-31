@@ -61,3 +61,46 @@ func TestEncode(t *testing.T) {
 		}
 	}
 }
+
+type ReaderWriter struct {
+	reader io.Reader
+	writer *bytes.Buffer
+}
+
+func (rw ReaderWriter) Read(b []byte) (int, error) {
+	return rw.reader.Read(b)
+}
+func (rw ReaderWriter) Write(b []byte) (int, error) {
+	return rw.writer.Write(b)
+}
+func (rw ReaderWriter) Close() error {
+	return nil
+}
+
+func responsewarningv3(key string, args []string) string {
+	answer := "1"
+	return answer
+}
+
+func TestHandleConnection(t *testing.T) {
+	cases := []struct {
+		in   ReaderWriter
+		want []byte
+	}{
+		{ReaderWriter{bytes.NewReader(pingRequest), new(bytes.Buffer)}, pingAnswer},
+	}
+	for _, c := range cases {
+		handleConnection(c.in, responsewarningv3)
+		got := c.in.writer.Bytes()
+		if len(got) != len(c.want) {
+			t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
+			break
+		}
+		for i := 0; i < len(got); i++ {
+			if got[i] != c.want[i] {
+				t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
+				break
+			}
+		}
+	}
+}

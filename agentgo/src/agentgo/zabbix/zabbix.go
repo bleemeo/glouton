@@ -110,6 +110,7 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 	return encodedPacket, nil
 }
 
-func run() {
+//Run starts a connection with a zabbix server
+func Run() {
 	return
 }
