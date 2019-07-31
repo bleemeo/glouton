@@ -74,9 +74,24 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 }
 
 // Run : Starts our API
-func (api API) Run(_ context.Context) error {
+func (api API) Run(ctx context.Context) error {
+	srv := http.Server{
+		Addr:    api.bindAddress,
+		Handler: api.router,
+	}
+
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		<-ctx.Done()
+		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := srv.Shutdown(subCtx); err != nil {
+			log.Printf("DBG2: HTTP server Shutdown: %v", err)
+		}
+		close(idleConnsClosed)
+	}()
 	log.Printf("Starting API on %s", api.bindAddress)
-	if err := http.ListenAndServe(api.bindAddress, api.router); err != http.ErrServerClosed {
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}
 	return nil
