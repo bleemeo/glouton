@@ -1,9 +1,9 @@
 package store
 
 import (
+	"agentgo/logger"
 	"agentgo/types"
 	"fmt"
-	"log"
 	"reflect"
 	"time"
 
@@ -74,7 +74,7 @@ func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator 
 // AddError add an error to the Accumulator
 func (a *Accumulator) AddError(err error) {
 	if err != nil {
-		log.Printf("DBG: Add error called with: %v", err)
+		logger.V(1).Printf("Add error called with: %v", err)
 	}
 }
 
@@ -108,7 +108,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 		}
 		value, err := convertInterface(value)
 		if err != nil {
-			log.Panicf("convertInterface failed. Ignoring point: %s", err)
+			logger.V(1).Printf("convertInterface failed. Ignoring point: %s", err)
 			continue
 		}
 		metric := a.store.metricGetOrCreate(labels, 0)

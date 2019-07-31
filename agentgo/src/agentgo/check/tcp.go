@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strconv"
 	"time"
 
+	"agentgo/logger"
 	"agentgo/types"
 )
 
@@ -88,7 +88,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 	defer conn.Close()
 	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err != nil {
-		log.Printf("DBG: Unable to set Deadline: %v", err)
+		logger.V(1).Printf("Unable to set Deadline: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to set Deadline",
@@ -143,7 +143,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 		readBuffer := make([]byte, 4096)
 		err = conn.SetDeadline(time.Now().Add(1 * time.Second))
 		if err != nil {
-			log.Printf("DBG: Unable to set Deadline: %v", err)
+			logger.V(1).Printf("Unable to set Deadline: %v", err)
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusUnknown,
 				StatusDescription: "Checker error. Unable to set Deadline",

@@ -1,8 +1,8 @@
 package task
 
 import (
+	"agentgo/logger"
 	"context"
-	"log"
 	"sync"
 )
 
@@ -70,7 +70,7 @@ func (r *Registry) AddTask(task Runner, shortName string) int {
 		defer close(waitC)
 		err := task.Run(ctx)
 		if err != nil {
-			log.Printf("Task %#v failed to start: %v", shortName, err)
+			logger.Printf("Task %#v failed to start: %v", shortName, err)
 		}
 	}()
 	r.taskCancelFuncs[id] = cancelWait
@@ -94,11 +94,11 @@ func (r *Registry) removeTask(taskID int) {
 		taskName := r.taskNames[taskID]
 		if closer, ok := task.(RunCloser); ok {
 			if err := closer.Close(); err != nil {
-				log.Printf("DBG: Failed to close task %#v: %v", taskName, err)
+				logger.V(1).Printf("Failed to close task %#v: %v", taskName, err)
 			}
 		}
 	} else {
-		log.Printf("DBG2: called RemoveTask with unexisting ID %d", taskID)
+		logger.V(2).Printf("called RemoveTask with unexisting ID %d", taskID)
 	}
 
 	delete(r.taskCancelFuncs, taskID)

@@ -1,10 +1,10 @@
 package facts
 
 import (
+	"agentgo/logger"
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math"
 	"net"
 	"strconv"
@@ -264,7 +264,7 @@ func (c Container) ListenAddresses() []net.Addr {
 		protocol := tmp[1]
 		port, err := strconv.ParseInt(portStr, 10, 0)
 		if err != nil {
-			log.Printf("DBG: unable to parse port %#v: %v", portStr, err)
+			logger.V(1).Printf("unable to parse port %#v: %v", portStr, err)
 			continue
 		}
 		exposedPorts = append(exposedPorts, listenAddress{network: protocol, address: c.PrimaryAddress(), port: int(port)})
@@ -357,14 +357,14 @@ func notifyError(err error, lastErrorNotify time.Time, reconnectAttempt int) tim
 		return lastErrorNotify
 	}
 	if strings.Contains(fmt.Sprintf("%v", err), "permission denied") {
-		log.Println(
+		logger.Printf(
 			"The agent is not permitted to access Docker, the Docker integration will be disabled.",
 		)
-		log.Println(
+		logger.Printf(
 			"'adduser bleemeo docker' and a restart of the Agent should fix this issue",
 		)
 	} else if isDockerRunning() {
-		log.Printf("Unable to contact Docker: %v", err)
+		logger.Printf("Unable to contact Docker: %v", err)
 	}
 	return time.Now()
 }

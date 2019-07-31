@@ -1,8 +1,8 @@
 package internal
 
 import (
+	"agentgo/logger"
 	"fmt"
-	"log"
 	"reflect"
 	"sort"
 	"strings"
@@ -295,7 +295,7 @@ func (a *Accumulator) AddMetric(telegraf.Metric) {
 // AddError reports an error.
 func (a *Accumulator) AddError(err error) {
 	if a.Accumulator == nil {
-		log.Printf("AddError(%v)", err)
+		logger.Printf("AddError(%v)", err)
 	} else {
 		a.Accumulator.AddError(err)
 	}

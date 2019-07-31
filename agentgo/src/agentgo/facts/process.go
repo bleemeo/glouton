@@ -1,10 +1,10 @@
 package facts
 
 import (
+	"agentgo/logger"
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"path/filepath"
 	"regexp"
 	"runtime"
@@ -354,12 +354,12 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 					// Using cgroup, make sure process is not running in a container
 					candidateID := pp.containerIDFromCGroup(pid)
 					if n, ok := id2name[candidateID]; ok {
-						log.Printf("DBG: Based on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, n)
+						logger.V(1).Printf("Based on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, n)
 						p.ContainerID = candidateID
 						p.ContainerName = n
 						newProcessesMap[pid] = p
 					} else if candidateID != "" && time.Since(p.CreateTime) < 3*time.Second {
-						log.Printf("DBG: Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
+						logger.V(1).Printf("Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
 						delete(newProcessesMap, pid)
 					}
 				}
@@ -572,7 +572,7 @@ func (d *dockerProcessImpl) processes(ctx context.Context, maxAge time.Duration)
 		case err != nil && strings.Contains(fmt.Sprintf("%v", err), "is not running"):
 			continue
 		case err != nil:
-			log.Printf("%#v", err)
+			logger.Printf("%#v", err)
 			return
 		}
 		processes1 := decodeDocker(top, c.ID(), c.Name())

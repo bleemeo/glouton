@@ -2,9 +2,9 @@ package discovery
 
 import (
 	"agentgo/check"
+	"agentgo/logger"
 	"agentgo/task"
 	"fmt"
-	"log"
 )
 
 func (d *Discovery) configureChecks(oldServices, services map[nameContainer]Service) {
@@ -28,7 +28,7 @@ func (d *Discovery) removeCheck(key nameContainer) {
 		return
 	}
 	if checkID, ok := d.activeCheck[key]; ok {
-		log.Printf("DBG2: Remove check for service %v on container %s", key.name, key.containerID)
+		logger.V(2).Printf("Remove check for service %v on container %s", key.name, key.containerID)
 		delete(d.activeCheck, key)
 		d.taskRegistry.RemoveTask(checkID)
 	}
@@ -39,7 +39,7 @@ func (d *Discovery) createCheck(service Service) {
 		return
 	}
 
-	log.Printf("DBG2: Add check for service %v on container %s", service.Name, service.ContainerID)
+	logger.V(2).Printf("Add check for service %v on container %s", service.Name, service.ContainerID)
 
 	di := servicesDiscoveryInfo[service.Name]
 	primaryIP := addressForPort(service, di)
@@ -114,7 +114,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 		)
 		d.addCheck(tcpCheck, service)
 	} else {
-		log.Printf("DBG: No check for service type %#v", service.Name)
+		logger.V(1).Printf("No check for service type %#v", service.Name)
 	}
 }
 

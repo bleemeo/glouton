@@ -3,9 +3,9 @@ package discovery
 
 import (
 	"agentgo/facts"
+	"agentgo/logger"
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"path/filepath"
 	"runtime"
@@ -254,7 +254,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		dd.fillExtraAttributes(&service)
 		// TODO: jmx ?
 
-		log.Printf("DBG2: Discovered service %v", service)
+		logger.V(2).Printf("Discovered service %v", service)
 		servicesMap[key] = service
 	}
 
@@ -280,13 +280,13 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 		}
 		address, portStr, err := net.SplitHostPort(a.String())
 		if err != nil {
-			log.Printf("DBG: unable to split host/port for %#v: %v", a.String(), err)
+			logger.V(1).Printf("unable to split host/port for %#v: %v", a.String(), err)
 			newListenAddresses = append(newListenAddresses, a)
 			continue
 		}
 		port, err := strconv.ParseInt(portStr, 10, 0)
 		if err != nil {
-			log.Printf("DBG: unable to parse port %#v: %v", portStr, err)
+			logger.V(1).Printf("unable to parse port %#v: %v", portStr, err)
 			newListenAddresses = append(newListenAddresses, a)
 			continue
 		}
@@ -318,7 +318,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 				}
 			}
 		} else {
-			log.Printf("DBG2: TODO use sudo -n cat /etc/mysql/debian.cnf")
+			logger.V(2).Printf("TODO use sudo -n cat /etc/mysql/debian.cnf")
 		}
 	}
 	if service.Name == "postgresql" {

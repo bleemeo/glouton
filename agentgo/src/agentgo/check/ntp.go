@@ -5,11 +5,11 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"net"
 	"time"
 
+	"agentgo/logger"
 	"agentgo/types"
 )
 
@@ -99,7 +99,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	start := time.Now()
 	conn, err := net.ListenPacket("udp", ":0")
 	if err != nil {
-		log.Printf("DBG: Unable to create UDP socket: %v", err)
+		logger.V(1).Printf("Unable to create UDP socket: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to create UDP socket",
@@ -109,7 +109,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 
 	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err != nil {
-		log.Printf("DBG: Unable to set Deadline: %v", err)
+		logger.V(1).Printf("Unable to set Deadline: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to set Deadline",
@@ -118,7 +118,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 
 	dst, err := net.ResolveUDPAddr("udp", nc.mainAddress)
 	if err != nil {
-		log.Printf("DBG: Unable to resolve UDP address: %v", err)
+		logger.V(1).Printf("Unable to resolve UDP address: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: fmt.Sprintf("Unable to resolve address %#v", nc.mainAddress),
@@ -130,7 +130,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 	err = binary.Write(buf, binary.BigEndian, packet)
 	if err != nil {
-		log.Printf("DBG: Unable to encode NTP packet: %v", err)
+		logger.V(1).Printf("Unable to encode NTP packet: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to encode NTP packet",
@@ -138,7 +138,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 	_, err = conn.WriteTo(buf.Bytes(), dst)
 	if err != nil {
-		log.Printf("DBG: ntp check, failed to send data: %v", err)
+		logger.V(1).Printf("ntp check, failed to send data: %v", err)
 	}
 	data := make([]byte, 48)
 	n, _, err := conn.ReadFrom(data)
@@ -157,7 +157,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 
 	err = binary.Read(bytes.NewReader(data), binary.BigEndian, &packet)
 	if err != nil {
-		log.Printf("DBG: NTP packet format unknown: %v", err)
+		logger.V(1).Printf("NTP packet format unknown: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Unknown response from NTP server",

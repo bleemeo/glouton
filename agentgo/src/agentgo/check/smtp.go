@@ -3,11 +3,11 @@ package check
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"net/smtp"
 	"time"
 
+	"agentgo/logger"
 	"agentgo/types"
 )
 
@@ -64,7 +64,7 @@ func (sc *SMTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	}
 	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err != nil {
-		log.Printf("DBG: Unable to set Deadline: %v", err)
+		logger.V(1).Printf("Unable to set Deadline: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to set Deadline",

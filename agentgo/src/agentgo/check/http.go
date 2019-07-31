@@ -4,11 +4,11 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log"
 	"net/http"
 	"net/url"
 	"time"
 
+	"agentgo/logger"
 	"agentgo/types"
 )
 
@@ -62,7 +62,7 @@ func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode in
 func (hc *HTTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	req, err := http.NewRequest("GET", hc.url, nil)
 	if err != nil {
-		log.Printf("DBG2: Unable to create HTTP Request: %v", err)
+		logger.V(2).Printf("Unable to create HTTP Request: %v", err)
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusOk,
 			StatusDescription: "Checker error. Unable to create Request",

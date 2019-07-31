@@ -12,8 +12,8 @@ import (
 	"agentgo/inputs/postgresql"
 	"agentgo/inputs/rabbitmq"
 	"agentgo/inputs/redis"
+	"agentgo/logger"
 	"fmt"
-	"log"
 	"net"
 	"strconv"
 
@@ -63,7 +63,7 @@ func (d *Discovery) removeInput(key nameContainer) {
 		return
 	}
 	if inputID, ok := d.activeInput[key]; ok {
-		log.Printf("DBG2: Remove input for service %v on container %s", key.name, key.containerID)
+		logger.V(2).Printf("Remove input for service %v on container %s", key.name, key.containerID)
 		delete(d.activeInput, key)
 		d.coll.RemoveInput(inputID)
 	}
@@ -75,7 +75,7 @@ func (d *Discovery) createInput(service Service) error {
 		return nil
 	}
 
-	log.Printf("DBG2: Add input for service %v on container %s", service.Name, service.ContainerID)
+	logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
 	di := servicesDiscoveryInfo[service.Name]
 
 	var input telegraf.Input
@@ -148,7 +148,7 @@ func (d *Discovery) createInput(service Service) error {
 			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
 		}
 	default:
-		log.Printf("DBG: service type %s don't support metrics", service.Name)
+		logger.V(1).Printf("service type %s don't support metrics", service.Name)
 	}
 
 	if input != nil {

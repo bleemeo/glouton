@@ -1,10 +1,10 @@
 package facts
 
 import (
+	"agentgo/logger"
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"regexp"
@@ -160,12 +160,12 @@ func addAddress(addresses []net.Addr, newAddr listenAddress) []net.Addr {
 			}
 			_, otherPortStr, err := net.SplitHostPort(v.String())
 			if err != nil {
-				log.Printf("DBG: unable to split host/port for %#v: %v", v.String(), err)
+				logger.V(1).Printf("unable to split host/port for %#v: %v", v.String(), err)
 				return addresses
 			}
 			otherPort, err := strconv.ParseInt(otherPortStr, 10, 0)
 			if err != nil {
-				log.Printf("DBG: unable to parse port %#v: %v", otherPortStr, err)
+				logger.V(1).Printf("unable to parse port %#v: %v", otherPortStr, err)
 				return addresses
 			}
 			if int(otherPort) == newAddr.port {

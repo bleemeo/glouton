@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"agentgo/inputs/process"
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
+	"agentgo/logger"
 	"agentgo/store"
 	"agentgo/task"
 	"agentgo/version"
@@ -42,7 +44,8 @@ type agent struct {
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
 	if err != nil {
-		log.Fatalf("%v", err)
+		logger.Printf("%v", err)
+		panic(err)
 	}
 	return i
 }
@@ -51,11 +54,34 @@ func (a *agent) init() {
 	a.taskRegistry = task.NewRegistry(context.Background())
 	cfg, warnings, err := a.loadConfiguration()
 	a.config = cfg
+
+	useSyslog := false
+	if a.config.String("logging.output") == "syslog" {
+		useSyslog = true
+	}
+	logger.UseSyslog(useSyslog)
+	if level := a.config.Int("logging.level"); level != 0 {
+		logger.SetLevel(level)
+	} else {
+		switch strings.ToLower(a.config.String("logging.level")) {
+		case "0", "info", "warning", "error":
+			logger.SetLevel(0)
+		case "verbose":
+			logger.SetLevel(1)
+		case "debug":
+			logger.SetLevel(2)
+		default:
+			logger.SetLevel(0)
+			logger.Printf("Unknown logging.level = %#v. Using \"INFO\"", a.config.String("logging.level"))
+		}
+	}
+	logger.SetPkgLevels(a.config.String("logging.package_levels"))
+
 	if err != nil {
 		log.Fatalf("Error while loading configuration: %v", err)
 	}
 	for _, w := range warnings {
-		log.Printf("Warning while loading configuration: %v", w)
+		logger.Printf("Warning while loading configuration: %v", w)
 	}
 }
 
@@ -70,7 +96,7 @@ func Run() {
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
 func (a *agent) run() {
-	log.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
+	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	c := make(chan os.Signal, 1)
@@ -81,7 +107,7 @@ func (a *agent) run() {
 	if a.config.Bool("agent.http_debug.enabled") {
 		go func() {
 			debugAddress := a.config.String("agent.http_debug.binf_address")
-			log.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
+			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
 			log.Println(http.ListenAndServe(debugAddress, nil))
 		}()
 	}
@@ -130,20 +156,20 @@ func (a *agent) run() {
 		func(ctx context.Context) {
 			_, err := disc.Discovery(ctx, 0)
 			if err != nil {
-				log.Printf("DBG: error during discovery: %v", err)
+				logger.V(1).Printf("error during discovery: %v", err)
 			}
 			hasConnection := dockerFact.HasConnection(ctx)
 			if hasConnection && !dockerInputPresent {
 				i, err := docker.New()
 				if err != nil {
-					log.Printf("DBG: error when creating Docker input: %v", err)
+					logger.V(1).Printf("error when creating Docker input: %v", err)
 				} else {
-					log.Printf("DBG2: Enable Docker metrics")
+					logger.V(2).Printf("Enable Docker metrics")
 					dockerInputID = coll.AddInput(i, "docker")
 					dockerInputPresent = true
 				}
 			} else if !hasConnection && dockerInputPresent {
-				log.Printf("DBG2: Disable Docker metrics")
+				logger.V(2).Printf("Disable Docker metrics")
 				coll.RemoveInput(dockerInputID)
 				dockerInputPresent = false
 			}
@@ -203,5 +229,5 @@ func (a *agent) run() {
 	a.taskRegistry.Close()
 	disc.Close()
 	wg.Wait()
-	log.Printf("DBG2: Agent stopped")
+	logger.V(2).Printf("Agent stopped")
 }

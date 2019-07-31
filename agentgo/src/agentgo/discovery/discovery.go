@@ -1,10 +1,10 @@
 package discovery
 
 import (
+	"agentgo/logger"
 	"agentgo/task"
 	"agentgo/types"
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -92,7 +92,7 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 		}
 		err = d.configureMetricInputs(d.servicesMap, servicesMap)
 		if err != nil {
-			log.Printf("Unable to update metric inputs: %v", err)
+			logger.Printf("Unable to update metric inputs: %v", err)
 		}
 		d.configureChecks(d.servicesMap, servicesMap)
 		d.servicesMap = servicesMap

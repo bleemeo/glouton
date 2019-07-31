@@ -2,11 +2,11 @@ package check
 
 import (
 	"context"
-	"log"
 	"net"
 	"sync"
 	"time"
 
+	"agentgo/logger"
 	"agentgo/types"
 )
 
@@ -120,7 +120,7 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescr
 	if !timerDone {
 		bc.timer.Reset(time.Minute)
 	}
-	log.Printf("DBG2: check for %#v on %#v: %v", bc.metricName, bc.item, result)
+	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.item, result)
 	labels := make(map[string]string)
 	if bc.item != "" {
 		labels["item"] = bc.item
@@ -198,7 +198,7 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep
 	defer cancel()
 	conn, err := bc.dialer.DialContext(ctx2, "tcp", addr)
 	if err != nil {
-		log.Printf("DBG2: fail to open TCP connection to %#v: %v", addr, err)
+		logger.V(2).Printf("fail to open TCP connection to %#v: %v", addr, err)
 		select {
 		case bc.triggerC <- nil:
 		default:
@@ -210,7 +210,7 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep
 	for ctx.Err() == nil {
 		err := conn.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
-			log.Printf("DBG2: Unable to SetDeadline() for %#v: %v", addr, err)
+			logger.V(2).Printf("Unable to SetDeadline() for %#v: %v", addr, err)
 			return false
 		}
 		_, err = conn.Read(buffer)
@@ -218,7 +218,7 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep
 			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 				continue
 			}
-			log.Printf("DBG2: Unable to Read() from %#v: %v", addr, err)
+			logger.V(2).Printf("Unable to Read() from %#v: %v", addr, err)
 			return false
 		}
 	}

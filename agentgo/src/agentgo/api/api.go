@@ -4,12 +4,12 @@ package api
 
 import (
 	"context"
-	"log"
 	"net/http"
 	"time"
 
 	"agentgo/discovery"
 	"agentgo/facts"
+	"agentgo/logger"
 	"agentgo/types"
 
 	"github.com/99designs/gqlgen/handler"
@@ -66,7 +66,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 		html, _ := boxHTML.Find("index.html")
 		_, err := w.Write(html)
 		if err != nil {
-			log.Printf("DBG2: fail to serve index.html: %v", err)
+			logger.V(2).Printf("fail to serve index.html: %v", err)
 		}
 	})
 	api.router = router
@@ -86,11 +86,11 @@ func (api API) Run(ctx context.Context) error {
 		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 		if err := srv.Shutdown(subCtx); err != nil {
-			log.Printf("DBG2: HTTP server Shutdown: %v", err)
+			logger.V(2).Printf("HTTP server Shutdown: %v", err)
 		}
 		close(idleConnsClosed)
 	}()
-	log.Printf("Starting API on %s", api.bindAddress)
+	logger.Printf("Starting API on %s", api.bindAddress)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}

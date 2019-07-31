@@ -1,10 +1,10 @@
 package facts
 
 import (
+	"agentgo/logger"
 	"agentgo/version"
 	"context"
 	"io/ioutil"
-	"log"
 	"net"
 	"net/http"
 	"os"
@@ -115,11 +115,11 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	f.l.Unlock()
 	if f.factPath != "" {
 		if data, err := ioutil.ReadFile(f.factPath); err != nil {
-			log.Printf("DBG: unable to read fact file: %v", err)
+			logger.V(1).Printf("unable to read fact file: %v", err)
 		} else {
 			var fileFacts map[string]string
 			if err := yaml.Unmarshal(data, &fileFacts); err != nil {
-				log.Printf("DBG: fact file is invalid: %v", err)
+				logger.V(1).Printf("fact file is invalid: %v", err)
 			} else {
 				for k, v := range fileFacts {
 					newFacts[k] = v

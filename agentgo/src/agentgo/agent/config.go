@@ -2,9 +2,9 @@ package agent
 
 import (
 	"agentgo/config"
+	"agentgo/logger"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"strings"
 )
@@ -48,6 +48,7 @@ var defaultConfig = map[string]interface{}{
 	"kubernetes.nodename":              "",
 	"logging.level":                    "INFO",
 	"logging.output":                   "console",
+	"logging.package_levels":           "",
 	"metric.prometheus":                map[string]interface{}{},
 	"metric.pull":                      map[string]interface{}{},
 	"metric.softstatus_period_default": 5 * 60,
@@ -75,7 +76,7 @@ func configLoadFile(filePath string, cfg *config.Configuration) error {
 	}
 	err = cfg.LoadByte(buffer)
 	if err != nil {
-		log.Printf("Unable to load %#v: %v", filePath, err)
+		logger.Printf("Unable to load %#v: %v", filePath, err)
 	}
 	return err
 }
@@ -150,10 +151,10 @@ func (a *agent) loadConfiguration() (cfg *config.Configuration, warnings []error
 	if err := cfg.LoadDirectory("/etc/bleemeo/agent.conf.d"); err != nil && !os.IsNotExist(err) {
 		finalError = err
 	}
-	if err := configLoadFile("etc/bleemeo/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
+	if err := configLoadFile("etc/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
 		finalError = err
 	}
-	if err := cfg.LoadDirectory("etc/bleemeo/agent.conf.d"); err != nil && !os.IsNotExist(err) {
+	if err := cfg.LoadDirectory("etc/agent.conf.d"); err != nil && !os.IsNotExist(err) {
 		finalError = err
 	}
 

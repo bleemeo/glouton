@@ -2,8 +2,8 @@
 package collector
 
 import (
+	"agentgo/logger"
 	"context"
-	"log"
 	"sync"
 	"time"
 
@@ -67,7 +67,7 @@ func (c *Collector) RemoveInput(id int) {
 			si.Stop()
 		}
 	} else {
-		log.Printf("DBG2: called RemoveInput with unexisting ID %d", id)
+		logger.V(2).Printf("called RemoveInput with unexisting ID %d", id)
 	}
 
 	delete(c.inputs, id)
@@ -120,11 +120,11 @@ func (c *Collector) run() {
 			defer wg.Done()
 			err := input.Gather(c.acc)
 			if err != nil {
-				log.Printf("Input %s failed: %v", inputsNameCopy[i], err)
+				logger.Printf("Input %s failed: %v", inputsNameCopy[i], err)
 			}
 		}()
 	}
 	wg.Wait()
 	delta := time.Since(t0)
-	log.Printf("DBG-METRIC: Gather took %v", delta)
+	logger.V(1).Printf("METRIC: Gather took %v", delta)
 }

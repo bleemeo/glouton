@@ -5,10 +5,10 @@ package store
 
 import (
 	"context"
-	"log"
 	"sync"
 	"time"
 
+	"agentgo/logger"
 	"agentgo/types"
 )
 
@@ -44,7 +44,7 @@ func (s *Store) Run(ctx context.Context) error {
 
 // Close closes the store. Currently noop, but may write to persistence later
 func (s *Store) Close() error {
-	log.Println("Store closed")
+	logger.V(2).Printf("Store closed")
 	return nil
 }
 
@@ -131,7 +131,7 @@ func (s *Store) run() {
 		delete(s.metrics, metricID)
 		delete(s.points, metricID)
 	}
-	log.Printf("DBG: deleted %d points. Total point: %d", deletedPoints, totalPoints)
+	logger.V(1).Printf("deleted %d points. Total point: %d", deletedPoints, totalPoints)
 }
 
 // metricGetOrCreate will return the metric that exactly match given labels.

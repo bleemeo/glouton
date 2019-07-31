@@ -1,9 +1,9 @@
 package facts
 
 import (
+	"agentgo/logger"
 	"bytes"
 	"io/ioutil"
-	"log"
 	"os/exec"
 	"path/filepath"
 	"strings"
@@ -17,11 +17,11 @@ func (f *FactProvider) platformFacts() map[string]string {
 	if f.hostRootPath != "" {
 		osReleasePath := filepath.Join(f.hostRootPath, "etc/os-release")
 		if osReleaseData, err := ioutil.ReadFile(osReleasePath); err != nil {
-			log.Printf("DBG: unable to read os-release file: %v", err)
+			logger.V(1).Printf("unable to read os-release file: %v", err)
 		} else {
 			osRelease, err := decodeOsRelease(string(osReleaseData))
 			if err != nil {
-				log.Printf("DBG: os-release file is invalid: %v", err)
+				logger.V(1).Printf("os-release file is invalid: %v", err)
 			}
 			facts["os_family"] = osRelease["ID_LIKE"]
 			facts["os_name"] = osRelease["NAME"]
@@ -33,7 +33,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 	if f.hostRootPath == "/" {
 		out, err := exec.Command("lsb_release", "--codename", "--short").Output()
 		if err != nil {
-			log.Printf("DBG: unable to run lsb_release: %v", err)
+			logger.V(1).Printf("unable to run lsb_release: %v", err)
 		} else {
 			facts["os_codename"] = strings.TrimSpace(string(out))
 		}
@@ -81,7 +81,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 func (f *FactProvider) primaryAddress() (ipAddress string, ifaceName string) {
 	out, err := exec.Command("ip", "route", "get", "8.8.8.8").Output()
 	if err != nil {
-		log.Printf("DBG: unable to run ip route get: %v", err)
+		logger.V(1).Printf("unable to run ip route get: %v", err)
 		return
 	}
 	l := strings.Split(string(out), " ")
