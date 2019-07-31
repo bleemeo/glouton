@@ -20,6 +20,7 @@ type RunCloser interface {
 // Registry contains running tasks. It allow to add/remove tasks
 type Registry struct {
 	ctx             context.Context
+	cancel          func()
 	tasks           map[int]Runner
 	taskNames       map[int]string
 	taskCancelFuncs map[int]func()
@@ -28,8 +29,10 @@ type Registry struct {
 
 // NewRegistry create a new registry. All task running in this registry will terminate when ctx is cancelled
 func NewRegistry(ctx context.Context) *Registry {
+	subCtx, cancel := context.WithCancel(ctx)
 	return &Registry{
-		ctx:             ctx,
+		ctx:             subCtx,
+		cancel:          cancel,
 		tasks:           make(map[int]Runner),
 		taskNames:       make(map[int]string),
 		taskCancelFuncs: make(map[int]func()),
@@ -40,6 +43,7 @@ func NewRegistry(ctx context.Context) *Registry {
 func (r *Registry) Close() {
 	r.l.Lock()
 	defer r.l.Unlock()
+	r.cancel()
 	for k := range r.taskCancelFuncs {
 		r.removeTask(k)
 	}
