@@ -78,8 +78,13 @@ func (rw ReaderWriter) Close() error {
 }
 
 func responsewarningv3(key string, args []string) string {
-	answer := "1"
-	return answer
+	if key == "agent.ping" {
+		return "1"
+	}
+	if key == "agent.version" {
+		return "4.2.4"
+	}
+	return ""
 }
 
 func TestHandleConnection(t *testing.T) {
@@ -88,6 +93,7 @@ func TestHandleConnection(t *testing.T) {
 		want []byte
 	}{
 		{ReaderWriter{bytes.NewReader(pingRequest), new(bytes.Buffer)}, pingAnswer},
+		{ReaderWriter{bytes.NewReader(versionRequest), new(bytes.Buffer)}, versionAnswer},
 	}
 	for _, c := range cases {
 		handleConnection(c.in, responsewarningv3)

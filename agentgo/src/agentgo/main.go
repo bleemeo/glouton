@@ -25,12 +25,23 @@ import (
 	"agentgo/inputs/system"
 	"agentgo/store"
 	"agentgo/version"
+	"agentgo/zabbix"
 
 	"github.com/influxdata/telegraf"
 
 	"net/http"
 	_ "net/http/pprof"
 )
+
+func response(key string, args []string) string {
+	if key == "agent.ping" {
+		return "1"
+	}
+	if key == "agent.version" {
+		return "4.2.4"
+	}
+	return ""
+}
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
 	if err != nil {
@@ -188,6 +199,12 @@ func main() {
 	}()
 
 	go api.Run()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		zabbix.Run(ctx, ":10052", response, false)
+	}()
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)

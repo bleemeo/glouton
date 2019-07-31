@@ -2,10 +2,14 @@ package zabbix
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"fmt"
 	"io"
 	"log"
+	"net"
+	"sync"
+	"time"
 )
 
 type packetStruct struct {
@@ -111,6 +115,53 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 }
 
 //Run starts a connection with a zabbix server
-func Run() {
-	return
+func Run(ctx context.Context, port string, cb callback, useTLS bool) {
+	tcpAdress, err := net.ResolveTCPAddr("tcp4", port)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	l, err := net.ListenTCP("tcp4", tcpAdress)
+
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer l.Close()
+	lWrap := net.Listener(l)
+	if useTLS {
+	}
+
+	var wg sync.WaitGroup
+	for {
+		err := l.SetDeadline(time.Now().Add(time.Second))
+		if err != nil {
+			log.Printf("Nrpe: setDeadline on listener failed: %v", err)
+			break
+		}
+		c, err := lWrap.Accept()
+		if ctx.Err() != nil {
+			break
+		}
+		if errNet, ok := err.(net.Error); ok && errNet.Timeout() {
+			continue
+		}
+		if err != nil {
+			log.Printf("Nrpe accept failed: %v", err)
+			break
+		}
+
+		err = c.SetDeadline(time.Now().Add(time.Second * 10))
+		if err != nil {
+			log.Printf("Nrpe: setDeadline on connection failed: %v", err)
+			break
+		}
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			handleConnection(c, cb)
+		}()
+	}
+	wg.Wait()
 }
