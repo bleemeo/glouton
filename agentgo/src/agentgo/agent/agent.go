@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"agentgo/agent/state"
 	"agentgo/api"
 	"agentgo/collector"
 	"agentgo/config"
@@ -40,6 +41,7 @@ import (
 type agent struct {
 	taskRegistry *task.Registry
 	config       *config.Configuration
+	state        *state.State
 }
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
@@ -50,11 +52,33 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 	return i
 }
 
-func (a *agent) init() {
+func (a *agent) init() (ok bool) {
 	a.taskRegistry = task.NewRegistry(context.Background())
 	cfg, warnings, err := a.loadConfiguration()
 	a.config = cfg
 
+	a.setupLogger()
+	if err != nil {
+		logger.Printf("Error while loading configuration: %v", err)
+		return false
+	}
+	for _, w := range warnings {
+		logger.Printf("Warning while loading configuration: %v", w)
+	}
+
+	a.state, err = state.Load(a.config.String("agent.state_file"))
+	if err != nil {
+		logger.Printf("Error while loading state file: %v", err)
+		return false
+	}
+	if err := a.state.Save(); err != nil {
+		logger.Printf("State file is not writable, stopping agent: %v", err)
+		return false
+	}
+	return true
+}
+
+func (a *agent) setupLogger() {
 	useSyslog := false
 	if a.config.String("logging.output") == "syslog" {
 		useSyslog = true
@@ -76,13 +100,6 @@ func (a *agent) init() {
 		}
 	}
 	logger.SetPkgLevels(a.config.String("logging.package_levels"))
-
-	if err != nil {
-		log.Fatalf("Error while loading configuration: %v", err)
-	}
-	for _, w := range warnings {
-		logger.Printf("Warning while loading configuration: %v", w)
-	}
 }
 
 // Run runs the Bleemeo agent
@@ -90,7 +107,10 @@ func Run() {
 	agent := &agent{
 		taskRegistry: task.NewRegistry(context.Background()),
 	}
-	agent.init()
+	if !agent.init() {
+		os.Exit(1)
+		return
+	}
 	agent.run()
 }
 
