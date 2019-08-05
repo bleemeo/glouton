@@ -56,18 +56,14 @@ func decode(r io.Reader) (packetStruct, error) {
 		return packetStruct{}, err
 	}
 	var decodedPacket packetStruct
-	var header int32
-	buf := bytes.NewReader(packetHead)
-	err = binary.Read(buf, binary.BigEndian, &header)
-	if err != nil {
-		err = fmt.Errorf("binary.Read failed for packet_version: %v", err)
-		return decodedPacket, err
-	}
-	if header != int32(1514297412) { //1514297412= 0x5a, 0x42, 0x58, 0x44
+	header := packetHead[0:4]
+	buf := bytes.NewReader(packetHead[4:])
+
+	if bytes.Compare(header, []byte("ZBXD")) != 0 {
 		err = fmt.Errorf("wrong packet header")
 		return decodedPacket, err
 	}
-	err = binary.Read(buf, binary.BigEndian, &decodedPacket.version)
+	err = binary.Read(buf, binary.LittleEndian, &decodedPacket.version)
 	if err != nil {
 		err = fmt.Errorf("binary.Read failed for packet_version: %v", err)
 		return decodedPacket, err

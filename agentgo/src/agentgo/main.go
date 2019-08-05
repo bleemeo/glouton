@@ -40,7 +40,7 @@ func response(key string, args []string) string {
 	if key == "agent.version" {
 		return "4.2.4"
 	}
-	return ""
+	return "ok"
 }
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
@@ -203,7 +203,7 @@ func main() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		zabbix.Run(ctx, ":10052", response, false)
+		zabbix.Run(ctx, ":10053", response, false)
 	}()
 
 	c := make(chan os.Signal, 1)
