@@ -43,7 +43,7 @@ type Collector interface {
 
 // Registry will contains checks
 type Registry interface {
-	AddTask(task task.Runner, shortName string) int
+	AddTask(task task.Runner, shortName string) (int, error)
 	RemoveTask(int)
 }
 
@@ -84,9 +84,7 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 	defer d.l.Unlock()
 
 	if time.Since(d.lastDiscoveryUpdate) > maxAge {
-		d.l.Unlock()
 		servicesMap, err := d.updateDiscovery(ctx, maxAge)
-		d.l.Lock()
 		if err != nil {
 			return nil, err
 		}

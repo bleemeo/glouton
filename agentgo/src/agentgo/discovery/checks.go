@@ -152,6 +152,9 @@ func (d *Discovery) addCheck(task task.Runner, service Service) {
 		name:        service.Name,
 		containerID: service.ContainerID,
 	}
-	id := d.taskRegistry.AddTask(task, fmt.Sprintf("check for %s", service.Name))
+	id, err := d.taskRegistry.AddTask(task, fmt.Sprintf("check for %s", service.Name))
+	if err != nil {
+		logger.V(1).Printf("Unable to add check: %v", err)
+	}
 	d.activeCheck[key] = id
 }

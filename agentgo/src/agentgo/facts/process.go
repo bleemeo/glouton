@@ -315,14 +315,10 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 	// Keep some additional margin by doubling this value.
 	onlyStartedBefore := t0.Add(-20 * time.Millisecond)
 
-	// Unlock during most of the expensive operation
-	pp.l.Unlock()
-
 	newProcessesMap := make(map[int]Process)
 	if pp.dp != nil {
 		dockerProcesses, err := pp.dp.processes(ctx, 0)
 		if err != nil {
-			pp.l.Lock()
 			return err
 		}
 		for _, p := range dockerProcesses {
@@ -331,7 +327,6 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 	}
 	psProcesses, err := pp.psutil.processes(ctx, 0)
 	if err != nil {
-		pp.l.Lock()
 		return err
 	}
 	for _, p := range psProcesses {
@@ -366,8 +361,6 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 			}
 		}
 	}
-
-	pp.l.Lock()
 
 	// Update CPU percent
 	for pid, p := range newProcessesMap {

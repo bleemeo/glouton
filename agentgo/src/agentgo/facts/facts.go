@@ -111,8 +111,6 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	callbacks := make([]FactCallback, len(f.callbacks))
 	copy(callbacks, f.callbacks)
 
-	// unlock during slow operation
-	f.l.Unlock()
 	if f.factPath != "" {
 		if data, err := ioutil.ReadFile(f.factPath); err != nil {
 			logger.V(1).Printf("unable to read fact file: %v", err)
@@ -206,7 +204,6 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		}
 	}
 
-	f.l.Lock()
 	for k, v := range f.manualFact {
 		newFacts[k] = v
 	}

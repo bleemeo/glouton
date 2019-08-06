@@ -60,7 +60,7 @@ func (dd *Debouncer) Trigger() {
 	}
 }
 
-func (dd *Debouncer) run(ctx context.Context, fromTimer bool) {
+func (dd *Debouncer) shouldTrigger(fromTimer bool) bool {
 	dd.l.Lock()
 	defer dd.l.Unlock()
 
@@ -77,13 +77,16 @@ func (dd *Debouncer) run(ctx context.Context, fromTimer bool) {
 
 	if dd.trigger && discoveryAgo >= dd.delay {
 		dd.trigger = false
-		dd.runTarget(ctx)
-		dd.lastRun = time.Now()
+		return true
 	}
+	return false
 }
 
-func (dd *Debouncer) runTarget(ctx context.Context) {
-	dd.l.Unlock()
-	defer dd.l.Lock()
-	dd.target(ctx)
+func (dd *Debouncer) run(ctx context.Context, fromTimer bool) {
+	if dd.shouldTrigger(fromTimer) {
+		dd.target(ctx)
+		dd.l.Lock()
+		defer dd.l.Unlock()
+		dd.lastRun = time.Now()
+	}
 }

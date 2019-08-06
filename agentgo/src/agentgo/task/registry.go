@@ -3,6 +3,7 @@ package task
 import (
 	"agentgo/logger"
 	"context"
+	"errors"
 	"sync"
 )
 
@@ -24,6 +25,7 @@ type Registry struct {
 	tasks           map[int]Runner
 	taskNames       map[int]string
 	taskCancelFuncs map[int]func()
+	closed          bool
 	l               sync.Mutex
 }
 
@@ -41,18 +43,27 @@ func NewRegistry(ctx context.Context) *Registry {
 
 // Close stops and wait for all currently running tasks
 func (r *Registry) Close() {
-	r.l.Lock()
-	defer r.l.Unlock()
+	r.close()
 	r.cancel()
 	for k := range r.taskCancelFuncs {
 		r.removeTask(k)
 	}
 }
 
-// AddTask add and start a new task. It return an taskID that could be used in RemoveTask
-func (r *Registry) AddTask(task Runner, shortName string) int {
+func (r *Registry) close() {
 	r.l.Lock()
 	defer r.l.Unlock()
+	r.closed = true
+}
+
+// AddTask add and start a new task. It return an taskID that could be used in RemoveTask
+func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	if r.closed {
+		return 0, errors.New("registry already closed")
+	}
 
 	id := 1
 	_, ok := r.taskCancelFuncs[id]
@@ -74,20 +85,23 @@ func (r *Registry) AddTask(task Runner, shortName string) int {
 		defer close(waitC)
 		err := task.Run(ctx)
 		if err != nil {
-			logger.Printf("Task %#v failed to start: %v", shortName, err)
+			logger.Printf("Task %#v failed: %v", shortName, err)
 		}
 	}()
 	r.taskCancelFuncs[id] = cancelWait
 	r.tasks[id] = task
 	r.taskNames[id] = shortName
 
-	return id
+	return id, nil
 }
 
 // RemoveTask stop (and potentially close) and remove given task
 func (r *Registry) RemoveTask(taskID int) {
 	r.l.Lock()
 	defer r.l.Unlock()
+	if r.closed {
+		return
+	}
 	r.removeTask(taskID)
 }
 

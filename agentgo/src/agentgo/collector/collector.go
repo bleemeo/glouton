@@ -100,15 +100,21 @@ func (c *Collector) sleepToAlign(interval time.Duration) {
 	time.Sleep(nextMultiple.Sub(now))
 }
 
-func (c *Collector) run() {
+func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
 	c.l.Lock()
+	defer c.l.Unlock()
+
 	inputsCopy := make([]telegraf.Input, 0)
 	inputsNameCopy := make([]string, 0)
 	for id, v := range c.inputs {
 		inputsCopy = append(inputsCopy, v)
 		inputsNameCopy = append(inputsNameCopy, c.inputNames[id])
 	}
-	c.l.Unlock()
+	return inputsCopy, inputsNameCopy
+}
+
+func (c *Collector) run() {
+	inputsCopy, inputsNameCopy := c.inputsForCollection()
 	var wg sync.WaitGroup
 
 	t0 := time.Now()

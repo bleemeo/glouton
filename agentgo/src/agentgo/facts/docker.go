@@ -162,18 +162,21 @@ func (d *DockerProvider) HasConnection(ctx context.Context) bool {
 // by Run but could be retrieved with LastError
 func (d *DockerProvider) Run(ctx context.Context) error {
 	var lastErrorNotify time.Time
+	var sleepDelay float64
 	for {
 		err := d.run(ctx)
-		d.l.Lock()
-		d.reconnectAttempt++
-		if err != nil {
-			lastErrorNotify = notifyError(err, lastErrorNotify, d.reconnectAttempt)
-		}
-		sleepDelay := 5 * math.Pow(2, float64(d.reconnectAttempt))
-		if sleepDelay > 60 {
-			sleepDelay = 60
-		}
-		d.l.Unlock()
+		func() {
+			d.l.Lock()
+			defer d.l.Unlock()
+			d.reconnectAttempt++
+			if err != nil {
+				lastErrorNotify = notifyError(err, lastErrorNotify, d.reconnectAttempt)
+			}
+			sleepDelay = 5 * math.Pow(2, float64(d.reconnectAttempt))
+			if sleepDelay > 60 {
+				sleepDelay = 60
+			}
+		}()
 		select {
 		case <-time.After(time.Duration(sleepDelay) * time.Second):
 		case <-ctx.Done():
@@ -432,12 +435,11 @@ func (d *DockerProvider) getClient(ctx context.Context) (cl *docker.Client, err 
 
 func (d *DockerProvider) top(ctx context.Context, containerID string) (top container.ContainerTopOKBody, topWaux container.ContainerTopOKBody, err error) {
 	d.l.Lock()
+	defer d.l.Unlock()
 	cl, err := d.getClient(ctx)
 	if err != nil {
-		d.l.Unlock()
 		return
 	}
-	d.l.Unlock()
 
 	top, err = cl.ContainerTop(ctx, containerID, nil)
 	if err != nil {
@@ -452,8 +454,6 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-
-	d.l.Unlock()
 
 	bridgeNetworks := make(map[string]interface{})
 	containerAddressOnDockerBridge := make(map[string]string)
@@ -478,7 +478,6 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 
 	dockerContainers, err := cl.ContainerList(ctx, types.ContainerListOptions{All: true})
 	if err != nil {
-		d.l.Lock()
 		return err
 	}
 	containers := make(map[string]Container)
@@ -496,7 +495,6 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 			inspect:        inspect,
 		}
 	}
-	d.l.Lock()
 	d.lastUpdate = time.Now()
 	d.containers = containers
 	d.ignoredID = ignoredID
@@ -504,9 +502,12 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 }
 
 func (d *DockerProvider) run(ctx context.Context) (err error) {
-	d.l.Lock()
-	cl, err := d.getClient(ctx)
-	d.l.Unlock()
+	var cl *docker.Client
+	func() {
+		d.l.Lock()
+		defer d.l.Unlock()
+		cl, err = d.getClient(ctx)
+	}()
 	if err != nil {
 		return
 	}
@@ -529,9 +530,7 @@ func (d *DockerProvider) run(ctx context.Context) (err error) {
 					// Docker before 1.10 didn't had Actor
 					se.ActorID = event.ID
 				}
-				d.l.Lock()
-				_, ok := d.ignoredID[se.ActorID]
-				d.l.Unlock()
+				ok := d.isIgnored(se.ActorID)
 				if ok {
 					continue
 				}
@@ -546,4 +545,11 @@ func (d *DockerProvider) run(ctx context.Context) (err error) {
 			return
 		}
 	}
+}
+
+func (d *DockerProvider) isIgnored(containerID string) bool {
+	d.l.Lock()
+	defer d.l.Unlock()
+	_, ok := d.ignoredID[containerID]
+	return ok
 }
