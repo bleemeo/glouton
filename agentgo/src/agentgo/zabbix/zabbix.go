@@ -90,7 +90,7 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 	copy(encodedPacket[0:4], []byte("ZBXD"))
 
 	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, &decodedPacket.version)
+	err := binary.Write(buf, binary.LittleEndian, &decodedPacket.version)
 	if err != nil {
 		err = fmt.Errorf("binary.Write failed for result_code: %v", err)
 		return encodedPacket, err

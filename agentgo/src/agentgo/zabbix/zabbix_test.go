@@ -46,6 +46,14 @@ var discAnswer = []byte{0x5a, 0x42, 0x58, 0x44,
 	0x45, 0x7d, 0x22, 0x3a, 0x22, 0x76, 0x65, 0x74,
 	0x68, 0x62, 0x63, 0x30, 0x39, 0x38, 0x31, 0x31,
 	0x22, 0x7d, 0x5d}
+var discstring = `[{"{#IFNAME}":"wlp2s0"},{"{#IFNAME}":"veth0a803ad"},{"{#IFNAME}":"docker0"},{"{#IFNAME}":"veth3cd3a42"},{"{#IFNAME}":"lo"},{"{#IFNAME}":"veth20ad4ea"},{"{#IFNAME}":"vethbc09811"}]`
+var inlorequest = []byte{0x5a, 0x42, 0x58, 0x44,
+	0x01, 0x0d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x6e, 0x65, 0x74, 0x2e, 0x69, 0x66, 0x2e,
+	0x69, 0x6e, 0x5b, 0x6c, 0x6f, 0x5d} //net.if.in[lo]
+var inloanswer = []byte{0x5a, 0x42, 0x58, 0x44,
+	0x01, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+	0x37, 0x39, 0x37, 0x38, 0x32, 0x36}
 
 func TestDecode(t *testing.T) {
 	cases := []struct {
@@ -54,6 +62,8 @@ func TestDecode(t *testing.T) {
 	}{
 		{bytes.NewReader(versionRequest), packetStruct{1, "agent.version"}},
 		{bytes.NewReader(pingRequest), packetStruct{1, "agent.ping"}},
+		{bytes.NewReader(discRequest), packetStruct{1, "net.if.discovery"}},
+		{bytes.NewReader(inlorequest), packetStruct{1, "net.if.in[lo]"}},
 	}
 	for _, c := range cases {
 		got, err := decode(c.in)
@@ -73,6 +83,8 @@ func TestEncode(t *testing.T) {
 	}{
 		{packetStruct{1, "1"}, pingAnswer},
 		{packetStruct{1, "4.2.4"}, versionAnswer},
+		{packetStruct{1, discstring}, discAnswer},
+		{packetStruct{1, "797826"}, inloanswer},
 	}
 	for _, c := range cases {
 		got, err := encodev1(c.in)
