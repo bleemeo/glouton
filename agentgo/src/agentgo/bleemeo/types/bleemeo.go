@@ -30,3 +30,13 @@ type AccountConfig struct {
 	DockerIntegration     bool   `json:"docker_integration"`
 }
 
+// Service is a Service object on Bleemeo API
+type Service struct {
+	ID              string `json:"id"`
+	Label           string `json:"label"`
+	Instance        string `json:"instance"`
+	ListenAddresses string `json:"listen_addresses"`
+	ExePath         string `json:"exe_path"`
+	Stack           string `json:"stack"`
+	Active          bool   `json:"active"`
+}

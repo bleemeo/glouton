@@ -7,6 +7,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"sync"
@@ -85,44 +86,53 @@ func NewClient(ctx context.Context, baseURL string, username string, password st
 	}, nil
 }
 
-// Do perform the specified request. From the input request URL, only path is taken and joined with baseURL path.
+// Do perform the specified request.
 //
-// Headers of the request will be modified to perform authentication with JWT token
+// Response is assumed to be JSON and will be decoded into result. If result is nil, response is not decoded
 //
-// Response is assumed to be JSON and will be decoded into result
-func (c *HTTPClient) Do(req *http.Request, result interface{}) (statusCode int, err error) {
+// If submittedData is not-nil, it's the body content of the request.
+func (c *HTTPClient) Do(method string, path string, data interface{}, result interface{}) (statusCode int, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	req.URL, _ = c.baseURL.Parse(req.URL.Path)
+	req, err := c.prepareRequest(method, path, data)
+	if err != nil {
+		return 0, err
+	}
 	return c.do(req, result, true)
 }
 
-// Post perform the post on specified path. baseURL will be always be added.
-func (c *HTTPClient) Post(path string, data interface{}, result interface{}) (statusCode int, err error) {
-	return c.PostAuth(path, data, "", "", result)
+func (c *HTTPClient) prepareRequest(method string, path string, data interface{}) (*http.Request, error) {
+	u, err := c.baseURL.Parse(path)
+	if err != nil {
+		return nil, err
+	}
+	var bodyReader io.Reader
+	if data != nil {
+		body, _ := json.Marshal(data)
+		bodyReader = bytes.NewReader(body)
+	}
+	req, err := http.NewRequest(method, u.String(), bodyReader)
+	if bodyReader != nil {
+		req.Header.Add("Content-type", "application/json")
+	}
+	if err != nil {
+		return nil, err
+	}
+	return req, nil
 }
 
 // PostAuth perform the post on specified path. baseURL will be always be added.
 func (c *HTTPClient) PostAuth(path string, data interface{}, username string, password string, result interface{}) (statusCode int, err error) {
-	u, err := c.baseURL.Parse(path)
-	if err != nil {
-		return 0, err
-	}
-	body, _ := json.Marshal(data)
-	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(body))
-	if err != nil {
-		return 0, err
-	}
-	req.Header.Add("Content-type", "application/json")
-
-	if username != "" {
-		req.SetBasicAuth(username, password)
-		return c.sendRequest(req, result)
-	}
 	c.l.Lock()
 	defer c.l.Unlock()
-	return c.do(req, result, true)
+
+	req, err := c.prepareRequest("POST", path, data)
+	if err != nil {
+		return 0, err
+	}
+	req.SetBasicAuth(username, password)
+	return c.sendRequest(req, result)
 }
 
 // Iter read all page for given resource
@@ -136,7 +146,7 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 		params["page_size"] = "100"
 	}
 	result := make([]json.RawMessage, 0)
-	nextURL, err := c.baseURL.Parse(fmt.Sprintf("v1/%s/", resource))
+	nextURL, err := url.Parse(fmt.Sprintf("v1/%s/", resource))
 	q := nextURL.Query()
 	for k, v := range params {
 		q.Set(k, v)
@@ -151,11 +161,7 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 			Next    string
 			Results []json.RawMessage
 		}
-		req, err := http.NewRequest("GET", next, nil)
-		if err != nil {
-			return result, err
-		}
-		_, err = c.Do(req, &page)
+		_, err = c.Do("GET", next, nil, &page)
 		if err != nil && IsNotFound(err) {
 			break
 		}

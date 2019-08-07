@@ -5,7 +5,6 @@ import (
 	"agentgo/logger"
 	"encoding/json"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 )
@@ -29,7 +28,7 @@ func (s *Synchronizer) syncFactsRead() error {
 	return nil
 }
 
-func (s *Synchronizer) syncFacts() error {
+func (s *Synchronizer) syncFacts(fullSync bool) error {
 
 	// List of registered facts is updated by syncFactsRead which is always called by checkDuplicated before syncFacts
 
@@ -59,7 +58,7 @@ func (s *Synchronizer) syncFacts() error {
 			"value": value,
 		}
 		var response types.AgentFact
-		_, err := s.client.Post("v1/agentfact/", payload, &response)
+		_, err := s.client.Do("POST", "v1/agentfact/", payload, &response)
 		if err != nil {
 			return err
 		}
@@ -69,19 +68,21 @@ func (s *Synchronizer) syncFacts() error {
 	}
 
 	registeredFacts = s.option.Cache.FactsByUUID()
-	for _, v := range registeredFacts {
+	for k, v := range registeredFacts {
 		if _, ok := localUUIDs[v.ID]; ok {
 			continue
 		}
-		req, err := http.NewRequest("DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil)
+		_, err = s.client.Do("DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil)
 		if err != nil {
 			return err
 		}
-		_, err = s.client.Do(req, nil)
-		if err != nil {
-			return err
-		}
+		delete(registeredFacts, k)
 	}
 	s.lastFactUpdatedAt = localFacts["fact_updated_at"]
+	facts := make([]types.AgentFact, 0, len(registeredFacts))
+	for _, v := range registeredFacts {
+		facts = append(facts, v)
+	}
+	s.option.Cache.SetFacts(facts)
 	return nil
 }

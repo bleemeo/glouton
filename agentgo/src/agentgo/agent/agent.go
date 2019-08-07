@@ -261,6 +261,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Config:                 a.config,
 			State:                  a.state,
 			Facts:                  a.factProvider,
+			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})
 		_, err := a.taskRegistry.AddTask(connector, "bleemeo")

@@ -7,6 +7,7 @@ import (
 	"agentgo/bleemeo/internal/cache"
 	"agentgo/bleemeo/internal/synchronizer"
 	"agentgo/bleemeo/types"
+	"agentgo/discovery"
 	"agentgo/logger"
 )
 
@@ -19,9 +20,10 @@ type Connector struct {
 
 // Option for bleemeo.Connector
 type Option struct {
-	Config types.Config
-	State  types.State
-	Facts  types.FactProvider
+	Config    types.Config
+	State     types.State
+	Facts     types.FactProvider
+	Discovery discovery.PersistentDiscoverer
 
 	UpdateMetricResolution func(resolution time.Duration)
 }
@@ -37,10 +39,11 @@ func New(option Option) *Connector {
 // Run run the Connector
 func (c Connector) Run(ctx context.Context) error {
 	sync := synchronizer.New(ctx, synchronizer.Option{
-		Config: c.option.Config,
-		State:  c.option.State,
-		Facts:  c.option.Facts,
-		Cache:  c.cache,
+		Config:    c.option.Config,
+		State:     c.option.State,
+		Facts:     c.option.Facts,
+		Discovery: c.option.Discovery,
+		Cache:     c.cache,
 
 		UpdateConfigCallback: c.uppdateConfig,
 	})

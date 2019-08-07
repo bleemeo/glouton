@@ -18,9 +18,28 @@ type Cache struct {
 
 type data struct {
 	Version       int
+	AccountID     string
 	Facts         []types.AgentFact
 	Agent         types.Agent
 	AccountConfig types.AccountConfig
+	Services      []types.Service
+}
+
+// SetAccountID update the AccountID
+func (c *Cache) SetAccountID(accountID string) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.AccountID = accountID
+	c.dirty = true
+}
+
+// AccountID returns the AccountID
+func (c *Cache) AccountID() string {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.data.AccountID
 }
 
 // SetFacts update the AgentFact list
@@ -29,6 +48,15 @@ func (c *Cache) SetFacts(facts []types.AgentFact) {
 	defer c.l.Unlock()
 
 	c.data.Facts = facts
+	c.dirty = true
+}
+
+// SetServices update the Services list
+func (c *Cache) SetServices(services []types.Service) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Services = services
 	c.dirty = true
 }
 
@@ -76,6 +104,26 @@ func (c *Cache) FactsByUUID() map[string]types.AgentFact {
 	defer c.l.Unlock()
 	result := make(map[string]types.AgentFact)
 	for _, v := range c.data.Facts {
+		result[v.ID] = v
+	}
+	return result
+}
+
+// Services returns a (copy) of the Services
+func (c *Cache) Services() []types.Service {
+	c.l.Lock()
+	defer c.l.Unlock()
+	result := make([]types.Service, len(c.data.Services))
+	copy(result, c.data.Services)
+	return result
+}
+
+// ServicesByUUID returns a map service.id => service
+func (c *Cache) ServicesByUUID() map[string]types.Service {
+	c.l.Lock()
+	defer c.l.Unlock()
+	result := make(map[string]types.Service)
+	for _, v := range c.data.Services {
 		result[v.ID] = v
 	}
 	return result

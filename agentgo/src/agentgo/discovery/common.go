@@ -13,6 +13,12 @@ type Discoverer interface {
 	Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error)
 }
 
+// PersistentDiscoverer also allow to remove a non-running service
+type PersistentDiscoverer interface {
+	Discoverer
+	RemoveIfNonRunning(ctx context.Context, services []Service)
+}
+
 type nameContainer struct {
 	name        ServiceName
 	containerID string

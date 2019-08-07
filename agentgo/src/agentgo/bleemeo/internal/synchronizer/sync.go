@@ -4,6 +4,7 @@ import (
 	"agentgo/bleemeo/client"
 	"agentgo/bleemeo/internal/cache"
 	"agentgo/bleemeo/types"
+	"agentgo/discovery"
 	"agentgo/logger"
 	"context"
 	cryptoRand "crypto/rand"
@@ -24,16 +25,19 @@ type Synchronizer struct {
 	nextFullSync  time.Time
 	disabledUntil time.Time
 
-	lastFactUpdatedAt string
+	lastFactUpdatedAt       string
+	successiveErrors        int
+	warnAccountMismatchDone bool
 }
 
 // Option are parameter for the syncrhonizer
 type Option struct {
 	// Those option are mandatory
-	State  types.State
-	Config types.Config
-	Facts  types.FactProvider
-	Cache  *cache.Cache
+	State     types.State
+	Config    types.Config
+	Facts     types.FactProvider
+	Discovery discovery.PersistentDiscoverer
+	Cache     *cache.Cache
 
 	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
 	// reason state why it's disabled and until set for how long it should be disabled.
@@ -71,7 +75,7 @@ func (s Synchronizer) Run() error {
 		logger.V(1).Printf("This agent is registered on Bleemeo Cloud platform with UUID %v", agentID)
 	}
 
-	successiveErrors := 0
+	s.successiveErrors = 0
 	delay := time.Duration(0)
 	deadline := time.Now()
 
@@ -83,8 +87,8 @@ func (s Synchronizer) Run() error {
 		s.waitDeadline(deadline)
 		err := s.runOnce()
 		if err != nil {
-			successiveErrors++
-			delay = JitterDelay(15+math.Pow(1.55, float64(successiveErrors)), 0.1, 900)
+			s.successiveErrors++
+			delay = JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 			if client.IsAuthError(err) {
 				agentID := s.option.State.AgentID()
 				fqdn := " with FQDN TODO from agent fact cache"
@@ -94,14 +98,14 @@ func (s Synchronizer) Run() error {
 					fqdn,
 				)
 			} else {
-				if successiveErrors%5 == 0 {
+				if s.successiveErrors%5 == 0 {
 					logger.Printf("Unable to synchronize with Bleemeo: %v", err)
 				} else {
 					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", err)
 				}
 			}
 		} else {
-			successiveErrors = 0
+			s.successiveErrors = 0
 			delay = JitterDelay(15, 0.05, 15)
 		}
 		deadline = time.Now().Add(delay)
@@ -170,26 +174,30 @@ func (s *Synchronizer) runOnce() error {
 	now := time.Now()
 	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 
-	// TODO: add other condition to trigger update
+	fullSync := false
 	if s.nextFullSync.Before(now) {
+		fullSync = true
+	}
+	// TODO: add other condition to trigger update
+	if fullSync {
 		syncMethods["agent"] = true
 	}
-	if s.nextFullSync.Before(now) || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
+	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods["facts"] = true
 	}
-	if s.nextFullSync.Before(now) {
+	if fullSync {
 		syncMethods["services"] = true
 
 		// Metrics registration may need services to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = true
 	}
-	if s.nextFullSync.Before(now) {
+	if fullSync {
 		syncMethods["containers"] = true
 
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = true
 	}
-	if s.nextFullSync.Before(now) {
+	if fullSync {
 		syncMethods["metrics"] = true
 	}
 
@@ -203,11 +211,11 @@ func (s *Synchronizer) runOnce() error {
 
 	syncStep := []struct {
 		name   string
-		method func() error
+		method func(bool) error
 	}{
 		{name: "agent", method: s.syncAgent},
 		{name: "facts", method: s.syncFacts},
-		// {name: "services", method: s.syncFacts},
+		{name: "services", method: s.syncServices},
 		// {name: "containers", method: s.syncFacts},
 		// {name: "metrics", method: s.syncFacts},
 	}
@@ -215,7 +223,7 @@ func (s *Synchronizer) runOnce() error {
 	var lastErr error
 	for _, step := range syncStep {
 		if _, ok := syncMethods[step.name]; ok {
-			err := step.method()
+			err := step.method(fullSync)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 				lastErr = err
@@ -223,7 +231,7 @@ func (s *Synchronizer) runOnce() error {
 		}
 	}
 	logger.V(2).Printf("Synchronization took %v for %v", time.Since(startAt), syncMethods)
-	if s.nextFullSync.Before(now) && lastErr == nil {
+	if fullSync && lastErr == nil {
 		s.option.Cache.Save()
 		s.nextFullSync = time.Now().Add(JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))

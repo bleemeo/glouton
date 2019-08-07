@@ -28,11 +28,12 @@ type Discovery struct {
 	servicesMap         map[nameContainer]Service
 	lastDiscoveryUpdate time.Time
 
-	acc          Accumulator
-	activeInput  map[nameContainer]int
-	activeCheck  map[nameContainer]int
-	coll         Collector
-	taskRegistry Registry
+	acc                   Accumulator
+	lastConfigservicesMap map[nameContainer]Service
+	activeInput           map[nameContainer]int
+	activeCheck           map[nameContainer]int
+	coll                  Collector
+	taskRegistry          Registry
 }
 
 // Collector will gather metrics for added inputs
@@ -82,18 +83,17 @@ func (d *Discovery) Close() {
 func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	d.l.Lock()
 	defer d.l.Unlock()
+	return d.discovery(ctx, maxAge)
+}
+
+func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 
 	if time.Since(d.lastDiscoveryUpdate) > maxAge {
-		servicesMap, err := d.updateDiscovery(ctx, maxAge)
+		err := d.updateDiscovery(ctx, maxAge)
 		if err != nil {
 			return nil, err
 		}
-		err = d.configureMetricInputs(d.servicesMap, servicesMap)
-		if err != nil {
-			logger.Printf("Unable to update metric inputs: %v", err)
-		}
-		d.configureChecks(d.servicesMap, servicesMap)
-		d.servicesMap = servicesMap
+		d.reconfigure()
 		d.lastDiscoveryUpdate = time.Now()
 	}
 
@@ -104,10 +104,40 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 	return services, nil
 }
 
-func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) (map[nameContainer]Service, error) {
+// RemoveIfNonRunning remove a service if the service is not running
+//
+// This is useful to remove persited service that no longer run.
+func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) {
+	d.l.Lock()
+	defer d.l.Unlock()
+	deleted := false
+	for _, v := range services {
+		key := nameContainer{name: v.Name, containerID: v.ContainerID}
+		if _, ok := d.servicesMap[key]; ok {
+			deleted = true
+		}
+		delete(d.servicesMap, key)
+	}
+	if deleted {
+		if _, err := d.discovery(ctx, 0); err != nil {
+			logger.V(2).Printf("Error during discovery during RemoveIfNonRunning: %v", err)
+		}
+	}
+}
+
+func (d *Discovery) reconfigure() {
+	err := d.configureMetricInputs(d.lastConfigservicesMap, d.servicesMap)
+	if err != nil {
+		logger.Printf("Unable to update metric inputs: %v", err)
+	}
+	d.configureChecks(d.lastConfigservicesMap, d.servicesMap)
+	d.lastConfigservicesMap = d.servicesMap
+}
+
+func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
 	r, err := d.dynamicDiscovery.Discovery(ctx, maxAge)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	servicesMap := make(map[nameContainer]Service)
@@ -131,5 +161,6 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) (
 		servicesMap[key] = service
 	}
 
-	return servicesMap, nil
+	d.servicesMap = servicesMap
+	return nil
 }
