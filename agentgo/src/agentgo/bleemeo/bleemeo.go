@@ -30,7 +30,7 @@ type Option struct {
 func New(option Option) *Connector {
 	return &Connector{
 		option: option,
-		cache:  &cache.Cache{},
+		cache:  cache.Load(option.State),
 	}
 }
 
@@ -44,6 +44,7 @@ func (c Connector) Run(ctx context.Context) error {
 
 		UpdateConfigCallback: c.uppdateConfig,
 	})
+	defer c.cache.Save()
 	return sync.Run()
 }
 

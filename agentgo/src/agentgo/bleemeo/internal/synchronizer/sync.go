@@ -73,7 +73,14 @@ func (s Synchronizer) Run() error {
 
 	successiveErrors := 0
 	delay := time.Duration(0)
+	deadline := time.Now()
+
+	if len(s.option.Cache.FactsByKey()) != 0 {
+		logger.V(2).Printf("Waiting few second before first synchroization as this agent has a valid cache")
+		deadline = time.Now().Add(JitterDelay(20, 0.5, 20))
+	}
 	for s.ctx.Err() == nil {
+		s.waitDeadline(deadline)
 		err := s.runOnce()
 		if err != nil {
 			successiveErrors++
@@ -97,11 +104,10 @@ func (s Synchronizer) Run() error {
 			successiveErrors = 0
 			delay = JitterDelay(15, 0.05, 15)
 		}
-		deadline := time.Now().Add(delay)
+		deadline = time.Now().Add(delay)
 		if deadline.Before(s.disabledUntil) {
 			deadline = s.disabledUntil
 		}
-		s.waitDeadline(deadline)
 	}
 
 	return nil
@@ -218,6 +224,7 @@ func (s *Synchronizer) runOnce() error {
 	}
 	logger.V(2).Printf("Synchronization took %v for %v", time.Since(startAt), syncMethods)
 	if s.nextFullSync.Before(now) && lastErr == nil {
+		s.option.Cache.Save()
 		s.nextFullSync = time.Now().Add(JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}

@@ -18,6 +18,8 @@ type State struct {
 type stateData struct {
 	AgentUUID     string `json:"agent_uuid"`
 	AgentPassword string `json:"password"`
+
+	Cache map[string]json.RawMessage
 }
 
 // Load load state.json file
@@ -33,6 +35,9 @@ func Load(path string) (*State, error) {
 	}
 	decoder := json.NewDecoder(f)
 	err = decoder.Decode(&state.data)
+	if state.data.Cache == nil {
+		state.data.Cache = make(map[string]json.RawMessage)
+	}
 	return &state, err
 }
 
@@ -92,4 +97,34 @@ func (s *State) SetAgentIDPassword(agentID string, password string) {
 	if err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
 	}
+}
+
+// SetCache save a cache object
+func (s *State) SetCache(key string, object interface{}) error {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	buffer, err := json.Marshal(object)
+	if err != nil {
+		return err
+	}
+	s.data.Cache[key] = json.RawMessage(buffer)
+	err = s.save()
+	if err != nil {
+		logger.Printf("Unable to save state.json: %v", err)
+	}
+	return nil
+}
+
+// Cache get a cache object
+func (s *State) Cache(key string, result interface{}) error {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	buffer, ok := s.data.Cache[key]
+	if !ok {
+		return nil
+	}
+	err := json.Unmarshal(buffer, &result)
+	return err
 }
