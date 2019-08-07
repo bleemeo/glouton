@@ -12,10 +12,12 @@ import (
 
 // Collector implement running Gather on inputs every fixed time interval
 type Collector struct {
-	acc        telegraf.Accumulator
-	inputs     map[int]telegraf.Input
-	inputNames map[int]string
-	l          sync.Mutex
+	acc          telegraf.Accumulator
+	inputs       map[int]telegraf.Input
+	inputNames   map[int]string
+	currentDelay time.Duration
+	updateDelayC chan interface{}
+	l            sync.Mutex
 }
 
 // New returns a Collector with default option
@@ -24,9 +26,11 @@ type Collector struct {
 // 10 seconds.
 func New(acc telegraf.Accumulator) *Collector {
 	c := &Collector{
-		acc:        acc,
-		inputs:     make(map[int]telegraf.Input),
-		inputNames: make(map[int]string),
+		acc:          acc,
+		inputs:       make(map[int]telegraf.Input),
+		inputNames:   make(map[int]string),
+		currentDelay: 10 * time.Second,
+		updateDelayC: make(chan interface{}),
 	}
 	return c
 }
@@ -74,19 +78,36 @@ func (c *Collector) RemoveInput(id int) {
 	delete(c.inputNames, id)
 }
 
+// UpdateDelay change the delay between metric gather
+func (c *Collector) UpdateDelay(delay time.Duration) {
+	if c.setCurrentDelay(delay) {
+		logger.V(2).Printf("Change metric collector delay to %v", delay)
+		c.updateDelayC <- nil
+	}
+}
+
 // Run will run the collections until context is cancelled
 func (c *Collector) Run(ctx context.Context) error {
-	c.sleepToAlign(10 * time.Second)
-	ticker := time.NewTicker(10 * time.Second)
-	defer ticker.Stop()
-	for {
-		c.run()
-		select {
-		case <-ticker.C:
-		case <-ctx.Done():
-			return nil
-		}
+	for ctx.Err() == nil {
+		c.run(ctx)
 	}
+	return nil
+}
+
+func (c *Collector) getCurrentDelay() time.Duration {
+	c.l.Lock()
+	defer c.l.Unlock()
+	return c.currentDelay
+}
+
+func (c *Collector) setCurrentDelay(delay time.Duration) (changed bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+	if c.currentDelay == delay {
+		return false
+	}
+	c.currentDelay = delay
+	return true
 }
 
 // sleep such are time.Now() is aligned on a multiple of interval
@@ -113,7 +134,24 @@ func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
 	return inputsCopy, inputsNameCopy
 }
 
-func (c *Collector) run() {
+func (c *Collector) run(ctx context.Context) {
+	currentDelay := c.getCurrentDelay()
+	c.sleepToAlign(currentDelay)
+	ticker := time.NewTicker(currentDelay)
+	defer ticker.Stop()
+	for {
+		c.runOnce()
+		select {
+		case <-c.updateDelayC:
+			return
+		case <-ticker.C:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (c *Collector) runOnce() {
 	inputsCopy, inputsNameCopy := c.inputsForCollection()
 	var wg sync.WaitGroup
 

@@ -46,15 +46,15 @@ func TestAddRemove(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	c := New(nil)
-	c.run()
+	c.runOnce()
 
 	input := &mockInput{Name: "input1"}
 	c.AddInput(input, "input1")
-	c.run()
+	c.runOnce()
 	if input.GatherCallCount != 1 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 1)
 	}
-	c.run()
+	c.runOnce()
 	if input.GatherCallCount != 2 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 2)
 	}

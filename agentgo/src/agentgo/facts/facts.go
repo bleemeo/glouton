@@ -192,7 +192,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	}
 	if f.hostRootPath != "" {
 		if v, err := ioutil.ReadFile(filepath.Join(f.hostRootPath, "etc/timezone")); err == nil {
-			newFacts["timezone"] = string(v)
+			newFacts["timezone"] = strings.TrimSpace(string(v))
 		}
 	}
 	newFacts["agent_version"] = version.Version

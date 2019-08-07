@@ -1,6 +1,7 @@
 package state
 
 import (
+	"agentgo/logger"
 	"encoding/json"
 	"os"
 	"sync"
@@ -8,11 +9,15 @@ import (
 
 // State is state.json
 type State struct {
-	AgentUUID string `json:"agent_uuid"`
-	Password  string `json:"password"`
+	data stateData
 
 	l    sync.Mutex
 	path string
+}
+
+type stateData struct {
+	AgentUUID     string `json:"agent_uuid"`
+	AgentPassword string `json:"password"`
 }
 
 // Load load state.json file
@@ -27,7 +32,7 @@ func Load(path string) (*State, error) {
 		return nil, err
 	}
 	decoder := json.NewDecoder(f)
-	err = decoder.Decode(&state)
+	err = decoder.Decode(&state.data)
 	return &state, err
 }
 
@@ -35,9 +40,13 @@ func Load(path string) (*State, error) {
 func (s *State) Save() error {
 	s.l.Lock()
 	defer s.l.Unlock()
+	return s.save()
+}
+
+func (s *State) save() error {
 	err := s.saveTo(s.path + ".tmp")
 	if err != nil {
-		return nil
+		return err
 	}
 	err = os.Rename(s.path+".tmp", s.path)
 	return err
@@ -50,10 +59,37 @@ func (s *State) saveTo(path string) error {
 	}
 	defer w.Close()
 	encoder := json.NewEncoder(w)
-	err = encoder.Encode(s)
+	err = encoder.Encode(s.data)
 	if err != nil {
 		return err
 	}
 	_ = w.Sync()
 	return nil
+}
+
+// AgentID returns the agent UUID for Bleemeo
+func (s *State) AgentID() string {
+	s.l.Lock()
+	defer s.l.Unlock()
+	return s.data.AgentUUID
+}
+
+// AgentPassword returns the agent password for Bleemeo
+func (s *State) AgentPassword() string {
+	s.l.Lock()
+	defer s.l.Unlock()
+	return s.data.AgentPassword
+}
+
+// SetAgentIDPassword save the agent UUID and password for Bleemeo
+func (s *State) SetAgentIDPassword(agentID string, password string) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.data.AgentUUID = agentID
+	s.data.AgentPassword = password
+	err := s.save()
+	if err != nil {
+		logger.Printf("Unable to save state.json: %v", err)
+	}
 }

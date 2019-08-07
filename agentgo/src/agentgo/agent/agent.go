@@ -14,6 +14,7 @@ import (
 
 	"agentgo/agent/state"
 	"agentgo/api"
+	"agentgo/bleemeo"
 	"agentgo/collector"
 	"agentgo/config"
 	"agentgo/debouncer"
@@ -115,7 +116,7 @@ func Run() {
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
-func (a *agent) run() {
+func (a *agent) run() { //nolint:gocyclo
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -198,11 +199,26 @@ func (a *agent) run() {
 	)
 	discoveryTrigger.Trigger()
 
-	a.taskRegistry.AddTask(db, "store")
-	a.taskRegistry.AddTask(discoveryTrigger, "discovery")
-	a.taskRegistry.AddTask(dockerFact, "docker")
-	a.taskRegistry.AddTask(coll, "collector")
-	a.taskRegistry.AddTask(api, "api")
+	_, err := a.taskRegistry.AddTask(db, "store")
+	if err != nil {
+		logger.V(1).Printf("Unable to start store: %v", err)
+	}
+	_, err = a.taskRegistry.AddTask(discoveryTrigger, "discovery")
+	if err != nil {
+		logger.V(1).Printf("Unable to start discovery: %v", err)
+	}
+	_, err = a.taskRegistry.AddTask(dockerFact, "docker")
+	if err != nil {
+		logger.V(1).Printf("Unable to start Docker watcher: %v", err)
+	}
+	_, err = a.taskRegistry.AddTask(coll, "collector")
+	if err != nil {
+		logger.V(1).Printf("Unable to start metric collector: %v", err)
+	}
+	_, err = a.taskRegistry.AddTask(api, "api")
+	if err != nil {
+		logger.V(1).Printf("Unable to start local API: %v", err)
+	}
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -234,6 +250,19 @@ func (a *agent) run() {
 			}
 		}
 	}()
+
+	if a.config.Bool("bleemeo.enabled") {
+		connector := bleemeo.New(bleemeo.Option{
+			Config:                 a.config,
+			State:                  a.state,
+			Facts:                  factProvider,
+			UpdateMetricResolution: coll.UpdateDelay,
+		})
+		_, err := a.taskRegistry.AddTask(connector, "bleemeo")
+		if err != nil {
+			logger.V(1).Printf("Unable to start Bleemeo connector: %v", err)
+		}
+	}
 
 	for s := range c {
 		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
