@@ -23,6 +23,8 @@ type Synchronizer struct {
 	client        *client.HTTPClient
 	nextFullSync  time.Time
 	disabledUntil time.Time
+
+	lastFactUpdatedAt string
 }
 
 // Option are parameter for the syncrhonizer
@@ -159,13 +161,14 @@ func (s *Synchronizer) runOnce() error {
 	}
 
 	syncMethods := make(map[string]bool)
-
 	now := time.Now()
+	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+
 	// TODO: add other condition to trigger update
 	if s.nextFullSync.Before(now) {
 		syncMethods["agent"] = true
 	}
-	if s.nextFullSync.Before(now) {
+	if s.nextFullSync.Before(now) || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods["facts"] = true
 	}
 	if s.nextFullSync.Before(now) {

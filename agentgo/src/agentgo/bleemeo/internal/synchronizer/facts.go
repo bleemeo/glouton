@@ -33,7 +33,7 @@ func (s *Synchronizer) syncFacts() error {
 	// List of registered facts is updated by syncFactsRead which is always called by checkDuplicated before syncFacts
 
 	currentConfig := s.option.Cache.AccountConfig()
-	localFacts, err := s.option.Facts.Facts(s.ctx, time.Minute)
+	localFacts, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
@@ -81,5 +81,6 @@ func (s *Synchronizer) syncFacts() error {
 			return err
 		}
 	}
+	s.lastFactUpdatedAt = localFacts["fact_updated_at"]
 	return nil
 }

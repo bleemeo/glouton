@@ -43,6 +43,19 @@ type agent struct {
 	taskRegistry *task.Registry
 	config       *config.Configuration
 	state        *state.State
+
+	discovery    *discovery.Discovery
+	dockerFact   *facts.DockerProvider
+	collector    *collector.Collector
+	factProvider *facts.FactProvider
+
+	triggerHandler *debouncer.Debouncer
+	triggerLock    sync.Mutex
+	triggerDisc    bool
+	triggerFact    bool
+
+	dockerInputPresent bool
+	dockerInputID      int
 }
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
@@ -139,79 +152,57 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	db := store.New()
-	dockerFact := facts.NewDocker()
-	psFact := facts.NewProcess(dockerFact)
+	a.dockerFact = facts.NewDocker()
+	psFact := facts.NewProcess(a.dockerFact)
 	netstat := &facts.NetstatProvider{}
-	factProvider := facts.NewFacter(
+	a.factProvider = facts.NewFacter(
 		a.config.String("agent.facts_file"),
 		rootPath,
 		a.config.String("agent.public_ip_indicator"),
 	)
-	factProvider.AddCallback(dockerFact.DockerFact)
-	factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
-	factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
-	coll := collector.New(db.Accumulator())
-	disc := discovery.New(
-		discovery.NewDynamic(psFact, netstat, dockerFact),
-		coll,
+	a.factProvider.AddCallback(a.dockerFact.DockerFact)
+	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
+	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
+	a.collector = collector.New(db.Accumulator())
+	a.discovery = discovery.New(
+		discovery.NewDynamic(psFact, netstat, a.dockerFact),
+		a.collector,
 		a.taskRegistry,
 		nil,
 		db.Accumulator(),
 	)
-	api := api.New(db, dockerFact, psFact, factProvider, apiBindAddress, disc)
+	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery)
 
-	coll.AddInput(panicOnError(system.New()), "system")
-	coll.AddInput(panicOnError(process.New()), "process")
-	coll.AddInput(panicOnError(cpu.New()), "cpu")
-	coll.AddInput(panicOnError(mem.New()), "mem")
-	coll.AddInput(panicOnError(swap.New()), "swap")
-	coll.AddInput(panicOnError(net.New(a.config.StringList("network_interface_blacklist"))), "net")
+	a.collector.AddInput(panicOnError(system.New()), "system")
+	a.collector.AddInput(panicOnError(process.New()), "process")
+	a.collector.AddInput(panicOnError(cpu.New()), "cpu")
+	a.collector.AddInput(panicOnError(mem.New()), "mem")
+	a.collector.AddInput(panicOnError(swap.New()), "swap")
+	a.collector.AddInput(panicOnError(net.New(a.config.StringList("network_interface_blacklist"))), "net")
 	if rootPath != "" {
-		coll.AddInput(panicOnError(disk.New(rootPath, nil)), "disk")
+		a.collector.AddInput(panicOnError(disk.New(rootPath, nil)), "disk")
 	}
-	coll.AddInput(panicOnError(diskio.New(a.config.StringList("disk_monitor"))), "diskio")
+	a.collector.AddInput(panicOnError(diskio.New(a.config.StringList("disk_monitor"))), "diskio")
 
-	dockerInputPresent := false
-	dockerInputID := 0
-	discoveryTrigger := debouncer.New(
-		func(ctx context.Context) {
-			_, err := disc.Discovery(ctx, 0)
-			if err != nil {
-				logger.V(1).Printf("error during discovery: %v", err)
-			}
-			hasConnection := dockerFact.HasConnection(ctx)
-			if hasConnection && !dockerInputPresent {
-				i, err := docker.New()
-				if err != nil {
-					logger.V(1).Printf("error when creating Docker input: %v", err)
-				} else {
-					logger.V(2).Printf("Enable Docker metrics")
-					dockerInputID = coll.AddInput(i, "docker")
-					dockerInputPresent = true
-				}
-			} else if !hasConnection && dockerInputPresent {
-				logger.V(2).Printf("Disable Docker metrics")
-				coll.RemoveInput(dockerInputID)
-				dockerInputPresent = false
-			}
-		},
+	a.triggerHandler = debouncer.New(
+		a.handleTrigger,
 		10*time.Second,
 	)
-	discoveryTrigger.Trigger()
+	a.FireTrigger(true, false)
 
 	_, err := a.taskRegistry.AddTask(db, "store")
 	if err != nil {
 		logger.V(1).Printf("Unable to start store: %v", err)
 	}
-	_, err = a.taskRegistry.AddTask(discoveryTrigger, "discovery")
+	_, err = a.taskRegistry.AddTask(a.triggerHandler, "triggerHandler")
 	if err != nil {
 		logger.V(1).Printf("Unable to start discovery: %v", err)
 	}
-	_, err = a.taskRegistry.AddTask(dockerFact, "docker")
+	_, err = a.taskRegistry.AddTask(a.dockerFact, "docker")
 	if err != nil {
 		logger.V(1).Printf("Unable to start Docker watcher: %v", err)
 	}
-	_, err = a.taskRegistry.AddTask(coll, "collector")
+	_, err = a.taskRegistry.AddTask(a.collector, "collector")
 	if err != nil {
 		logger.V(1).Printf("Unable to start metric collector: %v", err)
 	}
@@ -231,7 +222,21 @@ func (a *agent) run() { //nolint:gocyclo
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				discoveryTrigger.Trigger()
+				a.FireTrigger(true, false)
+			}
+		}
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				a.FireTrigger(false, true)
 			}
 		}
 	}()
@@ -241,9 +246,9 @@ func (a *agent) run() { //nolint:gocyclo
 		defer wg.Done()
 		for {
 			select {
-			case ev := <-dockerFact.Events():
+			case ev := <-a.dockerFact.Events():
 				if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
-					discoveryTrigger.Trigger()
+					a.FireTrigger(true, false)
 				}
 			case <-ctx.Done():
 				return
@@ -255,8 +260,8 @@ func (a *agent) run() { //nolint:gocyclo
 		connector := bleemeo.New(bleemeo.Option{
 			Config:                 a.config,
 			State:                  a.state,
-			Facts:                  factProvider,
-			UpdateMetricResolution: coll.UpdateDelay,
+			Facts:                  a.factProvider,
+			UpdateMetricResolution: a.collector.UpdateDelay,
 		})
 		_, err := a.taskRegistry.AddTask(connector, "bleemeo")
 		if err != nil {
@@ -270,13 +275,66 @@ func (a *agent) run() { //nolint:gocyclo
 			break
 		}
 		if s == syscall.SIGHUP {
-			discoveryTrigger.Trigger()
+			a.FireTrigger(true, true)
 		}
 	}
 
 	cancel()
 	a.taskRegistry.Close()
-	disc.Close()
+	a.discovery.Close()
 	wg.Wait()
 	logger.V(2).Printf("Agent stopped")
+}
+
+func (a *agent) FireTrigger(discovery bool, sendFacts bool) {
+	a.triggerLock.Lock()
+	defer a.triggerLock.Unlock()
+	if discovery {
+		a.triggerDisc = true
+	}
+	if sendFacts {
+		a.triggerFact = true
+	}
+	a.triggerHandler.Trigger()
+}
+
+func (a *agent) cleanTrigger() (discovery bool, sendFacts bool) {
+	a.triggerLock.Lock()
+	defer a.triggerLock.Unlock()
+
+	discovery = a.triggerDisc
+	sendFacts = a.triggerFact
+	a.triggerDisc = false
+	a.triggerFact = false
+	return
+}
+
+func (a *agent) handleTrigger(ctx context.Context) {
+	runDiscovery, runFact := a.cleanTrigger()
+	if runDiscovery {
+		_, err := a.discovery.Discovery(ctx, 0)
+		if err != nil {
+			logger.V(1).Printf("error during discovery: %v", err)
+		}
+		hasConnection := a.dockerFact.HasConnection(ctx)
+		if hasConnection && !a.dockerInputPresent {
+			i, err := docker.New()
+			if err != nil {
+				logger.V(1).Printf("error when creating Docker input: %v", err)
+			} else {
+				logger.V(2).Printf("Enable Docker metrics")
+				a.dockerInputID = a.collector.AddInput(i, "docker")
+				a.dockerInputPresent = true
+			}
+		} else if !hasConnection && a.dockerInputPresent {
+			logger.V(2).Printf("Disable Docker metrics")
+			a.collector.RemoveInput(a.dockerInputID)
+			a.dockerInputPresent = false
+		}
+	}
+	if runFact {
+		if _, err := a.factProvider.Facts(ctx, 0); err != nil {
+			logger.V(1).Printf("error during facts gathering: %v", err)
+		}
+	}
 }
