@@ -3,6 +3,7 @@ package synchronizer
 import (
 	"agentgo/bleemeo/types"
 	"agentgo/logger"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"strings"
@@ -17,12 +18,12 @@ func (s *Synchronizer) syncFactsRead() error {
 	}
 
 	facts := make([]types.AgentFact, len(result))
-	for i, v := range result {
-		v := types.InterfaceToAgentFact(v)
-		if v.ID == "" {
+	for i, jsonMessage := range result {
+		var fact types.AgentFact
+		if err := json.Unmarshal(jsonMessage, &fact); err != nil {
 			continue
 		}
-		facts[i] = v
+		facts[i] = fact
 	}
 	s.option.Cache.SetFacts(facts)
 	return nil

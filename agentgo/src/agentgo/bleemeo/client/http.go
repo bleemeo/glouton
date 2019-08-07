@@ -128,14 +128,14 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 // Iter read all page for given resource
 //
 // params may be modified
-func (c *HTTPClient) Iter(resource string, params map[string]string) ([]interface{}, error) {
+func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.RawMessage, error) {
 	if params == nil {
 		params = make(map[string]string)
 	}
 	if _, ok := params["page_size"]; !ok {
 		params["page_size"] = "100"
 	}
-	result := make([]interface{}, 0)
+	result := make([]json.RawMessage, 0)
 	nextURL, err := c.baseURL.Parse(fmt.Sprintf("v1/%s/", resource))
 	q := nextURL.Query()
 	for k, v := range params {
@@ -146,8 +146,11 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]interfac
 		return nil, err
 	}
 	next := nextURL.String()
-	var page map[string]interface{}
 	for {
+		var page struct {
+			Next    string
+			Results []json.RawMessage
+		}
 		req, err := http.NewRequest("GET", next, nil)
 		if err != nil {
 			return result, err
@@ -160,12 +163,9 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]interfac
 			return result, err
 		}
 
-		list := page["results"]
-		if list, ok := list.([]interface{}); ok {
-			result = append(result, list...)
-		}
-		next, ok := page["next"].(string)
-		if next == "" || !ok {
+		result = append(result, page.Results...)
+		next = page.Next
+		if next == "" {
 			break
 		}
 	}
