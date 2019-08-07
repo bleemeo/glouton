@@ -8,13 +8,15 @@ import (
 	"io"
 	"log"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
 
 type packetStruct struct {
 	version int8
-	data    string
+	key     string
+	args    []string
 }
 
 type callback func(key string, args []string) string
@@ -28,7 +30,7 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 	}
 
 	var answer packetStruct
-	answer.data = cb(decodedRequest.data, []string{""})
+	answer.key = cb(decodedRequest.key, decodedRequest.args)
 	answer.version = decodedRequest.version
 
 	var encodedAnswer []byte
@@ -80,12 +82,20 @@ func decode(r io.Reader) (packetStruct, error) {
 		err = fmt.Errorf("r.Read failed for data: %v", err)
 		return decodedPacket, err
 	}
-	decodedPacket.data = string(packetData)
+	strPacketData := string(packetData)
+	i := strings.Index(strPacketData, "[")
+	if i != -1 {
+		decodedPacket.key = strPacketData[0:i]
+		decodedPacket.args = strings.Split(strPacketData[i+1:len(strPacketData)-1], ",")
+	} else {
+		decodedPacket.key = strPacketData
+	}
 	return decodedPacket, err
 }
 
 func encodev1(decodedPacket packetStruct) ([]byte, error) {
-	encodedPacket := make([]byte, 13+len(decodedPacket.data))
+	var dataLength = int64(len(decodedPacket.key))
+	encodedPacket := make([]byte, 13+dataLength)
 
 	copy(encodedPacket[0:4], []byte("ZBXD"))
 
@@ -97,7 +107,6 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 	}
 	copy(encodedPacket[4:5], buf.Bytes())
 
-	var dataLength = int64(len(decodedPacket.data))
 	buf = new(bytes.Buffer)
 	err = binary.Write(buf, binary.LittleEndian, &dataLength)
 	if err != nil {
@@ -106,7 +115,7 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 	}
 	copy(encodedPacket[5:13], buf.Bytes())
 
-	copy(encodedPacket[13:13+len(decodedPacket.data)], []byte(decodedPacket.data))
+	copy(encodedPacket[13:], []byte(decodedPacket.key))
 	return encodedPacket, nil
 }
 

@@ -3,6 +3,7 @@ package zabbix
 import (
 	"bytes"
 	"io"
+	"reflect"
 	"testing"
 )
 
@@ -60,14 +61,14 @@ func TestDecode(t *testing.T) {
 		in   io.Reader
 		want packetStruct
 	}{
-		{bytes.NewReader(versionRequest), packetStruct{1, "agent.version"}},
-		{bytes.NewReader(pingRequest), packetStruct{1, "agent.ping"}},
-		{bytes.NewReader(discRequest), packetStruct{1, "net.if.discovery"}},
-		{bytes.NewReader(inlorequest), packetStruct{1, "net.if.in[lo]"}},
+		{bytes.NewReader(versionRequest), packetStruct{version: 1, key: "agent.version"}},
+		{bytes.NewReader(pingRequest), packetStruct{version: 1, key: "agent.ping"}},
+		{bytes.NewReader(discRequest), packetStruct{version: 1, key: "net.if.discovery"}},
+		{bytes.NewReader(inlorequest), packetStruct{1, "net.if.in", []string{"lo"}}},
 	}
 	for _, c := range cases {
 		got, err := decode(c.in)
-		if got != c.want {
+		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("decode(zabbixPacket) == %v, want %v", got, c.want)
 		}
 		if err != nil {
@@ -81,22 +82,16 @@ func TestEncode(t *testing.T) {
 		in   packetStruct
 		want []byte
 	}{
-		{packetStruct{1, "1"}, pingAnswer},
-		{packetStruct{1, "4.2.4"}, versionAnswer},
-		{packetStruct{1, discstring}, discAnswer},
-		{packetStruct{1, "797826"}, inloanswer},
+		{packetStruct{version: 1, key: "1"}, pingAnswer},
+		{packetStruct{version: 1, key: "4.2.4"}, versionAnswer},
+		{packetStruct{version: 1, key: discstring}, discAnswer},
+		{packetStruct{version: 1, key: "797826"}, inloanswer},
 	}
 	for _, c := range cases {
 		got, err := encodev1(c.in)
-		if len(got) != len(c.want) {
+		if bytes.Compare(got, c.want) != 0 {
 			t.Errorf("encodeV2(%v) == %v, want %v", c.in, got, c.want)
 			break
-		}
-		for i := 0; i < len(got); i++ {
-			if got[i] != c.want[i] {
-				t.Errorf("encodeV2(%v) == %v, want %v", c.in, got, c.want)
-				break
-			}
 		}
 		if err != nil {
 			t.Error(err)
