@@ -10,7 +10,10 @@ import (
 
 func (s *Synchronizer) syncAgent(fullSync bool) error {
 	var agent types.Agent
-	_, err := s.client.Do("GET", fmt.Sprintf("v1/agent/%s/", s.option.State.AgentID()), nil, &agent)
+	params := map[string]string{
+		"fields": "id,created_at,account,next_config_at,current_config",
+	}
+	_, err := s.client.Do("GET", fmt.Sprintf("v1/agent/%s/", s.option.State.AgentID()), params, nil, &agent)
 	if err != nil {
 		return err
 	}
@@ -31,7 +34,10 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 	}
 
 	var config types.AccountConfig
-	_, err = s.client.Do("GET", fmt.Sprintf("v1/accountconfig/%s/", agent.CurrentConfigID), nil, &config)
+	params = map[string]string{
+		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,live_process_resolution,docker_integration",
+	}
+	_, err = s.client.Do("GET", fmt.Sprintf("v1/accountconfig/%s/", agent.CurrentConfigID), params, nil, &config)
 	if err != nil {
 		return err
 	}

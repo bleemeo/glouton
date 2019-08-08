@@ -120,7 +120,11 @@ func (s *Synchronizer) syncServices(fullSync bool) error {
 }
 
 func (s *Synchronizer) serviceUpdateList() error {
-	result, err := s.client.Iter("service", nil)
+	params := map[string]string{
+		"agent":  s.option.State.AgentID(),
+		"fields": "id,label,instance,listen_addresses,exe_path,stack,active",
+	}
+	result, err := s.client.Iter("service", params)
 	if err != nil {
 		return err
 	}
@@ -168,6 +172,9 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	remoteServices := s.option.Cache.Services()
 	remoteIndexByKey := serviceIndexByKey(remoteServices)
 	longToShortLookup := longToShortKey(localServices)
+	params := map[string]string{
+		"fields": "id,label,instance,listen_addresses,exe_path,stack,active,account,agent",
+	}
 	for _, srv := range localServices {
 		key := serviceNameInstance{
 			name:     string(srv.Name),
@@ -202,14 +209,14 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		}
 		var result types.Service
 		if remoteFound {
-			_, err := s.client.Do("PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), payload, &result)
+			_, err := s.client.Do("PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), params, payload, &result)
 			if err != nil {
 				return err
 			}
 			remoteServices[remoteIndex] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
-			_, err := s.client.Do("POST", "v1/service/", payload, &result)
+			_, err := s.client.Do("POST", "v1/service/", params, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -239,7 +246,7 @@ func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service)
 		if _, ok := shortToLongLookup[shortKey]; ok {
 			continue
 		}
-		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/service/%s/", v.ID), nil, nil)
+		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/service/%s/", v.ID), nil, nil, nil)
 		key := serviceNameInstance{name: v.Label, instance: v.Instance}
 		if err != nil {
 			logger.V(1).Printf("Failed to delete service %v on Bleemeo API: %v", key, err)

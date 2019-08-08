@@ -91,18 +91,18 @@ func NewClient(ctx context.Context, baseURL string, username string, password st
 // Response is assumed to be JSON and will be decoded into result. If result is nil, response is not decoded
 //
 // If submittedData is not-nil, it's the body content of the request.
-func (c *HTTPClient) Do(method string, path string, data interface{}, result interface{}) (statusCode int, err error) {
+func (c *HTTPClient) Do(method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	req, err := c.prepareRequest(method, path, data)
+	req, err := c.prepareRequest(method, path, params, data)
 	if err != nil {
 		return 0, err
 	}
 	return c.do(req, result, true)
 }
 
-func (c *HTTPClient) prepareRequest(method string, path string, data interface{}) (*http.Request, error) {
+func (c *HTTPClient) prepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
 	u, err := c.baseURL.Parse(path)
 	if err != nil {
 		return nil, err
@@ -119,6 +119,13 @@ func (c *HTTPClient) prepareRequest(method string, path string, data interface{}
 	if err != nil {
 		return nil, err
 	}
+	if len(params) > 0 {
+		q := req.URL.Query()
+		for k, v := range params {
+			q.Set(k, v)
+		}
+		req.URL.RawQuery = q.Encode()
+	}
 	return req, nil
 }
 
@@ -127,7 +134,7 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	req, err := c.prepareRequest("POST", path, data)
+	req, err := c.prepareRequest("POST", path, nil, data)
 	if err != nil {
 		return 0, err
 	}
@@ -146,22 +153,13 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 		params["page_size"] = "100"
 	}
 	result := make([]json.RawMessage, 0)
-	nextURL, err := url.Parse(fmt.Sprintf("v1/%s/", resource))
-	q := nextURL.Query()
-	for k, v := range params {
-		q.Set(k, v)
-	}
-	nextURL.RawQuery = q.Encode()
-	if err != nil {
-		return nil, err
-	}
-	next := nextURL.String()
+	next := fmt.Sprintf("v1/%s/", resource)
 	for {
 		var page struct {
 			Next    string
 			Results []json.RawMessage
 		}
-		_, err = c.Do("GET", next, nil, &page)
+		_, err := c.Do("GET", next, params, nil, &page)
 		if err != nil && IsNotFound(err) {
 			break
 		}
@@ -171,6 +169,7 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 
 		result = append(result, page.Results...)
 		next = page.Next
+		params = nil // params are now included in next url.
 		if next == "" {
 			break
 		}
