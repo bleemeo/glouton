@@ -83,14 +83,57 @@ func decode(r io.Reader) (packetStruct, error) {
 		return decodedPacket, err
 	}
 	strPacketData := string(packetData)
-	i := strings.Index(strPacketData, "[")
-	if i != -1 {
-		decodedPacket.key = strPacketData[0:i]
-		decodedPacket.args = strings.Split(strPacketData[i+1:len(strPacketData)-1], ",")
-	} else {
-		decodedPacket.key = strPacketData
-	}
+	decodedPacket.key, decodedPacket.args = splitData(strPacketData)
+
 	return decodedPacket, err
+}
+
+func splitData(request string) (string, []string) {
+	var args []string
+	i := strings.Index(request, "[")
+	if i == -1 {
+		return request, args
+	}
+	newrequest := strings.Replace(request, " ", "", -1)
+	key := newrequest[0:i]
+	joinArgs := newrequest[i+1 : len(newrequest)-1]
+	if len(joinArgs) == 0 {
+		return key, []string{""}
+	}
+	var j int
+	var inBrackets bool
+	for k, s := range joinArgs {
+		if inBrackets {
+			if string(s) == "]" && k == len(joinArgs)-1 {
+				inBrackets = false
+				args = append(args, string(joinArgs[j:k]))
+				j = k + 1
+				continue
+			}
+			if string(s) == "]" && string(joinArgs[k+1]) == "," {
+				inBrackets = false
+				args = append(args, string(joinArgs[j:k]))
+				j = k + 1
+			}
+		} else {
+			if string(s) == "[" && j == k {
+				inBrackets = true
+				j = k + 1
+			}
+			if string(s) == "," {
+				args = append(args, string(joinArgs[j:k]))
+				j = k + 1
+			}
+		}
+	}
+	if j == len(joinArgs) {
+		if string(joinArgs[len(joinArgs)-1]) == "," {
+			args = append(args, "")
+		}
+	} else {
+		args = append(args, string(joinArgs[j:]))
+	}
+	return key, args
 }
 
 func encodev1(decodedPacket packetStruct) ([]byte, error) {

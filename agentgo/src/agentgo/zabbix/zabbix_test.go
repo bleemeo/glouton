@@ -87,6 +87,28 @@ func TestDecode(t *testing.T) {
 	}
 }
 
+func TestSplitData(t *testing.T) {
+	cases := []struct {
+		in       string
+		wantKey  string
+		wantArgs []string
+	}{
+		{"key[a]", "key", []string{"a"}},
+		{in: "key", wantKey: "key"},
+		{"key[ ]", "key", []string{""}},
+		{"key[a,]", "key", []string{"a", ""}},
+		{`key["a"]`, "key", []string{`"a"`}},
+		{"key[a,[b]]", "key", []string{"a", "b"}},
+		{"key[a,b[c]", "key", []string{"a", "b[c"}},
+	}
+	for _, c := range cases {
+		gotKey, gotArgs := splitData(c.in)
+		if gotKey != c.wantKey || !reflect.DeepEqual(gotArgs, c.wantArgs) {
+			t.Errorf("splitData(%v) == %v+%v, want %v+%v", c.in, gotKey, gotArgs, c.wantKey, c.wantArgs)
+		}
+	}
+}
+
 func TestEncode(t *testing.T) {
 	cases := []struct {
 		in   packetStruct
