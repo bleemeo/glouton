@@ -20,6 +20,7 @@ type data struct {
 	Version       int
 	AccountID     string
 	Facts         []types.AgentFact
+	Containers    []types.Container
 	Agent         types.Agent
 	AccountConfig types.AccountConfig
 	Services      []types.Service
@@ -57,6 +58,15 @@ func (c *Cache) SetServices(services []types.Service) {
 	defer c.l.Unlock()
 
 	c.data.Services = services
+	c.dirty = true
+}
+
+// SetContainers update the Container list
+func (c *Cache) SetContainers(containers []types.Container) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Containers = containers
 	c.dirty = true
 }
 
@@ -124,6 +134,38 @@ func (c *Cache) ServicesByUUID() map[string]types.Service {
 	defer c.l.Unlock()
 	result := make(map[string]types.Service)
 	for _, v := range c.data.Services {
+		result[v.ID] = v
+	}
+	return result
+}
+
+// Containers returns a (copy) of the Containers
+func (c *Cache) Containers() (containers []types.Container) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]types.Container, len(c.data.Containers))
+	copy(result, c.data.Containers)
+	return result
+}
+
+// ContainersByContainerID returns a map container.ContainerId => container
+func (c *Cache) ContainersByContainerID() map[string]types.Container {
+	c.l.Lock()
+	defer c.l.Unlock()
+	result := make(map[string]types.Container)
+	for _, v := range c.data.Containers {
+		result[v.DockerID] = v
+	}
+	return result
+}
+
+// ContainersByUUID returns a map container.id => container
+func (c *Cache) ContainersByUUID() map[string]types.Container {
+	c.l.Lock()
+	defer c.l.Unlock()
+	result := make(map[string]types.Container)
+	for _, v := range c.data.Containers {
 		result[v.ID] = v
 	}
 	return result

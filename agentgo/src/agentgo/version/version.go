@@ -8,7 +8,7 @@ var (
 	BuildHash = "unset"
 
 	// Version is the agent version
-	Version = "0.1-dev"
+	Version = "0.1"
 )
 
 // UserAgent returns the User-Agent for request performed by the agent

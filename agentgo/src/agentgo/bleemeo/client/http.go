@@ -249,6 +249,15 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
+		if resp.Header.Get("Content-Type") != "application/json" {
+			partialBody := make([]byte, 250)
+			n, _ := resp.Body.Read(partialBody)
+			return 0, APIError{
+				StatusCode:   resp.StatusCode,
+				Content:      string(partialBody[:n]),
+				UnmarshalErr: nil,
+			}
+		}
 		var jsonError struct {
 			Error  string
 			Detail string

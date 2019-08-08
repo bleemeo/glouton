@@ -7,29 +7,18 @@ import (
 	"agentgo/bleemeo/internal/cache"
 	"agentgo/bleemeo/internal/synchronizer"
 	"agentgo/bleemeo/types"
-	"agentgo/discovery"
 	"agentgo/logger"
 )
 
 // Connector manager the connection between the Agent and Bleemeo
 type Connector struct {
-	option Option
+	option types.GlobalOption
 
 	cache *cache.Cache
 }
 
-// Option for bleemeo.Connector
-type Option struct {
-	Config    types.Config
-	State     types.State
-	Facts     types.FactProvider
-	Discovery discovery.PersistentDiscoverer
-
-	UpdateMetricResolution func(resolution time.Duration)
-}
-
 // New create a new Connector
-func New(option Option) *Connector {
+func New(option types.GlobalOption) *Connector {
 	return &Connector{
 		option: option,
 		cache:  cache.Load(option.State),
@@ -39,12 +28,8 @@ func New(option Option) *Connector {
 // Run run the Connector
 func (c Connector) Run(ctx context.Context) error {
 	sync := synchronizer.New(ctx, synchronizer.Option{
-		Config:    c.option.Config,
-		State:     c.option.State,
-		Facts:     c.option.Facts,
-		Discovery: c.option.Discovery,
-		Cache:     c.cache,
-
+		GlobalOption:         c.option,
+		Cache:                c.cache,
 		UpdateConfigCallback: c.uppdateConfig,
 	})
 	defer c.cache.Save()

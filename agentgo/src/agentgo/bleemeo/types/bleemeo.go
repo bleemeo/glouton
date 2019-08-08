@@ -1,6 +1,8 @@
 package types
 
 import (
+	"crypto/sha256"
+	"fmt"
 	"time"
 )
 
@@ -39,4 +41,19 @@ type Service struct {
 	ExePath         string `json:"exe_path"`
 	Stack           string `json:"stack"`
 	Active          bool   `json:"active"`
+}
+
+// Container is a Contaier object on Bleemeo API
+type Container struct {
+	ID                string `json:"id"`
+	Name              string `json:"name"`
+	DockerID          string `json:"docker_id"`
+	DockerInspect     string `json:"docker_inspect"`
+	DockerInspectHash string `json:",omitempty"`
+}
+
+// FillInspectHash fill the DockerInspectHash
+func (c *Container) FillInspectHash() {
+	bin := sha256.Sum256([]byte(c.DockerInspect))
+	c.DockerInspectHash = fmt.Sprintf("%x", bin)
 }

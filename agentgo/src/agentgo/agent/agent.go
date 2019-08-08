@@ -15,6 +15,7 @@ import (
 	"agentgo/agent/state"
 	"agentgo/api"
 	"agentgo/bleemeo"
+	"agentgo/bleemeo/types"
 	"agentgo/collector"
 	"agentgo/config"
 	"agentgo/debouncer"
@@ -257,10 +258,11 @@ func (a *agent) run() { //nolint:gocyclo
 	}()
 
 	if a.config.Bool("bleemeo.enabled") {
-		connector := bleemeo.New(bleemeo.Option{
+		connector := bleemeo.New(types.GlobalOption{
 			Config:                 a.config,
 			State:                  a.state,
 			Facts:                  a.factProvider,
+			Docker:                 a.dockerFact,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})

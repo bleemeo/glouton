@@ -4,7 +4,6 @@ import (
 	"agentgo/bleemeo/client"
 	"agentgo/bleemeo/internal/cache"
 	"agentgo/bleemeo/types"
-	"agentgo/discovery"
 	"agentgo/logger"
 	"context"
 	cryptoRand "crypto/rand"
@@ -32,12 +31,8 @@ type Synchronizer struct {
 
 // Option are parameter for the syncrhonizer
 type Option struct {
-	// Those option are mandatory
-	State     types.State
-	Config    types.Config
-	Facts     types.FactProvider
-	Discovery discovery.PersistentDiscoverer
-	Cache     *cache.Cache
+	types.GlobalOption
+	Cache *cache.Cache
 
 	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
 	// reason state why it's disabled and until set for how long it should be disabled.
@@ -216,7 +211,7 @@ func (s *Synchronizer) runOnce() error {
 		{name: "agent", method: s.syncAgent},
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
-		// {name: "containers", method: s.syncFacts},
+		{name: "containers", method: s.syncContainers},
 		// {name: "metrics", method: s.syncFacts},
 	}
 	startAt := time.Now()
