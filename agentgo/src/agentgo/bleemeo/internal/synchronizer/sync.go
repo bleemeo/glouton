@@ -241,7 +241,7 @@ func (s *Synchronizer) runOnce() error {
 
 func (s *Synchronizer) checkDuplicated() error {
 	oldFacts := s.option.Cache.FactsByKey()
-	if err := s.syncFactsRead(); err != nil {
+	if err := s.factsUpdateList(); err != nil {
 		return err
 	}
 	newFacts := s.option.Cache.FactsByKey()

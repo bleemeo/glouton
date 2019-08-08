@@ -89,42 +89,42 @@ func getListenAddress(addresses []net.Addr) string {
 
 func (s *Synchronizer) syncServices(fullSync bool) error {
 
+	localServices, err := s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
+	if err != nil {
+		return err
+	}
+
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
 		fullSync = true
 	}
 
-	deletedServiceNameInstance := make(map[serviceNameInstance]bool)
+	previousServices := s.option.Cache.ServicesByUUID()
 	if fullSync {
-		remoteDeletedServices, err := s.syncServiceUpdateList()
+		err := s.serviceUpdateList()
 		if err != nil {
 			return err
 		}
-		for _, srv := range remoteDeletedServices {
-			deletedServiceNameInstance[serviceNameInstance{name: srv.Label, instance: srv.Instance}] = true
-		}
 	}
 
-	if err := s.syncServiceApplyRemoteDeletion(deletedServiceNameInstance); err != nil {
+	if err := s.serviceDeleteFromRemote(localServices, previousServices); err != nil {
 		return err
 	}
-	localUUIDs, err := s.syncServiceRegisterAndUpdate()
-	if err != nil {
+	if err := s.serviceRegisterAndUpdate(localServices); err != nil {
 		return err
 	}
-	if err := s.syncServiceApplyLocalDeletion(localUUIDs); err != nil {
+	if err := s.serviceDeleteFromLocal(localServices); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (s *Synchronizer) syncServiceUpdateList() (deletedServices []types.Service, err error) {
+func (s *Synchronizer) serviceUpdateList() error {
 	result, err := s.client.Iter("service", nil)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	remoteUUID := make(map[string]bool)
 	services := make([]types.Service, len(result))
 	for i, jsonMessage := range result {
 		var service types.Service
@@ -132,25 +132,23 @@ func (s *Synchronizer) syncServiceUpdateList() (deletedServices []types.Service,
 			continue
 		}
 		services[i] = service
-		remoteUUID[service.ID] = true
-	}
-
-	localServices := s.option.Cache.ServicesByUUID()
-	deletedServices = make([]types.Service, 0)
-	for _, srv := range localServices {
-		if !remoteUUID[srv.ID] {
-			deletedServices = append(deletedServices, srv)
-		}
 	}
 	s.option.Cache.SetServices(services)
-	return deletedServices, nil
+	return nil
 }
 
-func (s *Synchronizer) syncServiceApplyRemoteDeletion(deletedServiceNameInstance map[serviceNameInstance]bool) error {
-	localServices, err := s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
-	if err != nil {
-		return err
+func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service, previousServices map[string]types.Service) error {
+
+	newServices := s.option.Cache.ServicesByUUID()
+
+	deletedServiceNameInstance := make(map[serviceNameInstance]bool)
+	for _, srv := range previousServices {
+		if _, ok := newServices[srv.ID]; !ok {
+			key := serviceNameInstance{name: srv.Label, instance: srv.Instance}
+			deletedServiceNameInstance[key] = true
+		}
 	}
+
 	localServiceToDelete := make([]discovery.Service, 0)
 	for _, srv := range localServices {
 		key := serviceNameInstance{
@@ -165,15 +163,11 @@ func (s *Synchronizer) syncServiceApplyRemoteDeletion(deletedServiceNameInstance
 	return nil
 }
 
-func (s *Synchronizer) syncServiceRegisterAndUpdate() (localUUIDs map[string]bool, err error) {
-	localServices, err := s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
-	if err != nil {
-		return nil, err
-	}
-	localUUIDs = make(map[string]bool, len(localServices))
+func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Service) error {
+
 	remoteServices := s.option.Cache.Services()
 	remoteIndexByKey := serviceIndexByKey(remoteServices)
-	shortKeyLookup := longToShortKey(localServices)
+	longToShortLookup := longToShortKey(localServices)
 	for _, srv := range localServices {
 		key := serviceNameInstance{
 			name:     string(srv.Name),
@@ -181,7 +175,7 @@ func (s *Synchronizer) syncServiceRegisterAndUpdate() (localUUIDs map[string]boo
 		}
 		var shortKey serviceNameInstance
 		var ok bool
-		if shortKey, ok = shortKeyLookup[key]; !ok {
+		if shortKey, ok = longToShortLookup[key]; !ok {
 			continue
 		}
 		remoteIndex, remoteFound := remoteIndexByKey[shortKey]
@@ -192,7 +186,6 @@ func (s *Synchronizer) syncServiceRegisterAndUpdate() (localUUIDs map[string]boo
 		listenAddresses := getListenAddress(srv.ListenAddresses)
 		// TODO: Stack
 		if remoteFound && remoteSrv.Label == string(srv.Name) && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active {
-			localUUIDs[remoteSrv.ID] = true
 			continue
 		}
 		payload := servicePayload{
@@ -211,19 +204,18 @@ func (s *Synchronizer) syncServiceRegisterAndUpdate() (localUUIDs map[string]boo
 		if remoteFound {
 			_, err := s.client.Do("PUT", fmt.Sprintf("v1/service/%s/", remoteSrv.ID), payload, &result)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			remoteServices[remoteIndex] = result
 			logger.V(2).Printf("Service %v updated with UUID %s", key, result.ID)
 		} else {
 			_, err := s.client.Do("POST", "v1/service/", payload, &result)
 			if err != nil {
-				return nil, err
+				return err
 			}
 			remoteServices = append(remoteServices, result)
 			logger.V(2).Printf("Service %v registrered with UUID %s", key, result.ID)
 		}
-		localUUIDs[result.ID] = true
 		if remoteFound && remoteSrv.Active != result.Active {
 			// API will update all associated metrics and update their active status. Apply the same rule on local cache
 			// TODO
@@ -231,13 +223,20 @@ func (s *Synchronizer) syncServiceRegisterAndUpdate() (localUUIDs map[string]boo
 		}
 	}
 	s.option.Cache.SetServices(remoteServices)
-	return localUUIDs, nil
+	return nil
 }
 
-func (s *Synchronizer) syncServiceApplyLocalDeletion(localUUIDs map[string]bool) error {
+func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) error {
+	longToShortLookup := longToShortKey(localServices)
+	shortToLongLookup := make(map[serviceNameInstance]serviceNameInstance, len(longToShortLookup))
+	for k, v := range longToShortLookup {
+		shortToLongLookup[v] = k
+	}
+
 	registeredServices := s.option.Cache.ServicesByUUID()
 	for k, v := range registeredServices {
-		if _, ok := localUUIDs[v.ID]; ok {
+		shortKey := serviceNameInstance{name: v.Label, instance: v.Instance}
+		if _, ok := shortToLongLookup[shortKey]; ok {
 			continue
 		}
 		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/service/%s/", v.ID), nil, nil)
