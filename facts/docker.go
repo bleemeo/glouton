@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -490,6 +491,7 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		if ignoreContainer(inspect) {
 			ignoredID[c.ID] = nil
 		}
+		sortInspect(inspect)
 		containers[c.ID] = Container{
 			primaryAddress: primaryAddress(inspect, bridgeNetworks, containerAddressOnDockerBridge),
 			inspect:        inspect,
@@ -552,4 +554,20 @@ func (d *DockerProvider) isIgnored(containerID string) bool {
 	defer d.l.Unlock()
 	_, ok := d.ignoredID[containerID]
 	return ok
+}
+
+func sortInspect(inspect types.ContainerJSON) {
+	// Sort the docker inspect to have consistent hash value
+	// Mounts order does not matter but is not consistent between call to docker inspect.
+	if len(inspect.Mounts) > 0 {
+		sort.Slice(inspect.Mounts, func(i int, j int) bool {
+			if inspect.Mounts[i].Source < inspect.Mounts[j].Source {
+				return true
+			}
+			if inspect.Mounts[i].Source == inspect.Mounts[j].Source && inspect.Mounts[i].Destination < inspect.Mounts[j].Destination {
+				return true
+			}
+			return false
+		})
+	}
 }
