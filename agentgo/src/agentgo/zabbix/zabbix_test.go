@@ -97,9 +97,10 @@ func TestSplitData(t *testing.T) {
 		{in: "key", wantKey: "key"},
 		{"key[ ]", "key", []string{""}},
 		{"key[a,]", "key", []string{"a", ""}},
-		{`key["a"]`, "key", []string{`"a"`}},
+		{`key["a","b","c"]`, "key", []string{"a", "b", "c"}},
 		{"key[a,[b]]", "key", []string{"a", "b"}},
-		{"key[a,b[c]", "key", []string{"a", "b[c"}},
+		{"key[a,[b,c]]", "key", []string{"a", "b,c"}},
+		{`key["a","b",["c","d\",]"],[e,f]]`, "key", []string{"a", "b", `"c","d\",]"`, "e,f"}},
 	}
 	for _, c := range cases {
 		gotKey, gotArgs := splitData(c.in)

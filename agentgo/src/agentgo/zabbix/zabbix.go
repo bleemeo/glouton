@@ -110,9 +110,9 @@ func splitData(request string) (string, []string) {
 				j = k + 1
 				continue
 			}
-			if string(s) == "]" && string(joinArgs[k+1]) == "," {
+			if string(s) == "," && string(joinArgs[k-1]) == "]" {
 				inBrackets = false
-				args = append(args, string(joinArgs[j:k]))
+				args = append(args, string(joinArgs[j:k-1]))
 				j = k + 1
 			}
 		} else {
@@ -121,7 +121,11 @@ func splitData(request string) (string, []string) {
 				j = k + 1
 			}
 			if string(s) == "," {
-				args = append(args, string(joinArgs[j:k]))
+				if string(joinArgs[j]) == `"` && string(joinArgs[k-1]) == `"` {
+					args = append(args, string(joinArgs[j+1:k-1]))
+				} else {
+					args = append(args, string(joinArgs[j:k]))
+				}
 				j = k + 1
 			}
 		}
@@ -131,7 +135,11 @@ func splitData(request string) (string, []string) {
 			args = append(args, "")
 		}
 	} else {
-		args = append(args, string(joinArgs[j:]))
+		if string(joinArgs[j]) == `"` && string(joinArgs[len(joinArgs)-1]) == `"` {
+			args = append(args, string(joinArgs[j+1:len(joinArgs)-1]))
+		} else {
+			args = append(args, string(joinArgs[j:]))
+		}
 	}
 	return key, args
 }
