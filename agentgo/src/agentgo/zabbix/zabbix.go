@@ -123,6 +123,16 @@ func splitData(request string) (string, []string, error) {
 			if string(s) == "]" {
 				if k == len(joinArgs)-1 {
 					inBrackets = false
+					if strings.Index(joinArgs[j:k], `"`) != -1 {
+						if strings.LastIndex(joinArgs[j:k], `"`) != k-j-1 {
+							return key, args, errors.New("quoted parameter cannot contain unquoted part")
+						}
+						if string(joinArgs[j]) == `"` {
+							args = append(args, string(joinArgs[j+1:k-1]))
+							j = k + 1
+							continue
+						}
+					}
 					args = append(args, string(joinArgs[j:k]))
 					j = k + 1
 					continue
@@ -142,11 +152,17 @@ func splitData(request string) (string, []string, error) {
 				j = k + 1
 			}
 			if string(s) == "," {
-				if string(joinArgs[j]) == `"` && string(joinArgs[k-1]) == `"` {
-					args = append(args, string(joinArgs[j+1:k-1]))
-				} else {
-					args = append(args, string(joinArgs[j:k]))
+				if strings.Index(joinArgs[j:k], `"`) != -1 {
+					if strings.LastIndex(joinArgs[j:k], `"`) != k-j-1 {
+						return key, args, errors.New("quoted parameter cannot contain unquoted part")
+					}
+					if string(joinArgs[j]) == `"` {
+						args = append(args, string(joinArgs[j+1:k-1]))
+						j = k + 1
+						continue
+					}
 				}
+				args = append(args, string(joinArgs[j:k]))
 				j = k + 1
 			}
 			if string(s) == "]" {

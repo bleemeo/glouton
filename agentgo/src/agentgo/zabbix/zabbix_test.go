@@ -3,6 +3,7 @@ package zabbix
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"testing"
@@ -105,9 +106,10 @@ func TestSplitData(t *testing.T) {
 		{"key[a,, ,ccc]", "key", []string{"a", "", "", "ccc"}},
 	}
 	for _, c := range cases {
-		gotKey, gotArgs, _ := splitData(c.in)
+		gotKey, gotArgs, err := splitData(c.in)
 		if gotKey != c.wantKey || !reflect.DeepEqual(gotArgs, c.wantArgs) {
 			t.Errorf("splitData(%v) == %v+%v, want %v+%v", c.in, gotKey, gotArgs, c.wantKey, c.wantArgs)
+			fmt.Println(err)
 		}
 	}
 }
@@ -125,6 +127,10 @@ func TestValidSplitData(t *testing.T) {
 		{"key[a,{]", errors.New("Illegal braces")},
 		{"key,21", errors.New("Comma but no arguments detected")},
 		{`key["a","b",[["c","d\",]"]]]`, errors.New("multi-level arrays are not allowed")},
+		{`key["a",b[c,d],e]`, errors.New("character ] is not allowed in unquoted parameter string")},
+		{`key["a",["b","]"c]]`, errors.New("quoted parameter cannot contain unquoted part")},
+		{`key[["]"a]]`, errors.New("quoted parameter cannot contain unquoted part")},
+		{`key[[a]"b"]`, errors.New("unmatched opening brackets")},
 	}
 	for _, c := range cases {
 		_, _, err := splitData(c.in)
