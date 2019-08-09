@@ -78,6 +78,13 @@ func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err e
 	return
 }
 
+// MetricsCount return the count of metrics stored
+func (s *Store) MetricsCount() int {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	return len(s.metrics)
+}
+
 // Labels returns all label of the metric
 func (m metric) Labels() map[string]string {
 	labels := make(map[string]string)

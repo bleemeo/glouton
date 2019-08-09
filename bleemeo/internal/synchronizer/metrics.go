@@ -154,6 +154,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 			return err
 		}
 	}
+	s.lastMetricCount = len(localMetrics)
 	return nil
 }
 

@@ -49,6 +49,7 @@ type DockerProvider interface {
 // Store is the interface used by Bleemeo to access Metric Store
 type Store interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
+	MetricsCount() int
 	DropMetrics(labelsList []map[string]string)
 }
 
@@ -61,5 +62,20 @@ const (
 	DisableDuplicatedAgent
 	DisableTooManyErrors
 	DisableAgentTooOld
-	DisableMaintaince
+	DisableMaintenance
 )
+
+func (r DisableReason) String() string {
+	switch r {
+	case DisableDuplicatedAgent:
+		return "duplicated state.json"
+	case DisableTooManyErrors:
+		return "too many errors"
+	case DisableAgentTooOld:
+		return "this agent being too old"
+	case DisableMaintenance:
+		return "maintenance on Bleemeo API"
+	default:
+		return "unspecified reason"
+	}
+}

@@ -15,6 +15,7 @@ type Connector struct {
 	option types.GlobalOption
 
 	cache *cache.Cache
+	sync  *synchronizer.Synchronizer
 }
 
 // New create a new Connector
@@ -27,13 +28,14 @@ func New(option types.GlobalOption) *Connector {
 
 // Run run the Connector
 func (c Connector) Run(ctx context.Context) error {
-	sync := synchronizer.New(ctx, synchronizer.Option{
+	c.sync = synchronizer.New(ctx, synchronizer.Option{
 		GlobalOption:         c.option,
 		Cache:                c.cache,
 		UpdateConfigCallback: c.uppdateConfig,
+		DisableCallback:      c.disableCallback,
 	})
 	defer c.cache.Save()
-	return sync.Run()
+	return c.sync.Run()
 }
 
 func (c Connector) uppdateConfig() {
@@ -43,4 +45,9 @@ func (c Connector) uppdateConfig() {
 	if c.option.UpdateMetricResolution != nil {
 		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
 	}
+}
+
+func (c Connector) disableCallback(reason types.DisableReason, until time.Time) {
+	logger.Printf("Disabling Bleemeo connector until %v due to %v", until.Truncate(time.Minute), reason)
+	c.sync.Disable(until)
 }

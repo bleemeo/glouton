@@ -86,6 +86,13 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 	return d.discovery(ctx, maxAge)
 }
 
+// LastUpdate return when the last update occurred
+func (d *Discovery) LastUpdate() time.Time {
+	d.l.Lock()
+	defer d.l.Unlock()
+	return d.lastDiscoveryUpdate
+}
+
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 
 	if time.Since(d.lastDiscoveryUpdate) > maxAge {

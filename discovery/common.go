@@ -11,6 +11,7 @@ const tcpPortocol = "tcp"
 // Discoverer allow to discover services. See DynamicDiscovery and Discovery
 type Discoverer interface {
 	Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error)
+	LastUpdate() time.Time
 }
 
 // PersistentDiscoverer also allow to remove a non-running service

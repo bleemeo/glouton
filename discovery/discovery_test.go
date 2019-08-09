@@ -16,6 +16,10 @@ func (md mockDiscoverer) Discovery(ctx context.Context, maxAge time.Duration) (s
 	return md.result, nil
 }
 
+func (md mockDiscoverer) LastUpdate() time.Time {
+	return time.Now()
+}
+
 // Test dynamic Discovery with single service present
 func TestDiscoverySingle(t *testing.T) {
 

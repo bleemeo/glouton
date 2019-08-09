@@ -65,6 +65,13 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 	return dd.services, nil
 }
 
+// LastUpdate return when the last update occurred
+func (dd *DynamicDiscovery) LastUpdate() time.Time {
+	dd.l.Lock()
+	defer dd.l.Unlock()
+	return dd.lastDiscoveryUpdate
+}
+
 // nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]ServiceName{

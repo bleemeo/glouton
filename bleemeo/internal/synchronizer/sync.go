@@ -12,6 +12,7 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -20,15 +21,20 @@ type Synchronizer struct {
 	ctx    context.Context
 	option Option
 
-	client        *client.HTTPClient
-	nextFullSync  time.Time
-	disabledUntil time.Time
+	client       *client.HTTPClient
+	nextFullSync time.Time
 
 	startedAt               time.Time
+	lastSync                time.Time
 	lastFactUpdatedAt       string
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	apiSupportLabels        bool
+	forceSync               map[string]time.Time
+	lastMetricCount         int
+
+	l             sync.Mutex
+	disabledUntil time.Time
 }
 
 // Option are parameter for the syncrhonizer
@@ -55,7 +61,7 @@ func New(ctx context.Context, option Option) *Synchronizer {
 }
 
 // Run run the Connector
-func (s Synchronizer) Run() error {
+func (s *Synchronizer) Run() error {
 	s.startedAt = time.Now()
 	accountID := s.option.Config.String("bleemeo.account_id")
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
@@ -82,6 +88,9 @@ func (s Synchronizer) Run() error {
 	}
 	for s.ctx.Err() == nil {
 		s.waitDeadline(deadline)
+		if s.ctx.Err() != nil {
+			break
+		}
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
@@ -106,15 +115,17 @@ func (s Synchronizer) Run() error {
 			delay = JitterDelay(15, 0.05, 15)
 		}
 		deadline = time.Now().Add(delay)
-		if deadline.Before(s.disabledUntil) {
-			deadline = s.disabledUntil
-		}
 	}
 
 	return nil
 }
 
-func (s Synchronizer) waitDeadline(deadline time.Time) {
+func (s *Synchronizer) waitDeadline(deadline time.Time) {
+	disabledUntil := s.getDisabledUntil()
+	sleepUntil := deadline
+	if sleepUntil.Before(disabledUntil) {
+		sleepUntil = disabledUntil
+	}
 	for time.Now().Before(deadline) && s.ctx.Err() == nil {
 		delay := time.Until(deadline)
 		if delay < 0 {
@@ -132,7 +143,28 @@ func (s Synchronizer) waitDeadline(deadline time.Time) {
 		case <-time.After(delay):
 		case <-s.ctx.Done():
 		}
+
+		disabledUntil := s.getDisabledUntil()
+		if deadline.Before(disabledUntil) {
+			sleepUntil = disabledUntil
+		} else {
+			sleepUntil = deadline
+		}
 	}
+}
+
+func (s *Synchronizer) getDisabledUntil() time.Time {
+	s.l.Lock()
+	defer s.l.Unlock()
+	return s.disabledUntil
+}
+
+// Disable will disable (or re-enable) the Synchronized until given time.
+// To re-enable, set a time in the past.
+func (s *Synchronizer) Disable(until time.Time) {
+	s.l.Lock()
+	defer s.l.Unlock()
+	s.disabledUntil = until
 }
 
 // JitterDelay return a number between value * [1-factor; 1+factor[
@@ -182,19 +214,19 @@ func (s *Synchronizer) runOnce() error {
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods["facts"] = true
 	}
-	if fullSync {
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["services"] = true
 
 		// Metrics registration may need services to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = true
 	}
-	if fullSync {
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["containers"] = true
 
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = true
 	}
-	if fullSync {
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = true
 	}
 
@@ -219,8 +251,18 @@ func (s *Synchronizer) runOnce() error {
 	startAt := time.Now()
 	var lastErr error
 	for _, step := range syncStep {
-		if _, ok := syncMethods[step.name]; ok {
-			err := step.method(fullSync)
+		if s.ctx.Err() != nil {
+			break
+		}
+		if !s.getDisabledUntil().IsZero() {
+			if lastErr == nil {
+				lastErr = errors.New("bleemeo connector is temporary disabled")
+			}
+			break
+		}
+		forcedSync := s.lastSync.Before(s.forceSync[step.name])
+		if _, ok := syncMethods[step.name]; ok || forcedSync {
+			err := step.method(fullSync || forcedSync)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 				lastErr = err
@@ -232,6 +274,9 @@ func (s *Synchronizer) runOnce() error {
 		s.option.Cache.Save()
 		s.nextFullSync = time.Now().Add(JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
+	}
+	if lastErr == nil {
+		s.lastSync = startAt
 	}
 	return lastErr
 }
@@ -270,6 +315,7 @@ func (s *Synchronizer) checkDuplicated() error {
 			"The following links may be relevant to solve the issue: https://docs.bleemeo.com/agent/migrate-agent-new-server/ " +
 				"and https://docs.bleemeo.com/agent/install-cloudimage-creation/",
 		)
+		return errors.New("bleemeo connector temporary disabled")
 	}
 	return nil
 }
