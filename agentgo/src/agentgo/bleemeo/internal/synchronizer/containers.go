@@ -85,19 +85,29 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		return nil
 	}
 
-	remoteContainers := s.option.Cache.ContainersByContainerID()
+	remoteContainers := s.option.Cache.Containers()
+	remoteIndexByName := make(map[string]int, len(remoteContainers))
+	for i, v := range remoteContainers {
+		remoteIndexByName[v.Name] = i
+	}
+
 	params := map[string]string{
 		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at,docker_api_version,docker_image_id,docker_image_name",
 	}
 	for _, container := range localContainers {
-		remoteContainer, remoteFound := remoteContainers[container.ID()]
+		name := container.Name()
+		if len(name) > apiContainerNameLength {
+			name = name[:apiContainerNameLength]
+		}
+		remoteIndex, remoteFound := remoteIndexByName[name]
+		var remoteContainer types.Container
+		if remoteFound {
+			remoteContainer = remoteContainers[remoteIndex]
+		}
 		payloadContainer := types.Container{
-			Name:          container.Name(),
+			Name:          name,
 			DockerID:      container.ID(),
 			DockerInspect: container.InspectJSON(),
-		}
-		if len(payloadContainer.Name) > apiContainerNameLength {
-			payloadContainer.Name = payloadContainer.Name[:apiContainerNameLength]
 		}
 		payloadContainer.FillInspectHash()
 		if remoteFound && payloadContainer.DockerInspectHash == remoteContainer.DockerInspectHash {
@@ -123,26 +133,23 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 				return err
 			}
 			logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
+			remoteContainers[remoteIndex] = result
 		} else {
 			_, err := s.client.Do("POST", "v1/container/", params, payload, &result)
 			if err != nil {
 				return err
 			}
 			logger.V(2).Printf("Container %v registrered with UUID %s", result.Name, result.ID)
+			remoteContainers = append(remoteContainers, result)
 		}
-		remoteContainers[result.DockerID] = result
 	}
 
-	containers := make([]types.Container, 0, len(remoteContainers))
-	for _, v := range remoteContainers {
-		containers = append(containers, v)
-	}
-	s.option.Cache.SetContainers(containers)
+	s.option.Cache.SetContainers(remoteContainers)
 	return nil
 }
 
 func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Container) error {
-
+	duplicatedKey := make(map[string]bool)
 	localByContainerID := make(map[string]facts.Container, len(localContainers))
 	for _, v := range localContainers {
 		localByContainerID[v.ID()] = v
@@ -150,7 +157,8 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 
 	registeredContainers := s.option.Cache.ContainersByUUID()
 	for k, v := range registeredContainers {
-		if _, ok := localByContainerID[v.DockerID]; ok {
+		if _, ok := localByContainerID[v.DockerID]; ok && !duplicatedKey[v.DockerID] {
+			duplicatedKey[v.DockerID] = true
 			continue
 		}
 		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/container/%s/", v.ID), nil, nil, nil)

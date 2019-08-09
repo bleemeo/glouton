@@ -52,6 +52,23 @@ type Container struct {
 	DockerInspectHash string `json:",omitempty"`
 }
 
+// Metric is a Metric object on Bleemeo API
+type Metric struct {
+	ID                     string            `json:"id"`
+	Label                  string            `json:"label"`
+	Labels                 map[string]string `json:"labels"`
+	ServiceID              string            `json:"service,omitempty"`
+	ContainerID            string            `json:"container,omitempty"`
+	StatusOf               string            `json:"status_of,omitempty"`
+	ThresholdLowWarning    float64           `json:"threshold_low_warning,omitempty"`
+	ThresholdLowCrictical  float64           `json:"threshold_low_critical,omitempty"`
+	ThresholdHighWarning   float64           `json:"threshold_high_warning,omitempty"`
+	ThresholdHighCrictical float64           `json:"threshold_high_critical,omitempty"`
+	Unit                   int               `json:"unit,omitempty"`
+	UnitText               string            `json:"unit_text,omitempty"`
+	DeactivatedAt          time.Time         `json:"deactivated_at,omitempty"`
+}
+
 // FillInspectHash fill the DockerInspectHash
 func (c *Container) FillInspectHash() {
 	bin := sha256.Sum256([]byte(c.DockerInspect))

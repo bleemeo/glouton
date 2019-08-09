@@ -21,6 +21,7 @@ type data struct {
 	AccountID     string
 	Facts         []types.AgentFact
 	Containers    []types.Container
+	Metrics       []types.Metric
 	Agent         types.Agent
 	AccountConfig types.AccountConfig
 	Services      []types.Service
@@ -119,6 +120,15 @@ func (c *Cache) FactsByUUID() map[string]types.AgentFact {
 	return result
 }
 
+// Facts returns a (copy) of the Facts
+func (c *Cache) Facts() []types.AgentFact {
+	c.l.Lock()
+	defer c.l.Unlock()
+	result := make([]types.AgentFact, len(c.data.Facts))
+	copy(result, c.data.Facts)
+	return result
+}
+
 // Services returns a (copy) of the Services
 func (c *Cache) Services() []types.Service {
 	c.l.Lock()
@@ -166,6 +176,36 @@ func (c *Cache) ContainersByUUID() map[string]types.Container {
 	defer c.l.Unlock()
 	result := make(map[string]types.Container)
 	for _, v := range c.data.Containers {
+		result[v.ID] = v
+	}
+	return result
+}
+
+// SetMetrics update the Metric list
+func (c *Cache) SetMetrics(metrics []types.Metric) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Metrics = metrics
+	c.dirty = true
+}
+
+// Metrics returns a (copy) of the Metrics
+func (c *Cache) Metrics() (metrics []types.Metric) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]types.Metric, len(c.data.Metrics))
+	copy(result, c.data.Metrics)
+	return result
+}
+
+// MetricsByUUID returns a map metric.id => metric
+func (c *Cache) MetricsByUUID() map[string]types.Metric {
+	c.l.Lock()
+	defer c.l.Unlock()
+	result := make(map[string]types.Metric)
+	for _, v := range c.data.Metrics {
 		result[v.ID] = v
 	}
 	return result

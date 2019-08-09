@@ -3,6 +3,7 @@ package types
 import (
 	"agentgo/discovery"
 	"agentgo/facts"
+	"agentgo/types"
 	"context"
 	"time"
 )
@@ -13,6 +14,7 @@ type GlobalOption struct {
 	State     State
 	Facts     FactProvider
 	Docker    DockerProvider
+	Store     Store
 	Discovery discovery.PersistentDiscoverer
 
 	UpdateMetricResolution func(resolution time.Duration)
@@ -25,7 +27,7 @@ type Config interface {
 	Bool(string) bool
 }
 
-// State is the interaface user by Bleemeo to access State
+// State is the interaface used by Bleemeo to access State
 type State interface {
 	AgentID() string
 	AgentPassword() string
@@ -34,14 +36,20 @@ type State interface {
 	Cache(key string, result interface{}) error
 }
 
-// FactProvider is the interface user by Bleemeo to access facts
+// FactProvider is the interface used by Bleemeo to access facts
 type FactProvider interface {
 	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
 }
 
-// DockerProvider is the interface user by Bleemeo to access Docker containers
+// DockerProvider is the interface used by Bleemeo to access Docker containers
 type DockerProvider interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
+}
+
+// Store is the interface used by Bleemeo to access Metric Store
+type Store interface {
+	Metrics(filters map[string]string) (result []types.Metric, err error)
+	DropMetrics(labelsList []map[string]string)
 }
 
 // DisableReason is a list of status why Bleemeo connector may be (temporary) disabled

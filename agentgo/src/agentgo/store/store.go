@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"reflect"
 	"sync"
 	"time"
 
@@ -46,6 +47,22 @@ func (s *Store) Run(ctx context.Context) error {
 func (s *Store) Close() error {
 	logger.V(2).Printf("Store closed")
 	return nil
+}
+
+// DropMetrics delete metrics and they points.
+// The provided labels list is an exact match (e.g. {"__name__": "disk_used"} won't delete the metrics for all disk. You need to specify all labels)
+func (s *Store) DropMetrics(labelsList []map[string]string) {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	for i, m := range s.metrics {
+		for _, l := range labelsList {
+			if reflect.DeepEqual(m.labels, l) {
+				delete(s.metrics, i)
+				delete(s.points, i)
+			}
+		}
+	}
 }
 
 // Metrics return a list of Metric matching given labels filter

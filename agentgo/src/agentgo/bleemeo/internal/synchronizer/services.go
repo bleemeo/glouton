@@ -26,6 +26,12 @@ func (sni serviceNameInstance) String() string {
 	return sni.name
 }
 
+func (sni *serviceNameInstance) truncateInstance() {
+	if len(sni.instance) > apiServiceInstanceLength {
+		sni.instance = sni.instance[:apiServiceInstanceLength]
+	}
+}
+
 type servicePayload struct {
 	types.Service
 	Account string `json:"account"`
@@ -36,14 +42,11 @@ type servicePayload struct {
 func longToShortKey(services []discovery.Service) map[serviceNameInstance]serviceNameInstance {
 	revertLookup := make(map[serviceNameInstance]discovery.Service)
 	for _, srv := range services {
-		truncateIndex := apiServiceInstanceLength
-		if truncateIndex > len(srv.ContainerName) {
-			truncateIndex = len(srv.ContainerName)
-		}
 		shortKey := serviceNameInstance{
 			name:     string(srv.Name),
-			instance: srv.ContainerName[:truncateIndex],
+			instance: srv.ContainerName,
 		}
+		shortKey.truncateInstance()
 		if otherSrv, ok := revertLookup[shortKey]; !ok {
 			revertLookup[shortKey] = srv
 		} else {
@@ -108,6 +111,10 @@ func (s *Synchronizer) syncServices(fullSync bool) error {
 	}
 
 	if err := s.serviceDeleteFromRemote(localServices, previousServices); err != nil {
+		return err
+	}
+	localServices, err = s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
+	if err != nil {
 		return err
 	}
 	if err := s.serviceRegisterAndUpdate(localServices); err != nil {
@@ -234,6 +241,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 }
 
 func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) error {
+	duplicatedKey := make(map[serviceNameInstance]bool)
 	longToShortLookup := longToShortKey(localServices)
 	shortToLongLookup := make(map[serviceNameInstance]serviceNameInstance, len(longToShortLookup))
 	for k, v := range longToShortLookup {
@@ -243,7 +251,8 @@ func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service)
 	registeredServices := s.option.Cache.ServicesByUUID()
 	for k, v := range registeredServices {
 		shortKey := serviceNameInstance{name: v.Label, instance: v.Instance}
-		if _, ok := shortToLongLookup[shortKey]; ok {
+		if _, ok := shortToLongLookup[shortKey]; ok && !duplicatedKey[shortKey] {
+			duplicatedKey[shortKey] = true
 			continue
 		}
 		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/service/%s/", v.ID), nil, nil, nil)

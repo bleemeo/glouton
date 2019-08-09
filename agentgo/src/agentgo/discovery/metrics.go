@@ -152,9 +152,14 @@ func (d *Discovery) createInput(service Service) error {
 	}
 
 	if input != nil {
-		if service.ContainerName != "" {
-			input = modify.AddItem(input, service.ContainerName)
+		extraLabels := map[string]string{
+			"service_name": string(service.Name),
 		}
+		if service.ContainerName != "" {
+			extraLabels["item"] = service.ContainerName
+			extraLabels["container_id"] = service.ContainerID
+		}
+		input = modify.AddLabels(input, extraLabels)
 		if err != nil {
 			return err
 		}

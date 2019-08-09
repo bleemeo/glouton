@@ -263,6 +263,7 @@ func (a *agent) run() { //nolint:gocyclo
 			State:                  a.state,
 			Facts:                  a.factProvider,
 			Docker:                 a.dockerFact,
+			Store:                  db,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})

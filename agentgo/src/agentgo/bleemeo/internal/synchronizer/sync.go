@@ -24,9 +24,11 @@ type Synchronizer struct {
 	nextFullSync  time.Time
 	disabledUntil time.Time
 
+	startedAt               time.Time
 	lastFactUpdatedAt       string
 	successiveErrors        int
 	warnAccountMismatchDone bool
+	apiSupportLabels        bool
 }
 
 // Option are parameter for the syncrhonizer
@@ -54,7 +56,7 @@ func New(ctx context.Context, option Option) *Synchronizer {
 
 // Run run the Connector
 func (s Synchronizer) Run() error {
-
+	s.startedAt = time.Now()
 	accountID := s.option.Config.String("bleemeo.account_id")
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
 	if accountID == "" || registrationKey == "" {
@@ -212,7 +214,7 @@ func (s *Synchronizer) runOnce() error {
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
-		// {name: "metrics", method: s.syncFacts},
+		{name: "metrics", method: s.syncMetrics},
 	}
 	startAt := time.Now()
 	var lastErr error

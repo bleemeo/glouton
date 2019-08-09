@@ -59,8 +59,8 @@ type Accumulator struct {
 	// RenameMetrics apply a per-metric rename of metric name and measurement. tags can't be mutated
 	RenameMetrics func(originalContext GatherContext, currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string)
 
-	// ItemValue is a item value that will be added to tags. If item already exist in tags, ItemValue is used as prefix
-	ItemValue string
+	// StaticLabels is a list of labels that will be added. If a label already exist, the value is used as prefix
+	StaticLabels map[string]string
 
 	// map a flattened tags to a map[fieldName]value
 	currentValues map[string]map[string]metricPoint
@@ -239,18 +239,18 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		}
 		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
-	if a.ItemValue != "" {
+	for k, v := range a.StaticLabels {
 		if &currentContext.Tags == &originalContext.Tags {
 			currentContext.Tags = make(map[string]string)
 			for k, v := range originalContext.Tags {
 				currentContext.Tags[k] = v
 			}
 		}
-		oldItem := currentContext.Tags["item"]
-		if oldItem != "" {
-			currentContext.Tags["item"] = a.ItemValue + "_" + oldItem
+		oldValue := currentContext.Tags[k]
+		if oldValue != "" {
+			currentContext.Tags[k] = v + "_" + oldValue
 		} else {
-			currentContext.Tags["item"] = a.ItemValue
+			currentContext.Tags[k] = v
 		}
 	}
 	for measurementName, fields := range fieldsPerMeasurements {

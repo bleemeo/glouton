@@ -56,10 +56,7 @@ func (s *Synchronizer) factRegister(localFacts map[string]string) error {
 	currentConfig := s.option.Cache.AccountConfig()
 
 	registeredFacts := s.option.Cache.FactsByKey()
-	facts := make([]types.AgentFact, 0, len(registeredFacts))
-	for _, v := range registeredFacts {
-		facts = append(facts, v)
-	}
+	facts := s.option.Cache.Facts()
 	for key, value := range localFacts {
 		if !currentConfig.DockerIntegration && strings.HasPrefix(key, "docker_") {
 			continue
@@ -89,15 +86,19 @@ func (s *Synchronizer) factRegister(localFacts map[string]string) error {
 }
 
 func (s *Synchronizer) factDeleteFromLocal(localFacts map[string]string) error {
+	duplicatedKey := make(map[string]bool)
 	registeredFacts := s.option.Cache.FactsByUUID()
 	for k, v := range registeredFacts {
-		if _, ok := localFacts[v.Key]; ok {
+		localValue, ok := localFacts[v.Key]
+		if ok && localValue == v.Value && !duplicatedKey[v.Key] {
+			duplicatedKey[v.Key] = true
 			continue
 		}
 		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
 		if err != nil {
 			return err
 		}
+		logger.V(2).Printf("Fact %v (uuid=%v) deleted", v.Key, v.ID)
 		delete(registeredFacts, k)
 	}
 

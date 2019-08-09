@@ -52,6 +52,14 @@ func IsNotFound(err error) bool {
 	return false
 }
 
+// IsServerError return true if the error is an APIError due to 5xx
+func IsServerError(err error) bool {
+	if apiError, ok := err.(APIError); ok {
+		return apiError.StatusCode >= 500
+	}
+	return false
+}
+
 func (ae APIError) Error() string {
 	if ae.Content == "" && ae.UnmarshalErr != nil {
 		return fmt.Sprintf("unable to decode JSON: %v", ae.UnmarshalErr)
