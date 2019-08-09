@@ -93,6 +93,9 @@ func splitData(request string) (string, []string, error) {
 	var args []string
 	i := strings.Index(request, "[")
 	if i == -1 {
+		if strings.Index(request, ",") != -1 {
+			return request, args, errors.New("Comma but no arguments detected")
+		}
 		return request, args, nil
 	}
 	newrequest := strings.Replace(request, " ", "", -1)
@@ -107,14 +110,28 @@ func splitData(request string) (string, []string, error) {
 	var j int
 	var inBrackets bool
 	for k, s := range joinArgs {
+		if string(s) == "{" || string(s) == "}" {
+			return key, args, errors.New("Illegal braces")
+		}
 		if inBrackets {
-			if string(s) == "]" && k == len(joinArgs)-1 {
-				inBrackets = false
-				args = append(args, string(joinArgs[j:k]))
-				j = k + 1
-				continue
+			if string(s) == "[" {
+				if string(joinArgs[k-1:k+2]) != `"["` {
+					return key, args, errors.New("multi-level arrays are not allowed")
+				}
 			}
-			if string(s) == "," && string(joinArgs[k-1]) == "]" {
+
+			if string(s) == "]" {
+				if k == len(joinArgs)-1 {
+					inBrackets = false
+					args = append(args, string(joinArgs[j:k]))
+					j = k + 1
+					continue
+				}
+				if string(joinArgs[k+1]) == "]" {
+					return key, args, errors.New("unmatched closing bracket")
+				}
+			}
+			if string(joinArgs[k-1:k+1]) == "]," {
 				inBrackets = false
 				args = append(args, string(joinArgs[j:k-1]))
 				j = k + 1
@@ -131,6 +148,9 @@ func splitData(request string) (string, []string, error) {
 					args = append(args, string(joinArgs[j:k]))
 				}
 				j = k + 1
+			}
+			if string(s) == "]" {
+				return key, args, errors.New("character ] is not allowed in unquoted parameter string")
 			}
 		}
 	}

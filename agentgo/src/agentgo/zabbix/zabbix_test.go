@@ -118,9 +118,13 @@ func TestValidSplitData(t *testing.T) {
 		want error
 	}{
 		{"key[a]", nil},
+		{"key[a,b[c]", nil},
 		{`key[["a",]`, errors.New("unmatched opening brackets")},
-		{"key[a]b", errors.New("missing closing bracket at the end")},
-		{"key[a ]]", nil},
+		{"key[a[b]]", errors.New("character ] is not allowed in unquoted parameter string")},
+		{"key[a ]]", errors.New("character ] is not allowed in unquoted parameter string")},
+		{"key[a,{]", errors.New("Illegal braces")},
+		{"key,21", errors.New("Comma but no arguments detected")},
+		{`key["a","b",[["c","d\",]"]]]`, errors.New("multi-level arrays are not allowed")},
 	}
 	for _, c := range cases {
 		_, _, err := splitData(c.in)
