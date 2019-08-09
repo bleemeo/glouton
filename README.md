@@ -65,7 +65,7 @@ cp -r ../bleemeo-agent-ui/dist/js api/static/assets
 ```
 VERSION=`TZ=UTC date +%y.%m.%d.%H%M%S`
 BUILD_HASH=`git rev-parse --short HEAD`
-go build -o agent-go -ldflags "-X agentgo/version.Version=$VERSION -X agentgo/version.BuildHash=$BUILD_HASH" agentgo
+go build -ldflags "-X agentgo/version.Version=$VERSION -X agentgo/version.BuildHash=$BUILD_HASH" agentgo
 ```
 
 ### Note on VS code

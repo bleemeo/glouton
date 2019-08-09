@@ -9,5 +9,6 @@
 /VERSION
 .vscode
 /agent-go
+/agentgo
 *-packr.go
 api/static/assets/js
