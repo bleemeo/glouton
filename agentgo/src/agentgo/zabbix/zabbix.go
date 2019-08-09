@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -83,22 +84,25 @@ func decode(r io.Reader) (packetStruct, error) {
 		return decodedPacket, err
 	}
 	strPacketData := string(packetData)
-	decodedPacket.key, decodedPacket.args = splitData(strPacketData)
+	decodedPacket.key, decodedPacket.args, err = splitData(strPacketData)
 
 	return decodedPacket, err
 }
 
-func splitData(request string) (string, []string) {
+func splitData(request string) (string, []string, error) {
 	var args []string
 	i := strings.Index(request, "[")
 	if i == -1 {
-		return request, args
+		return request, args, nil
 	}
 	newrequest := strings.Replace(request, " ", "", -1)
 	key := newrequest[0:i]
+	if string(newrequest[len(newrequest)-1]) != "]" {
+		return key, args, errors.New("missing closing bracket at the end")
+	}
 	joinArgs := newrequest[i+1 : len(newrequest)-1]
 	if len(joinArgs) == 0 {
-		return key, []string{""}
+		return key, []string{""}, nil
 	}
 	var j int
 	var inBrackets bool
@@ -130,6 +134,10 @@ func splitData(request string) (string, []string) {
 			}
 		}
 	}
+	if inBrackets {
+		err := errors.New("unmatched opening brackets")
+		return key, args, err
+	}
 	if j == len(joinArgs) {
 		if string(joinArgs[len(joinArgs)-1]) == "," {
 			args = append(args, "")
@@ -141,7 +149,7 @@ func splitData(request string) (string, []string) {
 			args = append(args, string(joinArgs[j:]))
 		}
 	}
-	return key, args
+	return key, args, nil
 }
 
 func encodev1(decodedPacket packetStruct) ([]byte, error) {

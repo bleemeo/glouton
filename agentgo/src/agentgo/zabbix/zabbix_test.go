@@ -2,6 +2,7 @@ package zabbix
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"reflect"
 	"testing"
@@ -97,15 +98,34 @@ func TestSplitData(t *testing.T) {
 		{in: "key", wantKey: "key"},
 		{"key[ ]", "key", []string{""}},
 		{"key[a,]", "key", []string{"a", ""}},
-		{`key["a","b","c"]`, "key", []string{"a", "b", "c"}},
+		{`key["a",b"c",d]`, "key", []string{"a", `b"c"`, "d"}},
 		{"key[a,[b]]", "key", []string{"a", "b"}},
 		{"key[a,[b,c]]", "key", []string{"a", "b,c"}},
 		{`key["a","b",["c","d\",]"],[e,f]]`, "key", []string{"a", "b", `"c","d\",]"`, "e,f"}},
+		{"key[a,, ,ccc]", "key", []string{"a", "", "", "ccc"}},
 	}
 	for _, c := range cases {
-		gotKey, gotArgs := splitData(c.in)
+		gotKey, gotArgs, _ := splitData(c.in)
 		if gotKey != c.wantKey || !reflect.DeepEqual(gotArgs, c.wantArgs) {
 			t.Errorf("splitData(%v) == %v+%v, want %v+%v", c.in, gotKey, gotArgs, c.wantKey, c.wantArgs)
+		}
+	}
+}
+
+func TestValidSplitData(t *testing.T) {
+	cases := []struct {
+		in   string
+		want error
+	}{
+		{"key[a]", nil},
+		{`key[["a",]`, errors.New("unmatched opening brackets")},
+		{"key[a]b", errors.New("missing closing bracket at the end")},
+		{"key[a ]]", nil},
+	}
+	for _, c := range cases {
+		_, _, err := splitData(c.in)
+		if !reflect.DeepEqual(err, c.want) {
+			t.Errorf("splitData(%v) returns %v, want %v", c.in, err, c.want)
 		}
 	}
 }
