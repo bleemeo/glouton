@@ -1,3 +1,4 @@
+//nolint:gochecknoglobals
 package zabbix
 
 var versionRequest = []byte{0x5a, 0x42, 0x58, 0x44,

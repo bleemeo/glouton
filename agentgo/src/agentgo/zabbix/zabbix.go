@@ -1,13 +1,13 @@
 package zabbix
 
 import (
+	"agentgo/logger"
 	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"strings"
 	"sync"
@@ -25,7 +25,7 @@ type callback func(key string, args []string) string
 func handleConnection(c io.ReadWriteCloser, cb callback) {
 	decodedRequest, err := decode(c)
 	if err != nil {
-		log.Printf("Unable to decode Zabbix packet: %v", err)
+		logger.V(1).Printf("Unable to decode Zabbix packet: %v", err)
 		c.Close()
 		return
 	}
@@ -39,14 +39,14 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 		encodedAnswer, err = encodev1(answer)
 	}
 	if err != nil {
-		log.Println(err)
+		logger.V(1).Println(err)
 		c.Close()
 		return
 	}
 
 	_, err = c.Write(encodedAnswer)
 	if err != nil {
-		log.Printf("Answer writing failed: %v", err)
+		logger.V(1).Printf("Answer writing failed: %v", err)
 	}
 
 	c.Close()
@@ -62,7 +62,7 @@ func decode(r io.Reader) (packetStruct, error) {
 	header := packetHead[0:4]
 	buf := bytes.NewReader(packetHead[4:])
 
-	if bytes.Compare(header, []byte("ZBXD")) != 0 {
+	if !bytes.Equal(header, []byte("ZBXD")) {
 		err = fmt.Errorf("wrong packet header")
 		return decodedPacket, err
 	}
@@ -91,13 +91,13 @@ func decode(r io.Reader) (packetStruct, error) {
 
 func splitData(request string) (string, []string, error) {
 	var args []string
-	if strings.Index(request, "{") != -1 || strings.Index(request, "}") != -1 {
-		return request, args, errors.New("Illegal braces")
+	if strings.Contains(request, "{") || strings.Contains(request, "}") {
+		return request, args, errors.New("illegal braces")
 	}
 	i := strings.Index(request, "[")
 	if i == -1 {
-		if strings.Index(request, ",") != -1 {
-			return request, args, errors.New("Comma but no arguments detected")
+		if strings.Contains(request, ",") {
+			return request, args, errors.New("comma but no arguments detected")
 		}
 		return request, args, nil
 	}
@@ -115,7 +115,7 @@ func splitData(request string) (string, []string, error) {
 	for k, s := range joinArgs {
 		if inBrackets {
 			if string(s) == "[" {
-				if string(joinArgs[k-1:k+2]) != `"["` {
+				if joinArgs[k-1:k+2] != `"["` {
 					return key, args, errors.New("multi-level arrays are not allowed")
 				}
 			}
@@ -123,12 +123,12 @@ func splitData(request string) (string, []string, error) {
 			if string(s) == "]" {
 				if k == len(joinArgs)-1 {
 					inBrackets = false
-					if strings.Index(joinArgs[j:k], `"`) != -1 {
+					if strings.Contains(joinArgs[j:k], `"`) {
 						if strings.LastIndex(joinArgs[j:k], `"`) != k-j-1 {
 							return key, args, errors.New("quoted parameter cannot contain unquoted part")
 						}
 					}
-					args = append(args, string(joinArgs[j:k]))
+					args = append(args, joinArgs[j:k])
 					j = k + 1
 					continue
 				}
@@ -136,9 +136,9 @@ func splitData(request string) (string, []string, error) {
 					return key, args, errors.New("unmatched closing bracket")
 				}
 			}
-			if string(joinArgs[k-1:k+1]) == "]," {
+			if joinArgs[k-1:k+1] == "]," {
 				inBrackets = false
-				args = append(args, string(joinArgs[j:k-1]))
+				args = append(args, joinArgs[j:k-1])
 				j = k + 1
 			}
 		} else {
@@ -147,17 +147,17 @@ func splitData(request string) (string, []string, error) {
 				j = k + 1
 			}
 			if string(s) == "," {
-				if strings.Index(joinArgs[j:k], `"`) != -1 {
+				if strings.Contains(joinArgs[j:k], `"`) {
 					if strings.LastIndex(joinArgs[j:k], `"`) != k-j-1 {
 						return key, args, errors.New("quoted parameter cannot contain unquoted part")
 					}
 					if string(joinArgs[j]) == `"` {
-						args = append(args, strings.Replace(string(joinArgs[j+1:k-1]), `\`, "", -1))
+						args = append(args, strings.Replace(joinArgs[j+1:k-1], `\`, "", -1))
 						j = k + 1
 						continue
 					}
 				}
-				args = append(args, string(joinArgs[j:k]))
+				args = append(args, joinArgs[j:k])
 				j = k + 1
 			}
 			if string(s) == "]" {
@@ -174,16 +174,16 @@ func splitData(request string) (string, []string, error) {
 			args = append(args, "")
 		}
 	} else {
-		if strings.Index(joinArgs[j:], `"`) != -1 { // si il y a des "
-			if strings.LastIndex(joinArgs, `"`) != len(joinArgs)-1 { // si le dernier " n'est pas à la fin
+		if strings.Contains(joinArgs[j:], `"`) {
+			if strings.LastIndex(joinArgs, `"`) != len(joinArgs)-1 {
 				return key, args, errors.New("quoted parameter cannot contain unquoted part")
 			}
 			if string(joinArgs[j]) == `"` {
-				args = append(args, string(joinArgs[j+1:len(joinArgs)-1]))
+				args = append(args, joinArgs[j+1:len(joinArgs)-1])
 				return key, args, nil
 			}
 		}
-		args = append(args, string(joinArgs[j:]))
+		args = append(args, joinArgs[j:])
 	}
 	return key, args, nil
 }
@@ -218,25 +218,26 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 func Run(ctx context.Context, port string, cb callback, useTLS bool) {
 	tcpAdress, err := net.ResolveTCPAddr("tcp4", port)
 	if err != nil {
-		log.Println(err)
+		logger.V(1).Println(err)
 		return
 	}
 	l, err := net.ListenTCP("tcp4", tcpAdress)
 
 	if err != nil {
-		log.Println(err)
+		logger.V(1).Println(err)
 		return
 	}
 	defer l.Close()
 	lWrap := net.Listener(l)
 	if useTLS {
+		logger.V(1).Println("useTLS")
 	}
 
 	var wg sync.WaitGroup
 	for {
 		err := l.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
-			log.Printf("Nrpe: setDeadline on listener failed: %v", err)
+			logger.V(1).Printf("Zabbix: setDeadline on listener failed: %v", err)
 			break
 		}
 		c, err := lWrap.Accept()
@@ -247,13 +248,13 @@ func Run(ctx context.Context, port string, cb callback, useTLS bool) {
 			continue
 		}
 		if err != nil {
-			log.Printf("Nrpe accept failed: %v", err)
+			logger.V(1).Printf("Zabbix accept failed: %v", err)
 			break
 		}
 
 		err = c.SetDeadline(time.Now().Add(time.Second * 10))
 		if err != nil {
-			log.Printf("Nrpe: setDeadline on connection failed: %v", err)
+			logger.V(1).Printf("Zabbix: setDeadline on connection failed: %v", err)
 			break
 		}
 

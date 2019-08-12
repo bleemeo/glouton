@@ -81,8 +81,8 @@ func TestValidSplitData(t *testing.T) {
 		{"key[a ]]", errors.New("character ] is not allowed in unquoted parameter string")},
 		{"key[ a]]", errors.New("character ] is not allowed in unquoted parameter string")},
 		{"key[abca]654", errors.New("missing closing bracket at the end")},
-		{"{}key", errors.New("Illegal braces")},
-		{"ssh,21", errors.New("Comma but no arguments detected")},
+		{"{}key", errors.New("illegal braces")},
+		{"ssh,21", errors.New("comma but no arguments detected")},
 		{"key[][]", errors.New("character ] is not allowed in unquoted parameter string")},
 		{`key["a",b,["c","d\",]"]]["d"]`, errors.New("unmatched closing bracket")},
 		{"key[[[]]]", errors.New("multi-level arrays are not allowed")},
@@ -117,7 +117,7 @@ func TestEncode(t *testing.T) {
 	}
 	for _, c := range cases {
 		got, err := encodev1(c.in)
-		if bytes.Compare(got, c.want) != 0 {
+		if !bytes.Equal(got, c.want) {
 			t.Errorf("encodeV2(%v) == %v, want %v", c.in, got, c.want)
 			break
 		}
@@ -163,7 +163,7 @@ func TestHandleConnection(t *testing.T) {
 	for _, c := range cases {
 		handleConnection(c.in, responsev1)
 		got := c.in.writer.Bytes()
-		if bytes.Compare(got, c.want) != 0 {
+		if !bytes.Equal(got, c.want) {
 			t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
 			break
 		}
