@@ -38,7 +38,7 @@ func TestSplitData(t *testing.T) {
 		wantArgs []string
 	}{
 		{in: "key", wantKey: "key"},
-		{"key[ ]", "key", []string{""}},
+		{"key[]", "key", []string{""}},
 		{"key[a]", "key", []string{"a"}},
 		{`key[""]`, "key", []string{""}},
 		{"key[ ]", "key", []string{""}},
