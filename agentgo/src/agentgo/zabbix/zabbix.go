@@ -91,6 +91,9 @@ func decode(r io.Reader) (packetStruct, error) {
 
 func splitData(request string) (string, []string, error) {
 	var args []string
+	if strings.Index(request, "{") != -1 || strings.Index(request, "}") != -1 {
+		return request, args, errors.New("Illegal braces")
+	}
 	i := strings.Index(request, "[")
 	if i == -1 {
 		if strings.Index(request, ",") != -1 {
@@ -110,9 +113,6 @@ func splitData(request string) (string, []string, error) {
 	var j int
 	var inBrackets bool
 	for k, s := range joinArgs {
-		if string(s) == "{" || string(s) == "}" {
-			return key, args, errors.New("Illegal braces")
-		}
 		if inBrackets {
 			if string(s) == "[" {
 				if string(joinArgs[k-1:k+2]) != `"["` {
@@ -126,11 +126,6 @@ func splitData(request string) (string, []string, error) {
 					if strings.Index(joinArgs[j:k], `"`) != -1 {
 						if strings.LastIndex(joinArgs[j:k], `"`) != k-j-1 {
 							return key, args, errors.New("quoted parameter cannot contain unquoted part")
-						}
-						if string(joinArgs[j]) == `"` {
-							args = append(args, string(joinArgs[j+1:k-1]))
-							j = k + 1
-							continue
 						}
 					}
 					args = append(args, string(joinArgs[j:k]))
@@ -157,7 +152,7 @@ func splitData(request string) (string, []string, error) {
 						return key, args, errors.New("quoted parameter cannot contain unquoted part")
 					}
 					if string(joinArgs[j]) == `"` {
-						args = append(args, string(joinArgs[j+1:k-1]))
+						args = append(args, strings.Replace(string(joinArgs[j+1:k-1]), `\`, "", -1))
 						j = k + 1
 						continue
 					}
@@ -171,7 +166,7 @@ func splitData(request string) (string, []string, error) {
 		}
 	}
 	if inBrackets {
-		err := errors.New("unmatched opening brackets")
+		err := errors.New("unmatched opening bracket")
 		return key, args, err
 	}
 	if j == len(joinArgs) {
@@ -179,11 +174,16 @@ func splitData(request string) (string, []string, error) {
 			args = append(args, "")
 		}
 	} else {
-		if string(joinArgs[j]) == `"` && string(joinArgs[len(joinArgs)-1]) == `"` {
-			args = append(args, string(joinArgs[j+1:len(joinArgs)-1]))
-		} else {
-			args = append(args, string(joinArgs[j:]))
+		if strings.Index(joinArgs[j:], `"`) != -1 { // si il y a des "
+			if strings.LastIndex(joinArgs, `"`) != len(joinArgs)-1 { // si le dernier " n'est pas à la fin
+				return key, args, errors.New("quoted parameter cannot contain unquoted part")
+			}
+			if string(joinArgs[j]) == `"` {
+				args = append(args, string(joinArgs[j+1:len(joinArgs)-1]))
+				return key, args, nil
+			}
 		}
+		args = append(args, string(joinArgs[j:]))
 	}
 	return key, args, nil
 }
