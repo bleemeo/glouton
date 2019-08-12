@@ -38,6 +38,33 @@ func (c Connector) Run(ctx context.Context) error {
 	return c.sync.Run()
 }
 
+// AccountID returns the Account UUID of Bleemeo
+// It return the empty string if the Account UUID is not available
+func (c *Connector) AccountID() string {
+	accountID := c.cache.AccountID()
+	if accountID != "" {
+		return accountID
+	}
+	return c.option.Config.String("bleemeo.account_id")
+}
+
+// AgentID returns the Agent UUID of Bleemeo
+// It return the empty string if the Account UUID is not available
+func (c *Connector) AgentID() string {
+	return c.option.State.AgentID()
+}
+
+// RegistrationAt returns the date of registration with Bleemeo API
+func (c *Connector) RegistrationAt() time.Time {
+	agent := c.cache.Agent()
+	return agent.CreatedAt
+}
+
+// LastReport returns the date of last report with Bleemeo API
+func (c *Connector) LastReport() time.Time {
+	return time.Time{} // TODO
+}
+
 func (c Connector) uppdateConfig() {
 	currentConfig := c.cache.AccountConfig()
 	logger.Printf("Changed to configuration %s", currentConfig.Name)

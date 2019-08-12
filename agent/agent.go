@@ -45,10 +45,11 @@ type agent struct {
 	config       *config.Configuration
 	state        *state.State
 
-	discovery    *discovery.Discovery
-	dockerFact   *facts.DockerProvider
-	collector    *collector.Collector
-	factProvider *facts.FactProvider
+	discovery        *discovery.Discovery
+	dockerFact       *facts.DockerProvider
+	collector        *collector.Collector
+	factProvider     *facts.FactProvider
+	bleemeoConnector *bleemeo.Connector
 
 	triggerHandler *debouncer.Debouncer
 	triggerLock    sync.Mutex
@@ -127,6 +128,42 @@ func Run() {
 		return
 	}
 	agent.run()
+}
+
+// BleemeoAccountID returns the Account UUID of Bleemeo
+// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or mis-configured)
+func (a *agent) BleemeoAccountID() string {
+	if a.bleemeoConnector == nil {
+		return ""
+	}
+	return a.bleemeoConnector.AccountID()
+}
+
+// BleemeoAgentID returns the Agent UUID of Bleemeo
+// It return the empty string if the Agent UUID is not available (e.g. because Bleemeo is disabled or registration didn't happen yet)
+func (a *agent) BleemeoAgentID() string {
+	if a.bleemeoConnector == nil {
+		return ""
+	}
+	return a.bleemeoConnector.AgentID()
+}
+
+// BleemeoRegistrationAt returns the date of Agent registration with Bleemeo API
+// It return the zero time if registration didn't occurred yet
+func (a *agent) BleemeoRegistrationAt() time.Time {
+	if a.bleemeoConnector == nil {
+		return time.Time{}
+	}
+	return a.bleemeoConnector.RegistrationAt()
+}
+
+// BleemeoLastReport returns the date of last report with Bleemeo API
+// It return the zero time if registration didn't occurred yet or no data send to Bleemeo API
+func (a *agent) BleemeoLastReport() time.Time {
+	if a.bleemeoConnector == nil {
+		return time.Time{}
+	}
+	return a.bleemeoConnector.LastReport()
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
@@ -258,7 +295,7 @@ func (a *agent) run() { //nolint:gocyclo
 	}()
 
 	if a.config.Bool("bleemeo.enabled") {
-		connector := bleemeo.New(types.GlobalOption{
+		a.bleemeoConnector = bleemeo.New(types.GlobalOption{
 			Config:                 a.config,
 			State:                  a.state,
 			Facts:                  a.factProvider,
@@ -267,7 +304,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})
-		_, err := a.taskRegistry.AddTask(connector, "bleemeo")
+		_, err := a.taskRegistry.AddTask(a.bleemeoConnector, "bleemeo")
 		if err != nil {
 			logger.V(1).Printf("Unable to start Bleemeo connector: %v", err)
 		}

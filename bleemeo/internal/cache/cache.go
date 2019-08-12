@@ -71,6 +71,14 @@ func (c *Cache) SetContainers(containers []types.Container) {
 	c.dirty = true
 }
 
+// Agent returns the Agent object
+func (c *Cache) Agent() (agent types.Agent) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.data.Agent
+}
+
 // SetAgent update the Agent object
 func (c *Cache) SetAgent(agent types.Agent) {
 	c.l.Lock()
