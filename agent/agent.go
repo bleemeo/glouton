@@ -166,6 +166,14 @@ func (a *agent) BleemeoLastReport() time.Time {
 	return a.bleemeoConnector.LastReport()
 }
 
+// BleemeoConnected returns true if Bleemeo is currently connected (to MQTT)
+func (a *agent) BleemeoConnected() bool {
+	if a.bleemeoConnector == nil {
+		return false
+	}
+	return a.bleemeoConnector.Connected()
+}
+
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
 func (a *agent) run() { //nolint:gocyclo
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
@@ -301,6 +309,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Facts:                  a.factProvider,
 			Docker:                 a.dockerFact,
 			Store:                  db,
+			Acc:                    db.Accumulator(),
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})

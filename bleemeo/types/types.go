@@ -6,6 +6,8 @@ import (
 	"agentgo/types"
 	"context"
 	"time"
+
+	"github.com/influxdata/telegraf"
 )
 
 // GlobalOption are option user by most component of bleemeo.Connector
@@ -15,6 +17,7 @@ type GlobalOption struct {
 	Facts     FactProvider
 	Docker    DockerProvider
 	Store     Store
+	Acc       telegraf.Accumulator
 	Discovery discovery.PersistentDiscoverer
 
 	UpdateMetricResolution func(resolution time.Duration)

@@ -51,9 +51,8 @@ type Option struct {
 }
 
 // New return a new Synchronizer
-func New(ctx context.Context, option Option) *Synchronizer {
+func New(option Option) *Synchronizer {
 	return &Synchronizer{
-		ctx:    ctx,
 		option: option,
 
 		nextFullSync: time.Now(),
@@ -61,7 +60,8 @@ func New(ctx context.Context, option Option) *Synchronizer {
 }
 
 // Run run the Connector
-func (s *Synchronizer) Run() error {
+func (s *Synchronizer) Run(ctx context.Context) error {
+	s.ctx = ctx
 	s.startedAt = time.Now()
 	accountID := s.option.Config.String("bleemeo.account_id")
 	registrationKey := s.option.Config.String("bleemeo.registration_key")

@@ -13,6 +13,7 @@ require (
 	github.com/docker/docker v0.7.3-0.20180327123150-ed7b6428c133
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
+	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-redis/redis v0.0.0-20190503082931-75795aa4236d // indirect
@@ -34,6 +35,7 @@ require (
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/prometheus/client_golang v1.1.0
+	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/shirou/gopsutil v2.19.6+incompatible
@@ -43,7 +45,7 @@ require (
 	github.com/vektah/gqlparser v1.1.2
 	golang.org/x/crypto v0.0.0-20190701094942-4def268fd1a4 // indirect
 	golang.org/x/net v0.0.0-20190724013045-ca1201d0de80 // indirect
-	golang.org/x/sys v0.0.0-20190804053845-51ab0e2deafa // indirect
+	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a // indirect
 	google.golang.org/appengine v1.6.1 // indirect
 	gopkg.in/mgo.v2 v2.0.0-20180705113604-9856a29383ce // indirect
 	gopkg.in/yaml.v3 v3.0.0-20190709130402-674ba3eaed22

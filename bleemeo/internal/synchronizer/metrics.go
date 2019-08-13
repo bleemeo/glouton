@@ -20,6 +20,33 @@ var (
 	errNeedRegister = errors.New("metric was deleted from API, it need to be re-registered")
 )
 
+// The metric registration function is done in 4 pass
+// * first will only ensure agent_status is registered (this metric is required before connecting to MQTT and is produced once connected to MQTT...)
+// * main pass will do the bulk of the jobs. But some metric may fail and will be done in Recreate and Retry pass
+// * The Recreate pass is for metric that failed (to update) because they were deleted from API
+// * The Retry pass is for metric that failed to create due to dependency with other metric (e.g. status_of)
+type metricRegisterPass int
+
+const (
+	metricPassAgentStatus metricRegisterPass = iota
+	metricPassMain
+	metricPassRecreate
+	metricPassRetry
+)
+
+type fakeMetric struct {
+	label string
+}
+
+func (m fakeMetric) Points(time.Time, time.Time) ([]agentTypes.PointStatus, error) {
+	return nil, errors.New("not implemented on fakeMetric")
+}
+func (m fakeMetric) Labels() map[string]string {
+	return map[string]string{
+		"__name__": m.label,
+	}
+}
+
 type metricPayload struct {
 	types.Metric
 	Agent string `json:"agent"`
@@ -282,12 +309,16 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 	var lastErr error
 	retryMetrics := make([]agentTypes.Metric, 0)
 	registerMetrics := make([]agentTypes.Metric, 0)
-	for state := 0; state < 3; state++ {
+	for state := metricPassAgentStatus; state <= metricPassRetry; state++ {
 		var currentList []agentTypes.Metric
 		switch state {
-		case 0: // initial loop
+		case metricPassAgentStatus:
+			currentList = []agentTypes.Metric{
+				fakeMetric{label: "agent_status"},
+			}
+		case metricPassMain:
 			currentList = localMetrics
-		case 1: // process errNeedRegister
+		case metricPassRecreate:
 			currentList = registerMetrics
 			if len(registerMetrics) > 0 && !fullForInactive {
 				metrics := make([]types.Metric, 0, len(registeredMetricsByUUID))
@@ -310,7 +341,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 					registeredMetricsByKey[key] = v
 				}
 			}
-		case 2: // process errRetryLater
+		case metricPassRetry:
 			currentList = retryMetrics
 		}
 	metricLoop:
