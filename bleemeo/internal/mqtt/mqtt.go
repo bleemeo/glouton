@@ -51,14 +51,35 @@ type Client struct {
 }
 
 type metricPayload struct {
-	UUID             string  `json:"uuid"`
-	Measurement      string  `json:"measurement"`
-	Timestamp        int64   `json:"time"`
-	Value            float64 `json:"value"`
-	Item             string  `json:"item,omitempty"`
-	Status           string  `json:"status,omitempty"`
-	EventGracePeriod int     `json:"event_grace_period,omitempty"`
-	ProblemOrigin    string  `json:"check_output,omitempty"`
+	UUID             string            `json:"uuid"`
+	Measurement      string            `json:"measurement"`
+	Timestamp        int64             `json:"time"`
+	Value            forceDecimalFloat `json:"value"`
+	Item             string            `json:"item,omitempty"`
+	Status           string            `json:"status,omitempty"`
+	EventGracePeriod int               `json:"event_grace_period,omitempty"`
+	ProblemOrigin    string            `json:"check_output,omitempty"`
+}
+
+// This type is only used because the Bleemeo consumer require Value to be a float,
+// and assume that the JSON "5" is not a float but an int.
+// So this this guarantee that the Go float value 5.0 is encoded as "5.0" and not "5".
+// This should disapear when Bleemeo consumer is upgraded to support int as float
+type forceDecimalFloat float64
+
+// MarshalJSON do what comment on forceDecimalFloat say
+func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
+	buffer, err := json.Marshal(float64(f))
+	if err != nil {
+		return buffer, err
+	}
+	for _, b := range buffer {
+		if b == '.' || b == 'e' {
+			return buffer, err
+		}
+	}
+	buffer = append(buffer, '.', '0')
+	return buffer, err
 }
 
 // New create a new client
@@ -257,7 +278,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				UUID:        m.ID,
 				Measurement: p.Labels["__name__"],
 				Timestamp:   p.Time.Unix(),
-				Value:       p.Value,
+				Value:       forceDecimalFloat(p.Value),
 				Item:        p.Labels["item"],
 			}
 			if p.CurrentStatus.IsSet() {
