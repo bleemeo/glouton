@@ -51,6 +51,8 @@ type agent struct {
 	factProvider     *facts.FactProvider
 	bleemeoConnector *bleemeo.Connector
 
+	taskIDs map[string]int
+
 	triggerHandler *debouncer.Debouncer
 	triggerLock    sync.Mutex
 	triggerDisc    bool
@@ -122,6 +124,7 @@ func (a *agent) setupLogger() {
 func Run() {
 	agent := &agent{
 		taskRegistry: task.NewRegistry(context.Background()),
+		taskIDs:      make(map[string]int),
 	}
 	if !agent.init() {
 		os.Exit(1)
@@ -236,25 +239,22 @@ func (a *agent) run() { //nolint:gocyclo
 	)
 	a.FireTrigger(true, false)
 
-	_, err := a.taskRegistry.AddTask(db, "store")
-	if err != nil {
-		logger.V(1).Printf("Unable to start store: %v", err)
+	tasks := []struct {
+		runner task.Runner
+		name   string
+	}{
+		{db, "store"},
+		{a.triggerHandler, "triggerHandler"},
+		{a.dockerFact, "docker"},
+		{a.collector, "collector"},
+		{api, "api"},
 	}
-	_, err = a.taskRegistry.AddTask(a.triggerHandler, "triggerHandler")
-	if err != nil {
-		logger.V(1).Printf("Unable to start discovery: %v", err)
-	}
-	_, err = a.taskRegistry.AddTask(a.dockerFact, "docker")
-	if err != nil {
-		logger.V(1).Printf("Unable to start Docker watcher: %v", err)
-	}
-	_, err = a.taskRegistry.AddTask(a.collector, "collector")
-	if err != nil {
-		logger.V(1).Printf("Unable to start metric collector: %v", err)
-	}
-	_, err = a.taskRegistry.AddTask(api, "api")
-	if err != nil {
-		logger.V(1).Printf("Unable to start local API: %v", err)
+	for _, t := range tasks {
+		id, err := a.taskRegistry.AddTask(t.runner, t.name)
+		if err != nil {
+			logger.V(1).Printf("Unable to start %s: %v", t.name, err)
+		}
+		a.taskIDs[t.name] = id
 	}
 
 	var wg sync.WaitGroup
@@ -314,11 +314,27 @@ func (a *agent) run() { //nolint:gocyclo
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})
-		_, err := a.taskRegistry.AddTask(a.bleemeoConnector, "bleemeo")
+		id, err := a.taskRegistry.AddTask(a.bleemeoConnector, "bleemeo")
 		if err != nil {
 			logger.V(1).Printf("Unable to start Bleemeo connector: %v", err)
 		}
+		a.taskIDs["bleemeo"] = id
 	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				a.healthCheck(ctx, cancel)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	for s := range c {
 		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
@@ -335,6 +351,25 @@ func (a *agent) run() { //nolint:gocyclo
 	a.discovery.Close()
 	wg.Wait()
 	logger.V(2).Printf("Agent stopped")
+}
+
+func (a *agent) healthCheck(ctx context.Context, cancel context.CancelFunc) {
+	mandatoryTasks := []string{"bleemeo", "collector", "store"}
+	for _, name := range mandatoryTasks {
+		if id, ok := a.taskIDs[name]; ok {
+			if !a.taskRegistry.IsRunning(id) {
+				// Re-check ctx to avoid race condition
+				if ctx.Err() != nil {
+					return
+				}
+				logger.Printf("Gorouting %v crashed. Stopping the agent", name)
+				cancel()
+			}
+		}
+	}
+	if a.bleemeoConnector != nil {
+		a.bleemeoConnector.HealthCheck()
+	}
 }
 
 func (a *agent) FireTrigger(discovery bool, sendFacts bool) {

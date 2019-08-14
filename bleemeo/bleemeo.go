@@ -137,9 +137,25 @@ func (c *Connector) Connected() bool {
 	return c.mqtt.Connected()
 }
 
-// LastReport returns the date of last report with Bleemeo API
+// LastReport returns the date of last report with Bleemeo API over MQTT
 func (c *Connector) LastReport() time.Time {
-	return time.Time{} // TODO
+	return c.mqtt.LastReport()
+}
+
+// HealthCheck perform some health check and logger any issue found
+func (c *Connector) HealthCheck() bool {
+	ok := true
+	if c.option.State.AgentID() == "" {
+		logger.Printf("Agent not yet registered")
+		ok = false
+	}
+	// TODO: Log a message if Bleemeo connector is disabled
+	c.l.Lock()
+	defer c.l.Unlock()
+	if c.mqtt != nil {
+		ok = c.mqtt.HealthCheck() && ok
+	}
+	return ok
 }
 
 func (c *Connector) emitInternalMetric() {

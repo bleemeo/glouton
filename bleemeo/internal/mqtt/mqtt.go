@@ -44,10 +44,12 @@ type Client struct {
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 
-	l             sync.Mutex
-	setupDone     bool
-	pendingToken  []paho.Token
-	pendingPoints []agentTypes.MetricPoint
+	l                 sync.Mutex
+	setupDone         bool
+	pendingToken      []paho.Token
+	pendingPoints     []agentTypes.MetricPoint
+	lastReport        time.Time
+	failedPointsCount int
 }
 
 type metricPayload struct {
@@ -118,6 +120,30 @@ func (c *Client) Run(ctx context.Context) error {
 		return err
 	}
 	return shutdownErr
+}
+
+// LastReport returns the date of last report with Bleemeo API
+func (c *Client) LastReport() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+	return c.lastReport
+}
+
+// HealthCheck perform some health check and logger any issue found
+func (c *Client) HealthCheck() bool {
+	ok := true
+	if !c.Connected() {
+		logger.Printf("Bleemeo connection (MQTT) is currently not established")
+		ok = false
+	}
+	c.l.Lock()
+	defer c.l.Unlock()
+	if c.failedPointsCount >= maxPendingPoints {
+		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform. Older points are being dropped", c.failedPointsCount)
+	} else if c.failedPointsCount > 1000 {
+		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform", c.failedPointsCount)
+	}
+	return ok
 }
 
 func (c *Client) setupMQTT() error {
@@ -268,6 +294,9 @@ func (c *Client) sendPoints() {
 		}
 		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.State.AgentID()), buffer)
 	}
+	c.l.Lock()
+	defer c.l.Unlock()
+	c.failedPointsCount = len(c.failedPoints)
 }
 
 func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[common.MetricLabelItem]types.Metric, points []agentTypes.MetricPoint) []metricPayload {
@@ -382,6 +411,7 @@ func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
 			if t.Error() != nil {
 				logger.V(2).Printf("MQTT publish failed: %v", t.Error())
 			}
+			c.lastReport = time.Now()
 		} else {
 			stillPending = append(stillPending, t)
 		}
