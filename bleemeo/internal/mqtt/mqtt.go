@@ -4,6 +4,8 @@ import (
 	"agentgo/bleemeo/internal/cache"
 	"agentgo/bleemeo/types"
 	"agentgo/logger"
+	"bytes"
+	"compress/zlib"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -144,9 +146,22 @@ func (c *Client) run(ctx context.Context) error {
 	}
 	c.connect(ctx)
 
+	var topinfoSendAt time.Time
+	//var lastPointSend map[string]time.Time // uuid => time
+
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
 	for ctx.Err() == nil {
+		cfg := c.option.Cache.AccountConfig()
+		if time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
+			topinfoSendAt = time.Now()
+			c.sendTopinfo(ctx, cfg)
+		}
 		c.waitPublish(time.Now().Add(5 * time.Second))
-		time.Sleep(5 * time.Second)
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+		}
 	}
 
 	return nil
@@ -207,6 +222,30 @@ func (c *Client) publish(topic string, payload []byte) {
 	c.pendingToken = append(c.pendingToken, token)
 }
 
+func (c *Client) sendTopinfo(ctx context.Context, cfg types.AccountConfig) {
+	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second/2)
+	if err != nil {
+		logger.V(1).Printf("Unable to get topinfo: %v", err)
+		return
+	}
+	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.State.AgentID())
+
+	var buffer bytes.Buffer
+	w := zlib.NewWriter(&buffer)
+	err = json.NewEncoder(w).Encode(topinfo)
+	if err != nil {
+		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
+		w.Close()
+		return
+	}
+	err = w.Close()
+	if err != nil {
+		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
+		return
+	}
+	c.publish(topic, buffer.Bytes())
+}
+
 func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
 	stillPending := make([]paho.Token, 0)
 	c.l.Lock()
@@ -239,6 +278,12 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 
 func (c *Client) ready() bool {
 	if c.option.State.AgentID() == "" {
+		logger.V(2).Printf("MQTT not ready, Agent not yet registrered")
+		return false
+	}
+	cfg := c.option.Cache.AccountConfig()
+	if cfg.LiveProcessResolution == 0 || cfg.MetricAgentResolution == 0 {
+		logger.V(2).Printf("MQTT not ready, Agent as no configuration")
 		return false
 	}
 	for _, m := range c.option.Cache.Metrics() {
@@ -246,5 +291,6 @@ func (c *Client) ready() bool {
 			return true
 		}
 	}
+	logger.V(2).Printf("MQTT not ready, metric \"agent_status\" is not yet registered")
 	return false
 }

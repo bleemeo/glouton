@@ -215,7 +215,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if !ok {
 			continue
 		}
-		serviceName, ok := serviceByCommand(process.CmdLine)
+		serviceName, ok := serviceByCommand(process.CmdLineList)
 		if !ok {
 			continue
 		}

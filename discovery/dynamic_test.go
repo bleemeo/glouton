@@ -101,7 +101,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 					PID:         1547,
 					PPID:        1,
 					CreateTime:  time.Now(),
-					CmdLine:     []string{"/usr/bin/memcached", "-m", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1", "-P", "/var/run/memcached/memcached.pid"},
+					CmdLineList: []string{"/usr/bin/memcached", "-m", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1", "-P", "/var/run/memcached/memcached.pid"},
 					Name:        "memcached",
 					MemoryRSS:   0xa88,
 					CPUPercent:  0.028360216236998047,
@@ -253,7 +253,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				[]facts.Process{
 					{
 						PID:         42,
-						CmdLine:     c.cmdLine,
+						CmdLineList: c.cmdLine,
 						ContainerID: c.containerID,
 					},
 				},

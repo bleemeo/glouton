@@ -15,6 +15,10 @@ import (
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/errdefs"
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/host"
+	"github.com/shirou/gopsutil/load"
+	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 )
 
@@ -34,24 +38,70 @@ type ProcessProvider struct {
 	containerIDFromCGroup func(int) string
 
 	processes           map[int]Process
+	topinfo             TopInfo
+	lastCPUtimes        cpu.TimesStat
 	lastProcessesUpdate time.Time
 }
 
 // Process describe one Process
 type Process struct {
-	PID           int
-	PPID          int
-	CreateTime    time.Time
-	CmdLine       []string
-	Name          string
-	MemoryRSS     uint64
-	CPUPercent    float64
-	CPUTime       float64
-	Status        string
-	Username      string
-	Executable    string
-	ContainerID   string
-	ContainerName string
+	PID             int       `json:"pid"`
+	PPID            int       `json:"ppid"`
+	CreateTime      time.Time `json:"-"`
+	CreateTimestamp int64     `json:"create_time"`
+	CmdLineList     []string  `json:"-"`
+	CmdLine         string    `json:"cmdline"`
+	Name            string    `json:"name"`
+	MemoryRSS       uint64    `json:"memory_rss"`
+	CPUPercent      float64   `json:"cpu_percent"`
+	CPUTime         float64   `json:"cpu_times"`
+	Status          string    `json:"status"`
+	Username        string    `json:"username"`
+	Executable      string    `json:"exe"`
+	ContainerID     string    `json:"-"`
+	ContainerName   string    `json:"instance"`
+}
+
+// TopInfo contains all information to show a top-like view
+type TopInfo struct {
+	Time      int64       `json:"time"`
+	Uptime    int         `json:"uptime"`
+	Loads     []float64   `json:"loads"`
+	Users     int         `json:"users"`
+	Processes []Process   `json:"processes"`
+	CPU       CPUUsage    `json:"cpu"`
+	Memory    MemoryUsage `json:"memory"`
+	Swap      SwapUsage   `json:"swap"`
+}
+
+// CPUUsage contains usage of CPU
+type CPUUsage struct {
+	User      float64 `json:"user"`
+	Nice      float64 `json:"nice"`
+	System    float64 `json:"system"`
+	Idle      float64 `json:"idle"`
+	IOWait    float64 `json:"iowait"`
+	Guest     float64 `json:"guest,omitempty"`
+	GuestNice float64 `json:"guest_nice,omitempty"`
+	IRQ       float64 `json:"irq,omitempty"`
+	SoftIRQ   float64 `json:"softirq,omitempty"`
+	Steal     float64 `json:"steal,omitempty"`
+}
+
+// MemoryUsage contains usage of Memory
+type MemoryUsage struct {
+	Total   float64 `json:"total"`
+	Used    float64 `json:"used"`
+	Free    float64 `json:"free"`
+	Buffers float64 `json:"buffers"`
+	Cached  float64 `json:"cached"`
+}
+
+// SwapUsage contains usage of Swap
+type SwapUsage struct {
+	Total float64 `json:"total"`
+	Used  float64 `json:"used"`
+	Free  float64 `json:"free"`
 }
 
 // NewProcess creates a new Process provider
@@ -73,6 +123,22 @@ func NewProcess(dockerProvider *DockerProvider) *ProcessProvider {
 func (pp *ProcessProvider) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]Process, err error) {
 	processes, _, err = pp.ProcessesWithTime(ctx, maxAge)
 	return
+}
+
+// TopInfo returns a topinfo object
+//
+// It may use a cached value as old as maxAge.
+func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (topinfo TopInfo, err error) {
+	pp.l.Lock()
+	defer pp.l.Unlock()
+
+	if time.Since(pp.lastProcessesUpdate) > maxAge {
+		err = pp.updateProcesses(ctx)
+		if err != nil {
+			return
+		}
+	}
+	return pp.topinfo, nil
 }
 
 // ProcessesWithTime returns the list of processes present on this system and the date of last update
@@ -154,11 +220,12 @@ func decodeDocker(top container.ContainerTopOKBody, containerID string, containe
 		if err != nil {
 			continue
 		}
-		cmdLine := strings.Split(row[cmdlineIndex], " ")
+		cmdLineList := strings.Split(row[cmdlineIndex], " ")
 		process := Process{
 			PID:           pid,
-			CmdLine:       cmdLine,
-			Name:          filepath.Base(cmdLine[0]),
+			CmdLine:       row[cmdlineIndex],
+			CmdLineList:   cmdLineList,
+			Name:          filepath.Base(cmdLineList[0]),
 			ContainerID:   containerID,
 			ContainerName: containerName,
 		}
@@ -364,7 +431,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 
 	// Update CPU percent
 	for pid, p := range newProcessesMap {
-		if oldP, ok := pp.processes[pid]; ok && oldP.CreateTime == p.CreateTime {
+		if oldP, ok := pp.processes[pid]; ok && oldP.CreateTime.Equal(p.CreateTime) {
 			deltaT := time.Since(pp.lastProcessesUpdate)
 			deltaCPU := p.CPUTime - oldP.CPUTime
 			if deltaCPU > 0 && deltaT > 0 {
@@ -381,10 +448,93 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 		}
 	}
 
+	topinfo, err := pp.baseTopinfo()
+	if err != nil {
+		return err
+	}
+	topinfo.Time = time.Now().Unix()
+	topinfo.Processes = make([]Process, 0, len(newProcessesMap))
+	for _, p := range newProcessesMap {
+		topinfo.Processes = append(topinfo.Processes, p)
+	}
+
+	pp.topinfo = topinfo
 	pp.processes = newProcessesMap
 	pp.lastProcessesUpdate = time.Now()
-
+	logger.V(2).Printf("Completed processes update in %v", time.Since(t0))
 	return nil
+}
+
+func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
+	uptime, err := host.Uptime()
+	if err != nil {
+		return result, err
+	}
+	result.Uptime = int(uptime)
+
+	loads, err := load.Avg()
+	if err != nil {
+		return result, err
+	}
+	result.Loads = []float64{loads.Load1, loads.Load5, loads.Load15}
+
+	users, err := host.Users()
+	if err != nil {
+		return result, err
+	}
+	result.Users = len(users)
+
+	memUsage, err := mem.VirtualMemory()
+	if err != nil {
+		return result, err
+	}
+	result.Memory.Total = float64(memUsage.Total) / 1024.
+	result.Memory.Used = float64(memUsage.Used) / 1024.
+	result.Memory.Free = float64(memUsage.Free) / 1024.
+	result.Memory.Buffers = float64(memUsage.Buffers) / 1024.
+	result.Memory.Cached = float64(memUsage.Cached) / 1024.
+
+	swapUsage, err := mem.SwapMemory()
+	if err != nil {
+		return result, err
+	}
+	result.Swap.Total = float64(swapUsage.Total) / 1024.
+	result.Swap.Used = float64(swapUsage.Used) / 1024.
+	result.Swap.Free = float64(swapUsage.Free) / 1024.
+
+	cpusTimes, err := cpu.Times(false)
+	if err != nil {
+		return result, err
+	}
+	cpuTimes := cpusTimes[0]
+
+	total1 := pp.lastCPUtimes.Total()
+	total2 := cpuTimes.Total()
+	delta := total2 - total1
+	if delta >= 0 {
+		between0and100 := func(input float64) float64 {
+			if input < 0 {
+				return 0
+			}
+			if input > 100 {
+				return 100
+			}
+			return input
+		}
+		result.CPU.User = between0and100((cpuTimes.User - pp.lastCPUtimes.User) / delta * 100)
+		result.CPU.Nice = between0and100((cpuTimes.Nice - pp.lastCPUtimes.Nice) / delta * 100)
+		result.CPU.System = between0and100((cpuTimes.System - pp.lastCPUtimes.System) / delta * 100)
+		result.CPU.Idle = between0and100((cpuTimes.Idle - pp.lastCPUtimes.Idle) / delta * 100)
+		result.CPU.IOWait = between0and100((cpuTimes.Iowait - pp.lastCPUtimes.Iowait) / delta * 100)
+		result.CPU.Guest = between0and100((cpuTimes.Guest - pp.lastCPUtimes.Guest) / delta * 100)
+		result.CPU.GuestNice = between0and100((cpuTimes.GuestNice - pp.lastCPUtimes.GuestNice) / delta * 100)
+		result.CPU.IRQ = between0and100((cpuTimes.Irq - pp.lastCPUtimes.Irq) / delta * 100)
+		result.CPU.SoftIRQ = between0and100((cpuTimes.Softirq - pp.lastCPUtimes.Softirq) / delta * 100)
+		result.CPU.Steal = between0and100((cpuTimes.Steal - pp.lastCPUtimes.Steal) / delta * 100)
+	}
+
+	pp.lastCPUtimes = cpuTimes
+	return result, nil
 }
 
 func (p *Process) update(other Process) {
@@ -393,8 +543,10 @@ func (p *Process) update(other Process) {
 	}
 	if !other.CreateTime.IsZero() {
 		p.CreateTime = other.CreateTime
+		p.CreateTimestamp = other.CreateTimestamp
 	}
-	if len(other.CmdLine) > 0 {
+	if len(other.CmdLineList) > 0 {
+		p.CmdLineList = other.CmdLineList
 		p.CmdLine = other.CmdLine
 	}
 	if other.Name != "" {
@@ -506,16 +658,18 @@ func (z psutilLister) processes(ctx context.Context, maxAge time.Duration) (proc
 		}
 
 		p := Process{
-			PID:        int(p.Pid),
-			PPID:       int(ppid),
-			CreateTime: createTime,
-			CmdLine:    cmdLine,
-			Name:       name,
-			MemoryRSS:  memoryInfo.RSS / 1024,
-			CPUTime:    cpuTimes.Total(),
-			Status:     psStat2Status(status),
-			Username:   userName,
-			Executable: executable,
+			PID:             int(p.Pid),
+			PPID:            int(ppid),
+			CreateTime:      createTime,
+			CreateTimestamp: createTime.Unix(),
+			CmdLineList:     cmdLine,
+			CmdLine:         strings.Join(cmdLine, " "),
+			Name:            name,
+			MemoryRSS:       memoryInfo.RSS / 1024,
+			CPUTime:         cpuTimes.Total(),
+			Status:          psStat2Status(status),
+			Username:        userName,
+			Executable:      executable,
 		}
 		processes = append(processes, p)
 	}

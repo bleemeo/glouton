@@ -307,6 +307,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Config:                 a.config,
 			State:                  a.state,
 			Facts:                  a.factProvider,
+			Process:                psFact,
 			Docker:                 a.dockerFact,
 			Store:                  db,
 			Acc:                    db.Accumulator(),

@@ -15,6 +15,7 @@ type GlobalOption struct {
 	Config    Config
 	State     State
 	Facts     FactProvider
+	Process   ProcessProvider
 	Docker    DockerProvider
 	Store     Store
 	Acc       telegraf.Accumulator
@@ -42,6 +43,12 @@ type State interface {
 // FactProvider is the interface used by Bleemeo to access facts
 type FactProvider interface {
 	Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error)
+}
+
+// ProcessProvider is the interface used by Bleemeo to access processes
+type ProcessProvider interface {
+	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
+	TopInfo(ctx context.Context, maxAge time.Duration) (topinfo facts.TopInfo, err error)
 }
 
 // DockerProvider is the interface used by Bleemeo to access Docker containers

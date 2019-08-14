@@ -63,8 +63,8 @@ func TestDecodeDocker(t *testing.T) {
 		if len(got) != 1 {
 			t.Errorf("Case #%v: len(got) == %v, want 1", i, len(got))
 		}
-		if got[0].CmdLine[0] != "python3" {
-			t.Errorf("Case #%v: CmdLine[0] == %v, want %v", i, got[0].CmdLine[0], "python3")
+		if got[0].CmdLineList[0] != "python3" {
+			t.Errorf("Case #%v: CmdLine[0] == %v, want %v", i, got[0].CmdLineList[0], "python3")
 		}
 		if got[0].ContainerID != "theDockerID" {
 			t.Errorf("Case #%v: ContainerID == %v, want %v", i, got[0].ContainerID, "theDockerID")
