@@ -57,3 +57,15 @@ func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
 	key := MetricLabelItem{}
 	return key
 }
+
+// MetricLookupFromList return a map[MetricLabelItem]Metric
+func MetricLookupFromList(registeredMetrics []types.Metric) map[MetricLabelItem]types.Metric {
+	registeredMetricsByKey := make(map[MetricLabelItem]types.Metric, len(registeredMetrics))
+	for _, v := range registeredMetrics {
+		key := MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
+		if existing, ok := registeredMetricsByKey[key]; !ok || !existing.DeactivatedAt.IsZero() {
+			registeredMetricsByKey[key] = v
+		}
+	}
+	return registeredMetricsByKey
+}

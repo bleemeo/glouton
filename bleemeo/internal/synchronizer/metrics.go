@@ -71,11 +71,7 @@ func prioritizeMetrics(metrics []agentTypes.Metric) {
 func (s *Synchronizer) findUnregisteredMetrics(metrics []agentTypes.Metric) []common.MetricLabelItem {
 
 	registeredMetrics := s.option.Cache.Metrics()
-	registeredMetricsByKey := make(map[common.MetricLabelItem]types.Metric)
-	for _, v := range registeredMetrics {
-		key := common.MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
-		registeredMetricsByKey[key] = v
-	}
+	registeredMetricsByKey := common.MetricLookupFromList(registeredMetrics)
 
 	result := make([]common.MetricLabelItem, 0)
 	for _, v := range metrics {
@@ -258,11 +254,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []agentTypes.Metric, 
 func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric, fullForInactive bool) error {
 
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := make(map[common.MetricLabelItem]types.Metric)
-	for _, v := range registeredMetricsByUUID {
-		key := common.MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
-		registeredMetricsByKey[key] = v
-	}
+	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	services := s.option.Cache.Services()
@@ -305,12 +297,8 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 				if err := s.metricUpdateListSearch(requests); err != nil {
 					return err
 				}
-				registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
-				registeredMetricsByKey := make(map[common.MetricLabelItem]types.Metric)
-				for _, v := range registeredMetricsByUUID {
-					key := common.MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
-					registeredMetricsByKey[key] = v
-				}
+				registeredMetricsByUUID = s.option.Cache.MetricsByUUID()
+				registeredMetricsByKey = common.MetricLookupFromList(s.option.Cache.Metrics())
 			}
 		case metricPassRetry:
 			currentList = retryMetrics
@@ -520,11 +508,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	longToShortKeyLookup := longToShortKey(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := make(map[common.MetricLabelItem]types.Metric)
-	for _, v := range registeredMetrics {
-		key := common.MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
-		registeredMetricsByKey[key] = v
-	}
+	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	for _, srv := range localServices {
 		if !srv.CheckIgnored {
