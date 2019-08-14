@@ -61,6 +61,8 @@ type Store interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 	MetricsCount() int
 	DropMetrics(labelsList []map[string]string)
+	AddNotifiee(func([]types.MetricPoint)) int
+	RemoveNotifiee(int)
 }
 
 // DisableReason is a list of status why Bleemeo connector may be (temporary) disabled

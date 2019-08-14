@@ -17,16 +17,19 @@ import (
 //
 // See methods GetMetrics and GetMetricPoints
 type Store struct {
-	metrics map[int]metric
-	points  map[int][]types.PointStatus
-	lock    sync.Mutex
+	metrics         map[int]metric
+	points          map[int][]types.PointStatus
+	notifyCallbacks map[int]func([]types.MetricPoint)
+	lock            sync.Mutex
+	notifeeLock     sync.Mutex
 }
 
 // New create a return a store. Store should be Close()d before leaving
 func New() *Store {
 	s := &Store{
-		metrics: make(map[int]metric),
-		points:  make(map[int][]types.PointStatus),
+		metrics:         make(map[int]metric),
+		points:          make(map[int][]types.PointStatus),
+		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
 	}
 	return s
 }
@@ -41,6 +44,35 @@ func (s *Store) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// AddNotifiee add a callback that will be notified of all points received
+// Note: AddNotifiee should not be called while in the callback.
+func (s *Store) AddNotifiee(cb func([]types.MetricPoint)) int {
+	s.notifeeLock.Lock()
+	defer s.notifeeLock.Unlock()
+
+	id := 1
+	_, ok := s.notifyCallbacks[id]
+	for ok {
+		id++
+		if id == 0 {
+			panic("too many notifiee in the store. Unable to find new slot")
+		}
+		_, ok = s.notifyCallbacks[id]
+	}
+	s.notifyCallbacks[id] = cb
+	return id
+}
+
+// RemoveNotifiee remove a callback that was notified
+// Note: RemoveNotifiee should not be called while in the callback.
+// Once RemoveNotifiee() returns, the callbacl won't be called anymore
+func (s *Store) RemoveNotifiee(id int) {
+	s.notifeeLock.Lock()
+	defer s.notifeeLock.Unlock()
+
+	delete(s.notifyCallbacks, id)
 }
 
 // Close closes the store. Currently noop, but may write to persistence later
@@ -178,12 +210,8 @@ func (s *Store) metricGetOrCreate(labels map[string]string, statusOf int) metric
 		}
 		_, ok = s.metrics[newID]
 	}
-	copyLabels := make(map[string]string)
-	for k, v := range labels {
-		copyLabels[k] = v
-	}
 	m := metric{
-		labels:   copyLabels,
+		labels:   labels,
 		store:    s,
 		statusOf: statusOf,
 		metricID: newID,

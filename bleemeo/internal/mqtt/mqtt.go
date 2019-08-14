@@ -2,8 +2,10 @@ package mqtt
 
 import (
 	"agentgo/bleemeo/internal/cache"
+	"agentgo/bleemeo/internal/common"
 	"agentgo/bleemeo/types"
 	"agentgo/logger"
+	agentTypes "agentgo/types"
 	"bytes"
 	"compress/zlib"
 	"context"
@@ -19,6 +21,9 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
+const maxPendingPoints = 100000
+const pointsBatchSize = 1000
+
 // Option are parameter for the MQTT client
 type Option struct {
 	types.GlobalOption
@@ -32,17 +37,35 @@ type Option struct {
 type Client struct {
 	option Option
 
-	ctx        context.Context
-	mqttClient paho.Client
+	// Those variable are write once or only read/write from Run() gorouting. No lock needed
+	ctx                        context.Context
+	mqttClient                 paho.Client
+	failedPoints               []agentTypes.MetricPoint
+	lastRegisteredMetricsCount int
+	lastFailedPointsRetry      time.Time
 
-	l            sync.Mutex
-	setupDone    bool
-	pendingToken []paho.Token
+	l             sync.Mutex
+	setupDone     bool
+	pendingToken  []paho.Token
+	pendingPoints []agentTypes.MetricPoint
+}
+
+type metricPayload struct {
+	UUID             string  `json:"uuid"`
+	Measurement      string  `json:"measurement"`
+	Timestamp        int64   `json:"time"`
+	Value            float64 `json:"value"`
+	Item             string  `json:"item,omitempty"`
+	Status           string  `json:"status,omitempty"`
+	EventGracePeriod int     `json:"event_grace_period,omitempty"`
+	ProblemOrigin    string  `json:"check_output,omitempty"`
 }
 
 // New create a new client
 func New(option Option) *Client {
-	return &Client{option: option}
+	return &Client{
+		option: option,
+	}
 }
 
 // Connected returns true if MQTT connection is established
@@ -58,8 +81,8 @@ func (c *Client) Connected() bool {
 // Run connect and transmit information to Bleemeo Cloud platform
 func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
-	paho.ERROR = logger.V(0)
-	paho.CRITICAL = logger.V(0)
+	paho.ERROR = logger.V(2)
+	paho.CRITICAL = logger.V(2)
 	paho.DEBUG = logger.V(3)
 	for !c.ready() {
 		select {
@@ -146,13 +169,15 @@ func (c *Client) run(ctx context.Context) error {
 	}
 	c.connect(ctx)
 
+	storeNotifieeID := c.option.Store.AddNotifiee(c.addPoints)
+
 	var topinfoSendAt time.Time
-	//var lastPointSend map[string]time.Time // uuid => time
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for ctx.Err() == nil {
 		cfg := c.option.Cache.AccountConfig()
+		c.sendPoints()
 		if time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
 			topinfoSendAt = time.Now()
 			c.sendTopinfo(ctx, cfg)
@@ -163,8 +188,89 @@ func (c *Client) run(ctx context.Context) error {
 		case <-ctx.Done():
 		}
 	}
-
+	c.option.Store.RemoveNotifiee(storeNotifieeID)
 	return nil
+}
+
+func (c *Client) addPoints(points []agentTypes.MetricPoint) {
+	c.l.Lock()
+	defer c.l.Unlock()
+	c.pendingPoints = append(c.pendingPoints, points...)
+}
+
+func (c *Client) popPendingPoints() []agentTypes.MetricPoint {
+	c.l.Lock()
+	defer c.l.Unlock()
+	points := c.pendingPoints
+	c.pendingPoints = nil
+	return points
+}
+
+func (c *Client) sendPoints() {
+	registreredMetrics := c.option.Cache.Metrics()
+	registreredMetricByKey := make(map[common.MetricLabelItem]types.Metric)
+	for _, m := range registreredMetrics {
+		key := common.MetricLabelItemFromMetric(m)
+		registreredMetricByKey[key] = m
+	}
+
+	points := c.popPendingPoints()
+	if len(c.failedPoints) > 0 && c.Connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
+		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
+		c.lastFailedPointsRetry = time.Now()
+		points = append(c.failedPoints, points...)
+		c.failedPoints = nil
+	}
+
+	payload := make([]metricPayload, 0, len(points))
+	if !c.Connected() {
+		c.failedPoints = append(c.failedPoints, points...)
+		if len(c.failedPoints) > maxPendingPoints {
+			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
+		}
+		return
+	}
+	payload = c.preparePoints(payload, registreredMetricByKey, points)
+	if len(payload) == 0 {
+		return
+	}
+	logger.V(2).Printf("MQTT send %d points", len(payload))
+	for i := 0; i < len(payload); i += pointsBatchSize {
+		end := i + pointsBatchSize
+		if end > len(payload) {
+			end = len(payload)
+		}
+		buffer, err := json.Marshal(payload[i:end])
+		if err != nil {
+			logger.V(1).Printf("Unable to encode points: %v", err)
+			return
+		}
+		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.State.AgentID()), buffer)
+	}
+}
+
+func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[common.MetricLabelItem]types.Metric, points []agentTypes.MetricPoint) []metricPayload {
+	for _, p := range points {
+		key := common.MetricLabelItemFromMetric(p.Labels)
+		if m, ok := registreredMetricByKey[key]; ok {
+			value := metricPayload{
+				UUID:        m.ID,
+				Measurement: p.Labels["__name__"],
+				Timestamp:   p.Time.Unix(),
+				Value:       p.Value,
+				Item:        p.Labels["item"],
+			}
+			if p.CurrentStatus.IsSet() {
+				value.Status = p.CurrentStatus.String()
+				value.ProblemOrigin = p.StatusDescription.StatusDescription
+			}
+			// TODO: fill value.EventGracePeriod
+			payload = append(payload, value)
+		} else {
+			c.failedPoints = append(c.failedPoints, p)
+		}
+	}
+	return payload
 }
 
 func (c *Client) connect(ctx context.Context) {
