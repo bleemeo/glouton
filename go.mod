@@ -40,6 +40,7 @@ require (
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/shirou/gopsutil v2.19.6+incompatible
 	github.com/shopspring/decimal v0.0.0-20180709203117-cd690d0c9e24 // indirect
+	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/stretchr/objx v0.2.0 // indirect
 	github.com/stretchr/testify v1.4.0 // indirect
 	github.com/tidwall/gjson v1.3.2 // indirect
@@ -48,6 +49,7 @@ require (
 	golang.org/x/net v0.0.0-20190813141303-74dc4d7220e7 // indirect
 	golang.org/x/sys v0.0.0-20190813064441-fde4db37ae7a // indirect
 	google.golang.org/appengine v1.6.1 // indirect
+	gopkg.in/ini.v1 v1.46.0
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20190709130402-674ba3eaed22
 	gotest.tools v2.2.0+incompatible // indirect

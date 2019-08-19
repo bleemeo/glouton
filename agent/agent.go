@@ -214,7 +214,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 	a.collector = collector.New(db.Accumulator())
 	a.discovery = discovery.New(
-		discovery.NewDynamic(psFact, netstat, a.dockerFact),
+		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}),
 		a.collector,
 		a.taskRegistry,
 		nil,
