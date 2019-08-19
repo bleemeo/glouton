@@ -31,20 +31,25 @@ export PATH=/usr/lib/go-1.12/bin:$PATH
 export PATH=/usr/lib/go-1.12/bin:$PATH
 ```
 
-- Update your credentials in `etc/agent.conf.d/90-local.conf`:
+- (optional) Configure your credentials for Bleemeo Cloud platform:
 
 ```
-vim etc/agent.conf.d/90-local.conf
+export BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID=YOUR_ACCOUNT_ID
+export BLEEMEO_AGENT_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
+```
 
-# Add something like
-bleemeo:
-   account_id: ...
-   registration_key: ...
+- (optional) If the Bleemeo Cloud platform is running locally:
+```
+export BLEEMEO_AGENT_BLEEMEO_API_BASE=http://localhost:8000
+export BLEEMEO_AGENT_BLEEMEO_MQTT_HOST=localhost
+export BLEEMEO_AGENT_BLEEMEO_MQTT_PORT=1883
+export BLEEMEO_AGENT_BLEEMEO_MQTT_SSL=False
 ```
 
 - Run development version of the agent:
 
 ```
+export BLEEMEO_AGENT_LOGGING_LEVEL=0  # 0: is the default. Increase to get more logs
 go run agentgo
 ```
 
