@@ -51,6 +51,18 @@ type metricPayload struct {
 	Item  string `json:"item,omitempty"`
 }
 
+// metricFromAPI convert a metricPayload received from API to a types.Metric
+func (mp metricPayload) metricFromAPI() types.Metric {
+	if mp.Labels["item"] == "" && mp.Item != "" {
+		if mp.Labels == nil {
+			mp.Labels = map[string]string{
+				"item": mp.Item,
+			}
+		}
+	}
+	return mp.Metric
+}
+
 func prioritizeMetrics(metrics []agentTypes.Metric) {
 	swapIdx := 0
 	for i, m := range metrics {
@@ -179,13 +191,7 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 		if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 			continue
 		}
-		if metric.Labels == nil {
-			metric.Labels = make(map[string]string)
-		}
-		if metric.Labels["item"] == "" && metric.Item != "" {
-			metric.Labels["item"] = metric.Item
-		}
-		metricsByUUID[metric.ID] = metric.Metric
+		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
 	metrics := make([]types.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
@@ -212,11 +218,11 @@ func (s *Synchronizer) metricUpdateListSearch(requests []common.MetricLabelItem)
 		}
 
 		for _, jsonMessage := range result {
-			var metric types.Metric
+			var metric metricPayload
 			if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 				continue
 			}
-			metricsByUUID[metric.ID] = metric
+			metricsByUUID[metric.ID] = metric.metricFromAPI()
 		}
 	}
 	metrics := make([]types.Metric, 0, len(metricsByUUID))
@@ -303,6 +309,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 		case metricPassRetry:
 			currentList = retryMetrics
 		}
+		logger.V(3).Printf("Metric registration phase %v start with %d metrics to process", state, len(currentList))
 	metricLoop:
 		for _, metric := range currentList {
 			if s.ctx.Err() != nil {
@@ -331,8 +338,8 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 			regCountBeforeUpdate--
 			if regCountBeforeUpdate == 0 {
 				regCountBeforeUpdate = 60
-				metrics := make([]types.Metric, 0, len(registeredMetricsByKey))
-				for _, v := range registeredMetricsByKey {
+				metrics := make([]types.Metric, 0, len(registeredMetricsByUUID))
+				for _, v := range registeredMetricsByUUID {
 					metrics = append(metrics, v)
 				}
 				s.option.Cache.SetMetrics(metrics)
@@ -369,7 +376,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 		Item:  key.Item,
 		Agent: s.option.State.AgentID(),
 	}
-	var result types.Metric
+	var result metricPayload
 	if labels["status_of"] != "" {
 		subKey := common.MetricLabelItem{Label: labels["status_of"], Item: key.Item}
 		metricStatusOf, ok := registeredMetricsByKey[subKey]
@@ -396,21 +403,13 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 		}
 		payload.ServiceID = service.ID
 	}
-	if remoteFound {
-		_, err := s.client.Do("PUT", fmt.Sprintf("v1/metric/%s/", remoteMetric.ID), params, payload, &result)
-		if err != nil {
-			return err
-		}
-		logger.V(2).Printf("Metric %v updated with UUID %s", key, result.ID)
-	} else {
-		_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
-		if err != nil {
-			return err
-		}
-		logger.V(2).Printf("Metric %v registrered with UUID %s", key, result.ID)
+	_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
+	if err != nil {
+		return err
 	}
-	registeredMetricsByKey[key] = result
-	registeredMetricsByUUID[result.ID] = result
+	logger.V(2).Printf("Metric %v registrered with UUID %s", key, result.ID)
+	registeredMetricsByKey[key] = result.metricFromAPI()
+	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
 	return nil
 }
 
