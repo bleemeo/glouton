@@ -33,6 +33,7 @@ func New() (i telegraf.Input, err error) {
 		i = &internal.Input{
 			Input: processInput,
 			Accumulator: internal.Accumulator{
+				RenameGlobal:     renameGlobal,
 				TransformMetrics: transformMetrics,
 			},
 		}
@@ -40,6 +41,12 @@ func New() (i telegraf.Input, err error) {
 		err = errors.New("input processes is not enabled in Telegraf")
 	}
 	return
+}
+
+func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+	newContext = originalContext
+	newContext.Measurement = "process"
+	return newContext, false
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
