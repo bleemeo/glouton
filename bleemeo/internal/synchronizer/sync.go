@@ -97,11 +97,15 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			delay = JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 			if client.IsAuthError(err) {
 				agentID := s.option.State.AgentID()
-				fqdn := " with FQDN TODO from agent fact cache"
+				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
+				fqdnMessage := ""
+				if fqdn != "" {
+					fqdnMessage = fmt.Sprintf(" with fqdn %s", fqdn)
+				}
 				logger.Printf(
 					"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
 					agentID,
-					fqdn,
+					fqdnMessage,
 				)
 			} else {
 				if s.successiveErrors%5 == 0 {
