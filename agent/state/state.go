@@ -26,6 +26,9 @@ type stateData struct {
 func Load(path string) (*State, error) {
 	state := State{
 		path: path,
+		data: stateData{
+			Cache: make(map[string]json.RawMessage),
+		},
 	}
 	f, err := os.Open(path)
 	if err != nil && os.IsNotExist(err) {
