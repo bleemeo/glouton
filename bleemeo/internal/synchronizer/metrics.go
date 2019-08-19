@@ -392,9 +392,12 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 			return nil
 		}
 		payload.ContainerID = container.ID
+		// TODO: For now all metrics are created no-associated with a container.
+		// PRODUCT-970 track the progress on this point
+		payload.ContainerID = ""
 	}
-	if labels["service_name"] != "" && labels["service_instance"] != "" {
-		srvKey := serviceNameInstance{name: labels["service_name"], instance: labels["service_instance"]}
+	if labels["service_name"] != "" {
+		srvKey := serviceNameInstance{name: labels["service_name"], instance: labels["container_name"]}
 		srvKey.truncateInstance()
 		service, ok := servicesByKey[srvKey]
 		if !ok {

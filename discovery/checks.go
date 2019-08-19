@@ -51,30 +51,39 @@ func (d *Discovery) createCheck(service Service) {
 		tcpAddresses = append(tcpAddresses, a.String())
 	}
 
+	labels := map[string]string{
+		"service_name": string(service.Name),
+	}
+	if service.ContainerName != "" {
+		labels["item"] = service.ContainerName
+		labels["container_id"] = service.ContainerID
+		labels["container_name"] = service.ContainerName
+	}
+
 	switch service.Name {
 	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
-		d.createTCPCheck(service, di, primaryIP, tcpAddresses)
+		d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
-		d.createHTTPCheck(service, di, primaryIP, tcpAddresses)
+		d.createHTTPCheck(service, di, primaryIP, tcpAddresses, labels)
 	case NTPService:
 		if primaryIP != "" {
 			check := check.NewNTP(
 				fmt.Sprintf("%s:%d", primaryIP, di.ServicePort),
 				tcpAddresses,
 				fmt.Sprintf("%s_status", service.Name),
-				service.ContainerName,
+				labels,
 				d.acc,
 			)
 			d.addCheck(check, service)
 		} else {
-			d.createTCPCheck(service, di, primaryIP, tcpAddresses)
+			d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
 		}
 	default:
-		d.createTCPCheck(service, di, primaryIP, tcpAddresses)
+		d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
 	}
 }
 
-func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP string, tcpAddresses []string) {
+func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP string, tcpAddresses []string, labels map[string]string) {
 
 	var primaryAddress string
 	if di.ServiceProtocol == tcpPortocol && primaryIP != "" {
@@ -109,7 +118,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 			tcpExpect,
 			tcpClose,
 			fmt.Sprintf("%s_status", service.Name),
-			service.ContainerName,
+			labels,
 			d.acc,
 		)
 		d.addCheck(tcpCheck, service)
@@ -118,9 +127,9 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 	}
 }
 
-func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryIP string, tcpAddresses []string) {
+func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryIP string, tcpAddresses []string, labels map[string]string) {
 	if primaryIP == "" {
-		d.createTCPCheck(service, di, primaryIP, tcpAddresses)
+		d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
 		return
 	}
 	url := fmt.Sprintf("http://%s:%d", primaryIP, di.ServicePort)
@@ -138,7 +147,7 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryIP
 		tcpAddresses,
 		expectedStatusCode,
 		fmt.Sprintf("%s_status", service.Name),
-		service.ContainerName,
+		labels,
 		d.acc,
 	)
 	d.addCheck(httpCheck, service)

@@ -31,7 +31,7 @@ type accumulator interface {
 // * (if persistentConnection is active) after a TCP connection is broken
 type baseCheck struct {
 	metricName     string
-	item           string
+	labels         map[string]string
 	mainTCPAddress string
 	tcpAddresses   []string
 	mainCheck      func(ctx context.Context) types.StatusDescription
@@ -46,10 +46,10 @@ type baseCheck struct {
 	persistentConnection bool
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, item string, acc accumulator) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, labels map[string]string, acc accumulator) *baseCheck {
 	return &baseCheck{
 		metricName:           metricName,
-		item:                 item,
+		labels:               labels,
 		mainTCPAddress:       mainTCPAddress,
 		tcpAddresses:         tcpAddresses,
 		persistentConnection: persistentConnection,
@@ -120,17 +120,13 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescr
 	if !timerDone {
 		bc.timer.Reset(time.Minute)
 	}
-	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.item, result)
-	labels := make(map[string]string)
-	if bc.item != "" {
-		labels["item"] = bc.item
-	}
+	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels["item"], result)
 	bc.acc.AddFieldsWithStatus(
 		"",
 		map[string]interface{}{
 			bc.metricName: result.CurrentStatus.NagiosCode(),
 		},
-		labels,
+		bc.labels,
 		map[string]types.StatusDescription{bc.metricName: result},
 		false,
 	)
