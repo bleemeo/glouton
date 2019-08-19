@@ -239,13 +239,13 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		}
 		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
-	for k, v := range a.StaticLabels {
-		if &currentContext.Tags == &originalContext.Tags {
-			currentContext.Tags = make(map[string]string)
-			for k, v := range originalContext.Tags {
-				currentContext.Tags[k] = v
-			}
+	if len(a.StaticLabels) > 0 {
+		currentContext.Tags = make(map[string]string)
+		for k, v := range originalContext.Tags {
+			currentContext.Tags[k] = v
 		}
+	}
+	for k, v := range a.StaticLabels {
 		oldValue := currentContext.Tags[k]
 		if oldValue != "" {
 			currentContext.Tags[k] = v + "_" + oldValue
