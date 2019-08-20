@@ -222,6 +222,7 @@ func TestLoadEnv(t *testing.T) {
 		"AGENT_API_ENABLED": "yes",
 		"API_ENABLED":       "false",
 		"EXTRA_ENV":         "not-used",
+		"AGENT_TAGS":        "this-is,a-list,comma separated",
 	}
 	lookupEnv := func(envName string) (string, bool) {
 		value, ok := envs[envName]
@@ -271,6 +272,12 @@ func TestLoadEnv(t *testing.T) {
 			key:       "api.port",
 			wantFound: false,
 		},
+		{
+			envName:   "AGENT_TAGS",
+			varType:   TypeStringList,
+			key:       "agent.tags",
+			wantFound: true,
+		},
 	}
 	cases := []struct {
 		key       string
@@ -296,6 +303,11 @@ func TestLoadEnv(t *testing.T) {
 			wantFound: true,
 			want:      true,
 		},
+		{
+			key:       "agent.tags",
+			wantFound: true,
+			want:      []string{"this-is", "a-list", "comma separated"},
+		},
 	}
 
 	for _, c := range loadCases {
@@ -313,7 +325,7 @@ func TestLoadEnv(t *testing.T) {
 			if err != nil {
 				t.Errorf("Get(%v) failed: %v", c.key, err)
 			}
-			if got != c.want {
+			if !reflect.DeepEqual(got, c.want) {
 				t.Errorf("Get(%v) == %#v, want %#v", c.key, got, c.want)
 			}
 		} else {

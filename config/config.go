@@ -74,6 +74,8 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 	switch varType {
 	case TypeString:
 		c.Set(key, value)
+	case TypeStringList:
+		c.Set(key, strings.Split(value, ","))
 	case TypeBoolean:
 		value, err := convertBoolean(value)
 		if err != nil {
@@ -89,7 +91,7 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 	default:
 		return false, fmt.Errorf("unknown variable type %v", varType)
 	}
-	return
+	return found, err
 }
 
 // Set define the default for given key.

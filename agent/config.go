@@ -152,6 +152,8 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	switch valueSample.(type) {
 	case string:
 		varType = config.TypeString
+	case []string:
+		varType = config.TypeStringList
 	case int:
 		varType = config.TypeInteger
 	case bool:

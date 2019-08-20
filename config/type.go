@@ -12,6 +12,7 @@ type ValueType int
 const (
 	TypeUnknown ValueType = iota
 	TypeString
+	TypeStringList
 	TypeInteger
 	TypeBoolean
 )
