@@ -177,6 +177,11 @@ func (a *agent) BleemeoConnected() bool {
 	return a.bleemeoConnector.Connected()
 }
 
+// Tags returns tags of this Agent.
+func (a *agent) Tags() []string {
+	return a.config.StringList("tags")
+}
+
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
 func (a *agent) run() { //nolint:gocyclo
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
