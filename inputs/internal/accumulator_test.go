@@ -518,3 +518,48 @@ func TestStaticLabels2(t *testing.T) {
 		t.Errorf("called == %v, want 2", called)
 	}
 }
+
+func TestLabelsMutation(t *testing.T) {
+	called := 0
+	want := map[string]string{
+		"service_name": "postgresql",
+		"container_id": "1234",
+		"item":         "postgres_1_dbname",
+	}
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		if !reflect.DeepEqual(tags, want) {
+			t.Errorf("tags == %v, want %v", tags, want)
+		}
+		called++
+	}
+	t0 := time.Now()
+	acc := Accumulator{
+		RenameGlobal: func(originalContext GatherContext) (GatherContext, bool) {
+			newContext := GatherContext{
+				Measurement: originalContext.Measurement,
+				Tags:        make(map[string]string),
+			}
+			newContext.Tags["item"] = originalContext.Tags["db"]
+			return newContext, false
+		},
+		StaticLabels: map[string]string{
+			"service_name": "postgresql",
+			"container_id": "1234",
+			"item":         "postgres_1",
+		},
+	}
+	tags := map[string]string{"db": "dbname"}
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc,
+		"postgresql",
+		map[string]interface{}{
+			"requests": 42.0,
+		},
+		tags,
+		t0,
+	)
+	if called != 1 {
+		t.Errorf("called == %v, want 1", called)
+	}
+}
