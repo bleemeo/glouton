@@ -4,6 +4,7 @@ package api
 
 import (
 	"context"
+	"math"
 	"sort"
 	"strings"
 	"time"
@@ -362,4 +363,39 @@ func (r *queryResolver) Tags(ctx context.Context) ([]*Tag, error) {
 		tagsResult = append(tagsResult, t)
 	}
 	return tagsResult, nil
+}
+
+// AgentStatus returns an integer that represent global server status over several metrics
+func (r *queryResolver) AgentStatus(ctx context.Context) (float64, error) {
+	if r.api.db == nil {
+		return 3, gqlerror.Errorf("Can not retrieve agent status at this moment. Please try later")
+	}
+	metrics := []types.Metric{}
+	var err error
+	metrics, err = r.api.db.Metrics(map[string]string{})
+	if err != nil {
+		logger.V(2).Printf("Can not retrieve metrics: %v", err)
+		return 3, gqlerror.Errorf("Can not retrieve metrics from agent status")
+	}
+	finalEnd := time.Now().UTC().Format(time.RFC3339)
+	finalStart := time.Now().UTC().Add(time.Duration(-1) * time.Minute).Format(time.RFC3339)
+	timeStart, _ := time.Parse(time.RFC3339, finalStart)
+	timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
+	statuses := map[string]float64{}
+	for _, metric := range metrics {
+		labels := metric.Labels()
+		if strings.Contains(labels["__name__"], "_status") && labels["__name__"] != "agent_status" && !strings.Contains(labels["__name__"], "process") {
+			points, err := metric.Points(timeStart, timeEnd)
+			if err != nil {
+				logger.V(2).Printf("Can not retrieve points: %v", err)
+				return 3, gqlerror.Errorf("Can not retrieve points from agent status")
+			}
+			statuses[labels["__name__"]] = points[0].Value
+		}
+	}
+	var finalStatus float64
+	for _, status := range statuses {
+		finalStatus = math.Max(status, finalStatus)
+	}
+	return finalStatus, nil
 }

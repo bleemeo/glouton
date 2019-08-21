@@ -106,6 +106,7 @@ type Query {
   services(isActive: Boolean!): [Service!]!
   agentInformation: AgentInfo!
   tags: [Tag!]!
+  agentStatus: Float!
 }
 
 scalar Time
