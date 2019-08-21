@@ -225,7 +225,7 @@ func (a *agent) run() { //nolint:gocyclo
 		nil,
 		db.Accumulator(),
 	)
-	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery)
+	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
 	a.collector.AddInput(panicOnError(system.New()), "system")
 	a.collector.AddInput(panicOnError(process.New()), "process")
