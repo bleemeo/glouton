@@ -346,3 +346,18 @@ func (r *queryResolver) AgentInformation(ctx context.Context) (*AgentInfo, error
 	}
 	return agentInfo, nil
 }
+
+func (r *queryResolver) Tags(ctx context.Context) ([]*Tag, error) {
+	if r.api.agent == nil {
+		return nil, gqlerror.Errorf("Can not retrieve tags at this moment. Please try later")
+	}
+	tags := r.api.agent.Tags()
+	tagsResult := []*Tag{}
+	for _, tag := range tags {
+		t := &Tag{
+			TagName: tag,
+		}
+		tagsResult = append(tagsResult, t)
+	}
+	return tagsResult, nil
+}

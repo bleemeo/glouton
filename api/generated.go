@@ -116,6 +116,7 @@ type ComplexityRoot struct {
 		Points           func(childComplexity int, metricsFilter []*MetricInput, start string, end string, minutes int) int
 		Processes        func(childComplexity int, containerID *string) int
 		Services         func(childComplexity int, isActive bool) int
+		Tags             func(childComplexity int) int
 	}
 
 	Service struct {
@@ -126,6 +127,10 @@ type ComplexityRoot struct {
 		ListenAddresses func(childComplexity int) int
 		Name            func(childComplexity int) int
 		Status          func(childComplexity int) int
+	}
+
+	Tag struct {
+		TagName func(childComplexity int) int
 	}
 
 	Topinfo struct {
@@ -142,6 +147,7 @@ type QueryResolver interface {
 	Facts(ctx context.Context) ([]*Fact, error)
 	Services(ctx context.Context, isActive bool) ([]*Service, error)
 	AgentInformation(ctx context.Context) (*AgentInfo, error)
+	Tags(ctx context.Context) ([]*Tag, error)
 }
 
 type executableSchema struct {
@@ -527,6 +533,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Query.Services(childComplexity, args["isActive"].(bool)), true
 
+	case "Query.tags":
+		if e.complexity.Query.Tags == nil {
+			break
+		}
+
+		return e.complexity.Query.Tags(childComplexity), true
+
 	case "Service.active":
 		if e.complexity.Service.Active == nil {
 			break
@@ -575,6 +588,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Service.Status(childComplexity), true
+
+	case "Tag.tagName":
+		if e.complexity.Tag.TagName == nil {
+			break
+		}
+
+		return e.complexity.Tag.TagName(childComplexity), true
 
 	case "Topinfo.processes":
 		if e.complexity.Topinfo.Processes == nil {
@@ -720,6 +740,10 @@ type AgentInfo {
   isConnected: Boolean!
 }
 
+type Tag {
+  tagName: String!
+}
+
 input LabelInput {
   key: String!
   value: String!
@@ -742,6 +766,7 @@ type Query {
   facts: [Fact!]!
   services(isActive: Boolean!): [Service!]!
   agentInformation: AgentInfo!
+  tags: [Tag!]!
 }
 
 scalar Time
@@ -2742,6 +2767,43 @@ func (ec *executionContext) _Query_agentInformation(ctx context.Context, field g
 	return ec.marshalNAgentInfo2ᚖagentgoᚋapiᚐAgentInfo(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Query_tags(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Query",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Tags(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]*Tag)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNTag2ᚕᚖagentgoᚋapiᚐTag(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	ctx = ec.Tracer.StartFieldExecution(ctx, field)
 	defer func() {
@@ -3074,6 +3136,43 @@ func (ec *executionContext) _Service_status(ctx context.Context, field graphql.C
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Tag_tagName(ctx context.Context, field graphql.CollectedField, obj *Tag) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Tag",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.TagName, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(string)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Topinfo_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
@@ -4856,6 +4955,20 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}
 				return res
 			})
+		case "tags":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_tags(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "__type":
 			out.Values[i] = ec._Query___type(ctx, field)
 		case "__schema":
@@ -4914,6 +5027,33 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 			}
 		case "status":
 			out.Values[i] = ec._Service_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var tagImplementors = []string{"Tag"}
+
+func (ec *executionContext) _Tag(ctx context.Context, sel ast.SelectionSet, obj *Tag) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, tagImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Tag")
+		case "tagName":
+			out.Values[i] = ec._Tag_tagName(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
@@ -5700,6 +5840,57 @@ func (ec *executionContext) marshalNString2ᚕstring(ctx context.Context, sel as
 	}
 
 	return ret
+}
+
+func (ec *executionContext) marshalNTag2agentgoᚋapiᚐTag(ctx context.Context, sel ast.SelectionSet, v Tag) graphql.Marshaler {
+	return ec._Tag(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNTag2ᚕᚖagentgoᚋapiᚐTag(ctx context.Context, sel ast.SelectionSet, v []*Tag) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	var wg sync.WaitGroup
+	isLen1 := len(v) == 1
+	if !isLen1 {
+		wg.Add(len(v))
+	}
+	for i := range v {
+		i := i
+		rctx := &graphql.ResolverContext{
+			Index:  &i,
+			Result: &v[i],
+		}
+		ctx := graphql.WithResolverContext(ctx, rctx)
+		f := func(i int) {
+			defer func() {
+				if r := recover(); r != nil {
+					ec.Error(ctx, ec.Recover(ctx, r))
+					ret = nil
+				}
+			}()
+			if !isLen1 {
+				defer wg.Done()
+			}
+			ret[i] = ec.marshalNTag2ᚖagentgoᚋapiᚐTag(ctx, sel, v[i])
+		}
+		if isLen1 {
+			f(i)
+		} else {
+			go f(i)
+		}
+
+	}
+	wg.Wait()
+	return ret
+}
+
+func (ec *executionContext) marshalNTag2ᚖagentgoᚋapiᚐTag(ctx context.Context, sel ast.SelectionSet, v *Tag) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Tag(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v interface{}) (time.Time, error) {

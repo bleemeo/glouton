@@ -79,6 +79,10 @@ type AgentInfo {
   isConnected: Boolean!
 }
 
+type Tag {
+  tagName: String!
+}
+
 input LabelInput {
   key: String!
   value: String!
@@ -101,6 +105,7 @@ type Query {
   facts: [Fact!]!
   services(isActive: Boolean!): [Service!]!
   agentInformation: AgentInfo!
+  tags: [Tag!]!
 }
 
 scalar Time

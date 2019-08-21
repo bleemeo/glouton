@@ -96,6 +96,10 @@ type Service struct {
 	Status          float64  `json:"status"`
 }
 
+type Tag struct {
+	TagName string `json:"tagName"`
+}
+
 type Topinfo struct {
 	UpdatedAt time.Time  `json:"updatedAt"`
 	Processes []*Process `json:"processes"`
