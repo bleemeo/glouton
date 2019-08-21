@@ -14,9 +14,17 @@ import (
 )
 
 var (
-	errRetryLater   = errors.New("metric registration should be retried laster")
-	errNeedRegister = errors.New("metric was deleted from API, it need to be re-registered")
+	errRetryLater = errors.New("metric registration should be retried laster")
 )
+
+type errNeedRegister struct {
+	remoteMetric types.Metric
+	key          common.MetricLabelItem
+}
+
+func (e errNeedRegister) Error() string {
+	return fmt.Sprintf("metric %v was deleted from API, it need to be re-registered", e.key)
+}
 
 // The metric registration function is done in 4 pass
 // * first will only ensure agent_status is registered (this metric is required before connecting to MQTT and is produced once connected to MQTT...)
@@ -31,6 +39,20 @@ const (
 	metricPassRecreate
 	metricPassRetry
 )
+
+func (p metricRegisterPass) String() string {
+	switch p {
+	case metricPassAgentStatus:
+		return "agent-status"
+	case metricPassMain:
+		return "main-pass"
+	case metricPassRecreate:
+		return "recreate-deleted"
+	case metricPassRetry:
+		return "retry"
+	}
+	return "unknown"
+}
 
 type fakeMetric struct {
 	label string
@@ -316,14 +338,17 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 				break
 			}
 			err := s.metricRegisterAndUpdateOne(metric, registeredMetricsByUUID, registeredMetricsByKey, containersByContainerID, servicesByKey, params)
-			switch {
-			case err != nil && err == errRetryLater && state < 2:
+			if err != nil && err == errRetryLater && state < metricPassRetry {
 				retryMetrics = append(retryMetrics, metric)
 				continue metricLoop
-			case err != nil && err == errNeedRegister && state < 1:
+			}
+			if errReReg, ok := err.(errNeedRegister); ok && err != nil && state < metricPassRecreate {
 				registerMetrics = append(registerMetrics, metric)
+				delete(registeredMetricsByUUID, errReReg.remoteMetric.ID)
+				delete(registeredMetricsByKey, errReReg.key)
 				continue metricLoop
-			case err != nil:
+			}
+			if err != nil {
 				if client.IsServerError(err) {
 					return err
 				}
@@ -441,7 +466,7 @@ func (s *Synchronizer) metricUpdateOne(key common.MetricLabelItem, metric agentT
 				nil,
 			)
 			if err != nil && client.IsNotFound(err) {
-				return remoteMetric, errNeedRegister
+				return remoteMetric, errNeedRegister{remoteMetric: remoteMetric, key: key}
 			} else if err != nil {
 				return remoteMetric, err
 			}
@@ -482,7 +507,7 @@ func (s *Synchronizer) metricUpdateOne(key common.MetricLabelItem, metric agentT
 			&response,
 		)
 		if err != nil && client.IsNotFound(err) {
-			return remoteMetric, errNeedRegister
+			return remoteMetric, errNeedRegister{remoteMetric: remoteMetric, key: key}
 		} else if err != nil {
 			return remoteMetric, err
 		}

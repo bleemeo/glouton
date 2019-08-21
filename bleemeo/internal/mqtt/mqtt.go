@@ -44,12 +44,14 @@ type Client struct {
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 
-	l                 sync.Mutex
-	setupDone         bool
-	pendingToken      []paho.Token
-	pendingPoints     []agentTypes.MetricPoint
-	lastReport        time.Time
-	failedPointsCount int
+	l                     sync.Mutex
+	setupDone             bool
+	pendingToken          []paho.Token
+	pendingPoints         []agentTypes.MetricPoint
+	lastReport            time.Time
+	failedPointsCount     int
+	lastDisconnectionTime []time.Time
+	disabledUntil         time.Time
 }
 
 type metricPayload struct {
@@ -223,6 +225,11 @@ func (c *Client) run(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for ctx.Err() == nil {
+		disableUntil := c.getDisableUntil()
+		if time.Now().Before(disableUntil) {
+			c.mqttClient.Disconnect(0)
+			c.connect(ctx) // connect wait for disableUntil to be passed
+		}
 		cfg := c.option.Cache.AccountConfig()
 		c.sendPoints()
 		if time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
@@ -254,6 +261,19 @@ func (c *Client) popPendingPoints() []agentTypes.MetricPoint {
 }
 
 func (c *Client) sendPoints() {
+	points := c.popPendingPoints()
+	if !c.Connected() {
+		c.failedPoints = append(c.failedPoints, points...)
+		if len(c.failedPoints) > maxPendingPoints {
+			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
+		}
+		// Make sure that when connection is back we retry failed point as soon as possible
+		c.lastFailedPointsRetry = time.Time{}
+		c.l.Lock()
+		defer c.l.Unlock()
+		c.failedPointsCount = len(c.failedPoints)
+		return
+	}
 	registreredMetrics := c.option.Cache.Metrics()
 	registreredMetricByKey := make(map[common.MetricLabelItem]types.Metric)
 	for _, m := range registreredMetrics {
@@ -261,26 +281,31 @@ func (c *Client) sendPoints() {
 		registreredMetricByKey[key] = m
 	}
 
-	points := c.popPendingPoints()
 	if len(c.failedPoints) > 0 && c.Connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
+		localMetrics, err := c.option.Store.Metrics(nil)
+		if err != nil {
+			return
+		}
+		localExistsByKey := make(map[common.MetricLabelItem]bool, len(localMetrics))
+		for _, m := range localMetrics {
+			key := common.MetricLabelItemFromMetric(m)
+			localExistsByKey[key] = true
+		}
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
-		points = append(c.failedPoints, points...)
+		newPoints := make([]agentTypes.MetricPoint, 0, len(c.failedPoints))
+		for _, p := range c.failedPoints {
+			key := common.MetricLabelItemFromMetric(p.Labels)
+			if localExistsByKey[key] {
+				newPoints = append(newPoints, p)
+			}
+		}
+		points = append(newPoints, points...)
 		c.failedPoints = nil
 	}
 
 	payload := make([]metricPayload, 0, len(points))
-	if !c.Connected() {
-		c.failedPoints = append(c.failedPoints, points...)
-		if len(c.failedPoints) > maxPendingPoints {
-			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
-		}
-		return
-	}
 	payload = c.preparePoints(payload, registreredMetricByKey, points)
-	if len(payload) == 0 {
-		return
-	}
 	logger.V(2).Printf("MQTT send %d points", len(payload))
 	for i := 0; i < len(payload); i += pointsBatchSize {
 		end := i + pointsBatchSize
@@ -323,11 +348,40 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 	return payload
 }
 
+func (c *Client) getDisableUntil() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+	return c.disabledUntil
+}
+
 func (c *Client) connect(ctx context.Context) {
 	optionReader := c.mqttClient.OptionsReader()
-	delay := 5 * time.Second
-	logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
+	delay := 0 * time.Second
+	firstConnect := true
+
 	for ctx.Err() == nil {
+		disableDelay := time.Until(c.getDisableUntil())
+		if disableDelay > 0 && disableDelay > delay {
+			delay = disableDelay
+		}
+		if delay > 0 {
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				return
+			}
+			delay *= 2
+			if delay > optionReader.MaxReconnectInterval() {
+				delay = optionReader.MaxReconnectInterval()
+			}
+		} else {
+			delay = 5 * time.Second
+		}
+
+		if firstConnect {
+			logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
+			firstConnect = false
+		}
 		token := c.mqttClient.Connect()
 		for !token.WaitTimeout(1 * time.Second) {
 			if ctx.Err() != nil {
@@ -338,14 +392,6 @@ func (c *Client) connect(ctx context.Context) {
 			break
 		}
 		logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
-		select {
-		case <-time.After(delay):
-		case <-ctx.Done():
-		}
-		delay *= 2
-		if delay > optionReader.MaxReconnectInterval() {
-			delay = optionReader.MaxReconnectInterval()
-		}
 	}
 }
 
@@ -368,7 +414,30 @@ func (c *Client) onConnect(_ paho.Client) {
 
 func (c *Client) onConnectionLost(_ paho.Client, err error) {
 	logger.Printf("MQTT connection lost: %v", err)
-	// TODO: last disconnect & disabling if too many connect/disconnect
+	c.l.Lock()
+	defer c.l.Unlock()
+	c.lastDisconnectionTime = append(c.lastDisconnectionTime, time.Now())
+	if len(c.lastDisconnectionTime) > 15 {
+		c.lastDisconnectionTime = c.lastDisconnectionTime[len(c.lastDisconnectionTime)-15:]
+	}
+	length := len(c.lastDisconnectionTime)
+	until := time.Time{}
+	if length >= 6 && time.Since(c.lastDisconnectionTime[length-6]) < time.Minute {
+		delay := common.JitterDelay(60, 0.25, 60).Round(time.Second)
+		until = time.Now().Add(delay)
+		logger.Printf("Too many attempt to connect to MQTT on last minute. Disable MQTT for %v", delay)
+	}
+	if length >= 15 && time.Since(c.lastDisconnectionTime[length-15]) < 10*time.Minute {
+		delay := common.JitterDelay(300, 0.25, 300).Round(time.Second)
+		until = time.Now().Add(delay)
+		logger.Printf("Too many attempt to connect to MQTT on last 10 minutes. Disable MQTT for %v", delay)
+	}
+	if c.disabledUntil.Before(until) {
+		c.disabledUntil = until
+		c.mqttClient.Disconnect(0)
+		// Trigger facts synchronization to check for duplicate agent
+		_, _ = c.option.Facts.Facts(c.ctx, 0)
+	}
 }
 
 func (c *Client) publish(topic string, payload []byte) {

@@ -33,6 +33,7 @@ import (
 	"agentgo/logger"
 	"agentgo/store"
 	"agentgo/task"
+	"agentgo/threshold"
 	"agentgo/version"
 
 	"github.com/influxdata/telegraf"
@@ -206,6 +207,10 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	db := store.New()
+	acc := threshold.New(
+		db.Accumulator(),
+		a.state,
+	)
 	a.dockerFact = facts.NewDocker()
 	psFact := facts.NewProcess(a.dockerFact)
 	netstat := &facts.NetstatProvider{}
@@ -217,13 +222,13 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
-	a.collector = collector.New(db.Accumulator())
+	a.collector = collector.New(acc)
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}),
 		a.collector,
 		a.taskRegistry,
 		nil,
-		db.Accumulator(),
+		acc,
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
@@ -315,7 +320,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Process:                psFact,
 			Docker:                 a.dockerFact,
 			Store:                  db,
-			Acc:                    db.Accumulator(),
+			Acc:                    acc,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})
