@@ -73,6 +73,12 @@ type Fact {
   value: String!
 }
 
+type AgentInfo {
+  registrationAt: Time
+  lastReport: Time
+  isConnected: Boolean!
+}
+
 input LabelInput {
   key: String!
   value: String!
@@ -94,6 +100,7 @@ type Query {
   processes(containerId: String): Topinfo!
   facts: [Fact!]!
   services(isActive: Boolean!): [Service!]!
+  agentInformation: AgentInfo!
 }
 
 scalar Time

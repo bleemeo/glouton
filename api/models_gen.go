@@ -6,6 +6,12 @@ import (
 	"time"
 )
 
+type AgentInfo struct {
+	RegistrationAt *time.Time `json:"registrationAt"`
+	LastReport     *time.Time `json:"lastReport"`
+	IsConnected    bool       `json:"isConnected"`
+}
+
 type Container struct {
 	Command      string     `json:"command"`
 	CreatedAt    *time.Time `json:"createdAt"`

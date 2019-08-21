@@ -42,6 +42,12 @@ type DirectiveRoot struct {
 }
 
 type ComplexityRoot struct {
+	AgentInfo struct {
+		IsConnected    func(childComplexity int) int
+		LastReport     func(childComplexity int) int
+		RegistrationAt func(childComplexity int) int
+	}
+
 	Container struct {
 		CPUUsedPerc  func(childComplexity int) int
 		Command      func(childComplexity int) int
@@ -103,12 +109,13 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
-		Containers func(childComplexity int, input *Pagination, allContainers bool, search string) int
-		Facts      func(childComplexity int) int
-		Metrics    func(childComplexity int, metricsFilter []*MetricInput) int
-		Points     func(childComplexity int, metricsFilter []*MetricInput, start string, end string, minutes int) int
-		Processes  func(childComplexity int, containerID *string) int
-		Services   func(childComplexity int, isActive bool) int
+		AgentInformation func(childComplexity int) int
+		Containers       func(childComplexity int, input *Pagination, allContainers bool, search string) int
+		Facts            func(childComplexity int) int
+		Metrics          func(childComplexity int, metricsFilter []*MetricInput) int
+		Points           func(childComplexity int, metricsFilter []*MetricInput, start string, end string, minutes int) int
+		Processes        func(childComplexity int, containerID *string) int
+		Services         func(childComplexity int, isActive bool) int
 	}
 
 	Service struct {
@@ -134,6 +141,7 @@ type QueryResolver interface {
 	Processes(ctx context.Context, containerID *string) (*Topinfo, error)
 	Facts(ctx context.Context) ([]*Fact, error)
 	Services(ctx context.Context, isActive bool) ([]*Service, error)
+	AgentInformation(ctx context.Context) (*AgentInfo, error)
 }
 
 type executableSchema struct {
@@ -150,6 +158,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 	ec := executionContext{nil, e}
 	_ = ec
 	switch typeName + "." + field {
+
+	case "AgentInfo.isConnected":
+		if e.complexity.AgentInfo.IsConnected == nil {
+			break
+		}
+
+		return e.complexity.AgentInfo.IsConnected(childComplexity), true
+
+	case "AgentInfo.lastReport":
+		if e.complexity.AgentInfo.LastReport == nil {
+			break
+		}
+
+		return e.complexity.AgentInfo.LastReport(childComplexity), true
+
+	case "AgentInfo.registrationAt":
+		if e.complexity.AgentInfo.RegistrationAt == nil {
+			break
+		}
+
+		return e.complexity.AgentInfo.RegistrationAt(childComplexity), true
 
 	case "Container.cpuUsedPerc":
 		if e.complexity.Container.CPUUsedPerc == nil {
@@ -424,6 +453,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Process.Username(childComplexity), true
 
+	case "Query.agentInformation":
+		if e.complexity.Query.AgentInformation == nil {
+			break
+		}
+
+		return e.complexity.Query.AgentInformation(childComplexity), true
+
 	case "Query.containers":
 		if e.complexity.Query.Containers == nil {
 			break
@@ -678,6 +714,12 @@ type Fact {
   value: String!
 }
 
+type AgentInfo {
+  registrationAt: Time
+  lastReport: Time
+  isConnected: Boolean!
+}
+
 input LabelInput {
   key: String!
   value: String!
@@ -699,6 +741,7 @@ type Query {
   processes(containerId: String): Topinfo!
   facts: [Fact!]!
   services(isActive: Boolean!): [Service!]!
+  agentInformation: AgentInfo!
 }
 
 scalar Time
@@ -868,6 +911,111 @@ func (ec *executionContext) field___Type_fields_args(ctx context.Context, rawArg
 // endregion ************************** directives.gotpl **************************
 
 // region    **************************** field.gotpl *****************************
+
+func (ec *executionContext) _AgentInfo_registrationAt(ctx context.Context, field graphql.CollectedField, obj *AgentInfo) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "AgentInfo",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.RegistrationAt, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*time.Time)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _AgentInfo_lastReport(ctx context.Context, field graphql.CollectedField, obj *AgentInfo) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "AgentInfo",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LastReport, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*time.Time)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOTime2ᚖtimeᚐTime(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _AgentInfo_isConnected(ctx context.Context, field graphql.CollectedField, obj *AgentInfo) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "AgentInfo",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IsConnected, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(bool)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
 
 func (ec *executionContext) _Container_command(ctx context.Context, field graphql.CollectedField, obj *Container) (ret graphql.Marshaler) {
 	ctx = ec.Tracer.StartFieldExecution(ctx, field)
@@ -2557,6 +2705,43 @@ func (ec *executionContext) _Query_services(ctx context.Context, field graphql.C
 	return ec.marshalNService2ᚕᚖagentgoᚋapiᚐService(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Query_agentInformation(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Query",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().AgentInformation(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*AgentInfo)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNAgentInfo2ᚖagentgoᚋapiᚐAgentInfo(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	ctx = ec.Tracer.StartFieldExecution(ctx, field)
 	defer func() {
@@ -4190,6 +4375,37 @@ func (ec *executionContext) unmarshalInputPagination(ctx context.Context, obj in
 
 // region    **************************** object.gotpl ****************************
 
+var agentInfoImplementors = []string{"AgentInfo"}
+
+func (ec *executionContext) _AgentInfo(ctx context.Context, sel ast.SelectionSet, obj *AgentInfo) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, agentInfoImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentInfo")
+		case "registrationAt":
+			out.Values[i] = ec._AgentInfo_registrationAt(ctx, field, obj)
+		case "lastReport":
+			out.Values[i] = ec._AgentInfo_lastReport(ctx, field, obj)
+		case "isConnected":
+			out.Values[i] = ec._AgentInfo_isConnected(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var containerImplementors = []string{"Container"}
 
 func (ec *executionContext) _Container(ctx context.Context, sel ast.SelectionSet, obj *Container) graphql.Marshaler {
@@ -4626,6 +4842,20 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				}
 				return res
 			})
+		case "agentInformation":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_agentInformation(ctx, field)
+				if res == graphql.Null {
+					atomic.AddUint32(&invalids, 1)
+				}
+				return res
+			})
 		case "__type":
 			out.Values[i] = ec._Query___type(ctx, field)
 		case "__schema":
@@ -4974,6 +5204,20 @@ func (ec *executionContext) ___Type(ctx context.Context, sel ast.SelectionSet, o
 // endregion **************************** object.gotpl ****************************
 
 // region    ***************************** type.gotpl *****************************
+
+func (ec *executionContext) marshalNAgentInfo2agentgoᚋapiᚐAgentInfo(ctx context.Context, sel ast.SelectionSet, v AgentInfo) graphql.Marshaler {
+	return ec._AgentInfo(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAgentInfo2ᚖagentgoᚋapiᚐAgentInfo(ctx context.Context, sel ast.SelectionSet, v *AgentInfo) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._AgentInfo(ctx, sel, v)
+}
 
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
 	return graphql.UnmarshalBoolean(v)

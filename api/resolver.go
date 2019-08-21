@@ -331,3 +331,18 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 	}
 	return servicesRes, nil
 }
+
+func (r *queryResolver) AgentInformation(ctx context.Context) (*AgentInfo, error) {
+	if r.api.agent == nil {
+		return nil, gqlerror.Errorf("Can not retrieve agent information at this moment. Please try later")
+	}
+	registrationAt := r.api.agent.BleemeoRegistrationAt()
+	lastReport := r.api.agent.BleemeoLastReport()
+	connected := r.api.agent.BleemeoConnected()
+	agentInfo := &AgentInfo{
+		RegistrationAt: &registrationAt,
+		LastReport:     &lastReport,
+		IsConnected:    connected,
+	}
+	return agentInfo, nil
+}
