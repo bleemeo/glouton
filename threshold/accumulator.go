@@ -186,8 +186,13 @@ type Threshold struct {
 }
 
 // IsZero returns true is all threshold limit are unset (NaN)
+// Is also returns true is all threshold are equal and 0 (which is the zero-value of Threshold structure
+// and is an invalid threshold configuration)
 func (t Threshold) IsZero() bool {
-	return math.IsNaN(t.LowCritical) && math.IsNaN(t.LowWarning) && math.IsNaN(t.HighWarning) && math.IsNaN(t.HighCritical)
+	if math.IsNaN(t.LowCritical) && math.IsNaN(t.LowWarning) && math.IsNaN(t.HighWarning) && math.IsNaN(t.HighCritical) {
+		return true
+	}
+	return t.LowCritical == 0.0 && t.LowWarning == 0.0 && t.HighWarning == 0.0 && t.HighCritical == 0.0
 }
 
 // CurrentStatus returns the current status regarding the threshold and (if not ok) return the exceeded limit
