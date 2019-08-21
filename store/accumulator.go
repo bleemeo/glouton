@@ -136,6 +136,7 @@ func (a *Accumulator) addMetricsLock(measurement string, fields map[string]inter
 					copyLabels[k] = v
 				}
 				copyLabels["__name__"] += "_status"
+				copyLabels["status_of"] = labels["__name__"]
 				metric2 := a.store.metricGetOrCreate(copyLabels, metric.metricID)
 				if returnPoints {
 					result = append(result, types.MetricPoint{
