@@ -3,6 +3,7 @@ package types
 import (
 	"agentgo/discovery"
 	"agentgo/facts"
+	"agentgo/threshold"
 	"agentgo/types"
 	"context"
 	"time"
@@ -22,6 +23,8 @@ type GlobalOption struct {
 	Discovery discovery.PersistentDiscoverer
 
 	UpdateMetricResolution func(resolution time.Duration)
+	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold)
+	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 }
 
 // Config is the interface used by Bleemeo to access Config

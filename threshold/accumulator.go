@@ -28,6 +28,7 @@ type Accumulator struct {
 
 	l                 sync.Mutex
 	states            map[MetricNameItem]statusState
+	units             map[MetricNameItem]Unit
 	thresholdsAllItem map[string]Threshold
 	thresholds        map[MetricNameItem]Threshold
 }
@@ -49,6 +50,15 @@ func (a *Accumulator) SetThresholds(thresholdWithItem map[MetricNameItem]Thresho
 	defer a.l.Unlock()
 	a.thresholdsAllItem = thresholdAllItem
 	a.thresholds = thresholdWithItem
+	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
+}
+
+// SetUnits configure the units
+func (a *Accumulator) SetUnits(units map[MetricNameItem]Unit) {
+	a.l.Lock()
+	defer a.l.Unlock()
+	a.units = units
+	logger.V(2).Printf("Units contains %d definitions", len(units))
 }
 
 // AddFields adds a metric to the accumulator with the given measurement
@@ -185,6 +195,19 @@ type Threshold struct {
 	HighCritical float64
 }
 
+// Unit represent the unit of a metric
+type Unit struct {
+	UnitType int    `json:"unit,omitempty"`
+	UnitText string `json:"unit_text,omitempty"`
+}
+
+// Possible value for UnitType
+const (
+	UnitTypeUnit = 0
+	UnitTypeByte = 2
+	UnitTypeBit  = 3
+)
+
 // FromInterfaceMap convert a map[string]interface{} to Threshold.
 // It expect the key "low_critical", "low_warning", "high_critical" and "high_warning"
 func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
@@ -277,8 +300,21 @@ func (a *Accumulator) Run(ctx context.Context) error {
 	return nil
 }
 
-func formatValue(value float64, unit string) string {
-	return fmt.Sprintf("%f %s", value, unit)
+func formatValue(value float64, unit Unit) string {
+	switch unit.UnitType {
+	case UnitTypeUnit:
+		return fmt.Sprintf("%.2f", value)
+	case UnitTypeBit, UnitTypeByte:
+		scales := []string{"", "K", "M", "G", "T", "P", "E"}
+		i := 0
+		for i < len(scales)-1 && math.Abs(value) >= 1024 {
+			i++
+			value /= 1024
+		}
+		return fmt.Sprintf("%.2f %s%ss", value, scales[i], unit.UnitText)
+	default:
+		return fmt.Sprintf("%.2f %s", value, unit.UnitText)
+	}
 }
 
 func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
@@ -306,7 +342,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 		newState := previousState.Update(softStatus, period, time.Now())
 		a.states[key] = newState
 
-		unit := "TODO"
+		unit := a.units[key]
 		// Consumer expect status description from threshold to start with "Current value:"
 		statusDescription := fmt.Sprintf("Current value: %s", formatValue(valueF, unit))
 		if newState.CurrentStatus != types.StatusOk {

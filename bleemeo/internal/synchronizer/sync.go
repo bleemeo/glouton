@@ -79,6 +79,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		logger.V(1).Printf("This agent is registered on Bleemeo Cloud platform with UUID %v", agentID)
 	}
 
+	s.updateUnitsAndThresholds()
+
 	s.successiveErrors = 0
 	delay := time.Duration(0)
 	deadline := time.Now()

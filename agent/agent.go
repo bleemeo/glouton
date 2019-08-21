@@ -184,13 +184,13 @@ func (a *agent) Tags() []string {
 	return a.config.StringList("tags")
 }
 
-// UpdateThreshold update the thresholds definition.
+// UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file
-func (a *agent) UpdateThreshold(thresholds map[threshold.MetricNameItem]threshold.Threshold) {
-	a.updateThreshold(thresholds, false)
+func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold) {
+	a.updateThresholds(thresholds, false)
 }
 
-func (a *agent) updateThreshold(thresholds map[threshold.MetricNameItem]threshold.Threshold, showWarning bool) {
+func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, showWarning bool) {
 	rawValue, ok := a.config.Get("thresholds")
 	if !ok {
 		rawValue = map[string]interface{}{}
@@ -252,7 +252,7 @@ func (a *agent) run() { //nolint:gocyclo
 		db.Accumulator(),
 		a.state,
 	)
-	a.updateThreshold(nil, true)
+	a.updateThresholds(nil, true)
 	a.dockerFact = facts.NewDocker()
 	psFact := facts.NewProcess(a.dockerFact)
 	netstat := &facts.NetstatProvider{}
@@ -365,6 +365,8 @@ func (a *agent) run() { //nolint:gocyclo
 			Acc:                    a.accumulator,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
+			UpdateThresholds:       a.UpdateThresholds,
+			UpdateUnits:            a.accumulator.SetUnits,
 		})
 		id, err := a.taskRegistry.AddTask(a.bleemeoConnector, "bleemeo")
 		if err != nil {

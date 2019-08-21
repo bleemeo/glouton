@@ -80,3 +80,75 @@ func TestStateUpdatePeriodChange(t *testing.T) {
 		}
 	}
 }
+
+func TestFormatValue(t *testing.T) {
+	cases := []struct {
+		value float64
+		unit  Unit
+		want  string
+	}{
+		{
+			value: 0.,
+			unit:  Unit{},
+			want:  "0.00",
+		},
+		{
+			value: 0.,
+			unit:  Unit{UnitType: UnitTypeUnit, UnitText: "No unit"},
+			want:  "0.00",
+		},
+		{
+			value: 0.,
+			// 42 is a unknown value for UnitType
+			unit: Unit{UnitType: 42, UnitText: "%"},
+			want: "0.00 %",
+		},
+		{
+			value: 0.,
+			// 42 is a unknown value for UnitType
+			unit: Unit{UnitType: 42, UnitText: "thing"},
+			want: "0.00 thing",
+		},
+		{
+			value: 0.,
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			want:  "0.00 Bytes",
+		},
+		{
+			value: 1024,
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			want:  "1.00 KBytes",
+		},
+		{
+			value: 1 << 30,
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			want:  "1.00 GBytes",
+		},
+		{
+			value: 1 << 60,
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			want:  "1.00 EBytes",
+		},
+		{
+			value: 1 << 70,
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			want:  "1024.00 EBytes",
+		},
+		{
+			value: -1024,
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			want:  "-1.00 KBytes",
+		},
+		{
+			value: -1 << 30,
+			unit:  Unit{UnitType: UnitTypeByte, UnitText: "Byte"},
+			want:  "-1.00 GBytes",
+		},
+	}
+	for _, c := range cases {
+		got := formatValue(c.value, c.unit)
+		if got != c.want {
+			t.Errorf("formatValue(%v, %v) == %v, want %v", c.value, c.unit, got, c.want)
+		}
+	}
+}

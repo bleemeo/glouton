@@ -5,10 +5,12 @@ import (
 	"agentgo/bleemeo/internal/common"
 	"agentgo/bleemeo/types"
 	"agentgo/logger"
+	"agentgo/threshold"
 	agentTypes "agentgo/types"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 )
@@ -69,8 +71,12 @@ func (m fakeMetric) Labels() map[string]string {
 
 type metricPayload struct {
 	types.Metric
-	Agent string `json:"agent"`
-	Item  string `json:"item,omitempty"`
+	Agent                  string   `json:"agent"`
+	Item                   string   `json:"item,omitempty"`
+	ThresholdLowWarning    *float64 `json:"threshold_low_warning"`
+	ThresholdLowCrictical  *float64 `json:"threshold_low_critical"`
+	ThresholdHighWarning   *float64 `json:"threshold_high_warning"`
+	ThresholdHighCrictical *float64 `json:"threshold_high_critical"`
 }
 
 // metricFromAPI convert a metricPayload received from API to a types.Metric
@@ -81,6 +87,26 @@ func (mp metricPayload) metricFromAPI() types.Metric {
 				"item": mp.Item,
 			}
 		}
+	}
+	if mp.ThresholdLowWarning != nil {
+		mp.Metric.Threshold.LowWarning = *mp.ThresholdLowWarning
+	} else {
+		mp.Metric.Threshold.LowWarning = math.NaN()
+	}
+	if mp.ThresholdLowCrictical != nil {
+		mp.Metric.Threshold.LowCritical = *mp.ThresholdLowCrictical
+	} else {
+		mp.Metric.Threshold.LowCritical = math.NaN()
+	}
+	if mp.ThresholdHighWarning != nil {
+		mp.Metric.Threshold.HighWarning = *mp.ThresholdHighWarning
+	} else {
+		mp.Metric.Threshold.HighWarning = math.NaN()
+	}
+	if mp.ThresholdHighCrictical != nil {
+		mp.Metric.Threshold.HighCritical = *mp.ThresholdHighCrictical
+	} else {
+		mp.Metric.Threshold.HighCritical = math.NaN()
 	}
 	return mp.Metric
 }
@@ -154,6 +180,10 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		}
 	}
 
+	if fullSync || (!fullForInactive && len(unregisteredMetrics) > 0) {
+		s.updateUnitsAndThresholds()
+	}
+
 	if err := s.metricDeleteFromRemote(localMetrics, previousMetrics); err != nil {
 		return err
 	}
@@ -184,6 +214,22 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	}
 	s.lastMetricCount = len(localMetrics)
 	return nil
+}
+
+func (s *Synchronizer) updateUnitsAndThresholds() {
+	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
+	units := make(map[threshold.MetricNameItem]threshold.Unit)
+	for _, m := range s.option.Cache.Metrics() {
+		key := threshold.MetricNameItem{Name: m.Label, Item: m.Labels["item"]}
+		thresholds[key] = m.Threshold
+		units[key] = m.Unit
+	}
+	if s.option.UpdateThresholds != nil {
+		s.option.UpdateThresholds(thresholds)
+	}
+	if s.option.UpdateUnits != nil {
+		s.option.UpdateUnits(units)
+	}
 }
 
 func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
