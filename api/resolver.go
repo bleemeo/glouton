@@ -370,9 +370,7 @@ func (r *queryResolver) AgentStatus(ctx context.Context) (float64, error) {
 	if r.api.db == nil {
 		return 3, gqlerror.Errorf("Can not retrieve agent status at this moment. Please try later")
 	}
-	metrics := []types.Metric{}
-	var err error
-	metrics, err = r.api.db.Metrics(map[string]string{})
+	metrics, err := r.api.db.Metrics(map[string]string{})
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve metrics: %v", err)
 		return 3, gqlerror.Errorf("Can not retrieve metrics from agent status")
