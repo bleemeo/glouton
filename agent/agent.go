@@ -51,6 +51,7 @@ type agent struct {
 	collector        *collector.Collector
 	factProvider     *facts.FactProvider
 	bleemeoConnector *bleemeo.Connector
+	accumulator      *threshold.Accumulator
 
 	taskIDs map[string]int
 
@@ -183,6 +184,46 @@ func (a *agent) Tags() []string {
 	return a.config.StringList("tags")
 }
 
+// UpdateThreshold update the thresholds definition.
+// This method will merge with threshold definition present in configuration file
+func (a *agent) UpdateThreshold(thresholds map[threshold.MetricNameItem]threshold.Threshold) {
+	a.updateThreshold(thresholds, false)
+}
+
+func (a *agent) updateThreshold(thresholds map[threshold.MetricNameItem]threshold.Threshold, showWarning bool) {
+	rawValue, ok := a.config.Get("thresholds")
+	if !ok {
+		rawValue = map[string]interface{}{}
+	}
+	var rawThreshold map[string]interface{}
+	if rawThreshold, ok = rawValue.(map[string]interface{}); !ok {
+		if showWarning {
+			logger.V(1).Printf("Threshold in configuration file is not map")
+		}
+		rawThreshold = nil
+	}
+	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
+	for k, v := range rawThreshold {
+		v2, ok := v.(map[string]interface{})
+		if !ok {
+			if showWarning {
+				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v value is not a map", k)
+			}
+			continue
+		}
+		t, err := threshold.FromInterfaceMap(v2)
+		if err != nil {
+			if showWarning {
+				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v", err)
+			}
+			continue
+		}
+		configThreshold[k] = t
+	}
+
+	a.accumulator.SetThresholds(thresholds, configThreshold)
+}
+
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
 func (a *agent) run() { //nolint:gocyclo
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
@@ -207,10 +248,11 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	db := store.New()
-	acc := threshold.New(
+	a.accumulator = threshold.New(
 		db.Accumulator(),
 		a.state,
 	)
+	a.updateThreshold(nil, true)
 	a.dockerFact = facts.NewDocker()
 	psFact := facts.NewProcess(a.dockerFact)
 	netstat := &facts.NetstatProvider{}
@@ -222,13 +264,13 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
-	a.collector = collector.New(acc)
+	a.collector = collector.New(a.accumulator)
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}),
 		a.collector,
 		a.taskRegistry,
 		nil,
-		acc,
+		a.accumulator,
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
@@ -320,7 +362,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Process:                psFact,
 			Docker:                 a.dockerFact,
 			Store:                  db,
-			Acc:                    acc,
+			Acc:                    a.accumulator,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 		})

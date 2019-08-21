@@ -185,6 +185,41 @@ type Threshold struct {
 	HighCritical float64
 }
 
+// FromInterfaceMap convert a map[string]interface{} to Threshold.
+// It expect the key "low_critical", "low_warning", "high_critical" and "high_warning"
+func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
+	result := Threshold{
+		LowCritical:  math.NaN(),
+		LowWarning:   math.NaN(),
+		HighWarning:  math.NaN(),
+		HighCritical: math.NaN(),
+	}
+	for _, name := range []string{"low_critical", "low_warning", "high_warning", "high_critical"} {
+		if raw, ok := input[name]; ok {
+			var value float64
+			switch v := raw.(type) {
+			case float64:
+				value = v
+			case int:
+				value = float64(v)
+			default:
+				return result, fmt.Errorf("%v is not a float", raw)
+			}
+			switch name {
+			case "low_critical":
+				result.LowCritical = value
+			case "low_warning":
+				result.LowWarning = value
+			case "high_warning":
+				result.HighWarning = value
+			case "high_critical":
+				result.HighCritical = value
+			}
+		}
+	}
+	return result, nil
+}
+
 // IsZero returns true is all threshold limit are unset (NaN)
 // Is also returns true is all threshold are equal and 0 (which is the zero-value of Threshold structure
 // and is an invalid threshold configuration)

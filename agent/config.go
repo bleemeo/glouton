@@ -108,7 +108,7 @@ func configLoadFile(filePath string, cfg *config.Configuration) error {
 
 func loadDefault(cfg *config.Configuration) {
 	for key, value := range defaultConfig {
-		if _, err := cfg.Get(key); err != nil && config.IsNotFound(err) {
+		if _, ok := cfg.Get(key); !ok {
 			cfg.Set(key, value)
 		}
 	}
