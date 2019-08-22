@@ -181,7 +181,20 @@ func (a *agent) BleemeoConnected() bool {
 
 // Tags returns tags of this Agent.
 func (a *agent) Tags() []string {
-	return a.config.StringList("tags")
+	tagsSet := make(map[string]bool)
+	for _, t := range a.config.StringList("tags") {
+		tagsSet[t] = true
+	}
+	if a.bleemeoConnector != nil {
+		for _, t := range a.bleemeoConnector.Tags() {
+			tagsSet[t] = true
+		}
+	}
+	tags := make([]string, 0, len(tagsSet))
+	for t := range tagsSet {
+		tags = append(tags, t)
+	}
+	return tags
 }
 
 // UpdateThresholds update the thresholds definition.

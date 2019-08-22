@@ -95,6 +95,16 @@ func (c *Connector) Run(ctx context.Context) error {
 	return mqttErr
 }
 
+// Tags returns the Tags set on Bleemeo Cloud platform
+func (c *Connector) Tags() []string {
+	agent := c.cache.Agent()
+	tags := make([]string, len(agent.Tags))
+	for i, t := range agent.Tags {
+		tags[i] = t.Name
+	}
+	return tags
+}
+
 // AccountID returns the Account UUID of Bleemeo
 // It return the empty string if the Account UUID is not available
 func (c *Connector) AccountID() string {

@@ -15,12 +15,12 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 	params := map[string]string{
 		"fields": "tags,id,created_at,account,next_config_at,current_config",
 	}
-	data := map[string][]map[string]string{
-		"tags": make([]map[string]string, 0),
+	data := map[string][]types.Tag{
+		"tags": make([]types.Tag, 0),
 	}
 	for _, t := range s.option.Config.StringList("tags") {
 		if len(t) <= apiTagsLength && t != "" {
-			data["tags"] = append(data["tags"], map[string]string{"name": t})
+			data["tags"] = append(data["tags"], types.Tag{Name: t})
 		}
 	}
 	_, err := s.client.Do("PATCH", fmt.Sprintf("v1/agent/%s/", s.option.State.AgentID()), params, data, &agent)

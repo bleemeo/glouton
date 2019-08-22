@@ -21,6 +21,15 @@ type Agent struct {
 	AccountID       string    `json:"account"`
 	NextConfigAt    time.Time `json:"next_config_at"`
 	CurrentConfigID string    `json:"current_config"`
+	Tags            []Tag     `json:"tags"`
+}
+
+// Tag is an Tag object on Bleemeo API
+type Tag struct {
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name"`
+	IsAutomatic  bool   `json:"is_automatic,omitempty"`
+	IsServiceTag bool   `json:"is_service_tag,omitempty"`
 }
 
 // AccountConfig is the configuration used by this agent
