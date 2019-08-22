@@ -382,14 +382,15 @@ func (r *queryResolver) AgentStatus(ctx context.Context) (float64, error) {
 	statuses := map[string]float64{}
 	for _, metric := range metrics {
 		labels := metric.Labels()
-		if strings.Contains(labels["__name__"], "_status") && labels["__name__"] != "agent_status" && !strings.Contains(labels["__name__"], "process") {
-			points, err := metric.Points(timeStart, timeEnd)
-			if err != nil {
-				logger.V(2).Printf("Can not retrieve points: %v", err)
-				return 3, gqlerror.Errorf("Can not retrieve points from agent status")
-			}
-			statuses[labels["__name__"]] = points[0].Value
+		points, err := metric.Points(timeStart, timeEnd)
+		if err != nil {
+			logger.V(2).Printf("Can not retrieve points: %v", err)
+			return 3, gqlerror.Errorf("Can not retrieve points from agent status")
 		}
+		if len(points) > 0 && points[0].CurrentStatus.IsSet() {
+			statuses[labels["__name__"]] = float64(points[0].CurrentStatus.NagiosCode())
+		}
+
 	}
 	var finalStatus float64
 	for _, status := range statuses {
