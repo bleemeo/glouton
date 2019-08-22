@@ -30,6 +30,7 @@ type GlobalOption struct {
 // Config is the interface used by Bleemeo to access Config
 type Config interface {
 	String(string) string
+	StringList(string) []string
 	Int(string) int
 	Bool(string) bool
 }
