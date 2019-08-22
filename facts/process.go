@@ -81,11 +81,11 @@ type CPUUsage struct {
 	System    float64 `json:"system"`
 	Idle      float64 `json:"idle"`
 	IOWait    float64 `json:"iowait"`
-	Guest     float64 `json:"guest,omitempty"`
-	GuestNice float64 `json:"guest_nice,omitempty"`
-	IRQ       float64 `json:"irq,omitempty"`
-	SoftIRQ   float64 `json:"softirq,omitempty"`
-	Steal     float64 `json:"steal,omitempty"`
+	Guest     float64 `json:"guest"`
+	GuestNice float64 `json:"guest_nice"`
+	IRQ       float64 `json:"irq"`
+	SoftIRQ   float64 `json:"softirq"`
+	Steal     float64 `json:"steal"`
 }
 
 // MemoryUsage contains usage of Memory
