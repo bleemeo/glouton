@@ -615,7 +615,7 @@ func (z psutilLister) processes(ctx context.Context, maxAge time.Duration) (proc
 		if err != nil {
 			if runtime.GOOS != "windows" {
 				uids, err := p.UidsWithContext(ctx)
-				if err != nil {
+				if err != nil && len(uids) > 0 {
 					userName = fmt.Sprintf("%d", uids[0])
 				}
 			}
