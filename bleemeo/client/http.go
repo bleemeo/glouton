@@ -266,12 +266,28 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				UnmarshalErr: nil,
 			}
 		}
+		var jsonMessage json.RawMessage
 		var jsonError struct {
 			Error  string
 			Detail string
 		}
-		err = json.NewDecoder(resp.Body).Decode(&jsonError)
-		if err == nil {
+		err = json.NewDecoder(resp.Body).Decode(&jsonMessage)
+		if err != nil {
+			return 0, APIError{
+				StatusCode:   resp.StatusCode,
+				Content:      "",
+				UnmarshalErr: err,
+			}
+		}
+		err = json.Unmarshal(jsonMessage, &jsonError)
+		if err != nil {
+			return 0, APIError{
+				StatusCode:   resp.StatusCode,
+				Content:      "",
+				UnmarshalErr: err,
+			}
+		}
+		if jsonError.Error != "" || jsonError.Detail != "" {
 			errorMessage := jsonError.Error
 			if errorMessage == "" {
 				errorMessage = jsonError.Detail
@@ -284,9 +300,10 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 		}
 		return 0, APIError{
 			StatusCode:   resp.StatusCode,
-			Content:      "",
-			UnmarshalErr: err,
+			Content:      string(jsonMessage),
+			UnmarshalErr: nil,
 		}
+
 	}
 	if result != nil {
 		err = json.NewDecoder(resp.Body).Decode(result)
