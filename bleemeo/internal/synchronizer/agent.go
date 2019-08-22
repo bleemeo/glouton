@@ -16,7 +16,7 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 		"fields": "tags,id,created_at,account,next_config_at,current_config",
 	}
 	data := map[string][]map[string]string{
-		"tags": nil,
+		"tags": make([]map[string]string, 0),
 	}
 	for _, t := range s.option.Config.StringList("tags") {
 		if len(t) <= apiTagsLength && t != "" {
