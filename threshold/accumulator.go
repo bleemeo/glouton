@@ -14,6 +14,8 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
+const statusCacheKey = "statusState"
+
 // StatusAccumulator is the type used by Accumulator to send metrics. It's a subset of store.Accumulator
 type StatusAccumulator interface {
 	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
@@ -35,11 +37,19 @@ type Accumulator struct {
 
 // New returns a new Accumulator
 func New(acc StatusAccumulator, state *state.State) *Accumulator {
-	return &Accumulator{
+	self := &Accumulator{
 		acc:    acc,
 		state:  state,
 		states: make(map[MetricNameItem]statusState),
 	}
+	var jsonList []jsonState
+	err := state.Cache(statusCacheKey, &jsonList)
+	if err != nil {
+		for _, v := range jsonList {
+			self.states[v.MetricNameItem] = v.statusState
+		}
+	}
+	return self
 }
 
 // SetThresholds configure thresholds.
@@ -129,7 +139,12 @@ type statusState struct {
 	CurrentStatus types.Status
 	CriticalSince time.Time
 	WarningSince  time.Time
-	LastUsage     time.Time
+	LastUpdate    time.Time
+}
+
+type jsonState struct {
+	MetricNameItem
+	statusState
 }
 
 func (s statusState) Update(newStatus types.Status, period time.Duration, now time.Time) statusState {
@@ -183,6 +198,7 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		// downgrade status immediately
 		s.CurrentStatus = types.StatusOk
 	}
+	s.LastUpdate = time.Now()
 	return s
 }
 
@@ -296,8 +312,42 @@ func convertInterface(value interface{}) (float64, error) {
 
 // Run will periodically save status state and clean it.
 func (a *Accumulator) Run(ctx context.Context) error {
-	<-ctx.Done()
+	lastSave := time.Now()
+	for ctx.Err() == nil {
+		save := false
+		select {
+		case <-ctx.Done():
+			save = true
+		case <-time.After(time.Minute):
+		}
+		if time.Since(lastSave) > 60*time.Minute {
+			save = true
+		}
+		a.run(save)
+		if save {
+			lastSave = time.Now()
+		}
+	}
 	return nil
+}
+
+func (a *Accumulator) run(save bool) {
+	a.l.Lock()
+	defer a.l.Unlock()
+	jsonList := make([]jsonState, 0, len(a.states))
+	for k, v := range a.states {
+		if time.Since(v.LastUpdate) > 60*time.Minute {
+			delete(a.states, k)
+		} else {
+			jsonList = append(jsonList, jsonState{
+				MetricNameItem: k,
+				statusState:    v,
+			})
+		}
+	}
+	if save {
+		_ = a.state.SetCache(statusCacheKey, jsonList)
+	}
 }
 
 func formatValue(value float64, unit Unit) string {
