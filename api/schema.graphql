@@ -66,6 +66,7 @@ type Service {
   exePath: String!
   active: Boolean!
   status: Float!
+  statusDescription: String
 }
 
 type Fact {
@@ -81,6 +82,11 @@ type AgentInfo {
 
 type Tag {
   tagName: String!
+}
+
+type AgentStatus {
+  status: Float!
+  statusDescription: [String!]!
 }
 
 input LabelInput {
@@ -106,7 +112,7 @@ type Query {
   services(isActive: Boolean!): [Service!]!
   agentInformation: AgentInfo!
   tags: [Tag!]!
-  agentStatus: Float!
+  agentStatus: AgentStatus!
 }
 
 scalar Time

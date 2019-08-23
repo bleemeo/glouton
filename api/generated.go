@@ -48,6 +48,11 @@ type ComplexityRoot struct {
 		RegistrationAt func(childComplexity int) int
 	}
 
+	AgentStatus struct {
+		Status            func(childComplexity int) int
+		StatusDescription func(childComplexity int) int
+	}
+
 	Container struct {
 		CPUUsedPerc  func(childComplexity int) int
 		Command      func(childComplexity int) int
@@ -121,13 +126,14 @@ type ComplexityRoot struct {
 	}
 
 	Service struct {
-		Active          func(childComplexity int) int
-		ContainerID     func(childComplexity int) int
-		ExePath         func(childComplexity int) int
-		IPAddress       func(childComplexity int) int
-		ListenAddresses func(childComplexity int) int
-		Name            func(childComplexity int) int
-		Status          func(childComplexity int) int
+		Active            func(childComplexity int) int
+		ContainerID       func(childComplexity int) int
+		ExePath           func(childComplexity int) int
+		IPAddress         func(childComplexity int) int
+		ListenAddresses   func(childComplexity int) int
+		Name              func(childComplexity int) int
+		Status            func(childComplexity int) int
+		StatusDescription func(childComplexity int) int
 	}
 
 	Tag struct {
@@ -149,7 +155,7 @@ type QueryResolver interface {
 	Services(ctx context.Context, isActive bool) ([]*Service, error)
 	AgentInformation(ctx context.Context) (*AgentInfo, error)
 	Tags(ctx context.Context) ([]*Tag, error)
-	AgentStatus(ctx context.Context) (float64, error)
+	AgentStatus(ctx context.Context) (*AgentStatus, error)
 }
 
 type executableSchema struct {
@@ -187,6 +193,20 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AgentInfo.RegistrationAt(childComplexity), true
+
+	case "AgentStatus.status":
+		if e.complexity.AgentStatus.Status == nil {
+			break
+		}
+
+		return e.complexity.AgentStatus.Status(childComplexity), true
+
+	case "AgentStatus.statusDescription":
+		if e.complexity.AgentStatus.StatusDescription == nil {
+			break
+		}
+
+		return e.complexity.AgentStatus.StatusDescription(childComplexity), true
 
 	case "Container.cpuUsedPerc":
 		if e.complexity.Container.CPUUsedPerc == nil {
@@ -598,6 +618,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Service.Status(childComplexity), true
 
+	case "Service.statusDescription":
+		if e.complexity.Service.StatusDescription == nil {
+			break
+		}
+
+		return e.complexity.Service.StatusDescription(childComplexity), true
+
 	case "Tag.tagName":
 		if e.complexity.Tag.TagName == nil {
 			break
@@ -736,6 +763,7 @@ type Service {
   exePath: String!
   active: Boolean!
   status: Float!
+  statusDescription: String
 }
 
 type Fact {
@@ -751,6 +779,11 @@ type AgentInfo {
 
 type Tag {
   tagName: String!
+}
+
+type AgentStatus {
+  status: Float!
+  statusDescription: [String!]!
 }
 
 input LabelInput {
@@ -776,7 +809,7 @@ type Query {
   services(isActive: Boolean!): [Service!]!
   agentInformation: AgentInfo!
   tags: [Tag!]!
-  agentStatus: Float!
+  agentStatus: AgentStatus!
 }
 
 scalar Time
@@ -1050,6 +1083,80 @@ func (ec *executionContext) _AgentInfo_isConnected(ctx context.Context, field gr
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _AgentStatus_status(ctx context.Context, field graphql.CollectedField, obj *AgentStatus) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "AgentStatus",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Status, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _AgentStatus_statusDescription(ctx context.Context, field graphql.CollectedField, obj *AgentStatus) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "AgentStatus",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.StatusDescription, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]string)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNString2ᚕstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Container_command(ctx context.Context, field graphql.CollectedField, obj *Container) (ret graphql.Marshaler) {
@@ -2845,10 +2952,10 @@ func (ec *executionContext) _Query_agentStatus(ctx context.Context, field graphq
 		}
 		return graphql.Null
 	}
-	res := resTmp.(float64)
+	res := resTmp.(*AgentStatus)
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
-	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+	return ec.marshalNAgentStatus2ᚖagentgoᚋapiᚐAgentStatus(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -3183,6 +3290,40 @@ func (ec *executionContext) _Service_status(ctx context.Context, field graphql.C
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Service_statusDescription(ctx context.Context, field graphql.CollectedField, obj *Service) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Service",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.StatusDescription, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*string)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Tag_tagName(ctx context.Context, field graphql.CollectedField, obj *Tag) (ret graphql.Marshaler) {
@@ -4552,6 +4693,38 @@ func (ec *executionContext) _AgentInfo(ctx context.Context, sel ast.SelectionSet
 	return out
 }
 
+var agentStatusImplementors = []string{"AgentStatus"}
+
+func (ec *executionContext) _AgentStatus(ctx context.Context, sel ast.SelectionSet, obj *AgentStatus) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, agentStatusImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("AgentStatus")
+		case "status":
+			out.Values[i] = ec._AgentStatus_status(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "statusDescription":
+			out.Values[i] = ec._AgentStatus_statusDescription(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var containerImplementors = []string{"Container"}
 
 func (ec *executionContext) _Container(ctx context.Context, sel ast.SelectionSet, obj *Container) graphql.Marshaler {
@@ -5091,6 +5264,8 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "statusDescription":
+			out.Values[i] = ec._Service_statusDescription(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5418,6 +5593,20 @@ func (ec *executionContext) marshalNAgentInfo2ᚖagentgoᚋapiᚐAgentInfo(ctx c
 		return graphql.Null
 	}
 	return ec._AgentInfo(ctx, sel, v)
+}
+
+func (ec *executionContext) marshalNAgentStatus2agentgoᚋapiᚐAgentStatus(ctx context.Context, sel ast.SelectionSet, v AgentStatus) graphql.Marshaler {
+	return ec._AgentStatus(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNAgentStatus2ᚖagentgoᚋapiᚐAgentStatus(ctx context.Context, sel ast.SelectionSet, v *AgentStatus) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._AgentStatus(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalNBoolean2bool(ctx context.Context, v interface{}) (bool, error) {
