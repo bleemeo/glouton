@@ -392,7 +392,9 @@ func (r *queryResolver) AgentStatus(ctx context.Context) (*AgentStatus, error) {
 		if len(points) > 0 && points[0].CurrentStatus.IsSet() {
 			status := points[0].CurrentStatus.NagiosCode()
 			statuses[labels["__name__"]] = float64(status)
-			statusDescription = append(statusDescription, labels["__name__"]+": "+points[0].StatusDescription.StatusDescription)
+			if status > 0 {
+				statusDescription = append(statusDescription, labels["__name__"]+": "+points[0].StatusDescription.StatusDescription)
+			}
 		}
 
 	}
