@@ -6,12 +6,5 @@ WORKSPACE=`pwd`/work
 COMMIT_HASH=$(git rev-parse --short HEAD)
 VERSION=$(TZ=UTC date +%y.%m.%d.%H%M%S)
 
-mkdir "${WORKSPACE}"
-mkdir "${WORKSPACE}"/result
-
-echo ${VERSION} > "${WORKSPACE}"/VERSION
-echo ${COMMIT_HASH} > "${WORKSPACE}"/COMMIT_HASH
-
-git archive --format=tar --output="${WORKSPACE}"/bleemeo-agent_${VERSION}.tar --prefix=bleemeo-agent-${VERSION}/ HEAD
-cd "${WORKSPACE}"
-tar xvf bleemeo-agent_${VERSION}.tar
+echo "$0 is not yet done with Go"
+exit 1
