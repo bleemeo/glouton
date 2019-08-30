@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -61,8 +62,21 @@ type agent struct {
 	dockerInputID      int
 }
 
-func response(ctx context.Context, command string) (string, int16) {
-	return command + " ok", int16(1)
+func response(ctx context.Context, request string) (string, int16, error) {
+	var command string
+	commands := map[string]string{
+		"check_users":        "/usr/lib/nagios/plugins/check_users -w 5 -c 10",
+		"check_total_procs":  "/usr/lib/nagios/plugins/check_procs -w 150 -c 200",
+		"check_load":         "/usr/lib/nagios/plugins/check_load -r -w .15,.10,.05 -c .30,.25,.20",
+		"check_hda1":         "/usr/lib/nagios/plugins/check_disk -w 20% -c 10% -p /dev/hda1",
+		"check_zombie_procs": "usr/lib/nagios/plugins/check_procs -w 5 -c 10 -s Z",
+		"check_big":          "check_big ok",
+	}
+	command = commands[request]
+	if command == "" {
+		return "", 1, errors.New("unknown command")
+	}
+	return command, int16(1), nil
 }
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {

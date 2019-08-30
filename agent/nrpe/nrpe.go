@@ -28,7 +28,7 @@ type reducedPacket struct {
 	buffer        string
 }
 
-type callback func(ctx context.Context, command string) (string, int16)
+type callback func(ctx context.Context, command string) (string, int16, error)
 
 func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback) {
 	decodedRequest, err := decode(c)
@@ -39,8 +39,11 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback) {
 	}
 
 	var answer reducedPacket
-	answer.buffer, answer.resultCode = cb(ctx, decodedRequest.buffer)
+	answer.buffer, answer.resultCode, err = cb(ctx, decodedRequest.buffer)
 	answer.packetVersion = decodedRequest.packetVersion
+	if err != nil {
+		logger.V(1).Printf("%d", err)
+	}
 
 	var encodedAnswer []byte
 	if answer.packetVersion == 3 {

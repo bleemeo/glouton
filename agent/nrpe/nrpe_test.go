@@ -126,15 +126,15 @@ func (rw ReaderWriter) Close() error {
 	return nil
 }
 
-func responsewarningv3(ctx context.Context, command string) (string, int16) {
+func responsewarningv3(ctx context.Context, command string) (string, int16, error) {
 	answer := "WARNING - load average: 0.02, 0.07, 0.06|load1=0.022;0.150;0.300;0; load5=0.068;0.100;0.250;0; load15=0.060;0.050;0.200;0; "
 	resultCode := int16(1)
-	return answer, resultCode
+	return answer, resultCode, nil
 }
-func responsewarningv2(ctx context.Context, command string) (string, int16) {
+func responsewarningv2(ctx context.Context, command string) (string, int16, error) {
 	answer := "WARNING - load average: 0.12, 0.11, 0.12|load1=0.120;0.150;0.300;0; load5=0.107;0.100;0.250;0; load15=0.125;0.050;0.200;0; "
 	resultCode := int16(1)
-	return answer, resultCode
+	return answer, resultCode, nil
 }
 
 func TestHandleConnection(t *testing.T) {
