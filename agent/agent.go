@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"agentgo/agent/nrpe"
 	"agentgo/agent/state"
 	"agentgo/api"
 	"agentgo/bleemeo"
@@ -58,6 +59,10 @@ type agent struct {
 
 	dockerInputPresent bool
 	dockerInputID      int
+}
+
+func response(ctx context.Context, command string) (string, int16) {
+	return command + " ok", int16(1)
 }
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
@@ -292,6 +297,12 @@ func (a *agent) run() { //nolint:gocyclo
 				return
 			}
 		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		nrpe.Run(ctx, ":1025", response, false)
 	}()
 
 	if a.config.Bool("bleemeo.enabled") {
