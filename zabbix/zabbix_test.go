@@ -142,14 +142,14 @@ func (rw ReaderWriter) Close() error {
 	return nil
 }
 
-func responsev1(key string, args []string) string {
+func responsev1(key string, args []string) (string, error) {
 	if key == "agent.ping" {
-		return "1"
+		return "1", nil
 	}
 	if key == "agent.version" {
-		return "4.2.4"
+		return "4.2.4", nil
 	}
-	return ""
+	return "", nil
 }
 
 func TestHandleConnection(t *testing.T) {

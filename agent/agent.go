@@ -69,14 +69,14 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 	return i
 }
 
-func zabbixResponse(key string, args []string) string {
+func zabbixResponse(key string, args []string) (string, error) {
 	if key == "agent.ping" {
-		return "1"
+		return "1", nil
 	}
 	if key == "agent.version" {
-		return "4.2.4"
+		return "4.2.4", nil
 	}
-	return "ok"
+	return "ok", nil
 }
 
 func (a *agent) init() (ok bool) {

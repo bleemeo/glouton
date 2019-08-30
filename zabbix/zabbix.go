@@ -20,7 +20,7 @@ type packetStruct struct {
 	args    []string
 }
 
-type callback func(key string, args []string) string
+type callback func(key string, args []string) (string, error)
 
 func handleConnection(c io.ReadWriteCloser, cb callback) {
 	decodedRequest, err := decode(c)
@@ -31,8 +31,11 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 	}
 
 	var answer packetStruct
-	answer.key = cb(decodedRequest.key, decodedRequest.args)
+	answer.key, err = cb(decodedRequest.key, decodedRequest.args)
 	answer.version = decodedRequest.version
+	if err != nil {
+		logger.V(1).Printf("%d", err)
+	}
 
 	var encodedAnswer []byte
 	if answer.version == 1 {
