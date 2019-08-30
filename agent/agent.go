@@ -13,7 +13,6 @@ import (
 	"syscall"
 	"time"
 
-	"agentgo/agent/nrpe"
 	"agentgo/agent/state"
 	"agentgo/api"
 	"agentgo/bleemeo"
@@ -33,6 +32,7 @@ import (
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
 	"agentgo/logger"
+	"agentgo/nrpe"
 	"agentgo/store"
 	"agentgo/task"
 	"agentgo/version"
