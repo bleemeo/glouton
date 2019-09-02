@@ -2,6 +2,7 @@ package nrpe
 
 import (
 	"agentgo/logger"
+	"agentgo/version"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -56,7 +57,11 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 	}
 
 	var answer reducedPacket
-	answer.buffer, answer.resultCode, err = cb(ctx, decodedRequest.buffer)
+	if decodedRequest.buffer == "_NRPE_CHECK" {
+		answer.buffer = fmt.Sprintf("NRPE v3 (Bleemeo Agent %v)", version.Version)
+	} else {
+		answer.buffer, answer.resultCode, err = cb(ctx, decodedRequest.buffer)
+	}
 	answer.packetVersion = decodedRequest.packetVersion
 	if err != nil {
 		answer.buffer = err.Error()
