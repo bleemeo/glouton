@@ -317,12 +317,15 @@ func (a *agent) run() { //nolint:gocyclo
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			nrpe.Run(
-				ctx,
+			server := nrpe.New(
 				fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
-				response,
 				a.config.Bool("nrpe.ssl"),
+				response,
 			)
+			_, err := a.taskRegistry.AddTask(server, "nrpe")
+			if err != nil {
+				logger.V(1).Printf("Unable to start NRPE server: %v", err)
+			}
 		}()
 	}
 
