@@ -80,7 +80,39 @@ func TestDecodeEncodeV3(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+}
 
+func TestDecodeEncode(t *testing.T) {
+	for _, c := range allPackets {
+		packet := reducedPacket{
+			packetVersion: c.Version,
+			packetType:    2,
+			resultCode:    c.ReplyCode,
+			buffer:        c.ReplyString,
+		}
+		if c.ReplyError != nil {
+			packet.resultCode = 3
+			packet.buffer = c.ReplyError.Error()
+		}
+		var inter []byte
+		if c.Version == 3 {
+			inter, _ = encodeV3(packet)
+		} else if c.Version == 2 {
+			var rndBytes [2]byte
+			copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
+			inter, _ = encodeV2(packet, rndBytes)
+			if len(packet.buffer) > 1023 {
+				packet.buffer = packet.buffer[:1023]
+			}
+		}
+		got, err := decode(bytes.NewReader(inter))
+		if got != packet {
+			t.Errorf("decode(encodeV3([case %s])) == %v, want %v", c.Description, got, packet)
+		}
+		if err != nil {
+			t.Error(err)
+		}
+	}
 }
 
 func TestEncode(t *testing.T) {
