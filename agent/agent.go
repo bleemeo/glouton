@@ -31,6 +31,7 @@ import (
 	"agentgo/inputs/swap"
 	"agentgo/inputs/system"
 	"agentgo/logger"
+	"agentgo/nrpe"
 	"agentgo/store"
 	"agentgo/task"
 	"agentgo/threshold"
@@ -62,6 +63,10 @@ type agent struct {
 
 	dockerInputPresent bool
 	dockerInputID      int
+}
+
+func nrpeResponse(ctx context.Context, request string) (string, int16, error) {
+	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
 }
 
 func panicOnError(i telegraf.Input, err error) telegraf.Input {
@@ -366,6 +371,18 @@ func (a *agent) run() { //nolint:gocyclo
 			}
 		}
 	}()
+
+	if a.config.Bool("nrpe.enabled") {
+		server := nrpe.New(
+			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
+			a.config.Bool("nrpe.ssl"),
+			nrpeResponse,
+		)
+		_, err := a.taskRegistry.AddTask(server, "nrpe")
+		if err != nil {
+			logger.V(1).Printf("Unable to start NRPE server: %v", err)
+		}
+	}
 
 	if a.config.Bool("bleemeo.enabled") {
 		a.bleemeoConnector = bleemeo.New(types.GlobalOption{
