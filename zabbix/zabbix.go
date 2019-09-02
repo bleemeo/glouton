@@ -45,17 +45,10 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 		return
 	}
 
-	var answer packetStruct
-	answer.key, err = cb(decodedRequest.key, decodedRequest.args)
-	answer.version = decodedRequest.version
-	if err != nil {
-		logger.V(1).Printf("%d", err)
-	}
+	answer, err := cb(decodedRequest.key, decodedRequest.args)
 
 	var encodedAnswer []byte
-	if answer.version == 1 {
-		encodedAnswer, err = encodev1(answer)
-	}
+	encodedAnswer, err = encodeReply(answer, err)
 	if err != nil {
 		logger.V(1).Printf("%v", err)
 		c.Close()
@@ -206,29 +199,26 @@ func splitData(request string) (string, []string, error) {
 	return key, args, nil
 }
 
-func encodev1(decodedPacket packetStruct) ([]byte, error) {
-	var dataLength = int64(len(decodedPacket.key))
+func encodeReply(message string, inputError error) ([]byte, error) {
+	if inputError != nil {
+		message = fmt.Sprintf("ZBX_NOTSUPPORTED\x00%s.", inputError)
+	}
+	var dataLength = int64(len(message))
 	encodedPacket := make([]byte, 13+dataLength)
 
 	copy(encodedPacket[0:4], []byte("ZBXD"))
 
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.LittleEndian, &decodedPacket.version)
-	if err != nil {
-		err = fmt.Errorf("binary.Write failed for result_code: %v", err)
-		return encodedPacket, err
-	}
-	copy(encodedPacket[4:5], buf.Bytes())
+	encodedPacket[4] = 1 // version
 
-	buf = new(bytes.Buffer)
-	err = binary.Write(buf, binary.LittleEndian, &dataLength)
+	buf := new(bytes.Buffer)
+	err := binary.Write(buf, binary.LittleEndian, &dataLength)
 	if err != nil {
 		err = fmt.Errorf("binary.Write failed for data_length: %v", err)
 		return encodedPacket, err
 	}
 	copy(encodedPacket[5:13], buf.Bytes())
 
-	copy(encodedPacket[13:], []byte(decodedPacket.key))
+	copy(encodedPacket[13:], []byte(message))
 	return encodedPacket, nil
 }
 

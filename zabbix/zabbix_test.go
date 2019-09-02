@@ -16,6 +16,7 @@ type packetCapture struct {
 	QueryRaw    []byte
 	ReplyRaw    []byte
 	ReplyString string
+	ReplyError  error
 }
 
 func TestDecode(t *testing.T) {
@@ -110,13 +111,9 @@ func TestValidSplitData(t *testing.T) {
 
 func TestEncode(t *testing.T) {
 	for _, c := range allPackets {
-		in := packetStruct{
-			version: 1,
-			key:     c.ReplyString,
-		}
-		got, err := encodev1(in)
+		got, err := encodeReply(c.ReplyString, c.ReplyError)
 		if !bytes.Equal(got, c.ReplyRaw) {
-			t.Errorf("encodev1(%v) == %v, want %v", in, got, c.ReplyRaw)
+			t.Errorf("encodev1(%#v, %#v) == %v, want %v", c.ReplyString, c.ReplyError, got, c.ReplyRaw)
 			break
 		}
 		if err != nil {
@@ -149,7 +146,7 @@ func TestHandleConnection(t *testing.T) {
 		handleConnection(
 			socket,
 			func(key string, args []string) (string, error) {
-				return c.ReplyString, nil //nolint: scopelint
+				return c.ReplyString, c.ReplyError //nolint: scopelint
 			},
 		)
 		got := socket.writer.Bytes()
