@@ -13,6 +13,7 @@ type packetCapture struct {
 	QueryRaw    []byte
 	ReplyRaw    []byte
 	ReplyString string
+	ReplyError  error
 	Version     int16
 	ReplyCode   int16
 }
@@ -39,6 +40,13 @@ func TestDecode(t *testing.T) {
 			packetType:    2, // reply
 			resultCode:    c.ReplyCode,
 			buffer:        c.ReplyString,
+		}
+		if c.ReplyError != nil {
+			want.resultCode = 3
+			want.buffer = c.ReplyError.Error()
+			if c.Version == 2 && len(want.buffer) > 1023 {
+				want.buffer = want.buffer[:1023]
+			}
 		}
 		if got != want {
 			t.Errorf("decode([data of case %s) == %v, want %v", c.Description, got, want)
@@ -85,6 +93,10 @@ func TestEncode(t *testing.T) {
 		}
 		var got []byte
 		var err error
+		if c.ReplyError != nil {
+			inPacket.resultCode = 3
+			inPacket.buffer = c.ReplyError.Error()
+		}
 		if c.Version == 2 {
 			var rndBytes [2]byte
 			copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
@@ -129,7 +141,7 @@ func TestHandleConnection(t *testing.T) {
 			context.TODO(),
 			socket,
 			func(ctx context.Context, command string) (string, int16, error) {
-				return c.ReplyString, c.ReplyCode, nil // nolint:scopelint
+				return c.ReplyString, c.ReplyCode, c.ReplyError // nolint:scopelint
 			},
 			rndBytes,
 		)

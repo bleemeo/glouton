@@ -59,7 +59,8 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 	answer.buffer, answer.resultCode, err = cb(ctx, decodedRequest.buffer)
 	answer.packetVersion = decodedRequest.packetVersion
 	if err != nil {
-		logger.V(1).Printf("%d", err)
+		answer.buffer = err.Error()
+		answer.resultCode = 3
 	}
 
 	var encodedAnswer []byte
@@ -185,7 +186,11 @@ func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
 	}
 	copy(encodedPacket[8:10], buf.Bytes())
 
-	copy(encodedPacket[10:10+len(decodedPacket.buffer)], []byte(decodedPacket.buffer))
+	if len(decodedPacket.buffer) > 1023 {
+		copy(encodedPacket[10:10+1023], []byte(decodedPacket.buffer))
+	} else {
+		copy(encodedPacket[10:10+len(decodedPacket.buffer)], []byte(decodedPacket.buffer))
+	}
 	encodedPacket[1034] = randBytes[0] //random bytes encoding
 	encodedPacket[1035] = randBytes[1]
 
