@@ -313,11 +313,18 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		nrpe.Run(ctx, ":1025", response, false)
-	}()
+	if a.config.Bool("nrpe.enabled") {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			nrpe.Run(
+				ctx,
+				fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
+				response,
+				a.config.Bool("nrpe.ssl"),
+			)
+		}()
+	}
 
 	if a.config.Bool("bleemeo.enabled") {
 		a.bleemeoConnector = bleemeo.New(types.GlobalOption{
