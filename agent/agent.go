@@ -291,15 +291,14 @@ func (a *agent) run() { //nolint:gocyclo
 	}()
 
 	if a.config.Bool("zabbix.enabled") {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			zabbix.Run(
-				ctx,
-				fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
-				zabbixResponse,
-			)
-		}()
+		server := zabbix.New(
+			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
+			zabbixResponse,
+		)
+		_, err := a.taskRegistry.AddTask(server, "zabbix")
+		if err != nil {
+			logger.V(1).Printf("Unable to start Zabbix server: %v", err)
+		}
 	}
 
 	wg.Add(1)

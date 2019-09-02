@@ -14,6 +14,21 @@ import (
 	"time"
 )
 
+// Server is a Zabbix server than use Callback for reply to queries
+type Server struct {
+	callback    callback
+	bindAddress string
+}
+
+// New returns a Zabbix server
+// callback is the function responsible to generate the response for a given query.
+func New(bindAddress string, callback callback) Server {
+	return Server{
+		callback:    callback,
+		bindAddress: bindAddress,
+	}
+}
+
 type packetStruct struct {
 	version int8
 	key     string
@@ -218,26 +233,23 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 }
 
 //Run starts a connection with a zabbix server
-func Run(ctx context.Context, port string, cb callback) {
-	tcpAdress, err := net.ResolveTCPAddr("tcp4", port)
+func (s Server) Run(ctx context.Context) error {
+	tcpAdress, err := net.ResolveTCPAddr("tcp", s.bindAddress)
 	if err != nil {
-		logger.V(1).Printf("%v", err)
-		return
+		return err
 	}
-	l, err := net.ListenTCP("tcp4", tcpAdress)
+	l, err := net.ListenTCP("tcp", tcpAdress)
 
 	if err != nil {
-		logger.V(1).Printf("%v", err)
-		return
+		return err
 	}
 	defer l.Close()
 	lWrap := net.Listener(l)
 
 	var wg sync.WaitGroup
 	for {
-		err := l.SetDeadline(time.Now().Add(time.Second))
+		err = l.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
-			logger.V(1).Printf("Zabbix: setDeadline on listener failed: %v", err)
 			break
 		}
 		c, err := lWrap.Accept()
@@ -249,20 +261,21 @@ func Run(ctx context.Context, port string, cb callback) {
 		}
 		if err != nil {
 			logger.V(1).Printf("Zabbix accept failed: %v", err)
-			break
+			continue
 		}
 
 		err = c.SetDeadline(time.Now().Add(time.Second * 10))
 		if err != nil {
 			logger.V(1).Printf("Zabbix: setDeadline on connection failed: %v", err)
-			break
+			continue
 		}
 
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			handleConnection(c, cb)
+			handleConnection(c, s.callback)
 		}()
 	}
 	wg.Wait()
+	return err
 }
