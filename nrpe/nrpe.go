@@ -47,7 +47,7 @@ func New(bindAddress string, enableTLS bool, callback callback) Server {
 
 type callback func(ctx context.Context, command string) (string, int16, error)
 
-func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback) {
+func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rndBytes [2]byte) {
 	decodedRequest, err := decode(c)
 	if err != nil {
 		logger.V(1).Printf("Unable to decode NRPE packet: %v", err)
@@ -66,7 +66,7 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback) {
 	if answer.packetVersion == 3 {
 		encodedAnswer, err = encodeV3(answer)
 	} else {
-		encodedAnswer, err = encodeV2(answer, [2]byte{0x53, 0x51})
+		encodedAnswer, err = encodeV2(answer, rndBytes)
 	}
 	if err != nil {
 		logger.V(1).Printf("%v", err)
@@ -110,6 +110,10 @@ func decode(r io.Reader) (reducedPacket, error) {
 	if err != nil {
 		err = fmt.Errorf("binary.Read failed for result_code: %v", err)
 		return decodedPacket, err
+	}
+	if decodedPacket.packetType == 1 {
+		// On query packet, the result code has no meaning.
+		decodedPacket.resultCode = 0
 	}
 
 	if decodedPacket.packetVersion == 3 {
@@ -369,7 +373,7 @@ func (s Server) Run(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			handleConnection(ctx, c, s.callback)
+			handleConnection(ctx, c, s.callback, [2]byte{0x53, 0x51})
 		}()
 	}
 	wg.Wait()
