@@ -96,6 +96,9 @@ var defaultConfig = map[string]interface{}{
 	"web.enabled":                     true,
 	"web.listener.address":            "127.0.0.1",
 	"web.listener.port":               8015,
+	"zabbix.enabled":                  false,
+	"zabbix.address":                  "127.0.0.1",
+	"zabbix.port":                     10050,
 }
 
 func configLoadFile(filePath string, cfg *config.Configuration) error {

@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -36,6 +37,7 @@ import (
 	"agentgo/task"
 	"agentgo/threshold"
 	"agentgo/version"
+	"agentgo/zabbix"
 
 	"github.com/influxdata/telegraf"
 
@@ -75,6 +77,16 @@ func panicOnError(i telegraf.Input, err error) telegraf.Input {
 		panic(err)
 	}
 	return i
+}
+
+func zabbixResponse(key string, args []string) (string, error) {
+	if key == "agent.ping" {
+		return "1", nil
+	}
+	if key == "agent.version" {
+		return fmt.Sprintf("4 (Bleemeo Agent %s)", version.Version), nil
+	}
+	return "", errors.New("Unsupported item key") // nolint: stylecheck
 }
 
 func (a *agent) init() (ok bool) {
@@ -356,6 +368,17 @@ func (a *agent) run() { //nolint:gocyclo
 			}
 		}
 	}()
+
+	if a.config.Bool("zabbix.enabled") {
+		server := zabbix.New(
+			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
+			zabbixResponse,
+		)
+		_, err := a.taskRegistry.AddTask(server, "zabbix")
+		if err != nil {
+			logger.V(1).Printf("Unable to start Zabbix server: %v", err)
+		}
+	}
 
 	wg.Add(1)
 	go func() {
