@@ -3,6 +3,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -74,9 +75,9 @@ func zabbixResponse(key string, args []string) (string, error) {
 		return "1", nil
 	}
 	if key == "agent.version" {
-		return "4.2.4", nil
+		return fmt.Sprintf("4 (Bleemeo Agent %s)", version.Version), nil
 	}
-	return "ok", nil
+	return "", errors.New("Unsupported item key") // nolint: stylecheck
 }
 
 func (a *agent) init() (ok bool) {
