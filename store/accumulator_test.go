@@ -159,6 +159,13 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 		if labels["__name__"] != name {
 			t.Errorf("labels[__name__] == %v, want %v", labels["__name__"], name)
 		}
+		if strings.HasSuffix(name, "_status") {
+			strippedName := strings.TrimSuffix(name, "_status")
+			if labels["status_of"] != strippedName {
+				t.Errorf("labels[status_of] == %v, want %v", labels["status_of"], strippedName)
+			}
+			delete(labels, "status_of")
+		}
 		delete(labels, "__name__")
 		if !reflect.DeepEqual(labels, tags) {
 			t.Errorf("db.Metrics(__name__=%v).Labels() = %v, want %v", name, labels, tags)

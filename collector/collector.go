@@ -170,5 +170,7 @@ func (c *Collector) runOnce() {
 	}
 	wg.Wait()
 	delta := time.Since(t0)
-	logger.V(1).Printf("METRIC: Gather took %v", delta)
+	if c.acc != nil {
+		c.acc.AddFields("agent", map[string]interface{}{"gather_time": delta.Seconds()}, nil)
+	}
 }

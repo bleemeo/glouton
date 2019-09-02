@@ -1,6 +1,7 @@
 package types
 
 import (
+	"agentgo/threshold"
 	"crypto/sha256"
 	"fmt"
 	"time"
@@ -20,6 +21,15 @@ type Agent struct {
 	AccountID       string    `json:"account"`
 	NextConfigAt    time.Time `json:"next_config_at"`
 	CurrentConfigID string    `json:"current_config"`
+	Tags            []Tag     `json:"tags"`
+}
+
+// Tag is an Tag object on Bleemeo API
+type Tag struct {
+	ID           string `json:"id,omitempty"`
+	Name         string `json:"name"`
+	IsAutomatic  bool   `json:"is_automatic,omitempty"`
+	IsServiceTag bool   `json:"is_service_tag,omitempty"`
 }
 
 // AccountConfig is the configuration used by this agent
@@ -54,19 +64,15 @@ type Container struct {
 
 // Metric is a Metric object on Bleemeo API
 type Metric struct {
-	ID                     string            `json:"id"`
-	Label                  string            `json:"label"`
-	Labels                 map[string]string `json:"labels"`
-	ServiceID              string            `json:"service,omitempty"`
-	ContainerID            string            `json:"container,omitempty"`
-	StatusOf               string            `json:"status_of,omitempty"`
-	ThresholdLowWarning    float64           `json:"threshold_low_warning,omitempty"`
-	ThresholdLowCrictical  float64           `json:"threshold_low_critical,omitempty"`
-	ThresholdHighWarning   float64           `json:"threshold_high_warning,omitempty"`
-	ThresholdHighCrictical float64           `json:"threshold_high_critical,omitempty"`
-	Unit                   int               `json:"unit,omitempty"`
-	UnitText               string            `json:"unit_text,omitempty"`
-	DeactivatedAt          time.Time         `json:"deactivated_at,omitempty"`
+	ID          string              `json:"id"`
+	Label       string              `json:"label"`
+	Labels      map[string]string   `json:"labels"`
+	ServiceID   string              `json:"service,omitempty"`
+	ContainerID string              `json:"container,omitempty"`
+	StatusOf    string              `json:"status_of,omitempty"`
+	Threshold   threshold.Threshold `json:"-"`
+	threshold.Unit
+	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
 }
 
 // FillInspectHash fill the DockerInspectHash

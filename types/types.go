@@ -97,6 +97,12 @@ type Point struct {
 	Value float64
 }
 
+// MetricPoint is one point for one metrics (identified by labels)
+type MetricPoint struct {
+	PointStatus
+	Labels map[string]string
+}
+
 // PointStatus is a point (value) and a status
 type PointStatus struct {
 	Point

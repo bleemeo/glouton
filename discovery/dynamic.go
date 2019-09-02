@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"gopkg.in/ini.v1"
 )
 
 // DynamicDiscovery implement the dynamic discovery. It will only return
@@ -24,6 +26,7 @@ type DynamicDiscovery struct {
 	ps            processFact
 	netstat       netstatProvider
 	containerInfo containerInfoProvider
+	fileReader    fileReader
 
 	lastDiscoveryUpdate time.Time
 	services            []Service
@@ -40,13 +43,18 @@ type containerInfoProvider interface {
 	Container(containerID string) (c container, found bool)
 }
 
+type fileReader interface {
+	ReadFile(filename string) ([]byte, error)
+}
+
 // NewDynamic create a new dynamic service discovery which use information from
 // processess and netstat to discovery services
-func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider) *DynamicDiscovery {
+func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider, fileReader fileReader) *DynamicDiscovery {
 	return &DynamicDiscovery{
 		ps:            ps,
 		netstat:       netstat,
 		containerInfo: (*dockerWrapper)(containerInfo),
+		fileReader:    fileReader,
 	}
 }
 
@@ -215,7 +223,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if !ok {
 			continue
 		}
-		serviceName, ok := serviceByCommand(process.CmdLine)
+		serviceName, ok := serviceByCommand(process.CmdLineList)
 		if !ok {
 			continue
 		}
@@ -324,8 +332,13 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "MYSQL_ROOT_PASSWORD=")
 				}
 			}
-		} else {
-			logger.V(2).Printf("TODO use sudo -n cat /etc/mysql/debian.cnf")
+		} else if dd.fileReader != nil {
+			if debianCnfRaw, err := dd.fileReader.ReadFile("/etc/mysql/debian.cnf"); err == nil {
+				if debianCnf, err := ini.Load(debianCnfRaw); err == nil {
+					service.ExtraAttributes["username"] = debianCnf.Section("client").Key("user").String()
+					service.ExtraAttributes["password"] = debianCnf.Section("client").Key("password").String()
+				}
+			}
 		}
 	}
 	if service.Name == "postgresql" {

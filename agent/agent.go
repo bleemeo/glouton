@@ -34,6 +34,7 @@ import (
 	"agentgo/nrpe"
 	"agentgo/store"
 	"agentgo/task"
+	"agentgo/threshold"
 	"agentgo/version"
 
 	"github.com/influxdata/telegraf"
@@ -51,6 +52,9 @@ type agent struct {
 	collector        *collector.Collector
 	factProvider     *facts.FactProvider
 	bleemeoConnector *bleemeo.Connector
+	accumulator      *threshold.Accumulator
+
+	taskIDs map[string]int
 
 	triggerHandler *debouncer.Debouncer
 	triggerLock    sync.Mutex
@@ -127,6 +131,7 @@ func (a *agent) setupLogger() {
 func Run() {
 	agent := &agent{
 		taskRegistry: task.NewRegistry(context.Background()),
+		taskIDs:      make(map[string]int),
 	}
 	if !agent.init() {
 		os.Exit(1)
@@ -171,6 +176,72 @@ func (a *agent) BleemeoLastReport() time.Time {
 	return a.bleemeoConnector.LastReport()
 }
 
+// BleemeoConnected returns true if Bleemeo is currently connected (to MQTT)
+func (a *agent) BleemeoConnected() bool {
+	if a.bleemeoConnector == nil {
+		return false
+	}
+	return a.bleemeoConnector.Connected()
+}
+
+// Tags returns tags of this Agent.
+func (a *agent) Tags() []string {
+	tagsSet := make(map[string]bool)
+	for _, t := range a.config.StringList("tags") {
+		tagsSet[t] = true
+	}
+	if a.bleemeoConnector != nil {
+		for _, t := range a.bleemeoConnector.Tags() {
+			tagsSet[t] = true
+		}
+	}
+	tags := make([]string, 0, len(tagsSet))
+	for t := range tagsSet {
+		tags = append(tags, t)
+	}
+	return tags
+}
+
+// UpdateThresholds update the thresholds definition.
+// This method will merge with threshold definition present in configuration file
+func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold) {
+	a.updateThresholds(thresholds, false)
+}
+
+func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, showWarning bool) {
+	rawValue, ok := a.config.Get("thresholds")
+	if !ok {
+		rawValue = map[string]interface{}{}
+	}
+	var rawThreshold map[string]interface{}
+	if rawThreshold, ok = rawValue.(map[string]interface{}); !ok {
+		if showWarning {
+			logger.V(1).Printf("Threshold in configuration file is not map")
+		}
+		rawThreshold = nil
+	}
+	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
+	for k, v := range rawThreshold {
+		v2, ok := v.(map[string]interface{})
+		if !ok {
+			if showWarning {
+				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v value is not a map", k)
+			}
+			continue
+		}
+		t, err := threshold.FromInterfaceMap(v2)
+		if err != nil {
+			if showWarning {
+				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v", err)
+			}
+			continue
+		}
+		configThreshold[k] = t
+	}
+
+	a.accumulator.SetThresholds(thresholds, configThreshold)
+}
+
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
 func (a *agent) run() { //nolint:gocyclo
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
@@ -195,6 +266,11 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	db := store.New()
+	a.accumulator = threshold.New(
+		db.Accumulator(),
+		a.state,
+	)
+	a.updateThresholds(nil, true)
 	a.dockerFact = facts.NewDocker()
 	psFact := facts.NewProcess(a.dockerFact)
 	netstat := &facts.NetstatProvider{}
@@ -206,15 +282,15 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
-	a.collector = collector.New(db.Accumulator())
+	a.collector = collector.New(a.accumulator)
 	a.discovery = discovery.New(
-		discovery.NewDynamic(psFact, netstat, a.dockerFact),
+		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}),
 		a.collector,
 		a.taskRegistry,
 		nil,
-		db.Accumulator(),
+		a.accumulator,
 	)
-	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery)
+	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
 	a.collector.AddInput(panicOnError(system.New()), "system")
 	a.collector.AddInput(panicOnError(process.New()), "process")
@@ -233,25 +309,22 @@ func (a *agent) run() { //nolint:gocyclo
 	)
 	a.FireTrigger(true, false)
 
-	_, err := a.taskRegistry.AddTask(db, "store")
-	if err != nil {
-		logger.V(1).Printf("Unable to start store: %v", err)
+	tasks := []struct {
+		runner task.Runner
+		name   string
+	}{
+		{db, "store"},
+		{a.triggerHandler, "triggerHandler"},
+		{a.dockerFact, "docker"},
+		{a.collector, "collector"},
+		{api, "api"},
 	}
-	_, err = a.taskRegistry.AddTask(a.triggerHandler, "triggerHandler")
-	if err != nil {
-		logger.V(1).Printf("Unable to start discovery: %v", err)
-	}
-	_, err = a.taskRegistry.AddTask(a.dockerFact, "docker")
-	if err != nil {
-		logger.V(1).Printf("Unable to start Docker watcher: %v", err)
-	}
-	_, err = a.taskRegistry.AddTask(a.collector, "collector")
-	if err != nil {
-		logger.V(1).Printf("Unable to start metric collector: %v", err)
-	}
-	_, err = a.taskRegistry.AddTask(api, "api")
-	if err != nil {
-		logger.V(1).Printf("Unable to start local API: %v", err)
+	for _, t := range tasks {
+		id, err := a.taskRegistry.AddTask(t.runner, t.name)
+		if err != nil {
+			logger.V(1).Printf("Unable to start %s: %v", t.name, err)
+		}
+		a.taskIDs[t.name] = id
 	}
 
 	var wg sync.WaitGroup
@@ -320,16 +393,36 @@ func (a *agent) run() { //nolint:gocyclo
 			Config:                 a.config,
 			State:                  a.state,
 			Facts:                  a.factProvider,
+			Process:                psFact,
 			Docker:                 a.dockerFact,
 			Store:                  db,
+			Acc:                    a.accumulator,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
+			UpdateThresholds:       a.UpdateThresholds,
+			UpdateUnits:            a.accumulator.SetUnits,
 		})
-		_, err := a.taskRegistry.AddTask(a.bleemeoConnector, "bleemeo")
+		id, err := a.taskRegistry.AddTask(a.bleemeoConnector, "bleemeo")
 		if err != nil {
 			logger.V(1).Printf("Unable to start Bleemeo connector: %v", err)
 		}
+		a.taskIDs["bleemeo"] = id
 	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				a.healthCheck(ctx, cancel)
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	for s := range c {
 		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
@@ -346,6 +439,25 @@ func (a *agent) run() { //nolint:gocyclo
 	a.discovery.Close()
 	wg.Wait()
 	logger.V(2).Printf("Agent stopped")
+}
+
+func (a *agent) healthCheck(ctx context.Context, cancel context.CancelFunc) {
+	mandatoryTasks := []string{"bleemeo", "collector", "store"}
+	for _, name := range mandatoryTasks {
+		if id, ok := a.taskIDs[name]; ok {
+			if !a.taskRegistry.IsRunning(id) {
+				// Re-check ctx to avoid race condition
+				if ctx.Err() != nil {
+					return
+				}
+				logger.Printf("Gorouting %v crashed. Stopping the agent", name)
+				cancel()
+			}
+		}
+	}
+	if a.bleemeoConnector != nil {
+		a.bleemeoConnector.HealthCheck()
+	}
 }
 
 func (a *agent) FireTrigger(discovery bool, sendFacts bool) {

@@ -28,6 +28,13 @@ type dockerInterface interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 }
 
+type agentInterface interface {
+	BleemeoRegistrationAt() time.Time
+	BleemeoLastReport() time.Time
+	BleemeoConnected() bool
+	Tags() []string
+}
+
 // API : Structure that contains API's port
 type API struct {
 	bindAddress  string
@@ -37,17 +44,18 @@ type API struct {
 	psFact       *facts.ProcessProvider
 	factProvider *facts.FactProvider
 	disc         *discovery.Discovery
+	agent        agentInterface
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc}
+	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent}
 
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")

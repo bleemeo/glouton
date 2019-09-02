@@ -74,6 +74,8 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 	switch varType {
 	case TypeString:
 		c.Set(key, value)
+	case TypeStringList:
+		c.Set(key, strings.Split(value, ","))
 	case TypeBoolean:
 		value, err := convertBoolean(value)
 		if err != nil {
@@ -89,7 +91,7 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 	default:
 		return false, fmt.Errorf("unknown variable type %v", varType)
 	}
-	return
+	return found, err
 }
 
 // Set define the default for given key.
@@ -105,8 +107,8 @@ func (c *Configuration) Set(key string, value interface{}) {
 //
 // Return "" if the key does not exists or could not be converted to string
 func (c Configuration) String(key string) string {
-	rawValue, err := c.Get(key)
-	if err != nil {
+	rawValue, ok := c.Get(key)
+	if !ok {
 		return ""
 	}
 	switch value := rawValue.(type) {
@@ -125,8 +127,8 @@ func (c Configuration) String(key string) string {
 //
 // Return nil if the key does not exists or could not be converted to []string
 func (c Configuration) StringList(key string) []string {
-	rawValue, err := c.Get(key)
-	if err != nil {
+	rawValue, ok := c.Get(key)
+	if !ok {
 		return nil
 	}
 	switch value := rawValue.(type) {
@@ -154,8 +156,8 @@ func (c Configuration) StringList(key string) []string {
 // Return 0 if the key does not exists or could not be converted to int.
 // Use Get() if you need to known if the key exists or not.
 func (c Configuration) Int(key string) int {
-	rawValue, err := c.Get(key)
-	if err != nil {
+	rawValue, ok := c.Get(key)
+	if !ok {
 		return 0
 	}
 	switch value := rawValue.(type) {
@@ -177,8 +179,8 @@ func (c Configuration) Int(key string) int {
 // Return false if the key does not exists or could not be converted to bool.
 // Use Get() if you need to known if the key exists or not.
 func (c Configuration) Bool(key string) bool {
-	rawValue, err := c.Get(key)
-	if err != nil {
+	rawValue, ok := c.Get(key)
+	if !ok {
 		return false
 	}
 	switch value := rawValue.(type) {
@@ -198,21 +200,21 @@ func (c Configuration) Bool(key string) bool {
 }
 
 // Get return the given key as interface{}
-func (c Configuration) Get(key string) (interface{}, error) {
+func (c Configuration) Get(key string) (result interface{}, found bool) {
 	keyPart := strings.Split(key, ".")
 	return get(c.rawValues, keyPart, key)
 }
 
-func get(root interface{}, keyPart []string, key string) (interface{}, error) {
+func get(root interface{}, keyPart []string, key string) (result interface{}, found bool) {
 	if len(keyPart) == 0 {
-		return root, nil
+		return root, true
 	}
 	if m, ok := root.(map[string]interface{}); ok {
 		if subRoot, ok := m[keyPart[0]]; ok {
 			return get(subRoot, keyPart[1:], key)
 		}
 	}
-	return nil, notFoundError(fmt.Errorf("key %#v not found", key))
+	return nil, false
 }
 
 func merge(root map[string]interface{}, newValue map[string]interface{}) {

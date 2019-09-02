@@ -66,11 +66,27 @@ type Service {
   exePath: String!
   active: Boolean!
   status: Float!
+  statusDescription: String
 }
 
 type Fact {
   name: String!
   value: String!
+}
+
+type AgentInfo {
+  registrationAt: Time
+  lastReport: Time
+  isConnected: Boolean!
+}
+
+type Tag {
+  tagName: String!
+}
+
+type AgentStatus {
+  status: Float!
+  statusDescription: [String!]!
 }
 
 input LabelInput {
@@ -94,6 +110,9 @@ type Query {
   processes(containerId: String): Topinfo!
   facts: [Fact!]!
   services(isActive: Boolean!): [Service!]!
+  agentInformation: AgentInfo!
+  tags: [Tag!]!
+  agentStatus: AgentStatus!
 }
 
 scalar Time

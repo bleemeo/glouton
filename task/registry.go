@@ -20,24 +20,29 @@ type RunCloser interface {
 
 // Registry contains running tasks. It allow to add/remove tasks
 type Registry struct {
-	ctx             context.Context
-	cancel          func()
-	tasks           map[int]Runner
-	taskNames       map[int]string
-	taskCancelFuncs map[int]func()
-	closed          bool
-	l               sync.Mutex
+	ctx    context.Context
+	cancel func()
+	tasks  map[int]*taskInfo
+	closed bool
+	l      sync.Mutex
+}
+
+type taskInfo struct {
+	Runner     Runner
+	Name       string
+	CancelFunc func()
+
+	l       sync.Mutex
+	Running bool
 }
 
 // NewRegistry create a new registry. All task running in this registry will terminate when ctx is cancelled
 func NewRegistry(ctx context.Context) *Registry {
 	subCtx, cancel := context.WithCancel(ctx)
 	return &Registry{
-		ctx:             subCtx,
-		cancel:          cancel,
-		tasks:           make(map[int]Runner),
-		taskNames:       make(map[int]string),
-		taskCancelFuncs: make(map[int]func()),
+		ctx:    subCtx,
+		cancel: cancel,
+		tasks:  make(map[int]*taskInfo),
 	}
 }
 
@@ -45,9 +50,12 @@ func NewRegistry(ctx context.Context) *Registry {
 func (r *Registry) Close() {
 	r.close()
 	r.cancel()
-	for k := range r.taskCancelFuncs {
-		r.removeTask(k)
+	for k := range r.tasks {
+		r.removeTask(k, true)
 	}
+	r.l.Lock()
+	defer r.l.Unlock()
+	r.tasks = make(map[int]*taskInfo)
 }
 
 func (r *Registry) close() {
@@ -66,13 +74,13 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	}
 
 	id := 1
-	_, ok := r.taskCancelFuncs[id]
+	_, ok := r.tasks[id]
 	for ok {
 		id++
 		if id == 0 {
 			panic("too many tasks in the registry. Unable to find new slot")
 		}
-		_, ok = r.taskCancelFuncs[id]
+		_, ok = r.tasks[id]
 	}
 
 	ctx, cancel := context.WithCancel(r.ctx)
@@ -81,16 +89,24 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 		cancel()
 		<-waitC
 	}
+	ti := &taskInfo{
+		CancelFunc: cancelWait,
+		Runner:     task,
+		Name:       shortName,
+		Running:    true,
+	}
 	go func() {
 		defer close(waitC)
 		err := task.Run(ctx)
 		if err != nil {
 			logger.Printf("Task %#v failed: %v", shortName, err)
 		}
+		ti.l.Lock()
+		defer ti.l.Unlock()
+		ti.Running = false
 	}()
-	r.taskCancelFuncs[id] = cancelWait
-	r.tasks[id] = task
-	r.taskNames[id] = shortName
+
+	r.tasks[id] = ti
 
 	return id, nil
 }
@@ -102,22 +118,35 @@ func (r *Registry) RemoveTask(taskID int) {
 	if r.closed {
 		return
 	}
-	r.removeTask(taskID)
+	r.removeTask(taskID, false)
 }
 
-func (r *Registry) removeTask(taskID int) {
-	if cancel, ok := r.taskCancelFuncs[taskID]; ok {
-		cancel()
-		task := r.tasks[taskID]
-		taskName := r.taskNames[taskID]
-		if closer, ok := task.(RunCloser); ok {
+// IsRunning return true if the taskID is still running.
+func (r *Registry) IsRunning(taskID int) bool {
+	r.l.Lock()
+	defer r.l.Unlock()
+	task, ok := r.tasks[taskID]
+	if !ok {
+		return false
+	}
+	task.l.Lock()
+	defer task.l.Unlock()
+	return task.Running
+}
+
+func (r *Registry) removeTask(taskID int, forClosing bool) {
+	if task, ok := r.tasks[taskID]; ok {
+		task.CancelFunc()
+		if closer, ok := task.Runner.(RunCloser); ok {
 			if err := closer.Close(); err != nil {
-				logger.V(1).Printf("Failed to close task %#v: %v", taskName, err)
+				logger.V(1).Printf("Failed to close task %#v: %v", task.Name, err)
 			}
 		}
 	} else {
 		logger.V(2).Printf("called RemoveTask with unexisting ID %d", taskID)
 	}
 
-	delete(r.taskCancelFuncs, taskID)
+	if !forClosing {
+		delete(r.tasks, taskID)
+	}
 }

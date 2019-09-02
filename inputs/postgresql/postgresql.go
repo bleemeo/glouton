@@ -57,19 +57,11 @@ func New(url string) (i telegraf.Input, err error) {
 
 func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	if originalContext.Tags["db"] == "template0" || originalContext.Tags["db"] == "template1" {
-		drop = true
-		return
+		return originalContext, true
 	}
-	newContext = internal.GatherContext{
-		Measurement: originalContext.Measurement,
-		Tags:        make(map[string]string),
-	}
-	for k, v := range originalContext.Tags {
-		newContext.Tags[k] = v
-	}
-	newContext.Tags["item"] = originalContext.Tags["db"]
+	originalContext.Tags["item"] = originalContext.Tags["db"]
 
-	return
+	return originalContext, false
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {

@@ -2,9 +2,11 @@ package bleemeo
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"agentgo/bleemeo/internal/cache"
+	"agentgo/bleemeo/internal/mqtt"
 	"agentgo/bleemeo/internal/synchronizer"
 	"agentgo/bleemeo/types"
 	"agentgo/logger"
@@ -16,6 +18,10 @@ type Connector struct {
 
 	cache *cache.Cache
 	sync  *synchronizer.Synchronizer
+	mqtt  *mqtt.Client
+
+	l        sync.Mutex
+	initDone bool
 }
 
 // New create a new Connector
@@ -26,21 +32,87 @@ func New(option types.GlobalOption) *Connector {
 	}
 }
 
-// Run run the Connector
-func (c Connector) Run(ctx context.Context) error {
-	c.sync = synchronizer.New(ctx, synchronizer.Option{
+func (c *Connector) init(ctx context.Context) {
+	c.l.Lock()
+	defer c.l.Unlock()
+	c.sync = synchronizer.New(synchronizer.Option{
 		GlobalOption:         c.option,
 		Cache:                c.cache,
 		UpdateConfigCallback: c.uppdateConfig,
 		DisableCallback:      c.disableCallback,
 	})
+	c.mqtt = mqtt.New(mqtt.Option{
+		GlobalOption:    c.option,
+		Cache:           c.cache,
+		DisableCallback: c.disableCallback,
+	})
+	c.initDone = true
+}
+
+// Run run the Connector
+func (c *Connector) Run(ctx context.Context) error {
+	c.init(ctx)
 	defer c.cache.Save()
-	return c.sync.Run()
+	subCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	var wg sync.WaitGroup
+	var syncErr, mqttErr error
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer cancel()
+		syncErr = c.sync.Run(subCtx)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer cancel()
+		mqttErr = c.mqtt.Run(subCtx)
+	}()
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer cancel()
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+
+		for subCtx.Err() == nil {
+			c.emitInternalMetric()
+			select {
+			case <-ticker.C:
+			case <-subCtx.Done():
+			}
+		}
+		logger.V(2).Printf("Bleemeo connector stopping")
+	}()
+
+	wg.Wait()
+	logger.V(2).Printf("Bleemeo connector stopped")
+	if syncErr != nil {
+		return syncErr
+	}
+	return mqttErr
+}
+
+// Tags returns the Tags set on Bleemeo Cloud platform
+func (c *Connector) Tags() []string {
+	agent := c.cache.Agent()
+	tags := make([]string, len(agent.Tags))
+	for i, t := range agent.Tags {
+		tags[i] = t.Name
+	}
+	return tags
 }
 
 // AccountID returns the Account UUID of Bleemeo
 // It return the empty string if the Account UUID is not available
 func (c *Connector) AccountID() string {
+	c.l.Lock()
+	defer c.l.Unlock()
+	if !c.initDone {
+		return ""
+	}
 	accountID := c.cache.AccountID()
 	if accountID != "" {
 		return accountID
@@ -56,16 +128,53 @@ func (c *Connector) AgentID() string {
 
 // RegistrationAt returns the date of registration with Bleemeo API
 func (c *Connector) RegistrationAt() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+	if !c.initDone {
+		return time.Time{}
+	}
 	agent := c.cache.Agent()
 	return agent.CreatedAt
 }
 
-// LastReport returns the date of last report with Bleemeo API
-func (c *Connector) LastReport() time.Time {
-	return time.Time{} // TODO
+// Connected returns the date of registration with Bleemeo API
+func (c *Connector) Connected() bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+	if !c.initDone {
+		return false
+	}
+	return c.mqtt.Connected()
 }
 
-func (c Connector) uppdateConfig() {
+// LastReport returns the date of last report with Bleemeo API over MQTT
+func (c *Connector) LastReport() time.Time {
+	return c.mqtt.LastReport()
+}
+
+// HealthCheck perform some health check and logger any issue found
+func (c *Connector) HealthCheck() bool {
+	ok := true
+	if c.option.State.AgentID() == "" {
+		logger.Printf("Agent not yet registered")
+		ok = false
+	}
+	// TODO: Log a message if Bleemeo connector is disabled
+	c.l.Lock()
+	defer c.l.Unlock()
+	if c.mqtt != nil {
+		ok = c.mqtt.HealthCheck() && ok
+	}
+	return ok
+}
+
+func (c *Connector) emitInternalMetric() {
+	if c.mqtt.Connected() {
+		c.option.Acc.AddFields("", map[string]interface{}{"agent_status": 1.0}, nil)
+	}
+}
+
+func (c *Connector) uppdateConfig() {
 	currentConfig := c.cache.AccountConfig()
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 
@@ -74,7 +183,7 @@ func (c Connector) uppdateConfig() {
 	}
 }
 
-func (c Connector) disableCallback(reason types.DisableReason, until time.Time) {
+func (c *Connector) disableCallback(reason types.DisableReason, until time.Time) {
 	logger.Printf("Disabling Bleemeo connector until %v due to %v", until.Truncate(time.Minute), reason)
 	c.sync.Disable(until)
 }

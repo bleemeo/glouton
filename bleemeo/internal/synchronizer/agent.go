@@ -8,12 +8,22 @@ import (
 	"reflect"
 )
 
+const apiTagsLength = 100
+
 func (s *Synchronizer) syncAgent(fullSync bool) error {
 	var agent types.Agent
 	params := map[string]string{
-		"fields": "id,created_at,account,next_config_at,current_config",
+		"fields": "tags,id,created_at,account,next_config_at,current_config",
 	}
-	_, err := s.client.Do("GET", fmt.Sprintf("v1/agent/%s/", s.option.State.AgentID()), params, nil, &agent)
+	data := map[string][]types.Tag{
+		"tags": make([]types.Tag, 0),
+	}
+	for _, t := range s.option.Config.StringList("tags") {
+		if len(t) <= apiTagsLength && t != "" {
+			data["tags"] = append(data["tags"], types.Tag{Name: t})
+		}
+	}
+	_, err := s.client.Do("PATCH", fmt.Sprintf("v1/agent/%s/", s.option.State.AgentID()), params, data, &agent)
 	if err != nil {
 		return err
 	}
