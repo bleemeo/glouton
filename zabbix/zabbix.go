@@ -50,14 +50,14 @@ func handleConnection(c io.ReadWriteCloser, cb callback) {
 	var encodedAnswer []byte
 	encodedAnswer, err = encodeReply(answer, err)
 	if err != nil {
-		logger.V(1).Printf("%v", err)
+		logger.V(1).Printf("Failed to encode Zabbix packet: %v", err)
 		c.Close()
 		return
 	}
 
 	_, err = c.Write(encodedAnswer)
 	if err != nil {
-		logger.V(1).Printf("Answer writing failed: %v", err)
+		logger.V(1).Printf("Failed to write Zabbix packet: %v", err)
 	}
 
 	c.Close()
@@ -235,6 +235,8 @@ func (s Server) Run(ctx context.Context) error {
 	}
 	defer l.Close()
 	lWrap := net.Listener(l)
+
+	logger.V(1).Printf("Zabbix server listening on %s", s.bindAddress)
 
 	var wg sync.WaitGroup
 	for {
