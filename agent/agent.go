@@ -373,19 +373,15 @@ func (a *agent) run() { //nolint:gocyclo
 	}()
 
 	if a.config.Bool("nrpe.enabled") {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			server := nrpe.New(
-				fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
-				a.config.Bool("nrpe.ssl"),
-				nrpeResponse,
-			)
-			_, err := a.taskRegistry.AddTask(server, "nrpe")
-			if err != nil {
-				logger.V(1).Printf("Unable to start NRPE server: %v", err)
-			}
-		}()
+		server := nrpe.New(
+			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
+			a.config.Bool("nrpe.ssl"),
+			nrpeResponse,
+		)
+		_, err := a.taskRegistry.AddTask(server, "nrpe")
+		if err != nil {
+			logger.V(1).Printf("Unable to start NRPE server: %v", err)
+		}
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
