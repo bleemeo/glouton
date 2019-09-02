@@ -290,11 +290,17 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 	}()
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		zabbix.Run(ctx, ":10053", zabbixResponse, false)
-	}()
+	if a.config.Bool("zabbix.enabled") {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			zabbix.Run(
+				ctx,
+				fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
+				zabbixResponse,
+			)
+		}()
+	}
 
 	wg.Add(1)
 	go func() {

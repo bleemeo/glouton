@@ -218,7 +218,7 @@ func encodev1(decodedPacket packetStruct) ([]byte, error) {
 }
 
 //Run starts a connection with a zabbix server
-func Run(ctx context.Context, port string, cb callback, useTLS bool) {
+func Run(ctx context.Context, port string, cb callback) {
 	tcpAdress, err := net.ResolveTCPAddr("tcp4", port)
 	if err != nil {
 		logger.V(1).Printf("%v", err)
@@ -232,9 +232,6 @@ func Run(ctx context.Context, port string, cb callback, useTLS bool) {
 	}
 	defer l.Close()
 	lWrap := net.Listener(l)
-	if useTLS {
-		logger.V(1).Printf("useTLS")
-	}
 
 	var wg sync.WaitGroup
 	for {
