@@ -4,6 +4,7 @@ import (
 	"agentgo/facts"
 	"context"
 	"net"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -72,6 +73,18 @@ func (mc mockContainer) Ignored() bool {
 	return false
 }
 
+type mockFileReader struct {
+	contents map[string]string
+}
+
+func (mfr mockFileReader) ReadFile(path string) ([]byte, error) {
+	content, ok := mfr.contents[path]
+	if !ok {
+		return nil, os.ErrNotExist
+	}
+	return []byte(content), nil
+}
+
 func TestServiceByCommand(t *testing.T) {
 	cases := []struct {
 		in   []string
@@ -101,7 +114,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 					PID:         1547,
 					PPID:        1,
 					CreateTime:  time.Now(),
-					CmdLine:     []string{"/usr/bin/memcached", "-m", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1", "-P", "/var/run/memcached/memcached.pid"},
+					CmdLineList: []string{"/usr/bin/memcached", "-m", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1", "-P", "/var/run/memcached/memcached.pid"},
 					Name:        "memcached",
 					MemoryRSS:   0xa88,
 					CPUPercent:  0.028360216236998047,
@@ -143,6 +156,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 	cases := []struct {
 		testName           string
 		cmdLine            []string
+		filesContent       map[string]string
 		containerID        string
 		netstatAddresses   []listenAddress
 		containerAddresses []listenAddress
@@ -236,6 +250,19 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 		},
 		{
+			testName: "mysql-host",
+			cmdLine:  []string{"mysqld"},
+			filesContent: map[string]string{
+				"/etc/mysql/debian.cnf": "[client]\nuser   = root\npassword    = secret\n",
+			},
+			want: Service{
+				Name:            "mysql",
+				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:3306"}},
+				IPAddress:       "127.0.0.1",
+				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
+			},
+		},
+		{
 			testName: "erlang-process",
 			cmdLine:  []string{"/usr/lib/erlang/erts-9.3.3.3/bin/beam.smp", "-W", "w", "[...]", "-noinput", "-s", "rabbit", "boot", "-sname", "[...]"},
 			want: Service{
@@ -253,7 +280,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				[]facts.Process{
 					{
 						PID:         42,
-						CmdLine:     c.cmdLine,
+						CmdLineList: c.cmdLine,
 						ContainerID: c.containerID,
 					},
 				},
@@ -269,6 +296,9 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 						env:             c.containerEnv,
 					},
 				},
+			},
+			fileReader: mockFileReader{
+				contents: c.filesContent,
 			},
 		}
 

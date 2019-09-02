@@ -137,9 +137,9 @@ func TestData(t *testing.T) {
 			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
 		}
 	}
-	got, err := cfg.Get("merged_list")
-	if err != nil {
-		t.Error(err)
+	got, ok := cfg.Get("merged_list")
+	if !ok {
+		t.Errorf("Get(%v) not found", "merged_list")
 	}
 	want := []interface{}{
 		"duplicated between main.conf & second.conf",
@@ -205,9 +205,9 @@ func TestSet(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got, err := cfg.Get(c.key)
-		if err != nil {
-			t.Errorf("cfg.Get(%#v) failed: %v", c.key, err)
+		got, ok := cfg.Get(c.key)
+		if !ok {
+			t.Errorf("cfg.Get(%#v) not found", c.key)
 		}
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("cfg.Get(%#v) == %v, want %v", c.key, got, c.want)
@@ -222,6 +222,7 @@ func TestLoadEnv(t *testing.T) {
 		"AGENT_API_ENABLED": "yes",
 		"API_ENABLED":       "false",
 		"EXTRA_ENV":         "not-used",
+		"AGENT_TAGS":        "this-is,a-list,comma separated",
 	}
 	lookupEnv := func(envName string) (string, bool) {
 		value, ok := envs[envName]
@@ -271,6 +272,12 @@ func TestLoadEnv(t *testing.T) {
 			key:       "api.port",
 			wantFound: false,
 		},
+		{
+			envName:   "AGENT_TAGS",
+			varType:   TypeStringList,
+			key:       "agent.tags",
+			wantFound: true,
+		},
 	}
 	cases := []struct {
 		key       string
@@ -296,6 +303,11 @@ func TestLoadEnv(t *testing.T) {
 			wantFound: true,
 			want:      true,
 		},
+		{
+			key:       "agent.tags",
+			wantFound: true,
+			want:      []string{"this-is", "a-list", "comma separated"},
+		},
 	}
 
 	for _, c := range loadCases {
@@ -308,21 +320,16 @@ func TestLoadEnv(t *testing.T) {
 		}
 	}
 	for _, c := range cases {
-		got, err := cfg.Get(c.key)
+		got, ok := cfg.Get(c.key)
 		if c.wantFound {
-			if err != nil {
-				t.Errorf("Get(%v) failed: %v", c.key, err)
+			if !ok {
+				t.Errorf("Get(%v) not found", c.key)
 			}
-			if got != c.want {
+			if !reflect.DeepEqual(got, c.want) {
 				t.Errorf("Get(%v) == %#v, want %#v", c.key, got, c.want)
 			}
-		} else {
-			if err == nil {
-				t.Errorf("Get(%v) == %v, want IsNotFound error", c.key, got)
-			} else if !IsNotFound(err) {
-				t.Errorf("Get(%v) failed: %v", c.key, err)
-			}
-
+		} else if ok {
+			t.Errorf("Get(%v) == %v, want not found", c.key, got)
 		}
 	}
 }

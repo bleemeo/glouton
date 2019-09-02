@@ -46,6 +46,13 @@ func (l Logger) Printf(fmtArg string, a ...interface{}) {
 	}
 }
 
+// Println behave like fmt.Println
+func (l Logger) Println(v ...interface{}) {
+	if l {
+		println(v...)
+	}
+}
+
 func printf(fmtArg string, a ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
@@ -53,6 +60,15 @@ func printf(fmtArg string, a ...interface{}) {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 	_, _ = fmt.Fprintf(cfg.writer, fmtArg+"\n", a...)
+}
+
+func println(v ...interface{}) {
+	cfg.l.Lock()
+	defer cfg.l.Unlock()
+	if !cfg.useSyslog {
+		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
+	}
+	_, _ = fmt.Fprintln(cfg.writer, v...)
 }
 
 // Printf behave like fmt.Printf

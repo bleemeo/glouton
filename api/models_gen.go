@@ -6,6 +6,17 @@ import (
 	"time"
 )
 
+type AgentInfo struct {
+	RegistrationAt *time.Time `json:"registrationAt"`
+	LastReport     *time.Time `json:"lastReport"`
+	IsConnected    bool       `json:"isConnected"`
+}
+
+type AgentStatus struct {
+	Status            float64  `json:"status"`
+	StatusDescription []string `json:"statusDescription"`
+}
+
 type Container struct {
 	Command      string     `json:"command"`
 	CreatedAt    *time.Time `json:"createdAt"`
@@ -81,13 +92,18 @@ type Process struct {
 }
 
 type Service struct {
-	Name            string   `json:"name"`
-	ContainerID     string   `json:"containerId"`
-	IPAddress       string   `json:"ipAddress"`
-	ListenAddresses []string `json:"listenAddresses"`
-	ExePath         string   `json:"exePath"`
-	Active          bool     `json:"active"`
-	Status          float64  `json:"status"`
+	Name              string   `json:"name"`
+	ContainerID       string   `json:"containerId"`
+	IPAddress         string   `json:"ipAddress"`
+	ListenAddresses   []string `json:"listenAddresses"`
+	ExePath           string   `json:"exePath"`
+	Active            bool     `json:"active"`
+	Status            float64  `json:"status"`
+	StatusDescription *string  `json:"statusDescription"`
+}
+
+type Tag struct {
+	TagName string `json:"tagName"`
 }
 
 type Topinfo struct {

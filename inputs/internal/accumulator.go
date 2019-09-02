@@ -41,7 +41,7 @@ type Accumulator struct {
 	// RenameGlobal apply global rename on all metrics from one batch.
 	// It may:
 	// * change the measurement name (prefix of metric name)
-	// * alter tags (if tags are modified, a new *copy* of input tags map must be returned)
+	// * alter tags
 	// * completly drop this base (e.g. blacklisting for disk/network interface/...))
 	RenameGlobal func(originalContext GatherContext) (newContext GatherContext, drop bool)
 
@@ -204,9 +204,13 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		Tags:        tags,
 	}
 	currentContext := originalContext
+	currentContext.Tags = make(map[string]string, len(tags))
+	for k, v := range tags {
+		currentContext.Tags[k] = v
+	}
 	if a.RenameGlobal != nil {
 		drop := false
-		currentContext, drop = a.RenameGlobal(originalContext)
+		currentContext, drop = a.RenameGlobal(currentContext)
 		if drop {
 			return
 		}
@@ -240,12 +244,6 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
 	for k, v := range a.StaticLabels {
-		if &currentContext.Tags == &originalContext.Tags {
-			currentContext.Tags = make(map[string]string)
-			for k, v := range originalContext.Tags {
-				currentContext.Tags[k] = v
-			}
-		}
 		oldValue := currentContext.Tags[k]
 		if oldValue != "" {
 			currentContext.Tags[k] = v + "_" + oldValue

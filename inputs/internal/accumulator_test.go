@@ -2,6 +2,7 @@ package internal
 
 import (
 	"math"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -422,5 +423,143 @@ func TestMeasurementMap(t *testing.T) {
 	)
 	if called != 3 {
 		t.Errorf("called == %v, want %v", called, 3)
+	}
+}
+
+func TestStaticLabels(t *testing.T) {
+	called := 0
+	want := map[string]string{
+		"service_name": "mysql",
+		"item":         "mysql_1",
+	}
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		if !reflect.DeepEqual(tags, want) {
+			t.Errorf("tags == %v, want %v", tags, want)
+		}
+		called++
+	}
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+	acc := Accumulator{
+		StaticLabels: map[string]string{
+			"service_name": "mysql",
+			"item":         "mysql_1",
+		},
+	}
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc,
+		"mysql",
+		map[string]interface{}{
+			"requests": 42.0,
+		},
+		nil,
+		t0,
+	)
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc,
+		"mysql",
+		map[string]interface{}{
+			"requests": 1337.0,
+		},
+		nil,
+		t1,
+	)
+	if called != 2 {
+		t.Errorf("called == %v, want 2", called)
+	}
+}
+
+func TestStaticLabels2(t *testing.T) {
+	called := 0
+	want := map[string]string{
+		"service_name": "postgresql",
+		"container_id": "1234",
+		"item":         "postgres_1_dbname",
+	}
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		if !reflect.DeepEqual(tags, want) {
+			t.Errorf("tags == %v, want %v", tags, want)
+		}
+		called++
+	}
+	t0 := time.Now()
+	t1 := t0.Add(10 * time.Second)
+	acc := Accumulator{
+		StaticLabels: map[string]string{
+			"service_name": "postgresql",
+			"container_id": "1234",
+			"item":         "postgres_1",
+		},
+	}
+	tags := map[string]string{"item": "dbname"}
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc,
+		"postgresql",
+		map[string]interface{}{
+			"requests": 42.0,
+		},
+		tags,
+		t0,
+	)
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc,
+		"postgresql",
+		map[string]interface{}{
+			"requests": 1337.0,
+		},
+		tags,
+		t1,
+	)
+	if called != 2 {
+		t.Errorf("called == %v, want 2", called)
+	}
+}
+
+func TestLabelsMutation(t *testing.T) {
+	called := 0
+	want := map[string]string{
+		"service_name": "postgresql",
+		"container_id": "1234",
+		"item":         "postgres_1_dbname",
+	}
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+		if !reflect.DeepEqual(tags, want) {
+			t.Errorf("tags == %v, want %v", tags, want)
+		}
+		called++
+	}
+	t0 := time.Now()
+	acc := Accumulator{
+		RenameGlobal: func(originalContext GatherContext) (GatherContext, bool) {
+			newContext := GatherContext{
+				Measurement: originalContext.Measurement,
+				Tags:        make(map[string]string),
+			}
+			newContext.Tags["item"] = originalContext.Tags["db"]
+			return newContext, false
+		},
+		StaticLabels: map[string]string{
+			"service_name": "postgresql",
+			"container_id": "1234",
+			"item":         "postgres_1",
+		},
+	}
+	tags := map[string]string{"db": "dbname"}
+	acc.PrepareGather()
+	acc.processMetrics(
+		finalFunc,
+		"postgresql",
+		map[string]interface{}{
+			"requests": 42.0,
+		},
+		tags,
+		t0,
+	)
+	if called != 1 {
+		t.Errorf("called == %v, want 1", called)
 	}
 }

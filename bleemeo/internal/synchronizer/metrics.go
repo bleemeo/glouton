@@ -2,55 +2,113 @@ package synchronizer
 
 import (
 	"agentgo/bleemeo/client"
+	"agentgo/bleemeo/internal/common"
 	"agentgo/bleemeo/types"
 	"agentgo/logger"
+	"agentgo/threshold"
 	agentTypes "agentgo/types"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"math/rand"
 	"time"
 )
 
-const apiMetricItemLength = 100
-const apiMetricItemLengthIfService = 50
-
 var (
-	errRetryLater   = errors.New("metric registration should be retried laster")
-	errNeedRegister = errors.New("metric was deleted from API, it need to be re-registered")
+	errRetryLater = errors.New("metric registration should be retried laster")
 )
+
+type errNeedRegister struct {
+	remoteMetric types.Metric
+	key          common.MetricLabelItem
+}
+
+func (e errNeedRegister) Error() string {
+	return fmt.Sprintf("metric %v was deleted from API, it need to be re-registered", e.key)
+}
+
+// The metric registration function is done in 4 pass
+// * first will only ensure agent_status is registered (this metric is required before connecting to MQTT and is produced once connected to MQTT...)
+// * main pass will do the bulk of the jobs. But some metric may fail and will be done in Recreate and Retry pass
+// * The Recreate pass is for metric that failed (to update) because they were deleted from API
+// * The Retry pass is for metric that failed to create due to dependency with other metric (e.g. status_of)
+type metricRegisterPass int
+
+const (
+	metricPassAgentStatus metricRegisterPass = iota
+	metricPassMain
+	metricPassRecreate
+	metricPassRetry
+)
+
+func (p metricRegisterPass) String() string {
+	switch p {
+	case metricPassAgentStatus:
+		return "agent-status"
+	case metricPassMain:
+		return "main-pass"
+	case metricPassRecreate:
+		return "recreate-deleted"
+	case metricPassRetry:
+		return "retry"
+	}
+	return "unknown"
+}
+
+type fakeMetric struct {
+	label string
+}
+
+func (m fakeMetric) Points(time.Time, time.Time) ([]agentTypes.PointStatus, error) {
+	return nil, errors.New("not implemented on fakeMetric")
+}
+func (m fakeMetric) Labels() map[string]string {
+	return map[string]string{
+		"__name__": m.label,
+	}
+}
 
 type metricPayload struct {
 	types.Metric
-	Agent string `json:"agent"`
-	Item  string `json:"item,omitempty"`
+	Agent                  string   `json:"agent"`
+	Item                   string   `json:"item,omitempty"`
+	ThresholdLowWarning    *float64 `json:"threshold_low_warning"`
+	ThresholdLowCrictical  *float64 `json:"threshold_low_critical"`
+	ThresholdHighWarning   *float64 `json:"threshold_high_warning"`
+	ThresholdHighCrictical *float64 `json:"threshold_high_critical"`
 }
 
-type metricLabelItem struct {
-	label string
-	item  string
-}
-
-func (key *metricLabelItem) truncateItem(isService bool) {
-	if len(key.item) > apiMetricItemLength {
-		key.item = key.item[:apiMetricItemLength]
+// metricFromAPI convert a metricPayload received from API to a types.Metric
+func (mp metricPayload) metricFromAPI() types.Metric {
+	if mp.Labels["item"] == "" && mp.Item != "" {
+		if mp.Labels == nil {
+			mp.Labels = map[string]string{
+				"item": mp.Item,
+			}
+		}
 	}
-	if isService && len(key.item) > apiMetricItemLengthIfService {
-		key.item = key.item[:apiMetricItemLengthIfService]
+	if mp.ThresholdLowWarning != nil {
+		mp.Metric.Threshold.LowWarning = *mp.ThresholdLowWarning
+	} else {
+		mp.Metric.Threshold.LowWarning = math.NaN()
 	}
-}
-
-func (key metricLabelItem) String() string {
-	if key.item != "" {
-		return fmt.Sprintf("%s (item %s)", key.label, key.item)
+	if mp.ThresholdLowCrictical != nil {
+		mp.Metric.Threshold.LowCritical = *mp.ThresholdLowCrictical
+	} else {
+		mp.Metric.Threshold.LowCritical = math.NaN()
 	}
-	return key.label
-}
-
-func metricLabelItemFromLabels(labels map[string]string) metricLabelItem {
-	key := metricLabelItem{label: labels["__name__"], item: labels["item"]}
-	key.truncateItem(labels["service_name"] != "")
-	return key
+	if mp.ThresholdHighWarning != nil {
+		mp.Metric.Threshold.HighWarning = *mp.ThresholdHighWarning
+	} else {
+		mp.Metric.Threshold.HighWarning = math.NaN()
+	}
+	if mp.ThresholdHighCrictical != nil {
+		mp.Metric.Threshold.HighCritical = *mp.ThresholdHighCrictical
+	} else {
+		mp.Metric.Threshold.HighCritical = math.NaN()
+	}
+	return mp.Metric
 }
 
 func prioritizeMetrics(metrics []agentTypes.Metric) {
@@ -70,18 +128,14 @@ func prioritizeMetrics(metrics []agentTypes.Metric) {
 	}
 }
 
-func (s *Synchronizer) findUnregisteredMetrics(metrics []agentTypes.Metric) []metricLabelItem {
+func (s *Synchronizer) findUnregisteredMetrics(metrics []agentTypes.Metric) []common.MetricLabelItem {
 
 	registeredMetrics := s.option.Cache.Metrics()
-	registeredMetricsByKey := make(map[metricLabelItem]types.Metric)
-	for _, v := range registeredMetrics {
-		key := metricLabelItem{label: v.Label, item: v.Labels["item"]}
-		registeredMetricsByKey[key] = v
-	}
+	registeredMetricsByKey := common.MetricLookupFromList(registeredMetrics)
 
-	result := make([]metricLabelItem, 0)
+	result := make([]common.MetricLabelItem, 0)
 	for _, v := range metrics {
-		key := metricLabelItemFromLabels(v.Labels())
+		key := common.MetricLabelItemFromMetric(v)
 		if _, ok := registeredMetricsByKey[key]; ok {
 			continue
 		}
@@ -126,6 +180,10 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		}
 	}
 
+	if fullSync || (!fullForInactive && len(unregisteredMetrics) > 0) {
+		s.updateUnitsAndThresholds()
+	}
+
 	if err := s.metricDeleteFromRemote(localMetrics, previousMetrics); err != nil {
 		return err
 	}
@@ -158,6 +216,22 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	return nil
 }
 
+func (s *Synchronizer) updateUnitsAndThresholds() {
+	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
+	units := make(map[threshold.MetricNameItem]threshold.Unit)
+	for _, m := range s.option.Cache.Metrics() {
+		key := threshold.MetricNameItem{Name: m.Label, Item: m.Labels["item"]}
+		thresholds[key] = m.Threshold
+		units[key] = m.Unit
+	}
+	if s.option.UpdateThresholds != nil {
+		s.option.UpdateThresholds(thresholds)
+	}
+	if s.option.UpdateUnits != nil {
+		s.option.UpdateUnits(units)
+	}
+}
+
 func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 	params := map[string]string{
 		"agent":  s.option.State.AgentID(),
@@ -185,13 +259,7 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 		if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 			continue
 		}
-		if metric.Labels == nil {
-			metric.Labels = make(map[string]string)
-		}
-		if metric.Labels["item"] == "" && metric.Item != "" {
-			metric.Labels["item"] = metric.Item
-		}
-		metricsByUUID[metric.ID] = metric.Metric
+		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
 	metrics := make([]types.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
@@ -201,15 +269,15 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 	return nil
 }
 
-func (s *Synchronizer) metricUpdateListSearch(requests []metricLabelItem) error {
+func (s *Synchronizer) metricUpdateListSearch(requests []common.MetricLabelItem) error {
 
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
 	for _, key := range requests {
 		params := map[string]string{
 			"agent":  s.option.State.AgentID(),
-			"label":  key.label,
-			"item":   key.item,
+			"label":  key.Label,
+			"item":   key.Item,
 			"fields": "id,label,labels,item,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 		result, err := s.client.Iter("metric", params)
@@ -218,11 +286,11 @@ func (s *Synchronizer) metricUpdateListSearch(requests []metricLabelItem) error 
 		}
 
 		for _, jsonMessage := range result {
-			var metric types.Metric
+			var metric metricPayload
 			if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 				continue
 			}
-			metricsByUUID[metric.ID] = metric
+			metricsByUUID[metric.ID] = metric.metricFromAPI()
 		}
 	}
 	metrics := make([]types.Metric, 0, len(metricsByUUID))
@@ -237,10 +305,10 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []agentTypes.Metric, 
 
 	newMetrics := s.option.Cache.MetricsByUUID()
 
-	deletedMetricLabelItem := make(map[metricLabelItem]bool)
+	deletedMetricLabelItem := make(map[common.MetricLabelItem]bool)
 	for _, m := range previousMetrics {
 		if _, ok := newMetrics[m.ID]; !ok {
-			key := metricLabelItem{label: m.Label, item: m.Labels["item"]}
+			key := common.MetricLabelItem{Label: m.Label, Item: m.Labels["item"]}
 			deletedMetricLabelItem[key] = true
 		}
 	}
@@ -248,7 +316,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []agentTypes.Metric, 
 	localMetricToDelete := make([]map[string]string, 0)
 	for _, m := range localMetrics {
 		labels := m.Labels()
-		key := metricLabelItemFromLabels(labels)
+		key := common.MetricLabelItemFromMetric(labels)
 		if _, ok := deletedMetricLabelItem[key]; ok {
 			localMetricToDelete = append(localMetricToDelete, labels)
 		}
@@ -260,11 +328,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []agentTypes.Metric, 
 func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric, fullForInactive bool) error {
 
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := make(map[metricLabelItem]types.Metric)
-	for _, v := range registeredMetricsByUUID {
-		key := metricLabelItem{label: v.Label, item: v.Labels["item"]}
-		registeredMetricsByKey[key] = v
-	}
+	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	services := s.option.Cache.Services()
@@ -282,12 +346,16 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 	var lastErr error
 	retryMetrics := make([]agentTypes.Metric, 0)
 	registerMetrics := make([]agentTypes.Metric, 0)
-	for state := 0; state < 3; state++ {
+	for state := metricPassAgentStatus; state <= metricPassRetry; state++ {
 		var currentList []agentTypes.Metric
 		switch state {
-		case 0: // initial loop
+		case metricPassAgentStatus:
+			currentList = []agentTypes.Metric{
+				fakeMetric{label: "agent_status"},
+			}
+		case metricPassMain:
 			currentList = localMetrics
-		case 1: // process errNeedRegister
+		case metricPassRecreate:
 			currentList = registerMetrics
 			if len(registerMetrics) > 0 && !fullForInactive {
 				metrics := make([]types.Metric, 0, len(registeredMetricsByUUID))
@@ -295,38 +363,38 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 					metrics = append(metrics, v)
 				}
 				s.option.Cache.SetMetrics(metrics)
-				requests := make([]metricLabelItem, len(registerMetrics))
+				requests := make([]common.MetricLabelItem, len(registerMetrics))
 				for i, m := range registerMetrics {
 					labels := m.Labels()
-					requests[i] = metricLabelItem{label: labels["__name__"], item: labels["item"]}
+					requests[i] = common.MetricLabelItem{Label: labels["__name__"], Item: labels["item"]}
 				}
 				if err := s.metricUpdateListSearch(requests); err != nil {
 					return err
 				}
-				registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
-				registeredMetricsByKey := make(map[metricLabelItem]types.Metric)
-				for _, v := range registeredMetricsByUUID {
-					key := metricLabelItem{label: v.Label, item: v.Labels["item"]}
-					registeredMetricsByKey[key] = v
-				}
+				registeredMetricsByUUID = s.option.Cache.MetricsByUUID()
+				registeredMetricsByKey = common.MetricLookupFromList(s.option.Cache.Metrics())
 			}
-		case 2: // process errRetryLater
+		case metricPassRetry:
 			currentList = retryMetrics
 		}
+		logger.V(3).Printf("Metric registration phase %v start with %d metrics to process", state, len(currentList))
 	metricLoop:
 		for _, metric := range currentList {
 			if s.ctx.Err() != nil {
 				break
 			}
 			err := s.metricRegisterAndUpdateOne(metric, registeredMetricsByUUID, registeredMetricsByKey, containersByContainerID, servicesByKey, params)
-			switch {
-			case err != nil && err == errRetryLater && state < 2:
+			if err != nil && err == errRetryLater && state < metricPassRetry {
 				retryMetrics = append(retryMetrics, metric)
 				continue metricLoop
-			case err != nil && err == errNeedRegister && state < 1:
+			}
+			if errReReg, ok := err.(errNeedRegister); ok && err != nil && state < metricPassRecreate {
 				registerMetrics = append(registerMetrics, metric)
+				delete(registeredMetricsByUUID, errReReg.remoteMetric.ID)
+				delete(registeredMetricsByKey, errReReg.key)
 				continue metricLoop
-			case err != nil:
+			}
+			if err != nil {
 				if client.IsServerError(err) {
 					return err
 				}
@@ -341,8 +409,8 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 			regCountBeforeUpdate--
 			if regCountBeforeUpdate == 0 {
 				regCountBeforeUpdate = 60
-				metrics := make([]types.Metric, 0, len(registeredMetricsByKey))
-				for _, v := range registeredMetricsByKey {
+				metrics := make([]types.Metric, 0, len(registeredMetricsByUUID))
+				for _, v := range registeredMetricsByUUID {
 					metrics = append(metrics, v)
 				}
 				s.option.Cache.SetMetrics(metrics)
@@ -358,9 +426,9 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 	return lastErr
 }
 
-func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, registeredMetricsByUUID map[string]types.Metric, registeredMetricsByKey map[metricLabelItem]types.Metric, containersByContainerID map[string]types.Container, servicesByKey map[serviceNameInstance]types.Service, params map[string]string) error {
+func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, registeredMetricsByUUID map[string]types.Metric, registeredMetricsByKey map[common.MetricLabelItem]types.Metric, containersByContainerID map[string]types.Container, servicesByKey map[serviceNameInstance]types.Service, params map[string]string) error {
 	labels := metric.Labels()
-	key := metricLabelItemFromLabels(labels)
+	key := common.MetricLabelItemFromMetric(labels)
 	remoteMetric, remoteFound := registeredMetricsByKey[key]
 	if remoteFound {
 		result, err := s.metricUpdateOne(key, metric, remoteMetric)
@@ -376,12 +444,12 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 			Label:  labels["__name__"],
 			Labels: labels,
 		},
-		Item:  key.item,
+		Item:  key.Item,
 		Agent: s.option.State.AgentID(),
 	}
-	var result types.Metric
+	var result metricPayload
 	if labels["status_of"] != "" {
-		subKey := metricLabelItem{label: labels["status_of"], item: key.item}
+		subKey := common.MetricLabelItem{Label: labels["status_of"], Item: key.Item}
 		metricStatusOf, ok := registeredMetricsByKey[subKey]
 		if !ok {
 			return errRetryLater
@@ -395,9 +463,12 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 			return nil
 		}
 		payload.ContainerID = container.ID
+		// TODO: For now all metrics are created no-associated with a container.
+		// PRODUCT-970 track the progress on this point
+		payload.ContainerID = ""
 	}
-	if labels["service_name"] != "" && labels["service_instance"] != "" {
-		srvKey := serviceNameInstance{name: labels["service_name"], instance: labels["service_instance"]}
+	if labels["service_name"] != "" {
+		srvKey := serviceNameInstance{name: labels["service_name"], instance: labels["container_name"]}
 		srvKey.truncateInstance()
 		service, ok := servicesByKey[srvKey]
 		if !ok {
@@ -406,25 +477,17 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 		}
 		payload.ServiceID = service.ID
 	}
-	if remoteFound {
-		_, err := s.client.Do("PUT", fmt.Sprintf("v1/metric/%s/", remoteMetric.ID), params, payload, &result)
-		if err != nil {
-			return err
-		}
-		logger.V(2).Printf("Metric %v updated with UUID %s", key, result.ID)
-	} else {
-		_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
-		if err != nil {
-			return err
-		}
-		logger.V(2).Printf("Metric %v registrered with UUID %s", key, result.ID)
+	_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
+	if err != nil {
+		return err
 	}
-	registeredMetricsByKey[key] = result
-	registeredMetricsByUUID[result.ID] = result
+	logger.V(2).Printf("Metric %v registrered with UUID %s", key, result.ID)
+	registeredMetricsByKey[key] = result.metricFromAPI()
+	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
 	return nil
 }
 
-func (s *Synchronizer) metricUpdateOne(key metricLabelItem, metric agentTypes.Metric, remoteMetric types.Metric) (types.Metric, error) {
+func (s *Synchronizer) metricUpdateOne(key common.MetricLabelItem, metric agentTypes.Metric, remoteMetric types.Metric) (types.Metric, error) {
 	if !remoteMetric.DeactivatedAt.IsZero() {
 		points, err := metric.Points(time.Now().Add(-10*time.Minute), time.Now())
 		if err != nil {
@@ -449,7 +512,7 @@ func (s *Synchronizer) metricUpdateOne(key metricLabelItem, metric agentTypes.Me
 				nil,
 			)
 			if err != nil && client.IsNotFound(err) {
-				return remoteMetric, errNeedRegister
+				return remoteMetric, errNeedRegister{remoteMetric: remoteMetric, key: key}
 			} else if err != nil {
 				return remoteMetric, err
 			}
@@ -490,7 +553,7 @@ func (s *Synchronizer) metricUpdateOne(key metricLabelItem, metric agentTypes.Me
 			&response,
 		)
 		if err != nil && client.IsNotFound(err) {
-			return remoteMetric, errNeedRegister
+			return remoteMetric, errNeedRegister{remoteMetric: remoteMetric, key: key}
 		} else if err != nil {
 			return remoteMetric, err
 		}
@@ -518,11 +581,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	longToShortKeyLookup := longToShortKey(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := make(map[metricLabelItem]types.Metric)
-	for _, v := range registeredMetrics {
-		key := metricLabelItem{label: v.Label, item: v.Labels["item"]}
-		registeredMetricsByKey[key] = v
-	}
+	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	for _, srv := range localServices {
 		if !srv.CheckIgnored {
@@ -533,7 +592,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 		if !ok {
 			continue
 		}
-		metricKey := metricLabelItem{label: fmt.Sprintf("%s_status", srv.Name), item: shortKey.instance}
+		metricKey := common.MetricLabelItem{Label: fmt.Sprintf("%s_status", srv.Name), Item: shortKey.instance}
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
 			_, err := s.client.Do("DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
 			if err != nil {
@@ -554,10 +613,10 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 
 func (s *Synchronizer) metricDeactivate(localMetrics []agentTypes.Metric) error {
 
-	duplicatedKey := make(map[metricLabelItem]bool)
-	localByMetricKey := make(map[metricLabelItem]agentTypes.Metric, len(localMetrics))
+	duplicatedKey := make(map[common.MetricLabelItem]bool)
+	localByMetricKey := make(map[common.MetricLabelItem]agentTypes.Metric, len(localMetrics))
 	for _, v := range localMetrics {
-		key := metricLabelItemFromLabels(v.Labels())
+		key := common.MetricLabelItemFromMetric(v)
 		localByMetricKey[key] = v
 	}
 
@@ -572,7 +631,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []agentTypes.Metric) error 
 		if v.Label == "agent_sent_message" || v.Label == "agent_status" {
 			continue
 		}
-		key := metricLabelItem{label: v.Label, item: v.Labels["item"]}
+		key := common.MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
 		metric, ok := localByMetricKey[key]
 		if ok && !duplicatedKey[key] {
 			duplicatedKey[key] = true

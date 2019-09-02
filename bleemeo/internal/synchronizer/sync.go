@@ -3,6 +3,7 @@ package synchronizer
 import (
 	"agentgo/bleemeo/client"
 	"agentgo/bleemeo/internal/cache"
+	"agentgo/bleemeo/internal/common"
 	"agentgo/bleemeo/types"
 	"agentgo/logger"
 	"context"
@@ -51,9 +52,8 @@ type Option struct {
 }
 
 // New return a new Synchronizer
-func New(ctx context.Context, option Option) *Synchronizer {
+func New(option Option) *Synchronizer {
 	return &Synchronizer{
-		ctx:    ctx,
 		option: option,
 
 		nextFullSync: time.Now(),
@@ -61,7 +61,8 @@ func New(ctx context.Context, option Option) *Synchronizer {
 }
 
 // Run run the Connector
-func (s *Synchronizer) Run() error {
+func (s *Synchronizer) Run(ctx context.Context) error {
+	s.ctx = ctx
 	s.startedAt = time.Now()
 	accountID := s.option.Config.String("bleemeo.account_id")
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
@@ -78,13 +79,15 @@ func (s *Synchronizer) Run() error {
 		logger.V(1).Printf("This agent is registered on Bleemeo Cloud platform with UUID %v", agentID)
 	}
 
+	s.updateUnitsAndThresholds()
+
 	s.successiveErrors = 0
 	delay := time.Duration(0)
 	deadline := time.Now()
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
 		logger.V(2).Printf("Waiting few second before first synchroization as this agent has a valid cache")
-		deadline = time.Now().Add(JitterDelay(20, 0.5, 20))
+		deadline = time.Now().Add(common.JitterDelay(20, 0.5, 20))
 	}
 	for s.ctx.Err() == nil {
 		s.waitDeadline(deadline)
@@ -94,14 +97,18 @@ func (s *Synchronizer) Run() error {
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
-			delay = JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+			delay = common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 			if client.IsAuthError(err) {
 				agentID := s.option.State.AgentID()
-				fqdn := " with FQDN TODO from agent fact cache"
+				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
+				fqdnMessage := ""
+				if fqdn != "" {
+					fqdnMessage = fmt.Sprintf(" with fqdn %s", fqdn)
+				}
 				logger.Printf(
 					"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
 					agentID,
-					fqdn,
+					fqdnMessage,
 				)
 			} else {
 				if s.successiveErrors%5 == 0 {
@@ -112,7 +119,7 @@ func (s *Synchronizer) Run() error {
 			}
 		} else {
 			s.successiveErrors = 0
-			delay = JitterDelay(15, 0.05, 15)
+			delay = common.JitterDelay(15, 0.05, 15)
 		}
 		deadline = time.Now().Add(delay)
 	}
@@ -165,19 +172,6 @@ func (s *Synchronizer) Disable(until time.Time) {
 	s.l.Lock()
 	defer s.l.Unlock()
 	s.disabledUntil = until
-}
-
-// JitterDelay return a number between value * [1-factor; 1+factor[
-// If the valueSecond exceed max, max is used instead of valueSecond.
-// factor should be less than 1
-func JitterDelay(valueSecond float64, factor float64, maxSecond float64) time.Duration {
-	scale := rand.Float64() * 2 * factor
-	scale += 1 - factor
-	if valueSecond > maxSecond {
-		valueSecond = maxSecond
-	}
-	result := int(valueSecond * scale)
-	return time.Duration(result) * time.Second
 }
 
 func (s *Synchronizer) setClient() error {
@@ -272,7 +266,7 @@ func (s *Synchronizer) runOnce() error {
 	logger.V(2).Printf("Synchronization took %v for %v", time.Since(startAt), syncMethods)
 	if fullSync && lastErr == nil {
 		s.option.Cache.Save()
-		s.nextFullSync = time.Now().Add(JitterDelay(3600, 0.1, 3600))
+		s.nextFullSync = time.Now().Add(common.JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 	if lastErr == nil {
@@ -301,7 +295,8 @@ func (s *Synchronizer) checkDuplicated() error {
 		if old == new {
 			continue
 		}
-		until := time.Now().Add(JitterDelay(900, 0.05, 900))
+		until := time.Now().Add(common.JitterDelay(900, 0.05, 900))
+		s.Disable(until)
 		if s.option.DisableCallback != nil {
 			s.option.DisableCallback(types.DisableDuplicatedAgent, until)
 		}

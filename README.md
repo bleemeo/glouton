@@ -31,20 +31,25 @@ export PATH=/usr/lib/go-1.12/bin:$PATH
 export PATH=/usr/lib/go-1.12/bin:$PATH
 ```
 
-- Update your credentials in `etc/agent.conf.d/90-local.conf`:
+- (optional) Configure your credentials for Bleemeo Cloud platform:
 
 ```
-vim etc/agent.conf.d/90-local.conf
+export BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID=YOUR_ACCOUNT_ID
+export BLEEMEO_AGENT_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
+```
 
-# Add something like
-bleemeo:
-   account_id: ...
-   registration_key: ...
+- (optional) If the Bleemeo Cloud platform is running locally:
+```
+export BLEEMEO_AGENT_BLEEMEO_API_BASE=http://localhost:8000
+export BLEEMEO_AGENT_BLEEMEO_MQTT_HOST=localhost
+export BLEEMEO_AGENT_BLEEMEO_MQTT_PORT=1883
+export BLEEMEO_AGENT_BLEEMEO_MQTT_SSL=False
 ```
 
 - Run development version of the agent:
 
 ```
+export BLEEMEO_AGENT_LOGGING_LEVEL=0  # 0: is the default. Increase to get more logs
 go run agentgo
 ```
 
@@ -56,6 +61,7 @@ cp -r ../bleemeo-agent-ui/dist/js api/static/assets
 
 - Prepare a release (or just run some test and linter during development):
    - Optionally, try to update dependencies: `go get -u` then `go mod tidy`
+   - For Telegraf, the update must specify the version: `go get github.com/influxdata/telegraf@1.11.4`
    - Run Go generate to update generated files (static JS files & GraphQL schema): `go generate agentgo/...`
    - Run GoLang linter: `~/go/bin/golangci-lint run ./...`
    - Run Go tests: `go test agentgo/...`
