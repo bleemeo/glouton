@@ -70,13 +70,13 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 		encodedAnswer, err = encodeV2(answer, rndBytes)
 	}
 	if err != nil {
-		logger.V(1).Printf("%v", err)
+		logger.V(1).Printf("Failed to encode NRPE packet: %v", err)
 		c.Close()
 		return
 	}
 	_, err = c.Write(encodedAnswer)
 	if err != nil {
-		logger.V(1).Printf("%v", err)
+		logger.V(1).Printf("Failed to write NRPE packet: %v", err)
 	}
 	c.Close()
 }
@@ -350,6 +350,8 @@ func (s Server) Run(ctx context.Context) error {
 		lWrap = tls.NewListener(l, certificate)
 	}
 
+	logger.V(1).Printf("NRPE server listening on %s", s.bindAddress)
+
 	var wg sync.WaitGroup
 	for {
 		err = l.SetDeadline(time.Now().Add(time.Second))
@@ -364,13 +366,13 @@ func (s Server) Run(ctx context.Context) error {
 			continue
 		}
 		if err != nil {
-			logger.V(1).Printf("Nrpe accept failed: %v", err)
+			logger.V(1).Printf("NRPE server fail on accept(): %v", err)
 			continue
 		}
 
 		err = c.SetDeadline(time.Now().Add(time.Second * 10))
 		if err != nil {
-			logger.V(1).Printf("Nrpe: setDeadline on connection failed: %v", err)
+			logger.V(1).Printf("setDeadline on NRPE connection failed: %v", err)
 			c.Close()
 			continue
 		}
