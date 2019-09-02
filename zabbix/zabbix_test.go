@@ -9,21 +9,25 @@ import (
 	"testing"
 )
 
+type packetCapture struct {
+	Description string
+	QueryKey    string
+	QueryArgs   []string
+	QueryRaw    []byte
+	ReplyRaw    []byte
+	ReplyString string
+}
+
 func TestDecode(t *testing.T) {
-	cases := []struct {
-		in   io.Reader
-		want packetStruct
-	}{
-		{bytes.NewReader(versionRequest), packetStruct{version: 1, key: "agent.version"}},
-		{bytes.NewReader(pingRequest), packetStruct{version: 1, key: "agent.ping"}},
-		{bytes.NewReader(discRequest), packetStruct{version: 1, key: "net.if.discovery"}},
-		{bytes.NewReader(inloRequest), packetStruct{1, "net.if.in", []string{"lo"}}},
-		{bytes.NewReader(cpuUtilRequest), packetStruct{1, "system.cpu.util", []string{"all", "user", "avg1"}}},
-	}
-	for _, c := range cases {
-		got, err := decode(c.in)
-		if !reflect.DeepEqual(got, c.want) {
-			t.Errorf("decode(zabbixPacket) == %v, want %v", got, c.want)
+	for _, c := range allPackets {
+		got, err := decode(bytes.NewReader(c.QueryRaw))
+		want := packetStruct{
+			version: 1,
+			key:     c.QueryKey,
+			args:    c.QueryArgs,
+		}
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("decode(zabbixPacket) == %v, want %v", got, want)
 		}
 		if err != nil {
 			t.Error(err)
@@ -105,20 +109,14 @@ func TestValidSplitData(t *testing.T) {
 }
 
 func TestEncode(t *testing.T) {
-	cases := []struct {
-		in   packetStruct
-		want []byte
-	}{
-		{packetStruct{version: 1, key: "1"}, pingAnswer},
-		{packetStruct{version: 1, key: "4.2.4"}, versionAnswer},
-		{packetStruct{version: 1, key: discString}, discAnswer},
-		{packetStruct{version: 1, key: "797826"}, inloAnswer},
-		{packetStruct{version: 1, key: "3.008123"}, cpuUtilAnswer},
-	}
-	for _, c := range cases {
-		got, err := encodev1(c.in)
-		if !bytes.Equal(got, c.want) {
-			t.Errorf("encodeV2(%v) == %v, want %v", c.in, got, c.want)
+	for _, c := range allPackets {
+		in := packetStruct{
+			version: 1,
+			key:     c.ReplyString,
+		}
+		got, err := encodev1(in)
+		if !bytes.Equal(got, c.ReplyRaw) {
+			t.Errorf("encodev1(%v) == %v, want %v", in, got, c.ReplyRaw)
 			break
 		}
 		if err != nil {
@@ -142,29 +140,21 @@ func (rw ReaderWriter) Close() error {
 	return nil
 }
 
-func responsev1(key string, args []string) (string, error) {
-	if key == "agent.ping" {
-		return "1", nil
-	}
-	if key == "agent.version" {
-		return "4.2.4", nil
-	}
-	return "", nil
-}
-
 func TestHandleConnection(t *testing.T) {
-	cases := []struct {
-		in   ReaderWriter
-		want []byte
-	}{
-		{ReaderWriter{bytes.NewReader(pingRequest), new(bytes.Buffer)}, pingAnswer},
-		{ReaderWriter{bytes.NewReader(versionRequest), new(bytes.Buffer)}, versionAnswer},
-	}
-	for _, c := range cases {
-		handleConnection(c.in, responsev1)
-		got := c.in.writer.Bytes()
-		if !bytes.Equal(got, c.want) {
-			t.Errorf("handleConnection(%v,response) writes %v, want %v", c.in, got, c.want)
+	for _, c := range allPackets {
+		socket := ReaderWriter{
+			bytes.NewReader(c.QueryRaw),
+			new(bytes.Buffer),
+		}
+		handleConnection(
+			socket,
+			func(key string, args []string) (string, error) {
+				return c.ReplyString, nil //nolint: scopelint
+			},
+		)
+		got := socket.writer.Bytes()
+		if !bytes.Equal(got, c.ReplyRaw) {
+			t.Errorf("handleConnection([case %s]) writes %v, want %v", c.Description, got, c.ReplyRaw)
 			break
 		}
 
