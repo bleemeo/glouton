@@ -20,8 +20,10 @@ type Connector struct {
 	sync  *synchronizer.Synchronizer
 	mqtt  *mqtt.Client
 
-	l        sync.Mutex
-	initDone bool
+	l             sync.Mutex
+	initDone      bool
+	disabledUntil time.Time
+	disableReason types.DisableReason
 }
 
 // New create a new Connector
@@ -159,9 +161,14 @@ func (c *Connector) HealthCheck() bool {
 		logger.Printf("Agent not yet registered")
 		ok = false
 	}
-	// TODO: Log a message if Bleemeo connector is disabled
 	c.l.Lock()
 	defer c.l.Unlock()
+	if time.Now().Before(c.disabledUntil) {
+		delay := time.Until(c.disabledUntil)
+		logger.Printf("Bleemeo connector is still disabled for %v due to %v", delay.Truncate(time.Second), c.disableReason)
+		return false
+	}
+
 	if c.mqtt != nil {
 		ok = c.mqtt.HealthCheck() && ok
 	}
@@ -184,6 +191,13 @@ func (c *Connector) uppdateConfig() {
 }
 
 func (c *Connector) disableCallback(reason types.DisableReason, until time.Time) {
-	logger.Printf("Disabling Bleemeo connector until %v due to %v", until.Truncate(time.Minute), reason)
-	c.sync.Disable(until)
+	delay := time.Until(until)
+	logger.Printf("Disabling Bleemeo connector for %v due to %v", delay.Truncate(time.Second), reason)
+	c.sync.Disable(until, reason)
+	c.mqtt.Disable(until, reason)
+
+	c.l.Lock()
+	defer c.l.Unlock()
+	c.disabledUntil = until
+	c.disableReason = reason
 }

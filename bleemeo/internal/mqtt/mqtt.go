@@ -52,6 +52,7 @@ type Client struct {
 	failedPointsCount     int
 	lastDisconnectionTime []time.Time
 	disabledUntil         time.Time
+	disableReason         types.DisableReason
 }
 
 type metricPayload struct {
@@ -101,6 +102,15 @@ func (c *Client) Connected() bool {
 		return false
 	}
 	return c.mqttClient.IsConnectionOpen()
+}
+
+// Disable will disable (or re-enable) the MQTT connection until given time.
+// To re-enable, set a time in the past.
+func (c *Client) Disable(until time.Time, reason types.DisableReason) {
+	c.l.Lock()
+	defer c.l.Unlock()
+	c.disabledUntil = until
+	c.disableReason = reason
 }
 
 // Run connect and transmit information to Bleemeo Cloud platform
@@ -225,7 +235,7 @@ func (c *Client) run(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 	for ctx.Err() == nil {
-		disableUntil := c.getDisableUntil()
+		disableUntil, _ := c.getDisableUntil()
 		if time.Now().Before(disableUntil) {
 			c.mqttClient.Disconnect(0)
 			c.connect(ctx) // connect wait for disableUntil to be passed
@@ -249,6 +259,9 @@ func (c *Client) run(ctx context.Context) error {
 func (c *Client) addPoints(points []agentTypes.MetricPoint) {
 	c.l.Lock()
 	defer c.l.Unlock()
+	if time.Now().Before(c.disabledUntil) && c.disableReason == types.DisableDuplicatedAgent {
+		return
+	}
 	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
@@ -344,10 +357,10 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 	return payload
 }
 
-func (c *Client) getDisableUntil() time.Time {
+func (c *Client) getDisableUntil() (time.Time, types.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
-	return c.disabledUntil
+	return c.disabledUntil, c.disableReason
 }
 
 func (c *Client) connect(ctx context.Context) {
@@ -356,27 +369,16 @@ func (c *Client) connect(ctx context.Context) {
 	firstConnect := true
 
 	for ctx.Err() == nil {
-		disableDelay := time.Until(c.getDisableUntil())
-		if disableDelay > 0 && disableDelay > delay {
-			delay = disableDelay
+		delay *= 2
+		if delay > optionReader.MaxReconnectInterval() {
+			delay = optionReader.MaxReconnectInterval()
 		}
-		if delay > 0 {
-			select {
-			case <-time.After(delay):
-			case <-ctx.Done():
-				return
-			}
-			delay *= 2
-			if delay > optionReader.MaxReconnectInterval() {
-				delay = optionReader.MaxReconnectInterval()
-			}
-		} else {
-			delay = 5 * time.Second
-		}
+		common.WaitDeadline(c.ctx, delay, c.getDisableUntil, "Bleemeo MQTT connection")
 
 		if firstConnect {
 			logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
 			firstConnect = false
+			delay = 5 * time.Second
 		}
 		token := c.mqttClient.Connect()
 		for !token.WaitTimeout(1 * time.Second) {
@@ -430,6 +432,7 @@ func (c *Client) onConnectionLost(_ paho.Client, err error) {
 	}
 	if c.disabledUntil.Before(until) {
 		c.disabledUntil = until
+		c.disableReason = types.DisableTooManyErrors
 		c.mqttClient.Disconnect(0)
 		// Trigger facts synchronization to check for duplicate agent
 		_, _ = c.option.Facts.Facts(c.ctx, 0)

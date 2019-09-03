@@ -36,6 +36,7 @@ type Synchronizer struct {
 
 	l             sync.Mutex
 	disabledUntil time.Time
+	disableReason types.DisableReason
 }
 
 // Option are parameter for the syncrhonizer
@@ -82,22 +83,23 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	s.updateUnitsAndThresholds()
 
 	s.successiveErrors = 0
-	delay := time.Duration(0)
-	deadline := time.Now()
+	var minimalDelay time.Duration
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
 		logger.V(2).Printf("Waiting few second before first synchroization as this agent has a valid cache")
-		deadline = time.Now().Add(common.JitterDelay(20, 0.5, 20))
+		minimalDelay = common.JitterDelay(20, 0.5, 20)
 	}
 	for s.ctx.Err() == nil {
-		s.waitDeadline(deadline)
+		// TODO: allow WaitDeadline to be interrupted when new metrics arrive
+		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronize with Bleemeo Cloud platform")
 		if s.ctx.Err() != nil {
 			break
 		}
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
-			delay = common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+			delay := common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+			s.disable(time.Now().Add(delay), types.DisableTooManyErrors, false)
 			if client.IsAuthError(err) {
 				agentID := s.option.State.AgentID()
 				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
@@ -119,59 +121,32 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			}
 		} else {
 			s.successiveErrors = 0
-			delay = common.JitterDelay(15, 0.05, 15)
+			minimalDelay = common.JitterDelay(15, 0.05, 15)
 		}
-		deadline = time.Now().Add(delay)
 	}
 
 	return nil
 }
 
-func (s *Synchronizer) waitDeadline(deadline time.Time) {
-	disabledUntil := s.getDisabledUntil()
-	sleepUntil := deadline
-	if sleepUntil.Before(disabledUntil) {
-		sleepUntil = disabledUntil
-	}
-	for time.Now().Before(deadline) && s.ctx.Err() == nil {
-		delay := time.Until(deadline)
-		if delay < 0 {
-			break
-		}
-		if delay > 60*time.Second {
-			logger.V(1).Printf(
-				"Synchronize with Bleemeo Cloud platform still have to wait %v due to last error",
-				delay.Truncate(time.Second),
-			)
-			delay = 60 * time.Second
-		}
-		select {
-		// TODO: allow this loop to be interrupted when new metrics arrive
-		case <-time.After(delay):
-		case <-s.ctx.Done():
-		}
-
-		disabledUntil := s.getDisabledUntil()
-		if deadline.Before(disabledUntil) {
-			sleepUntil = disabledUntil
-		} else {
-			sleepUntil = deadline
-		}
-	}
-}
-
-func (s *Synchronizer) getDisabledUntil() time.Time {
+func (s *Synchronizer) getDisabledUntil() (time.Time, types.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
-	return s.disabledUntil
+	return s.disabledUntil, s.disableReason
 }
 
 // Disable will disable (or re-enable) the Synchronized until given time.
 // To re-enable, set a time in the past.
-func (s *Synchronizer) Disable(until time.Time) {
+func (s *Synchronizer) Disable(until time.Time, reason types.DisableReason) {
+	s.disable(until, reason, true)
+}
+
+func (s *Synchronizer) disable(until time.Time, reason types.DisableReason, force bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
-	s.disabledUntil = until
+	if force || s.disabledUntil.Before(until) {
+		s.disabledUntil = until
+		s.disableReason = reason
+	}
 }
 
 func (s *Synchronizer) setClient() error {
@@ -248,7 +223,8 @@ func (s *Synchronizer) runOnce() error {
 		if s.ctx.Err() != nil {
 			break
 		}
-		if !s.getDisabledUntil().IsZero() {
+		until, _ := s.getDisabledUntil()
+		if time.Now().Before(until) {
 			if lastErr == nil {
 				lastErr = errors.New("bleemeo connector is temporary disabled")
 			}
@@ -296,15 +272,15 @@ func (s *Synchronizer) checkDuplicated() error {
 			continue
 		}
 		until := time.Now().Add(common.JitterDelay(900, 0.05, 900))
-		s.Disable(until)
+		s.Disable(until, types.DisableDuplicatedAgent)
 		if s.option.DisableCallback != nil {
 			s.option.DisableCallback(types.DisableDuplicatedAgent, until)
 		}
 		logger.Printf(
 			"Detected duplicated state.json. Another agent changed %#v from %#v to %#v",
 			name,
-			old,
-			new,
+			old.Value,
+			new.Value,
 		)
 		logger.Printf(
 			"The following links may be relevant to solve the issue: https://docs.bleemeo.com/agent/migrate-agent-new-server/ " +
