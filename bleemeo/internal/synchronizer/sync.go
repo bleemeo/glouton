@@ -338,6 +338,7 @@ func (s *Synchronizer) register() error {
 	if statusCode != 201 {
 		return fmt.Errorf("registration status code is %v, want 201", statusCode)
 	}
+	s.agentID = objectID.ID
 	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
 		return err
 	}
