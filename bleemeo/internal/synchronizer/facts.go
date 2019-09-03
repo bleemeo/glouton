@@ -32,7 +32,7 @@ func (s *Synchronizer) syncFacts(fullSync bool) error {
 func (s *Synchronizer) factsUpdateList() error {
 
 	params := map[string]string{
-		"agent": s.option.State.AgentID(),
+		"agent": s.agentID,
 	}
 	result, err := s.client.Iter("agentfact", params)
 	if err != nil {
@@ -69,7 +69,7 @@ func (s *Synchronizer) factRegister(localFacts map[string]string) error {
 
 		// Agent can't update fact. We delete and re-create the facts
 		payload := map[string]string{
-			"agent": s.option.State.AgentID(),
+			"agent": s.agentID,
 			"key":   key,
 			"value": value,
 		}

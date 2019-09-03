@@ -27,7 +27,9 @@ const pointsBatchSize = 1000
 // Option are parameter for the MQTT client
 type Option struct {
 	types.GlobalOption
-	Cache *cache.Cache
+	Cache         *cache.Cache
+	AgentID       string
+	AgentPassword string
 
 	// DisableCallback is a function called when MQTT got too much connect/disconnection.
 	DisableCallback func(reason types.DisableReason, until time.Time)
@@ -164,9 +166,8 @@ func (c *Client) setupMQTT() error {
 	if err != nil {
 		return err
 	}
-	agentID := c.option.State.AgentID()
 	pahoOptions.SetBinaryWill(
-		fmt.Sprintf("v1/agent/%s/disconnect", agentID),
+		fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID),
 		willPayload,
 		1,
 		false,
@@ -189,8 +190,8 @@ func (c *Client) setupMQTT() error {
 	} else {
 		brokerURL = "tcp://" + brokerURL
 	}
-	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", agentID))
-	pahoOptions.SetPassword(c.option.State.AgentPassword())
+	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
+	pahoOptions.SetPassword(c.option.AgentPassword)
 	pahoOptions.AddBroker(brokerURL)
 	pahoOptions.SetConnectionLostHandler(c.onConnectionLost)
 	pahoOptions.SetOnConnectHandler(c.onConnect)
@@ -212,7 +213,7 @@ func (c *Client) shutdown() error {
 		if err != nil {
 			return err
 		}
-		c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.option.State.AgentID()), payload)
+		c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID), payload)
 	}
 	stillPending := c.waitPublish(deadline)
 	if stillPending > 0 {
@@ -326,7 +327,7 @@ func (c *Client) sendPoints() {
 			logger.V(1).Printf("Unable to encode points: %v", err)
 			return
 		}
-		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.State.AgentID()), buffer)
+		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.AgentID), buffer)
 	}
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -412,8 +413,7 @@ func (c *Client) onConnect(_ paho.Client) {
 		logger.V(2).Printf("Unable to encode connect message: %v", err)
 		return
 	}
-	agentID := c.option.State.AgentID()
-	c.publish(fmt.Sprintf("v1/agent/%s/connect", agentID), payload)
+	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload)
 }
 
 func (c *Client) onConnectionLost(_ paho.Client, err error) {
@@ -458,7 +458,7 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg types.AccountConfig) {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
 		return
 	}
-	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.State.AgentID())
+	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.AgentID)
 
 	var buffer bytes.Buffer
 	w := zlib.NewWriter(&buffer)
@@ -508,10 +508,6 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 }
 
 func (c *Client) ready() bool {
-	if c.option.State.AgentID() == "" {
-		logger.V(2).Printf("MQTT not ready, Agent not yet registrered")
-		return false
-	}
 	cfg := c.option.Cache.AccountConfig()
 	if cfg.LiveProcessResolution == 0 || cfg.MetricAgentResolution == 0 {
 		logger.V(2).Printf("MQTT not ready, Agent as no configuration")

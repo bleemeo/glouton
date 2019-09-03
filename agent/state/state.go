@@ -9,26 +9,17 @@ import (
 
 // State is state.json
 type State struct {
-	data stateData
+	data map[string]json.RawMessage
 
 	l    sync.Mutex
 	path string
-}
-
-type stateData struct {
-	AgentUUID     string `json:"agent_uuid"`
-	AgentPassword string `json:"password"`
-
-	Cache map[string]json.RawMessage
 }
 
 // Load load state.json file
 func Load(path string) (*State, error) {
 	state := State{
 		path: path,
-		data: stateData{
-			Cache: make(map[string]json.RawMessage),
-		},
+		data: make(map[string]json.RawMessage),
 	}
 	f, err := os.Open(path)
 	if err != nil && os.IsNotExist(err) {
@@ -38,9 +29,6 @@ func Load(path string) (*State, error) {
 	}
 	decoder := json.NewDecoder(f)
 	err = decoder.Decode(&state.data)
-	if state.data.Cache == nil {
-		state.data.Cache = make(map[string]json.RawMessage)
-	}
 	return &state, err
 }
 
@@ -75,35 +63,8 @@ func (s *State) saveTo(path string) error {
 	return nil
 }
 
-// AgentID returns the agent UUID for Bleemeo
-func (s *State) AgentID() string {
-	s.l.Lock()
-	defer s.l.Unlock()
-	return s.data.AgentUUID
-}
-
-// AgentPassword returns the agent password for Bleemeo
-func (s *State) AgentPassword() string {
-	s.l.Lock()
-	defer s.l.Unlock()
-	return s.data.AgentPassword
-}
-
-// SetAgentIDPassword save the agent UUID and password for Bleemeo
-func (s *State) SetAgentIDPassword(agentID string, password string) {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	s.data.AgentUUID = agentID
-	s.data.AgentPassword = password
-	err := s.save()
-	if err != nil {
-		logger.Printf("Unable to save state.json: %v", err)
-	}
-}
-
-// SetCache save a cache object
-func (s *State) SetCache(key string, object interface{}) error {
+// Set save an object
+func (s *State) Set(key string, object interface{}) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -111,7 +72,7 @@ func (s *State) SetCache(key string, object interface{}) error {
 	if err != nil {
 		return err
 	}
-	s.data.Cache[key] = json.RawMessage(buffer)
+	s.data[key] = json.RawMessage(buffer)
 	err = s.save()
 	if err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
@@ -119,12 +80,12 @@ func (s *State) SetCache(key string, object interface{}) error {
 	return nil
 }
 
-// Cache get a cache object
-func (s *State) Cache(key string, result interface{}) error {
+// Get return an object
+func (s *State) Get(key string, result interface{}) error {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	buffer, ok := s.data.Cache[key]
+	buffer, ok := s.data[key]
 	if !ok {
 		return nil
 	}

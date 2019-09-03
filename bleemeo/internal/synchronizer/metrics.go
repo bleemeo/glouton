@@ -234,7 +234,7 @@ func (s *Synchronizer) updateUnitsAndThresholds() {
 
 func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 	params := map[string]string{
-		"agent":  s.option.State.AgentID(),
+		"agent":  s.agentID,
 		"fields": "id,item,label,labels,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
 	}
 	if !includeInactive {
@@ -275,7 +275,7 @@ func (s *Synchronizer) metricUpdateListSearch(requests []common.MetricLabelItem)
 
 	for _, key := range requests {
 		params := map[string]string{
-			"agent":  s.option.State.AgentID(),
+			"agent":  s.agentID,
 			"label":  key.Label,
 			"item":   key.Item,
 			"fields": "id,label,labels,item,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
@@ -445,7 +445,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 			Labels: labels,
 		},
 		Item:  key.Item,
-		Agent: s.option.State.AgentID(),
+		Agent: s.agentID,
 	}
 	var result metricPayload
 	if labels["status_of"] != "" {

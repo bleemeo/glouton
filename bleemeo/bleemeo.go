@@ -20,40 +20,47 @@ type Connector struct {
 	sync  *synchronizer.Synchronizer
 	mqtt  *mqtt.Client
 
-	l             sync.Mutex
-	initDone      bool
+	l sync.Mutex
+	// initDone      bool
 	disabledUntil time.Time
 	disableReason types.DisableReason
 }
 
 // New create a new Connector
 func New(option types.GlobalOption) *Connector {
-	return &Connector{
+	c := &Connector{
 		option: option,
 		cache:  cache.Load(option.State),
 	}
-}
-
-func (c *Connector) init(ctx context.Context) {
-	c.l.Lock()
-	defer c.l.Unlock()
 	c.sync = synchronizer.New(synchronizer.Option{
 		GlobalOption:         c.option,
 		Cache:                c.cache,
 		UpdateConfigCallback: c.uppdateConfig,
 		DisableCallback:      c.disableCallback,
 	})
+	return c
+}
+
+func (c *Connector) initMQTT() error {
+	c.l.Lock()
+	defer c.l.Unlock()
+	var password string
+	err := c.option.State.Get("password", &password)
+	if err != nil {
+		return err
+	}
 	c.mqtt = mqtt.New(mqtt.Option{
 		GlobalOption:    c.option,
 		Cache:           c.cache,
 		DisableCallback: c.disableCallback,
+		AgentID:         c.AgentID(),
+		AgentPassword:   password,
 	})
-	c.initDone = true
+	return nil
 }
 
 // Run run the Connector
 func (c *Connector) Run(ctx context.Context) error {
-	c.init(ctx)
 	defer c.cache.Save()
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -65,12 +72,6 @@ func (c *Connector) Run(ctx context.Context) error {
 		defer wg.Done()
 		defer cancel()
 		syncErr = c.sync.Run(subCtx)
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer cancel()
-		mqttErr = c.mqtt.Run(subCtx)
 	}()
 	wg.Add(1)
 	go func() {
@@ -88,6 +89,27 @@ func (c *Connector) Run(ctx context.Context) error {
 		}
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
+
+	for {
+		if c.AgentID() != "" {
+			if err := c.initMQTT(); err != nil {
+				cancel()
+				mqttErr = err
+				break
+			}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				defer cancel()
+				mqttErr = c.mqtt.Run(subCtx)
+			}()
+			break
+		}
+		select {
+		case <-time.After(5 * time.Second):
+		case <-subCtx.Done():
+		}
+	}
 
 	wg.Wait()
 	logger.V(2).Printf("Bleemeo connector stopped")
@@ -112,9 +134,6 @@ func (c *Connector) Tags() []string {
 func (c *Connector) AccountID() string {
 	c.l.Lock()
 	defer c.l.Unlock()
-	if !c.initDone {
-		return ""
-	}
 	accountID := c.cache.AccountID()
 	if accountID != "" {
 		return accountID
@@ -125,16 +144,18 @@ func (c *Connector) AccountID() string {
 // AgentID returns the Agent UUID of Bleemeo
 // It return the empty string if the Account UUID is not available
 func (c *Connector) AgentID() string {
-	return c.option.State.AgentID()
+	var agentID string
+	err := c.option.State.Get("agent_uuid", &agentID)
+	if err != nil {
+		return ""
+	}
+	return agentID
 }
 
 // RegistrationAt returns the date of registration with Bleemeo API
 func (c *Connector) RegistrationAt() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
-	if !c.initDone {
-		return time.Time{}
-	}
 	agent := c.cache.Agent()
 	return agent.CreatedAt
 }
@@ -143,7 +164,7 @@ func (c *Connector) RegistrationAt() time.Time {
 func (c *Connector) Connected() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
-	if !c.initDone {
+	if c.mqtt == nil {
 		return false
 	}
 	return c.mqtt.Connected()
@@ -151,13 +172,18 @@ func (c *Connector) Connected() bool {
 
 // LastReport returns the date of last report with Bleemeo API over MQTT
 func (c *Connector) LastReport() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+	if c.mqtt == nil {
+		return time.Time{}
+	}
 	return c.mqtt.LastReport()
 }
 
 // HealthCheck perform some health check and logger any issue found
 func (c *Connector) HealthCheck() bool {
 	ok := true
-	if c.option.State.AgentID() == "" {
+	if c.AgentID() == "" {
 		logger.Printf("Agent not yet registered")
 		ok = false
 	}
@@ -176,7 +202,9 @@ func (c *Connector) HealthCheck() bool {
 }
 
 func (c *Connector) emitInternalMetric() {
-	if c.mqtt.Connected() {
+	c.l.Lock()
+	defer c.l.Unlock()
+	if c.mqtt != nil && c.mqtt.Connected() {
 		c.option.Acc.AddFields("", map[string]interface{}{"agent_status": 1.0}, nil)
 	}
 }

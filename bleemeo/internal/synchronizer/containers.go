@@ -55,7 +55,7 @@ func (s *Synchronizer) syncContainers(fullSync bool) error {
 
 func (s *Synchronizer) containerUpdateList() error {
 	params := map[string]string{
-		"agent":  s.option.State.AgentID(),
+		"agent":  s.agentID,
 		"fields": "id,name,docker_id,docker_inspect",
 	}
 	result, err := s.client.Iter("container", params)
@@ -116,7 +116,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		payloadContainer.DockerInspectHash = "" // we don't send inspect hash to API
 		payload := containerPayload{
 			Container:        payloadContainer,
-			Host:             s.option.State.AgentID(),
+			Host:             s.agentID,
 			Command:          container.Command(),
 			DockerStatus:     container.State(),
 			DockerCreatedAt:  container.CreatedAt(),

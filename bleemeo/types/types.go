@@ -37,11 +37,8 @@ type Config interface {
 
 // State is the interaface used by Bleemeo to access State
 type State interface {
-	AgentID() string
-	AgentPassword() string
-	SetAgentIDPassword(string, string)
-	SetCache(key string, object interface{}) error
-	Cache(key string, result interface{}) error
+	Set(key string, object interface{}) error
+	Get(key string, result interface{}) error
 }
 
 // FactProvider is the interface used by Bleemeo to access facts

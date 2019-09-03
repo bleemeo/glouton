@@ -23,7 +23,7 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 			data["tags"] = append(data["tags"], types.Tag{Name: t})
 		}
 	}
-	_, err := s.client.Do("PATCH", fmt.Sprintf("v1/agent/%s/", s.option.State.AgentID()), params, data, &agent)
+	_, err := s.client.Do("PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
 	if err != nil {
 		return err
 	}

@@ -33,6 +33,7 @@ type Synchronizer struct {
 	apiSupportLabels        bool
 	forceSync               map[string]time.Time
 	lastMetricCount         int
+	agentID                 string
 
 	l             sync.Mutex
 	disabledUntil time.Time
@@ -71,13 +72,15 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent)")
 	}
 
-	if err := s.setClient(); err != nil {
-		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
+	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
+		return err
+	}
+	if s.agentID != "" {
+		logger.V(1).Printf("This agent is registered on Bleemeo Cloud platform with UUID %v", s.agentID)
 	}
 
-	agentID := s.option.State.AgentID()
-	if agentID != "" {
-		logger.V(1).Printf("This agent is registered on Bleemeo Cloud platform with UUID %v", agentID)
+	if err := s.setClient(); err != nil {
+		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
 	}
 
 	s.updateUnitsAndThresholds()
@@ -101,7 +104,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			delay := common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 			s.disable(time.Now().Add(delay), types.DisableTooManyErrors, false)
 			if client.IsAuthError(err) {
-				agentID := s.option.State.AgentID()
 				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
 				fqdnMessage := ""
 				if fqdn != "" {
@@ -109,7 +111,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				}
 				logger.Printf(
 					"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
-					agentID,
+					s.agentID,
 					fqdnMessage,
 				)
 			} else {
@@ -150,8 +152,11 @@ func (s *Synchronizer) disable(until time.Time, reason types.DisableReason, forc
 }
 
 func (s *Synchronizer) setClient() error {
-	username := fmt.Sprintf("%s@bleemeo.com", s.option.State.AgentID())
-	password := s.option.State.AgentPassword()
+	username := fmt.Sprintf("%s@bleemeo.com", s.agentID)
+	var password string
+	if err := s.option.State.Get("password", &password); err != nil {
+		return err
+	}
 	client, err := client.NewClient(s.ctx, s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
 	if err != nil {
 		return err
@@ -161,8 +166,7 @@ func (s *Synchronizer) setClient() error {
 }
 
 func (s *Synchronizer) runOnce() error {
-	agentID := s.option.State.AgentID()
-	if agentID == "" {
+	if s.agentID == "" {
 		if err := s.register(); err != nil {
 			return err
 		}
@@ -311,6 +315,11 @@ func (s *Synchronizer) register() error {
 	var objectID struct {
 		ID string
 	}
+	// We save the password before doing the API POST to validate that
+	// State can save value.
+	if err := s.option.State.Set("password", password); err != nil {
+		return err
+	}
 	statusCode, err := s.client.PostAuth(
 		"v1/agent/",
 		map[string]string{
@@ -329,7 +338,9 @@ func (s *Synchronizer) register() error {
 	if statusCode != 201 {
 		return fmt.Errorf("registration status code is %v, want 201", statusCode)
 	}
-	s.option.State.SetAgentIDPassword(objectID.ID, password)
+	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
+		return err
+	}
 	logger.V(1).Printf("regisration successful with UUID %v", objectID.ID)
 	_ = s.setClient()
 	return nil

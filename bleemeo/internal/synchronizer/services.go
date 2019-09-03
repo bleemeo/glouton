@@ -128,7 +128,7 @@ func (s *Synchronizer) syncServices(fullSync bool) error {
 
 func (s *Synchronizer) serviceUpdateList() error {
 	params := map[string]string{
-		"agent":  s.option.State.AgentID(),
+		"agent":  s.agentID,
 		"fields": "id,label,instance,listen_addresses,exe_path,stack,active",
 	}
 	result, err := s.client.Iter("service", params)
@@ -212,7 +212,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 				Active:          srv.Active,
 			},
 			Account: s.option.Cache.AccountID(),
-			Agent:   s.option.State.AgentID(),
+			Agent:   s.agentID,
 		}
 		var result types.Service
 		if remoteFound {

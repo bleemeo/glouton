@@ -7,6 +7,7 @@ import (
 )
 
 const cacheVersion = 1
+const cacheKey = "CacheBleemeoConnector"
 
 // Cache store information about object registered in Bleemeo API
 type Cache struct {
@@ -232,7 +233,7 @@ func (c *Cache) Save() {
 		return
 	}
 
-	if err := c.state.SetCache("bleemeoConnector", c.data); err != nil {
+	if err := c.state.Set(cacheKey, c.data); err != nil {
 		logger.V(1).Printf("Unable to save Bleemeo connector cache: %v", err)
 		return
 	}
@@ -245,7 +246,7 @@ func Load(state types.State) *Cache {
 		state: state,
 	}
 	var newData data
-	if err := state.Cache("bleemeoConnector", &newData); err != nil {
+	if err := state.Get(cacheKey, &newData); err != nil {
 		logger.V(1).Printf("Unable to load Bleemeo connector cache: %v", err)
 	}
 	switch newData.Version {

@@ -78,3 +78,9 @@ go build -ldflags "-X agentgo/version.Version=$VERSION -X agentgo/version.BuildH
 
 Bleemeo agent use Go module. VS code support for Go module require usage of gppls.
 Enable "Use Language Server" in VS code option for Go.
+
+To install or update gopls, use:
+
+```
+(cd /tmp; GO111MODULE=on go get golang.org/x/tools/gopls@latest)
+```

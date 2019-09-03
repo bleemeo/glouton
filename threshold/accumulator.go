@@ -14,7 +14,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-const statusCacheKey = "statusState"
+const statusCacheKey = "CacheStatusState"
 
 // StatusAccumulator is the type used by Accumulator to send metrics. It's a subset of store.Accumulator
 type StatusAccumulator interface {
@@ -43,7 +43,7 @@ func New(acc StatusAccumulator, state *state.State) *Accumulator {
 		states: make(map[MetricNameItem]statusState),
 	}
 	var jsonList []jsonState
-	err := state.Cache(statusCacheKey, &jsonList)
+	err := state.Get(statusCacheKey, &jsonList)
 	if err != nil {
 		for _, v := range jsonList {
 			self.states[v.MetricNameItem] = v.statusState
@@ -346,7 +346,7 @@ func (a *Accumulator) run(save bool) {
 		}
 	}
 	if save {
-		_ = a.state.SetCache(statusCacheKey, jsonList)
+		_ = a.state.Set(statusCacheKey, jsonList)
 	}
 }
 
