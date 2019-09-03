@@ -37,6 +37,7 @@ type Discovery struct {
 	coll                  Collector
 	taskRegistry          Registry
 	containerInfo         containerInfoProvider
+	state                 State
 }
 
 // Collector will gather metrics for added inputs
@@ -52,7 +53,8 @@ type Registry interface {
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, initialServices []Service, acc Accumulator, containerInfo *facts.DockerProvider) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider) *Discovery {
+	initialServices := servicesFromState(state)
 	servicesMap := make(map[nameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
 		key := nameContainer{
@@ -70,6 +72,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, ini
 		acc:              acc,
 		activeInput:      make(map[nameContainer]int),
 		activeCheck:      make(map[nameContainer]int),
+		state:            state,
 	}
 }
 
@@ -104,6 +107,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 		if err != nil {
 			return nil, err
 		}
+		saveState(d.state, d.servicesMap)
 		d.reconfigure()
 		d.lastDiscoveryUpdate = time.Now()
 	}

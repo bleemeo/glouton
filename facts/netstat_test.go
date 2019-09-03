@@ -2,13 +2,12 @@ package facts
 
 import (
 	"fmt"
-	"net"
 	"sort"
 	"strings"
 	"testing"
 )
 
-func cmpAddresses(t *testing.T, msgPrefix string, got []net.Addr, want []listenAddress) {
+func cmpAddresses(t *testing.T, msgPrefix string, got []ListenAddress, want []ListenAddress) {
 	if len(got) != len(want) {
 		t.Errorf("%s == %v, want %v", msgPrefix, got, want)
 	}
@@ -25,21 +24,21 @@ func cmpAddresses(t *testing.T, msgPrefix string, got []net.Addr, want []listenA
 
 func TestAddAddress(t *testing.T) {
 	cases := []struct {
-		adds []listenAddress
-		want []listenAddress
+		adds []ListenAddress
+		want []ListenAddress
 	}{
 		{
-			adds: []listenAddress{{network: "tcp", address: "0.0.0.0:22"}},
-			want: []listenAddress{{network: "tcp", address: "0.0.0.0:22"}},
+			adds: []ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0:22"}},
+			want: []ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0:22"}},
 		},
 		{
-			adds: []listenAddress{{network: "unix", address: "@/tmp/.ICE-unix/5108"}},
-			want: []listenAddress{{network: "unix", address: "@/tmp/.ICE-unix/5108"}},
+			adds: []ListenAddress{{NetworkFamily: "unix", Address: "@/tmp/.ICE-unix/5108"}},
+			want: []ListenAddress{{NetworkFamily: "unix", Address: "@/tmp/.ICE-unix/5108"}},
 		},
 	}
 
 	for i, c := range cases {
-		var got []net.Addr
+		var got []ListenAddress
 		for _, newAddr := range c.adds {
 			got = addAddress(got, newAddr)
 		}
@@ -67,31 +66,31 @@ unix  2      [ ACC ]     STREAM     LISTENING     66929    5108/gnome-session-  
 unix  2      [ ACC ]     SEQPACKET  LISTENING     18666    1/init               /run/udev/control
 `
 
-	want := map[int][]listenAddress{
+	want := map[int][]ListenAddress{
 		5534: {
-			{network: "tcp", address: "127.0.0.1", port: 46319},
+			{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 46319},
 		},
 		1281: {
-			{network: "tcp", address: "0.0.0.0", port: 111},
-			{network: "udp", address: "0.0.0.0", port: 609},
+			{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 111},
+			{NetworkFamily: "udp", Address: "0.0.0.0", Port: 609},
 		},
 		3541: {
-			{network: "tcp", address: "172.17.0.1", port: 9100},
+			{NetworkFamily: "tcp", Address: "172.17.0.1", Port: 9100},
 		},
 		14250: {
-			{network: "tcp", address: "127.0.0.1", port: 631}, // tcp6 as assumed to be tcp6+4. We only work with tcp4 for now
+			{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 631}, // tcp6 as assumed to be tcp6+4. We only work with tcp4 for now
 		},
 		1375: {
-			{network: "udp", address: "0.0.0.0", port: 5353},
+			{NetworkFamily: "udp", Address: "0.0.0.0", Port: 5353},
 		},
 		2158: {
-			{network: "udp", address: "192.168.122.1", port: 53},
+			{NetworkFamily: "udp", Address: "192.168.122.1", Port: 53},
 		},
 		1560: {
-			{network: "udp", address: "0.0.0.0", port: 8125},
+			{NetworkFamily: "udp", Address: "0.0.0.0", Port: 8125},
 		},
 		5108: {
-			{network: "unix", address: "@/tmp/.ICE-unix/5108"},
+			{NetworkFamily: "unix", Address: "@/tmp/.ICE-unix/5108"},
 		},
 	}
 

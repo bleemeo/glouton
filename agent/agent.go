@@ -299,7 +299,7 @@ func (a *agent) run() { //nolint:gocyclo
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}),
 		a.collector,
 		a.taskRegistry,
-		nil,
+		a.state,
 		a.accumulator,
 		a.dockerFact,
 	)

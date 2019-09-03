@@ -3,7 +3,6 @@ package discovery
 import (
 	"agentgo/facts"
 	"context"
-	"net"
 	"os"
 	"reflect"
 	"testing"
@@ -23,17 +22,13 @@ func (mp mockProcess) Processes(ctx context.Context, maxAge time.Duration) (proc
 }
 
 type mockNetstat struct {
-	result map[int][]listenAddress
+	result map[int][]facts.ListenAddress
 }
 
-func (mn mockNetstat) Netstat(ctx context.Context) (netstat map[int][]net.Addr, err error) {
-	result := make(map[int][]net.Addr, len(mn.result))
-	for pid, m := range mn.result {
-		sublist := make([]net.Addr, len(m))
-		for i := range m {
-			sublist[i] = m[i]
-		}
-		result[pid] = sublist
+func (mn mockNetstat) Netstat(ctx context.Context) (netstat map[int][]facts.ListenAddress, err error) {
+	result := make(map[int][]facts.ListenAddress, len(mn.result))
+	for pid, l := range mn.result {
+		result[pid] = l
 	}
 	return result, nil
 }
@@ -44,7 +39,7 @@ type mockContainerInfo struct {
 
 type mockContainer struct {
 	ipAddress       string
-	listenAddresses []listenAddress
+	listenAddresses []facts.ListenAddress
 	env             []string
 }
 
@@ -53,12 +48,8 @@ func (mci mockContainerInfo) Container(containerID string) (container container,
 	return c, ok
 }
 
-func (mc mockContainer) ListenAddresses() []net.Addr {
-	listenAddresses := make([]net.Addr, 0)
-	for _, v := range mc.listenAddresses {
-		listenAddresses = append(listenAddresses, v)
-	}
-	return listenAddresses
+func (mc mockContainer) ListenAddresses() []facts.ListenAddress {
+	return mc.listenAddresses
 }
 
 func (mc mockContainer) Env() []string {
@@ -126,9 +117,9 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 				},
 			},
 		},
-		netstat: mockNetstat{result: map[int][]listenAddress{
+		netstat: mockNetstat{result: map[int][]facts.ListenAddress{
 			1547: {
-				{network: "tcp", address: "127.0.0.1:11211"},
+				{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211},
 			},
 		}},
 	}
@@ -144,7 +135,7 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 	if srv[0].Name != MemcachedService {
 		t.Errorf("Name == %#v, want %#v", srv[0].Name, MemcachedService)
 	}
-	want := []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:11211"}}
+	want := []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}}
 	if !reflect.DeepEqual(srv[0].ListenAddresses, want) {
 		t.Errorf("ListenAddresses == %v, want %v", srv[0].ListenAddresses, want)
 	}
@@ -158,8 +149,8 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		cmdLine            []string
 		filesContent       map[string]string
 		containerID        string
-		netstatAddresses   []listenAddress
-		containerAddresses []listenAddress
+		netstatAddresses   []facts.ListenAddress
+		containerAddresses []facts.ListenAddress
 		containerIP        string
 		containerEnv       []string
 		want               Service
@@ -168,11 +159,11 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			testName:         "simple-bind-all",
 			cmdLine:          []string{"/usr/bin/memcached"},
 			containerID:      "",
-			netstatAddresses: []listenAddress{{network: "tcp", address: "0.0.0.0:11211"}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 11211}},
 			want: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "0.0.0.0:11211"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 			},
 		},
@@ -184,7 +175,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			want: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:11211"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
 			},
 		},
@@ -192,11 +183,11 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			testName:         "simple-bind-specific",
 			cmdLine:          []string{"/usr/bin/memcached"},
 			containerID:      "",
-			netstatAddresses: []listenAddress{{network: "tcp", address: "192.168.1.1:11211"}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "192.168.1.1", Port: 11211}},
 			want: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "192.168.1.1:11211"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "192.168.1.1", Port: 11211}},
 				IPAddress:       "192.168.1.1",
 			},
 		},
@@ -204,11 +195,11 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			testName:         "ignore-highport",
 			cmdLine:          []string{"/usr/sbin/haproxy", "-f", "/etc/haproxy/haproxy.cfg"},
 			containerID:      "",
-			netstatAddresses: []listenAddress{{network: "tcp", address: "0.0.0.0:80"}, {network: "udp", address: "0.0.0.0:42514"}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 80}, {NetworkFamily: "udp", Address: "0.0.0.0", Port: 42514}},
 			want: Service{
 				Name:            "haproxy",
 				ContainerID:     "",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "0.0.0.0:80"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 80}},
 				IPAddress:       "127.0.0.1",
 			},
 		},
@@ -217,12 +208,12 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			cmdLine:            []string{"redis-server *:6379"},
 			containerID:        "5b8f83412931055bcc5da35e41ada85fd70015673163d56911cac4fe6693273f",
 			netstatAddresses:   nil, // netstat won't provide information
-			containerAddresses: []listenAddress{{network: "tcp", address: "172.17.0.49:6379"}},
+			containerAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379}},
 			containerIP:        "172.17.0.49",
 			want: Service{
 				Name:            "redis",
 				ContainerID:     "5b8f83412931055bcc5da35e41ada85fd70015673163d56911cac4fe6693273f",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "172.17.0.49:6379"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379}},
 				IPAddress:       "172.17.0.49",
 			},
 		},
@@ -231,7 +222,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			cmdLine:  []string{"/opt/jdk-11.0.1/bin/java", "-Xms1g", "-Xmx1g", "-XX:+UseConcMarkSweepGC", "[...]", "/usr/share/elasticsearch/lib/*", "org.elasticsearch.bootstrap.Elasticsearch"},
 			want: Service{
 				Name:            "elasticsearch",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:9200"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
 				IPAddress:       "127.0.0.1",
 			},
 		},
@@ -244,7 +235,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			want: Service{
 				Name:            "mysql",
 				ContainerID:     "1234",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "172.17.0.49:3306"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
 				IPAddress:       "172.17.0.49",
 				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
 			},
@@ -257,7 +248,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 			want: Service{
 				Name:            "mysql",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:3306"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
 				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
 			},
@@ -267,7 +258,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			cmdLine:  []string{"/usr/lib/erlang/erts-9.3.3.3/bin/beam.smp", "-W", "w", "[...]", "-noinput", "-s", "rabbit", "boot", "-sname", "[...]"},
 			want: Service{
 				Name:            "rabbitmq",
-				ListenAddresses: []net.Addr{listenAddress{network: "tcp", address: "127.0.0.1:5672"}},
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
 				IPAddress:       "127.0.0.1",
 			},
 		},
@@ -285,7 +276,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 					},
 				},
 			},
-			netstat: mockNetstat{result: map[int][]listenAddress{
+			netstat: mockNetstat{result: map[int][]facts.ListenAddress{
 				42: c.netstatAddresses,
 			}},
 			containerInfo: mockContainerInfo{

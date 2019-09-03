@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -260,14 +259,14 @@ func (c Container) InspectJSON() string {
 }
 
 // ListenAddresses returns the addresseses this container listen on
-func (c Container) ListenAddresses() []net.Addr {
+func (c Container) ListenAddresses() []ListenAddress {
 	if c.inspect.Config == nil {
 		return nil
 	}
 	if c.PrimaryAddress() == "" {
 		return nil
 	}
-	exposedPorts := make([]net.Addr, 0)
+	exposedPorts := make([]ListenAddress, 0)
 	for v := range c.inspect.Config.ExposedPorts {
 		tmp := strings.Split(string(v), "/")
 		if len(tmp) != 2 {
@@ -280,7 +279,7 @@ func (c Container) ListenAddresses() []net.Addr {
 			logger.V(1).Printf("unable to parse port %#v: %v", portStr, err)
 			continue
 		}
-		exposedPorts = append(exposedPorts, listenAddress{network: protocol, address: c.PrimaryAddress(), port: int(port)})
+		exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: protocol, Address: c.PrimaryAddress(), Port: int(port)})
 	}
 	return exposedPorts
 }

@@ -26,7 +26,7 @@ type NetstatProvider struct {
 // Netstat return a mapping from PID to listening addresses
 //
 // Supported addresses network is currently "tcp", "udp" or "unix".
-func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]net.Addr, err error) {
+func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]ListenAddress, err error) {
 	netstatData, err := ioutil.ReadFile(np.filePath)
 	if err != nil && !os.IsNotExist(err) {
 		return
@@ -55,10 +55,10 @@ func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]net.Ad
 				protocol += "6"
 			}
 
-			netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], listenAddress{
-				network: protocol,
-				address: address,
-				port:    int(c.Laddr.Port),
+			netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], ListenAddress{
+				NetworkFamily: protocol,
+				Address:       address,
+				Port:          int(c.Laddr.Port),
 			})
 		}
 	}
@@ -75,24 +75,27 @@ var (
 	)
 )
 
-type listenAddress struct {
-	network string
-	address string
-	port    int
+// ListenAddress is net.Addr implmentation
+type ListenAddress struct {
+	NetworkFamily string
+	Address       string
+	Port          int
 }
 
-func (l listenAddress) Network() string {
-	return l.network
+// Network is the method from net.Addr
+func (l ListenAddress) Network() string {
+	return l.NetworkFamily
 }
-func (l listenAddress) String() string {
-	if l.network == "unix" {
-		return l.address
+
+func (l ListenAddress) String() string {
+	if l.NetworkFamily == "unix" {
+		return l.Address
 	}
-	return fmt.Sprintf("%s:%d", l.address, l.port)
+	return fmt.Sprintf("%s:%d", l.Address, l.Port)
 }
 
-func decodeNetstatFile(data string) map[int][]net.Addr {
-	result := make(map[int][]net.Addr)
+func decodeNetstatFile(data string) map[int][]ListenAddress {
+	result := make(map[int][]ListenAddress)
 	lines := strings.Split(data, "\n")
 	for _, line := range lines {
 		var protocol, address string
@@ -126,32 +129,32 @@ func decodeNetstatFile(data string) map[int][]net.Addr {
 
 		addresses := result[int(pid)]
 		if addresses == nil {
-			addresses = make([]net.Addr, 0)
+			addresses = make([]ListenAddress, 0)
 		}
-		result[int(pid)] = addAddress(addresses, listenAddress{
-			network: protocol,
-			address: address,
-			port:    int(port),
+		result[int(pid)] = addAddress(addresses, ListenAddress{
+			NetworkFamily: protocol,
+			Address:       address,
+			Port:          int(port),
 		})
 	}
 	return result
 }
 
-func addAddress(addresses []net.Addr, newAddr listenAddress) []net.Addr {
+func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddress {
 	duplicate := false
-	if newAddr.network != "unix" {
-		if newAddr.network == "tcp6" || newAddr.network == "udp6" {
-			if newAddr.address == "::" {
-				newAddr.address = "0.0.0.0"
+	if newAddr.NetworkFamily != "unix" {
+		if newAddr.NetworkFamily == "tcp6" || newAddr.NetworkFamily == "udp6" {
+			if newAddr.Address == "::" {
+				newAddr.Address = "0.0.0.0"
 			}
-			if newAddr.address == "::1" {
-				newAddr.address = "127.0.0.1"
+			if newAddr.Address == "::1" {
+				newAddr.Address = "127.0.0.1"
 			}
-			if strings.Contains(newAddr.address, ":") {
+			if strings.Contains(newAddr.Address, ":") {
 				// It's still an IPv6 address, we don't know how to convert it to IPv4
 				return addresses
 			}
-			newAddr.network = newAddr.network[:3]
+			newAddr.NetworkFamily = newAddr.NetworkFamily[:3]
 		}
 
 		for i, v := range addresses {
@@ -168,10 +171,10 @@ func addAddress(addresses []net.Addr, newAddr listenAddress) []net.Addr {
 				logger.V(1).Printf("unable to parse port %#v: %v", otherPortStr, err)
 				return addresses
 			}
-			if int(otherPort) == newAddr.port {
+			if int(otherPort) == newAddr.Port {
 				duplicate = true
 				// We prefere 127.* address
-				if strings.HasPrefix(newAddr.address, "127.") {
+				if strings.HasPrefix(newAddr.Address, "127.") {
 					addresses[i] = newAddr
 				}
 				break

@@ -5,7 +5,6 @@ import (
 	"agentgo/facts"
 	"agentgo/logger"
 	"context"
-	"fmt"
 	"net"
 	"path/filepath"
 	"runtime"
@@ -35,7 +34,7 @@ type DynamicDiscovery struct {
 type container interface {
 	Env() []string
 	PrimaryAddress() string
-	ListenAddresses() []net.Addr
+	ListenAddresses() []facts.ListenAddress
 	Ignored() bool
 }
 
@@ -169,24 +168,12 @@ var (
 	}
 )
 
-type listenAddress struct {
-	network string
-	address string
-}
-
-func (l listenAddress) Network() string {
-	return l.network
-}
-func (l listenAddress) String() string {
-	return l.address
-}
-
 type processFact interface {
 	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
 }
 
 type netstatProvider interface {
-	Netstat(ctx context.Context) (netstat map[int][]net.Addr, err error)
+	Netstat(ctx context.Context) (netstat map[int][]facts.ListenAddress, err error)
 }
 
 type dockerWrapper facts.DockerProvider
@@ -316,7 +303,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	service.IPAddress = defaultAddress
 	if len(service.ListenAddresses) == 0 && di.ServicePort != 0 {
 		// If netstat seems to have failed, always add the main service port
-		service.ListenAddresses = append(service.ListenAddresses, listenAddress{network: di.ServiceProtocol, address: fmt.Sprintf("%s:%d", service.IPAddress, di.ServicePort)})
+		service.ListenAddresses = append(service.ListenAddresses, facts.ListenAddress{NetworkFamily: di.ServiceProtocol, Address: service.IPAddress, Port: di.ServicePort})
 	}
 }
 

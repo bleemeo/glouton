@@ -3,10 +3,10 @@ package synchronizer
 import (
 	"agentgo/bleemeo/types"
 	"agentgo/discovery"
+	"agentgo/facts"
 	"agentgo/logger"
 	"encoding/json"
 	"fmt"
-	"net"
 	"sort"
 	"strings"
 	"time"
@@ -81,7 +81,7 @@ func serviceIndexByKey(services []types.Service) map[serviceNameInstance]int {
 	return result
 }
 
-func getListenAddress(addresses []net.Addr) string {
+func getListenAddress(addresses []facts.ListenAddress) string {
 	stringList := make([]string, len(addresses))
 	for i, v := range addresses {
 		stringList[i] = v.String()

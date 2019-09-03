@@ -1,8 +1,8 @@
 package discovery
 
 import (
+	"agentgo/facts"
 	"context"
-	"net"
 	"time"
 )
 
@@ -71,8 +71,9 @@ type Service struct {
 	ContainerID     string
 	ContainerName   string
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
-	ListenAddresses []net.Addr
+	ListenAddresses []facts.ListenAddress
 	ExePath         string
+	Stack           string
 	// ExtraAttributes contains additional service-dependant attribute. It may be password for MySQL, URL for HAProxy, ...
 	// Both configuration and dynamic discovery may set value here.
 	ExtraAttributes map[string]string
