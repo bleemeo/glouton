@@ -1,10 +1,12 @@
 package discovery
 
 import (
+	"agentgo/facts"
 	"agentgo/logger"
 	"agentgo/task"
 	"agentgo/types"
 	"context"
+	"os"
 	"sync"
 	"time"
 
@@ -34,6 +36,7 @@ type Discovery struct {
 	activeCheck           map[nameContainer]int
 	coll                  Collector
 	taskRegistry          Registry
+	containerInfo         containerInfoProvider
 }
 
 // Collector will gather metrics for added inputs
@@ -49,7 +52,7 @@ type Registry interface {
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, initialServices []Service, acc Accumulator) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, initialServices []Service, acc Accumulator, containerInfo *facts.DockerProvider) *Discovery {
 	servicesMap := make(map[nameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
 		key := nameContainer{
@@ -63,6 +66,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, ini
 		servicesMap:      servicesMap,
 		coll:             coll,
 		taskRegistry:     taskRegistry,
+		containerInfo:    (*dockerWrapper)(containerInfo),
 		acc:              acc,
 		activeInput:      make(map[nameContainer]int),
 		activeCheck:      make(map[nameContainer]int),
@@ -149,7 +153,15 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	servicesMap := make(map[nameContainer]Service)
 	for key, service := range d.servicesMap {
-		service.Active = false
+		if service.ContainerID != "" {
+			if _, found := d.containerInfo.Container(service.ContainerID); !found {
+				service.Active = false
+			}
+		} else if service.ExePath != "" {
+			if _, err := os.Stat(service.ExePath); os.IsNotExist(err) {
+				service.Active = false
+			}
+		}
 		servicesMap[key] = service
 	}
 

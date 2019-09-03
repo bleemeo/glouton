@@ -32,6 +32,7 @@ type DockerProvider struct {
 	lastEventAt time.Time
 
 	containers map[string]Container
+	lastKill   map[string]time.Time
 	ignoredID  map[string]interface{}
 	lastUpdate time.Time
 }
@@ -54,6 +55,7 @@ func NewDocker() *DockerProvider {
 	return &DockerProvider{
 		notifyC:     make(chan DockerEvent),
 		lastEventAt: time.Now(),
+		lastKill:    make(map[string]time.Time),
 	}
 }
 
@@ -185,6 +187,13 @@ func (d *DockerProvider) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+// ContainerLastKill return the last time a kill event was seen for given container ID
+func (d *DockerProvider) ContainerLastKill(containerID string) time.Time {
+	d.l.Lock()
+	defer d.l.Unlock()
+	return d.lastKill[containerID]
 }
 
 // Command returns the command run in the container
@@ -518,7 +527,17 @@ func (d *DockerProvider) run(ctx context.Context) (err error) {
 	defer cancel()
 	eventC, errC := cl.Events(ctx2, types.EventsOptions{Since: d.lastEventAt.Format(time.RFC3339Nano)})
 
+	var lastCleanup time.Time
 	for {
+		if time.Since(lastCleanup) > 10*time.Minute {
+			d.l.Lock()
+			for k, v := range d.lastKill {
+				if time.Since(v) > time.Hour {
+					delete(d.lastKill, k)
+				}
+			}
+			d.l.Unlock()
+		}
 		select {
 		case event := <-eventC:
 			d.lastEventAt = time.Unix(event.Time, event.TimeNano)
@@ -535,6 +554,11 @@ func (d *DockerProvider) run(ctx context.Context) (err error) {
 				ok := d.isIgnored(se.ActorID)
 				if ok {
 					continue
+				}
+				if se.Action == "kill" {
+					d.l.Lock()
+					d.lastKill[se.ActorID] = time.Now()
+					d.l.Unlock()
 				}
 				select {
 				case d.notifyC <- se:

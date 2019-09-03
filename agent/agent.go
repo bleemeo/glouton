@@ -301,6 +301,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.taskRegistry,
 		nil,
 		a.accumulator,
+		a.dockerFact,
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 

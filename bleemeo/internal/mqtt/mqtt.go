@@ -347,8 +347,14 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 			if p.CurrentStatus.IsSet() {
 				value.Status = p.CurrentStatus.String()
 				value.ProblemOrigin = p.StatusDescription.StatusDescription
+				if p.Labels["container_id"] != "" {
+					lastKilledAt := c.option.Docker.ContainerLastKill(p.Labels["container_id"])
+					gracePeriod := time.Since(lastKilledAt) + 300*time.Second
+					if gracePeriod > 60*time.Second {
+						value.EventGracePeriod = int(gracePeriod.Seconds())
+					}
+				}
 			}
-			// TODO: fill value.EventGracePeriod
 			payload = append(payload, value)
 		} else {
 			c.failedPoints = append(c.failedPoints, p)

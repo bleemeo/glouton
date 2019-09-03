@@ -122,7 +122,7 @@ func TestDiscoverySingle(t *testing.T) {
 		if c.previousService.Name != "" {
 			previousService = append(previousService, c.previousService)
 		}
-		disc := New(mockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, previousService, nil)
+		disc := New(mockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, previousService, nil, nil)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {

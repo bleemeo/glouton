@@ -58,6 +58,7 @@ type ProcessProvider interface {
 // DockerProvider is the interface used by Bleemeo to access Docker containers
 type DockerProvider interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
+	ContainerLastKill(containerID string) time.Time
 }
 
 // Store is the interface used by Bleemeo to access Metric Store
