@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"os"
 	"sync"
 	"time"
 
@@ -208,8 +209,11 @@ func (c *Client) shutdown() error {
 	}
 	deadline := time.Now().Add(5 * time.Second)
 	if c.mqttClient.IsConnectionOpen() {
-		// TODO if upgrade_in_progress
-		payload, err := json.Marshal(map[string]string{"disconnect-cause": "Clean shutdown"})
+		cause := "Clean shutdown"
+		if _, err := os.Stat(c.option.Config.String("agent.upgrade_file")); err == nil {
+			cause = "Upgrade"
+		}
+		payload, err := json.Marshal(map[string]string{"disconnect-cause": cause})
 		if err != nil {
 			return err
 		}

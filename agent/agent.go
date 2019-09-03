@@ -258,6 +258,8 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 func (a *agent) run() { //nolint:gocyclo
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
+	_ = os.Remove(a.config.String("agent.upgrade_file"))
+
 	ctx, cancel := context.WithCancel(context.Background())
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
