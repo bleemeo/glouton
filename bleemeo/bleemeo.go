@@ -50,11 +50,13 @@ func (c *Connector) initMQTT() error {
 		return err
 	}
 	c.mqtt = mqtt.New(mqtt.Option{
-		GlobalOption:    c.option,
-		Cache:           c.cache,
-		DisableCallback: c.disableCallback,
-		AgentID:         c.AgentID(),
-		AgentPassword:   password,
+		GlobalOption:         c.option,
+		Cache:                c.cache,
+		DisableCallback:      c.disableCallback,
+		AgentID:              c.AgentID(),
+		AgentPassword:        password,
+		UpdateConfigCallback: c.sync.NotifyConfigUpdate,
+		UpdateMetrics:        c.sync.UpdateMetrics,
 	})
 	return nil
 }

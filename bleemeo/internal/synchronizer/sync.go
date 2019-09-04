@@ -31,13 +31,14 @@ type Synchronizer struct {
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	apiSupportLabels        bool
-	forceSync               map[string]time.Time
 	lastMetricCount         int
 	agentID                 string
 
-	l             sync.Mutex
-	disabledUntil time.Time
-	disableReason types.DisableReason
+	l                    sync.Mutex
+	disabledUntil        time.Time
+	disableReason        types.DisableReason
+	forceSync            map[string]bool
+	pendingMetricsUpdate []string
 }
 
 // Option are parameter for the syncrhonizer
@@ -58,6 +59,7 @@ func New(option Option) *Synchronizer {
 	return &Synchronizer{
 		option: option,
 
+		forceSync:    make(map[string]bool),
 		nextFullSync: time.Now(),
 	}
 }
@@ -137,6 +139,50 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	return nil
 }
 
+// NotifyConfigUpdate notify that an Agent configuration change occurred.
+// If immediate is true, the configuration change already happened, else it will happen.
+func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
+	s.l.Lock()
+	defer s.l.Unlock()
+	s.forceSync["agent"] = true
+	if !immediate {
+		return
+	}
+	s.forceSync["metrics"] = true
+	s.forceSync["containers"] = true
+}
+
+// UpdateMetrics request to update a specific metrics
+func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if len(metricUUID) == 1 && metricUUID[0] == "" {
+		// We don't known the metric to update. Update all
+		s.forceSync["metrics"] = true
+		s.pendingMetricsUpdate = nil
+		return
+	}
+	s.pendingMetricsUpdate = append(s.pendingMetricsUpdate, metricUUID...)
+	s.forceSync["metrics"] = false
+}
+
+func (s *Synchronizer) popPendingMetricsUpdate() []string {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	set := make(map[string]bool, len(s.pendingMetricsUpdate))
+	for _, m := range s.pendingMetricsUpdate {
+		set[m] = true
+	}
+	s.pendingMetricsUpdate = nil
+	result := make([]string, 0, len(set))
+	for m := range set {
+		result = append(result, m)
+	}
+	return result
+}
+
 func (s *Synchronizer) waitCPUMetric() {
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
@@ -201,36 +247,7 @@ func (s *Synchronizer) runOnce() error {
 		}
 	}
 
-	syncMethods := make(map[string]bool)
-	now := time.Now()
-	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
-
-	fullSync := false
-	if s.nextFullSync.Before(now) {
-		fullSync = true
-	}
-	// TODO: add other condition to trigger update
-	if fullSync {
-		syncMethods["agent"] = true
-	}
-	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
-		syncMethods["facts"] = true
-	}
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
-		syncMethods["services"] = true
-
-		// Metrics registration may need services to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = true
-	}
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
-		syncMethods["containers"] = true
-
-		// Metrics registration may need containers to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = true
-	}
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
-		syncMethods["metrics"] = true
-	}
+	syncMethods := s.syncToPerform()
 
 	if len(syncMethods) == 0 {
 		return nil
@@ -263,9 +280,8 @@ func (s *Synchronizer) runOnce() error {
 			}
 			break
 		}
-		forcedSync := s.lastSync.Before(s.forceSync[step.name])
-		if _, ok := syncMethods[step.name]; ok || forcedSync {
-			err := step.method(fullSync || forcedSync)
+		if full, ok := syncMethods[step.name]; ok {
+			err := step.method(full)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 				lastErr = err
@@ -273,7 +289,7 @@ func (s *Synchronizer) runOnce() error {
 		}
 	}
 	logger.V(2).Printf("Synchronization took %v for %v", time.Since(startAt), syncMethods)
-	if fullSync && lastErr == nil {
+	if len(syncMethods) == len(syncStep) && lastErr == nil {
 		s.option.Cache.Save()
 		s.nextFullSync = time.Now().Add(common.JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
@@ -282,6 +298,55 @@ func (s *Synchronizer) runOnce() error {
 		s.lastSync = startAt
 	}
 	return lastErr
+}
+
+func (s *Synchronizer) syncToPerform() map[string]bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+	syncMethods := make(map[string]bool)
+
+	fullSync := false
+	if s.nextFullSync.Before(time.Now()) {
+		fullSync = true
+	}
+
+	nextConfigAt := s.option.Cache.Agent().NextConfigAt
+	if !nextConfigAt.IsZero() && nextConfigAt.Before(time.Now()) {
+		fullSync = true
+	}
+
+	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+
+	if fullSync {
+		syncMethods["agent"] = fullSync
+	}
+	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
+		syncMethods["facts"] = fullSync
+	}
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
+		syncMethods["services"] = fullSync
+	}
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
+		syncMethods["containers"] = fullSync
+	}
+
+	if _, ok := syncMethods["services"]; ok {
+		// Metrics registration may need services to be synced, trigger metrics synchronization
+		syncMethods["metrics"] = false
+	}
+	if _, ok := syncMethods["containers"]; ok {
+		// Metrics registration may need containers to be synced, trigger metrics synchronization
+		syncMethods["metrics"] = false
+	}
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
+		syncMethods["metrics"] = fullSync
+	}
+
+	for k, full := range s.forceSync {
+		syncMethods[k] = full || syncMethods[k]
+		delete(s.forceSync, k)
+	}
+	return syncMethods
 }
 
 func (s *Synchronizer) checkDuplicated() error {

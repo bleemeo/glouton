@@ -34,6 +34,10 @@ type Option struct {
 
 	// DisableCallback is a function called when MQTT got too much connect/disconnection.
 	DisableCallback func(reason types.DisableReason, until time.Time)
+	// UpdateConfigCallback is a function called when Agent configuration (will) change
+	UpdateConfigCallback func(now bool)
+	// UpdateMetrics request update for given metric UUIDs
+	UpdateMetrics func(metricUUID ...string)
 }
 
 // Client is an MQTT client for Bleemeo Cloud platform
@@ -418,6 +422,37 @@ func (c *Client) onConnect(_ paho.Client) {
 		return
 	}
 	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload)
+	c.mqttClient.Subscribe(
+		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
+		0,
+		c.onNotification,
+	)
+}
+
+type notificationPayload struct {
+	MessageType string `json:"message_type"`
+	MetricUUID  string `json:"metric_uuid,omitempty"`
+}
+
+func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
+	if len(msg.Payload()) > 1024*60 {
+		logger.V(1).Printf("Ignoring abnormally big MQTT message")
+		return
+	}
+	var payload notificationPayload
+	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
+		logger.V(1).Printf("Failed to decode MQTT message: %v", err)
+		return
+	}
+	logger.V(2).Printf("Got notification message %s", payload.MessageType)
+	switch payload.MessageType {
+	case "config-changed":
+		c.option.UpdateConfigCallback(true)
+	case "config-will-change":
+		c.option.UpdateConfigCallback(false)
+	case "threshold-update":
+		c.option.UpdateMetrics(payload.MetricUUID)
+	}
 }
 
 func (c *Client) onConnectionLost(_ paho.Client, err error) {

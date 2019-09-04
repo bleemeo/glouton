@@ -149,6 +149,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 }
 
 func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Container) error {
+	deletedPerformed := false
 	duplicatedKey := make(map[string]bool)
 	localByContainerID := make(map[string]facts.Container, len(localContainers))
 	for _, v := range localContainers {
@@ -168,11 +169,17 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		}
 		logger.V(2).Printf("Container %v deleted (UUID %s)", v.Name, v.ID)
 		delete(registeredContainers, k)
+		deletedPerformed = true
 	}
 	containers := make([]types.Container, 0, len(registeredContainers))
 	for _, v := range registeredContainers {
 		containers = append(containers, v)
 	}
 	s.option.Cache.SetContainers(containers)
+	if deletedPerformed {
+		s.l.Lock()
+		defer s.l.Unlock()
+		s.forceSync["services"] = true
+	}
 	return nil
 }

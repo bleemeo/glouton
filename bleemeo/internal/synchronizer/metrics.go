@@ -161,7 +161,22 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 
 	fullForInactive := false
 	previousMetrics := s.option.Cache.MetricsByUUID()
-	// TODO "update_metrics": metric to excplicitly update that come from MQTT message
+	activeMetricsCount := 0
+	for _, m := range previousMetrics {
+		if m.DeactivatedAt.IsZero() {
+			activeMetricsCount++
+		}
+	}
+	pendingMetricsUpdate := s.popPendingMetricsUpdate()
+
+	if len(pendingMetricsUpdate) > activeMetricsCount*3/100 {
+		// If more than 3% of known active metrics needs update, do a full
+		// update. 3% is arbitrary choose, based on assumption request for
+		// one page of (100) metrics is cheaper than 3 request for
+		// one metric.
+		fullSync = true
+	}
+
 	if fullSync {
 		s.apiSupportLabels = true // retry labels update
 		if len(unregisteredMetrics) > 3*len(previousMetrics)/100 {
@@ -169,9 +184,15 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		}
 		err := s.metricUpdateList(fullForInactive)
 		if err != nil {
+			s.UpdateMetrics(pendingMetricsUpdate...)
 			return err
 		}
-
+	} else if len(pendingMetricsUpdate) > 0 {
+		logger.V(2).Printf("Update %d metrics by UUID", len(pendingMetricsUpdate))
+		if err := s.metricUpdateListUUID(pendingMetricsUpdate); err != nil {
+			s.UpdateMetrics(pendingMetricsUpdate...)
+			return err
+		}
 	}
 	if !fullSync && !fullForInactive {
 		err := s.metricUpdateListSearch(unregisteredMetrics)
@@ -180,7 +201,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		}
 	}
 
-	if fullSync || (!fullForInactive && len(unregisteredMetrics) > 0) {
+	if fullSync || (!fullForInactive && len(unregisteredMetrics) > 0) || len(pendingMetricsUpdate) > 0 {
 		s.updateUnitsAndThresholds()
 	}
 
@@ -292,6 +313,37 @@ func (s *Synchronizer) metricUpdateListSearch(requests []common.MetricLabelItem)
 			}
 			metricsByUUID[metric.ID] = metric.metricFromAPI()
 		}
+	}
+	metrics := make([]types.Metric, 0, len(metricsByUUID))
+	for _, m := range metricsByUUID {
+		metrics = append(metrics, m)
+	}
+	s.option.Cache.SetMetrics(metrics)
+	return nil
+}
+
+func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
+	metricsByUUID := s.option.Cache.MetricsByUUID()
+
+	for _, key := range requests {
+		var metric metricPayload
+		params := map[string]string{
+			"fields": "id,label,labels,item,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+		}
+		_, err := s.client.Do(
+			"GET",
+			fmt.Sprintf("v1/metric/%s/", key),
+			params,
+			nil,
+			&metric,
+		)
+		if err != nil && client.IsNotFound(err) {
+			delete(metricsByUUID, key)
+			continue
+		} else if err != nil {
+			return err
+		}
+		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
 	metrics := make([]types.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
