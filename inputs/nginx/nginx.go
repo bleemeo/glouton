@@ -57,9 +57,9 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 	for metricName, value := range fields {
 		switch metricName {
 		case "accepts":
-			newFields["nginx_connections_accepted"] = value
+			newFields["connections_accepted"] = value
 		case "handled", "active", "waiting", "reading", "writing":
-			newFields["connection_"+metricName] = value
+			newFields["connections_"+metricName] = value
 		default:
 			newFields[metricName] = value
 		}
