@@ -75,8 +75,10 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
 		return err
 	}
+	firstSync := true
 	if s.agentID != "" {
 		logger.V(1).Printf("This agent is registered on Bleemeo Cloud platform with UUID %v", s.agentID)
+		firstSync = false
 	}
 
 	if err := s.setClient(); err != nil {
@@ -124,10 +126,37 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		} else {
 			s.successiveErrors = 0
 			minimalDelay = common.JitterDelay(15, 0.05, 15)
+			if firstSync {
+				minimalDelay = common.JitterDelay(1, 0.05, 1)
+				s.waitCPUMetric()
+				firstSync = false
+			}
 		}
 	}
 
 	return nil
+}
+
+func (s *Synchronizer) waitCPUMetric() {
+	metrics := s.option.Cache.Metrics()
+	for _, m := range metrics {
+		if m.Label == "cpu_used" {
+			return
+		}
+	}
+	filter := map[string]string{"__name__": "cpu_used"}
+	count := 0
+	for s.ctx.Err() == nil && count < 20 {
+		count++
+		m, _ := s.option.Store.Metrics(filter)
+		if len(m) > 0 {
+			return
+		}
+		select {
+		case <-s.ctx.Done():
+		case <-time.After(1 * time.Second):
+		}
+	}
 }
 
 func (s *Synchronizer) getDisabledUntil() (time.Time, types.DisableReason) {
