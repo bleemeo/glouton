@@ -493,7 +493,7 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 	ignoredID := make(map[string]interface{})
 	for _, c := range dockerContainers {
 		inspect, err := cl.ContainerInspect(ctx, c.ID)
-		if err != nil && docker.IsErrNotFound(err) {
+		if err != nil && docker.IsErrNotFound(err) || inspect.ContainerJSONBase == nil {
 			continue // the container was deleted between call. Ignore it
 		}
 		if ignoreContainer(inspect) {
