@@ -12,6 +12,7 @@ import (
 	"agentgo/inputs/postgresql"
 	"agentgo/inputs/rabbitmq"
 	"agentgo/inputs/redis"
+	"agentgo/inputs/zookeeper"
 	"agentgo/logger"
 	"fmt"
 	"net"
@@ -147,8 +148,15 @@ func (d *Discovery) createInput(service Service) error {
 		if address := addressForPort(service, di); address != "" {
 			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
 		}
+	case ZookeeperService:
+		if address := addressForPort(service, di); address != "" {
+			input, err = zookeeper.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
+		}
 	default:
 		logger.V(1).Printf("service type %s don't support metrics", service.Name)
+	}
+	if err != nil {
+		return err
 	}
 
 	if input != nil {
@@ -161,9 +169,6 @@ func (d *Discovery) createInput(service Service) error {
 			extraLabels["container_name"] = service.ContainerName
 		}
 		input = modify.AddLabels(input, extraLabels)
-		if err != nil {
-			return err
-		}
 		return d.addInput(input, service)
 	}
 

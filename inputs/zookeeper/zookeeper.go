@@ -1,0 +1,63 @@
+// Copyright 2015-2018 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package zookeeper
+
+import (
+	"agentgo/inputs/internal"
+	"errors"
+
+	"github.com/influxdata/telegraf"
+	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
+	"github.com/influxdata/telegraf/plugins/inputs/zookeeper"
+)
+
+// New initialise the Input
+func New(url string) (i telegraf.Input, err error) {
+	var input, ok = telegraf_inputs.Inputs["zookeeper"]
+	if ok {
+		zkInput, ok := input().(*zookeeper.Zookeeper)
+		if ok {
+			slice := append(make([]string, 0), url)
+			zkInput.Servers = slice
+			i = &internal.Input{
+				Input: zkInput,
+				Accumulator: internal.Accumulator{
+					DerivatedMetrics: []string{"packets_received", "packets_sent"},
+					TransformMetrics: transformMetrics,
+				},
+			}
+		} else {
+			err = errors.New("input Zookeeper is not the expected type")
+		}
+	} else {
+		err = errors.New("input Zookeeper is not enabled in Telegraf")
+	}
+	return
+}
+
+func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	newFields := make(map[string]float64)
+	for metricName, value := range fields {
+		switch metricName {
+		case "packets_received", "packets_sent", "ephemerals_count", "watch_count", "znode_count":
+			newFields[metricName] = value
+		case "num_alive_connections":
+			newFields["connections"] = value
+		}
+	}
+	return newFields
+}
