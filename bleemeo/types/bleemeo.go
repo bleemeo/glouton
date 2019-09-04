@@ -4,6 +4,7 @@ import (
 	"agentgo/threshold"
 	"crypto/sha256"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -79,4 +80,16 @@ type Metric struct {
 func (c *Container) FillInspectHash() {
 	bin := sha256.Sum256([]byte(c.DockerInspect))
 	c.DockerInspectHash = fmt.Sprintf("%x", bin)
+}
+
+// MetricsAgentWhitelistMap return a map with all whitelisted agent metrics
+func (ac AccountConfig) MetricsAgentWhitelistMap() map[string]bool {
+	result := make(map[string]bool)
+	if len(ac.MetricsAgentWhitelist) == 0 {
+		return nil
+	}
+	for _, n := range strings.Split(ac.MetricsAgentWhitelist, ",") {
+		result[strings.Trim(n, " \t\n")] = true
+	}
+	return result
 }

@@ -128,6 +128,16 @@ func prioritizeMetrics(metrics []agentTypes.Metric) {
 	}
 }
 
+func filterMetrics(input []agentTypes.Metric, metricWhitelist map[string]bool) []agentTypes.Metric {
+	result := make([]agentTypes.Metric, 0)
+	for _, m := range input {
+		if common.AllowMetric(m.Labels(), metricWhitelist) {
+			result = append(result, m)
+		}
+	}
+	return result
+}
+
 func (s *Synchronizer) findUnregisteredMetrics(metrics []agentTypes.Metric) []common.MetricLabelItem {
 
 	registeredMetrics := s.option.Cache.Metrics()
@@ -147,12 +157,15 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []agentTypes.Metric) []co
 
 func (s *Synchronizer) syncMetrics(fullSync bool) error {
 
+	metricWhitelist := s.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
+
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return err
 	}
+	filteredMetrics := filterMetrics(localMetrics, metricWhitelist)
 
-	unregisteredMetrics := s.findUnregisteredMetrics(localMetrics)
+	unregisteredMetrics := s.findUnregisteredMetrics(filteredMetrics)
 
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
@@ -176,12 +189,13 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		// one metric.
 		fullSync = true
 	}
+	if len(unregisteredMetrics) > 3*len(previousMetrics)/100 {
+		fullForInactive = true
+		fullSync = true
+	}
 
 	if fullSync {
 		s.apiSupportLabels = true // retry labels update
-		if len(unregisteredMetrics) > 3*len(previousMetrics)/100 {
-			fullForInactive = true
-		}
 		err := s.metricUpdateList(fullForInactive)
 		if err != nil {
 			s.UpdateMetrics(pendingMetricsUpdate...)
@@ -194,7 +208,8 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 			return err
 		}
 	}
-	if !fullSync && !fullForInactive {
+	if !fullForInactive {
+		logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
 		err := s.metricUpdateListSearch(unregisteredMetrics)
 		if err != nil {
 			return err
@@ -205,7 +220,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		s.updateUnitsAndThresholds()
 	}
 
-	if err := s.metricDeleteFromRemote(localMetrics, previousMetrics); err != nil {
+	if err := s.metricDeleteFromRemote(filteredMetrics, previousMetrics); err != nil {
 		return err
 	}
 
@@ -213,23 +228,24 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	if err != nil {
 		return err
 	}
+	filteredMetrics = filterMetrics(localMetrics, metricWhitelist)
 
 	// If one metric fail to register, it may block other metric that would register correctly.
 	// To reduce this risk, randomize the list, so on next run, the metric that failed to register
 	// may no longer block other.
-	rand.Shuffle(len(localMetrics), func(i, j int) {
-		localMetrics[i], localMetrics[j] = localMetrics[j], localMetrics[i]
+	rand.Shuffle(len(filteredMetrics), func(i, j int) {
+		filteredMetrics[i], filteredMetrics[j] = filteredMetrics[j], filteredMetrics[i]
 	})
-	prioritizeMetrics(localMetrics)
+	prioritizeMetrics(filteredMetrics)
 
-	if err := s.metricRegisterAndUpdate(localMetrics, fullForInactive); err != nil {
+	if err := s.metricRegisterAndUpdate(filteredMetrics, fullForInactive); err != nil {
 		return err
 	}
 	if err := s.metricDeleteFromLocal(); err != nil {
 		return err
 	}
 	if time.Since(s.startedAt) > 70*time.Minute {
-		if err := s.metricDeactivate(localMetrics); err != nil {
+		if err := s.metricDeactivate(filteredMetrics); err != nil {
 			return err
 		}
 	}

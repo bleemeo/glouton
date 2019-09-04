@@ -283,7 +283,8 @@ func (c *Client) popPendingPoints() []agentTypes.MetricPoint {
 }
 
 func (c *Client) sendPoints() {
-	points := c.popPendingPoints()
+	metricWhitelist := c.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
+	points := filterPoints(c.popPendingPoints(), metricWhitelist)
 	if !c.Connected() {
 		c.failedPoints = append(c.failedPoints, points...)
 		if len(c.failedPoints) > maxPendingPoints {
@@ -318,7 +319,7 @@ func (c *Client) sendPoints() {
 				newPoints = append(newPoints, p)
 			}
 		}
-		points = append(newPoints, points...)
+		points = append(filterPoints(newPoints, metricWhitelist), points...)
 		c.failedPoints = nil
 	}
 
@@ -544,6 +545,16 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 		return nil, errors.New("not a PEM file")
 	}
 	return rootCAs, nil
+}
+
+func filterPoints(input []agentTypes.MetricPoint, metricWhitelist map[string]bool) []agentTypes.MetricPoint {
+	result := make([]agentTypes.MetricPoint, 0)
+	for _, m := range input {
+		if common.AllowMetric(m.Labels, metricWhitelist) {
+			result = append(result, m)
+		}
+	}
+	return result
 }
 
 func (c *Client) ready() bool {

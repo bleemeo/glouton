@@ -15,6 +15,15 @@ func (s *Synchronizer) syncFacts(fullSync bool) error {
 	if err != nil {
 		return err
 	}
+	if !s.option.Cache.AccountConfig().DockerIntegration {
+		copyFacts := make(map[string]string)
+		for k, v := range localFacts {
+			if !strings.HasPrefix(k, "docker_") {
+				copyFacts[k] = v
+			}
+		}
+		localFacts = copyFacts
+	}
 
 	// s.factUpdateList() is already done by checkDuplicated
 	// s.serviceDeleteFromRemote() is uneeded, API don't delete facts

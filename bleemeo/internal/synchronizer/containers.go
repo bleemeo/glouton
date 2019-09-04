@@ -26,9 +26,13 @@ type containerPayload struct {
 
 func (s *Synchronizer) syncContainers(fullSync bool) error {
 
-	localContainers, err := s.option.Docker.Containers(s.ctx, 24*time.Second, false)
-	if err != nil {
-		return err
+	var localContainers []facts.Container
+	if s.option.Cache.AccountConfig().DockerIntegration {
+		var err error
+		localContainers, err = s.option.Docker.Containers(s.ctx, 24*time.Second, false)
+		if err != nil {
+			return err
+		}
 	}
 
 	if s.successiveErrors == 3 {
