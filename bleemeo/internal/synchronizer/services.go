@@ -232,8 +232,17 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		}
 		if remoteFound && remoteSrv.Active != result.Active {
 			// API will update all associated metrics and update their active status. Apply the same rule on local cache
-			// TODO
-			_ = 5
+			var newDeactivatedAt time.Time
+			if !result.Active {
+				newDeactivatedAt = time.Now()
+			}
+			metrics := s.option.Cache.Metrics()
+			for i, m := range metrics {
+				if m.ServiceID == result.ID {
+					metrics[i].DeactivatedAt = newDeactivatedAt
+				}
+			}
+			s.option.Cache.SetMetrics(metrics)
 		}
 	}
 	s.option.Cache.SetServices(remoteServices)
