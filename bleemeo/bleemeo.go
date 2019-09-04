@@ -92,7 +92,7 @@ func (c *Connector) Run(ctx context.Context) error {
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
-	for {
+	for subCtx.Err() == nil {
 		if c.AgentID() != "" {
 			if err := c.initMQTT(); err != nil {
 				cancel()

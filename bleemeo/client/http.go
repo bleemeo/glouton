@@ -10,6 +10,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 )
@@ -226,6 +227,12 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	}
 	statusCode, err := c.sendRequest(req, &token)
 	if err != nil {
+		if apiError, ok := err.(APIError); ok {
+			if apiError.StatusCode < 500 {
+				apiError.IsAuthError = true
+				return "", apiError
+			}
+		}
 		return "", err
 	}
 	if statusCode != 200 {
@@ -264,12 +271,14 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				StatusCode:   resp.StatusCode,
 				Content:      string(partialBody[:n]),
 				UnmarshalErr: nil,
+				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
 		var jsonMessage json.RawMessage
 		var jsonError struct {
-			Error  string
-			Detail string
+			Error          string
+			Detail         string
+			NonFieldErrors []string `json:"non_field_errors"`
 		}
 		err = json.NewDecoder(resp.Body).Decode(&jsonMessage)
 		if err != nil {
@@ -277,6 +286,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				StatusCode:   resp.StatusCode,
 				Content:      "",
 				UnmarshalErr: err,
+				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
 		err = json.Unmarshal(jsonMessage, &jsonError)
@@ -285,23 +295,29 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				StatusCode:   resp.StatusCode,
 				Content:      "",
 				UnmarshalErr: err,
+				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
-		if jsonError.Error != "" || jsonError.Detail != "" {
+		if jsonError.Error != "" || jsonError.Detail != "" || len(jsonError.NonFieldErrors) > 0 {
 			errorMessage := jsonError.Error
 			if errorMessage == "" {
 				errorMessage = jsonError.Detail
+			}
+			if errorMessage == "" && len(jsonError.NonFieldErrors) > 0 {
+				errorMessage = strings.Join(jsonError.NonFieldErrors, ", ")
 			}
 			return 0, APIError{
 				StatusCode:   resp.StatusCode,
 				Content:      errorMessage,
 				UnmarshalErr: nil,
+				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
 		return 0, APIError{
 			StatusCode:   resp.StatusCode,
 			Content:      string(jsonMessage),
 			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
 		}
 
 	}

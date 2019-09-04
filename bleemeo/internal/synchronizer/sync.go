@@ -107,7 +107,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			s.successiveErrors++
 			delay := common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 			s.disable(time.Now().Add(delay), types.DisableTooManyErrors, false)
-			if client.IsAuthError(err) {
+			switch {
+			case client.IsAuthError(err) && s.agentID != "":
 				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
 				fqdnMessage := ""
 				if fqdn != "" {
@@ -118,7 +119,19 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-			} else {
+			case client.IsAuthError(err):
+				registrationKey := []rune(s.option.Config.String("bleemeo.registration_key"))
+				for i := range registrationKey {
+					if i >= 6 && i < len(registrationKey)-4 {
+						registrationKey[i] = '*'
+					}
+				}
+				logger.Printf(
+					"Wrong credential for registration. Configuration contains account_id %s and registration_key %s",
+					s.option.Config.String("bleemeo.account_id"),
+					string(registrationKey),
+				)
+			default:
 				if s.successiveErrors%5 == 0 {
 					logger.Printf("Unable to synchronize with Bleemeo: %v", err)
 				} else {
@@ -409,9 +422,9 @@ func (s *Synchronizer) register() error {
 	var objectID struct {
 		ID string
 	}
-	// We save the password before doing the API POST to validate that
+	// We save an empty agent_uuid before doing the API POST to validate that
 	// State can save value.
-	if err := s.option.State.Set("password", password); err != nil {
+	if err := s.option.State.Set("agent_uuid", ""); err != nil {
 		return err
 	}
 	statusCode, err := s.client.PostAuth(
@@ -434,6 +447,9 @@ func (s *Synchronizer) register() error {
 	}
 	s.agentID = objectID.ID
 	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
+		return err
+	}
+	if err := s.option.State.Set("password", password); err != nil {
 		return err
 	}
 	logger.V(1).Printf("regisration successful with UUID %v", objectID.ID)
