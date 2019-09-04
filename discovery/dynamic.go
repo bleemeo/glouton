@@ -26,6 +26,7 @@ type DynamicDiscovery struct {
 	netstat       netstatProvider
 	containerInfo containerInfoProvider
 	fileReader    fileReader
+	defaultStack  string
 
 	lastDiscoveryUpdate time.Time
 	services            []Service
@@ -35,6 +36,7 @@ type container interface {
 	Env() []string
 	PrimaryAddress() string
 	ListenAddresses() []facts.ListenAddress
+	Labels() map[string]string
 	Ignored() bool
 }
 
@@ -48,12 +50,13 @@ type fileReader interface {
 
 // NewDynamic create a new dynamic service discovery which use information from
 // processess and netstat to discovery services
-func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider, fileReader fileReader) *DynamicDiscovery {
+func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	return &DynamicDiscovery{
 		ps:            ps,
 		netstat:       netstat,
 		containerInfo: (*dockerWrapper)(containerInfo),
 		fileReader:    fileReader,
+		defaultStack:  defaultStack,
 	}
 }
 
@@ -220,6 +223,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			ContainerName: process.ContainerName,
 			ExePath:       process.Executable,
 			Active:        true,
+			Stack:         dd.defaultStack,
 		}
 
 		key := nameContainer{
@@ -237,6 +241,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			}
 			if service.container.Ignored() {
 				continue
+			}
+			if stack, ok := service.container.Labels()["bleemeo.stack"]; ok {
+				service.Stack = stack
 			}
 		}
 

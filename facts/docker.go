@@ -258,6 +258,14 @@ func (c Container) InspectJSON() string {
 	return string(result)
 }
 
+// Labels returns labels associated with the container
+func (c Container) Labels() map[string]string {
+	if c.inspect.Config == nil {
+		return nil
+	}
+	return c.inspect.Config.Labels
+}
+
 // ListenAddresses returns the addresseses this container listen on
 func (c Container) ListenAddresses() []ListenAddress {
 	if c.inspect.Config == nil {

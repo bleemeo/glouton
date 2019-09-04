@@ -198,8 +198,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			remoteSrv = remoteServices[remoteIndex]
 		}
 		listenAddresses := getListenAddress(srv.ListenAddresses)
-		// TODO: Stack
-		if remoteFound && remoteSrv.Label == string(srv.Name) && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active {
+		if remoteFound && remoteSrv.Label == string(srv.Name) && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active && remoteSrv.Stack == srv.Stack {
 			continue
 		}
 		payload := servicePayload{
@@ -208,7 +207,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 				Instance:        shortKey.instance,
 				ListenAddresses: listenAddresses,
 				ExePath:         srv.ExePath,
-				Stack:           "TODO",
+				Stack:           srv.Stack,
 				Active:          srv.Active,
 			},
 			Account: s.option.Cache.AccountID(),

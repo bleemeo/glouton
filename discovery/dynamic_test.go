@@ -41,6 +41,7 @@ type mockContainer struct {
 	ipAddress       string
 	listenAddresses []facts.ListenAddress
 	env             []string
+	labels          map[string]string
 }
 
 func (mci mockContainerInfo) Container(containerID string) (container container, found bool) {
@@ -54,6 +55,10 @@ func (mc mockContainer) ListenAddresses() []facts.ListenAddress {
 
 func (mc mockContainer) Env() []string {
 	return mc.env
+}
+
+func (mc mockContainer) Labels() map[string]string {
+	return mc.labels
 }
 
 func (mc mockContainer) PrimaryAddress() string {
