@@ -320,6 +320,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.hourlyDiscovery, "hourlyDiscovery"},
 		{a.dailyFact, "dailyFact"},
 		{a.dockerWatcher, "dockerWatcher"},
+		{a.netstatWatcher, "netstatWatcher"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -453,6 +454,25 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		}
+	}
+}
+
+func (a *agent) netstatWatcher(ctx context.Context) error {
+	filePath := a.config.String("agent.netstat_file")
+	stat, _ := os.Stat(filePath)
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+		}
+		newStat, _ := os.Stat(filePath)
+		if newStat != nil && (stat == nil || !newStat.ModTime().Equal(stat.ModTime())) {
+			a.FireTrigger(true, false)
+		}
+		stat = newStat
 	}
 }
 
