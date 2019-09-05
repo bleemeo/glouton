@@ -8,6 +8,7 @@ import (
 	"agentgo/inputs/disk"
 	"agentgo/inputs/diskio"
 	"agentgo/inputs/elasticsearch"
+	"agentgo/inputs/haproxy"
 	"agentgo/inputs/mem"
 	"agentgo/inputs/memcached"
 	"agentgo/inputs/modify"
@@ -157,6 +158,10 @@ func (d *Discovery) createInput(service Service) error {
 	case ElasticSearchService:
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = elasticsearch.New(fmt.Sprintf("http://%s:%d", ip, port))
+		}
+	case HAProxyService:
+		if service.ExtraAttributes["stats_url"] != "" {
+			input, err = haproxy.New(service.ExtraAttributes["stats_url"])
 		}
 	case MemcachedService:
 		if ip, port := service.AddressPort(); ip != "" {

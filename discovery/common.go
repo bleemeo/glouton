@@ -192,6 +192,7 @@ var (
 		},
 		HAProxyService: {
 			IgnoreHighPort:      true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
+			ServiceProtocol:     "tcp",
 			ExtraAttributeNames: []string{"address", "port", "stats_url"},
 		},
 		InfluxDBService: {
@@ -242,6 +243,10 @@ var (
 		},
 		OpenVPNService: {
 			DisablePersistentConnection: true,
+		},
+		PHPFPMService: {
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port", "stats_url"},
 		},
 		PostfixService: {
 			ServicePort:         25,
