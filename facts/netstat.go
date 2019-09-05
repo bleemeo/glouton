@@ -29,7 +29,7 @@ type NetstatProvider struct {
 func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]ListenAddress, err error) {
 	netstatData, err := ioutil.ReadFile(np.FilePath)
 	if err != nil && !os.IsNotExist(err) {
-		return
+		logger.V(1).Printf("Unable to read netstat file: %v", err)
 	}
 	netstat = decodeNetstatFile(string(netstatData))
 	dynamicNetstat, err := psutilNet.Connections("inet")
