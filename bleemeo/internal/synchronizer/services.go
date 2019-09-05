@@ -82,9 +82,12 @@ func serviceIndexByKey(services []types.Service) map[serviceNameInstance]int {
 }
 
 func getListenAddress(addresses []facts.ListenAddress) string {
-	stringList := make([]string, len(addresses))
-	for i, v := range addresses {
-		stringList[i] = v.String()
+	stringList := make([]string, 0, len(addresses))
+	for _, v := range addresses {
+		if v.Network() == "unix" {
+			continue
+		}
+		stringList = append(stringList, v.String()+"/"+v.Network())
 	}
 	sort.Strings(stringList)
 	return strings.Join(stringList, ",")

@@ -287,7 +287,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.updateThresholds(nil, true)
 	a.dockerFact = facts.NewDocker()
 	psFact := facts.NewProcess(a.dockerFact)
-	netstat := &facts.NetstatProvider{}
+	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
 	a.factProvider = facts.NewFacter(
 		a.config.String("agent.facts_file"),
 		rootPath,

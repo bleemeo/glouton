@@ -20,14 +20,14 @@ import (
 // The file is useful since gopsutil will be run with current privilege which are unlikely to be root.
 // The file should be the output of netstat run as root.
 type NetstatProvider struct {
-	filePath string
+	FilePath string
 }
 
 // Netstat return a mapping from PID to listening addresses
 //
 // Supported addresses network is currently "tcp", "udp" or "unix".
 func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]ListenAddress, err error) {
-	netstatData, err := ioutil.ReadFile(np.filePath)
+	netstatData, err := ioutil.ReadFile(np.FilePath)
 	if err != nil && !os.IsNotExist(err) {
 		return
 	}
