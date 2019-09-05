@@ -8,15 +8,7 @@ import (
 )
 
 // Runner is something that can be Run
-type Runner interface {
-	Run(context.Context) error
-}
-
-// RunCloser is something that can be Run and Close(d)
-type RunCloser interface {
-	Runner
-	Close() error
-}
+type Runner func(context.Context) error
 
 // Registry contains running tasks. It allow to add/remove tasks
 type Registry struct {
@@ -97,7 +89,7 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	}
 	go func() {
 		defer close(waitC)
-		err := task.Run(ctx)
+		err := task(ctx)
 		if err != nil {
 			logger.Printf("Task %#v failed: %v", shortName, err)
 		}
@@ -137,11 +129,6 @@ func (r *Registry) IsRunning(taskID int) bool {
 func (r *Registry) removeTask(taskID int, forClosing bool) {
 	if task, ok := r.tasks[taskID]; ok {
 		task.CancelFunc()
-		if closer, ok := task.Runner.(RunCloser); ok {
-			if err := closer.Close(); err != nil {
-				logger.V(1).Printf("Failed to close task %#v: %v", task.Name, err)
-			}
-		}
 	} else {
 		logger.V(2).Printf("called RemoveTask with unexisting ID %d", taskID)
 	}

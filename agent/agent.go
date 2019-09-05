@@ -22,15 +22,7 @@ import (
 	"agentgo/debouncer"
 	"agentgo/discovery"
 	"agentgo/facts"
-	"agentgo/inputs/cpu"
-	"agentgo/inputs/disk"
-	"agentgo/inputs/diskio"
 	"agentgo/inputs/docker"
-	"agentgo/inputs/mem"
-	"agentgo/inputs/net"
-	"agentgo/inputs/process"
-	"agentgo/inputs/swap"
-	"agentgo/inputs/system"
 	"agentgo/logger"
 	"agentgo/nrpe"
 	"agentgo/store"
@@ -39,8 +31,6 @@ import (
 	"agentgo/version"
 	"agentgo/zabbix"
 
-	"github.com/influxdata/telegraf"
-
 	"net/http"
 )
 
@@ -48,6 +38,7 @@ type agent struct {
 	taskRegistry *task.Registry
 	config       *config.Configuration
 	state        *state.State
+	cancel       context.CancelFunc
 
 	discovery        *discovery.Discovery
 	dockerFact       *facts.DockerProvider
@@ -56,8 +47,6 @@ type agent struct {
 	bleemeoConnector *bleemeo.Connector
 	accumulator      *threshold.Accumulator
 
-	taskIDs map[string]int
-
 	triggerHandler *debouncer.Debouncer
 	triggerLock    sync.Mutex
 	triggerDisc    bool
@@ -65,18 +54,13 @@ type agent struct {
 
 	dockerInputPresent bool
 	dockerInputID      int
+
+	l       sync.Mutex
+	taskIDs map[string]int
 }
 
 func nrpeResponse(ctx context.Context, request string) (string, int16, error) {
 	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
-}
-
-func panicOnError(i telegraf.Input, err error) telegraf.Input {
-	if err != nil {
-		logger.Printf("%v", err)
-		panic(err)
-	}
-	return i
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -87,6 +71,11 @@ func zabbixResponse(key string, args []string) (string, error) {
 		return fmt.Sprintf("4 (Bleemeo Agent %s)", version.Version), nil
 	}
 	return "", errors.New("Unsupported item key") // nolint: stylecheck
+}
+
+type taskInfo struct {
+	function task.Runner
+	name     string
 }
 
 func (a *agent) init() (ok bool) {
@@ -260,8 +249,10 @@ func (a *agent) run() { //nolint:gocyclo
 
 	_ = os.Remove(a.config.String("agent.upgrade_file"))
 
-	ctx, cancel := context.WithCancel(context.Background())
 	c := make(chan os.Signal, 1)
+	a.cancel = func() {
+		c <- os.Interrupt
+	}
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
 	apiBindAddress := fmt.Sprintf("%s:%d", a.config.String("web.listener.address"), a.config.Int("web.listener.port"))
@@ -307,16 +298,11 @@ func (a *agent) run() { //nolint:gocyclo
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
-	a.collector.AddInput(panicOnError(system.New()), "system")
-	a.collector.AddInput(panicOnError(process.New()), "process")
-	a.collector.AddInput(panicOnError(cpu.New()), "cpu")
-	a.collector.AddInput(panicOnError(mem.New()), "mem")
-	a.collector.AddInput(panicOnError(swap.New()), "swap")
-	a.collector.AddInput(panicOnError(net.New(a.config.StringList("network_interface_blacklist"))), "net")
-	if rootPath != "" {
-		a.collector.AddInput(panicOnError(disk.New(rootPath, nil)), "disk")
+	err := discovery.AddDefaultInputs(a.collector, rootPath, a.config)
+	if err != nil {
+		logger.Printf("Unable to initialize system collector: %v", err)
+		return
 	}
-	a.collector.AddInput(panicOnError(diskio.New(a.config.StringList("disk_monitor"))), "diskio")
 
 	a.triggerHandler = debouncer.New(
 		a.handleTrigger,
@@ -324,90 +310,16 @@ func (a *agent) run() { //nolint:gocyclo
 	)
 	a.FireTrigger(true, false)
 
-	tasks := []struct {
-		runner task.Runner
-		name   string
-	}{
-		{db, "store"},
-		{a.triggerHandler, "triggerHandler"},
-		{a.dockerFact, "docker"},
-		{a.collector, "collector"},
-		{api, "api"},
-	}
-	for _, t := range tasks {
-		id, err := a.taskRegistry.AddTask(t.runner, t.name)
-		if err != nil {
-			logger.V(1).Printf("Unable to start %s: %v", t.name, err)
-		}
-		a.taskIDs[t.name] = id
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				a.FireTrigger(true, false)
-			}
-		}
-	}()
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(24 * time.Hour)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-ticker.C:
-				a.FireTrigger(false, true)
-			}
-		}
-	}()
-
-	if a.config.Bool("zabbix.enabled") {
-		server := zabbix.New(
-			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
-			zabbixResponse,
-		)
-		_, err := a.taskRegistry.AddTask(server, "zabbix")
-		if err != nil {
-			logger.V(1).Printf("Unable to start Zabbix server: %v", err)
-		}
-	}
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		for {
-			select {
-			case ev := <-a.dockerFact.Events():
-				if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
-					a.FireTrigger(true, false)
-				}
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
-
-	if a.config.Bool("nrpe.enabled") {
-		server := nrpe.New(
-			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
-			a.config.Bool("nrpe.ssl"),
-			nrpeResponse,
-		)
-		_, err := a.taskRegistry.AddTask(server, "nrpe")
-		if err != nil {
-			logger.V(1).Printf("Unable to start NRPE server: %v", err)
-		}
+	tasks := []taskInfo{
+		{db.Run, "store"},
+		{a.triggerHandler.Run, "triggerHandler"},
+		{a.dockerFact.Run, "docker"},
+		{a.collector.Run, "collector"},
+		{api.Run, "api"},
+		{a.healthCheck, "healthCheck"},
+		{a.hourlyDiscovery, "hourlyDiscovery"},
+		{a.dailyFact, "dailyFact"},
+		{a.dockerWatcher, "dockerWatcher"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -424,31 +336,28 @@ func (a *agent) run() { //nolint:gocyclo
 			UpdateThresholds:       a.UpdateThresholds,
 			UpdateUnits:            a.accumulator.SetUnits,
 		})
-		id, err := a.taskRegistry.AddTask(a.bleemeoConnector, "bleemeo")
-		if err != nil {
-			logger.V(1).Printf("Unable to start Bleemeo connector: %v", err)
-		}
-		a.taskIDs["bleemeo"] = id
+		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "bleemeo"})
+	}
+	if a.config.Bool("nrpe.enabled") {
+		server := nrpe.New(
+			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
+			a.config.Bool("nrpe.ssl"),
+			nrpeResponse,
+		)
+		tasks = append(tasks, taskInfo{server.Run, "nrpe"})
+	}
+	if a.config.Bool("zabbix.enabled") {
+		server := zabbix.New(
+			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
+			zabbixResponse,
+		)
+		tasks = append(tasks, taskInfo{server.Run, "zabbix"})
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		ticker := time.NewTicker(time.Minute)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				a.healthCheck(ctx, cancel)
-			case <-ctx.Done():
-				return
-			}
-		}
-	}()
+	a.startTasks(tasks)
 
 	for s := range c {
 		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
-			cancel()
 			break
 		}
 		if s == syscall.SIGHUP {
@@ -456,29 +365,97 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 	}
 
-	cancel()
 	a.taskRegistry.Close()
 	a.discovery.Close()
-	wg.Wait()
 	logger.V(2).Printf("Agent stopped")
 }
 
-func (a *agent) healthCheck(ctx context.Context, cancel context.CancelFunc) {
-	mandatoryTasks := []string{"bleemeo", "collector", "store"}
-	for _, name := range mandatoryTasks {
-		if id, ok := a.taskIDs[name]; ok {
-			if !a.taskRegistry.IsRunning(id) {
-				// Re-check ctx to avoid race condition
-				if ctx.Err() != nil {
-					return
-				}
+func (a *agent) startTasks(tasks []taskInfo) {
+	a.l.Lock()
+	defer a.l.Unlock()
+
+	for _, t := range tasks {
+		id, err := a.taskRegistry.AddTask(t.function, t.name)
+		if err != nil {
+			logger.V(1).Printf("Unable to start %s: %v", t.name, err)
+		}
+		a.taskIDs[t.name] = id
+	}
+}
+
+func (a *agent) healthCheck(ctx context.Context) error {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return nil
+		}
+		mandatoryTasks := []string{"bleemeo", "collector", "store"}
+		for _, name := range mandatoryTasks {
+			if a.doesTaskCrashed(ctx, name) {
 				logger.Printf("Gorouting %v crashed. Stopping the agent", name)
-				cancel()
+				a.cancel()
 			}
 		}
+		if a.bleemeoConnector != nil {
+			a.bleemeoConnector.HealthCheck()
+		}
 	}
-	if a.bleemeoConnector != nil {
-		a.bleemeoConnector.HealthCheck()
+}
+
+func (a *agent) doesTaskCrashed(ctx context.Context, name string) bool {
+	a.l.Lock()
+	defer a.l.Unlock()
+	if id, ok := a.taskIDs[name]; ok {
+		if !a.taskRegistry.IsRunning(id) {
+			// Re-check ctx to avoid race condition
+			if ctx.Err() != nil {
+				return false
+			}
+			return true
+		}
+	}
+	return false
+}
+
+func (a *agent) hourlyDiscovery(ctx context.Context) error {
+	ticker := time.NewTicker(time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			a.FireTrigger(true, false)
+		}
+	}
+}
+
+func (a *agent) dailyFact(ctx context.Context) error {
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-ticker.C:
+			a.FireTrigger(false, true)
+		}
+	}
+}
+
+func (a *agent) dockerWatcher(ctx context.Context) error {
+	for {
+		select {
+		case ev := <-a.dockerFact.Events():
+			if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
+				a.FireTrigger(true, false)
+			}
+		case <-ctx.Done():
+			return nil
+		}
 	}
 }
 

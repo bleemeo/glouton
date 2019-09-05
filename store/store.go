@@ -75,12 +75,6 @@ func (s *Store) RemoveNotifiee(id int) {
 	delete(s.notifyCallbacks, id)
 }
 
-// Close closes the store. Currently noop, but may write to persistence later
-func (s *Store) Close() error {
-	logger.V(2).Printf("Store closed")
-	return nil
-}
-
 // DropMetrics delete metrics and they points.
 // The provided labels list is an exact match (e.g. {"__name__": "disk_used"} won't delete the metrics for all disk. You need to specify all labels)
 func (s *Store) DropMetrics(labelsList []map[string]string) {

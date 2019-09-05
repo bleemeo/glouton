@@ -1,17 +1,27 @@
 package discovery
 
 import (
+	"agentgo/collector"
+	"agentgo/config"
 	"agentgo/inputs/apache"
+	"agentgo/inputs/cpu"
+	"agentgo/inputs/disk"
+	"agentgo/inputs/diskio"
 	"agentgo/inputs/elasticsearch"
+	"agentgo/inputs/mem"
 	"agentgo/inputs/memcached"
 	"agentgo/inputs/modify"
 	"agentgo/inputs/mongodb"
 	"agentgo/inputs/mysql"
+	netInput "agentgo/inputs/net"
 	"agentgo/inputs/nginx"
 	"agentgo/inputs/phpfpm"
 	"agentgo/inputs/postgresql"
+	"agentgo/inputs/process"
 	"agentgo/inputs/rabbitmq"
 	"agentgo/inputs/redis"
+	"agentgo/inputs/swap"
+	"agentgo/inputs/system"
 	"agentgo/inputs/zookeeper"
 	"agentgo/logger"
 	"fmt"
@@ -20,6 +30,63 @@ import (
 
 	"github.com/influxdata/telegraf"
 )
+
+// AddDefaultInputs adds system inputs to a collector
+func AddDefaultInputs(coll *collector.Collector, rootPath string, cfg *config.Configuration) error {
+	var input telegraf.Input
+	var err error
+
+	input, err = system.New()
+	if err != nil {
+		return err
+	}
+	coll.AddInput(input, "system")
+
+	input, err = process.New()
+	if err != nil {
+		return err
+	}
+	coll.AddInput(input, "process")
+
+	input, err = cpu.New()
+	if err != nil {
+		return err
+	}
+	coll.AddInput(input, "cpu")
+
+	input, err = mem.New()
+	if err != nil {
+		return err
+	}
+	coll.AddInput(input, "mem")
+
+	input, err = swap.New()
+	if err != nil {
+		return err
+	}
+	coll.AddInput(input, "swap")
+
+	input, err = netInput.New(cfg.StringList("network_interface_blacklist"))
+	if err != nil {
+		return err
+	}
+	coll.AddInput(input, "net")
+
+	if rootPath != "" {
+		input, err = disk.New(rootPath, nil)
+		if err != nil {
+			return err
+		}
+		coll.AddInput(input, "disk")
+	}
+
+	input, err = diskio.New(cfg.StringList("disk_monitor"))
+	if err != nil {
+		return err
+	}
+	coll.AddInput(input, "diskio")
+	return nil
+}
 
 func (d *Discovery) configureMetricInputs(oldServices, services map[nameContainer]Service) (err error) {
 	for key := range oldServices {

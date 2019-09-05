@@ -74,7 +74,7 @@ func (d *Discovery) createCheck(service Service) {
 				labels,
 				d.acc,
 			)
-			d.addCheck(check, service)
+			d.addCheck(check.Run, service)
 		} else {
 			d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
 		}
@@ -121,7 +121,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 			labels,
 			d.acc,
 		)
-		d.addCheck(tcpCheck, service)
+		d.addCheck(tcpCheck.Run, service)
 	} else {
 		logger.V(1).Printf("No check for service type %#v", service.Name)
 	}
@@ -150,7 +150,7 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryIP
 		labels,
 		d.acc,
 	)
-	d.addCheck(httpCheck, service)
+	d.addCheck(httpCheck.Run, service)
 }
 
 func (d *Discovery) addCheck(task task.Runner, service Service) {
