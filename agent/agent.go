@@ -288,6 +288,8 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 	a.collector = collector.New(a.accumulator)
+
+	services, _ := a.config.Get("service")
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
@@ -295,6 +297,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.state,
 		a.accumulator,
 		a.dockerFact,
+		serivcesOverrideFromInterface(services),
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 

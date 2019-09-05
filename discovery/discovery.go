@@ -27,8 +27,9 @@ type Discovery struct {
 
 	dynamicDiscovery Discoverer
 
-	servicesMap         map[nameContainer]Service
-	lastDiscoveryUpdate time.Time
+	discoveredServicesMap map[nameContainer]Service
+	servicesMap           map[nameContainer]Service
+	lastDiscoveryUpdate   time.Time
 
 	acc                   Accumulator
 	lastConfigservicesMap map[nameContainer]Service
@@ -38,6 +39,7 @@ type Discovery struct {
 	taskRegistry          Registry
 	containerInfo         containerInfoProvider
 	state                 State
+	servicesOverride      map[nameContainer]map[string]string
 }
 
 // Collector will gather metrics for added inputs
@@ -53,26 +55,42 @@ type Registry interface {
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string) *Discovery {
 	initialServices := servicesFromState(state)
-	servicesMap := make(map[nameContainer]Service, len(initialServices))
+	discoveredServicesMap := make(map[nameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
 		key := nameContainer{
 			name:          v.Name,
 			containerName: v.ContainerName,
 		}
-		servicesMap[key] = v
+		discoveredServicesMap[key] = v
+	}
+	servicesOverrideMap := make(map[nameContainer]map[string]string)
+	for _, fragment := range servicesOverride {
+		fragmentCopy := make(map[string]string)
+		for k, v := range fragment {
+			if k == "id" || k == "instance" {
+				continue
+			}
+			fragmentCopy[k] = v
+		}
+		key := nameContainer{
+			ServiceName(fragment["id"]),
+			fragment["instance"],
+		}
+		servicesOverrideMap[key] = fragmentCopy
 	}
 	return &Discovery{
-		dynamicDiscovery: dynamicDiscovery,
-		servicesMap:      servicesMap,
-		coll:             coll,
-		taskRegistry:     taskRegistry,
-		containerInfo:    (*dockerWrapper)(containerInfo),
-		acc:              acc,
-		activeInput:      make(map[nameContainer]int),
-		activeCheck:      make(map[nameContainer]int),
-		state:            state,
+		dynamicDiscovery:      dynamicDiscovery,
+		discoveredServicesMap: discoveredServicesMap,
+		coll:                  coll,
+		taskRegistry:          taskRegistry,
+		containerInfo:         (*dockerWrapper)(containerInfo),
+		acc:                   acc,
+		activeInput:           make(map[nameContainer]int),
+		activeCheck:           make(map[nameContainer]int),
+		state:                 state,
+		servicesOverride:      servicesOverrideMap,
 	}
 }
 
@@ -107,7 +125,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 		if err != nil {
 			return nil, err
 		}
-		saveState(d.state, d.servicesMap)
+		saveState(d.state, d.discoveredServicesMap)
 		d.reconfigure()
 		d.lastDiscoveryUpdate = time.Now()
 	}
@@ -132,6 +150,7 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 			deleted = true
 		}
 		delete(d.servicesMap, key)
+		delete(d.discoveredServicesMap, key)
 	}
 	if deleted {
 		if _, err := d.discovery(ctx, 0); err != nil {
@@ -156,7 +175,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	}
 
 	servicesMap := make(map[nameContainer]Service)
-	for key, service := range d.servicesMap {
+	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
 			if _, found := d.containerInfo.Container(service.ContainerID); !found {
 				service.Active = false
@@ -184,6 +203,46 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 		servicesMap[key] = service
 	}
 
-	d.servicesMap = servicesMap
+	d.discoveredServicesMap = servicesMap
+	d.servicesMap = d.applyOveride(servicesMap)
 	return nil
+}
+
+func (d *Discovery) applyOveride(discoveredServicesMap map[nameContainer]Service) map[nameContainer]Service {
+	servicesMap := make(map[nameContainer]Service)
+
+	for k, v := range discoveredServicesMap {
+		servicesMap[k] = v
+	}
+
+	for serviceKey, override := range d.servicesOverride {
+		overrideCopy := make(map[string]string, len(override))
+		for k, v := range override {
+			overrideCopy[k] = v
+		}
+		service := servicesMap[serviceKey]
+		if service.Name == "" {
+			continue // TODO: add custom check
+		}
+		if service.ExtraAttributes == nil {
+			service.ExtraAttributes = make(map[string]string)
+		}
+		di := servicesDiscoveryInfo[serviceKey.name]
+		for _, name := range di.ExtraAttributeNames {
+			if value, ok := overrideCopy[name]; ok {
+				service.ExtraAttributes[name] = value
+				delete(overrideCopy, name)
+			}
+		}
+		if len(overrideCopy) > 0 {
+			ignoredNames := make([]string, 0, len(overrideCopy))
+			for k := range overrideCopy {
+				ignoredNames = append(ignoredNames, k)
+			}
+			logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
+		}
+		servicesMap[serviceKey] = service
+	}
+
+	return servicesMap
 }

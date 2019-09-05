@@ -42,7 +42,11 @@ func (d *Discovery) createCheck(service Service) {
 	logger.V(2).Printf("Add check for service %v on container %s", service.Name, service.ContainerID)
 
 	di := servicesDiscoveryInfo[service.Name]
-	primaryIP := addressForPort(service, di)
+	var primaryAddress string
+	primaryIP, primaryPort := service.AddressPort()
+	if primaryIP != "" {
+		primaryAddress = fmt.Sprintf("%s:%d", primaryIP, primaryPort)
+	}
 	tcpAddresses := make([]string, 0)
 	for _, a := range service.ListenAddresses {
 		if a.Network() != tcpPortocol {
@@ -62,13 +66,13 @@ func (d *Discovery) createCheck(service Service) {
 
 	switch service.Name {
 	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
-		d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
+		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
-		d.createHTTPCheck(service, di, primaryIP, tcpAddresses, labels)
+		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels)
 	case NTPService:
-		if primaryIP != "" {
+		if primaryAddress != "" {
 			check := check.NewNTP(
-				fmt.Sprintf("%s:%d", primaryIP, di.ServicePort),
+				primaryAddress,
 				tcpAddresses,
 				fmt.Sprintf("%s_status", service.Name),
 				labels,
@@ -76,19 +80,14 @@ func (d *Discovery) createCheck(service Service) {
 			)
 			d.addCheck(check.Run, service)
 		} else {
-			d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
+			d.createTCPCheck(service, di, "", tcpAddresses, labels)
 		}
 	default:
-		d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
+		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
 	}
 }
 
-func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP string, tcpAddresses []string, labels map[string]string) {
-
-	var primaryAddress string
-	if di.ServiceProtocol == tcpPortocol && primaryIP != "" {
-		primaryAddress = fmt.Sprintf("%s:%d", primaryIP, di.ServicePort)
-	}
+func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
 
 	var tcpSend, tcpExpect, tcpClose []byte
 	switch service.Name {
@@ -127,12 +126,12 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryIP 
 	}
 }
 
-func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryIP string, tcpAddresses []string, labels map[string]string) {
-	if primaryIP == "" {
-		d.createTCPCheck(service, di, primaryIP, tcpAddresses, labels)
+func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
+	if primaryAddress == "" {
+		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
 		return
 	}
-	url := fmt.Sprintf("http://%s:%d", primaryIP, di.ServicePort)
+	url := fmt.Sprintf("http://%s", primaryAddress)
 	expectedStatusCode := 0
 	if service.Name == SquidService {
 		// Agent does a normal HTTP request, but squid expect a proxy. It expect

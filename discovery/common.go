@@ -2,7 +2,10 @@ package discovery
 
 import (
 	"agentgo/facts"
+	"agentgo/logger"
 	"context"
+	"net"
+	"strconv"
 	"time"
 )
 
@@ -85,125 +88,202 @@ type Service struct {
 	container      container
 }
 
+// AddressForPort return the IP address for given port & network (tcp, udp)
+func (s Service) AddressForPort(port int, network string, force bool) string {
+	if s.ExtraAttributes["address"] != "" {
+		return s.ExtraAttributes["address"]
+	}
+	for _, a := range s.ListenAddresses {
+		if a.Network() != network {
+			continue
+		}
+		address, portStr, err := net.SplitHostPort(a.String())
+		if err != nil {
+			continue
+		}
+		p, err := strconv.ParseInt(portStr, 10, 0)
+		if err != nil {
+			continue
+		}
+		if address == "0.0.0.0" {
+			address = s.IPAddress
+		}
+		if int(p) == port {
+			return address
+		}
+	}
+	if force {
+		return s.IPAddress
+	}
+	return ""
+}
+
+// AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port)
+func (s Service) AddressPort() (string, int) {
+	di := servicesDiscoveryInfo[s.Name]
+	port := di.ServicePort
+	force := false
+	if s.ExtraAttributes["port"] != "" {
+		tmp, err := strconv.ParseInt(s.ExtraAttributes["port"], 10, 0)
+		if err != nil {
+			logger.V(1).Printf("Invalid port %#v: %v", s.ExtraAttributes["port"], err)
+		} else {
+			port = int(tmp)
+			force = true
+		}
+	}
+	if port == 0 {
+		return "", 0
+	}
+	return s.AddressForPort(port, di.ServiceProtocol, force), port
+}
+
 // nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
 		ApacheService: {
-			ServicePort:     80,
-			ServiceProtocol: "tcp",
+			ServicePort:         80,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		BitBucketService: {
-			ServicePort:     7990,
-			ServiceProtocol: "tcp",
-			IgnoreHighPort:  true,
+			ServicePort:         7990,
+			ServiceProtocol:     "tcp",
+			IgnoreHighPort:      true,
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
 		},
 		BindService: {
-			ServicePort:     53,
-			ServiceProtocol: "tcp",
+			ServicePort:         53,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		CassandraService: {
-			ServicePort:     9042,
-			ServiceProtocol: "tcp",
-			IgnoreHighPort:  true,
+			ServicePort:         9042,
+			ServiceProtocol:     "tcp",
+			IgnoreHighPort:      true,
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
 		},
 		ConfluenceService: {
-			ServicePort:     8090,
-			ServiceProtocol: "tcp",
-			IgnoreHighPort:  true,
+			ServicePort:         8090,
+			ServiceProtocol:     "tcp",
+			IgnoreHighPort:      true,
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
 		},
 		DovecoteService: {
-			ServicePort:     143,
-			ServiceProtocol: "tcp",
+			ServicePort:         143,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		ElasticSearchService: {
-			ServicePort:     9200,
-			ServiceProtocol: "tcp",
+			ServicePort:         9200,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		EjabberService: {
-			ServicePort:     5222,
-			ServiceProtocol: "tcp",
-			IgnoreHighPort:  true,
+			ServicePort:         5222,
+			ServiceProtocol:     "tcp",
+			IgnoreHighPort:      true,
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		EximService: {
-			ServicePort:     25,
-			ServiceProtocol: "tcp",
+			ServicePort:         25,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		HAProxyService: {
-			IgnoreHighPort: true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
+			IgnoreHighPort:      true, // HAProxy use a random high-port when Syslog over-UDP is enabled.
+			ExtraAttributeNames: []string{"address", "port", "stats_url"},
 		},
 		InfluxDBService: {
-			ServicePort:     8086,
-			ServiceProtocol: "tcp",
+			ServicePort:         8086,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		JIRAService: {
-			ServicePort:     8080,
-			ServiceProtocol: "tcp",
-			IgnoreHighPort:  true,
+			ServicePort:         8080,
+			ServiceProtocol:     "tcp",
+			IgnoreHighPort:      true,
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
 		},
 		MemcachedService: {
-			ServicePort:     11211,
-			ServiceProtocol: "tcp",
+			ServicePort:         11211,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		MongoDBService: {
-			ServicePort:     27017,
-			ServiceProtocol: "tcp",
+			ServicePort:         27017,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		MosquittoService: {
-			ServicePort:     1883,
-			ServiceProtocol: "tcp",
+			ServicePort:         1883,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		MySQLService: {
-			ServicePort:     3306,
-			ServiceProtocol: "tcp",
+			ServicePort:         3306,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port", "username", "password"},
 		},
 		NginxService: {
-			ServicePort:     80,
-			ServiceProtocol: "tcp",
+			ServicePort:         80,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		NTPService: {
-			ServicePort:     123,
-			ServiceProtocol: "udp",
+			ServicePort:         123,
+			ServiceProtocol:     "udp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		OpenLDAPService: {
-			ServicePort:     389,
-			ServiceProtocol: "tcp",
+			ServicePort:         389,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		OpenVPNService: {
 			DisablePersistentConnection: true,
 		},
 		PostfixService: {
-			ServicePort:     25,
-			ServiceProtocol: "tcp",
+			ServicePort:         25,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		PostgreSQLService: {
-			ServicePort:     5432,
-			ServiceProtocol: "tcp",
+			ServicePort:         5432,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port", "username", "password"},
 		},
 		RabbitMQService: {
-			ServicePort:     5672,
-			ServiceProtocol: "tcp",
-			IgnoreHighPort:  true,
+			ServicePort:         5672,
+			ServiceProtocol:     "tcp",
+			IgnoreHighPort:      true,
+			ExtraAttributeNames: []string{"address", "port", "username", "password", "mgmt_port"},
 		},
 		RedisService: {
-			ServicePort:     6379,
-			ServiceProtocol: "tcp",
+			ServicePort:         6379,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		SaltMasterService: {
-			ServicePort:     4505,
-			ServiceProtocol: "tcp",
+			ServicePort:         4505,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		SquidService: {
-			ServicePort:     3128,
-			ServiceProtocol: "tcp",
+			ServicePort:         3128,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		VarnishService: {
-			ServicePort:     6082,
-			ServiceProtocol: "tcp",
+			ServicePort:         6082,
+			ServiceProtocol:     "tcp",
+			ExtraAttributeNames: []string{"address", "port"},
 		},
 		ZookeeperService: {
-			ServicePort:     2181,
-			ServiceProtocol: "tcp",
-			IgnoreHighPort:  true,
+			ServicePort:         2181,
+			ServiceProtocol:     "tcp",
+			IgnoreHighPort:      true,
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
 		},
 	}
 )
@@ -213,4 +293,5 @@ type discoveryInfo struct {
 	ServiceProtocol             string // "tcp", "udp" or "unix"
 	IgnoreHighPort              bool
 	DisablePersistentConnection bool
+	ExtraAttributeNames         []string
 }

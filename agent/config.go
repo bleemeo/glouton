@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -198,4 +199,60 @@ func (a *agent) loadConfiguration() (cfg *config.Configuration, warnings []error
 	}
 	loadDefault(cfg)
 	return cfg, warnings, finalError
+}
+
+func convertToMap(input interface{}) (result map[string]interface{}, ok bool) {
+	result, ok = input.(map[string]interface{})
+	if ok {
+		return
+	}
+	tmp, ok := input.(map[interface{}]interface{})
+	if !ok {
+		return nil, false
+	}
+	result = make(map[string]interface{}, len(tmp))
+	for k, v := range tmp {
+		result[convertToString(k)] = v
+	}
+	return result, true
+}
+
+func convertToString(rawValue interface{}) string {
+	switch value := rawValue.(type) {
+	case string:
+		return value
+	case fmt.Stringer:
+		return value.String()
+	case int:
+		return strconv.FormatInt(int64(value), 10)
+	default:
+		return fmt.Sprintf("%v", rawValue)
+	}
+}
+
+func serivcesOverrideFromInterface(input interface{}) []map[string]string {
+	if input == nil {
+		return nil
+	}
+
+	inputMap, ok := input.([]interface{})
+	if !ok {
+		logger.Printf("services override in configuration file is not a list")
+		return nil
+	}
+	result := make([]map[string]string, 0, len(inputMap))
+
+	for i, v := range inputMap {
+		vMap, ok := convertToMap(v)
+		if !ok {
+			logger.Printf("services override entry #%d is not a map, ignoring, %#v", i, v)
+			continue
+		}
+		override := make(map[string]string, len(vMap))
+		for k, v := range vMap {
+			override[k] = convertToString(v)
+		}
+		result = append(result, override)
+	}
+	return result
 }

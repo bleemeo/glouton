@@ -25,7 +25,6 @@ import (
 	"agentgo/inputs/zookeeper"
 	"agentgo/logger"
 	"fmt"
-	"net"
 	"strconv"
 
 	"github.com/influxdata/telegraf"
@@ -144,42 +143,40 @@ func (d *Discovery) createInput(service Service) error {
 	}
 
 	logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
-	di := servicesDiscoveryInfo[service.Name]
-
 	var input telegraf.Input
 	var err error
 	switch service.Name {
 	case ApacheService:
-		if address := addressForPort(service, di); address != "" {
-			statusURL := fmt.Sprintf("http://%s:%d/server-status?auto", address, di.ServicePort)
-			if di.ServicePort == 80 {
-				statusURL = fmt.Sprintf("http://%s/server-status?auto", address)
+		if ip, port := service.AddressPort(); ip != "" {
+			statusURL := fmt.Sprintf("http://%s:%d/server-status?auto", ip, port)
+			if port == 80 {
+				statusURL = fmt.Sprintf("http://%s/server-status?auto", ip)
 			}
 			input, err = apache.New(statusURL)
 		}
 	case ElasticSearchService:
-		if address := addressForPort(service, di); address != "" {
-			input, err = elasticsearch.New(fmt.Sprintf("http://%s:%d", address, di.ServicePort))
+		if ip, port := service.AddressPort(); ip != "" {
+			input, err = elasticsearch.New(fmt.Sprintf("http://%s:%d", ip, port))
 		}
 	case MemcachedService:
-		if address := addressForPort(service, di); address != "" {
-			input, err = memcached.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
+		if ip, port := service.AddressPort(); ip != "" {
+			input, err = memcached.New(fmt.Sprintf("%s:%d", ip, port))
 		}
 	case MongoDBService:
-		if address := addressForPort(service, di); address != "" {
-			input, err = mongodb.New(fmt.Sprintf("mongodb://%s:%d", address, di.ServicePort))
+		if ip, port := service.AddressPort(); ip != "" {
+			input, err = mongodb.New(fmt.Sprintf("mongodb://%s:%d", ip, port))
 		}
 	case MySQLService:
-		if address := addressForPort(service, di); address != "" && service.ExtraAttributes["password"] != "" {
+		if ip, port := service.AddressPort(); ip != "" && service.ExtraAttributes["password"] != "" {
 			username := service.ExtraAttributes["username"]
 			if username == "" {
 				username = "root"
 			}
-			input, err = mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.ExtraAttributes["password"], address, di.ServicePort))
+			input, err = mysql.New(fmt.Sprintf("%s:%s@tcp(%s:%d)/", username, service.ExtraAttributes["password"], ip, port))
 		}
 	case NginxService:
-		if address := addressForPort(service, di); address != "" {
-			input, err = nginx.New(fmt.Sprintf("http://%s:%d/nginx_status", address, di.ServicePort))
+		if ip, port := service.AddressPort(); ip != "" {
+			input, err = nginx.New(fmt.Sprintf("http://%s:%d/nginx_status", ip, port))
 		}
 	case PHPFPMService:
 		statsURL := urlForPHPFPM(service)
@@ -187,37 +184,45 @@ func (d *Discovery) createInput(service Service) error {
 			input, err = phpfpm.New(statsURL)
 		}
 	case PostgreSQLService:
-		if address := addressForPort(service, di); address != "" && service.ExtraAttributes["password"] != "" {
+		if ip, port := service.AddressPort(); ip != "" && service.ExtraAttributes["password"] != "" {
 			username := service.ExtraAttributes["username"]
 			if username == "" {
 				username = "postgres"
 			}
-			input, err = postgresql.New(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", address, di.ServicePort, username, service.ExtraAttributes["password"]))
+			input, err = postgresql.New(fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=postgres sslmode=disable", ip, port, username, service.ExtraAttributes["password"]))
 		}
 	case RabbitMQService:
-		if address := addressForPort(service, di); address != "" {
+		mgmtPortStr := service.ExtraAttributes["mgmt_port"]
+		mgmtPort := 15672
+		force := false
+		if mgmtPortStr != "" {
+			tmp, err := strconv.ParseInt(mgmtPortStr, 10, 0)
+			if err != nil {
+				mgmtPort = int(tmp)
+				force = true
+			} else {
+				logger.V(1).Printf("%#v is not a valid port number for service RabbitMQ", mgmtPortStr)
+			}
+		}
+		if ip := service.AddressForPort(mgmtPort, "tcp", force); ip != "" {
 			username := service.ExtraAttributes["username"]
 			password := service.ExtraAttributes["password"]
-			mgmtPort := service.ExtraAttributes["mgmt_port"]
 			if username == "" {
 				username = "guest"
 			}
 			if password == "" {
 				password = "guest"
 			}
-			if mgmtPort == "" {
-				mgmtPort = "15672"
-			}
-			url := fmt.Sprintf("http://%s:%s", service.IPAddress, mgmtPort)
+			url := fmt.Sprintf("http://%s:%d", ip, mgmtPort)
 			input, err = rabbitmq.New(url, username, password)
 		}
 	case RedisService:
-		if address := addressForPort(service, di); address != "" {
-			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", address, di.ServicePort))
+		if ip, port := service.AddressPort(); ip != "" {
+			input, err = redis.New(fmt.Sprintf("tcp://%s:%d", ip, port))
 		}
 	case ZookeeperService:
-		if address := addressForPort(service, di); address != "" {
-			input, err = zookeeper.New(fmt.Sprintf("%s:%d", address, di.ServicePort))
+		if ip, port := service.AddressPort(); ip != "" {
+			input, err = zookeeper.New(fmt.Sprintf("%s:%d", ip, port))
 		}
 	default:
 		logger.V(1).Printf("service type %s don't support metrics", service.Name)
@@ -253,33 +258,6 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	}
 	d.activeInput[key] = inputID
 	return nil
-}
-
-// addressForPort returns the IP address for the servicePort or empty if it don't listen on this port
-func addressForPort(service Service, di discoveryInfo) string {
-	if di.ServicePort == 0 {
-		return ""
-	}
-	for _, a := range service.ListenAddresses {
-		if a.Network() != di.ServiceProtocol {
-			continue
-		}
-		address, portStr, err := net.SplitHostPort(a.String())
-		if err != nil {
-			continue
-		}
-		port, err := strconv.ParseInt(portStr, 10, 0)
-		if err != nil {
-			continue
-		}
-		if address == "0.0.0.0" {
-			address = service.IPAddress
-		}
-		if int(port) == di.ServicePort {
-			return address
-		}
-	}
-	return ""
 }
 
 func urlForPHPFPM(service Service) string {
