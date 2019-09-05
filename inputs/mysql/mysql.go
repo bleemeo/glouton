@@ -125,7 +125,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		case "queries", "slow_queries":
 			newFields[metricName] = value
 		case "innodb_row_lock_current_waits":
-			newFields["locked_transaction"] = value
+			newFields["innobdb_locked_transaction"] = value
 		case "trx_rseg_history_len":
 			newFields["history_list_len"] = value
 		}
