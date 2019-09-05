@@ -410,11 +410,8 @@ func (a *agent) doesTaskCrashed(ctx context.Context, name string) bool {
 	defer a.l.Unlock()
 	if id, ok := a.taskIDs[name]; ok {
 		if !a.taskRegistry.IsRunning(id) {
-			// Re-check ctx to avoid race condition
-			if ctx.Err() != nil {
-				return false
-			}
-			return true
+			// Re-check ctx to avoid race condition, it crashed only if we are still running
+			return ctx.Err() == nil
 		}
 	}
 	return false

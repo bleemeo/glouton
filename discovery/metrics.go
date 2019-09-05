@@ -131,7 +131,7 @@ func (d *Discovery) removeInput(key nameContainer) {
 		return
 	}
 	if inputID, ok := d.activeInput[key]; ok {
-		logger.V(2).Printf("Remove input for service %v on container %s", key.name, key.containerID)
+		logger.V(2).Printf("Remove input for service %v on container %s", key.name, key.containerName)
 		delete(d.activeInput, key)
 		d.coll.RemoveInput(inputID)
 	}
@@ -248,8 +248,8 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	}
 	inputID := d.coll.AddInput(input, string(service.Name))
 	key := nameContainer{
-		name:        service.Name,
-		containerID: service.ContainerID,
+		name:          service.Name,
+		containerName: service.ContainerName,
 	}
 	d.activeInput[key] = inputID
 	return nil

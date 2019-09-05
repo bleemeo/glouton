@@ -58,8 +58,8 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 	servicesMap := make(map[nameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
 		key := nameContainer{
-			name:        v.Name,
-			containerID: v.ContainerID,
+			name:          v.Name,
+			containerName: v.ContainerName,
 		}
 		servicesMap[key] = v
 	}
@@ -127,7 +127,7 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	defer d.l.Unlock()
 	deleted := false
 	for _, v := range services {
-		key := nameContainer{name: v.Name, containerID: v.ContainerID}
+		key := nameContainer{name: v.Name, containerName: v.ContainerName}
 		if _, ok := d.servicesMap[key]; ok {
 			deleted = true
 		}
@@ -171,8 +171,8 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for _, service := range r {
 		key := nameContainer{
-			name:        service.Name,
-			containerID: service.ContainerID,
+			name:          service.Name,
+			containerName: service.ContainerName,
 		}
 		if previousService, ok := servicesMap[key]; ok {
 			if previousService.hasNetstatInfo && !service.hasNetstatInfo {

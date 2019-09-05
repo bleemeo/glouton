@@ -227,8 +227,8 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		}
 
 		key := nameContainer{
-			name:        service.Name,
-			containerID: service.ContainerID,
+			name:          service.Name,
+			containerName: service.ContainerName,
 		}
 		if _, ok := servicesMap[key]; ok {
 			continue

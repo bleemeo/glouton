@@ -21,8 +21,8 @@ type PersistentDiscoverer interface {
 }
 
 type nameContainer struct {
-	name        ServiceName
-	containerID string
+	name          ServiceName
+	containerName string
 }
 
 // ServiceName is the name of a supported service

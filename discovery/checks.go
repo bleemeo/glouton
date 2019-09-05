@@ -28,7 +28,7 @@ func (d *Discovery) removeCheck(key nameContainer) {
 		return
 	}
 	if checkID, ok := d.activeCheck[key]; ok {
-		logger.V(2).Printf("Remove check for service %v on container %s", key.name, key.containerID)
+		logger.V(2).Printf("Remove check for service %v on container %s", key.name, key.containerName)
 		delete(d.activeCheck, key)
 		d.taskRegistry.RemoveTask(checkID)
 	}
@@ -158,8 +158,8 @@ func (d *Discovery) addCheck(task task.Runner, service Service) {
 		return
 	}
 	key := nameContainer{
-		name:        service.Name,
-		containerID: service.ContainerID,
+		name:          service.Name,
+		containerName: service.ContainerName,
 	}
 	id, err := d.taskRegistry.AddTask(task, fmt.Sprintf("check for %s", service.Name))
 	if err != nil {
