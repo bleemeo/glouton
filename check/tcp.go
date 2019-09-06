@@ -56,7 +56,11 @@ func NewTCP(address string, tcpAddresses []string, persistentConnection bool, se
 		expect:      expect,
 		closeMsg:    closeMsg,
 	}
-	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, tc.doCheck, metricName, labels, acc)
+	mainCheck := tc.doCheck
+	if address == "" {
+		mainCheck = nil
+	}
+	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, metricName, labels, acc)
 	return tc
 }
 

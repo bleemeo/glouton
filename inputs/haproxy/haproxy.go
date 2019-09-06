@@ -71,6 +71,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	if originalContext.Tags["sv"] != "BACKEND" && originalContext.Tags["sv"] != "FRONTEND" {
 		drop = true
 	}
+	newContext.Tags["item"] = newContext.Tags["proxy"]
 	return
 }
 

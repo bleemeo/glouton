@@ -36,10 +36,8 @@ type accumulator interface {
 // * use mainCheck to perform the primary check (protocol specific)
 // * open & close a TCP connection on all tcpAddresses (with exclusion of mainTCPAddress if set)
 //
-// tcpAddresses is supposed to contains mainTCPAddress
-//
 // If persistentConnection is active, when check successed, this checker will maintain a TCP connection
-// to each tcpAddresses to detect service failture quickly.
+// to each tcpAddresses + the mainTCPAddress to detect service failture quickly.
 //
 // The check is run at the first of:
 // * One minute after last check
@@ -63,6 +61,22 @@ type baseCheck struct {
 }
 
 func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, labels map[string]string, acc accumulator) *baseCheck {
+	if mainTCPAddress != "" {
+		found := false
+		for _, v := range tcpAddresses {
+			if v == mainTCPAddress {
+				found = true
+				break
+			}
+		}
+		if !found {
+			tmp := make([]string, 0, len(tcpAddresses)+1)
+			tmp = append(tmp, mainTCPAddress)
+			tmp = append(tmp, tcpAddresses...)
+			tcpAddresses = tmp
+		}
+	}
+
 	return &baseCheck{
 		metricName:           metricName,
 		labels:               labels,

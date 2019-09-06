@@ -68,6 +68,9 @@ func (d *Discovery) createCheck(service Service) {
 		if a.Network() != tcpPortocol {
 			continue
 		}
+		if a.Address == "0.0.0.0" {
+			a.Address = service.IPAddress
+		}
 		tcpAddresses = append(tcpAddresses, a.String())
 	}
 
