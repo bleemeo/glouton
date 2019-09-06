@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Bleemeo
+// Copyright 2015-2019 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //

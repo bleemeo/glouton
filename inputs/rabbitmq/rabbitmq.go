@@ -1,4 +1,4 @@
-// Copyright 2015-2018 Bleemeo
+// Copyright 2015-2019 Bleemeo
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
@@ -13,8 +13,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
-// Package for rabbitmq input
 
 package rabbitmq
 
