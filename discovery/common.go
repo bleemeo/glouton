@@ -121,7 +121,7 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 		if err != nil {
 			continue
 		}
-		if address == "0.0.0.0" {
+		if address == net.IPv4zero.String() {
 			address = s.IPAddress
 		}
 		if int(p) == port {

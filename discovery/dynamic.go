@@ -315,7 +315,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 			newListenAddresses = append(newListenAddresses, a)
 			continue
 		}
-		if int(port) == di.ServicePort && a.Network() == di.ServiceProtocol && address != "0.0.0.0" {
+		if int(port) == di.ServicePort && a.Network() == di.ServiceProtocol && address != net.IPv4zero.String() {
 			defaultAddress = address
 		}
 		if !di.IgnoreHighPort || port <= 32000 {

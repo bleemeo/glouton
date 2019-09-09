@@ -21,6 +21,7 @@ import (
 	"agentgo/logger"
 	"agentgo/task"
 	"fmt"
+	"net"
 )
 
 func (d *Discovery) configureChecks(oldServices, services map[nameContainer]Service) {
@@ -68,7 +69,7 @@ func (d *Discovery) createCheck(service Service) {
 		if a.Network() != tcpPortocol {
 			continue
 		}
-		if a.Address == "0.0.0.0" {
+		if a.Address == net.IPv4zero.String() {
 			a.Address = service.IPAddress
 		}
 		tcpAddresses = append(tcpAddresses, a.String())
