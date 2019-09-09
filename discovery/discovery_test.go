@@ -68,14 +68,14 @@ func TestDiscoverySingle(t *testing.T) {
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 			want: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 		},
 		{
@@ -84,21 +84,21 @@ func TestDiscoverySingle(t *testing.T) {
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 			dynamicResult: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 			want: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 		},
 		{
@@ -107,21 +107,21 @@ func TestDiscoverySingle(t *testing.T) {
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
 				IPAddress:       "10.0.0.5",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 			dynamicResult: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "",
-				hasNetstatInfo:  false,
+				HasNetstatInfo:  false,
 			},
 			want: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
 				IPAddress:       "10.0.0.5",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 		},
 		{
@@ -130,21 +130,21 @@ func TestDiscoverySingle(t *testing.T) {
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "10.0.0.5", Port: 11211}},
 				IPAddress:       "10.0.0.5",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 			dynamicResult: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 			want: Service{
 				Name:            MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
-				hasNetstatInfo:  true,
+				HasNetstatInfo:  true,
 			},
 		},
 	}
@@ -179,8 +179,8 @@ func TestDiscoverySingle(t *testing.T) {
 		if !reflect.DeepEqual(srv[0].ListenAddresses, c.want.ListenAddresses) {
 			t.Errorf("Case #%d: ListenAddresses == %v, want %v", i, srv[0].ListenAddresses, c.want.ListenAddresses)
 		}
-		if srv[0].hasNetstatInfo != c.want.hasNetstatInfo {
-			t.Errorf("Case #%d: hasNetstatInfo == %#v, want %#v", i, srv[0].hasNetstatInfo, c.want.hasNetstatInfo)
+		if srv[0].HasNetstatInfo != c.want.HasNetstatInfo {
+			t.Errorf("Case #%d: hasNetstatInfo == %#v, want %#v", i, srv[0].HasNetstatInfo, c.want.HasNetstatInfo)
 		}
 	}
 }

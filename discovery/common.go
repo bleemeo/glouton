@@ -100,7 +100,7 @@ type Service struct {
 
 	CheckIgnored bool // TODO: fill this value
 
-	hasNetstatInfo bool
+	HasNetstatInfo bool
 	container      container
 }
 

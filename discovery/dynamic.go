@@ -269,7 +269,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			service.ListenAddresses = service.container.ListenAddresses()
 		}
 		if len(service.ListenAddresses) > 0 {
-			service.hasNetstatInfo = true
+			service.HasNetstatInfo = true
 		}
 
 		di := servicesDiscoveryInfo[serviceName]

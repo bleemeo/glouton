@@ -210,10 +210,10 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 			containerName: service.ContainerName,
 		}
 		if previousService, ok := servicesMap[key]; ok {
-			if previousService.hasNetstatInfo && !service.hasNetstatInfo {
+			if previousService.HasNetstatInfo && !service.HasNetstatInfo {
 				service.ListenAddresses = previousService.ListenAddresses
 				service.IPAddress = previousService.IPAddress
-				service.hasNetstatInfo = previousService.hasNetstatInfo
+				service.HasNetstatInfo = previousService.HasNetstatInfo
 			}
 		}
 		servicesMap[key] = service
