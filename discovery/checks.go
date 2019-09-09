@@ -127,22 +127,18 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpSend = []byte("ruok\n")
 		tcpExpect = []byte("imok")
 	}
-	if primaryAddress != "" || len(tcpAddresses) > 0 {
-		tcpCheck := check.NewTCP(
-			primaryAddress,
-			tcpAddresses,
-			!di.DisablePersistentConnection,
-			tcpSend,
-			tcpExpect,
-			tcpClose,
-			fmt.Sprintf("%s_status", service.Name),
-			labels,
-			d.acc,
-		)
-		d.addCheck(tcpCheck.Run, service)
-	} else {
-		logger.V(1).Printf("No check for service type %#v", service.Name)
-	}
+	tcpCheck := check.NewTCP(
+		primaryAddress,
+		tcpAddresses,
+		!di.DisablePersistentConnection,
+		tcpSend,
+		tcpExpect,
+		tcpClose,
+		fmt.Sprintf("%s_status", service.Name),
+		labels,
+		d.acc,
+	)
+	d.addCheck(tcpCheck.Run, service)
 }
 
 func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
