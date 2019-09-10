@@ -21,9 +21,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"os/signal"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -283,15 +285,61 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
 func (a *agent) run() { //nolint:gocyclo
-	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 
-	_ = os.Remove(a.config.String("agent.upgrade_file"))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	a.cancel = cancel
+
+	rootPath := "/"
+	if a.config.String("container.type") != "" {
+		rootPath = a.config.String("df.host_mount_point")
+	}
+	a.triggerHandler = debouncer.New(
+		a.handleTrigger,
+		10*time.Second,
+	)
+	a.factProvider = facts.NewFacter(
+		a.config.String("agent.facts_file"),
+		rootPath,
+		a.config.String("agent.public_ip_indicator"),
+	)
 
 	c := make(chan os.Signal, 1)
-	a.cancel = func() {
-		c <- os.Interrupt
-	}
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+	go func() {
+		for s := range c {
+			if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
+				cancel()
+				break
+			}
+			if s == syscall.SIGHUP {
+				a.FireTrigger(true, true, false)
+			}
+		}
+	}()
+
+	cloudImageFile := a.config.String("agent.cloudimage_creation_file")
+	content, err := ioutil.ReadFile(cloudImageFile)
+	if err != nil && !os.IsNotExist(err) {
+		logger.Printf("Unable to read content of %#v file: %v", cloudImageFile, err)
+	}
+	if err == nil || !os.IsNotExist(err) {
+		initialMac := parseIPOutput(content)
+		facts, err := a.factProvider.Facts(ctx, 0)
+		currentMac := ""
+		if err == nil {
+			currentMac = facts["primary_mac_address"]
+		}
+		if currentMac == initialMac || currentMac == "" || initialMac == "" {
+			logger.Printf("Not starting bleemeo-agent since installation for creation of a cloud image was requested and agent is still running on the same machine")
+			logger.Printf("If this is wrong and agent should run on this machine, remove %#v file", cloudImageFile)
+			return
+		}
+	}
+	_ = os.Remove(cloudImageFile)
+
+	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
+	_ = os.Remove(a.config.String("agent.upgrade_file"))
 
 	apiBindAddress := fmt.Sprintf("%s:%d", a.config.String("web.listener.address"), a.config.Int("web.listener.port"))
 
@@ -303,11 +351,6 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
-	rootPath := "/"
-	if a.config.String("container.type") != "" {
-		rootPath = a.config.String("df.host_mount_point")
-	}
-
 	db := store.New()
 	a.accumulator = threshold.New(
 		db.Accumulator(),
@@ -316,11 +359,6 @@ func (a *agent) run() { //nolint:gocyclo
 	a.dockerFact = facts.NewDocker()
 	psFact := facts.NewProcess(a.dockerFact)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
-	a.factProvider = facts.NewFacter(
-		a.config.String("agent.facts_file"),
-		rootPath,
-		a.config.String("agent.public_ip_indicator"),
-	)
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
@@ -338,16 +376,12 @@ func (a *agent) run() { //nolint:gocyclo
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
-	err := discovery.AddDefaultInputs(a.collector, rootPath, a.config)
+	err = discovery.AddDefaultInputs(a.collector, rootPath, a.config)
 	if err != nil {
 		logger.Printf("Unable to initialize system collector: %v", err)
 		return
 	}
 
-	a.triggerHandler = debouncer.New(
-		a.handleTrigger,
-		10*time.Second,
-	)
 	a.FireTrigger(true, false, false)
 
 	tasks := []taskInfo{
@@ -408,15 +442,10 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.startTasks(tasks)
 
-	for s := range c {
-		if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
-			break
-		}
-		if s == syscall.SIGHUP {
-			a.FireTrigger(true, true, false)
-		}
-	}
-
+	<-ctx.Done()
+	logger.V(2).Printf("Stopping agent...")
+	signal.Stop(c)
+	close(c)
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	logger.V(2).Printf("Agent stopped")
@@ -615,4 +644,46 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			)
 		}
 	}
+}
+
+func parseIPOutput(content []byte) string {
+
+	lines := strings.Split(string(content), "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	ipRoute := lines[0]
+	lines = lines[1:]
+
+	ipAddress := ""
+	macAddress := ""
+
+	splitOutput := strings.Split(ipRoute, " ")
+	for i, s := range splitOutput {
+		if s == "src" && len(splitOutput) > i+1 {
+			ipAddress = splitOutput[i+1]
+		}
+	}
+
+	reNewInterface := regexp.MustCompile(`^\d+: .*$`)
+	reEtherAddress := regexp.MustCompile(`^\s+link/ether ([0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}) .*`)
+	reInetAddress := regexp.MustCompile(`\s+inet (\d+(\.\d+){3})/\d+ .*`)
+	currentMacAddress := ""
+	for _, line := range lines {
+		if reNewInterface.MatchString(line) {
+			currentMacAddress = ""
+		}
+
+		match := reInetAddress.FindStringSubmatch(line)
+		if len(match) > 0 && match[1] == ipAddress {
+			macAddress = currentMacAddress
+			break
+		}
+
+		match = reEtherAddress.FindStringSubmatch(line)
+		if len(match) > 0 {
+			currentMacAddress = match[1]
+		}
+	}
+	return macAddress
 }
