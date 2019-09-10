@@ -570,7 +570,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			logger.V(1).Printf("error during discovery: %v", err)
 		}
 		hasConnection := a.dockerFact.HasConnection(ctx)
-		if hasConnection && !a.dockerInputPresent {
+		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enabled") {
 			i, err := docker.New()
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
