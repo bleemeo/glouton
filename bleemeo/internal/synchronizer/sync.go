@@ -103,8 +103,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
 	}
 
-	s.updateUnitsAndThresholds()
-
 	s.successiveErrors = 0
 	var minimalDelay time.Duration
 

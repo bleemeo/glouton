@@ -18,6 +18,7 @@ package threshold
 
 import (
 	"agentgo/types"
+	"math"
 	"testing"
 	"time"
 )
@@ -165,6 +166,102 @@ func TestFormatValue(t *testing.T) {
 		got := formatValue(c.value, c.unit)
 		if got != c.want {
 			t.Errorf("formatValue(%v, %v) == %v, want %v", c.value, c.unit, got, c.want)
+		}
+	}
+}
+
+func TestFormatDuration(t *testing.T) {
+	cases := []struct {
+		value time.Duration
+		want  string
+	}{
+		{
+			value: 300 * time.Second,
+			want:  "5 minutes",
+		},
+		{
+			value: 24 * time.Hour,
+			want:  "1 day",
+		},
+		{
+			value: 24*time.Hour + 100*time.Second,
+			want:  "1 day",
+		},
+		{
+			value: 24*time.Hour - 100*time.Second,
+			want:  "1 day",
+		},
+		{
+			value: 89 * time.Second,
+			want:  "1 minute",
+		},
+		{
+			value: 91 * time.Second,
+			want:  "2 minutes",
+		},
+		{
+			value: 0,
+			want:  "",
+		},
+	}
+	for _, c := range cases {
+		got := formatDuration(c.value)
+		if got != c.want {
+			t.Errorf("formatValue(%v) == %v, want %v", c.value, got, c.want)
+		}
+	}
+}
+
+func TestThresholdEqual(t *testing.T) {
+	cases := []struct {
+		left  Threshold
+		right Threshold
+		want  bool
+	}{
+		{
+			left:  Threshold{},
+			right: Threshold{},
+			want:  true,
+		},
+		{
+			left:  Threshold{LowCritical: 1},
+			right: Threshold{},
+			want:  false,
+		},
+		{
+			left:  Threshold{LowCritical: math.NaN()},
+			right: Threshold{},
+			want:  false,
+		},
+		{
+			left:  Threshold{LowCritical: math.NaN()},
+			right: Threshold{LowCritical: math.NaN()},
+			want:  true,
+		},
+		{
+			left:  Threshold{LowCritical: math.NaN(), LowWarning: math.NaN(), HighWarning: math.NaN(), HighCritical: math.NaN()},
+			right: Threshold{LowCritical: math.NaN(), LowWarning: math.NaN(), HighWarning: math.NaN(), HighCritical: math.NaN()},
+			want:  true,
+		},
+		{
+			left:  Threshold{LowCritical: 5, LowWarning: math.NaN(), HighWarning: math.NaN(), HighCritical: math.NaN()},
+			right: Threshold{LowCritical: 5, LowWarning: math.NaN(), HighWarning: math.NaN(), HighCritical: math.NaN()},
+			want:  true,
+		},
+		{
+			left:  Threshold{LowCritical: 5, LowWarning: math.NaN(), HighWarning: math.NaN(), HighCritical: math.NaN()},
+			right: Threshold{LowCritical: 6, LowWarning: math.NaN(), HighWarning: math.NaN(), HighCritical: math.NaN()},
+			want:  false,
+		},
+	}
+	for i, c := range cases {
+		got := c.left.Equal(c.right)
+		if got != c.want {
+			t.Errorf("case %d: left.Equal(right) == %v, want %v", i, got, c.want)
+		}
+		got = c.right.Equal(c.left)
+		if got != c.want {
+			t.Errorf("case %d: right.Equal(left) == %v, want %v", i, got, c.want)
 		}
 	}
 }

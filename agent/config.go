@@ -24,6 +24,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 //nolint:gochecknoglobals
@@ -269,6 +270,39 @@ func serivcesOverrideFromInterface(input interface{}) []map[string]string {
 			override[k] = convertToString(v)
 		}
 		result = append(result, override)
+	}
+	return result
+}
+
+func softPeriodsFromInterface(input interface{}) map[string]time.Duration {
+	if input == nil {
+		return nil
+	}
+
+	inputMap, ok := convertToMap(input)
+	if !ok {
+		logger.Printf("softstatus period in configuration file is not a map")
+		return nil
+	}
+	result := make(map[string]time.Duration, len(inputMap))
+
+	for k, rawValue := range inputMap {
+		var duration time.Duration
+		switch value := rawValue.(type) {
+		case int:
+			duration = time.Duration(value) * time.Second
+		case float64:
+			duration = time.Duration(int(value/1000)) * time.Millisecond
+		case string:
+			var err error
+			duration, err = time.ParseDuration(value)
+			if err != nil {
+				continue
+			}
+		default:
+			continue
+		}
+		result[k] = duration
 	}
 	return result
 }

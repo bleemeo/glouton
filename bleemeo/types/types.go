@@ -39,7 +39,7 @@ type GlobalOption struct {
 	Discovery discovery.PersistentDiscoverer
 
 	UpdateMetricResolution func(resolution time.Duration)
-	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold)
+	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 }
 

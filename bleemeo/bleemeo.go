@@ -57,6 +57,11 @@ func New(option types.GlobalOption) *Connector {
 	return c
 }
 
+// UpdateUnitsAndThresholds update metrics units & threshold (from cache)
+func (c *Connector) UpdateUnitsAndThresholds(firstUpdate bool) {
+	c.sync.UpdateUnitsAndThresholds(firstUpdate)
+}
+
 func (c *Connector) initMQTT() error {
 	c.l.Lock()
 	defer c.l.Unlock()

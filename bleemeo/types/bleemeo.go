@@ -20,6 +20,7 @@ import (
 	"agentgo/threshold"
 	"crypto/sha256"
 	"fmt"
+	"math"
 	"strings"
 	"time"
 )
@@ -79,15 +80,24 @@ type Container struct {
 	DockerInspectHash string `json:",omitempty"`
 }
 
+// Threshold is the threshold of a metrics. We use pointer to float to support
+// null value in JSON
+type Threshold struct {
+	LowWarning    *float64 `json:"threshold_low_warning"`
+	LowCrictical  *float64 `json:"threshold_low_critical"`
+	HighWarning   *float64 `json:"threshold_high_warning"`
+	HighCrictical *float64 `json:"threshold_high_critical"`
+}
+
 // Metric is a Metric object on Bleemeo API
 type Metric struct {
-	ID          string              `json:"id"`
-	Label       string              `json:"label"`
-	Labels      map[string]string   `json:"labels"`
-	ServiceID   string              `json:"service,omitempty"`
-	ContainerID string              `json:"container,omitempty"`
-	StatusOf    string              `json:"status_of,omitempty"`
-	Threshold   threshold.Threshold `json:"-"`
+	ID          string            `json:"id"`
+	Label       string            `json:"label"`
+	Labels      map[string]string `json:"labels"`
+	ServiceID   string            `json:"service,omitempty"`
+	ContainerID string            `json:"container,omitempty"`
+	StatusOf    string            `json:"status_of,omitempty"`
+	Threshold
 	threshold.Unit
 	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
 }
@@ -106,6 +116,31 @@ func (ac AccountConfig) MetricsAgentWhitelistMap() map[string]bool {
 	}
 	for _, n := range strings.Split(ac.MetricsAgentWhitelist, ",") {
 		result[strings.Trim(n, " \t\n")] = true
+	}
+	return result
+}
+
+// ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset threshold)
+func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
+	if t.LowWarning != nil {
+		result.LowWarning = *t.LowWarning
+	} else {
+		result.LowWarning = math.NaN()
+	}
+	if t.LowCrictical != nil {
+		result.LowCritical = *t.LowCrictical
+	} else {
+		result.LowCritical = math.NaN()
+	}
+	if t.HighWarning != nil {
+		result.HighWarning = *t.HighWarning
+	} else {
+		result.HighWarning = math.NaN()
+	}
+	if t.HighCrictical != nil {
+		result.HighCritical = *t.HighCrictical
+	} else {
+		result.HighCritical = math.NaN()
 	}
 	return result
 }

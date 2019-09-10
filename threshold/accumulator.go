@@ -36,6 +36,7 @@ const statusCacheKey = "CacheStatusState"
 type StatusAccumulator interface {
 	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
 	AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
+	AddError(err error)
 }
 
 // Accumulator implement telegraf.Accumulator (+AddFieldsWithStatus, cf store package) but check threshold and
@@ -49,14 +50,17 @@ type Accumulator struct {
 	units             map[MetricNameItem]Unit
 	thresholdsAllItem map[string]Threshold
 	thresholds        map[MetricNameItem]Threshold
+	defaultSoftPeriod time.Duration
+	softPeriods       map[string]time.Duration
 }
 
 // New returns a new Accumulator
 func New(acc StatusAccumulator, state *state.State) *Accumulator {
 	self := &Accumulator{
-		acc:    acc,
-		state:  state,
-		states: make(map[MetricNameItem]statusState),
+		acc:               acc,
+		state:             state,
+		states:            make(map[MetricNameItem]statusState),
+		defaultSoftPeriod: 300 * time.Second,
 	}
 	var jsonList []jsonState
 	err := state.Get(statusCacheKey, &jsonList)
@@ -77,6 +81,16 @@ func (a *Accumulator) SetThresholds(thresholdWithItem map[MetricNameItem]Thresho
 	a.thresholdsAllItem = thresholdAllItem
 	a.thresholds = thresholdWithItem
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
+}
+
+// SetSoftPeriod configure soft status period. A metric must stay in higher status for at least this period before its status actually change.
+// For example, CPU usage must be above 80% for at least 5 minutes before being alerted. The term soft-status is taken from Nagios.
+func (a *Accumulator) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
+	a.l.Lock()
+	defer a.l.Unlock()
+	a.softPeriods = periodPerMetrics
+	a.defaultSoftPeriod = defaultPeriod
+	logger.V(2).Printf("SoftPeriod contains %d definitions", len(periodPerMetrics))
 }
 
 // SetUnits configure the units
@@ -135,6 +149,10 @@ func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator 
 
 // AddError add an error to the Accumulator
 func (a *Accumulator) AddError(err error) {
+	if a.acc != nil {
+		a.acc.AddError(err)
+		return
+	}
 	if err != nil {
 		logger.V(1).Printf("Add error called with: %v", err)
 	}
@@ -227,6 +245,27 @@ type Threshold struct {
 	HighCritical float64
 }
 
+// Equal test equality of threhold object
+func (t Threshold) Equal(other Threshold) bool {
+	if t == other {
+		return true
+	}
+	// Need special handling for NaN
+	if t.LowCritical != other.LowCritical && (!math.IsNaN(t.LowCritical) || !math.IsNaN(other.LowCritical)) {
+		return false
+	}
+	if t.LowWarning != other.LowWarning && (!math.IsNaN(t.LowWarning) || !math.IsNaN(other.LowWarning)) {
+		return false
+	}
+	if t.HighWarning != other.HighWarning && (!math.IsNaN(t.HighWarning) || !math.IsNaN(other.HighWarning)) {
+		return false
+	}
+	if t.HighCritical != other.HighCritical && (!math.IsNaN(t.HighCritical) || !math.IsNaN(other.HighCritical)) {
+		return false
+	}
+	return true
+}
+
 // Unit represent the unit of a metric
 type Unit struct {
 	UnitType int    `json:"unit,omitempty"`
@@ -300,6 +339,13 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 		return types.StatusWarning, t.HighWarning
 	}
 	return types.StatusOk, math.NaN()
+}
+
+// GetThreshold return the current threshold for given Metric
+func (a *Accumulator) GetThreshold(key MetricNameItem) Threshold {
+	a.l.Lock()
+	defer a.l.Unlock()
+	return a.getThreshold(key)
 }
 
 func (a *Accumulator) getThreshold(key MetricNameItem) Threshold {
@@ -383,6 +429,39 @@ func formatValue(value float64, unit Unit) string {
 	}
 }
 
+func formatDuration(period time.Duration) string {
+	if period <= 0 {
+		return ""
+	}
+
+	units := []struct {
+		Scale float64
+		Name  string
+	}{
+		{1, "second"},
+		{60, "minute"},
+		{60, "hour"},
+		{24, "day"},
+	}
+
+	currentUnit := ""
+	value := period.Seconds()
+	for _, unit := range units {
+		if math.Round(value/unit.Scale) >= 1 {
+			value /= unit.Scale
+			currentUnit = unit.Name
+		} else {
+			break
+		}
+	}
+
+	value = math.Round(value)
+	if value > 1 {
+		currentUnit += "s"
+	}
+	return fmt.Sprintf("%.0f %s", value, currentUnit)
+}
+
 func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.l.Lock()
 	defer a.l.Unlock()
@@ -404,7 +483,10 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 		}
 		softStatus, thresholdLimit := threshold.CurrentStatus(valueF)
 		previousState := a.states[key]
-		period := 300 * time.Second // TODO
+		period := a.defaultSoftPeriod
+		if tmp, ok := a.softPeriods[key.Name]; ok {
+			period = tmp
+		}
 		newState := previousState.Update(softStatus, period, time.Now())
 		a.states[key] = newState
 
@@ -416,7 +498,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 				statusDescription += fmt.Sprintf(
 					" threshold (%s) exceeded over last %v",
 					formatValue(thresholdLimit, unit),
-					period,
+					formatDuration(period),
 				)
 			} else {
 				statusDescription += fmt.Sprintf(

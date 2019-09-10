@@ -63,10 +63,11 @@ type agent struct {
 	bleemeoConnector *bleemeo.Connector
 	accumulator      *threshold.Accumulator
 
-	triggerHandler *debouncer.Debouncer
-	triggerLock    sync.Mutex
-	triggerDisc    bool
-	triggerFact    bool
+	triggerHandler            *debouncer.Debouncer
+	triggerLock               sync.Mutex
+	triggerDisc               bool
+	triggerFact               bool
+	triggerSystemUpdateMetric bool
 
 	dockerInputPresent bool
 	dockerInputID      int
@@ -221,18 +222,18 @@ func (a *agent) Tags() []string {
 
 // UpdateThresholds update the thresholds definition.
 // This method will merge with threshold definition present in configuration file
-func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold) {
-	a.updateThresholds(thresholds, false)
+func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+	a.updateThresholds(thresholds, firstUpdate)
 }
 
-func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, showWarning bool) {
+func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	rawValue, ok := a.config.Get("thresholds")
 	if !ok {
 		rawValue = map[string]interface{}{}
 	}
 	var rawThreshold map[string]interface{}
 	if rawThreshold, ok = rawValue.(map[string]interface{}); !ok {
-		if showWarning {
+		if firstUpdate {
 			logger.V(1).Printf("Threshold in configuration file is not map")
 		}
 		rawThreshold = nil
@@ -241,14 +242,14 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 	for k, v := range rawThreshold {
 		v2, ok := v.(map[string]interface{})
 		if !ok {
-			if showWarning {
+			if firstUpdate {
 				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v value is not a map", k)
 			}
 			continue
 		}
 		t, err := threshold.FromInterfaceMap(v2)
 		if err != nil {
-			if showWarning {
+			if firstUpdate {
 				logger.V(1).Printf("Threshold in configuration file is not well-formated: %v", err)
 			}
 			continue
@@ -256,7 +257,28 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		configThreshold[k] = t
 	}
 
+	oldThresholds := map[string]threshold.Threshold{
+		"system_pending_updates":          {},
+		"system_pending_security_updates": {},
+	}
+	for name := range oldThresholds {
+		key := threshold.MetricNameItem{
+			Name: name,
+			Item: "",
+		}
+		oldThresholds[name] = a.accumulator.GetThreshold(key)
+	}
 	a.accumulator.SetThresholds(thresholds, configThreshold)
+	for name := range oldThresholds {
+		key := threshold.MetricNameItem{
+			Name: name,
+			Item: "",
+		}
+		newThreshold := a.accumulator.GetThreshold(key)
+		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
+			a.FireTrigger(false, false, true)
+		}
+	}
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
@@ -291,7 +313,6 @@ func (a *agent) run() { //nolint:gocyclo
 		db.Accumulator(),
 		a.state,
 	)
-	a.updateThresholds(nil, true)
 	a.dockerFact = facts.NewDocker()
 	psFact := facts.NewProcess(a.dockerFact)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
@@ -327,7 +348,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.handleTrigger,
 		10*time.Second,
 	)
-	a.FireTrigger(true, false)
+	a.FireTrigger(true, false, false)
 
 	tasks := []taskInfo{
 		{db.Run, "store"},
@@ -374,6 +395,17 @@ func (a *agent) run() { //nolint:gocyclo
 		tasks = append(tasks, taskInfo{server.Run, "zabbix"})
 	}
 
+	if a.bleemeoConnector == nil {
+		a.updateThresholds(nil, true)
+	} else {
+		a.bleemeoConnector.UpdateUnitsAndThresholds(true)
+	}
+	tmp, _ := a.config.Get("metric.softstatus_period")
+	a.accumulator.SetSoftPeriod(
+		time.Duration(a.config.Int("metric.softstatus_period_default"))*time.Second,
+		softPeriodsFromInterface(tmp),
+	)
+
 	a.startTasks(tasks)
 
 	for s := range c {
@@ -381,7 +413,7 @@ func (a *agent) run() { //nolint:gocyclo
 			break
 		}
 		if s == syscall.SIGHUP {
-			a.FireTrigger(true, true)
+			a.FireTrigger(true, true, false)
 		}
 	}
 
@@ -438,6 +470,13 @@ func (a *agent) doesTaskCrashed(ctx context.Context, name string) bool {
 }
 
 func (a *agent) hourlyDiscovery(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return nil
+	case <-time.After(15 * time.Second):
+	}
+	a.FireTrigger(false, false, true)
+
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
 	for {
@@ -445,7 +484,7 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			a.FireTrigger(true, false)
+			a.FireTrigger(true, false, true)
 		}
 	}
 }
@@ -458,7 +497,7 @@ func (a *agent) dailyFact(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			a.FireTrigger(false, true)
+			a.FireTrigger(false, true, false)
 		}
 	}
 }
@@ -468,7 +507,7 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 		select {
 		case ev := <-a.dockerFact.Events():
 			if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
-				a.FireTrigger(true, false)
+				a.FireTrigger(true, false, false)
 			}
 		case <-ctx.Done():
 			return nil
@@ -489,13 +528,13 @@ func (a *agent) netstatWatcher(ctx context.Context) error {
 		}
 		newStat, _ := os.Stat(filePath)
 		if newStat != nil && (stat == nil || !newStat.ModTime().Equal(stat.ModTime())) {
-			a.FireTrigger(true, false)
+			a.FireTrigger(true, false, false)
 		}
 		stat = newStat
 	}
 }
 
-func (a *agent) FireTrigger(discovery bool, sendFacts bool) {
+func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric bool) {
 	a.triggerLock.Lock()
 	defer a.triggerLock.Unlock()
 	if discovery {
@@ -504,22 +543,27 @@ func (a *agent) FireTrigger(discovery bool, sendFacts bool) {
 	if sendFacts {
 		a.triggerFact = true
 	}
+	if systemUpdateMetric {
+		a.triggerSystemUpdateMetric = true
+	}
 	a.triggerHandler.Trigger()
 }
 
-func (a *agent) cleanTrigger() (discovery bool, sendFacts bool) {
+func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetric bool) {
 	a.triggerLock.Lock()
 	defer a.triggerLock.Unlock()
 
 	discovery = a.triggerDisc
 	sendFacts = a.triggerFact
+	systemUpdateMetric = a.triggerSystemUpdateMetric
+	a.triggerSystemUpdateMetric = false
 	a.triggerDisc = false
 	a.triggerFact = false
 	return
 }
 
 func (a *agent) handleTrigger(ctx context.Context) {
-	runDiscovery, runFact := a.cleanTrigger()
+	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
 		_, err := a.discovery.Discovery(ctx, 0)
 		if err != nil {
@@ -544,6 +588,31 @@ func (a *agent) handleTrigger(ctx context.Context) {
 	if runFact {
 		if _, err := a.factProvider.Facts(ctx, 0); err != nil {
 			logger.V(1).Printf("error during facts gathering: %v", err)
+		}
+	}
+	if runSystemUpdateMetric {
+		rootPath := "/"
+		if a.config.String("container.type") != "" {
+			rootPath = a.config.String("df.host_mount_point")
+		}
+		pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
+			ctx,
+			a.config.String("container.type") != "",
+			rootPath,
+		)
+		fields := make(map[string]interface{})
+		if pendingUpdate >= 0 {
+			fields["pending_updates"] = pendingUpdate
+		}
+		if pendingSecurityUpdate >= 0 {
+			fields["pending_security_updates"] = pendingSecurityUpdate
+		}
+		if len(fields) > 0 {
+			a.accumulator.AddFields(
+				"system",
+				fields,
+				nil,
+			)
 		}
 	}
 }
