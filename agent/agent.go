@@ -357,7 +357,10 @@ func (a *agent) run() { //nolint:gocyclo
 		a.state,
 	)
 	a.dockerFact = facts.NewDocker()
-	psFact := facts.NewProcess(a.dockerFact)
+	psFact := facts.NewProcess(
+		a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host"),
+		a.dockerFact,
+	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))

@@ -123,14 +123,18 @@ type SwapUsage struct {
 // NewProcess creates a new Process provider
 //
 // Docker provider should be given to allow processes to be associated with a Docker container
-func NewProcess(dockerProvider *DockerProvider) *ProcessProvider {
-	return &ProcessProvider{
-		psutil: psutilLister{},
+// useProc should be true if the Agent see all processes (running outside container or with host PID namespace)
+func NewProcess(useProc bool, dockerProvider *DockerProvider) *ProcessProvider {
+	pp := &ProcessProvider{
 		dp: &dockerProcessImpl{
 			dockerProvider: dockerProvider,
 		},
 		containerIDFromCGroup: containerIDFromCGroup,
 	}
+	if useProc {
+		pp.psutil = psutilLister{}
+	}
+	return pp
 }
 
 // Processes returns the list of processes present on this system.
@@ -408,24 +412,26 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 			newProcessesMap[p.PID] = p
 		}
 	}
-	psProcesses, err := pp.psutil.processes(ctx, 0)
-	if err != nil {
-		return err
-	}
-	for _, p := range psProcesses {
-		if p.CreateTime.After(onlyStartedBefore) {
-			continue
+	if pp.psutil != nil {
+		psProcesses, err := pp.psutil.processes(ctx, 0)
+		if err != nil {
+			return err
 		}
-		if pOld, ok := newProcessesMap[p.PID]; ok {
-			p.ContainerID = pOld.ContainerID
-			p.ContainerName = pOld.ContainerName
-			pOld.update(p)
-			newProcessesMap[p.PID] = pOld
-		} else {
-			newProcessesMap[p.PID] = p
+		for _, p := range psProcesses {
+			if p.CreateTime.After(onlyStartedBefore) {
+				continue
+			}
+			if pOld, ok := newProcessesMap[p.PID]; ok {
+				p.ContainerID = pOld.ContainerID
+				p.ContainerName = pOld.ContainerName
+				pOld.update(p)
+				newProcessesMap[p.PID] = pOld
+			} else {
+				newProcessesMap[p.PID] = p
+			}
 		}
 	}
-	if pp.dp != nil {
+	if pp.dp != nil && pp.psutil != nil {
 		if id2name, err := pp.dp.containerID2Name(ctx, 10*time.Second); err == nil {
 			for pid, p := range newProcessesMap {
 				if p.ContainerID == "" && pp.containerIDFromCGroup != nil {
