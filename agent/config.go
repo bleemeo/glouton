@@ -76,19 +76,19 @@ var defaultConfig = map[string]interface{}{
 		"^rsxx[0-9]$",
 		"^[A-Z]:$",
 	},
-	"influxdb.db_name":                 "metrics",
+	"influxdb.db_name":                 "metrics", // TODO: influxdb connector
 	"influxdb.enabled":                 false,
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
-	"jmx.enabled":                      true,
+	"jmx.enabled":                      true, // TODO: JMX metric gathering
 	"jmxtrans.config_file":             "/var/lib/jmxtrans/bleemeo-generated.json",
-	"kubernetes.enabled":               false,
+	"kubernetes.enabled":               false, // TODO: add support for k8s
 	"kubernetes.nodename":              "",
 	"logging.level":                    "INFO",
 	"logging.output":                   "console",
 	"logging.package_levels":           "",
-	"metric.prometheus":                map[string]interface{}{},
-	"metric.pull":                      map[string]interface{}{},
+	"metric.prometheus":                map[string]interface{}{}, // TODO: gather prometheus exporters
+	"metric.pull":                      map[string]interface{}{}, // TODO: pull metrics
 	"metric.softstatus_period_default": 5 * 60,
 	"metric.softstatus_period": map[string]interface{}{
 		"system_pending_updates":          86400,
@@ -100,13 +100,13 @@ var defaultConfig = map[string]interface{}{
 	"nrpe.address":                    "127.0.0.1",
 	"nrpe.port":                       5666,
 	"nrpe.ssl":                        true,
-	"service_ignore_check":            []interface{}{},
-	"service_ignore_metrics":          []interface{}{},
-	"service":                         []interface{}{},
-	"stack":                           "",
+	"service_ignore_check":            []interface{}{}, // TODO
+	"service_ignore_metrics":          []interface{}{}, // TODO
+	"service":                         []interface{}{}, // TODO: custom checks
+	"stack":                           "",              // TODO: default stack
 	"tags":                            []string{},
 	"telegraf.docker_metrics_enabled": true,
-	"telegraf.statsd.address":         "127.0.0.1",
+	"telegraf.statsd.address":         "127.0.0.1", // TODO: stastd server
 	"telegraf.statsd.enabled":         true,
 	"telegraf.statsd.port":            8125,
 	"thresholds":                      map[string]interface{}{},
