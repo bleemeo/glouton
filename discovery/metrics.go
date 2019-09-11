@@ -18,7 +18,6 @@ package discovery
 
 import (
 	"agentgo/collector"
-	"agentgo/config"
 	"agentgo/inputs/apache"
 	"agentgo/inputs/cpu"
 	"agentgo/inputs/disk"
@@ -47,8 +46,16 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
+// InputOption are option used by system inputs
+type InputOption struct {
+	DFRootPath      string
+	DFPathBlacklist []string
+	NetIfBlacklist  []string
+	IODiskWhitelist []string
+}
+
 // AddDefaultInputs adds system inputs to a collector
-func AddDefaultInputs(coll *collector.Collector, rootPath string, cfg *config.Configuration) error {
+func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 	var input telegraf.Input
 	var err error
 
@@ -82,21 +89,21 @@ func AddDefaultInputs(coll *collector.Collector, rootPath string, cfg *config.Co
 	}
 	coll.AddInput(input, "swap")
 
-	input, err = netInput.New(cfg.StringList("network_interface_blacklist"))
+	input, err = netInput.New(option.NetIfBlacklist)
 	if err != nil {
 		return err
 	}
 	coll.AddInput(input, "net")
 
-	if rootPath != "" {
-		input, err = disk.New(rootPath, nil)
+	if option.DFRootPath != "" {
+		input, err = disk.New(option.DFRootPath, option.DFPathBlacklist)
 		if err != nil {
 			return err
 		}
 		coll.AddInput(input, "disk")
 	}
 
-	input, err = diskio.New(cfg.StringList("disk_monitor"))
+	input, err = diskio.New(option.IODiskWhitelist)
 	if err != nil {
 		return err
 	}

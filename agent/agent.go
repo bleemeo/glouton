@@ -379,7 +379,15 @@ func (a *agent) run() { //nolint:gocyclo
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
-	err = discovery.AddDefaultInputs(a.collector, rootPath, a.config)
+	err = discovery.AddDefaultInputs(
+		a.collector,
+		discovery.InputOption{
+			DFRootPath:      rootPath,
+			NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
+			IODiskWhitelist: a.config.StringList("disk_monitor"),
+			DFPathBlacklist: a.config.StringList("df.path_ignore"),
+		},
+	)
 	if err != nil {
 		logger.Printf("Unable to initialize system collector: %v", err)
 		return
