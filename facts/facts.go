@@ -160,29 +160,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	}
 	newFacts["architecture"] = runtime.GOARCH
 
-	hostname, _ := os.Hostname()
-	fqdn, err := net.DefaultResolver.LookupCNAME(ctx, hostname)
-	if err != nil {
-		fqdn = hostname
-	}
-	if fqdn == "" {
-		// With pure-Go resolver, it may happen. Perform what C-resolver seems to do
-		if addrs, err := net.DefaultResolver.LookupHost(ctx, hostname); err == nil && len(addrs) > 0 {
-			if names, err := net.DefaultResolver.LookupAddr(ctx, addrs[0]); err == nil && len(names) > 0 {
-				fqdn = names[0]
-			}
-		}
-	}
-	if len(fqdn) > 0 && fqdn[len(fqdn)-1] == '.' {
-		fqdn = fqdn[:len(fqdn)-1]
-	}
-
-	switch fqdn {
-	case "", "localhost", "localhost.local", "localhost.localdomain":
-		if hostname != "localhost" {
-			fqdn = hostname
-		}
-	}
+	hostname, fqdn := getFQDN(ctx)
 	newFacts["fqdn"] = fqdn
 	newFacts["hostname"] = hostname
 
@@ -240,6 +218,33 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 
 	f.facts = newFacts
 	f.lastFactsUpdate = time.Now()
+}
+
+func getFQDN(ctx context.Context) (hostname string, fqdn string) {
+	hostname, _ = os.Hostname()
+	fqdn, err := net.DefaultResolver.LookupCNAME(ctx, hostname)
+	if err != nil {
+		fqdn = hostname
+	}
+	if fqdn == "" {
+		// With pure-Go resolver, it may happen. Perform what C-resolver seems to do
+		if addrs, err := net.DefaultResolver.LookupHost(ctx, hostname); err == nil && len(addrs) > 0 {
+			if names, err := net.DefaultResolver.LookupAddr(ctx, addrs[0]); err == nil && len(names) > 0 {
+				fqdn = names[0]
+			}
+		}
+	}
+	if len(fqdn) > 0 && fqdn[len(fqdn)-1] == '.' {
+		fqdn = fqdn[:len(fqdn)-1]
+	}
+
+	switch fqdn {
+	case "", "localhost", "localhost.local", "localhost.localdomain":
+		if hostname != "localhost" {
+			fqdn = hostname
+		}
+	}
+	return
 }
 
 func awsFacts(ctx context.Context) map[string]string {
