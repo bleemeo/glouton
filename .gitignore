@@ -7,8 +7,9 @@
 /work
 .vscode/
 /VERSION
+/COMMIT_HASH
 .vscode
 /agent-go
-/agentgo
+/agentgo*
 *-packr.go
 api/static/assets/js
