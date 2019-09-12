@@ -41,6 +41,7 @@ import (
 	"agentgo/discovery"
 	"agentgo/facts"
 	"agentgo/inputs/docker"
+	"agentgo/inputs/statsd"
 	"agentgo/logger"
 	"agentgo/nrpe"
 	"agentgo/store"
@@ -364,7 +365,6 @@ func (a *agent) run() { //nolint:gocyclo
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
-	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 	a.collector = collector.New(a.accumulator)
 
 	services, _ := a.config.Get("service")
@@ -378,20 +378,6 @@ func (a *agent) run() { //nolint:gocyclo
 		serivcesOverrideFromInterface(services),
 	)
 	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
-
-	err = discovery.AddDefaultInputs(
-		a.collector,
-		discovery.InputOption{
-			DFRootPath:      rootPath,
-			NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
-			IODiskWhitelist: a.config.StringList("disk_monitor"),
-			DFPathBlacklist: a.config.StringList("df.path_ignore"),
-		},
-	)
-	if err != nil {
-		logger.Printf("Unable to initialize system collector: %v", err)
-		return
-	}
 
 	a.FireTrigger(true, false, false)
 
@@ -450,6 +436,38 @@ func (a *agent) run() { //nolint:gocyclo
 		time.Duration(a.config.Int("metric.softstatus_period_default"))*time.Second,
 		softPeriodsFromInterface(tmp),
 	)
+
+	err = discovery.AddDefaultInputs(
+		a.collector,
+		discovery.InputOption{
+			DFRootPath:      rootPath,
+			NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
+			IODiskWhitelist: a.config.StringList("disk_monitor"),
+			DFPathBlacklist: a.config.StringList("df.path_ignore"),
+		},
+	)
+	if err != nil {
+		logger.Printf("Unable to initialize system collector: %v", err)
+		return
+	}
+
+	if a.config.Bool("telegraf.statsd.enabled") {
+		input, err := statsd.New(fmt.Sprintf("%s:%d", a.config.String("telegraf.statsd.address"), a.config.Int("telegraf.statsd.port")))
+		if err != nil {
+			logger.Printf("Unable to create StatsD input: %v", err)
+			a.config.Set("telegraf.statsd.enabled", false)
+		} else if _, err = a.collector.AddInput(input, "statsd"); err != nil {
+			if strings.Contains(err.Error(), "address already in use") {
+				logger.Printf("Unable to listen on StatsD port because another program already use it")
+				logger.Printf("The StatsD integration is now disabled. Restart the agent to try re-enabling it.")
+				logger.Printf("See https://docs.bleemeo.com/agent/configuration/ to permanently disable StatsD integration or using an alternate port")
+			} else {
+				logger.Printf("Unable to create StatsD input: %v", err)
+			}
+			a.config.Set("telegraf.statsd.enabled", false)
+		}
+	}
+	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 
 	a.startTasks(tasks)
 
@@ -616,7 +634,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
 				logger.V(2).Printf("Enable Docker metrics")
-				a.dockerInputID = a.collector.AddInput(i, "docker")
+				a.dockerInputID, _ = a.collector.AddInput(i, "docker")
 				a.dockerInputPresent = true
 			}
 		} else if !hasConnection && a.dockerInputPresent {

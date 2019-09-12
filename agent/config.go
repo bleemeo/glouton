@@ -106,7 +106,7 @@ var defaultConfig = map[string]interface{}{
 	"stack":                           "",              // TODO: default stack
 	"tags":                            []string{},
 	"telegraf.docker_metrics_enabled": true,
-	"telegraf.statsd.address":         "127.0.0.1", // TODO: stastd server
+	"telegraf.statsd.address":         "127.0.0.1",
 	"telegraf.statsd.enabled":         true,
 	"telegraf.statsd.port":            8125,
 	"thresholds":                      map[string]interface{}{},

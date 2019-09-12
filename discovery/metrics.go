@@ -63,51 +63,67 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 	if err != nil {
 		return err
 	}
-	coll.AddInput(input, "system")
+	if _, err = coll.AddInput(input, "system"); err != nil {
+		return err
+	}
 
 	input, err = process.New()
 	if err != nil {
 		return err
 	}
-	coll.AddInput(input, "process")
+	if _, err = coll.AddInput(input, "process"); err != nil {
+		return err
+	}
 
 	input, err = cpu.New()
 	if err != nil {
 		return err
 	}
-	coll.AddInput(input, "cpu")
+	if _, err = coll.AddInput(input, "cpu"); err != nil {
+		return err
+	}
 
 	input, err = mem.New()
 	if err != nil {
 		return err
 	}
-	coll.AddInput(input, "mem")
+	if _, err = coll.AddInput(input, "mem"); err != nil {
+		return err
+	}
 
 	input, err = swap.New()
 	if err != nil {
 		return err
 	}
-	coll.AddInput(input, "swap")
+	if _, err = coll.AddInput(input, "swap"); err != nil {
+		return err
+	}
 
 	input, err = netInput.New(option.NetIfBlacklist)
 	if err != nil {
 		return err
 	}
-	coll.AddInput(input, "net")
+	if _, err = coll.AddInput(input, "net"); err != nil {
+		return err
+	}
 
 	if option.DFRootPath != "" {
 		input, err = disk.New(option.DFRootPath, option.DFPathBlacklist)
 		if err != nil {
 			return err
 		}
-		coll.AddInput(input, "disk")
+		if _, err = coll.AddInput(input, "disk"); err != nil {
+			return err
+		}
 	}
 
 	input, err = diskio.New(option.IODiskWhitelist)
 	if err != nil {
 		return err
 	}
-	coll.AddInput(input, "diskio")
+	if _, err = coll.AddInput(input, "diskio"); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -279,7 +295,10 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil
 	}
-	inputID := d.coll.AddInput(input, string(service.Name))
+	inputID, err := d.coll.AddInput(input, string(service.Name))
+	if err != nil {
+		return err
+	}
 	key := nameContainer{
 		name:          service.Name,
 		containerName: service.ContainerName,

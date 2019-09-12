@@ -42,8 +42,8 @@ func (m *mockInput) SampleConfig() string {
 
 func TestAddRemove(t *testing.T) {
 	c := New(nil)
-	id1 := c.AddInput(&mockInput{Name: "input1"}, "input1")
-	id2 := c.AddInput(&mockInput{Name: "input2"}, "input2")
+	id1, _ := c.AddInput(&mockInput{Name: "input1"}, "input1")
+	id2, _ := c.AddInput(&mockInput{Name: "input2"}, "input2")
 
 	if len(c.inputs) != 2 {
 		t.Errorf("len(c.inputs) == %v, want %v", len(c.inputs), 2)
@@ -65,7 +65,10 @@ func TestRun(t *testing.T) {
 	c.runOnce()
 
 	input := &mockInput{Name: "input1"}
-	c.AddInput(input, "input1")
+	_, err := c.AddInput(input, "input1")
+	if err != nil {
+		t.Error(err)
+	}
 	c.runOnce()
 	if input.GatherCallCount != 1 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 1)

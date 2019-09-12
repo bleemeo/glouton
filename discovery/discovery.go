@@ -60,7 +60,7 @@ type Discovery struct {
 
 // Collector will gather metrics for added inputs
 type Collector interface {
-	AddInput(input telegraf.Input, shortName string) int
+	AddInput(input telegraf.Input, shortName string) (int, error)
 	RemoveInput(int)
 }
 

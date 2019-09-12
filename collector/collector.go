@@ -20,6 +20,7 @@ package collector
 import (
 	"agentgo/logger"
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -52,7 +53,7 @@ func New(acc telegraf.Accumulator) *Collector {
 }
 
 // AddInput add an input to this collector and return an ID
-func (c *Collector) AddInput(input telegraf.Input, shortName string) int {
+func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -61,7 +62,7 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) int {
 	for ok {
 		id++
 		if id == 0 {
-			panic("too many inputs in the collectors. Unable to find new slot")
+			return 0, errors.New("too many inputs in the collectors. Unable to find new slot")
 		}
 		_, ok = c.inputs[id]
 	}
@@ -70,11 +71,11 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) int {
 
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
-			panic("Failed to start input")
+			return 0, err
 		}
 	}
 
-	return id
+	return id, nil
 }
 
 // RemoveInput removes an input by its ID.
