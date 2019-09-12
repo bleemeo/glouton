@@ -27,7 +27,7 @@ require (
 	github.com/gorilla/websocket v1.4.0 // indirect
 	github.com/gotestyourself/gotestyourself v2.2.0+incompatible // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
-	github.com/influxdata/telegraf v0.10.2-0.20190806184450-d9ca76e493b8
+	github.com/influxdata/telegraf v0.10.2-0.20190910190642-8de41160d4ed
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v3.5.0+incompatible // indirect
 	github.com/lib/pq v1.2.0 // indirect

@@ -61,7 +61,7 @@ cp -r ../bleemeo-agent-ui/dist/js api/static/assets
 
 - Prepare a release (or just run some test and linter during development):
    - Optionally, try to update dependencies: `go get -u` then `go mod tidy`
-   - For Telegraf, the update must specify the version: `go get github.com/influxdata/telegraf@1.11.4`
+   - For Telegraf, the update must specify the version: e.g. `go get github.com/influxdata/telegraf@1.12.1`
    - Run Go generate to update generated files (static JS files & GraphQL schema): `go generate agentgo/...`
    - Run GoLang linter: `~/go/bin/golangci-lint run ./...`
    - Run Go tests: `go test agentgo/...`
