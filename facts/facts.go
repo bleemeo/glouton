@@ -165,6 +165,14 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	if err != nil {
 		fqdn = hostname
 	}
+	if fqdn == "" {
+		// With pure-Go resolver, it may happen. Perform what C-resolver seems to do
+		if addrs, err := net.DefaultResolver.LookupHost(ctx, hostname); err == nil && len(addrs) > 0 {
+			if names, err := net.DefaultResolver.LookupAddr(ctx, addrs[0]); err == nil && len(names) > 0 {
+				fqdn = names[0]
+			}
+		}
+	}
 	if len(fqdn) > 0 && fqdn[len(fqdn)-1] == '.' {
 		fqdn = fqdn[:len(fqdn)-1]
 	}
