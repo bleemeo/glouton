@@ -4,7 +4,7 @@
 # docker run --name="bleemeo-agent" --net=host --pid=host -v /tmp/telegraf:/etc/telegraf/telegraf.d/bleemeo-generated.conf -v /var/lib/bleemeo:/var/lib/bleemeo -v /var/run/docker.sock:/var/run/docker.sock bleemeo/bleemeo-agent
 #
 
-FROM scratch
+FROM gcr.io/distroless/base
 
 LABEL MAINTAINER="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
 
