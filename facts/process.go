@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AstromechZA/etcpwdparse"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/errdefs"
 	"github.com/shirou/gopsutil/cpu"
@@ -124,7 +125,7 @@ type SwapUsage struct {
 //
 // Docker provider should be given to allow processes to be associated with a Docker container
 // useProc should be true if the Agent see all processes (running outside container or with host PID namespace)
-func NewProcess(useProc bool, dockerProvider *DockerProvider) *ProcessProvider {
+func NewProcess(useProc bool, hostRootPath string, dockerProvider *DockerProvider) *ProcessProvider {
 	pp := &ProcessProvider{
 		dp: &dockerProcessImpl{
 			dockerProvider: dockerProvider,
@@ -132,7 +133,17 @@ func NewProcess(useProc bool, dockerProvider *DockerProvider) *ProcessProvider {
 		containerIDFromCGroup: containerIDFromCGroup,
 	}
 	if useProc {
-		pp.psutil = psutilLister{}
+		ps := psutilLister{}
+		if hostRootPath != "" && hostRootPath != "/" {
+			pwdCache := etcpwdparse.NewEtcPasswdCache(true)
+			fileName := filepath.Join(hostRootPath, "etc/passwd")
+			if err := pwdCache.LoadFromPath(fileName); err != nil {
+				logger.V(1).Printf("Unable to load %#v, username lookup may fail: %v", fileName, err)
+			} else {
+				ps.PwdCache = pwdCache
+			}
+		}
+		pp.psutil = ps
 	}
 	return pp
 }
@@ -613,7 +624,9 @@ type dockerProcess interface {
 	containerID2Name(ctx context.Context, maxAge time.Duration) (containerID2Name map[string]string, err error)
 }
 
-type psutilLister struct{}
+type psutilLister struct {
+	PwdCache *etcpwdparse.EtcPasswdCache
+}
 
 func (z psutilLister) processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	psutilProcesses, err := process.Processes()
@@ -643,6 +656,12 @@ func (z psutilLister) processes(ctx context.Context, maxAge time.Duration) (proc
 				uids, err := p.UidsWithContext(ctx)
 				if err == nil && len(uids) > 0 {
 					userName = fmt.Sprintf("%d", uids[0])
+					if z.PwdCache != nil {
+						entry, found := z.PwdCache.LookupUserByUid(int(uids[0]))
+						if found {
+							userName = entry.Username()
+						}
+					}
 				}
 			}
 		}

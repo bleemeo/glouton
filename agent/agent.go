@@ -369,6 +369,7 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 	psFact := facts.NewProcess(
 		useProc,
+		rootPath,
 		a.dockerFact,
 	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
@@ -748,17 +749,6 @@ func setupContainer(hostRootPath string) {
 		target, err := os.Readlink(varRun)
 		if err == nil && target == "/run" {
 			os.Setenv("HOST_VAR", hostRootPath)
-		}
-	}
-
-	// Go user.LookupID will read /etc/passwd
-	if _, err := os.Lstat("/etc/passwd"); os.IsNotExist(err) {
-		err := os.Symlink(
-			filepath.Join(hostRootPath, "etc/passwd"),
-			"/etc/passwd",
-		)
-		if err != nil {
-			logger.V(2).Printf("Unable to make /etc/passwd symlink: %v", err)
 		}
 	}
 }

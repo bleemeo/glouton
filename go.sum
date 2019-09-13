@@ -1,5 +1,7 @@
 github.com/99designs/gqlgen v0.9.3 h1:BWOMuDFhpuvzbuUFgCL1OSfAM2lvnYgpoCXetDvbnHY=
 github.com/99designs/gqlgen v0.9.3/go.mod h1:HrrG7ic9EgLPsULxsZh/Ti+p0HNWgR3XRuvnD0pb5KY=
+github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716 h1:JRevDvQQOgv10srk9WAVWPeZcQ26u5ajUGw2UYB0Ci4=
+github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716/go.mod h1:O3zfbZlbGuEo47ctiOIcXolZac3RYnkK90TE/phwRoQ=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/Microsoft/go-winio v0.4.14 h1:+hMXMk01us9KgxGb7ftKQt2Xpf5hH/yky+TDA+qxleU=
 github.com/Microsoft/go-winio v0.4.14/go.mod h1:qXqCSQ3Xa7+6tgxaGTIe4Kpcdsi+P8jBhyzoq1bpyYA=
