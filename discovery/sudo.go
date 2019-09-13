@@ -18,12 +18,13 @@ package discovery
 
 import (
 	"agentgo/logger"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
 )
 
-// SudoFileReader read file using sudo (cat)
+// SudoFileReader read file using sudo cat (or direct read if running as root)
 type SudoFileReader struct {
 	HostRootPath string
 }
@@ -33,6 +34,9 @@ func (s SudoFileReader) ReadFile(path string) ([]byte, error) {
 	path = filepath.Join(s.HostRootPath, path)
 	if s.HostRootPath == "" {
 		return nil, os.ErrNotExist
+	}
+	if os.Getuid() == 0 {
+		return ioutil.ReadFile(path)
 	}
 	logger.V(1).Printf("Running sudo -n cat %#v", path)
 	cmd := exec.Command(
