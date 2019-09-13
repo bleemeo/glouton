@@ -35,7 +35,7 @@ import (
 	"agentgo/agent/state"
 	"agentgo/api"
 	"agentgo/bleemeo"
-	"agentgo/bleemeo/types"
+	bleemeoTypes "agentgo/bleemeo/types"
 	"agentgo/collector"
 	"agentgo/config"
 	"agentgo/debouncer"
@@ -48,6 +48,7 @@ import (
 	"agentgo/store"
 	"agentgo/task"
 	"agentgo/threshold"
+	"agentgo/types"
 	"agentgo/version"
 	"agentgo/zabbix"
 
@@ -405,7 +406,7 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
-		a.bleemeoConnector = bleemeo.New(types.GlobalOption{
+		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                 a.config,
 			State:                  a.state,
 			Facts:                  a.factProvider,
@@ -571,16 +572,103 @@ func (a *agent) dailyFact(ctx context.Context) error {
 }
 
 func (a *agent) dockerWatcher(ctx context.Context) error {
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		a.dockerWatcherContainerHealth(ctx)
+	}()
+	defer wg.Wait()
 	for {
 		select {
 		case ev := <-a.dockerFact.Events():
 			if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
 				a.FireTrigger(true, false, false)
 			}
+			if strings.HasPrefix(ev.Action, "health_status:") && ev.Container != nil {
+				if a.bleemeoConnector != nil {
+					a.bleemeoConnector.UpdateContainers()
+				}
+				a.sendDockerContainerHealth(*ev.Container)
+			}
 		case <-ctx.Done():
 			return nil
 		}
 	}
+}
+
+func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			// It not needed to have fresh container information. When health event occur,
+			// DockerFact already update the container information
+			containers, err := a.dockerFact.Containers(ctx, 3600*time.Second, false)
+			if err != nil {
+				continue
+			}
+			for _, c := range containers {
+				inspect := c.Inspect()
+				if inspect.State == nil || inspect.State.Health == nil {
+					continue
+				}
+				a.sendDockerContainerHealth(c)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (a *agent) sendDockerContainerHealth(container facts.Container) {
+	inspect := container.Inspect()
+	if inspect.State == nil || inspect.State.Health == nil {
+		return
+	}
+	state := container.State()
+	healthStatus := inspect.State.Health.Status
+	status := types.StatusDescription{}
+
+	index := len(inspect.State.Health.Log) - 1
+	if len(inspect.State.Health.Log) > 0 && inspect.State.Health.Log[index] != nil {
+		status.StatusDescription = inspect.State.Health.Log[index].Output
+	}
+	switch {
+	case state != "running":
+		status.CurrentStatus = types.StatusCritical
+		status.StatusDescription = "Container stopped"
+	case healthStatus == "healthy":
+		status.CurrentStatus = types.StatusOk
+	case healthStatus == "starting":
+		startedAt := container.StartedAt()
+		if time.Since(startedAt) < time.Minute || startedAt.IsZero() {
+			status.CurrentStatus = types.StatusOk
+		} else {
+			status.CurrentStatus = types.StatusWarning
+			status.StatusDescription = "Container is still starting"
+		}
+	case healthStatus == "unhealthy":
+		status.CurrentStatus = types.StatusCritical
+	default:
+		status.CurrentStatus = types.StatusUnknown
+		status.StatusDescription = fmt.Sprintf("Unknown health status %#v", healthStatus)
+	}
+
+	a.accumulator.AddFieldsWithStatus(
+		"docker",
+		map[string]interface{}{
+			"container_health_status": status.CurrentStatus.NagiosCode(),
+		},
+		map[string]string{
+			"item": container.Name(),
+		},
+		map[string]types.StatusDescription{
+			"container_health_status": status,
+		},
+		false,
+	)
 }
 
 func (a *agent) netstatWatcher(ctx context.Context) error {

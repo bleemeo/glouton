@@ -142,6 +142,11 @@ func (c *Connector) Run(ctx context.Context) error {
 	return mqttErr
 }
 
+// UpdateContainers request to update a containers
+func (c *Connector) UpdateContainers() {
+	c.sync.UpdateContainers()
+}
+
 // Tags returns the Tags set on Bleemeo Cloud platform
 func (c *Connector) Tags() []string {
 	agent := c.cache.Agent()

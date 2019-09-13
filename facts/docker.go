@@ -20,6 +20,7 @@ import (
 	"agentgo/logger"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -46,17 +47,20 @@ type DockerProvider struct {
 	notifyC     chan DockerEvent
 	lastEventAt time.Time
 
-	containers map[string]Container
-	lastKill   map[string]time.Time
-	ignoredID  map[string]interface{}
-	lastUpdate time.Time
+	containers                     map[string]Container
+	lastKill                       map[string]time.Time
+	ignoredID                      map[string]interface{}
+	lastUpdate                     time.Time
+	bridgeNetworks                 map[string]interface{}
+	containerAddressOnDockerBridge map[string]string
 }
 
 // DockerEvent is a simplified version of Docker Event.Message
 // Those event only happed on Container.
 type DockerEvent struct {
-	Action  string
-	ActorID string
+	Action    string
+	ActorID   string
+	Container *Container
 }
 
 // Container wraps the Docker inspect values and provide few accessor to useful fields
@@ -482,6 +486,29 @@ func (d *DockerProvider) top(ctx context.Context, containerID string) (top conta
 	return
 }
 
+func (d *DockerProvider) updateContainer(ctx context.Context, cl *docker.Client, containerID string) (Container, error) {
+	var result Container
+	inspect, err := cl.ContainerInspect(ctx, containerID)
+	if err != nil {
+		return result, err
+	}
+	if inspect.ContainerJSONBase == nil {
+		return result, errors.New("ContainerJSONBase is nil. Assume container is deleted")
+	}
+	d.l.Lock()
+	defer d.l.Unlock()
+	if ignoreContainer(inspect) {
+		d.ignoredID[containerID] = nil
+	}
+	delete(d.ignoredID, containerID)
+	sortInspect(inspect)
+	d.containers[containerID] = Container{
+		primaryAddress: primaryAddress(inspect, d.bridgeNetworks, d.containerAddressOnDockerBridge),
+		inspect:        inspect,
+	}
+	return d.containers[containerID], nil
+}
+
 func (d *DockerProvider) updateContainers(ctx context.Context) error {
 	cl, err := d.getClient(ctx)
 	if err != nil {
@@ -520,6 +547,9 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		if err != nil && docker.IsErrNotFound(err) || inspect.ContainerJSONBase == nil {
 			continue // the container was deleted between call. Ignore it
 		}
+		if err != nil {
+			return err
+		}
 		if ignoreContainer(inspect) {
 			ignoredID[c.ID] = nil
 		}
@@ -532,6 +562,8 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 	d.lastUpdate = time.Now()
 	d.containers = containers
 	d.ignoredID = ignoredID
+	d.bridgeNetworks = bridgeNetworks
+	d.containerAddressOnDockerBridge = containerAddressOnDockerBridge
 	return nil
 }
 
@@ -545,6 +577,9 @@ func (d *DockerProvider) run(ctx context.Context) (err error) {
 	if err != nil {
 		return
 	}
+
+	// Make sure information is recent enough
+	_, _ = d.Containers(ctx, 10*time.Second, false)
 
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -582,6 +617,14 @@ func (d *DockerProvider) run(ctx context.Context) (err error) {
 					d.l.Lock()
 					d.lastKill[se.ActorID] = time.Now()
 					d.l.Unlock()
+				}
+				if strings.HasPrefix(se.Action, "health_status:") {
+					container, err := d.updateContainer(ctx, cl, se.ActorID)
+					if err != nil {
+						logger.V(1).Printf("Update of container %v failed (will assume container is removed): %v", se.ActorID, err)
+						continue
+					}
+					se.Container = &container
 				}
 				select {
 				case d.notifyC <- se:

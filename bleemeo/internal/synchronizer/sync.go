@@ -194,6 +194,13 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 	s.forceSync["metrics"] = false
 }
 
+// UpdateContainers request to update a containers
+func (s *Synchronizer) UpdateContainers() {
+	s.l.Lock()
+	defer s.l.Unlock()
+	s.forceSync["containers"] = false
+}
+
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
 	s.l.Lock()
 	defer s.l.Unlock()
