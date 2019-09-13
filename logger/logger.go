@@ -106,7 +106,7 @@ var cfg = config{writer: os.Stderr}
 
 // UseSyslog enable or disable logging to syslog. If syslog is not used, message
 // are sent to StdErr
-func UseSyslog(useSyslog bool) {
+func UseSyslog(useSyslog bool) error {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 	cfg.useSyslog = useSyslog
@@ -114,16 +114,18 @@ func UseSyslog(useSyslog bool) {
 		closer.Close()
 	}
 	cfg.writer = nil
+	var err error
 	if useSyslog {
-		var err error
 		cfg.writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "")
 		if err != nil {
 			cfg.writer = os.Stderr
+			cfg.useSyslog = false
 		}
 	} else {
 		cfg.writer = os.Stderr
 	}
 	log.SetOutput(cfg.writer)
+	return err
 }
 
 // SetLevel configure the log level

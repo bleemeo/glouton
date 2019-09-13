@@ -25,6 +25,7 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"sync"
@@ -129,7 +130,10 @@ func (a *agent) setupLogger() {
 	if a.config.String("logging.output") == "syslog" {
 		useSyslog = true
 	}
-	logger.UseSyslog(useSyslog)
+	err := logger.UseSyslog(useSyslog)
+	if err != nil {
+		logger.Printf("Unable to use syslog: %v", err)
+	}
 	if level := a.config.Int("logging.level"); level != 0 {
 		logger.SetLevel(level)
 	} else {
@@ -294,6 +298,7 @@ func (a *agent) run() { //nolint:gocyclo
 	rootPath := "/"
 	if a.config.String("container.type") != "" {
 		rootPath = a.config.String("df.host_mount_point")
+		setupContainer(rootPath)
 	}
 	a.triggerHandler = debouncer.New(
 		a.handleTrigger,
@@ -358,8 +363,12 @@ func (a *agent) run() { //nolint:gocyclo
 		a.state,
 	)
 	a.dockerFact = facts.NewDocker()
+	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
+	if !useProc {
+		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
+	}
 	psFact := facts.NewProcess(
-		a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host"),
+		useProc,
 		a.dockerFact,
 	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
@@ -715,4 +724,41 @@ func parseIPOutput(content []byte) string {
 		}
 	}
 	return macAddress
+}
+
+// setupContainer will tune container to improve information gathered.
+// Mostly it make that access to file pass though hostroot
+func setupContainer(hostRootPath string) {
+	if hostRootPath == "" {
+		logger.Printf("The agent is running in a container but BLEEMEO_AGENT_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")
+		return
+	}
+	if _, err := os.Stat(hostRootPath); os.IsNotExist(err) {
+		logger.Printf("The agent is running in a container but host / partition is not mounted on %#v. Some informations will be missing", hostRootPath)
+		logger.Printf("Hint: to fix this issue when using Docker, add \"-v /:%v:ro\" when running the agent", hostRootPath)
+		return
+	}
+	if hostRootPath != "" && hostRootPath != "/" && os.Getenv("HOST_VAR") == "" {
+		// gopsutil will use HOST_VAR as prefix to host /var
+		// It's used at least for reading the number of connected user from /var/run/utmp
+		os.Setenv("HOST_VAR", hostRootPath+"/var")
+
+		// ... but /var/run is usually a symlink to /run.
+		varRun := filepath.Join(hostRootPath, "var/run")
+		target, err := os.Readlink(varRun)
+		if err == nil && target == "/run" {
+			os.Setenv("HOST_VAR", hostRootPath)
+		}
+	}
+
+	// Go user.LookupID will read /etc/passwd
+	if _, err := os.Lstat("/etc/passwd"); os.IsNotExist(err) {
+		err := os.Symlink(
+			filepath.Join(hostRootPath, "etc/passwd"),
+			"/etc/passwd",
+		)
+		if err != nil {
+			logger.V(2).Printf("Unable to make /etc/passwd symlink: %v", err)
+		}
+	}
 }

@@ -502,7 +502,8 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 
 	users, err := host.Users()
 	if err != nil {
-		return result, err
+		logger.V(2).Printf("Unable to get users count: %v", err)
+		users = nil
 	}
 	result.Users = len(users)
 
@@ -587,7 +588,10 @@ func (p *Process) update(other Process) {
 		p.Status = other.Status
 	}
 	if other.Username != "" {
-		p.Username = other.Username
+		// Don't overwrite existing Username with a numeric Username
+		if _, err := strconv.ParseInt(other.Username, 10, 0); err != nil || p.Username == "" {
+			p.Username = other.Username
+		}
 	}
 	if other.Executable != "" {
 		p.Executable = other.Executable
@@ -637,7 +641,7 @@ func (z psutilLister) processes(ctx context.Context, maxAge time.Duration) (proc
 		if err != nil {
 			if runtime.GOOS != "windows" {
 				uids, err := p.UidsWithContext(ctx)
-				if err != nil && len(uids) > 0 {
+				if err == nil && len(uids) > 0 {
 					userName = fmt.Sprintf("%d", uids[0])
 				}
 			}

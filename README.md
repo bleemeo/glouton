@@ -66,10 +66,11 @@ cp -r ../bleemeo-agent-ui/dist/js api/static/assets
    - Run GoLang linter: `~/go/bin/golangci-lint run ./...`
    - Run Go tests: `go test agentgo/...`
 
-- Build the release:
+- Build the release binaries and Docker image:
 
 ```
 sh build-release.sh
+docker build -t bleemeo/bleemeo-agent:go-latest .
 ```
 
 ### Note on VS code
