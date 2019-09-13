@@ -19,11 +19,15 @@ package facts
 import (
 	"agentgo/logger"
 	"bytes"
+	"context"
 	"io/ioutil"
+	"net"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
+
+	"github.com/vishvananda/netlink"
 )
 
 const dmiDir = "/sys/devices/virtual/dmi/id/"
@@ -94,22 +98,22 @@ func (f *FactProvider) platformFacts() map[string]string {
 //
 // This should be the IP address that this server use to communicate
 // on internet. It may be the private IP if the box is NATed.
-func (f *FactProvider) primaryAddress() (ipAddress string, ifaceName string) {
-	out, err := exec.Command("ip", "route", "get", "8.8.8.8").Output()
-	if err != nil {
+func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, macAddress string) {
+	routes, err := netlink.RouteGet(net.ParseIP("8.8.8.8"))
+	if err != nil || len(routes) == 0 {
 		logger.V(1).Printf("unable to run ip route get: %v", err)
 		return
 	}
-	l := strings.Split(string(out), " ")
-	for i, v := range l {
-		if v == "dev" && len(l) > i+1 {
-			ifaceName = l[i+1]
-		}
-		if v == "src" && len(l) > i+1 {
-			ipAddress = l[i+1]
+
+	link, err := netlink.LinkByIndex(routes[0].LinkIndex)
+	if err == nil {
+		attrs := link.Attrs()
+		if attrs != nil {
+			return routes[0].Src.String(), attrs.HardwareAddr.String()
 		}
 	}
-	return
+
+	return routes[0].Src.String(), macAddressByAddress(ctx, routes[0].Src.String())
 }
 
 func int8ToString(input []int8) string {

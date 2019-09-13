@@ -146,13 +146,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		newFacts[k] = v
 	}
 
-	primaryAddress, primaryInterface := f.primaryAddress()
-	primaryMacAddress := ""
-	if primaryInterface != "" {
-		primaryMacAddress = macAddressByInterface(ctx, primaryInterface)
-	} else {
-		primaryMacAddress = macAddressByAddress(ctx, primaryAddress)
-	}
+	primaryAddress, primaryMacAddress := f.primaryAddress(ctx)
 	newFacts["primary_address"] = primaryAddress
 	newFacts["primary_mac_address"] = primaryMacAddress
 	if f.ipIndicatorURL != "" {
@@ -341,19 +335,6 @@ func guessVirtual(facts map[string]string) string {
 	default:
 		return "physical"
 	}
-}
-
-func macAddressByInterface(ctx context.Context, ifaceName string) string {
-	ifs, err := psutilNet.InterfacesWithContext(ctx)
-	if err != nil {
-		return ""
-	}
-	for _, i := range ifs {
-		if i.Name == ifaceName {
-			return i.HardwareAddr
-		}
-	}
-	return ""
 }
 
 func macAddressByAddress(ctx context.Context, ipAddress string) string {
