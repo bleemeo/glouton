@@ -25,9 +25,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"syscall"
 
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 )
 
 const dmiDir = "/sys/devices/virtual/dmi/id/"
@@ -60,11 +60,11 @@ func (f *FactProvider) platformFacts() map[string]string {
 		}
 	}
 
-	var utsName syscall.Utsname
-	err := syscall.Uname(&utsName)
+	var utsName unix.Utsname
+	err := unix.Uname(&utsName)
 	if err == nil {
-		facts["kernel"] = int8ToString(utsName.Sysname[:])
-		facts["kernel_release"] = int8ToString(utsName.Release[:])
+		facts["kernel"] = bytesToString(utsName.Sysname[:])
+		facts["kernel_release"] = bytesToString(utsName.Release[:])
 		l := strings.SplitN(facts["kernel_release"], "-", 2)
 		facts["kernel_version"] = l[0]
 		l = strings.SplitN(facts["kernel_release"], ".", 3)
@@ -117,11 +117,7 @@ func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, ma
 	return routes[0].Src.String(), macAddressByAddress(ctx, routes[0].Src.String())
 }
 
-func int8ToString(input []int8) string {
-	buffer := make([]byte, len(input))
-	for i, v := range input {
-		buffer[i] = byte(v)
-	}
+func bytesToString(buffer []byte) string {
 	n := bytes.IndexByte(buffer, 0)
 	return string(buffer[:n])
 }
