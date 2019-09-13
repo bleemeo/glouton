@@ -48,6 +48,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 			facts["os_pretty_name"] = osRelease["PRETTY_NAME"]
 			facts["os_version"] = osRelease["VERSION_ID"]
 			facts["os_version_long"] = osRelease["VERSION"]
+			facts["os_codename"] = osRelease["VERSION_CODENAME"]
 		}
 	}
 	if f.hostRootPath == "/" {
