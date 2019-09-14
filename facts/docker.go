@@ -37,7 +37,8 @@ import (
 
 // DockerProvider provider information about Docker & Docker containers
 type DockerProvider struct {
-	l sync.Mutex
+	deletedContainersCallback func(containerIDs []string)
+	l                         sync.Mutex
 
 	client           *docker.Client
 	reconnectAttempt int
@@ -70,11 +71,12 @@ type Container struct {
 }
 
 // NewDocker creates a new Docker provider which must be started with Run() method
-func NewDocker() *DockerProvider {
+func NewDocker(deletedContainersCallback func(containerIDs []string)) *DockerProvider {
 	return &DockerProvider{
-		notifyC:     make(chan DockerEvent),
-		lastEventAt: time.Now(),
-		lastKill:    make(map[string]time.Time),
+		notifyC:                   make(chan DockerEvent),
+		lastEventAt:               time.Now(),
+		lastKill:                  make(map[string]time.Time),
+		deletedContainersCallback: deletedContainersCallback,
 	}
 }
 
@@ -558,6 +560,15 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 			primaryAddress: primaryAddress(inspect, bridgeNetworks, containerAddressOnDockerBridge),
 			inspect:        inspect,
 		}
+	}
+	var deletedContainerID []string
+	for k := range d.containers {
+		if _, ok := containers[k]; !ok {
+			deletedContainerID = append(deletedContainerID, k)
+		}
+	}
+	if len(deletedContainerID) > 0 && d.deletedContainersCallback != nil {
+		d.deletedContainersCallback(deletedContainerID)
 	}
 	d.lastUpdate = time.Now()
 	d.containers = containers

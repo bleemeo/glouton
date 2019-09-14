@@ -35,8 +35,9 @@ type metricPoint struct {
 
 // GatherContext is the couple Measurement and tags
 type GatherContext struct {
-	Measurement string
-	Tags        map[string]string
+	Measurement    string
+	Tags           map[string]string
+	OriginalFields map[string]interface{}
 }
 
 // Accumulator implements telegraf.Accumulator with the capabilities to
@@ -216,8 +217,9 @@ type accumulatorFunc func(measurement string, fields map[string]interface{}, tag
 
 func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	originalContext := GatherContext{
-		Measurement: measurement,
-		Tags:        tags,
+		Measurement:    measurement,
+		Tags:           tags,
+		OriginalFields: fields,
 	}
 	currentContext := originalContext
 	currentContext.Tags = make(map[string]string, len(tags))

@@ -235,7 +235,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	if err := s.metricDeleteFromLocal(); err != nil {
 		return err
 	}
-	if time.Since(s.startedAt) > 70*time.Minute {
+	if time.Since(s.startedAt) > 5*time.Minute {
 		if err := s.metricDeactivate(filteredMetrics); err != nil {
 			return err
 		}

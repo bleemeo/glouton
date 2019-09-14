@@ -67,6 +67,7 @@ type agent struct {
 	factProvider     *facts.FactProvider
 	bleemeoConnector *bleemeo.Connector
 	accumulator      *threshold.Accumulator
+	store            *store.Store
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -358,12 +359,12 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
-	db := store.New()
+	a.store = store.New()
 	a.accumulator = threshold.New(
-		db.Accumulator(),
+		a.store.Accumulator(),
 		a.state,
 	)
-	a.dockerFact = facts.NewDocker()
+	a.dockerFact = facts.NewDocker(a.deletedContainersCallback)
 	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
@@ -388,12 +389,12 @@ func (a *agent) run() { //nolint:gocyclo
 		a.dockerFact,
 		serivcesOverrideFromInterface(services),
 	)
-	api := api.New(db, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
+	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
 
 	a.FireTrigger(true, false, false)
 
 	tasks := []taskInfo{
-		{db.Run, "store"},
+		{a.store.Run, "store"},
 		{a.triggerHandler.Run, "triggerHandler"},
 		{a.dockerFact.Run, "docker"},
 		{a.collector.Run, "collector"},
@@ -412,7 +413,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Facts:                  a.factProvider,
 			Process:                psFact,
 			Docker:                 a.dockerFact,
-			Store:                  db,
+			Store:                  a.store,
 			Acc:                    a.accumulator,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
@@ -662,7 +663,8 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 			"container_health_status": status.CurrentStatus.NagiosCode(),
 		},
 		map[string]string{
-			"item": container.Name(),
+			"item":         container.Name(),
+			"container_id": container.ID(),
 		},
 		map[string]types.StatusDescription{
 			"container_health_status": status,
@@ -770,6 +772,26 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				nil,
 			)
 		}
+	}
+}
+
+func (a *agent) deletedContainersCallback(containersID []string) {
+	metrics, err := a.store.Metrics(nil)
+	if err != nil {
+		logger.V(1).Printf("Unable to list metrics to cleanup after container deletion: %v", err)
+		return
+	}
+	var metricToDelete []map[string]string
+	for _, m := range metrics {
+		labels := m.Labels()
+		for _, c := range containersID {
+			if labels["container_id"] == c {
+				metricToDelete = append(metricToDelete, labels)
+			}
+		}
+	}
+	if len(metricToDelete) > 0 {
+		a.store.DropMetrics(metricToDelete)
 	}
 }
 

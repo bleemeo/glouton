@@ -57,6 +57,11 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	if name, ok := originalContext.Tags["container_name"]; ok {
 		newContext.Tags["item"] = name
 	}
+	if id, ok := originalContext.OriginalFields["container_id"]; ok {
+		if containerID, ok := id.(string); ok {
+			newContext.Tags["container_id"] = containerID
+		}
+	}
 	if enable, ok := originalContext.Tags["bleemeo.enable"]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
@@ -80,7 +85,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		}
 		newContext.Measurement = "docker_container_io"
 	}
-	return
+	return newContext, drop
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
