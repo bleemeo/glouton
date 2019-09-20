@@ -203,10 +203,11 @@ func (c *Client) setupMQTT() error {
 			} else {
 				tlsConfig.RootCAs = rootCAs
 			}
-			if c.option.Config.Bool("bleemeo.mqtt.ssl_insecure") {
-				tlsConfig.InsecureSkipVerify = true
-			}
 		}
+		if c.option.Config.Bool("bleemeo.mqtt.ssl_insecure") {
+			tlsConfig.InsecureSkipVerify = true
+		}
+		pahoOptions.SetTLSConfig(tlsConfig)
 		brokerURL = "ssl://" + brokerURL
 	} else {
 		brokerURL = "tcp://" + brokerURL
