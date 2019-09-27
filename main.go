@@ -17,9 +17,9 @@
 package main
 
 import (
-	"agentgo/agent"
 	"flag"
 	"fmt"
+	"glouton/agent"
 	"os"
 
 	_ "net/http/pprof"
@@ -27,15 +27,15 @@ import (
 
 //nolint: gochecknoglobals
 var (
-	runAsRoot = flag.Bool("yes-run-as-root", false, "Allows Bleemeo agent to run as root")
+	runAsRoot = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
 )
 
 func main() {
 	flag.Parse()
 	if os.Getuid() == 0 && !*runAsRoot {
-		fmt.Println("Error: trying to run Bleemeo agent as root without \"--yes-run-as-root\" option.")
-		fmt.Println("If Bleemeo agent is installed using standard method, start it with:")
-		fmt.Println("    service bleemeo-agent start")
+		fmt.Println("Error: trying to run Glouton as root without \"--yes-run-as-root\" option.")
+		fmt.Println("If Glouton is installed using standard method, start it with:")
+		fmt.Println("    service glouton start")
 		fmt.Println("")
 		os.Exit(1)
 	}

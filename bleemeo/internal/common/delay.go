@@ -17,9 +17,9 @@
 package common
 
 import (
-	"agentgo/bleemeo/types"
-	"agentgo/logger"
 	"context"
+	"glouton/bleemeo/types"
+	"glouton/logger"
 	"math/rand"
 	"time"
 )

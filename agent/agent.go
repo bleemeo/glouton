@@ -32,25 +32,25 @@ import (
 	"syscall"
 	"time"
 
-	"agentgo/agent/state"
-	"agentgo/api"
-	"agentgo/bleemeo"
-	bleemeoTypes "agentgo/bleemeo/types"
-	"agentgo/collector"
-	"agentgo/config"
-	"agentgo/debouncer"
-	"agentgo/discovery"
-	"agentgo/facts"
-	"agentgo/inputs/docker"
-	"agentgo/inputs/statsd"
-	"agentgo/logger"
-	"agentgo/nrpe"
-	"agentgo/store"
-	"agentgo/task"
-	"agentgo/threshold"
-	"agentgo/types"
-	"agentgo/version"
-	"agentgo/zabbix"
+	"glouton/agent/state"
+	"glouton/api"
+	"glouton/bleemeo"
+	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/collector"
+	"glouton/config"
+	"glouton/debouncer"
+	"glouton/discovery"
+	"glouton/facts"
+	"glouton/inputs/docker"
+	"glouton/inputs/statsd"
+	"glouton/logger"
+	"glouton/nrpe"
+	"glouton/store"
+	"glouton/task"
+	"glouton/threshold"
+	"glouton/types"
+	"glouton/version"
+	"glouton/zabbix"
 
 	"net/http"
 )
@@ -91,7 +91,7 @@ func zabbixResponse(key string, args []string) (string, error) {
 		return "1", nil
 	}
 	if key == "agent.version" {
-		return fmt.Sprintf("4 (Bleemeo Agent %s)", version.Version), nil
+		return fmt.Sprintf("4 (Glouton %s)", version.Version), nil
 	}
 	return "", errors.New("Unsupported item key") // nolint: stylecheck
 }
@@ -841,7 +841,7 @@ func parseIPOutput(content []byte) string {
 // Mostly it make that access to file pass though hostroot
 func setupContainer(hostRootPath string) {
 	if hostRootPath == "" {
-		logger.Printf("The agent is running in a container but BLEEMEO_AGENT_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")
+		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")
 		return
 	}
 	if _, err := os.Stat(hostRootPath); os.IsNotExist(err) {

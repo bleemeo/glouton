@@ -17,9 +17,9 @@
 package types
 
 import (
-	"agentgo/threshold"
 	"crypto/sha256"
 	"fmt"
+	"glouton/threshold"
 	"math"
 	"strings"
 	"time"

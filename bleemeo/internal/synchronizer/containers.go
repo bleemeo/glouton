@@ -17,11 +17,11 @@
 package synchronizer
 
 import (
-	"agentgo/bleemeo/types"
-	"agentgo/facts"
-	"agentgo/logger"
 	"encoding/json"
 	"fmt"
+	"glouton/bleemeo/types"
+	"glouton/facts"
+	"glouton/logger"
 	"time"
 )
 

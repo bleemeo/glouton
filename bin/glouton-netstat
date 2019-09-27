@@ -1,0 +1,6 @@
+#!/bin/sh
+
+# creates file not wolrd-readable
+umask 0006
+netstat -lnp > /var/lib/glouton/netstat.out
+chown glouton:glouton /var/lib/glouton/netstat.out

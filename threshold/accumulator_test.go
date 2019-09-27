@@ -17,7 +17,7 @@
 package threshold
 
 import (
-	"agentgo/types"
+	"glouton/types"
 	"math"
 	"testing"
 	"time"

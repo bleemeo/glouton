@@ -17,11 +17,11 @@
 package threshold
 
 import (
-	"agentgo/agent/state"
-	"agentgo/logger"
-	"agentgo/types"
 	"context"
 	"fmt"
+	"glouton/agent/state"
+	"glouton/logger"
+	"glouton/types"
 	"math"
 	"reflect"
 	"sync"

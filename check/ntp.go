@@ -25,8 +25,8 @@ import (
 	"net"
 	"time"
 
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/logger"
+	"glouton/types"
 )
 
 // NTPCheck perform a NTP check

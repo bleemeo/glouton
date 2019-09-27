@@ -24,8 +24,8 @@ import (
 	"net/url"
 	"time"
 
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/logger"
+	"glouton/types"
 )
 
 // HTTPCheck perform a HTTP check

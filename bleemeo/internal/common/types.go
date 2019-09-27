@@ -17,9 +17,9 @@
 package common
 
 import (
-	"agentgo/bleemeo/types"
-	agentTypes "agentgo/types"
 	"fmt"
+	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/types"
 )
 
 // Maximal length of fields on Bleemeo API
@@ -53,12 +53,12 @@ func (key MetricLabelItem) String() string {
 
 // MetricLabelItemFromMetric create a MetricLabelItem from a local or remote metric (or labels of local one)
 func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
-	if metric, ok := input.(types.Metric); ok {
+	if metric, ok := input.(bleemeoTypes.Metric); ok {
 		key := MetricLabelItem{Label: metric.Label, Item: metric.Labels["item"]}
 		key.TruncateItem(metric.ServiceID != "")
 		return key
 	}
-	if metric, ok := input.(agentTypes.Metric); ok {
+	if metric, ok := input.(types.Metric); ok {
 		labels := metric.Labels()
 		key := MetricLabelItem{Label: labels["__name__"], Item: labels["item"]}
 		key.TruncateItem(labels["service_name"] != "")
@@ -75,8 +75,8 @@ func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
 }
 
 // MetricLookupFromList return a map[MetricLabelItem]Metric
-func MetricLookupFromList(registeredMetrics []types.Metric) map[MetricLabelItem]types.Metric {
-	registeredMetricsByKey := make(map[MetricLabelItem]types.Metric, len(registeredMetrics))
+func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[MetricLabelItem]bleemeoTypes.Metric {
+	registeredMetricsByKey := make(map[MetricLabelItem]bleemeoTypes.Metric, len(registeredMetrics))
 	for _, v := range registeredMetrics {
 		key := MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
 		if existing, ok := registeredMetricsByKey[key]; !ok || !existing.DeactivatedAt.IsZero() {

@@ -23,8 +23,8 @@ import (
 	"net/smtp"
 	"time"
 
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/logger"
+	"glouton/types"
 )
 
 // SMTPCheck perform a SMTP check

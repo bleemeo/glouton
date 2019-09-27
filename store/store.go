@@ -25,8 +25,8 @@ import (
 	"sync"
 	"time"
 
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/logger"
+	"glouton/types"
 )
 
 // Store implement an interface to retrieve metrics and metric points.

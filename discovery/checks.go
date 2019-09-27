@@ -17,10 +17,10 @@
 package discovery
 
 import (
-	"agentgo/check"
-	"agentgo/logger"
-	"agentgo/task"
 	"fmt"
+	"glouton/check"
+	"glouton/logger"
+	"glouton/task"
 	"net"
 )
 

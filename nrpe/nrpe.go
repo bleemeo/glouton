@@ -17,8 +17,6 @@
 package nrpe
 
 import (
-	"agentgo/logger"
-	"agentgo/version"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -30,6 +28,8 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
+	"glouton/logger"
+	"glouton/version"
 	"hash/crc32"
 	"io"
 	"math/big"

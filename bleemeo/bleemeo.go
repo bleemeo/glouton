@@ -21,11 +21,11 @@ import (
 	"sync"
 	"time"
 
-	"agentgo/bleemeo/internal/cache"
-	"agentgo/bleemeo/internal/mqtt"
-	"agentgo/bleemeo/internal/synchronizer"
-	"agentgo/bleemeo/types"
-	"agentgo/logger"
+	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/mqtt"
+	"glouton/bleemeo/internal/synchronizer"
+	"glouton/bleemeo/types"
+	"glouton/logger"
 )
 
 // Connector manager the connection between the Agent and Bleemeo

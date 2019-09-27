@@ -17,12 +17,12 @@
 package zabbix
 
 import (
-	"agentgo/logger"
 	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"glouton/logger"
 	"io"
 	"net"
 	"strings"

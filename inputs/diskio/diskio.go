@@ -17,9 +17,9 @@
 package diskio
 
 import (
-	"agentgo/inputs/internal"
 	"errors"
 	"fmt"
+	"glouton/inputs/internal"
 	"regexp"
 
 	"github.com/influxdata/telegraf"

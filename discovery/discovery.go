@@ -17,11 +17,11 @@
 package discovery
 
 import (
-	"agentgo/facts"
-	"agentgo/logger"
-	"agentgo/task"
-	"agentgo/types"
 	"context"
+	"glouton/facts"
+	"glouton/logger"
+	"glouton/task"
+	"glouton/types"
 	"os"
 	"sync"
 	"time"

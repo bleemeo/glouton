@@ -17,7 +17,7 @@
 package modify
 
 import (
-	"agentgo/inputs/internal"
+	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 )

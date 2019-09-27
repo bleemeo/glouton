@@ -23,10 +23,10 @@ import (
 	"net/http"
 	"time"
 
-	"agentgo/discovery"
-	"agentgo/facts"
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/discovery"
+	"glouton/facts"
+	"glouton/logger"
+	"glouton/types"
 
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"

@@ -17,9 +17,9 @@
 package agent
 
 import (
-	"agentgo/config"
-	"agentgo/logger"
 	"fmt"
+	"glouton/config"
+	"glouton/logger"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -160,6 +160,11 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		}
 	}
 	for key, value := range defaultConfig {
+		if found, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
+			return nil, err
+		} else if found {
+			warnings = append(warnings, fmt.Errorf("environement variable %#v is deprecated, use %#v instead", keyToBleemeoEnvironemntName(key), keyToEnvironemntName(key)))
+		}
 		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironemntName(key), value); err != nil {
 			return nil, err
 		}
@@ -167,8 +172,12 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 	return warnings, nil
 }
 
-func keyToEnvironemntName(key string) string {
+func keyToBleemeoEnvironemntName(key string) string {
 	return "BLEEMEO_AGENT_" + strings.ToUpper((strings.ReplaceAll(key, ".", "_")))
+}
+
+func keyToEnvironemntName(key string) string {
+	return "GLOUTON_" + strings.ToUpper((strings.ReplaceAll(key, ".", "_")))
 }
 
 func loadEnvironmentVariable(cfg *config.Configuration, key string, envName string, valueSample interface{}) (found bool, err error) {
@@ -196,10 +205,20 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 func (a *agent) loadConfiguration() (cfg *config.Configuration, warnings []error, finalError error) {
 	cfg = &config.Configuration{}
 
-	if err := configLoadFile("/etc/bleemeo/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
+	if err := configLoadFile("/etc/bleemeo/agent.conf", cfg); err != nil && !os.IsNotExist(err) && !os.IsPermission(err) {
+		finalError = err
+	} else if err != nil && os.IsPermission(err) {
+		warnings = append(warnings, err)
+	}
+	if err := cfg.LoadDirectory("/etc/bleemeo/agent.conf.d"); err != nil && !os.IsNotExist(err) && !os.IsPermission(err) {
+		finalError = err
+	} else if err != nil && os.IsPermission(err) {
+		warnings = append(warnings, err)
+	}
+	if err := configLoadFile("/etc/glouton/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
 		finalError = err
 	}
-	if err := cfg.LoadDirectory("/etc/bleemeo/agent.conf.d"); err != nil && !os.IsNotExist(err) {
+	if err := cfg.LoadDirectory("/etc/glouton/agent.conf.d"); err != nil && !os.IsNotExist(err) {
 		finalError = err
 	}
 	if err := configLoadFile("etc/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
@@ -209,12 +228,12 @@ func (a *agent) loadConfiguration() (cfg *config.Configuration, warnings []error
 		finalError = err
 	}
 
-	warnings, err := loadEnvironmentVariables(cfg)
+	moreMarnings, err := loadEnvironmentVariables(cfg)
 	if err != nil {
 		finalError = err
 	}
 	loadDefault(cfg)
-	return cfg, warnings, finalError
+	return cfg, append(warnings, moreMarnings...), finalError
 }
 
 func convertToMap(input interface{}) (result map[string]interface{}, ok bool) {

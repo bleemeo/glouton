@@ -17,11 +17,11 @@
 package facts
 
 import (
-	"agentgo/logger"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/logger"
 	"math"
 	"sort"
 	"strconv"
@@ -248,7 +248,7 @@ func (c Container) ID() string {
 	return c.inspect.ID
 }
 
-// Ignored returns true if this container should be ignored by Bleemeo agent
+// Ignored returns true if this container should be ignored by Glouton
 func (c Container) Ignored() bool {
 	return ignoreContainer(c.inspect)
 }
@@ -368,7 +368,11 @@ func ignoreContainer(inspect types.ContainerJSON) bool {
 	if inspect.Config == nil {
 		return false
 	}
-	label := strings.ToLower(inspect.Config.Labels["bleemeo.enable"])
+	label, ok := inspect.Config.Labels["glouton.enable"]
+	if !ok {
+		label = inspect.Config.Labels["bleemeo.enable"]
+	}
+	label = strings.ToLower(label)
 	switch label {
 	case "0", "off", "false", "no":
 		return true

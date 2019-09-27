@@ -17,15 +17,15 @@
 package synchronizer
 
 import (
-	"agentgo/bleemeo/client"
-	"agentgo/bleemeo/internal/cache"
-	"agentgo/bleemeo/internal/common"
-	"agentgo/bleemeo/types"
-	"agentgo/logger"
 	"context"
 	cryptoRand "crypto/rand"
 	"errors"
 	"fmt"
+	"glouton/bleemeo/client"
+	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/common"
+	"glouton/bleemeo/types"
+	"glouton/logger"
 	"math"
 	"math/big"
 	"math/rand"

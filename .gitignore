@@ -11,5 +11,6 @@
 .vscode
 /agent-go
 /agentgo*
+/glouton*
 *-packr.go
 api/static/assets/js

@@ -17,11 +17,6 @@
 package mqtt
 
 import (
-	"agentgo/bleemeo/internal/cache"
-	"agentgo/bleemeo/internal/common"
-	"agentgo/bleemeo/types"
-	"agentgo/logger"
-	agentTypes "agentgo/types"
 	"bytes"
 	"compress/zlib"
 	"context"
@@ -30,6 +25,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/common"
+	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/logger"
+	"glouton/types"
 	"io/ioutil"
 	"os"
 	"sync"
@@ -43,13 +43,13 @@ const pointsBatchSize = 1000
 
 // Option are parameter for the MQTT client
 type Option struct {
-	types.GlobalOption
+	bleemeoTypes.GlobalOption
 	Cache         *cache.Cache
 	AgentID       string
 	AgentPassword string
 
 	// DisableCallback is a function called when MQTT got too much connect/disconnection.
-	DisableCallback func(reason types.DisableReason, until time.Time)
+	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 	// UpdateConfigCallback is a function called when Agent configuration (will) change
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
@@ -63,19 +63,19 @@ type Client struct {
 	// Those variable are write once or only read/write from Run() gorouting. No lock needed
 	ctx                        context.Context
 	mqttClient                 paho.Client
-	failedPoints               []agentTypes.MetricPoint
+	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 
 	l                     sync.Mutex
 	setupDone             bool
 	pendingToken          []paho.Token
-	pendingPoints         []agentTypes.MetricPoint
+	pendingPoints         []types.MetricPoint
 	lastReport            time.Time
 	failedPointsCount     int
 	lastDisconnectionTime []time.Time
 	disabledUntil         time.Time
-	disableReason         types.DisableReason
+	disableReason         bleemeoTypes.DisableReason
 }
 
 type metricPayload struct {
@@ -129,7 +129,7 @@ func (c *Client) Connected() bool {
 
 // Disable will disable (or re-enable) the MQTT connection until given time.
 // To re-enable, set a time in the past.
-func (c *Client) Disable(until time.Time, reason types.DisableReason) {
+func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
 	c.disabledUntil = until
@@ -282,16 +282,16 @@ func (c *Client) run(ctx context.Context) error {
 	return nil
 }
 
-func (c *Client) addPoints(points []agentTypes.MetricPoint) {
+func (c *Client) addPoints(points []types.MetricPoint) {
 	c.l.Lock()
 	defer c.l.Unlock()
-	if time.Now().Before(c.disabledUntil) && c.disableReason == types.DisableDuplicatedAgent {
+	if time.Now().Before(c.disabledUntil) && c.disableReason == bleemeoTypes.DisableDuplicatedAgent {
 		return
 	}
 	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
-func (c *Client) popPendingPoints() []agentTypes.MetricPoint {
+func (c *Client) popPendingPoints() []types.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
 	points := c.pendingPoints
@@ -329,7 +329,7 @@ func (c *Client) sendPoints() {
 		}
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
-		newPoints := make([]agentTypes.MetricPoint, 0, len(c.failedPoints))
+		newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 		for _, p := range c.failedPoints {
 			key := common.MetricLabelItemFromMetric(p.Labels)
 			if localExistsByKey[key] {
@@ -360,7 +360,7 @@ func (c *Client) sendPoints() {
 	c.failedPointsCount = len(c.failedPoints)
 }
 
-func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[common.MetricLabelItem]types.Metric, points []agentTypes.MetricPoint) []metricPayload {
+func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[common.MetricLabelItem]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
 	for _, p := range points {
 		key := common.MetricLabelItemFromMetric(p.Labels)
 		if m, ok := registreredMetricByKey[key]; ok {
@@ -390,7 +390,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 	return payload
 }
 
-func (c *Client) getDisableUntil() (time.Time, types.DisableReason) {
+func (c *Client) getDisableUntil() (time.Time, bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
 	return c.disabledUntil, c.disableReason
@@ -495,7 +495,7 @@ func (c *Client) onConnectionLost(_ paho.Client, err error) {
 	}
 	if c.disabledUntil.Before(until) {
 		c.disabledUntil = until
-		c.disableReason = types.DisableTooManyErrors
+		c.disableReason = bleemeoTypes.DisableTooManyErrors
 		c.mqttClient.Disconnect(0)
 		// Trigger facts synchronization to check for duplicate agent
 		_, _ = c.option.Facts.Facts(c.ctx, 0)
@@ -509,7 +509,7 @@ func (c *Client) publish(topic string, payload []byte) {
 	c.pendingToken = append(c.pendingToken, token)
 }
 
-func (c *Client) sendTopinfo(ctx context.Context, cfg types.AccountConfig) {
+func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig) {
 	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second/2)
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
@@ -564,8 +564,8 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func filterPoints(input []agentTypes.MetricPoint, metricWhitelist map[string]bool) []agentTypes.MetricPoint {
-	result := make([]agentTypes.MetricPoint, 0)
+func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []types.MetricPoint {
+	result := make([]types.MetricPoint, 0)
 	for _, m := range input {
 		if common.AllowMetric(m.Labels, metricWhitelist) {
 			result = append(result, m)

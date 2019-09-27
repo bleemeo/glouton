@@ -17,7 +17,7 @@
 package api
 
 import (
-	"agentgo/types"
+	"glouton/types"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"

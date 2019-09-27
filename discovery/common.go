@@ -17,9 +17,9 @@
 package discovery
 
 import (
-	"agentgo/facts"
-	"agentgo/logger"
 	"context"
+	"glouton/facts"
+	"glouton/logger"
 	"net"
 	"strconv"
 	"time"

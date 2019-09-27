@@ -17,11 +17,11 @@
 package types
 
 import (
-	"agentgo/discovery"
-	"agentgo/facts"
-	"agentgo/threshold"
-	"agentgo/types"
 	"context"
+	"glouton/discovery"
+	"glouton/facts"
+	"glouton/threshold"
+	"glouton/types"
 	"time"
 
 	"github.com/influxdata/telegraf"

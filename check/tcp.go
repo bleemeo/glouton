@@ -25,8 +25,8 @@ import (
 	"strconv"
 	"time"
 
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/logger"
+	"glouton/types"
 )
 
 // TCPCheck perform a TCP check

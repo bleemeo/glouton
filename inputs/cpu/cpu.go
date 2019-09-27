@@ -20,7 +20,7 @@ import (
 	"errors"
 	"strings"
 
-	"agentgo/inputs/internal"
+	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"

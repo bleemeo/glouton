@@ -17,8 +17,8 @@
 package memcached
 
 import (
-	"agentgo/inputs/internal"
 	"errors"
+	"glouton/inputs/internal"
 	"strings"
 
 	"github.com/influxdata/telegraf"

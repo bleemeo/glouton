@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/logger"
+	"glouton/types"
 
 	"github.com/vektah/gqlparser/gqlerror"
 )

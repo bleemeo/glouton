@@ -18,9 +18,9 @@
 package discovery
 
 import (
-	"agentgo/facts"
-	"agentgo/logger"
 	"context"
+	"glouton/facts"
+	"glouton/logger"
 	"net"
 	"path/filepath"
 	"runtime"
@@ -259,6 +259,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 				continue
 			}
 			if stack, ok := service.container.Labels()["bleemeo.stack"]; ok {
+				service.Stack = stack
+			}
+			if stack, ok := service.container.Labels()["glouton.stack"]; ok {
 				service.Stack = stack
 			}
 		}

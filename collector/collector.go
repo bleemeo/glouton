@@ -18,9 +18,9 @@
 package collector
 
 import (
-	"agentgo/logger"
 	"context"
 	"errors"
+	"glouton/logger"
 	"sync"
 	"time"
 

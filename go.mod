@@ -1,4 +1,4 @@
-module agentgo
+module glouton
 
 go 1.12
 

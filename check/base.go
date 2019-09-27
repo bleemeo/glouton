@@ -22,8 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"agentgo/logger"
-	"agentgo/types"
+	"glouton/logger"
+	"glouton/types"
 )
 
 type accumulator interface {

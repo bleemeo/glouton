@@ -17,9 +17,9 @@
 package phpfpm
 
 import (
-	"agentgo/inputs/internal"
 	"errors"
 	"fmt"
+	"glouton/inputs/internal"
 	"reflect"
 
 	"github.com/influxdata/telegraf"

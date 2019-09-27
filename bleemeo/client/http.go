@@ -17,12 +17,12 @@
 package client
 
 import (
-	"agentgo/version"
 	"bytes"
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"glouton/version"
 	"io"
 	"net/http"
 	"net/url"

@@ -17,8 +17,8 @@
 package synchronizer
 
 import (
-	"agentgo/types"
 	"errors"
+	"glouton/types"
 	"testing"
 	"time"
 )

@@ -17,15 +17,15 @@
 package synchronizer
 
 import (
-	"agentgo/bleemeo/client"
-	"agentgo/bleemeo/internal/common"
-	"agentgo/bleemeo/types"
-	"agentgo/logger"
-	"agentgo/threshold"
-	agentTypes "agentgo/types"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"glouton/bleemeo/client"
+	"glouton/bleemeo/internal/common"
+	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/logger"
+	"glouton/threshold"
+	"glouton/types"
 	"math/rand"
 	"time"
 )
@@ -35,7 +35,7 @@ var (
 )
 
 type errNeedRegister struct {
-	remoteMetric types.Metric
+	remoteMetric bleemeoTypes.Metric
 	key          common.MetricLabelItem
 }
 
@@ -75,7 +75,7 @@ type fakeMetric struct {
 	label string
 }
 
-func (m fakeMetric) Points(time.Time, time.Time) ([]agentTypes.PointStatus, error) {
+func (m fakeMetric) Points(time.Time, time.Time) ([]types.PointStatus, error) {
 	return nil, errors.New("not implemented on fakeMetric")
 }
 func (m fakeMetric) Labels() map[string]string {
@@ -85,13 +85,13 @@ func (m fakeMetric) Labels() map[string]string {
 }
 
 type metricPayload struct {
-	types.Metric
+	bleemeoTypes.Metric
 	Agent string `json:"agent"`
 	Item  string `json:"item,omitempty"`
 }
 
-// metricFromAPI convert a metricPayload received from API to a types.Metric
-func (mp metricPayload) metricFromAPI() types.Metric {
+// metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric
+func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 	if mp.Labels["item"] == "" && mp.Item != "" {
 		if mp.Labels == nil {
 			mp.Labels = map[string]string{
@@ -102,7 +102,7 @@ func (mp metricPayload) metricFromAPI() types.Metric {
 	return mp.Metric
 }
 
-func prioritizeMetrics(metrics []agentTypes.Metric) {
+func prioritizeMetrics(metrics []types.Metric) {
 	swapIdx := 0
 	for i, m := range metrics {
 		switch m.Labels()["__name__"] {
@@ -119,8 +119,8 @@ func prioritizeMetrics(metrics []agentTypes.Metric) {
 	}
 }
 
-func filterMetrics(input []agentTypes.Metric, metricWhitelist map[string]bool) []agentTypes.Metric {
-	result := make([]agentTypes.Metric, 0)
+func filterMetrics(input []types.Metric, metricWhitelist map[string]bool) []types.Metric {
+	result := make([]types.Metric, 0)
 	for _, m := range input {
 		if common.AllowMetric(m.Labels(), metricWhitelist) {
 			result = append(result, m)
@@ -129,7 +129,7 @@ func filterMetrics(input []agentTypes.Metric, metricWhitelist map[string]bool) [
 	return result
 }
 
-func (s *Synchronizer) findUnregisteredMetrics(metrics []agentTypes.Metric) []common.MetricLabelItem {
+func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []common.MetricLabelItem {
 
 	registeredMetrics := s.option.Cache.Metrics()
 	registeredMetricsByKey := common.MetricLookupFromList(registeredMetrics)
@@ -274,7 +274,7 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 		return err
 	}
 
-	metricsByUUID := make(map[string]types.Metric, len(result))
+	metricsByUUID := make(map[string]bleemeoTypes.Metric, len(result))
 	if !includeInactive {
 		for _, m := range s.option.Cache.Metrics() {
 			if !m.DeactivatedAt.IsZero() {
@@ -290,7 +290,7 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 		}
 		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
-	metrics := make([]types.Metric, 0, len(metricsByUUID))
+	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
 		metrics = append(metrics, m)
 	}
@@ -322,7 +322,7 @@ func (s *Synchronizer) metricUpdateListSearch(requests []common.MetricLabelItem)
 			metricsByUUID[metric.ID] = metric.metricFromAPI()
 		}
 	}
-	metrics := make([]types.Metric, 0, len(metricsByUUID))
+	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
 		metrics = append(metrics, m)
 	}
@@ -353,7 +353,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		}
 		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
-	metrics := make([]types.Metric, 0, len(metricsByUUID))
+	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
 		metrics = append(metrics, m)
 	}
@@ -361,7 +361,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	return nil
 }
 
-func (s *Synchronizer) metricDeleteFromRemote(localMetrics []agentTypes.Metric, previousMetrics map[string]types.Metric) error {
+func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previousMetrics map[string]bleemeoTypes.Metric) error {
 
 	newMetrics := s.option.Cache.MetricsByUUID()
 
@@ -385,14 +385,14 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []agentTypes.Metric, 
 	return nil
 }
 
-func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric, fullForInactive bool) error {
+func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, fullForInactive bool) error {
 
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	services := s.option.Cache.Services()
-	servicesByKey := make(map[serviceNameInstance]types.Service, len(services))
+	servicesByKey := make(map[serviceNameInstance]bleemeoTypes.Service, len(services))
 	for _, v := range services {
 		k := serviceNameInstance{name: v.Label, instance: v.Instance}
 		servicesByKey[k] = v
@@ -404,13 +404,13 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 	regCountBeforeUpdate := 30
 	errorCount := 0
 	var lastErr error
-	retryMetrics := make([]agentTypes.Metric, 0)
-	registerMetrics := make([]agentTypes.Metric, 0)
+	retryMetrics := make([]types.Metric, 0)
+	registerMetrics := make([]types.Metric, 0)
 	for state := metricPassAgentStatus; state <= metricPassRetry; state++ {
-		var currentList []agentTypes.Metric
+		var currentList []types.Metric
 		switch state {
 		case metricPassAgentStatus:
-			currentList = []agentTypes.Metric{
+			currentList = []types.Metric{
 				fakeMetric{label: "agent_status"},
 			}
 		case metricPassMain:
@@ -418,7 +418,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 		case metricPassRecreate:
 			currentList = registerMetrics
 			if len(registerMetrics) > 0 && !fullForInactive {
-				metrics := make([]types.Metric, 0, len(registeredMetricsByUUID))
+				metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
 				for _, v := range registeredMetricsByUUID {
 					metrics = append(metrics, v)
 				}
@@ -469,7 +469,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 			regCountBeforeUpdate--
 			if regCountBeforeUpdate == 0 {
 				regCountBeforeUpdate = 60
-				metrics := make([]types.Metric, 0, len(registeredMetricsByUUID))
+				metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
 				for _, v := range registeredMetricsByUUID {
 					metrics = append(metrics, v)
 				}
@@ -478,7 +478,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 		}
 	}
 
-	metrics := make([]types.Metric, 0, len(registeredMetricsByUUID))
+	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
 	for _, v := range registeredMetricsByUUID {
 		metrics = append(metrics, v)
 	}
@@ -486,7 +486,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []agentTypes.Metric,
 	return lastErr
 }
 
-func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, registeredMetricsByUUID map[string]types.Metric, registeredMetricsByKey map[common.MetricLabelItem]types.Metric, containersByContainerID map[string]types.Container, servicesByKey map[serviceNameInstance]types.Service, params map[string]string) error {
+func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registeredMetricsByUUID map[string]bleemeoTypes.Metric, registeredMetricsByKey map[common.MetricLabelItem]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container, servicesByKey map[serviceNameInstance]bleemeoTypes.Service, params map[string]string) error {
 	labels := metric.Labels()
 	key := common.MetricLabelItemFromMetric(labels)
 	remoteMetric, remoteFound := registeredMetricsByKey[key]
@@ -500,7 +500,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 		return nil
 	}
 	payload := metricPayload{
-		Metric: types.Metric{
+		Metric: bleemeoTypes.Metric{
 			Label:  labels["__name__"],
 			Labels: labels,
 		},
@@ -547,7 +547,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric agentTypes.Metric, regi
 	return nil
 }
 
-func (s *Synchronizer) metricUpdateOne(key common.MetricLabelItem, metric agentTypes.Metric, remoteMetric types.Metric) (types.Metric, error) {
+func (s *Synchronizer) metricUpdateOne(key common.MetricLabelItem, metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
 	if !remoteMetric.DeactivatedAt.IsZero() {
 		points, err := metric.Points(time.Now().Add(-10*time.Minute), time.Now())
 		if err != nil {
@@ -663,7 +663,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 		}
 	}
 
-	metrics := make([]types.Metric, 0, len(registeredMetrics))
+	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetrics))
 	for _, v := range registeredMetrics {
 		metrics = append(metrics, v)
 	}
@@ -671,10 +671,10 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	return nil
 }
 
-func (s *Synchronizer) metricDeactivate(localMetrics []agentTypes.Metric) error {
+func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 	duplicatedKey := make(map[common.MetricLabelItem]bool)
-	localByMetricKey := make(map[common.MetricLabelItem]agentTypes.Metric, len(localMetrics))
+	localByMetricKey := make(map[common.MetricLabelItem]types.Metric, len(localMetrics))
 	for _, v := range localMetrics {
 		key := common.MetricLabelItemFromMetric(v)
 		localByMetricKey[key] = v
@@ -714,7 +714,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []agentTypes.Metric) error 
 		v.DeactivatedAt = time.Now()
 		registeredMetrics[k] = v
 	}
-	metrics := make([]types.Metric, 0, len(registeredMetrics))
+	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetrics))
 	for _, v := range registeredMetrics {
 		metrics = append(metrics, v)
 	}

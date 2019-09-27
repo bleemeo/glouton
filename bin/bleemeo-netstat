@@ -1,6 +1,0 @@
-#!/bin/sh
-
-# creates file not wolrd-readable
-umask 0006
-netstat -lnp > /var/lib/bleemeo/netstat.out
-chown bleemeo:bleemeo /var/lib/bleemeo/netstat.out

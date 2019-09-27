@@ -17,7 +17,7 @@
 package store
 
 import (
-	"agentgo/types"
+	"glouton/types"
 	"reflect"
 	"testing"
 	"time"

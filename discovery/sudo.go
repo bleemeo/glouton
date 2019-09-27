@@ -17,7 +17,7 @@
 package discovery
 
 import (
-	"agentgo/logger"
+	"glouton/logger"
 	"io/ioutil"
 	"os"
 	"os/exec"

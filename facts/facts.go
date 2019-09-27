@@ -17,9 +17,9 @@
 package facts
 
 import (
-	"agentgo/logger"
-	"agentgo/version"
 	"context"
+	"glouton/logger"
+	"glouton/version"
 	"io/ioutil"
 	"net"
 	"net/http"

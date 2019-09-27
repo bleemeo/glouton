@@ -17,10 +17,10 @@
 package discovery
 
 import (
-	"agentgo/facts"
-	"agentgo/logger"
 	"encoding/json"
 	"fmt"
+	"glouton/facts"
+	"glouton/logger"
 	"strconv"
 	"strings"
 )

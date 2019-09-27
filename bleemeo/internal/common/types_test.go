@@ -17,7 +17,7 @@
 package common
 
 import (
-	"agentgo/bleemeo/types"
+	"glouton/bleemeo/types"
 	"reflect"
 	"testing"
 	"time"
