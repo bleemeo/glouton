@@ -17,33 +17,39 @@
 package influxdb
 
 import (
-	bleemeoTypes "glouton/bleemeo/types"
+	"context"
+	"fmt"
 	"glouton/types"
 
 	"sync"
+
+	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
-// Option contians parameters for le influxDB client
-type Option struct {
-	bleemeoTypes.GlobalOption
-}
-
-// Metric point for influxDB
-type InfluxDBPoint struct {
+// Point is the influxBD MetricPoint
+type Point struct {
 	// à vérifier si cette struct n'existe pas dans le clien influx db
 }
 
 // Client is an MQTT client for Bleemeo Cloud platform
 type Client struct {
-	option Option
+	serverAddress string
+	dataBaseName  string
 
 	lock                  sync.Mutex
 	bleemeoPendingPoints  []types.MetricPoint
-	InfluxDBPendingPoints []InfluxDBPoint
+	InfluxDBPendingPoints []Point
 }
 
 // New create a new influxDB client
-func New(option Option) *Client {
+func New(serverAddress, dataBaseName string) *Client {
+	c, err := influxDBClient.NewHTTPClient(influxDBClient.HTTPConfig{
+		Addr: "http://localhost:8086",
+	})
+	if err != nil {
+		fmt.Println("Error creating InfluxDB Client: ", err.Error())
+	}
+	defer c.Close()
 }
 
 // Initialize the parameters to communicate with influxDB server
@@ -66,7 +72,7 @@ func (c *Client) convertPendingPoints() {
 }
 
 // Run the influxDB service
-func (c *Client) run() error {
+func (c *Client) Run(ctx context.Context) error {
 	// Initialize the server parameters
 	if err := c.setupInfluxDB(); err != nil {
 		return err

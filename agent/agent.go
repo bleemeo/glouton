@@ -41,6 +41,7 @@ import (
 	"glouton/debouncer"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/influxdb"
 	"glouton/inputs/docker"
 	"glouton/inputs/statsd"
 	"glouton/logger"
@@ -436,6 +437,13 @@ func (a *agent) run() { //nolint:gocyclo
 			zabbixResponse,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "zabbix"})
+	}
+	if a.config.Bool("influxDB.enabled") {
+		server := influxdb.New(
+			fmt.Sprintf("%s", a.config.String("infuxdb.address")),
+			fmt.Sprintf("%s", a.config.String("influxdb.data_base_name")),
+		)
+		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
 	}
 
 	if a.bleemeoConnector == nil {
