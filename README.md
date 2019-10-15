@@ -23,6 +23,7 @@ sudo apt install golang-1.12 git
 export PATH=/usr/lib/go-1.12/bin:$PATH
 
 (cd /tmp; GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1)
+(cd /tmp; GO111MODULE=on go get github.com/goreleaser/goreleaser@v0.119)
 ```
 
 - If not yet done, activate Golang 1.12:
@@ -69,7 +70,7 @@ cp -r ../bleemeo-agent-ui/dist/js api/static/assets
 - Build the release binaries and Docker image:
 
 ```
-docker build -t glouton/glouton:latest .
+~/go/bin/goreleaser --rm-dist --snapshot
 ```
 
 ### Note on VS code

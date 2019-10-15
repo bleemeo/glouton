@@ -8,11 +8,9 @@ FROM gcr.io/distroless/base
 
 LABEL MAINTAINER="Bleemeo Docker Maintainers <packaging-team@bleemeo.com>"
 
-ENV DEBIAN_FRONTEND noninteractive
-
 ADD packaging/common/bleemeo-05-system.conf /etc/bleemeo/agent.conf.d/05-system.conf
 ADD 60-bleemeo.conf /etc/bleemeo/agent.conf.d/
-COPY agentgo-x86_64 /agentgo
+COPY glouton /glouton
 
 #USER bleemeo
-CMD ["/agentgo", "--yes-run-as-root"]
+CMD ["/glouton", "--yes-run-as-root"]

@@ -20,6 +20,7 @@ import (
 	"flag"
 	"fmt"
 	"glouton/agent"
+	versionPkg "glouton/version"
 	"os"
 
 	_ "net/http/pprof"
@@ -30,7 +31,19 @@ var (
 	runAsRoot = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
 )
 
+//nolint: gochecknoglobals
+var (
+	version string
+	commit  string
+)
+
 func main() {
+	if version != "" {
+		versionPkg.Version = version
+	}
+	if commit != "" {
+		versionPkg.BuildHash = commit
+	}
 	flag.Parse()
 	if os.Getuid() == 0 && !*runAsRoot {
 		fmt.Println("Error: trying to run Glouton as root without \"--yes-run-as-root\" option.")

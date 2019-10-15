@@ -12,5 +12,6 @@
 /agent-go
 /agentgo*
 /glouton*
+/dist
 *-packr.go
 api/static/assets/js
