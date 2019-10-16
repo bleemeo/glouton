@@ -19,36 +19,35 @@ package influxdb
 import (
 	"context"
 	"fmt"
+	"glouton/store"
 	"glouton/types"
 	"math"
+	"os"
+	"sync"
 	"time"
 
-	"sync"
-
+	client "github.com/influxdata/influxdb1-client/v2"
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
-// Point is the influxBD MetricPoint
-type Point struct {
-	// à vérifier si cette struct n'existe pas dans le clien influxdb
-}
-
 // Client is an MQTT client for Bleemeo Cloud platform
 type Client struct {
-	serverAddress         string
-	dataBaseName          string
-	influxClient          influxDBClient.Client
-	lock                  sync.Mutex
-	bleemeoPendingPoints  []types.MetricPoint
-	InfluxDBPendingPoints []Point
+	serverAddress        string
+	dataBaseName         string
+	influxClient         influxDBClient.Client
+	store                *store.Store
+	lock                 sync.Mutex
+	gloutonPendingPoints []types.MetricPoint
+	influxDBBatchPoints  influxDBClient.BatchPoints
 }
 
 // New create a new influxDB client
-func New(serverAddress, dataBaseName string) *Client {
+func New(serverAddress, dataBaseName string, storeAgent *store.Store) *Client {
 	return &Client{
 		serverAddress: serverAddress,
 		dataBaseName:  dataBaseName,
 		influxClient:  nil,
+		store:         storeAgent,
 	}
 }
 
@@ -72,6 +71,11 @@ func (c *Client) doConnect() (bool, error) {
 	response, err := influxClient.Query(query)
 	if err == nil && response.Error() == nil {
 		fmt.Println("Database created: ", response.Results)
+		bp, _ := influxDBClient.NewBatchPoints(client.BatchPointsConfig{
+			Database:  c.dataBaseName,
+			Precision: "s",
+		})
+		c.influxDBBatchPoints = bp
 		return true, nil
 	}
 
@@ -106,11 +110,29 @@ func (c *Client) connect(ctx context.Context) {
 func (c *Client) addPoints(points []types.MetricPoint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.bleemeoPendingPoints = append(c.bleemeoPendingPoints, points...)
+	c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
 }
 
 // Convert the BleemeoPendingPoints in InfluxDBPendingPoints
 func (c *Client) convertPendingPoints() {
+	for _, metricPoint := range c.gloutonPendingPoints {
+		measurement := metricPoint.Labels["label"]
+		time := metricPoint.PointStatus.Point.Time
+		fields := map[string]interface{}{
+			"value": metricPoint.PointStatus.Point.Value,
+		}
+		tags := metricPoint.Labels
+		delete(tags, "label")
+		tags["status"] = metricPoint.PointStatus.StatusDescription.StatusDescription
+		hostname, _ := os.Hostname()
+		tags["hostname"] = hostname
+		pt, err := client.NewPoint(measurement, tags, fields, time)
+		if err != nil {
+			fmt.Println("Error : impossible to create the influxMetricPoint: ", measurement)
+		}
+		c.influxDBBatchPoints.AddPoint(pt)
+	}
+
 }
 
 // Run the influxDB service
@@ -120,7 +142,7 @@ func (c *Client) Run(ctx context.Context) error {
 	c.connect(ctx)
 
 	// Suscribe to the Store to receive the metrics
-	storeNotifieeID := c.option.Store.AddNotifiee(c.addPoints)
+	c.store.AddNotifiee(c.addPoints)
 
 	// Convert the BleemeoPendingPoints in InfluxDBPendingPoints
 	c.convertPendingPoints()

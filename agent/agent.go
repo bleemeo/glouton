@@ -442,6 +442,7 @@ func (a *agent) run() { //nolint:gocyclo
 		server := influxdb.New(
 			fmt.Sprintf("%s", a.config.String("infuxdb.address")),
 			fmt.Sprintf("%s", a.config.String("influxdb.data_base_name")),
+			a.store,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
 	}
