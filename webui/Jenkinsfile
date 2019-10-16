@@ -1,0 +1,34 @@
+node {
+  try {
+    stage('Clean') {
+      sh '''
+      docker run --rm -v $(pwd):/srv/data -w /srv/data node:11 rm -rf node_modules
+      docker run --rm -v $(pwd):/srv/data -w /srv/data node:11 npm run clean
+      '''
+    }
+
+    deleteDir()
+
+    stage('Clone') {
+      checkout scm
+    }
+
+    stage('Build') {
+      sh '''
+      docker run --rm -v $(pwd):/srv/data -w /srv/data node:11 npm i
+      docker run --rm -v $(pwd):/srv/data -w /srv/data node:11 npm run deploy
+      '''
+    }
+
+    if(env.BRANCH_NAME == 'master'){
+      stage('Rsync') {
+        sh '''
+        rsync -av --delete-after --exclude *.map dist/ /srv/www/cdn.bleemeo.com/htdocs/bleemeo/agent-ui/
+        '''
+      }
+    }
+  } catch(err) {
+    currentBuild.result = 'FAILED'
+    throw err
+  }
+}

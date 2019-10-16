@@ -1,0 +1,41 @@
+{
+  "parser" : "babel-eslint",
+  "env": {
+    "browser" : true,
+    "es6": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 6,
+    "sourceType": "module",
+    "ecmaFeatures": {
+      "jsx": true
+    }
+  },
+  "globals": {
+    "__DEV__"    : false,
+    "__DEBUG__"  : false
+  },
+  "plugins": [
+    "react",
+    "babel",
+    "import",
+    "prettier"
+  ],
+  "extends": [
+    "prettier",
+    "standard",
+    "standard-react"
+  ],
+  "settings": {
+    "import/ignore": [".png$", ".scss$"]
+  },
+  "rules": {
+    "space-before-function-paren": "off",
+    "generator-star-spacing": ["error", {
+      "before": false,
+      "after": true
+    }],
+    "jsx-quotes": "off",
+    "no-unneeded-ternary": "off"
+  }
+}

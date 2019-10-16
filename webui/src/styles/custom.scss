@@ -1,0 +1,24 @@
+$body-bg:    #f7f7f7 !default;
+$body-color: #73879C;
+
+// we don't like the default blue of Bootstrap 4 for the primary btn
+$btn-primary-bg:             #528bd1 !default;
+
+// change the padding of btn-sm so they looks like the one of alpha2
+$btn-padding-x-sm:               .75rem !default;
+$btn-padding-y-sm:               .40rem !default;
+
+$card-border-radius:              0 !default;
+$card-border-radius-inner:        0 !default;
+
+//
+$pagination-padding-y-sm:           .1rem !default;
+$pagination-padding-x-sm:           .1rem !default;
+
+// No rounded corner for list-group
+$list-group-border-radius:        0 !default;
+
+// old Modal size
+$modal-lg:                    900px !default;
+$modal-md:                    600px !default;
+$modal-sm:                    300px !default;

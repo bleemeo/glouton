@@ -1,0 +1,14 @@
+[ignore]
+.*/dist
+.*/node_modules
+.*/webpack
+*.scss
+
+[include]
+/src
+
+[libs]
+flow_libs/
+
+[options]
+esproposal.class_instance_fields=enable
