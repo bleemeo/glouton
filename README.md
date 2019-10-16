@@ -57,7 +57,7 @@ go run glouton
 - To include the Agent UI (http://localhost:8015), copy resulting JS files from bleemeo-agent-ui
 
 ```
-cp -r ../bleemeo-agent-ui/dist/js api/static/assets
+(cd ./webui && npm i && npm run deploy)
 ```
 
 - Prepare a release (or just run some test and linter during development):
