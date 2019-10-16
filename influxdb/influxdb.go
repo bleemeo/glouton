@@ -132,7 +132,25 @@ func (c *Client) convertPendingPoints() {
 		}
 		c.influxDBBatchPoints.AddPoint(pt)
 	}
+}
 
+// Send points and retry when it fails
+func (c *Client) sendPoints() error {
+	err := c.influxClient.Write(c.influxDBBatchPoints)
+	// If the write function succed we create a new batchPoint
+	if err == nil {
+		newBp, _ := influxDBClient.NewBatchPoints(client.BatchPointsConfig{
+			Database:  c.dataBaseName,
+			Precision: "s",
+		})
+		c.influxDBBatchPoints = newBp
+		return nil
+	}
+
+	// If the write function failed we don't refresh the batchPoint
+	// To send again the points
+	fmt.Println("Error while sending metrics to influxDB server: ", err.Error())
+	return err
 }
 
 // Run the influxDB service
