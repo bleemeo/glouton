@@ -170,7 +170,22 @@ func (c *Client) Run(ctx context.Context) error {
 	// Suscribe to the Store to receive the metrics
 	c.store.AddNotifiee(c.addPoints)
 
-	// Convert the BleemeoPendingPoints in InfluxDBPendingPoints
-	c.convertPendingPoints()
+	// Initialize a ticker of 10 seconds
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	for ctx.Err() == nil {
+		// Convert the BleemeoPendingPoints in InfluxDBPendingPoints
+		c.convertPendingPoints()
+
+		// Send the point to the server
+		c.sendPoints()
+
+		// Wait the ticker or the and of the programm
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+		}
+	}
 	return nil
 }
