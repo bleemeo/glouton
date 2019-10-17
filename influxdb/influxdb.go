@@ -22,11 +22,9 @@ import (
 	"glouton/store"
 	"glouton/types"
 	"math"
-	"os"
 	"sync"
 	"time"
 
-	client "github.com/influxdata/influxdb1-client/v2"
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
@@ -51,15 +49,15 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store) *Client {
 	}
 }
 
-// Connect influxDB client to the server and returns true if the connection is established
-func (c *Client) doConnect() (bool, error) {
+// doConnect connects an influxDB client to the server and returns true if the connection is established
+func (c *Client) doConnect() error {
 	// Create the influxBD client
 	influxClient, err := influxDBClient.NewHTTPClient(influxDBClient.HTTPConfig{
 		Addr: c.serverAddress,
 	})
 	if err != nil {
 		fmt.Println("Error creating InfluxDB Client: ", err.Error())
-		return false, err
+		return err
 	}
 	fmt.Println("Connexion influxDB succed")
 	c.influxClient = influxClient
@@ -71,30 +69,30 @@ func (c *Client) doConnect() (bool, error) {
 	response, err := influxClient.Query(query)
 	if err == nil && response.Error() == nil {
 		fmt.Println("Database created: ", response.Results)
-		bp, _ := influxDBClient.NewBatchPoints(client.BatchPointsConfig{
+		bp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
 			Database:  c.dataBaseName,
 			Precision: "s",
 		})
 		c.influxDBBatchPoints = bp
-		return true, nil
+		return nil
 	}
 
 	// If the database creation failed we print and return the error
 	if response.Error() != nil {
 		fmt.Println("Error creating InfluxDB DATABASE: ", response.Error())
-		return false, response.Error()
+		return response.Error()
 	}
 	fmt.Println("Error creating InfluxDB DATABASE: ", err.Error())
-	return false, err
+	return err
 }
 
-// Try to connect the influxDB client to the server and create the database.
-// Retry this operation after a delay if it fails.
+// connect tries to connect the influxDB client to the server and create the database.
+// connect retries this operation after a delay if it fails.
 func (c *Client) connect(ctx context.Context) {
 	var sleepDelay time.Duration = 10 * time.Second
 	for ctx.Err() != nil {
-		connectionSucced, _ := c.doConnect()
-		if connectionSucced == true {
+		err := c.doConnect()
+		if err == nil {
 			return
 		}
 		select {
@@ -106,27 +104,33 @@ func (c *Client) connect(ctx context.Context) {
 	}
 }
 
-// Add metrics points to the the client attribute BleemeopendingPoints
+// addPoints adds metrics points to the the client attribute BleemeopendingPoints
 func (c *Client) addPoints(points []types.MetricPoint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
 }
 
-// Convert the BleemeoPendingPoints in InfluxDBPendingPoints
+// convertPendingPoints converts the BleemeoPendingPoints in InfluxDBPendingPoints
 func (c *Client) convertPendingPoints() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	// For each metricPoint received in gloutonPendingPoints this block creates an influxDBPoint
+	// and adds it to the influxDBBatchPoints
 	for _, metricPoint := range c.gloutonPendingPoints {
-		measurement := metricPoint.Labels["label"]
+		measurement := metricPoint.Labels["__name__"]
 		time := metricPoint.PointStatus.Point.Time
 		fields := map[string]interface{}{
 			"value": metricPoint.PointStatus.Point.Value,
 		}
-		tags := metricPoint.Labels
-		delete(tags, "label")
+		tags := make(map[string]string)
+		for key, value := range metricPoint.Labels {
+			tags[key] = value
+		}
+		delete(tags, "__name__")
 		tags["status"] = metricPoint.PointStatus.StatusDescription.StatusDescription
-		hostname, _ := os.Hostname()
-		tags["hostname"] = hostname
-		pt, err := client.NewPoint(measurement, tags, fields, time)
+
+		pt, err := influxDBClient.NewPoint(measurement, tags, fields, time)
 		if err != nil {
 			fmt.Println("Error : impossible to create the influxMetricPoint: ", measurement)
 		}
@@ -134,26 +138,30 @@ func (c *Client) convertPendingPoints() {
 	}
 }
 
-// Send points and retry when it fails
+// sendPoints sends points and retry when it fails
 func (c *Client) sendPoints() error {
+	c.lock.Lock()
+	defer c.lock.Unlock()
 	err := c.influxClient.Write(c.influxDBBatchPoints)
-	// If the write function succed we create a new batchPoint
-	if err == nil {
-		newBp, _ := influxDBClient.NewBatchPoints(client.BatchPointsConfig{
-			Database:  c.dataBaseName,
-			Precision: "s",
-		})
-		c.influxDBBatchPoints = newBp
-		return nil
+
+	// If the write function failed we don't refresh the batchPoint and send an error
+	// to retry later
+	if err != nil {
+		fmt.Println("Error while sending metrics to influxDB server: ", err.Error())
+		return err
 	}
 
-	// If the write function failed we don't refresh the batchPoint
-	// To send again the points
-	fmt.Println("Error while sending metrics to influxDB server: ", err.Error())
-	return err
+	// If the write function succed we create a new empty batchPoint
+	// to receive the new points
+	newBp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
+		Database:  c.dataBaseName,
+		Precision: "s",
+	})
+	c.influxDBBatchPoints = newBp
+	return nil
 }
 
-// Run the influxDB service
+// Run runs the influxDB service
 func (c *Client) Run(ctx context.Context) error {
 
 	// Connect the client to the server and create the database
