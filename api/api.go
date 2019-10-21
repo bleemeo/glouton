@@ -114,7 +114,8 @@ func (api API) Run(ctx context.Context) error {
 		}
 		close(idleConnsClosed)
 	}()
-	logger.Printf("Starting API on %s", api.bindAddress)
+    logger.Printf("Starting API on %s ✔️", api.bindAddress)
+    logger.Printf("To access the local panel connect to http://%s 🌐", api.bindAddress)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}
