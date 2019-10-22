@@ -74,7 +74,7 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 
 	var answer reducedPacket
 	if decodedRequest.buffer == "_NRPE_CHECK" {
-		answer.buffer = fmt.Sprintf("NRPE v3 (Bleemeo Agent %v)", version.Version)
+		answer.buffer = fmt.Sprintf("NRPE v3 (Glouton %v)", version.Version)
 	} else {
 		answer.buffer, answer.resultCode, err = cb(ctx, decodedRequest.buffer)
 	}
@@ -288,7 +288,7 @@ func certTemplate() (*x509.Certificate, error) {
 
 	tmpl := x509.Certificate{
 		SerialNumber:          serialNumber,
-		Subject:               pkix.Name{Organization: []string{"Bleemeo"}},
+		Subject:               pkix.Name{Organization: []string{"Glouton"}},
 		SignatureAlgorithm:    x509.SHA256WithRSA,
 		IsCA:                  true,
 		NotBefore:             time.Now(),

@@ -29,5 +29,5 @@ var (
 
 // UserAgent returns the User-Agent for request performed by the agent
 func UserAgent() string {
-	return fmt.Sprintf("Bleemeo Agent %s", Version)
+	return fmt.Sprintf("Glouton %s", Version)
 }

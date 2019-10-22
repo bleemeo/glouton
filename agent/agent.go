@@ -154,7 +154,7 @@ func (a *agent) setupLogger() {
 	logger.SetPkgLevels(a.config.String("logging.package_levels"))
 }
 
-// Run runs the Bleemeo agent
+// Run runs Glouton
 func Run() {
 	agent := &agent{
 		taskRegistry: task.NewRegistry(context.Background()),
@@ -339,7 +339,7 @@ func (a *agent) run() { //nolint:gocyclo
 			currentMac = facts["primary_mac_address"]
 		}
 		if currentMac == initialMac || currentMac == "" || initialMac == "" {
-			logger.Printf("Not starting bleemeo-agent since installation for creation of a cloud image was requested and agent is still running on the same machine")
+			logger.Printf("Not starting Glouton since installation for creation of a cloud image was requested and agent is still running on the same machine")
 			logger.Printf("If this is wrong and agent should run on this machine, remove %#v file", cloudImageFile)
 			return
 		}

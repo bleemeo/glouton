@@ -407,7 +407,7 @@ func notifyError(err error, lastErrorNotify time.Time, reconnectAttempt int) tim
 			"The agent is not permitted to access Docker, the Docker integration will be disabled.",
 		)
 		logger.Printf(
-			"'adduser bleemeo docker' and a restart of the Agent should fix this issue",
+			"'adduser glouton docker' and a restart of the Agent should fix this issue",
 		)
 	} else if isDockerRunning() {
 		logger.Printf("Unable to contact Docker: %v", err)
