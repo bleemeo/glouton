@@ -202,7 +202,7 @@ const AgentDetails = ({ facts }) => {
                   ) : null}
                   <li>
                     <div className="d-flex flex-row align-items-center">
-                      <b style={{ marginRight: '0.4rem' }}>Is connected to Glouton ?</b>
+                      <b style={{ marginRight: '0.4rem' }}>Is connected to Bleemeo ?</b>
                       <div className={agentInformation.isConnected ? 'isConnected' : 'isNotConnected'} />
                     </div>
                   </li>
