@@ -1,0 +1,3 @@
+#!/bin/sh
+
+glouton-netstat 2> /dev/null || true

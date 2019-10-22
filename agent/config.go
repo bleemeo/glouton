@@ -205,16 +205,6 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 func (a *agent) loadConfiguration() (cfg *config.Configuration, warnings []error, finalError error) {
 	cfg = &config.Configuration{}
 
-	if err := configLoadFile("/etc/bleemeo/agent.conf", cfg); err != nil && !os.IsNotExist(err) && !os.IsPermission(err) {
-		finalError = err
-	} else if err != nil && os.IsPermission(err) {
-		warnings = append(warnings, err)
-	}
-	if err := cfg.LoadDirectory("/etc/bleemeo/agent.conf.d"); err != nil && !os.IsNotExist(err) && !os.IsPermission(err) {
-		finalError = err
-	} else if err != nil && os.IsPermission(err) {
-		warnings = append(warnings, err)
-	}
 	if err := configLoadFile("/etc/glouton/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
 		finalError = err
 	}

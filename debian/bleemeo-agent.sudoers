@@ -1,2 +1,0 @@
-bleemeo     ALL=(root) NOPASSWD: /usr/sbin/service telegraf restart
-bleemeo     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf

@@ -2,14 +2,14 @@ import dnf
 import subprocess
 
 
-class BleemeoPlugin(dnf.Plugin):
-    name = "bleemeo"
+class GloutonPlugin(dnf.Plugin):
+    name = "glouton"
 
     def __init__(self, base, cli):
-        super(BleemeoPlugin, self).__init__(base, cli)
+        super(GloutonPlugin, self).__init__(base, cli)
 
     def transaction(self):
         subprocess.call(
-            ["/usr/lib/bleemeo/bleemeo-hook-package-modified"],
+            ["/usr/lib/glouton/glouton-hook-package-modified"],
             stderr=open('/dev/null', 'w'),
         )

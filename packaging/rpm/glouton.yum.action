@@ -1,0 +1,2 @@
+# yum-plugin-post-transaction-actions file
+*:any:/usr/lib/glouton/glouton-hook-package-modified 2> /dev/null || true

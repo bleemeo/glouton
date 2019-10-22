@@ -1,12 +1,13 @@
 [Unit]
-Description=Bleemeo agent
+Description=Glouton
+Documentation=https://bleemeo.com
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/bleemeo-agent
+ExecStart=/usr/bin/glouton
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
-User=bleemeo
+User=glouton
 
 [Install]
 WantedBy=multi-user.target

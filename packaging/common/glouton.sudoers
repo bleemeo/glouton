@@ -1,0 +1,2 @@
+Defaults:glouton !requiretty
+glouton     ALL=(root) NOPASSWD: /bin/cat /etc/mysql/debian.cnf
