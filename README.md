@@ -54,7 +54,7 @@ export GLOUTON_LOGGING_LEVEL=0  # 0: is the default. Increase to get more logs
 go run glouton
 ```
 
-- To include the Agent UI (http://localhost:8015), copy resulting JS files from bleemeo-agent-ui
+- To include the Agent UI (http://localhost:8015), run
 
 ```
 (cd ./webui && npm i && npm run deploy)
