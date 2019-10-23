@@ -21,6 +21,9 @@ case "$1" in
         userdel --force glouton > /dev/null
         groupdel glouton > /dev/null
         ;;
+    1)
+        # Upgrade on rpm-distribution
+        systemctl try-restart glouton.service
 esac
 
 exit 0

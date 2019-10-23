@@ -87,12 +87,9 @@ elif [ "$1" = "1" ] ; then
     # Initial installation on rpm-like system
     systemctl daemon-reload
     systemctl enable --quiet --now glouton.service
-else
-    # Upgrade
-    systemctl daemon-reload
-    if systemctl is-enabled glouton.service; then
-        systemctl start glouton.service
-    fi
+elif [ "$1" = "configure" ]; then
+    # Upgrade on Debian
+    systemctl start glouton.service
 fi
 
 exit 0
