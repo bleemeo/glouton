@@ -76,13 +76,14 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
 
-	reg := prometheus.NewPedanticRegistry()
+	reg := prometheus.NewRegistry()
 	reg.MustRegister(
 		api,
 		prometheus.NewGoCollector(),
 		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
 	)
-	router.Handle("/metrics", promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg})))
+	addNodeExporter(reg)
+	router.Handle("/metrics", promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
@@ -114,8 +115,8 @@ func (api API) Run(ctx context.Context) error {
 		}
 		close(idleConnsClosed)
 	}()
-    logger.Printf("Starting API on %s ✔️", api.bindAddress)
-    logger.Printf("To access the local panel connect to http://%s 🌐", api.bindAddress)
+	logger.Printf("Starting API on %s ✔️", api.bindAddress)
+	logger.Printf("To access the local panel connect to http://%s 🌐", api.bindAddress)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}

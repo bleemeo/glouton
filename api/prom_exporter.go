@@ -17,11 +17,28 @@
 package api
 
 import (
+	"glouton/logger"
 	"glouton/types"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/node_exporter/collector"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
+
+func addNodeExporter(reg prometheus.Registerer) {
+	if _, err := kingpin.CommandLine.Parse(nil); err != nil {
+		logger.Printf("Failed to initialize kingpin (used by Prometheus node_exporter): %v", err)
+	}
+	collector, err := collector.NewNodeCollector()
+	if err != nil {
+		logger.Printf("Failed to create node_exporter: %v", err)
+	}
+	err = reg.Register(collector)
+	if err != nil {
+		logger.Printf("Failed to register node_exporter: %v", err)
+	}
+}
 
 // Return the most recent point. ok is false if no point are found
 func getLastPoint(m types.Metric) (point types.Point, ok bool) {
