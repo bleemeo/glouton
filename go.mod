@@ -65,3 +65,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20190924164351-c8b7dadae555
 	gotest.tools v2.2.0+incompatible // indirect
 )
+
+replace github.com/karrick/godirwalk => github.com/karrick/godirwalk v1.11.1
