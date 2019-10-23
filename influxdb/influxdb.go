@@ -57,10 +57,10 @@ func (c *Client) doConnect() error {
 		Addr: c.serverAddress,
 	})
 	if err != nil {
-		logger.V(1).Printl("Error creating InfluxDB Client: ", err.Error())
+		logger.V(1).Printf("Error creating InfluxDB Client: ", err.Error())
 		return err
 	}
-	logger.V(1).Printl("Connexion influxDB succed")
+	logger.V(1).Printf("Connexion influxDB succed")
 	c.influxClient = influxClient
 
 	// Create the database
@@ -69,7 +69,7 @@ func (c *Client) doConnect() error {
 	}
 	response, err := influxClient.Query(query)
 	if err == nil && response.Error() == nil {
-		logger.V(1).Printl("Database created: ", response.Results)
+		logger.V(1).Printf("Database created: ", response.Results)
 		bp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
 			Database:  c.dataBaseName,
 			Precision: "s",
@@ -80,10 +80,10 @@ func (c *Client) doConnect() error {
 
 	// If the database creation failed we print and return the error
 	if response.Error() != nil {
-		logger.V(1).Printl("Error creating InfluxDB DATABASE: ", response.Error())
+		logger.V(1).Printf("Error creating InfluxDB DATABASE: ", response.Error())
 		return response.Error()
 	}
-	logger.V(1).Printl("Error creating InfluxDB DATABASE: ", err.Error())
+	logger.V(1).Printf("Error creating InfluxDB DATABASE: ", err.Error())
 	return err
 }
 
@@ -133,7 +133,7 @@ func (c *Client) convertPendingPoints() {
 
 		pt, err := influxDBClient.NewPoint(measurement, tags, fields, time)
 		if err != nil {
-			logger.V(1).Printl("Error : impossible to create the influxMetricPoint: ", measurement)
+			logger.V(1).Printf("Error : impossible to create the influxMetricPoint: ", measurement)
 		}
 		c.influxDBBatchPoints.AddPoint(pt)
 	}
@@ -148,7 +148,7 @@ func (c *Client) sendPoints() error {
 	// If the write function failed we don't refresh the batchPoint and send an error
 	// to retry later
 	if err != nil {
-		logger.V(1).Printl("Error while sending metrics to influxDB server: ", err.Error())
+		logger.V(1).Printf("Error while sending metrics to influxDB server: ", err.Error())
 		return err
 	}
 
