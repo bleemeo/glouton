@@ -7,8 +7,12 @@ case "$1" in
 esac
 
 case "$1" in
-    upgrade|remove)
+    upgrade)
         # On Debian, we stop in pre-remove.
+        systemctl stop glouton.service
+        ;;
+    remove)
+        systemctl --no-reload disable glouton.service
         systemctl stop glouton.service
         ;;
     0)

@@ -28,6 +28,9 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
     cp -a /var/lib/bleemeo/state.json /var/lib/glouton/state.json
     chown glouton:glouton /var/lib/glouton/state.json
     for filename in `ls /etc/bleemeo/agent.conf.d`; do
+        if [ "$filename" = "99-disabled-by-glouton.conf" ]; then
+            continue
+        fi
         if [ ! -e "/etc/glouton/agent.conf.d/$filename" ]; then
             echo "Copy config $filename"
             cp -a "/etc/bleemeo/agent.conf.d/$filename" "/etc/glouton/agent.conf.d/$filename"
@@ -79,17 +82,14 @@ glouton-gather-facts
 glouton-netstat
 
 
-if [ "$1" = "configure" -a "$2" = "" ] ; then
-    # Initial installation on Debian-like system
+if [ "$1" = "configure" ] ; then
+    # Installation or upgrade on Debian-like system
     systemctl daemon-reload
     systemctl enable --quiet --now glouton.service
 elif [ "$1" = "1" ] ; then
     # Initial installation on rpm-like system
     systemctl daemon-reload
     systemctl enable --quiet --now glouton.service
-elif [ "$1" = "configure" ]; then
-    # Upgrade on Debian
-    systemctl start glouton.service
 fi
 
 exit 0
