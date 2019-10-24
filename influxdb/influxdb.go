@@ -52,52 +52,40 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store) *Client {
 
 // doConnect connects an influxDB client to the server and returns true if the connection is established
 func (c *Client) doConnect() error {
+
 	// Create the influxBD client
-	influxClient, err := influxDBClient.NewHTTPClient(influxDBClient.HTTPConfig{
-		Addr: c.serverAddress,
-	})
-	if err != nil {
-		logger.V(1).Printf("Error creating InfluxDB Client: ", err.Error())
-		return err
 	}
-	logger.V(1).Printf("Connexion influxDB succed")
-	c.influxClient = influxClient
 
 	// Create the database
 	query := influxDBClient.Query{
 		Command: fmt.Sprintf("CREATE DATABASE %s", c.dataBaseName),
 	}
-	response, err := influxClient.Query(query)
-	if err == nil && response.Error() == nil {
-		logger.V(1).Printf("Database created: ", response.Results)
 		bp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
 			Database:  c.dataBaseName,
 			Precision: "s",
 		})
 		c.influxDBBatchPoints = bp
+		logger.V(1).Printf("Database created: %s", c.dataBaseName)
 		return nil
 	}
 
-	// If the database creation failed we print and return the error
-	if response.Error() != nil {
-		logger.V(1).Printf("Error creating InfluxDB DATABASE: ", response.Error())
-		return response.Error()
 	}
-	logger.V(1).Printf("Error creating InfluxDB DATABASE: ", err.Error())
-	return err
 }
 
 // connect tries to connect the influxDB client to the server and create the database.
 // connect retries this operation after a delay if it fails.
 func (c *Client) connect(ctx context.Context) {
 	var sleepDelay time.Duration = 10 * time.Second
-	for ctx.Err() != nil {
+	for ctx.Err() == nil {
 		err := c.doConnect()
 		if err == nil {
+			logger.V(1).Printf("Connexion to the influxdb server '%s' succed", c.serverAddress)
 			return
 		}
+		logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v", c.serverAddress, sleepDelay)
 		select {
 		case <-ctx.Done():
+			logger.V(1).Printf("The context is ended, stop trying to conect to the influxdb server")
 			return
 		case <-time.After(sleepDelay * time.Second):
 		}
@@ -133,7 +121,7 @@ func (c *Client) convertPendingPoints() {
 
 		pt, err := influxDBClient.NewPoint(measurement, tags, fields, time)
 		if err != nil {
-			logger.V(1).Printf("Error : impossible to create the influxMetricPoint: ", measurement)
+			logger.V(1).Printf("Error: impossible to create the influxMetricPoint: %s", measurement)
 		}
 		c.influxDBBatchPoints.AddPoint(pt)
 	}
@@ -148,16 +136,20 @@ func (c *Client) sendPoints() error {
 	// If the write function failed we don't refresh the batchPoint and send an error
 	// to retry later
 	if err != nil {
-		logger.V(1).Printf("Error while sending metrics to influxDB server: ", err.Error())
+		logger.V(1).Printf("Error while sending metrics to influxDB server: %s", err.Error())
 		return err
 	}
 
 	// If the write function succed we create a new empty batchPoint
 	// to receive the new points
-	newBp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
+	newBp, err := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
 		Database:  c.dataBaseName,
 		Precision: "s",
 	})
+	if err != nil {
+		logger.V(1).Printf("Error creating BatchPoints for influxdb: %s", err.Error())
+		return err
+	}
 	c.influxDBBatchPoints = newBp
 	return nil
 }

@@ -445,6 +445,7 @@ func (a *agent) run() { //nolint:gocyclo
 			a.store,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
+		logger.V(1).Printf("Influxdb is activated !")
 	}
 
 	if a.bleemeoConnector == nil {
