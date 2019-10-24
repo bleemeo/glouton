@@ -19,9 +19,9 @@ package influxdb
 import (
 	"context"
 	"fmt"
+	"glouton/logger"
 	"glouton/store"
 	"glouton/types"
-	"glouton/logger"
 	"math"
 	"sync"
 	"time"
@@ -54,6 +54,23 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store) *Client {
 func (c *Client) doConnect() error {
 
 	// Create the influxBD client
+	if c.influxClient == nil {
+		influxClient, err := influxDBClient.NewHTTPClient(influxDBClient.HTTPConfig{
+			Addr: c.serverAddress,
+		})
+		if err != nil {
+			logger.V(1).Printf("Error creating InfluxDB Client: ", err.Error())
+			return err
+		}
+		c.influxClient = influxClient
+		logger.V(1).Printf("InfluxDB client created")
+	}
+
+	// Test the conectivity to the server
+	_, _, pingErr := c.influxClient.Ping(5 * time.Second)
+	if pingErr != nil {
+		logger.V(1).Printf("Impossible to contact the influxDB server %s : %s", c.serverAddress, pingErr)
+		return pingErr
 	}
 
 	// Create the database
