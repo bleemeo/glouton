@@ -55,6 +55,7 @@ type ProcessProvider struct {
 	containerIDFromCGroup func(int) string
 
 	processes           map[int]Process
+	pidExists           func(int32) (bool, error)
 	topinfo             TopInfo
 	lastCPUtimes        cpu.TimesStat
 	lastProcessesUpdate time.Time
@@ -131,6 +132,7 @@ func NewProcess(useProc bool, hostRootPath string, dockerProvider *DockerProvide
 			dockerProvider: dockerProvider,
 		},
 		containerIDFromCGroup: containerIDFromCGroup,
+		pidExists:             process.PidExists,
 	}
 	if useProc {
 		ps := psutilLister{}
@@ -474,7 +476,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 					}
 				}
 				if p.ContainerID == "" {
-					if exists, _ := process.PidExists(int32(p.PID)); !exists {
+					if exists, _ := pp.pidExists(int32(p.PID)); !exists {
 						logger.V(2).Printf("Skipping process %d (%s) terminated recently", p.PID, p.Name)
 						delete(newProcessesMap, pid)
 						continue

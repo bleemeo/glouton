@@ -65,7 +65,7 @@ go run glouton
    - For Telegraf, the update must specify the version: e.g. `go get github.com/influxdata/telegraf@1.12.1`
    - Run Go generate to update generated files (static JS files & GraphQL schema): `go generate glouton/...`
    - Run GoLang linter: `~/go/bin/golangci-lint run ./...`
-   - Run Go tests: `go test glouton/...`
+   - Run Go tests: `go test glouton/... || echo test FAILED`
 
 - Build the release binaries and Docker image:
 

@@ -200,9 +200,59 @@ func (m mockDockerProcess) processesContainer(ctx context.Context, containerID s
 func (m mockDockerProcess) findContainerOfProcess(ctx context.Context, newProcessesMap map[int]Process, p Process, containerDone map[string]bool) []Process {
 	return m.processesResult
 }
+func (m mockDockerProcess) pidExists(pid int32) (bool, error) {
+	for _, p := range m.processesResult {
+		if p.PID == int(pid) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
 
 func TestUpdateProcesses(t *testing.T) {
 	t0 := time.Now().Add(-time.Hour)
+	psutil := mockDockerProcess{
+		processesResult: []Process{
+			{
+				PID:         1,
+				Name:        "init",
+				CreateTime:  t0,
+				ContainerID: "",
+				CPUTime:     999,
+			},
+			{
+				PID:         2,
+				Name:        "[kthreadd]",
+				CreateTime:  t0,
+				ContainerID: "",
+				CPUTime:     999,
+			},
+			{
+				PID:         3,
+				Name:        "[kworker/]",
+				CreateTime:  t0,
+				ContainerID: "",
+				CPUTime:     999,
+			},
+			{
+				PID:         12,
+				Name:        "redis2",
+				CreateTime:  t0,
+				ContainerID: "",
+			},
+			{
+				PID:         42,
+				Name:        "mysql",
+				ContainerID: "",
+			},
+			{
+				PID:         1337,
+				Name:        "golang",
+				CreateTime:  t0,
+				ContainerID: "",
+			},
+		},
+	}
 	pp := ProcessProvider{
 		dp: mockDockerProcess{
 			processesResult: []Process{
@@ -224,43 +274,8 @@ func TestUpdateProcesses(t *testing.T) {
 				"golang-container-id": "golang-name",
 			},
 		},
-		psutil: mockDockerProcess{
-			processesResult: []Process{
-				{
-					PID:         1,
-					Name:        "init",
-					CreateTime:  t0,
-					ContainerID: "",
-					CPUTime:     999,
-				},
-				{
-					PID:         2,
-					Name:        "[kthreadd]",
-					CreateTime:  t0,
-					ContainerID: "",
-					CPUTime:     999,
-				},
-				{
-					PID:         3,
-					Name:        "[kworker/]",
-					CreateTime:  t0,
-					ContainerID: "",
-					CPUTime:     999,
-				},
-				{
-					PID:         12,
-					Name:        "redis2",
-					CreateTime:  t0,
-					ContainerID: "",
-				},
-				{
-					PID:         1337,
-					Name:        "golang",
-					CreateTime:  t0,
-					ContainerID: "",
-				},
-			},
-		},
+		psutil:    psutil,
+		pidExists: psutil.pidExists,
 		containerIDFromCGroup: func(pid int) string {
 			switch pid {
 			case 1, 2, 3:
