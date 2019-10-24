@@ -39,8 +39,10 @@ require (
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/prometheus/client_golang v0.9.3
-	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4 // indirect
+	github.com/prometheus/client_model v0.0.0-20190812154241-14fe0d1b01d4
+	github.com/prometheus/common v0.4.0
 	github.com/prometheus/node_exporter v0.18.1
+	github.com/prometheus/prometheus v2.5.0+incompatible
 	github.com/rs/cors v1.7.0
 	github.com/satori/go.uuid v1.2.0 // indirect
 	github.com/shirou/gopsutil v0.0.0-20190901111213-e4ec7b275ada

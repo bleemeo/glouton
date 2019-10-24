@@ -45,6 +45,8 @@ import (
 	"glouton/inputs/statsd"
 	"glouton/logger"
 	"glouton/nrpe"
+	"glouton/prometheus/exporter"
+	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
 	"glouton/threshold"
@@ -389,7 +391,15 @@ func (a *agent) run() { //nolint:gocyclo
 		a.dockerFact,
 		serivcesOverrideFromInterface(services),
 	)
-	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
+
+	var targets []scrapper.Target
+	if promCfg, found := a.config.Get("metric.prometheus"); found {
+		targets = prometheusConfigToURLs(promCfg)
+	}
+	scrap := scrapper.New(targets)
+	promExporter := exporter.New(a.store, scrap)
+
+	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter)
 
 	a.FireTrigger(true, false, false)
 
@@ -404,6 +414,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.dailyFact, "dailyFact"},
 		{a.dockerWatcher, "dockerWatcher"},
 		{a.netstatWatcher, "netstatWatcher"},
+		{scrap.Run, "prometheusScrapper"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -861,4 +872,33 @@ func setupContainer(hostRootPath string) {
 			os.Setenv("HOST_VAR", hostRootPath)
 		}
 	}
+}
+
+// prometheusConfigToURLs convert metric.prometheus config to a list of URL
+//
+// the config is expected to be a like:
+// config:
+//   your_custom_name_here:
+//     url: http://localhost:9100/metrics
+func prometheusConfigToURLs(config interface{}) (result []scrapper.Target) {
+	configMap, ok := config.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	for name, v := range configMap {
+		vMap, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		url, ok := vMap["url"].(string)
+		if !ok {
+			continue
+		}
+		target := scrapper.Target{URL: url, Name: name}
+		if prefix, ok := vMap["prefix"].(string); ok {
+			target.Prefix = prefix
+		}
+		result = append(result, target)
+	}
+	return result
 }

@@ -14,17 +14,60 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package api
+package exporter
 
 import (
 	"glouton/logger"
 	"glouton/types"
+	"net/http"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/node_exporter/collector"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
+
+// Exporter is a Promtheus export that export metrics from Glouton
+type Exporter struct {
+	db storeInterface
+
+	registry  *prometheus.Registry
+	gatherers prometheus.Gatherers
+	handler   http.Handler
+}
+
+type storeInterface interface {
+	Metrics(filters map[string]string) (result []types.Metric, err error)
+}
+
+// New return a new exporter
+func New(db storeInterface, gatherer prometheus.Gatherer) *Exporter {
+
+	e := &Exporter{
+		db: db,
+	}
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(
+		e,
+		prometheus.NewGoCollector(),
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+	)
+	addNodeExporter(reg)
+	e.registry = reg
+	if gatherer != nil {
+		e.gatherers = prometheus.Gatherers{reg, gatherer}
+	} else {
+		e.gatherers = prometheus.Gatherers{reg}
+	}
+	e.handler = promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(e.gatherers, promhttp.HandlerOpts{}))
+
+	return e
+}
+
+func (e Exporter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
+	e.handler.ServeHTTP(w, req)
+}
 
 func addNodeExporter(reg prometheus.Registerer) {
 	if _, err := kingpin.CommandLine.Parse(nil); err != nil {
@@ -56,12 +99,12 @@ func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 }
 
 // Describe implment Describe of a Prometheus collector
-func (a API) Describe(chan<- *prometheus.Desc) {
+func (e Exporter) Describe(chan<- *prometheus.Desc) {
 }
 
 // Collect implment Collect of a Prometheus collector
-func (a API) Collect(ch chan<- prometheus.Metric) {
-	metrics, err := a.db.Metrics(nil)
+func (e Exporter) Collect(ch chan<- prometheus.Metric) {
+	metrics, err := e.db.Metrics(nil)
 	if err != nil {
 		return
 	}
