@@ -438,10 +438,10 @@ func (a *agent) run() { //nolint:gocyclo
 		)
 		tasks = append(tasks, taskInfo{server.Run, "zabbix"})
 	}
-	if a.config.Bool("influxDB.enabled") {
+	if a.config.Bool("influxdb.enabled") {
 		server := influxdb.New(
-			fmt.Sprintf("%s", a.config.String("infuxdb.address")),
-			fmt.Sprintf("%s", a.config.String("influxdb.data_base_name")),
+			fmt.Sprintf("http://%s:%s", a.config.String("influxdb.host"), a.config.String("influxdb.port")),
+			fmt.Sprintf("%s", a.config.String("influxdb.db_name")),
 			a.store,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
