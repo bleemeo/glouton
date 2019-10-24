@@ -47,17 +47,18 @@ export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
 
+- To build the UI (http://localhost:8015), run
+
+```
+(cd ./webui && npm i && npm run deploy)
+go generate glouton/...
+```
+
 - Run development version of the agent:
 
 ```
 export GLOUTON_LOGGING_LEVEL=0  # 0: is the default. Increase to get more logs
 go run glouton
-```
-
-- To include the Agent UI (http://localhost:8015), run
-
-```
-(cd ./webui && npm i && npm run deploy)
 ```
 
 - Prepare a release (or just run some test and linter during development):
