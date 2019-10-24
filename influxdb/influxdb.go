@@ -116,7 +116,7 @@ func (c *Client) connect(ctx context.Context) {
 		case <-ctx.Done():
 			logger.V(1).Printf("The context is ended, stop trying to conect to the influxdb server")
 			return
-		case <-time.After(sleepDelay * time.Second):
+		case <-time.After(sleepDelay):
 		}
 		sleepDelay = time.Duration(math.Min(sleepDelay.Seconds()*2, 300)) * time.Second
 	}
