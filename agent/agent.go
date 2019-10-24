@@ -404,17 +404,17 @@ func (a *agent) run() { //nolint:gocyclo
 	a.FireTrigger(true, false, false)
 
 	tasks := []taskInfo{
-		{a.store.Run, "store"},
-		{a.triggerHandler.Run, "triggerHandler"},
-		{a.dockerFact.Run, "docker"},
-		{a.collector.Run, "collector"},
-		{api.Run, "api"},
-		{a.healthCheck, "healthCheck"},
-		{a.hourlyDiscovery, "hourlyDiscovery"},
-		{a.dailyFact, "dailyFact"},
-		{a.dockerWatcher, "dockerWatcher"},
-		{a.netstatWatcher, "netstatWatcher"},
-		{scrap.Run, "prometheusScrapper"},
+		{a.store.Run, "Metric store"},
+		{a.triggerHandler.Run, "Internal trigger handler"},
+		{a.dockerFact.Run, "Docker connector"},
+		{a.collector.Run, "Metric collector"},
+		{api.Run, "Local Web UI"},
+		{a.healthCheck, "Agent healthcheck"},
+		{a.hourlyDiscovery, "Service Discovery"},
+		{a.dailyFact, "Facts gatherer"},
+		{a.dockerWatcher, "Docker event watcher"},
+		{a.netstatWatcher, "Netstat file watcher"},
+		{scrap.Run, "Prometheus Scrapper"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -431,7 +431,7 @@ func (a *agent) run() { //nolint:gocyclo
 			UpdateThresholds:       a.UpdateThresholds,
 			UpdateUnits:            a.accumulator.SetUnits,
 		})
-		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "bleemeo"})
+		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 	if a.config.Bool("nrpe.enabled") {
 		server := nrpe.New(
@@ -439,14 +439,14 @@ func (a *agent) run() { //nolint:gocyclo
 			a.config.Bool("nrpe.ssl"),
 			nrpeResponse,
 		)
-		tasks = append(tasks, taskInfo{server.Run, "nrpe"})
+		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
 	if a.config.Bool("zabbix.enabled") {
 		server := zabbix.New(
 			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
 			zabbixResponse,
 		)
-		tasks = append(tasks, taskInfo{server.Run, "zabbix"})
+		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
 	}
 
 	if a.bleemeoConnector == nil {
@@ -525,10 +525,12 @@ func (a *agent) healthCheck(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		}
-		mandatoryTasks := []string{"bleemeo", "collector", "store"}
+		mandatoryTasks := []string{"Bleemeo SAAS connector", "Metric collector", "Metric store"}
 		for _, name := range mandatoryTasks {
-			if a.doesTaskCrashed(ctx, name) {
-				logger.Printf("Gorouting %v crashed. Stopping the agent", name)
+			crashed, err := a.doesTaskCrashed(ctx, name)
+			if crashed {
+				logger.Printf("Task %#v crashed: %v", name, err)
+				logger.Printf("Stopping the agent as task %#v is critical", name)
 				a.cancel()
 			}
 		}
@@ -538,16 +540,19 @@ func (a *agent) healthCheck(ctx context.Context) error {
 	}
 }
 
-func (a *agent) doesTaskCrashed(ctx context.Context, name string) bool {
+// Return true if the given task exited before ctx was terminated
+// Also return the error the tasks returned.
+func (a *agent) doesTaskCrashed(ctx context.Context, name string) (bool, error) {
 	a.l.Lock()
 	defer a.l.Unlock()
 	if id, ok := a.taskIDs[name]; ok {
-		if !a.taskRegistry.IsRunning(id) {
+		running, err := a.taskRegistry.IsRunning(id)
+		if !running {
 			// Re-check ctx to avoid race condition, it crashed only if we are still running
-			return ctx.Err() == nil
+			return ctx.Err() == nil, err
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (a *agent) hourlyDiscovery(ctx context.Context) error {
