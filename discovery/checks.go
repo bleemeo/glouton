@@ -22,6 +22,13 @@ import (
 	"glouton/logger"
 	"glouton/task"
 	"net"
+	"strconv"
+)
+
+const (
+	customCheckTCP    = "tcp"
+	customCheckHTTP   = "http"
+	customCheckNagios = "nagios"
 )
 
 func (d *Discovery) configureChecks(oldServices, services map[nameContainer]Service) {
@@ -58,7 +65,7 @@ func (d *Discovery) createCheck(service Service) {
 
 	logger.V(2).Printf("Add check for service %v on container %s", service.Name, service.ContainerID)
 
-	di := servicesDiscoveryInfo[service.Name]
+	di := servicesDiscoveryInfo[service.ServiceType]
 	var primaryAddress string
 	primaryIP, primaryPort := service.AddressPort()
 	if primaryIP != "" {
@@ -76,7 +83,7 @@ func (d *Discovery) createCheck(service Service) {
 	}
 
 	labels := map[string]string{
-		"service_name": string(service.Name),
+		"service_name": service.Name,
 	}
 	if service.ContainerName != "" {
 		labels["item"] = service.ContainerName
@@ -84,7 +91,7 @@ func (d *Discovery) createCheck(service Service) {
 		labels["container_name"] = service.ContainerName
 	}
 
-	switch service.Name {
+	switch service.ServiceType {
 	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
@@ -102,6 +109,17 @@ func (d *Discovery) createCheck(service Service) {
 		} else {
 			d.createTCPCheck(service, di, "", tcpAddresses, labels)
 		}
+	case CustomService:
+		switch service.ExtraAttributes["check_type"] {
+		case customCheckTCP:
+			d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
+		case customCheckHTTP:
+			d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels)
+		case customCheckNagios:
+			d.createNagiosCheck(service, primaryAddress, labels)
+		default:
+			logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.ExtraAttributes["check_type"], service.Name)
+		}
 	default:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
 	}
@@ -110,7 +128,7 @@ func (d *Discovery) createCheck(service Service) {
 func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
 
 	var tcpSend, tcpExpect, tcpClose []byte
-	switch service.Name {
+	switch service.ServiceType {
 	case DovecoteService:
 		tcpSend = []byte("001 NOOP\n")
 		tcpExpect = []byte("001 OK")
@@ -149,18 +167,44 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 	}
 	url := fmt.Sprintf("http://%s", primaryAddress)
 	expectedStatusCode := 0
-	if service.Name == SquidService {
+	if service.ServiceType == SquidService {
 		// Agent does a normal HTTP request, but squid expect a proxy. It expect
 		// squid to reply with a 400 - Bad request.
 		expectedStatusCode = 400
 	}
-	if service.Name == InfluxDBService {
+	if service.ServiceType == InfluxDBService {
 		url += "/ping"
+	}
+	if service.ServiceType == CustomService && service.ExtraAttributes["http_path"] != "" {
+		url += service.ExtraAttributes["http_path"]
+	}
+	if service.ServiceType == CustomService && service.ExtraAttributes["http_status_code"] != "" {
+		tmp, err := strconv.ParseInt(service.ExtraAttributes["http_status_code"], 10, 0)
+		if err != nil {
+			logger.V(1).Printf("Invalid http_status_code %#v on service %s. Ignoring this option", service.Name, service.ExtraAttributes["http_status_code"])
+		} else {
+			expectedStatusCode = int(tmp)
+		}
 	}
 	httpCheck := check.NewHTTP(
 		url,
 		tcpAddresses,
 		expectedStatusCode,
+		fmt.Sprintf("%s_status", service.Name),
+		labels,
+		d.acc,
+	)
+	d.addCheck(httpCheck.Run, service)
+}
+
+func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string) {
+	var tcpAddress []string
+	if primaryAddress != "" {
+		tcpAddress = []string{primaryAddress}
+	}
+	httpCheck := check.NewNagios(
+		service.ExtraAttributes["check_command"],
+		tcpAddress,
 		fmt.Sprintf("%s_status", service.Name),
 		labels,
 		d.acc,

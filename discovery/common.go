@@ -40,7 +40,7 @@ type PersistentDiscoverer interface {
 }
 
 type nameContainer struct {
-	name          ServiceName
+	name          string
 	containerName string
 }
 
@@ -82,11 +82,14 @@ const (
 	UWSGIService         ServiceName = "uwsgi"
 	VarnishService       ServiceName = "varnish"
 	ZookeeperService     ServiceName = "zookeeper"
+
+	CustomService ServiceName = "__custom__"
 )
 
 // Service is the information found about a given service
 type Service struct {
-	Name            ServiceName
+	Name            string
+	ServiceType     ServiceName
 	ContainerID     string
 	ContainerName   string
 	IPAddress       string // IPAddress is the IPv4 address to reach service for metrics gathering. If empty, it means IP was not found
@@ -136,7 +139,7 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 
 // AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port)
 func (s Service) AddressPort() (string, int) {
-	di := servicesDiscoveryInfo[s.Name]
+	di := servicesDiscoveryInfo[s.ServiceType]
 	port := di.ServicePort
 	force := false
 	if s.ExtraAttributes["port"] != "" {
@@ -305,6 +308,10 @@ var (
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
 			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
+		},
+
+		CustomService: {
+			ExtraAttributeNames: []string{"address", "port", "check_type", "check_command", "http_path", "http_status_code"},
 		},
 	}
 )

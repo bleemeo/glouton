@@ -647,7 +647,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 		if !srv.CheckIgnored {
 			continue
 		}
-		key := serviceNameInstance{name: string(srv.Name), instance: srv.ContainerName}
+		key := serviceNameInstance{name: srv.Name, instance: srv.ContainerName}
 		shortKey, ok := longToShortKeyLookup[key]
 		if !ok {
 			continue

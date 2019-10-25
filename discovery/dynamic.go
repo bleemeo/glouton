@@ -229,12 +229,13 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if !ok {
 			continue
 		}
-		serviceName, ok := serviceByCommand(process.CmdLineList)
+		serviceType, ok := serviceByCommand(process.CmdLineList)
 		if !ok {
 			continue
 		}
 		service := Service{
-			Name:          serviceName,
+			ServiceType:   serviceType,
+			Name:          string(serviceType),
 			ContainerID:   process.ContainerID,
 			ContainerName: process.ContainerName,
 			ExePath:       process.Executable,
@@ -275,7 +276,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			service.HasNetstatInfo = true
 		}
 
-		di := servicesDiscoveryInfo[serviceName]
+		di := servicesDiscoveryInfo[service.ServiceType]
 
 		dd.updateListenAddresses(&service, di)
 
@@ -337,7 +338,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 	if service.ExtraAttributes == nil {
 		service.ExtraAttributes = make(map[string]string)
 	}
-	if service.Name == "mysql" {
+	if service.ServiceType == MySQLService {
 		if service.container != nil {
 			for _, e := range service.container.Env() {
 				if strings.HasPrefix(e, "MYSQL_ROOT_PASSWORD=") {
@@ -354,7 +355,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 			}
 		}
 	}
-	if service.Name == "postgresql" {
+	if service.ServiceType == PostgreSQLService {
 		if service.container != nil {
 			for _, e := range service.container.Env() {
 				if strings.HasPrefix(e, "POSTGRES_PASSWORD=") {

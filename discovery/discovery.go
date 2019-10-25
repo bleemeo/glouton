@@ -91,7 +91,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 			fragmentCopy[k] = v
 		}
 		key := nameContainer{
-			ServiceName(fragment["id"]),
+			fragment["id"],
 			fragment["instance"],
 		}
 		servicesOverrideMap[key] = fragmentCopy
@@ -220,30 +220,40 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	}
 
 	d.discoveredServicesMap = servicesMap
-	d.servicesMap = d.applyOveride(servicesMap)
+	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
 	return nil
 }
 
-func (d *Discovery) applyOveride(discoveredServicesMap map[nameContainer]Service) map[nameContainer]Service {
+func applyOveride(discoveredServicesMap map[nameContainer]Service, servicesOverride map[nameContainer]map[string]string) map[nameContainer]Service {
 	servicesMap := make(map[nameContainer]Service)
 
 	for k, v := range discoveredServicesMap {
 		servicesMap[k] = v
 	}
 
-	for serviceKey, override := range d.servicesOverride {
+	for serviceKey, override := range servicesOverride {
 		overrideCopy := make(map[string]string, len(override))
 		for k, v := range override {
 			overrideCopy[k] = v
 		}
 		service := servicesMap[serviceKey]
-		if service.Name == "" {
-			continue // TODO: add custom check
+		if service.ServiceType == "" {
+			if serviceKey.containerName != "" {
+				logger.V(1).Printf(
+					"Custom check for service %#v with a container (%#v) is not supported. Please unset the container",
+					serviceKey.name,
+					serviceKey.containerName,
+				)
+				continue
+			}
+			service.ServiceType = CustomService
+			service.Name = serviceKey.name
+			service.Active = true
 		}
 		if service.ExtraAttributes == nil {
 			service.ExtraAttributes = make(map[string]string)
 		}
-		di := servicesDiscoveryInfo[serviceKey.name]
+		di := servicesDiscoveryInfo[service.ServiceType]
 		for _, name := range di.ExtraAttributeNames {
 			if value, ok := overrideCopy[name]; ok {
 				service.ExtraAttributes[name] = value
@@ -256,6 +266,28 @@ func (d *Discovery) applyOveride(discoveredServicesMap map[nameContainer]Service
 				ignoredNames = append(ignoredNames, k)
 			}
 			logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
+		}
+		if service.ServiceType == CustomService {
+			if service.ExtraAttributes["port"] != "" {
+				if service.ExtraAttributes["address"] == "" {
+					service.ExtraAttributes["address"] = "127.0.0.1"
+				}
+				if _, port := service.AddressPort(); port == 0 {
+					logger.V(1).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
+					continue
+				}
+			}
+			if service.ExtraAttributes["check_type"] == "" {
+				service.ExtraAttributes["check_type"] = customCheckTCP
+			}
+			if service.ExtraAttributes["check_type"] == customCheckNagios && service.ExtraAttributes["check_command"] == "" {
+				logger.V(1).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
+				continue
+			}
+			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["port"] == "" {
+				logger.V(1).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
+				continue
+			}
 		}
 		servicesMap[serviceKey] = service
 	}

@@ -153,8 +153,11 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 	if len(srv) != 1 {
 		t.Errorf("len(srv) == %v, want 1", len(srv))
 	}
-	if srv[0].Name != MemcachedService {
-		t.Errorf("Name == %#v, want %#v", srv[0].Name, MemcachedService)
+	if srv[0].Name != "memcached" {
+		t.Errorf("Name == %#v, want %#v", srv[0].Name, "memcached")
+	}
+	if srv[0].ServiceType != MemcachedService {
+		t.Errorf("Name == %#v, want %#v", srv[0].ServiceType, MemcachedService)
 	}
 	want := []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}}
 	if !reflect.DeepEqual(srv[0].ListenAddresses, want) {
@@ -182,7 +185,8 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerID:      "",
 			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 11211}},
 			want: Service{
-				Name:            MemcachedService,
+				Name:            "memcached",
+				ServiceType:     MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 11211}},
 				IPAddress:       "127.0.0.1",
@@ -194,7 +198,8 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerID:      "",
 			netstatAddresses: nil,
 			want: Service{
-				Name:            MemcachedService,
+				Name:            "memcached",
+				ServiceType:     MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
 				IPAddress:       "127.0.0.1",
@@ -206,7 +211,8 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerID:      "",
 			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "192.168.1.1", Port: 11211}},
 			want: Service{
-				Name:            MemcachedService,
+				Name:            "memcached",
+				ServiceType:     MemcachedService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "192.168.1.1", Port: 11211}},
 				IPAddress:       "192.168.1.1",
@@ -219,6 +225,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 80}, {NetworkFamily: "udp", Address: "0.0.0.0", Port: 42514}},
 			want: Service{
 				Name:            "haproxy",
+				ServiceType:     HAProxyService,
 				ContainerID:     "",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 80}},
 				IPAddress:       "127.0.0.1",
@@ -233,6 +240,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerIP:        "172.17.0.49",
 			want: Service{
 				Name:            "redis",
+				ServiceType:     RedisService,
 				ContainerID:     "5b8f83412931055bcc5da35e41ada85fd70015673163d56911cac4fe6693273f",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379}},
 				IPAddress:       "172.17.0.49",
@@ -243,6 +251,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			cmdLine:  []string{"/opt/jdk-11.0.1/bin/java", "-Xms1g", "-Xmx1g", "-XX:+UseConcMarkSweepGC", "[...]", "/usr/share/elasticsearch/lib/*", "org.elasticsearch.bootstrap.Elasticsearch"},
 			want: Service{
 				Name:            "elasticsearch",
+				ServiceType:     ElasticSearchService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
 				IPAddress:       "127.0.0.1",
 			},
@@ -255,6 +264,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerEnv: []string{"MYSQL_ROOT_PASSWORD=secret"},
 			want: Service{
 				Name:            "mysql",
+				ServiceType:     MySQLService,
 				ContainerID:     "1234",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
 				IPAddress:       "172.17.0.49",
@@ -269,6 +279,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 			want: Service{
 				Name:            "mysql",
+				ServiceType:     MySQLService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
 				IPAddress:       "127.0.0.1",
 				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
@@ -279,6 +290,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			cmdLine:  []string{"/usr/lib/erlang/erts-9.3.3.3/bin/beam.smp", "-W", "w", "[...]", "-noinput", "-s", "rabbit", "boot", "-sname", "[...]"},
 			want: Service{
 				Name:            "rabbitmq",
+				ServiceType:     RabbitMQService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
 				IPAddress:       "127.0.0.1",
 			},
@@ -323,6 +335,9 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		}
 		if srv[0].Name != c.want.Name {
 			t.Errorf("Case %s: Name == %#v, want %#v", c.testName, srv[0].Name, c.want.Name)
+		}
+		if srv[0].ServiceType != c.want.ServiceType {
+			t.Errorf("Case %s: ServiceType == %#v, want %#v", c.testName, srv[0].ServiceType, c.want.ServiceType)
 		}
 		if srv[0].ContainerID != c.want.ContainerID {
 			t.Errorf("Case %s: ContainerID == %#v, want %#v", c.testName, srv[0].ContainerID, c.want.ContainerID)

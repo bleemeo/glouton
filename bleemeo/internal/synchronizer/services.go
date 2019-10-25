@@ -59,7 +59,7 @@ func longToShortKey(services []discovery.Service) map[serviceNameInstance]servic
 	revertLookup := make(map[serviceNameInstance]discovery.Service)
 	for _, srv := range services {
 		shortKey := serviceNameInstance{
-			name:     string(srv.Name),
+			name:     srv.Name,
 			instance: srv.ContainerName,
 		}
 		shortKey.truncateInstance()
@@ -77,7 +77,7 @@ func longToShortKey(services []discovery.Service) map[serviceNameInstance]servic
 	result := make(map[serviceNameInstance]serviceNameInstance, len(revertLookup))
 	for shortKey, srv := range revertLookup {
 		key := serviceNameInstance{
-			name:     string(srv.Name),
+			name:     srv.Name,
 			instance: srv.ContainerName,
 		}
 		result[key] = shortKey
@@ -182,7 +182,7 @@ func (s *Synchronizer) serviceDeleteFromRemote(localServices []discovery.Service
 	localServiceToDelete := make([]discovery.Service, 0)
 	for _, srv := range localServices {
 		key := serviceNameInstance{
-			name:     string(srv.Name),
+			name:     srv.Name,
 			instance: srv.ContainerName,
 		}
 		if _, ok := deletedServiceNameInstance[key]; ok {
@@ -203,7 +203,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	}
 	for _, srv := range localServices {
 		key := serviceNameInstance{
-			name:     string(srv.Name),
+			name:     srv.Name,
 			instance: srv.ContainerName,
 		}
 		var shortKey serviceNameInstance
@@ -217,12 +217,12 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			remoteSrv = remoteServices[remoteIndex]
 		}
 		listenAddresses := getListenAddress(srv.ListenAddresses)
-		if remoteFound && remoteSrv.Label == string(srv.Name) && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active && remoteSrv.Stack == srv.Stack {
+		if remoteFound && remoteSrv.Label == srv.Name && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active && remoteSrv.Stack == srv.Stack {
 			continue
 		}
 		payload := servicePayload{
 			Service: types.Service{
-				Label:           string(srv.Name),
+				Label:           srv.Name,
 				Instance:        shortKey.instance,
 				ListenAddresses: listenAddresses,
 				ExePath:         srv.ExePath,
