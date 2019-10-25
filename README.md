@@ -70,10 +70,19 @@ go run glouton
 
 # Build a release
 
+- Build the UI files
+
+```
+docker run --rm -u $UID -e HOME=/tmp/home \
+   -v $(pwd):/src -w /src/webui \
+   node:12.13.0 \
+   sh -c 'rm -fr node_modules && npm install && npm run deploy'
+```
+
 - Run test and build the release binaries and Docker image:
 
 ```
-docker run --rm -u $UID:999 -e HOME=/tmp -e CGO_ENABLED=0 \
+docker run --rm -u $UID:999 -e HOME=/tmp/home -e CGO_ENABLED=0 \
    -v $(pwd):/src -w /src \
    -v /var/run/docker.sock:/var/run/docker.sock \
    --entrypoint '' \
