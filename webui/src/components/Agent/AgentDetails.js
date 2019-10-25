@@ -14,7 +14,7 @@ import ServiceDetailsModal from '../Service/ServiceDetailsModal'
 import { useFetch } from '../utils/hooks'
 import { formatDateTimeWithSeconds } from '../utils/formater'
 import Smiley from '../UI/Smiley'
-import { Problems } from '../utils'
+import { Problems, isNullOrUndefined } from '../utils'
 
 const AGENT_DETAILS = gql`
   query agent_details {
@@ -96,7 +96,13 @@ const AgentDetails = ({ facts }) => {
   if (isLoading) {
     displayServices = <Loading size="xl" />
     displayTags = <Loading size="xl" />
-  } else if (error) {
+  } else if (
+    error ||
+    isNullOrUndefined(services) ||
+    isNullOrUndefined(tags) ||
+    isNullOrUndefined(agentInformation) ||
+    isNullOrUndefined(agentStatus)
+  ) {
     displayServices = <QueryError />
     displayTags = <QueryError />
   } else {
