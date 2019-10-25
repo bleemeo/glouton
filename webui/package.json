@@ -4,8 +4,8 @@
   "description": "UI for local Glouton",
   "scripts": {
     "start": "webpack-dev-server --config webpack.config.dev.js",
-    "build": "npm run clean && webpack -p --config webpack.config.production.js --bail && rm dist/*.svg && cd dist && ls js/*.js > list.txt",
-    "deploy": "npm run build && npm run cleanOldJsFiles && cp -r ./dist/js ../api/static/assets",
+    "build": "npm run clean && webpack -p --config webpack.config.production.js --bail",
+    "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && cp ./dist/js/*.js ../api/static/assets/js",
     "cleanOldJsFiles": "rm -rf ../api/static/assets/js",
     "clean": "rm -rf dist",
     "lint": "eslint src",
