@@ -68,11 +68,19 @@ go run glouton
    - Run GoLang linter: `~/go/bin/golangci-lint run ./...`
    - Run Go tests: `go test glouton/... || echo test FAILED`
 
-- Build the release binaries and Docker image:
+# Build a release
+
+- Run test and build the release binaries and Docker image:
 
 ```
-~/go/bin/goreleaser --rm-dist --snapshot
+docker run --rm -u $UID:999 -e HOME=/tmp -e CGO_ENABLED=0 \
+   -v $(pwd):/src -w /src \
+   -v /var/run/docker.sock:/var/run/docker.sock \
+   --entrypoint '' \
+   goreleaser/goreleaser:v0.120.3 sh -c 'go test glouton/... && goreleaser --rm-dist --snapshot'
 ```
+
+Release files are present in dist/ folder and a Docker image is build (glouton:latest).
 
 ### Note on VS code
 
