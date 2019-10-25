@@ -50,9 +50,15 @@ var defaultConfig = map[string]interface{}{
 	"bleemeo.mqtt.ssl":               true,
 	"bleemeo.registration_key":       "",
 	"bleemeo.sentry.dsn":             "",
-	"container.pid_namespace_host":   false,
-	"container.type":                 "",
-	"df.host_mount_point":            "",
+	"config_files": []string{ // This settings could not be overridden by configuration files
+		"/etc/glouton/agent.conf",
+		"/etc/glouton/agent.conf.d",
+		"etc/agent.conf",
+		"etc/agent.conf.d",
+	},
+	"container.pid_namespace_host": false,
+	"container.type":               "",
+	"df.host_mount_point":          "",
 	"df.path_ignore": []interface{}{
 		"/var/lib/docker/aufs",
 		"/var/lib/docker/overlay",
@@ -202,20 +208,35 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	return found, nil
 }
 
-func (a *agent) loadConfiguration() (cfg *config.Configuration, warnings []error, finalError error) {
+func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configuration, warnings []error, finalError error) {
 	cfg = &config.Configuration{}
 
-	if err := configLoadFile("/etc/glouton/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
-		finalError = err
+	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironemntName("config_files"), defaultConfig["config_files"]); err != nil {
+		return cfg, nil, err
 	}
-	if err := cfg.LoadDirectory("/etc/glouton/agent.conf.d"); err != nil && !os.IsNotExist(err) {
-		finalError = err
+	if len(configFiles) > 0 && len(configFiles[0]) > 0 {
+		cfg.Set("config_files", configFiles)
 	}
-	if err := configLoadFile("etc/agent.conf", cfg); err != nil && !os.IsNotExist(err) {
-		finalError = err
+	if _, ok := cfg.Get("config_files"); !ok {
+		cfg.Set("config_files", defaultConfig["config_files"])
 	}
-	if err := cfg.LoadDirectory("etc/agent.conf.d"); err != nil && !os.IsNotExist(err) {
-		finalError = err
+	for _, filename := range cfg.StringList("config_files") {
+		stat, err := os.Stat(filename)
+		if err != nil && os.IsNotExist(err) {
+			continue
+		}
+		if err != nil {
+			finalError = err
+			continue
+		}
+		if stat.IsDir() {
+			err = cfg.LoadDirectory(filename)
+		} else {
+			err = configLoadFile(filename, cfg)
+		}
+		if err != nil {
+			finalError = err
+		}
 	}
 
 	moreMarnings, err := loadEnvironmentVariables(cfg)

@@ -103,9 +103,9 @@ type taskInfo struct {
 	name     string
 }
 
-func (a *agent) init() (ok bool) {
+func (a *agent) init(configFiles []string) (ok bool) {
 	a.taskRegistry = task.NewRegistry(context.Background())
-	cfg, warnings, err := a.loadConfiguration()
+	cfg, warnings, err := a.loadConfiguration(configFiles)
 	a.config = cfg
 
 	a.setupLogger()
@@ -157,12 +157,12 @@ func (a *agent) setupLogger() {
 }
 
 // Run runs Glouton
-func Run() {
+func Run(configFiles []string) {
 	agent := &agent{
 		taskRegistry: task.NewRegistry(context.Background()),
 		taskIDs:      make(map[string]int),
 	}
-	if !agent.init() {
+	if !agent.init(configFiles) {
 		os.Exit(1)
 		return
 	}

@@ -22,13 +22,15 @@ import (
 	"glouton/agent"
 	versionPkg "glouton/version"
 	"os"
+	"strings"
 
 	_ "net/http/pprof"
 )
 
 //nolint: gochecknoglobals
 var (
-	runAsRoot = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
+	runAsRoot   = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
+	configFiles = flag.String("config", "", "Configuration files/dirs to load.")
 )
 
 //nolint: gochecknoglobals
@@ -52,5 +54,5 @@ func main() {
 		fmt.Println("")
 		os.Exit(1)
 	}
-	agent.Run()
+	agent.Run(strings.Split(*configFiles, ","))
 }
