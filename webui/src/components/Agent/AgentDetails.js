@@ -97,8 +97,8 @@ const AgentDetails = ({ facts }) => {
     displayServices = <Loading size="xl" />
     displayTags = <Loading size="xl" />
   } else if (error) {
-    displayServices = <QueryError error={error} />
-    displayTags = <QueryError error={error} />
+    displayServices = <QueryError />
+    displayTags = <QueryError />
   } else {
     displayServices = (
       <Panel>
@@ -215,7 +215,7 @@ const AgentDetails = ({ facts }) => {
           {displayTags}
           <Grid.Row>
             <Grid.Col xl={6} offset={3}>
-              <Panel>{problems}</Panel>
+              {problems ? <Panel>{problems}</Panel> : null}
             </Grid.Col>
           </Grid.Row>
         </Grid.Col>

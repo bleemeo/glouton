@@ -85,10 +85,10 @@ const WidgetDashboardItem = ({
   } else if (error) {
     switch (type) {
       case chartTypes[0]:
-        displayWidgetItem = <MetricGaugeItem error={error} name={title} />
+        displayWidgetItem = <MetricGaugeItem hasError={hasError} name={title} />
         break
       default:
-        displayWidgetItem = <LineChart title={title} error={error} />
+        displayWidgetItem = <LineChart title={title} hasError={hasError} />
         break
     }
   } else {

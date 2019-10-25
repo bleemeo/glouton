@@ -3,8 +3,18 @@ import PropTypes from 'prop-types'
 import DonutPieChart from '../UI/DonutPieChart'
 import { unitFormatCallback } from '../utils/formater'
 import Loading from '../UI/Loading'
+import QueryError from '../UI/QueryError'
 
-const MetricGaugeItem = ({ unit, values, name, style = null, fontSize = 15, titleFontSize = 30, loading, error }) => {
+const MetricGaugeItem = ({
+  unit,
+  values,
+  name,
+  style = null,
+  fontSize = 15,
+  titleFontSize = 30,
+  loading,
+  hasError
+}) => {
   if (loading) {
     return (
       <div className="card card-body widgetLoading" style={style}>
@@ -13,11 +23,11 @@ const MetricGaugeItem = ({ unit, values, name, style = null, fontSize = 15, titl
         </div>
       </div>
     )
-  } else if (error) {
+  } else if (hasError) {
     return (
       <div className="card card-body widgetError" style={style}>
         <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
-          <h4>{error.toString()}</h4>
+          <QueryError noBorder style={{ textAlign: 'center' }} />
         </div>
       </div>
     )
@@ -44,7 +54,7 @@ MetricGaugeItem.propTypes = {
   fontSize: PropTypes.number,
   titleFontSize: PropTypes.number,
   loading: PropTypes.bool,
-  error: PropTypes.object
+  hasError: PropTypes.object
 }
 
 export default MetricGaugeItem

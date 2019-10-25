@@ -15,13 +15,14 @@ import {
 import Loading from './Loading'
 import { fillEmptyPoints, UNIT_PERCENTAGE } from '../utils'
 import FaIcon from './FaIcon'
+import QueryError from './QueryError'
 
 const CPU = ['#C49C94', '#F7B6D2', '#C5B0D5', '#FF7F0D', '#BDD1EC', '#9DD9E5', '#D62728', '#98DF89']
 const MEMORY = ['#AEC7E8', '#C7C7C7', '#E1E1A2', '#98DF8A']
 
 const colorScale = d3.scale.category20()
 
-const LineChart = ({ stacked, metrics, title, unit, loading, error, period, handleBackwardForward }) => {
+const LineChart = ({ stacked, metrics, title, unit, loading, hasError, period, handleBackwardForward }) => {
   const svgChart = useRef(null)
   const [series, setSeries] = useState([])
 
@@ -97,7 +98,7 @@ const LineChart = ({ stacked, metrics, title, unit, loading, error, period, hand
         </Card.Body>
       </Card>
     )
-  } else if (error) {
+  } else if (hasError) {
     return (
       <Card className="widgetChart widgetError">
         <Card.Body className="noPaddingHorizontal">
@@ -109,7 +110,7 @@ const LineChart = ({ stacked, metrics, title, unit, loading, error, period, hand
               style={{ marginTop: '0.4rem', height: '19rem' }}
               className="d-flex flex-row justify-content-center align-items-center"
             >
-              <h2>{error.toString()}</h2>
+              <QueryError noBorder />
             </div>
           </div>
         </Card.Body>
@@ -232,7 +233,7 @@ LineChart.propTypes = {
   title: PropTypes.string.isRequired,
   unit: PropTypes.number,
   loading: PropTypes.bool,
-  error: PropTypes.object,
+  hasError: PropTypes.object,
   period: PropTypes.object,
   handleBackwardForward: PropTypes.func
 }

@@ -6,6 +6,7 @@ import Loading from '../UI/Loading'
 import Panel from '../UI/Panel'
 import QueryError from '../UI/QueryError'
 import { useFetch } from '../utils/hooks'
+import { isNullOrUndefined } from '../utils'
 
 const PROCESSES = gql`
   query processesQuery {
@@ -72,8 +73,8 @@ const AgentProcessesContainer = () => {
         <Loading size="xl" />
       </div>
     )
-  } else if (error) {
-    displayProcesses = <QueryError error={error} />
+  } else if (error || isNullOrUndefined(processes)) {
+    displayProcesses = <QueryError noBorder />
   } else {
     const updatedAt = processes.updatedAt
     const systemMetrics = points
