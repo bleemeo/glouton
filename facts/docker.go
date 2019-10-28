@@ -450,7 +450,7 @@ func primaryAddress(inspect types.ContainerJSON, bridgeNetworks map[string]inter
 
 func (d *DockerProvider) getClient(ctx context.Context) (cl *docker.Client, err error) {
 	if d.client == nil {
-		cl, err = docker.NewClientWithOpts(docker.FromEnv)
+		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
 		if err != nil {
 			return
 		}
