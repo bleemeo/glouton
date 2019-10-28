@@ -9,5 +9,3 @@ class GloutonPanelApp {
 }
 
 window.GloutonPanel = new GloutonPanelApp()
-
-console.log(window)

@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react'
+import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
 import { gql } from 'apollo-boost'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
 import { chartTypes, computeEnd } from '../utils'
 import LineChart from './LineChart'
-import { useFetch } from '../utils/hooks'
+import { useFetch, POLL } from '../utils/hooks'
 
 const CPU = ['cpu_steal', 'cpu_softirq', 'cpu_interrupt', 'cpu_system', 'cpu_user', 'cpu_nice', 'cpu_wait', 'cpu_idle']
 const MEMORY = ['mem_used', 'mem_buffered', 'mem_cached', 'mem_free']
@@ -33,6 +33,7 @@ const WidgetDashboardItem = ({
   isVisible,
   handleBackwardForward
 }) => {
+  const previousError = useRef(null)
   const handleBackwardForwardFunc = (isForward = false) => {
     handleBackwardForward(isForward)
   }
@@ -56,13 +57,7 @@ const WidgetDashboardItem = ({
         if (nameItem.item) metricsFilter.push({ labels: [{ key: 'item', value: nameItem.item }] })
       })
   }
-  useEffect(() => {
-    console.log('hey')
-    return () => {
-      console.log('bye bye')
-    }
-  }, [])
-  const { isLoading, error, points } = useFetch(
+  const { isLoading, error, points, networkStatus } = useFetch(
     GET_POINTS,
     {
       metricsFilter,
@@ -72,6 +67,10 @@ const WidgetDashboardItem = ({
     },
     refetchTime * 1000
   )
+  let hasError = error
+  if (previousError.current && !error && networkStatus === POLL) {
+    hasError = previousError.current
+  }
   let displayWidgetItem
   if (isLoading || !points) {
     switch (type) {
@@ -82,13 +81,13 @@ const WidgetDashboardItem = ({
         displayWidgetItem = <LineChart title={title} loading />
         break
     }
-  } else if (error) {
+  } else if (hasError) {
     switch (type) {
       case chartTypes[0]:
-        displayWidgetItem = <MetricGaugeItem error={error} name={title} />
+        displayWidgetItem = <MetricGaugeItem hasError={hasError} name={title} />
         break
       default:
-        displayWidgetItem = <LineChart title={title} error={error} />
+        displayWidgetItem = <LineChart title={title} hasError={hasError} />
         break
     }
   } else {
@@ -137,6 +136,7 @@ const WidgetDashboardItem = ({
         break
     }
   }
+  previousError.current = error
   return (
     <div>
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}

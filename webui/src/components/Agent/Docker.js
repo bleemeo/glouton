@@ -170,7 +170,7 @@ const DockerProcesses = ({ containerId, name }) => {
   if (isLoading) {
     render = <Loading size="xl" />
   } else if (error) {
-    render = <QueryError error={error} />
+    render = <QueryError />
   } else {
     const result = processes
     const dockerProcesses = result && result.processes ? result.processes : []

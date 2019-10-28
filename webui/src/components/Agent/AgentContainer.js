@@ -53,7 +53,7 @@ const AgentContainer = () => {
   if (isLoading) {
     displayAgentContainer = <Loading size="xl" />
   } else if (error) {
-    displayAgentContainer = <QueryError error={error} />
+    displayAgentContainer = <QueryError />
   } else {
     displayAgentContainer = (
       <>

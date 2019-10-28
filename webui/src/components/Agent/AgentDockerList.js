@@ -8,6 +8,7 @@ import { DebounceInput } from 'react-debounce-input'
 import Toggle from '../UI/Toggle'
 import QueryError from '../UI/QueryError'
 import { useFetch } from '../utils/hooks'
+import { isNullOrUndefined } from '../utils'
 
 const PAGE_SIZE = 10
 
@@ -56,8 +57,8 @@ const AgentDockerList = () => {
   let displayContainers
   if (isLoading) {
     displayContainers = <Loading size="xl" />
-  } else if (error) {
-    displayContainers = <QueryError error={error} />
+  } else if (error || isNullOrUndefined(containers)) {
+    displayContainers = <QueryError />
   } else {
     const containersList = containers.containers
     const newNbContainers = containers.count

@@ -91,7 +91,7 @@ const ServiceContainer = ({ containerId }) => {
   if (isLoading) {
     return <Loading size="xl" />
   } else if (error) {
-    return <QueryError error={error} />
+    return <QueryError />
   } else {
     if (containers.containers[0]) {
       return (
