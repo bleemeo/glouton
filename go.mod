@@ -35,7 +35,7 @@ require (
 	github.com/gorilla/websocket v1.4.1 // indirect
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/hodgesds/perf-utils v0.0.8 // indirect
-	github.com/influxdata/telegraf v0.10.2-0.20190910190642-8de41160d4ed
+	github.com/influxdata/telegraf v0.10.2-0.20191023195903-9a4f08e94774
 	github.com/jackc/fake v0.0.0-20150926172116-812a484cc733 // indirect
 	github.com/jackc/pgx v3.6.0+incompatible // indirect
 	github.com/jsimonetti/rtnetlink v0.0.0-20191019172534-d21b2cb70d39 // indirect
