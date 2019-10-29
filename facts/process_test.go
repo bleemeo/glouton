@@ -278,7 +278,7 @@ func TestUpdateProcesses(t *testing.T) {
 		pidExists: psutil.pidExists,
 		containerIDFromCGroup: func(pid int) string {
 			switch pid {
-			case 1, 2, 3:
+			case 1, 2, 3, 12, 42:
 				return ""
 			case 1337:
 				return "golang-container-id"
