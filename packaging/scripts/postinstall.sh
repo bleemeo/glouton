@@ -18,7 +18,6 @@ fi
 
 usermod -aG docker glouton 2> /dev/null || true
 
-# TODO: should we migrate /etc/bleemeo/agent.conf ?
 if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
     echo "Migrating from bleemeo-agent to Glouton"
     echo "Stopping bleemeo-agent and copying state.json from bleemeo-agent to Glouton"
@@ -42,6 +41,25 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
             fi
         fi
     done
+    # We only want to migrate /etc/bleemeo/agent.conf if it was modified.
+    if [ -e /usr/bin/dpkg ]; then
+        # The space after filename in the grep are important to match agent.conf and not agent.conf.d
+        PACKAGE_MD5=`dpkg-query --show --showformat='${Conffiles}\n' bleemeo-agent | grep '/etc/bleemeo/agent.conf ' | awk '{print $2}'`
+        CURRENT_MD5=`md5sum /etc/bleemeo/agent.conf`
+        if [ ! -z "${CONFIG_MD5}" -a ! -z "${CURRENT_MD5}" -a "${CONFIG_MD5}" != "${CURRENT_MD5}" ]; then
+            echo "Copy config /etc/bleemeo/agent.conf"
+            cp /etc/bleemeo/agent.conf /etc/glouton/glouton.conf
+        fi
+    elif [ -e /usr/bin/rpm ]; then
+        # rpm --verify only print line for file modified
+        # the "grep 5" match line with bad md5sum
+        # the if will check the result code of the last grep. If true the line was found so
+        # file content (md5sum missmatch) was modified.
+        if rpm --verify bleemeo-agent | grep 5 | grep --quiet /etc/bleemeo/agent.conf$; then
+            echo "Copy config /etc/bleemeo/agent.conf"
+            cp /etc/bleemeo/agent.conf /etc/glouton/glouton.conf
+        fi
+    fi
     cat > /etc/bleemeo/agent.conf.d/zzz-disabled-by-glouton.conf << EOF
         # Bleemeo agent is disabled and is replaced by Glouton.
         # If you want to rollback from Glouton to Bleemeo-agent:
