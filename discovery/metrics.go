@@ -185,7 +185,7 @@ func (d *Discovery) createInput(service Service) error {
 	logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
 	var input telegraf.Input
 	var err error
-	switch service.Name {
+	switch service.ServiceType {
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
 			statusURL := fmt.Sprintf("http://%s:%d/server-status?auto", ip, port)
@@ -268,8 +268,10 @@ func (d *Discovery) createInput(service Service) error {
 		if ip, port := service.AddressPort(); ip != "" {
 			input, err = zookeeper.New(fmt.Sprintf("%s:%d", ip, port))
 		}
+	case CustomService:
+		return nil
 	default:
-		logger.V(1).Printf("service type %s don't support metrics", service.Name)
+		logger.V(1).Printf("service type %s don't support metrics", service.ServiceType)
 	}
 	if err != nil {
 		return err
@@ -277,7 +279,7 @@ func (d *Discovery) createInput(service Service) error {
 
 	if input != nil {
 		extraLabels := map[string]string{
-			"service_name": string(service.Name),
+			"service_name": service.Name,
 		}
 		if service.ContainerName != "" {
 			extraLabels["item"] = service.ContainerName
@@ -295,7 +297,7 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	if d.coll == nil {
 		return nil
 	}
-	inputID, err := d.coll.AddInput(input, string(service.Name))
+	inputID, err := d.coll.AddInput(input, service.Name)
 	if err != nil {
 		return err
 	}

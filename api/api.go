@@ -31,8 +31,6 @@ import (
 	"github.com/99designs/gqlgen/handler"
 	"github.com/go-chi/chi"
 	"github.com/gobuffalo/packr/v2"
-	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/cors"
 )
 
@@ -64,7 +62,7 @@ type API struct {
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
@@ -76,13 +74,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
 
-	reg := prometheus.NewPedanticRegistry()
-	reg.MustRegister(
-		api,
-		prometheus.NewGoCollector(),
-		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
-	)
-	router.Handle("/metrics", promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{Registry: reg})))
+	router.Handle("/metrics", promExporter) // promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
@@ -114,7 +106,8 @@ func (api API) Run(ctx context.Context) error {
 		}
 		close(idleConnsClosed)
 	}()
-	logger.Printf("Starting API on %s", api.bindAddress)
+	logger.Printf("Starting API on %s ✔️", api.bindAddress)
+	logger.Printf("To access the local panel connect to http://%s 🌐", api.bindAddress)
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}

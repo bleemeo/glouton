@@ -1,2 +1,0 @@
-# yum-plugin-post-transaction-actions file
-*:any:/usr/lib/bleemeo/bleemeo-hook-package-modified 2> /dev/null || true

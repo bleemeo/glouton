@@ -316,7 +316,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 			for _, addr := range service.ListenAddresses {
 				netAddrs = append(netAddrs, addr.String())
 			}
-			metrics, err := r.api.db.Metrics(map[string]string{"__name__": string(service.Name) + "_status"})
+			metrics, err := r.api.db.Metrics(map[string]string{"__name__": service.Name + "_status"})
 			var point types.PointStatus
 			if len(metrics) > 0 {
 				if err != nil {
@@ -335,7 +335,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				point = points[len(points)-1]
 			}
 			s := &Service{
-				Name:              string(service.Name),
+				Name:              service.Name,
 				ContainerID:       service.ContainerID,
 				IPAddress:         service.IPAddress,
 				ListenAddresses:   netAddrs,

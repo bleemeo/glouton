@@ -1,3 +1,0 @@
-#!/bin/sh
-
-bleemeo-netstat 2> /dev/null || true

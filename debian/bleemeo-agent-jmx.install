@@ -1,2 +1,0 @@
-#!/usr/bin/dh-exec
-packaging/common/jmxtrans-bleemeo-generated.json => var/lib/jmxtrans/bleemeo-generated.json

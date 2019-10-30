@@ -1,0 +1,516 @@
+$brand-success: #5CB85C;
+$brand-warning: #F0AD4E;
+$brand-danger: #D9534F;
+$brand-info: #0275D8;
+
+@mixin fa-mixin() {
+  font-family: FontAwesome;
+  font-style: normal;
+  font-weight: normal;
+  line-height: 1;
+  font-size-adjust: none;
+  font-stretch: normal;
+  font-feature-settings: normal;
+  font-language-override: normal;
+  font-kerning: auto;
+  font-synthesis: weight style;
+  font-variant: normal;
+  font-size: inherit;
+  text-rendering: auto;
+}
+
+html {
+  font-size: 16px;
+}
+
+@media (max-width: map-get($grid-breakpoints, md)) {
+  html {
+    font-size: 14px;
+  }
+}
+
+body {
+  font-size: 0.875rem; // 14px
+  line-height: 165%;
+  color: #2a3f54 !important;
+}
+
+// TODO do we still use label somewhere?
+label {
+  margin-bottom: .2rem;
+  font-size: 90%;
+  font-weight: bold;
+}
+
+// ensure that every link has the pointer cursor on hover
+// even when they don't have any href
+a {
+  cursor: pointer;
+}
+
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: .4;
+}
+
+.btn + .btn {
+  margin-left: 5px;
+}
+
+.marginOffset{
+  margin: .8rem;
+}
+
+.modal-xlg {
+  min-width: 80% !important;
+}
+
+.modal-lg {
+  min-width: 60% !important;
+}
+
+.modal-header>.close>span {
+  display: none;
+}
+
+.no-border {
+  border: 0px solid white !important;
+}
+
+.btn.blee-label {
+  line-height: 1;
+  padding: 0.25rem 0.4rem;
+  margin-bottom: 0.2rem;
+
+  &.btn-success {
+    border: 1px solid darken($brand-success, 5%);
+  }
+
+  &.btn-info {
+    border: 1px solid darken($brand-info, 5%);
+  }
+
+  &.btn-warning {
+    border: 1px solid darken($brand-warning, 5%);
+  }
+
+  &.btn-danger {
+    border: 1px solid darken($brand-danger, 5%);
+  }
+}
+
+.badge {
+  max-width: 17vw;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+// ---nav bar---
+.navbar-fixed-top {
+  background: #ededed;
+  border-bottom: 1px solid #D9DEE4;
+  max-height: 3rem;
+  //.navbar-nav {
+  //  padding-left: 20px;
+  //}
+}
+
+$top-main-content-margin: 6.5rem;
+$left-side-navbar-width: 3.6rem;
+$left-side-navbar-background-color: #2a3f54;
+
+.navbar-fixed-side-left {
+  position: fixed;
+  background: $left-side-navbar-background-color;
+  border-radius: 0;
+  left: 0;
+  height: 100%;
+  width: $left-side-navbar-width;
+  margin: -$top-main-content-margin 0 0 0;
+  padding: $top-main-content-margin 0 0 0;
+  z-index: 1020;
+
+  .nav-item {
+    width: 100%;
+    height: $left-side-navbar-width;
+    text-align: center;
+    margin: 0 !important;
+  }
+
+  .nav-link {
+    display: flex;
+    flex-flow: column nowrap;
+    justify-content: center;
+    align-items: stretch;
+
+    color: white;
+    width: 100%;
+    height: 100%;
+
+    &:hover {
+      color: rgba(255, 255, 255, .75);
+    }
+    &:focus {
+      outline: none;
+      background-color: lighten($left-side-navbar-background-color, 8%);
+    }
+    &.active {
+      background-color: lighten($left-side-navbar-background-color, 15%);
+    }
+  }
+}
+
+.main-content {
+  margin: 4rem 5rem 0 $left-side-navbar-width;
+  padding: 0 1rem;
+}
+
+// ---Reactable style---
+.reactable-header-sortable {
+  &:after {
+    content: "\00a0\f0dc";
+    @include fa-mixin()
+  }
+}
+
+.reactable-header-sort-desc {
+  &:after {
+    content: "\00a0\f0dd";
+  }
+}
+.reactable-header-sort-asc {
+  &:after {
+    content: "\00a0\f0de";
+  }
+}
+
+// hack because the Paginator of Reactable isn't configurable and we don't want to
+// display it
+.reactable-pagination {
+  display: none;
+}
+
+.name-col {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow:ellipsis;
+  width: 60rem;
+}
+
+.processes-cell {
+  padding: .3rem 0.75rem !important;
+  width: 8rem;
+}
+
+.reactable-filter-input {
+  width: 26rem;
+  color: black;
+
+  // taken from bootstrap 4 alpha CSS
+  padding-right: 2.25rem;
+  background-repeat: no-repeat;
+  background-position: center right .59375rem;
+  background-size: 1.2rem 1.2rem;
+  // Font awesome Search icon in SVG
+  background-image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTc5MiIgaGVpZ2h0PSIxNzkyIiB2aWV3Qm94PSIwIDAgMTc5MiAxNzkyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xMjE2IDgzMnEwLTE4NS0xMzEuNS0zMTYuNXQtMzE2LjUtMTMxLjUtMzE2LjUgMTMxLjUtMTMxLjUgMzE2LjUgMTMxLjUgMzE2LjUgMzE2LjUgMTMxLjUgMzE2LjUtMTMxLjUgMTMxLjUtMzE2LjV6bTUxMiA4MzJxMCA1Mi0zOCA5MHQtOTAgMzhxLTU0IDAtOTAtMzhsLTM0My0zNDJxLTE3OSAxMjQtMzk5IDEyNC0xNDMgMC0yNzMuNS01NS41dC0yMjUtMTUwLTE1MC0yMjUtNTUuNS0yNzMuNSA1NS41LTI3My41IDE1MC0yMjUgMjI1LTE1MCAyNzMuNS01NS41IDI3My41IDU1LjUgMjI1IDE1MCAxNTAgMjI1IDU1LjUgMjczLjVxMCAyMjAtMTI0IDM5OWwzNDMgMzQzcTM3IDM3IDM3IDkweiIvPjwvc3ZnPg==);
+}
+
+.percent-bars {
+  border-radius: 4px;
+  height: 2.4rem;
+  overflow: hidden;
+}
+.percent-bar-label {
+  width: 3.5rem;
+}
+.percent-bar {
+  height: 2.4rem;
+  float: left;
+}
+
+.littleBorderRadius {
+  border-radius: 3px;
+}
+
+.dockerTable {
+  overflow-x: hidden !important;
+  display: block !important;
+  table-layout: auto !important;
+}
+
+.react-bootstrap-table-pagination {
+  display: none !important
+}
+
+.cellEllipsis {
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  width: 48vw
+}
+
+.blee-tool-bar {
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: flex-start;
+  align-items: center;
+
+}
+
+.blee-tool-bar-item {
+  margin-right: 1rem;
+}
+
+.blee-tool-bar-item:last-child {
+  margin-right: 0rem;
+}
+
+// online/offline vertical text
+.item-left-border {
+  display: block;
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 1.5rem;
+  overflow: hidden;
+  white-space: nowrap;
+  background-color: #CCCCCC;
+
+  &.success {
+    background-color: $brand-success;
+  }
+  &.warning {
+    background-color: $brand-warning;
+  }
+  &.danger {
+    background-color: $brand-danger;
+  }
+
+  .vertical-text {
+    transform-origin: 0 50%;
+    transform: rotate(-90deg) translate(-50%, 50%);
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    height: 1.8rem;
+    margin: auto;
+    font-weight: bold;
+    font-size: 90%;
+    line-height: 1.8em;
+    letter-spacing: 0.2rem;
+    color: white;
+  }
+}
+
+.blee-row {
+  display: flex;
+  flex-direction: row;
+  flex-flow: row wrap;
+  align-items: center;
+}
+
+.block-fullsize {
+  width: 100%;
+  height: 100%;
+}
+
+.opacityTransition {
+  transition: opacity 150ms linear;
+}
+
+.widgetChart {
+  height: 25rem;
+}
+
+.widget, .widgetError {
+  animation: fadeIn 0.3s ease-in;
+}
+
+.smaller {
+  font-size: 95%
+}
+
+$small-widget-size: 100px;
+
+.small-widget {
+  text-align: center;
+
+  .content {
+    width: $small-widget-size;
+    height: $small-widget-size;
+    font-weight: bold;
+
+    small {
+      font-size: 70%;
+      line-height: 0.75
+    }
+
+    &.wide {
+      width: $small-widget-size * 2.25;
+    }
+
+    .content-row {
+      height: $small-widget-size / 4;
+      font-size: 140%;
+    }
+  }
+
+  .title {
+    margin-top: -1.2rem
+  }
+}
+
+.chart-legend {
+  display: flex;
+  flex-flow: row wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+
+  color: black;
+  font-size: 90%;
+  margin-right: 50px; // same value as in Chart.js chart.margin({ right: })
+
+  .legend-label {
+    margin-left: 1rem;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+
+  .legend-pill {
+    display: inline-flex;
+    height: 0.75rem;
+    width: 0.75rem;
+    border: 0.15rem solid;
+    border-radius: 50%;
+    margin-right: 0.2rem;
+  }
+}
+
+.gaugeBg {
+  fill: #F1F1F1
+}
+
+.blee-card {
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: flex-start;
+  align-items: stretch;
+}
+
+.caret {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  vertical-align: middle;
+  border-top: 4px dashed;
+  border-right: 4px solid transparent;
+  border-left: 4px solid transparent;
+}
+
+.caretCollapsed {
+  border-bottom: 4px solid transparent;
+  border-top: 4px solid transparent;
+  border-left: 4px solid;
+  display: inline-block;
+  height: 0;
+  vertical-align: middle;
+  width: 0;
+  margin-left: 4px;
+}
+
+.__react_component_tooltip.type-dark {
+  background-color: #444
+}
+.__react_component_tooltip.show {
+  opacity: 1;
+}
+
+.alignFlexCenterRow {
+  display: flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center
+}
+
+.noPaddingHorizontal {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+@keyframes fadeIn {
+  from {opacity: 0}
+  to {opacity: 1}
+}
+
+#toggle > ul {
+  color: white;
+  list-style-type: none;
+  display: flex;
+  padding: 0;
+  margin: 0;
+}
+#toggle > ul > li {
+  text-align: center; 
+  cursor: pointer;
+  width: 100%;
+  font-size: 0.9375rem;
+}
+
+#toggle {
+  background-color: $brand-info;
+  border-radius: 50px;
+  border: 3px solid $brand-info;
+  position: relative;
+}
+
+#nav {
+  background-color: white;
+  position: absolute;
+  top: 0;
+  border-top-left-radius: 50px;
+  border-bottom-left-radius: 50px;
+  height: 100%;
+  margin-left: 0rem;
+  width: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform-origin: right;
+  transition: transform cubic-bezier(0.25, 0.46, 0.44, 0.82) 0.2s;
+  transform: perspective(450px) rotateY(0deg);
+}
+
+#nav.isFlipped {
+  transform: perspective(450px) rotateY(180deg);
+}
+
+#nav > span {
+  position: absolute;
+  color: #333;
+}
+
+#nav > span:last-child {
+  transform: rotateY(180deg);
+}
+
+.graphcellBg {
+  background-color: rgb(211, 209, 209)
+}
+
+.isConnected {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background-color: $brand-success;
+}
+
+.isNotConnected {
+  display: block;
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  background-color: $brand-danger;
+}

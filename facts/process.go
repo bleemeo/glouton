@@ -55,6 +55,7 @@ type ProcessProvider struct {
 	containerIDFromCGroup func(int) string
 
 	processes           map[int]Process
+	pidExists           func(int32) (bool, error)
 	topinfo             TopInfo
 	lastCPUtimes        cpu.TimesStat
 	lastProcessesUpdate time.Time
@@ -131,6 +132,7 @@ func NewProcess(useProc bool, hostRootPath string, dockerProvider *DockerProvide
 			dockerProvider: dockerProvider,
 		},
 		containerIDFromCGroup: containerIDFromCGroup,
+		pidExists:             process.PidExists,
 	}
 	if useProc {
 		ps := psutilLister{}
@@ -405,24 +407,15 @@ func psStat2Status(psStat string) string {
 	}
 }
 
-func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
+func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint: gocyclo
 	t0 := time.Now()
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
 	// Process must be started at least 1/100th before t0.
 	// Keep some additional margin by doubling this value.
 	onlyStartedBefore := t0.Add(-20 * time.Millisecond)
-
 	newProcessesMap := make(map[int]Process)
-	if pp.dp != nil {
-		dockerProcesses, err := pp.dp.processes(ctx, 0)
-		if err != nil {
-			return err
-		}
-		for _, p := range dockerProcesses {
-			newProcessesMap[p.PID] = p
-		}
-	}
+
 	if pp.psutil != nil {
 		psProcesses, err := pp.psutil.processes(ctx, 0)
 		if err != nil {
@@ -432,30 +425,69 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error {
 			if p.CreateTime.After(onlyStartedBefore) {
 				continue
 			}
-			if pOld, ok := newProcessesMap[p.PID]; ok {
-				p.ContainerID = pOld.ContainerID
-				p.ContainerName = pOld.ContainerName
-				pOld.update(p)
-				newProcessesMap[p.PID] = pOld
-			} else {
-				newProcessesMap[p.PID] = p
-			}
+			newProcessesMap[p.PID] = p
 		}
 	}
+
+	if pp.dp != nil && len(newProcessesMap) < 5 {
+		// If we have too few processes listed by gopsutil, it probably means
+		// we don't have access to root PID namespace. In this case do a processes
+		// listing using Docker. We avoid it if possible as it's rather slow.
+		dockerProcesses, err := pp.dp.processes(ctx, 0)
+		if err != nil {
+			return err
+		}
+		for _, p := range dockerProcesses {
+			if pOld, ok := newProcessesMap[p.PID]; ok {
+				p.update(pOld) // we prefer keeping information coming from gopsutil
+				newProcessesMap[p.PID] = p
+			}
+			newProcessesMap[p.PID] = p
+		}
+	}
+	// Complet ContainerID/ContainerName
 	if pp.dp != nil && pp.psutil != nil {
-		if id2name, err := pp.dp.containerID2Name(ctx, 10*time.Second); err == nil {
-			for pid, p := range newProcessesMap {
+		var id2name map[string]string
+		containerPSDone := make(map[string]bool)
+		for pid, p := range newProcessesMap {
+			if oldP, ok := pp.processes[pid]; ok && oldP.CreateTime.Equal(p.CreateTime) {
+				p.ContainerID = oldP.ContainerID
+				p.ContainerName = oldP.ContainerName
+				newProcessesMap[pid] = p
+			} else {
+				if id2name == nil {
+					var err error
+					if id2name, err = pp.dp.containerID2Name(ctx, 10*time.Second); err != nil {
+						id2name = make(map[string]string)
+					}
+				}
 				if p.ContainerID == "" && pp.containerIDFromCGroup != nil {
 					// Using cgroup, make sure process is not running in a container
 					candidateID := pp.containerIDFromCGroup(pid)
 					if n, ok := id2name[candidateID]; ok {
-						logger.V(1).Printf("Based on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, n)
+						logger.V(2).Printf("Based on cgroup, process %d (%s) belong to container %s", p.PID, p.Name, n)
 						p.ContainerID = candidateID
 						p.ContainerName = n
 						newProcessesMap[pid] = p
 					} else if candidateID != "" && time.Since(p.CreateTime) < 3*time.Second {
-						logger.V(1).Printf("Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
+						logger.V(2).Printf("Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
 						delete(newProcessesMap, pid)
+						continue
+					}
+				}
+				if p.ContainerID == "" {
+					if exists, _ := pp.pidExists(int32(p.PID)); !exists {
+						logger.V(2).Printf("Skipping process %d (%s) terminated recently", p.PID, p.Name)
+						delete(newProcessesMap, pid)
+						continue
+					}
+				}
+				if p.ContainerID == "" {
+					for _, newP := range pp.dp.findContainerOfProcess(ctx, newProcessesMap, p, containerPSDone) {
+						if pOld, ok := newProcessesMap[newP.PID]; ok {
+							newP.update(pOld)
+						}
+						newProcessesMap[newP.PID] = newP
 					}
 				}
 			}
@@ -571,6 +603,44 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 	return result, nil
 }
 
+func (d *dockerProcessImpl) findContainerOfProcess(ctx context.Context, newProcessesMap map[int]Process, p Process, containerDone map[string]bool) []Process {
+	var allProcesses []Process
+	if parent, ok := newProcessesMap[p.PPID]; ok && parent.ContainerID != "" && !containerDone[parent.ContainerID] {
+		containerDone[parent.ContainerID] = true
+		logger.V(2).Printf("findContainerOfProcess: try parent container ID for PID %v", p.PID)
+		if tmp, err := d.processesContainer(ctx, parent.ContainerID, parent.ContainerName); err == nil {
+			allProcesses = append(allProcesses, tmp...)
+			for _, newP := range tmp {
+				if newP.PID == p.PID {
+					return allProcesses
+				}
+			}
+		}
+	}
+
+	if containers, err := d.dockerProvider.Containers(ctx, 10*time.Second, true); err == nil {
+		for _, c := range containers {
+			if containerDone[c.ID()] {
+				continue
+			}
+			if !c.IsRunning() {
+				continue
+			}
+			logger.V(2).Printf("findContainerOfProcess: try container %v for PID %v", c.Name(), p.PID)
+			containerDone[c.ID()] = true
+			if tmp, err := d.processesContainer(ctx, c.ID(), c.Name()); err == nil {
+				allProcesses = append(allProcesses, tmp...)
+				for _, newP := range tmp {
+					if newP.PID == p.PID {
+						return allProcesses
+					}
+				}
+			}
+		}
+	}
+	return allProcesses
+}
+
 func (p *Process) update(other Process) {
 	if other.PPID != 0 {
 		p.PPID = other.PPID
@@ -622,6 +692,8 @@ type processLister interface {
 type dockerProcess interface {
 	processLister
 	containerID2Name(ctx context.Context, maxAge time.Duration) (containerID2Name map[string]string, err error)
+	processesContainer(ctx context.Context, containerID string, containerName string) (processes []Process, err error)
+	findContainerOfProcess(ctx context.Context, newProcessesMap map[int]Process, p Process, containerDone map[string]bool) []Process
 }
 
 type psutilLister struct {
@@ -738,6 +810,42 @@ func (d *dockerProcessImpl) containerID2Name(ctx context.Context, maxAge time.Du
 		containerID2Name[c.ID()] = c.Name()
 	}
 	return
+}
+
+func (d *dockerProcessImpl) processesContainer(ctx context.Context, containerID string, containerName string) (processes []Process, err error) {
+	if d.dockerProvider == nil {
+		return
+	}
+	processesMap := make(map[int]Process)
+	var top, topWaux container.ContainerTopOKBody
+	top, topWaux, err = d.dockerProvider.top(ctx, containerID)
+	switch {
+	case err != nil && errdefs.IsNotFound(err):
+		return nil, nil
+	case err != nil && strings.Contains(fmt.Sprintf("%v", err), "is not running"):
+		return nil, nil
+	case err != nil:
+		logger.Printf("%#v", err)
+		return nil, nil
+	}
+	processes1 := decodeDocker(top, containerID, containerName)
+	processes2 := decodeDocker(topWaux, containerID, containerName)
+	for _, p := range processes1 {
+		processesMap[p.PID] = p
+	}
+	for _, p := range processes2 {
+		if pOld, ok := processesMap[p.PID]; ok {
+			pOld.update(p)
+			processesMap[p.PID] = pOld
+		} else {
+			processesMap[p.PID] = p
+		}
+	}
+	processes = make([]Process, 0, len(processesMap))
+	for _, p := range processesMap {
+		processes = append(processes, p)
+	}
+	return processes, nil
 }
 
 func (d *dockerProcessImpl) processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {

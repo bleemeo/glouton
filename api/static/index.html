@@ -1,27 +1,29 @@
 <!DOCTYPE html>
 <html lang="en">
-<!-- For now, We fetch Bleemeo Agent UI from http://localhost:3015/ for development purpose.
-But for a release, we have to serve UI from '/'. See line 52 at api.go that explains why I can not serve Javascript directory -->
 
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Bleemeo Panel</title>
+  <title>Glouton Panel</title>
   <link rel="icon" href="/static/img/logo.png" />
   <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css"
     integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
-  <script type="text/javascript" src="/static/js/panel-bleemeo-main.js"></script>
+  <script type="text/javascript" src="/static/js/panel-glouton-main.js"></script>
 </head>
 
 <body>
-  <div id="main" />
+  <div id="main">
+    <p>Loading UI...</p>
+    <p>The loading persit ? Maybe JavaScript file for the UI are not build ? Check the README and run the npm command
+      followed by go generate.</p>
+  </div>
 </body>
 <script type="text/javascript">
-  window.BleemeoConfig={
+  window.GloutonConfig = {
     "STATIC_CDN_URL": "/static/"
   };
-  window.AgentPanel.start()
+  window.GloutonPanel.start()
 </script>
 
 </html>

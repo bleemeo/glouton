@@ -26,6 +26,7 @@ import (
 
 	"glouton/logger"
 	"glouton/types"
+	"glouton/version"
 )
 
 // HTTPCheck perform a HTTP check
@@ -77,6 +78,7 @@ func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode in
 
 func (hc *HTTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	req, err := http.NewRequest("GET", hc.url, nil)
+	req.Header.Add("User-Agent", version.UserAgent())
 	if err != nil {
 		logger.V(2).Printf("Unable to create HTTP Request: %v", err)
 		return types.StatusDescription{

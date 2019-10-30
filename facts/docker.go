@@ -407,7 +407,7 @@ func notifyError(err error, lastErrorNotify time.Time, reconnectAttempt int) tim
 			"The agent is not permitted to access Docker, the Docker integration will be disabled.",
 		)
 		logger.Printf(
-			"'adduser bleemeo docker' and a restart of the Agent should fix this issue",
+			"'adduser glouton docker' and a restart of the Agent should fix this issue",
 		)
 	} else if isDockerRunning() {
 		logger.Printf("Unable to contact Docker: %v", err)
@@ -450,7 +450,7 @@ func primaryAddress(inspect types.ContainerJSON, bridgeNetworks map[string]inter
 
 func (d *DockerProvider) getClient(ctx context.Context) (cl *docker.Client, err error) {
 	if d.client == nil {
-		cl, err = docker.NewClientWithOpts(docker.FromEnv)
+		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
 		if err != nil {
 			return
 		}

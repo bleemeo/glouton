@@ -40,8 +40,9 @@ type taskInfo struct {
 	Name       string
 	CancelFunc func()
 
-	l       sync.Mutex
-	Running bool
+	l         sync.Mutex
+	Running   bool
+	ExitError error
 }
 
 // NewRegistry create a new registry. All task running in this registry will terminate when ctx is cancelled
@@ -112,6 +113,7 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 		ti.l.Lock()
 		defer ti.l.Unlock()
 		ti.Running = false
+		ti.ExitError = err
 	}()
 
 	r.tasks[id] = ti
@@ -130,16 +132,17 @@ func (r *Registry) RemoveTask(taskID int) {
 }
 
 // IsRunning return true if the taskID is still running.
-func (r *Registry) IsRunning(taskID int) bool {
+// If tasks stopped, also return the error the task returned
+func (r *Registry) IsRunning(taskID int) (bool, error) {
 	r.l.Lock()
 	defer r.l.Unlock()
 	task, ok := r.tasks[taskID]
 	if !ok {
-		return false
+		return false, nil
 	}
 	task.l.Lock()
 	defer task.l.Unlock()
-	return task.Running
+	return task.Running, task.ExitError
 }
 
 func (r *Registry) removeTask(taskID int, forClosing bool) {

@@ -46,6 +46,8 @@ import (
 	"glouton/inputs/statsd"
 	"glouton/logger"
 	"glouton/nrpe"
+	"glouton/prometheus/exporter"
+	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
 	"glouton/threshold"
@@ -102,9 +104,9 @@ type taskInfo struct {
 	name     string
 }
 
-func (a *agent) init() (ok bool) {
+func (a *agent) init(configFiles []string) (ok bool) {
 	a.taskRegistry = task.NewRegistry(context.Background())
-	cfg, warnings, err := a.loadConfiguration()
+	cfg, warnings, err := a.loadConfiguration(configFiles)
 	a.config = cfg
 
 	a.setupLogger()
@@ -155,13 +157,13 @@ func (a *agent) setupLogger() {
 	logger.SetPkgLevels(a.config.String("logging.package_levels"))
 }
 
-// Run runs the Bleemeo agent
-func Run() {
+// Run runs Glouton
+func Run(configFiles []string) {
 	agent := &agent{
 		taskRegistry: task.NewRegistry(context.Background()),
 		taskIDs:      make(map[string]int),
 	}
-	if !agent.init() {
+	if !agent.init(configFiles) {
 		os.Exit(1)
 		return
 	}
@@ -340,7 +342,7 @@ func (a *agent) run() { //nolint:gocyclo
 			currentMac = facts["primary_mac_address"]
 		}
 		if currentMac == initialMac || currentMac == "" || initialMac == "" {
-			logger.Printf("Not starting bleemeo-agent since installation for creation of a cloud image was requested and agent is still running on the same machine")
+			logger.Printf("Not starting Glouton since installation for creation of a cloud image was requested and agent is still running on the same machine")
 			logger.Printf("If this is wrong and agent should run on this machine, remove %#v file", cloudImageFile)
 			return
 		}
@@ -390,21 +392,30 @@ func (a *agent) run() { //nolint:gocyclo
 		a.dockerFact,
 		serivcesOverrideFromInterface(services),
 	)
-	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a)
+
+	var targets []scrapper.Target
+	if promCfg, found := a.config.Get("metric.prometheus"); found {
+		targets = prometheusConfigToURLs(promCfg)
+	}
+	scrap := scrapper.New(targets)
+	promExporter := exporter.New(a.store, scrap)
+
+	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter)
 
 	a.FireTrigger(true, false, false)
 
 	tasks := []taskInfo{
-		{a.store.Run, "store"},
-		{a.triggerHandler.Run, "triggerHandler"},
-		{a.dockerFact.Run, "docker"},
-		{a.collector.Run, "collector"},
-		{api.Run, "api"},
-		{a.healthCheck, "healthCheck"},
-		{a.hourlyDiscovery, "hourlyDiscovery"},
-		{a.dailyFact, "dailyFact"},
-		{a.dockerWatcher, "dockerWatcher"},
-		{a.netstatWatcher, "netstatWatcher"},
+		{a.store.Run, "Metric store"},
+		{a.triggerHandler.Run, "Internal trigger handler"},
+		{a.dockerFact.Run, "Docker connector"},
+		{a.collector.Run, "Metric collector"},
+		{api.Run, "Local Web UI"},
+		{a.healthCheck, "Agent healthcheck"},
+		{a.hourlyDiscovery, "Service Discovery"},
+		{a.dailyFact, "Facts gatherer"},
+		{a.dockerWatcher, "Docker event watcher"},
+		{a.netstatWatcher, "Netstat file watcher"},
+		{scrap.Run, "Prometheus Scrapper"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -421,7 +432,7 @@ func (a *agent) run() { //nolint:gocyclo
 			UpdateThresholds:       a.UpdateThresholds,
 			UpdateUnits:            a.accumulator.SetUnits,
 		})
-		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "bleemeo"})
+		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 	if a.config.Bool("nrpe.enabled") {
 		server := nrpe.New(
@@ -429,14 +440,14 @@ func (a *agent) run() { //nolint:gocyclo
 			a.config.Bool("nrpe.ssl"),
 			nrpeResponse,
 		)
-		tasks = append(tasks, taskInfo{server.Run, "nrpe"})
+		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
 	if a.config.Bool("zabbix.enabled") {
 		server := zabbix.New(
 			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
 			zabbixResponse,
 		)
-		tasks = append(tasks, taskInfo{server.Run, "zabbix"})
+		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
 	}
 	if a.config.Bool("influxdb.enabled") {
 		server := influxdb.New(
@@ -524,10 +535,12 @@ func (a *agent) healthCheck(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		}
-		mandatoryTasks := []string{"bleemeo", "collector", "store"}
+		mandatoryTasks := []string{"Bleemeo SAAS connector", "Metric collector", "Metric store"}
 		for _, name := range mandatoryTasks {
-			if a.doesTaskCrashed(ctx, name) {
-				logger.Printf("Gorouting %v crashed. Stopping the agent", name)
+			crashed, err := a.doesTaskCrashed(ctx, name)
+			if crashed {
+				logger.Printf("Task %#v crashed: %v", name, err)
+				logger.Printf("Stopping the agent as task %#v is critical", name)
 				a.cancel()
 			}
 		}
@@ -537,16 +550,19 @@ func (a *agent) healthCheck(ctx context.Context) error {
 	}
 }
 
-func (a *agent) doesTaskCrashed(ctx context.Context, name string) bool {
+// Return true if the given task exited before ctx was terminated
+// Also return the error the tasks returned.
+func (a *agent) doesTaskCrashed(ctx context.Context, name string) (bool, error) {
 	a.l.Lock()
 	defer a.l.Unlock()
 	if id, ok := a.taskIDs[name]; ok {
-		if !a.taskRegistry.IsRunning(id) {
+		running, err := a.taskRegistry.IsRunning(id)
+		if !running {
 			// Re-check ctx to avoid race condition, it crashed only if we are still running
-			return ctx.Err() == nil
+			return ctx.Err() == nil, err
 		}
 	}
-	return false
+	return false, nil
 }
 
 func (a *agent) hourlyDiscovery(ctx context.Context) error {
@@ -871,4 +887,33 @@ func setupContainer(hostRootPath string) {
 			os.Setenv("HOST_VAR", hostRootPath)
 		}
 	}
+}
+
+// prometheusConfigToURLs convert metric.prometheus config to a list of URL
+//
+// the config is expected to be a like:
+// config:
+//   your_custom_name_here:
+//     url: http://localhost:9100/metrics
+func prometheusConfigToURLs(config interface{}) (result []scrapper.Target) {
+	configMap, ok := config.(map[string]interface{})
+	if !ok {
+		return nil
+	}
+	for name, v := range configMap {
+		vMap, ok := v.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		url, ok := vMap["url"].(string)
+		if !ok {
+			continue
+		}
+		target := scrapper.Target{URL: url, Name: name}
+		if prefix, ok := vMap["prefix"].(string); ok {
+			target.Prefix = prefix
+		}
+		result = append(result, target)
+	}
+	return result
 }

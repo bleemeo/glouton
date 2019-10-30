@@ -1,0 +1,8 @@
+#!/bin/sh
+
+# Gather facts that need root privilege and write them in yaml file
+value=`cat /sys/devices/virtual/dmi/id/product_serial`
+
+if [ ! -z "${value}" ]; then
+    echo "serial_number: ${value}" > /var/lib/glouton/facts.yaml
+fi

@@ -1,0 +1,21 @@
+#!/bin/sh
+# Hook called after some package where installed/upgraded
+
+set -e
+
+glouton-netstat 2> /dev/null || true
+
+if systemctl is-active --quiet glouton 2>/dev/null; then
+    systemctl reload glouton
+fi
+
+if grep '^docker:' /etc/group 2> /dev/null > /dev/null; then
+    if id glouton 2>/dev/null | grep -vq docker; then
+        usermod -aG docker glouton
+
+        # glouton user was added to group docker, restart agent to make new
+        # permission effective.
+        touch /var/lib/glouton/upgrade  # avoid disconnect/reconnect notification
+        systemctl try-restart glouton restart
+    fi
+fi

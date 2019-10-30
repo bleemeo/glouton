@@ -46,6 +46,13 @@ export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
 
+- To build the UI (http://localhost:8015), run
+
+```
+(cd ./webui && npm i && npm run deploy)
+go generate glouton/...
+```
+
 - Run development version of the agent:
 
 ```
@@ -53,24 +60,35 @@ export GLOUTON_LOGGING_LEVEL=0  # 0: is the default. Increase to get more logs
 go run glouton
 ```
 
-- To include the Agent UI (http://localhost:8015), copy resulting JS files from bleemeo-agent-ui
-
-```
-cp -r ../bleemeo-agent-ui/dist/js api/static/assets
-```
-
 - Prepare a release (or just run some test and linter during development):
    - Optionally, try to update dependencies: `go get -u` then `go mod tidy`
    - For Telegraf, the update must specify the version: e.g. `go get github.com/influxdata/telegraf@1.12.1`
    - Run Go generate to update generated files (static JS files & GraphQL schema): `go generate glouton/...`
    - Run GoLang linter: `~/go/bin/golangci-lint run ./...`
-   - Run Go tests: `go test glouton/...`
+   - Run Go tests: `go test glouton/... || echo test FAILED`
 
-- Build the release binaries and Docker image:
+# Build a release
+
+- Build the UI files
 
 ```
-docker build -t glouton/glouton:latest .
+docker run --rm -u $UID -e HOME=/tmp/home \
+   -v $(pwd):/src -w /src/webui \
+   node:12.13.0 \
+   sh -c 'rm -fr node_modules && npm install && npm run deploy'
 ```
+
+- Run test and build the release binaries and Docker image:
+
+```
+docker run --rm -u $UID:999 -e HOME=/tmp/home -e CGO_ENABLED=0 \
+   -v $(pwd):/src -w /src \
+   -v /var/run/docker.sock:/var/run/docker.sock \
+   --entrypoint '' \
+   goreleaser/goreleaser:v0.120.3 sh -c 'go test glouton/... && goreleaser --rm-dist --snapshot'
+```
+
+Release files are present in dist/ folder and a Docker image is build (glouton:latest).
 
 ### Note on VS code
 

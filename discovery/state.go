@@ -52,7 +52,7 @@ func (o oldServiceKeyValue) toService() (srv Service, err error) {
 }
 
 type oldService struct {
-	Service      ServiceName       `json:"service"`
+	Service      string            `json:"service"`
 	Address      string            `json:"address"`
 	ExePath      string            `json:"exe_path"`
 	Active       bool              `json:"active"`
@@ -86,6 +86,7 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 		}
 	}
 	return Service{
+		ServiceType:     ServiceName(o.Service),
 		Name:            o.Service,
 		ContainerID:     o.ContainerID,
 		ContainerName:   instance,

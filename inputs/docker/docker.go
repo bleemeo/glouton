@@ -62,7 +62,14 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 			newContext.Tags["container_id"] = containerID
 		}
 	}
-	if enable, ok := originalContext.Tags["bleemeo.enable"]; ok {
+	if enable, ok := originalContext.Tags["glouton.enable"]; ok {
+		enable = strings.ToLower(enable)
+		switch enable {
+		case "0", "off", "false", "no":
+			drop = true
+			return
+		}
+	} else if enable, ok := originalContext.Tags["bleemeo.enable"]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
 		case "0", "off", "false", "no":

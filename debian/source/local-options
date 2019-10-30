@@ -1,5 +1,0 @@
-#### Uncomment to active options. See dpkg-source(1)
-#abort-on-upstream-changes
-#unapply-patches
-tar-ignore = ".git"
-tar-ignore = ".tox"

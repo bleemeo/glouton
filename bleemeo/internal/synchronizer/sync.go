@@ -86,8 +86,13 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	s.startedAt = time.Now()
 	accountID := s.option.Config.String("bleemeo.account_id")
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
-	if accountID == "" || registrationKey == "" {
-		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent)")
+	for accountID == "" || registrationKey == "" {
+		logger.Printf("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(time.Minute):
+		}
 	}
 
 	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
