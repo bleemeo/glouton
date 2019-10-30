@@ -29,7 +29,7 @@ import (
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
-// Client is an MQTT client for Bleemeo Cloud platform
+// Client is an influxdb client for Bleemeo Cloud platform
 type Client struct {
 	serverAddress        string
 	dataBaseName         string
@@ -59,17 +59,15 @@ func (c *Client) doConnect() error {
 			Addr: c.serverAddress,
 		})
 		if err != nil {
-			logger.V(1).Printf("Error creating InfluxDB Client: ", err.Error())
 			return err
 		}
 		c.influxClient = influxClient
-		logger.V(1).Printf("InfluxDB client created")
+		logger.V(2).Printf("InfluxDB client created")
 	}
 
 	// Test the conectivity to the server
 	_, _, pingErr := c.influxClient.Ping(5 * time.Second)
 	if pingErr != nil {
-		logger.V(1).Printf("Impossible to contact the influxDB server %s : %s", c.serverAddress, pingErr)
 		return pingErr
 	}
 
@@ -86,18 +84,16 @@ func (c *Client) doConnect() error {
 			Precision: "s",
 		})
 		c.influxDBBatchPoints = bp
-		logger.V(1).Printf("Database created: %s", c.dataBaseName)
+		logger.V(2).Printf("Database created: %s", c.dataBaseName)
 		return nil
 	}
 
 	// If the query creation failed
 	if err != nil {
-		logger.V(1).Printf("Error creating or sending influxdb query 'CREATE DATABASE %s' : %s", c.dataBaseName, err.Error())
 		return err
 	}
 
 	// If the answer failed we print and return the error
-	logger.V(1).Printf("Error creating InfluxDB DATABASE: %s", answer.Error())
 	return answer.Error()
 }
 
@@ -107,18 +103,21 @@ func (c *Client) connect(ctx context.Context) {
 	var sleepDelay time.Duration = 10 * time.Second
 	for ctx.Err() == nil {
 		err := c.doConnect()
-		if err == nil {
+		if err != nil {
+			logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v", c.serverAddress, sleepDelay)
+			logger.V(2).Printf("Connexion to the influxdb server failed : %s", err.Error())
+			select {
+			case <-ctx.Done():
+				logger.V(2).Printf("The context is ended, stop trying to connect to the influxdb server")
+				return
+			case <-time.After(sleepDelay):
+			}
+			sleepDelay = time.Duration(math.Min(sleepDelay.Seconds()*2, 300)) * time.Second
+		} else {
 			logger.V(1).Printf("Connexion to the influxdb server '%s' succed", c.serverAddress)
 			return
 		}
-		logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v", c.serverAddress, sleepDelay)
-		select {
-		case <-ctx.Done():
-			logger.V(1).Printf("The context is ended, stop trying to conect to the influxdb server")
-			return
-		case <-time.After(sleepDelay):
-		}
-		sleepDelay = time.Duration(math.Min(sleepDelay.Seconds()*2, 300)) * time.Second
+
 	}
 }
 
@@ -150,7 +149,7 @@ func (c *Client) convertPendingPoints() {
 
 		pt, err := influxDBClient.NewPoint(measurement, tags, fields, time)
 		if err != nil {
-			logger.V(1).Printf("Error: impossible to create the influxMetricPoint: %s", measurement)
+			logger.V(0).Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", measurement)
 		}
 		c.influxDBBatchPoints.AddPoint(pt)
 	}
@@ -165,20 +164,16 @@ func (c *Client) sendPoints() error {
 	// If the write function failed we don't refresh the batchPoint and send an error
 	// to retry later
 	if err != nil {
-		logger.V(1).Printf("Error while sending metrics to influxDB server: %s", err.Error())
 		return err
 	}
 
 	// If the write function succed we create a new empty batchPoint
 	// to receive the new points
-	newBp, err := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
+	newBp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
 		Database:  c.dataBaseName,
 		Precision: "s",
 	})
-	if err != nil {
-		logger.V(1).Printf("Error creating BatchPoints for influxdb: %s", err.Error())
-		return err
-	}
+
 	c.influxDBBatchPoints = newBp
 	return nil
 }
@@ -201,7 +196,10 @@ func (c *Client) Run(ctx context.Context) error {
 		c.convertPendingPoints()
 
 		// Send the point to the server
-		c.sendPoints()
+		err := c.sendPoints()
+		if err != nil {
+			logger.V(1).Printf("Fail to send the metrics to the influxdb server : %s", err.Error())
+		}
 
 		// Wait the ticker or the and of the programm
 		select {
