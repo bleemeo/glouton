@@ -128,32 +128,37 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
 }
 
+// convertMetricPoint convert a gloutonMetricPoint in influxDBClient.Point
+func convertMetricPoint(metricPoint types.MetricPoint, pointsConverted []string) (*influxDBClient.Point, error) {
+	measurement := metricPoint.Labels["__name__"]
+	time := metricPoint.PointStatus.Point.Time
+	fields := map[string]interface{}{
+		"value": metricPoint.PointStatus.Point.Value,
+	}
+	tags := make(map[string]string)
+	for key, value := range metricPoint.Labels {
+		tags[key] = value
+	}
+	delete(tags, "__name__")
+	tags["status"] = metricPoint.PointStatus.StatusDescription.StatusDescription
+
+	return influxDBClient.NewPoint(measurement, tags, fields, time)
+}
+
 // convertPendingPoints converts the BleemeoPendingPoints in InfluxDBPendingPoints
 func (c *Client) convertPendingPoints() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	// For each metricPoint received in gloutonPendingPoints this block creates an influxDBPoint
-	// and adds it to the influxDBBatchPoints
+	var pointsConverted []string
 	for _, metricPoint := range c.gloutonPendingPoints {
-		measurement := metricPoint.Labels["__name__"]
-		time := metricPoint.PointStatus.Point.Time
-		fields := map[string]interface{}{
-			"value": metricPoint.PointStatus.Point.Value,
-		}
-		tags := make(map[string]string)
-		for key, value := range metricPoint.Labels {
-			tags[key] = value
-		}
-		delete(tags, "__name__")
-		tags["status"] = metricPoint.PointStatus.StatusDescription.StatusDescription
-
-		pt, err := influxDBClient.NewPoint(measurement, tags, fields, time)
+		pt, err := convertMetricPoint(metricPoint, pointsConverted)
 		if err != nil {
-			logger.V(0).Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", measurement)
+			logger.V(0).Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
 		} else {
 			c.influxDBBatchPoints.AddPoint(pt)
 		}
 	}
+	c.gloutonPendingPoints = c.gloutonPendingPoints[:0]
 }
 
 // sendPoints sends points and retry when it fails
