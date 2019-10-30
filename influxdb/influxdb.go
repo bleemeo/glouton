@@ -77,24 +77,24 @@ func (c *Client) doConnect() error {
 	}
 	answer, err := c.influxClient.Query(query)
 
-	// If the query and the answer succed the database is created and we create a BatchPoints
-	if err == nil && answer.Error() == nil {
-		bp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
-			Database:  c.dataBaseName,
-			Precision: "s",
-		})
-		c.influxDBBatchPoints = bp
-		logger.V(2).Printf("Database created: %s", c.dataBaseName)
-		return nil
-	}
-
 	// If the query creation failed
 	if err != nil {
 		return err
 	}
 
 	// If the answer failed we print and return the error
-	return answer.Error()
+	if answer.Error() != nil {
+		return answer.Error()
+	}
+
+	// If the query and the answer succed the database is created and we create a BatchPoints
+	bp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
+		Database:  c.dataBaseName,
+		Precision: "s",
+	})
+	c.influxDBBatchPoints = bp
+	logger.V(2).Printf("Database created: %s", c.dataBaseName)
+	return nil
 }
 
 // connect tries to connect the influxDB client to the server and create the database.
