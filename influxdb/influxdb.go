@@ -153,7 +153,7 @@ func (c *Client) convertPendingPoints() {
 	for _, metricPoint := range c.gloutonPendingPoints {
 		pt, err := convertMetricPoint(metricPoint, pointsConverted)
 		if err != nil {
-			logger.V(0).Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
+			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
 		} else {
 			c.influxDBBatchPoints.AddPoint(pt)
 		}
