@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
 import { gql } from 'apollo-boost'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
-import { chartTypes, computeEnd } from '../utils'
+import { chartTypes, computeEnd, composeMetricName } from '../utils'
 import LineChart from './LineChart'
 import { useFetch, POLL } from '../utils/hooks'
 
@@ -123,6 +123,11 @@ const WidgetDashboardItem = ({
         break
       case chartTypes[2]:
         const resultsLines = points
+        resultsLines.sort((a, b) => {
+          const aLabel = composeMetricName(a)
+          const bLabel = composeMetricName(b)
+          return aLabel.nameDisplay.localeCompare(bLabel.nameDisplay)
+        })
         displayWidgetItem = (
           <LineChart
             metrics={resultsLines}
