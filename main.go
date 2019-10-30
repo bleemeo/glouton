@@ -31,6 +31,7 @@ import (
 var (
 	runAsRoot   = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
 	configFiles = flag.String("config", "", "Configuration files/dirs to load.")
+	showVersion = flag.Bool("version", false, "Show version and exit")
 )
 
 //nolint: gochecknoglobals
@@ -47,6 +48,10 @@ func main() {
 		versionPkg.BuildHash = commit
 	}
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(versionPkg.Version)
+		return
+	}
 	if os.Getuid() == 0 && !*runAsRoot {
 		fmt.Println("Error: trying to run Glouton as root without \"--yes-run-as-root\" option.")
 		fmt.Println("If Glouton is installed using standard method, start it with:")
