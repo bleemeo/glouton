@@ -15,7 +15,8 @@ const MetricGaugeItem = ({
   fontSize = 15,
   titleFontSize = 30,
   loading,
-  hasError
+  hasError,
+  thresholds
 }) => {
   if (loading) {
     return (
@@ -34,6 +35,19 @@ const MetricGaugeItem = ({
       </div>
     )
   }
+  const segmentsStep = []
+  const segmentsColor = ['#' + colorForStatus(0)]
+  if (thresholds) {
+    if (thresholds.highWarning) {
+      segmentsStep.push(thresholds.highWarning)
+      segmentsColor.push('#' + colorForStatus(1))
+    }
+    if (thresholds.highCritical) {
+      segmentsStep.push(thresholds.highCritical)
+      segmentsColor.push('#' + colorForStatus(2))
+    }
+  }
+  segmentsStep.push(100)
   return (
     <div className="card card-body widget" style={style}>
       <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
@@ -41,8 +55,8 @@ const MetricGaugeItem = ({
           <DonutPieChart
             value={value}
             fontSize={fontSize}
-            segmentsStep={[100]}
-            segmentsColor={[`#${status ? colorForStatus(status) : colorForStatus(0)}`]}
+            segmentsStep={segmentsStep}
+            segmentsColor={segmentsColor}
             formattedValue={unitFormatCallback(unit)(value)}
           />
         </div>
@@ -63,7 +77,8 @@ MetricGaugeItem.propTypes = {
   titleFontSize: PropTypes.number,
   loading: PropTypes.bool,
   hasError: PropTypes.object,
-  status: PropTypes.number
+  status: PropTypes.number,
+  thresholds: PropTypes.object
 }
 
 export default MetricGaugeItem

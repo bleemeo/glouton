@@ -20,6 +20,10 @@ const GET_POINTS = gql`
         time
         value
       }
+      thresholds {
+        highWarning
+        highCritical
+      }
     }
   }
 `
@@ -105,7 +109,9 @@ const WidgetDashboardItem = ({
         ) {
           lastPoint = resultGauge.points[resultGauge.points.length - 1].value
         }
-        displayWidgetItem = <MetricGaugeItem unit={unit} value={lastPoint} name={title} />
+        displayWidgetItem = (
+          <MetricGaugeItem unit={unit} value={lastPoint} thresholds={resultGauge.thresholds} name={title} />
+        )
         break
       case chartTypes[1]:
         const resultStacked = points
