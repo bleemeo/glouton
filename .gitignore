@@ -4,6 +4,7 @@
 /netstat.out
 /generated_values.json
 /etc/agent.conf.d/90-local.conf
+/etc/conf.d/90-local.conf
 /work
 .vscode/
 /VERSION

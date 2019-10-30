@@ -47,12 +47,12 @@ nfpms:
     "bin/glouton-netstat": "/usr/bin/glouton-netstat"
     "bin/glouton-gather-facts": "/usr/bin/glouton-gather-facts"
   config_files:
-    "etc/agent.conf": "/etc/glouton/agent.conf"
-    "packaging/common/glouton-05-system.conf": "/etc/glouton/agent.conf.d/05-system.conf"
+    "etc/glouton.conf": "/etc/glouton/glouton.conf"
+    "packaging/common/glouton-05-system.conf": "/etc/glouton/conf.d/05-system.conf"
     "packaging/common/glouton.sudoers": "/etc/sudoers.d/glouton"
     "packaging/common/glouton.cron.hourly": "/etc/cron.hourly/glouton"
   empty_folders:
-  - /etc/glouton/agent.conf.d
+  - /etc/glouton/conf.d
   - /var/lib/glouton
   scripts:
     postinstall: "packaging/scripts/postinstall.sh"
@@ -61,20 +61,21 @@ nfpms:
   overrides:
     deb:
       config_files:
-        "packaging/deb/glouton-06-distribution.conf": "/etc/glouton/agent.conf.d/06-distribution.conf"
+        "packaging/deb/glouton-06-distribution.conf": "/etc/glouton/conf.d/06-distribution.conf"
         "packaging/deb/glouton.apt.conf": "/etc/apt/apt.conf.d/05glouton"
     rpm:
       recommends:
       - yum-plugin-post-transaction-actions
       config_files:
         "packaging/rpm/glouton.yum.action": "/etc/yum/post-actions/glouton.action"
-        "packaging/rpm/glouton-06-distribution.conf": "/etc/glouton/agent.conf.d/06-distribution.conf"
+        "packaging/rpm/glouton-06-distribution.conf": "/etc/glouton/conf.d/06-distribution.conf"
         "packaging/rpm/glouton-dnf-plugin.py": "/usr/lib/python3.6/site-packages/dnf-plugins/glouton.py"
 dockers:
 - image_templates:
   - glouton:latest
   - glouton:{{.Version}}
   extra_files:
+  - etc/glouton.conf
   - packaging/docker/60-glouton.conf
   - packaging/common/glouton-05-system.conf
 checksum:

@@ -31,14 +31,14 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
         if [ "$filename" = "99-disabled-by-glouton.conf" ]; then
             continue
         fi
-        if [ ! -e "/etc/glouton/agent.conf.d/$filename" ]; then
+        if [ ! -e "/etc/glouton/conf.d/$filename" ]; then
             echo "Copy config $filename"
-            cp -a "/etc/bleemeo/agent.conf.d/$filename" "/etc/glouton/agent.conf.d/$filename"
-            if [ `stat -c %U "/etc/glouton/agent.conf.d/$filename"` = "bleemeo" ]; then
-                chown glouton "/etc/glouton/agent.conf.d/$filename"
+            cp -a "/etc/bleemeo/agent.conf.d/$filename" "/etc/glouton/conf.d/$filename"
+            if [ `stat -c %U "/etc/glouton/conf.d/$filename"` = "bleemeo" ]; then
+                chown glouton "/etc/glouton/conf.d/$filename"
             fi
-            if [ `stat -c %G "/etc/glouton/agent.conf.d/$filename"` = "bleemeo" ]; then
-                chgrp glouton "/etc/glouton/agent.conf.d/$filename"
+            if [ `stat -c %G "/etc/glouton/conf.d/$filename"` = "bleemeo" ]; then
+                chgrp glouton "/etc/glouton/conf.d/$filename"
             fi
         fi
     done
@@ -71,9 +71,9 @@ fi
 chown glouton:glouton /var/lib/glouton
 
 
-if [ -e /etc/glouton/agent.conf.d/30-install.conf ]; then
-    chown glouton:glouton /etc/glouton/agent.conf.d/30-install.conf
-    chmod 0640 /etc/glouton/agent.conf.d/30-install.conf
+if [ -e /etc/glouton/conf.d/30-install.conf ]; then
+    chown glouton:glouton /etc/glouton/conf.d/30-install.conf
+    chmod 0640 /etc/glouton/conf.d/30-install.conf
 fi
 
 # Retrive fact that needs root privilege

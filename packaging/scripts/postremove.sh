@@ -8,12 +8,12 @@ case "$1" in
         rm -f /var/lib/glouton/facts.yaml
         rm -f /var/lib/glouton/netstat.out
         rm -f /var/lib/glouton/cloudimage_creation
-        rm -f /etc/glouton/agent.conf.d/30-install.conf
+        rm -f /etc/glouton/conf.d/30-install.conf
         if [ -d /var/lib/glouton ]; then
             rmdir --ignore-fail-on-non-empty /var/lib/glouton
         fi
-        if [ -d /etc/glouton/agent.conf.d ]; then
-            rmdir --ignore-fail-on-non-empty /etc/glouton/agent.conf.d
+        if [ -d /etc/glouton/conf.d ]; then
+            rmdir --ignore-fail-on-non-empty /etc/glouton/conf.d
         fi
         if [ -d /etc/glouton ]; then
             rmdir --ignore-fail-on-non-empty /etc/glouton
