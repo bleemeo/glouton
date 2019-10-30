@@ -28,7 +28,7 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
     cp -a /var/lib/bleemeo/state.json /var/lib/glouton/state.json
     chown glouton:glouton /var/lib/glouton/state.json
     for filename in `ls /etc/bleemeo/agent.conf.d`; do
-        if [ "$filename" = "9999-disabled-by-glouton.conf" ]; then
+        if [ "$filename" = "zzz-disabled-by-glouton.conf" ]; then
             continue
         fi
         if [ ! -e "/etc/glouton/conf.d/$filename" ]; then
@@ -42,7 +42,7 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
             fi
         fi
     done
-    cat > /etc/bleemeo/agent.conf.d/9999-disabled-by-glouton.conf << EOF
+    cat > /etc/bleemeo/agent.conf.d/zzz-disabled-by-glouton.conf << EOF
         # Bleemeo agent is disabled and is replaced by Glouton.
         # If you want to rollback from Glouton to Bleemeo-agent:
         # * uninstall glouton
