@@ -88,9 +88,10 @@ type ComplexityRoot struct {
 	}
 
 	Metric struct {
-		Labels func(childComplexity int) int
-		Name   func(childComplexity int) int
-		Points func(childComplexity int) int
+		Labels     func(childComplexity int) int
+		Name       func(childComplexity int) int
+		Points     func(childComplexity int) int
+		Thresholds func(childComplexity int) int
 	}
 
 	Point struct {
@@ -138,6 +139,13 @@ type ComplexityRoot struct {
 
 	Tag struct {
 		TagName func(childComplexity int) int
+	}
+
+	Threshold struct {
+		HighCritical func(childComplexity int) int
+		HighWarning  func(childComplexity int) int
+		LowCritical  func(childComplexity int) int
+		LowWarning   func(childComplexity int) int
 	}
 
 	Topinfo struct {
@@ -382,6 +390,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Metric.Points(childComplexity), true
+
+	case "Metric.thresholds":
+		if e.complexity.Metric.Thresholds == nil {
+			break
+		}
+
+		return e.complexity.Metric.Thresholds(childComplexity), true
 
 	case "Point.time":
 		if e.complexity.Point.Time == nil {
@@ -632,6 +647,34 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Tag.TagName(childComplexity), true
 
+	case "Threshold.highCritical":
+		if e.complexity.Threshold.HighCritical == nil {
+			break
+		}
+
+		return e.complexity.Threshold.HighCritical(childComplexity), true
+
+	case "Threshold.highWarning":
+		if e.complexity.Threshold.HighWarning == nil {
+			break
+		}
+
+		return e.complexity.Threshold.HighWarning(childComplexity), true
+
+	case "Threshold.lowCritical":
+		if e.complexity.Threshold.LowCritical == nil {
+			break
+		}
+
+		return e.complexity.Threshold.LowCritical(childComplexity), true
+
+	case "Threshold.lowWarning":
+		if e.complexity.Threshold.LowWarning == nil {
+			break
+		}
+
+		return e.complexity.Threshold.LowWarning(childComplexity), true
+
 	case "Topinfo.processes":
 		if e.complexity.Topinfo.Processes == nil {
 			break
@@ -709,6 +752,14 @@ type Metric {
   name: String!
   labels: [Label!]!
   points: [Point!]
+  thresholds: Threshold!
+}
+
+type Threshold {
+  lowCritical: Float
+  lowWarning: Float
+  highCritical: Float
+  highWarning: Float
 }
 
 type Container {
@@ -2072,6 +2123,43 @@ func (ec *executionContext) _Metric_points(ctx context.Context, field graphql.Co
 	return ec.marshalOPoint2ᚕᚖgloutonᚋapiᚐPoint(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Metric_thresholds(ctx context.Context, field graphql.CollectedField, obj *Metric) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Metric",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Thresholds, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !ec.HasError(rctx) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(*Threshold)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalNThreshold2ᚖgloutonᚋapiᚐThreshold(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Point_time(ctx context.Context, field graphql.CollectedField, obj *Point) (ret graphql.Marshaler) {
 	ctx = ec.Tracer.StartFieldExecution(ctx, field)
 	defer func() {
@@ -3361,6 +3449,142 @@ func (ec *executionContext) _Tag_tagName(ctx context.Context, field graphql.Coll
 	rctx.Result = res
 	ctx = ec.Tracer.StartFieldChildExecution(ctx)
 	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Threshold_lowCritical(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Threshold",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LowCritical, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*float64)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Threshold_lowWarning(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Threshold",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.LowWarning, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*float64)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Threshold_highCritical(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Threshold",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HighCritical, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*float64)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Threshold_highWarning(ctx context.Context, field graphql.CollectedField, obj *Threshold) (ret graphql.Marshaler) {
+	ctx = ec.Tracer.StartFieldExecution(ctx, field)
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+		ec.Tracer.EndFieldExecution(ctx)
+	}()
+	rctx := &graphql.ResolverContext{
+		Object:   "Threshold",
+		Field:    field,
+		Args:     nil,
+		IsMethod: false,
+	}
+	ctx = graphql.WithResolverContext(ctx, rctx)
+	ctx = ec.Tracer.StartFieldResolverExecution(ctx, rctx)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.HighWarning, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*float64)
+	rctx.Result = res
+	ctx = ec.Tracer.StartFieldChildExecution(ctx)
+	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Topinfo_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
@@ -4937,6 +5161,11 @@ func (ec *executionContext) _Metric(ctx context.Context, sel ast.SelectionSet, o
 			}
 		case "points":
 			out.Values[i] = ec._Metric_points(ctx, field, obj)
+		case "thresholds":
+			out.Values[i] = ec._Metric_thresholds(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5293,6 +5522,36 @@ func (ec *executionContext) _Tag(ctx context.Context, sel ast.SelectionSet, obj 
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var thresholdImplementors = []string{"Threshold"}
+
+func (ec *executionContext) _Threshold(ctx context.Context, sel ast.SelectionSet, obj *Threshold) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.RequestContext, sel, thresholdImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("Threshold")
+		case "lowCritical":
+			out.Values[i] = ec._Threshold_lowCritical(ctx, field, obj)
+		case "lowWarning":
+			out.Values[i] = ec._Threshold_lowWarning(ctx, field, obj)
+		case "highCritical":
+			out.Values[i] = ec._Threshold_highCritical(ctx, field, obj)
+		case "highWarning":
+			out.Values[i] = ec._Threshold_highWarning(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -6143,6 +6402,20 @@ func (ec *executionContext) marshalNTag2ᚖgloutonᚋapiᚐTag(ctx context.Conte
 	return ec._Tag(ctx, sel, v)
 }
 
+func (ec *executionContext) marshalNThreshold2gloutonᚋapiᚐThreshold(ctx context.Context, sel ast.SelectionSet, v Threshold) graphql.Marshaler {
+	return ec._Threshold(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalNThreshold2ᚖgloutonᚋapiᚐThreshold(ctx context.Context, sel ast.SelectionSet, v *Threshold) graphql.Marshaler {
+	if v == nil {
+		if !ec.HasError(graphql.GetResolverContext(ctx)) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	return ec._Threshold(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalNTime2timeᚐTime(ctx context.Context, v interface{}) (time.Time, error) {
 	return graphql.UnmarshalTime(v)
 }
@@ -6418,6 +6691,29 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 		return graphql.Null
 	}
 	return ec.marshalOBoolean2bool(ctx, sel, *v)
+}
+
+func (ec *executionContext) unmarshalOFloat2float64(ctx context.Context, v interface{}) (float64, error) {
+	return graphql.UnmarshalFloat(v)
+}
+
+func (ec *executionContext) marshalOFloat2float64(ctx context.Context, sel ast.SelectionSet, v float64) graphql.Marshaler {
+	return graphql.MarshalFloat(v)
+}
+
+func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v interface{}) (*float64, error) {
+	if v == nil {
+		return nil, nil
+	}
+	res, err := ec.unmarshalOFloat2float64(ctx, v)
+	return &res, err
+}
+
+func (ec *executionContext) marshalOFloat2ᚖfloat64(ctx context.Context, sel ast.SelectionSet, v *float64) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec.marshalOFloat2float64(ctx, sel, *v)
 }
 
 func (ec *executionContext) unmarshalOPagination2gloutonᚋapiᚐPagination(ctx context.Context, v interface{}) (Pagination, error) {

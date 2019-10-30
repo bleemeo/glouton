@@ -26,6 +26,7 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/threshold"
 	"glouton/types"
 
 	"github.com/99designs/gqlgen/handler"
@@ -59,17 +60,18 @@ type API struct {
 	factProvider *facts.FactProvider
 	disc         *discovery.Discovery
 	agent        agentInterface
+	accumulator  *threshold.Accumulator
 }
 
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, accumulator *threshold.Accumulator) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent}
+	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent, accumulator: accumulator}
 
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
