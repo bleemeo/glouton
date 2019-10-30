@@ -352,7 +352,16 @@ func (a *Accumulator) getThreshold(key MetricNameItem) Threshold {
 	if threshold, ok := a.thresholds[key]; ok {
 		return threshold
 	}
-	return a.thresholdsAllItem[key.Name]
+	v := a.thresholdsAllItem[key.Name]
+	if v.IsZero() {
+		return Threshold{
+			LowCritical:  math.NaN(),
+			LowWarning:   math.NaN(),
+			HighWarning:  math.NaN(),
+			HighCritical: math.NaN(),
+		}
+	}
+	return v
 }
 
 // convertInterface convert the interface type in float64
