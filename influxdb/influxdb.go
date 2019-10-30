@@ -150,8 +150,9 @@ func (c *Client) convertPendingPoints() {
 		pt, err := influxDBClient.NewPoint(measurement, tags, fields, time)
 		if err != nil {
 			logger.V(0).Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", measurement)
+		} else {
+			c.influxDBBatchPoints.AddPoint(pt)
 		}
-		c.influxDBBatchPoints.AddPoint(pt)
 	}
 }
 
