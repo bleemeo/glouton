@@ -78,12 +78,12 @@ const DonutPieChart = ({ value, segmentsColor, segmentsStep, fontSize, formatted
     <div className="block-fullsize d-flex justify-content-center">
       <svg
         className="opacityTransition"
-        viewBox={`0 0 ${size} ${size}`}
+        viewBox={`0 0 ${size} ${size - 10}`}
         width="60%"
         height="60%"
         style={{ display: 'block' }}
       >
-        <g transform={`translate(${radius},${radius}) scale(1.4) rotate(216)`}>
+        <g transform={`translate(${radius},${radius}) scale(1.5) rotate(216)`}>
           <path className="gaugeBg" d={backgroundArc()} />
           {arcCmpts.map(arcCmpt => arcCmpt)}
           {textCmpt}
