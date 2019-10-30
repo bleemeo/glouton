@@ -2,11 +2,18 @@ import React from 'react'
 import { unitFormatCallback, formatToBits, formatToBytes } from '../utils/formater'
 import { UNIT_PERCENTAGE } from '../utils'
 import DonutPieChart from './DonutPieChart'
+import { colorForStatus } from '../utils/converter'
 
-export const renderDonut = (name, value) => (
+export const renderDonutDocker = (name, value) => (
   <div className="small-widget">
     <div className="content">
-      <DonutPieChart values={[{ label: name, value: value }]} valueFormatter={unitFormatCallback(UNIT_PERCENTAGE)} />
+      <DonutPieChart
+        value={value}
+        fontSize={15}
+        segmentsColor={['#' + colorForStatus(0)]}
+        segmentsStep={[100]}
+        formattedValue={unitFormatCallback(UNIT_PERCENTAGE)(value)}
+      />
     </div>
     <div className="title">{name}</div>
   </div>

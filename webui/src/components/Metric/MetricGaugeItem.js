@@ -4,10 +4,12 @@ import DonutPieChart from '../UI/DonutPieChart'
 import { unitFormatCallback } from '../utils/formater'
 import Loading from '../UI/Loading'
 import QueryError from '../UI/QueryError'
+import { colorForStatus } from '../utils/converter'
 
 const MetricGaugeItem = ({
   unit,
-  values,
+  value,
+  status = 0,
   name,
   style = null,
   fontSize = 15,
@@ -36,7 +38,13 @@ const MetricGaugeItem = ({
     <div className="card card-body widget" style={style}>
       <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
         <div>
-          <DonutPieChart values={values} fontSize={fontSize} valueFormatter={unitFormatCallback(unit)} />
+          <DonutPieChart
+            value={value}
+            fontSize={fontSize}
+            segmentsStep={[100]}
+            segmentsColor={[`#${status ? colorForStatus(status) : colorForStatus(0)}`]}
+            formattedValue={unitFormatCallback(unit)(value)}
+          />
         </div>
         <div>
           <b style={{ fontSize: titleFontSize, textOverflow: 'ellipsis' }}>{name}</b>
@@ -48,13 +56,14 @@ const MetricGaugeItem = ({
 
 MetricGaugeItem.propTypes = {
   unit: PropTypes.number,
-  values: PropTypes.instanceOf(Array),
-  name: PropTypes.oneOfType([PropTypes.object, PropTypes.string]).isRequired,
+  value: PropTypes.number,
+  name: PropTypes.oneOfType([PropTypes.object, PropTypes.string]),
   style: PropTypes.object,
   fontSize: PropTypes.number,
   titleFontSize: PropTypes.number,
   loading: PropTypes.bool,
-  hasError: PropTypes.object
+  hasError: PropTypes.object,
+  status: PropTypes.number
 }
 
 export default MetricGaugeItem

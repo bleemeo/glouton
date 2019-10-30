@@ -56,14 +56,14 @@ export const textForStatus = status => {
 export const colorForStatus = status => {
   switch (status) {
     case 0:
-      return '1F77B4'
+      return '28A745'
     case 1:
       return 'f0ad4e'
     case 2:
       return 'd9534f'
     // STATUS_UNKNOWN = 3
     default:
-      return undefined
+      return '28A745'
   }
 }
 

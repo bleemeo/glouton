@@ -105,7 +105,7 @@ const WidgetDashboardItem = ({
         ) {
           lastPoint = resultGauge.points[resultGauge.points.length - 1].value
         }
-        displayWidgetItem = <MetricGaugeItem unit={unit} values={[{ value: lastPoint }]} name={title} />
+        displayWidgetItem = <MetricGaugeItem unit={unit} value={lastPoint} name={title} />
         break
       case chartTypes[1]:
         const resultStacked = points
