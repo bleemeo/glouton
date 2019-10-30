@@ -45,8 +45,8 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
     if [ -e /usr/bin/dpkg ]; then
         # The space after filename in the grep are important to match agent.conf and not agent.conf.d
         PACKAGE_MD5=`dpkg-query --show --showformat='${Conffiles}\n' bleemeo-agent | grep '/etc/bleemeo/agent.conf ' | awk '{print $2}'`
-        CURRENT_MD5=`md5sum /etc/bleemeo/agent.conf`
-        if [ ! -z "${CONFIG_MD5}" -a ! -z "${CURRENT_MD5}" -a "${CONFIG_MD5}" != "${CURRENT_MD5}" ]; then
+        CURRENT_MD5=`md5sum /etc/bleemeo/agent.conf | awk '{print $1}'`
+        if [ ! -z "${PACKAGE_MD5}" -a ! -z "${CURRENT_MD5}" -a "${CONFIG_MD5}" != "${CURRENT_MD5}" ]; then
             echo "Copy config /etc/bleemeo/agent.conf"
             cp /etc/bleemeo/agent.conf /etc/glouton/glouton.conf
         fi
