@@ -1,4 +1,7 @@
 project_name: glouton
+snapshot:
+  # Our version is based on the date.
+  name_template: '{{ time "06.01.02.150405" }}'
 before:
   hooks:
     - go mod tidy
@@ -80,8 +83,6 @@ dockers:
   - packaging/common/glouton-05-system.conf
 checksum:
   name_template: 'checksums.txt'
-snapshot:
-  name_template: '{{ time "06.01.02.150405" }}'
 changelog:
   sort: asc
   filters:

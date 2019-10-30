@@ -69,6 +69,8 @@ go run glouton
 
 # Build a release
 
+Our release version will be set by goreleaser from the current date.
+
 - Build the UI files
 
 ```
