@@ -87,7 +87,7 @@ var defaultConfig = map[string]interface{}{
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
 	"jmx.enabled":                      true, // TODO: JMX metric gathering
-	"jmxtrans.config_file":             "/var/lib/jmxtrans/bleemeo-generated.json",
+	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
 	"kubernetes.enabled":               false, // TODO: add support for k8s
 	"kubernetes.nodename":              "",
 	"logging.level":                    "INFO",

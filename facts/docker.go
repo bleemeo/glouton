@@ -84,7 +84,7 @@ func NewDocker(deletedContainersCallback func(containerIDs []string)) *DockerPro
 //
 // It may use a cached value as old as maxAge
 //
-// If includeIgnored is false, Containers that has bleemeo.enable=false labels
+// If includeIgnored is false, Containers that has glouton.enable=false (or bleemeo.enable=false) labels
 // are not listed.
 func (d *DockerProvider) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []Container, err error) {
 	d.l.Lock()
