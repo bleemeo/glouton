@@ -19,7 +19,7 @@ case "$1" in
             rmdir --ignore-fail-on-non-empty /etc/glouton
         fi
         userdel --force glouton > /dev/null
-        groupdel glouton > /dev/null
+        groupdel glouton > /dev/null 2> /dev/null
         ;;
     1)
         # Upgrade on rpm-distribution

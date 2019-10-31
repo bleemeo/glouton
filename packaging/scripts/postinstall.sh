@@ -11,7 +11,7 @@ fi
 # the docker group to avoid requiring to run as root.
 if ! getent group docker >/dev/null; then
     groupadd -r docker
-    if [ -e /var/run/docker.sock -a `stat -c %G /var/run/docker.sock` = "root" ]; then
+    if [ -e /var/run/docker.sock -a "`stat -c %G /var/run/docker.sock 2>/dev/null`" = "root" ]; then
         chgrp docker /var/run/docker.sock
     fi
 fi
@@ -23,7 +23,7 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
     echo "Stopping bleemeo-agent and copying state.json from bleemeo-agent to Glouton"
     touch /var/lib/bleemeo/upgrade
     systemctl stop bleemeo-agent.service
-    systemctl stop telegraf.service
+    systemctl stop telegraf.service 2> /dev/null
     cp -a /var/lib/bleemeo/state.json /var/lib/glouton/state.json
     chown glouton:glouton /var/lib/glouton/state.json
     for filename in `ls /etc/bleemeo/agent.conf.d`; do
@@ -36,10 +36,10 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
         if [ ! -e "/etc/glouton/conf.d/$filename" ]; then
             echo "Copy config $filename"
             cp -a "/etc/bleemeo/agent.conf.d/$filename" "/etc/glouton/conf.d/$filename"
-            if [ `stat -c %U "/etc/glouton/conf.d/$filename"` = "bleemeo" ]; then
+            if [ "`stat -c %U "/etc/glouton/conf.d/$filename"`" = "bleemeo" ]; then
                 chown glouton "/etc/glouton/conf.d/$filename"
             fi
-            if [ `stat -c %G "/etc/glouton/conf.d/$filename"` = "bleemeo" ]; then
+            if [ "`stat -c %G "/etc/glouton/conf.d/$filename"`" = "bleemeo" ]; then
                 chgrp glouton "/etc/glouton/conf.d/$filename"
             fi
         fi
@@ -47,8 +47,8 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
     # We only want to migrate /etc/bleemeo/agent.conf if it was modified.
     if [ -e /usr/bin/dpkg ]; then
         # The space after filename in the grep are important to match agent.conf and not agent.conf.d
-        PACKAGE_MD5=`dpkg-query --show --showformat='${Conffiles}\n' bleemeo-agent | grep '/etc/bleemeo/agent.conf ' | awk '{print $2}'`
-        CURRENT_MD5=`md5sum /etc/bleemeo/agent.conf | awk '{print $1}'`
+        PACKAGE_MD5=`dpkg-query --show --showformat='${Conffiles}\n' bleemeo-agent 2>/dev/null | grep '/etc/bleemeo/agent.conf ' | awk '{print $2}'`
+        CURRENT_MD5=`md5sum /etc/bleemeo/agent.conf 2> /dev/null | awk '{print $1}'`
         if [ ! -z "${PACKAGE_MD5}" -a ! -z "${CURRENT_MD5}" -a "${PACKAGE_MD5}" != "${CURRENT_MD5}" ]; then
             echo "Copy config /etc/bleemeo/agent.conf"
             cp /etc/bleemeo/agent.conf /etc/glouton/glouton.conf
@@ -58,7 +58,7 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
         # the "grep 5" match line with bad md5sum
         # the if will check the result code of the last grep. If true the line was found so
         # file content (md5sum missmatch) was modified.
-        if rpm --verify bleemeo-agent | grep 5 | grep --quiet /etc/bleemeo/agent.conf$; then
+        if rpm --verify bleemeo-agent 2> /dev/null | grep 5 | grep --quiet /etc/bleemeo/agent.conf$; then
             echo "Copy config /etc/bleemeo/agent.conf"
             cp /etc/bleemeo/agent.conf /etc/glouton/glouton.conf
         fi
@@ -98,9 +98,9 @@ if [ -e /etc/glouton/conf.d/30-install.conf ]; then
 fi
 
 # Retrive fact that needs root privilege
-glouton-gather-facts
+glouton-gather-facts 2> /dev/null
 # Retrive netstat that also needs root privilege
-glouton-netstat
+glouton-netstat 2> /dev/null
 
 
 if [ "$1" = "configure" ] ; then
