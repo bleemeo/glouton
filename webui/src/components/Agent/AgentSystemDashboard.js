@@ -6,6 +6,7 @@ import { formatDateTime } from '../utils/formater'
 import EditPeriodModal, { lastQuickRanges } from './EditPeriodModal'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
 import LineChart from '../UI/LineChart'
+import { useWindowWidth } from '../utils/hooks'
 
 const gaugesBar = [
   { title: 'CPU', name: 'cpu_used', unit: UNIT_PERCENTAGE },
@@ -57,6 +58,8 @@ const AgentSystemDashboard = () => {
   useEffect(() => {
     window.localStorage.setItem('GLOUTON_STORAGE_period', JSON.stringify(period))
   }, [period])
+
+  const windowWidth = useWindowWidth()
 
   let periodText = ''
   if (period.minutes) {
@@ -155,7 +158,6 @@ const AgentSystemDashboard = () => {
                 scrollCheck
                 intervalCheck
                 intervalDelay={10000}
-                resizeCheck
               >
                 {renderProps => {
                   if (renderProps.isVisible) {
@@ -168,6 +170,7 @@ const AgentSystemDashboard = () => {
                         unit={widget.unit}
                         namesItems={widget.namesItems}
                         handleBackwardForward={handleBackwardForwardFunc}
+                        windowWidth={windowWidth}
                       />
                     )
                   } else {

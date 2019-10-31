@@ -50,16 +50,17 @@ const MetricGaugeItem = ({
   segmentsStep.push(100)
   return (
     <div className="card card-body widget" style={style}>
-      <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
-        <div>
-          <DonutPieChart
-            value={value}
-            fontSize={fontSize}
-            segmentsStep={segmentsStep}
-            segmentsColor={segmentsColor}
-            formattedValue={unitFormatCallback(unit)(value)}
-          />
-        </div>
+      <div
+        className="d-flex flex-column flex-nowrap justify-content-center align-items-center"
+        style={{ height: '100%' }}
+      >
+        <DonutPieChart
+          value={value}
+          fontSize={fontSize}
+          segmentsStep={segmentsStep}
+          segmentsColor={segmentsColor}
+          formattedValue={unitFormatCallback(unit)(value)}
+        />
         <div>
           <b style={{ fontSize: titleFontSize, textOverflow: 'ellipsis' }}>{name}</b>
         </div>

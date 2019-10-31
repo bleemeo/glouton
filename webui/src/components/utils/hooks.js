@@ -1,4 +1,5 @@
 import { useQuery } from '@apollo/react-hooks'
+import { useEffect, useState } from 'react'
 
 export const POLL = 6
 
@@ -17,4 +18,20 @@ export const useFetch = (query, variables = null, pollInterval = 0) => {
     isLoading = loading && networkStatus !== POLL
   }
   return { isLoading, error, ...data, networkStatus }
+}
+
+export const useWindowWidth = () => {
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+
+  useEffect(() => {
+    window.addEventListener('resize', onWindowResize)
+    return () => {
+      window.removeEventListener('resize', onWindowResize)
+    }
+  }, [])
+  const onWindowResize = () => {
+    setWindowWidth(window.innerWidth)
+  }
+
+  return windowWidth
 }

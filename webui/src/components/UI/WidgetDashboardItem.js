@@ -35,7 +35,8 @@ const WidgetDashboardItem = ({
   period,
   refetchTime,
   isVisible,
-  handleBackwardForward
+  handleBackwardForward,
+  windowWidth
 }) => {
   const previousError = useRef(null)
   const handleBackwardForwardFunc = (isForward = false) => {
@@ -124,6 +125,7 @@ const WidgetDashboardItem = ({
             period={period}
             refetchTime={refetchTime}
             handleBackwardForward={handleBackwardForwardFunc}
+            windowWidth={windowWidth}
           />
         )
         break
@@ -142,6 +144,7 @@ const WidgetDashboardItem = ({
             period={period}
             refetchTime={refetchTime}
             handleBackwardForward={handleBackwardForwardFunc}
+            windowWidth={windowWidth}
           />
         )
         break
@@ -164,10 +167,14 @@ WidgetDashboardItem.propTypes = {
   refetchTime: PropTypes.number.isRequired,
   period: PropTypes.object.isRequired,
   isVisible: PropTypes.bool,
-  handleBackwardForward: PropTypes.func
+  handleBackwardForward: PropTypes.func,
+  windowWidth: PropTypes.number.isRequired
 }
 
 export default React.memo(
   WidgetDashboardItem,
-  (prevProps, nextProps) => prevProps.period === nextProps.period && prevProps.isVisible === nextProps.isVisible
+  (prevProps, nextProps) =>
+    prevProps.period === nextProps.period &&
+    prevProps.isVisible === nextProps.isVisible &&
+    prevProps.windowWidth === nextProps.windowWidth
 )

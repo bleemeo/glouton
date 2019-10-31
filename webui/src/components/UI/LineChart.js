@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState } from 'react'
+import React, { useRef, useEffect, useState, useCallback } from 'react'
 import PropTypes from 'prop-types'
 import { Card } from 'tabler-react'
 import d3 from 'd3'
@@ -22,7 +22,17 @@ const MEMORY = ['#AEC7E8', '#C7C7C7', '#E1E1A2', '#98DF8A']
 
 const colorScale = d3.scale.category20()
 
-const LineChart = ({ stacked, metrics, title, unit, loading, hasError, period, handleBackwardForward }) => {
+const LineChart = ({
+  stacked,
+  metrics,
+  title,
+  unit,
+  loading,
+  hasError,
+  period,
+  handleBackwardForward,
+  windowWidth
+}) => {
   const svgChart = useRef(null)
   const [series, setSeries] = useState([])
 
@@ -74,6 +84,14 @@ const LineChart = ({ stacked, metrics, title, unit, loading, hasError, period, h
       svg.setOption(getOptions(series, stacked, selectUnitConverter(unit), unit))
     }
   }, [svgChart.current, metrics])
+
+  useEffect(() => {
+    if (svgChart.current) {
+      const svg = echarts.init(svgChart.current)
+      svg.resize()
+    }
+  }, [windowWidth])
+
   let doNotDisplayCarets = false
   let noData = false
   if (loading) {
@@ -209,6 +227,7 @@ const LineChart = ({ stacked, metrics, title, unit, loading, hasError, period, h
             <div
               ref={svgChart}
               style={{
+                width: svgChart.current ? svgChart.current.parentNode.offsetWidth - 100 + 'px' : '92%',
                 height: '100%',
                 marginLeft: '2.5rem',
                 marginTop: '0.4rem',
@@ -231,7 +250,8 @@ LineChart.propTypes = {
   loading: PropTypes.bool,
   hasError: PropTypes.object,
   period: PropTypes.object,
-  handleBackwardForward: PropTypes.func
+  handleBackwardForward: PropTypes.func,
+  windowWidth: PropTypes.number.isRequired
 }
 
 export default LineChart
