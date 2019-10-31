@@ -29,6 +29,8 @@ import (
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
+const maxPendingPoints = 100000
+
 // Client is an influxdb client for Bleemeo Cloud platform
 type Client struct {
 	serverAddress        string
@@ -125,7 +127,20 @@ func (c *Client) connect(ctx context.Context) {
 func (c *Client) addPoints(points []types.MetricPoint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
+	switch {
+	case len(points) > maxPendingPoints:
+		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(c.gloutonPendingPoints)+len(c.gloutonPendingPoints))
+		c.gloutonPendingPoints = points[len(points)-maxPendingPoints:]
+	case len(points) == maxPendingPoints:
+		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(c.gloutonPendingPoints))
+		c.gloutonPendingPoints = points
+	case len(c.gloutonPendingPoints)+len(points) > maxPendingPoints:
+		c.gloutonPendingPoints = c.gloutonPendingPoints[len(points):]
+		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
+		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(points))
+	default:
+		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
+	}
 }
 
 // convertMetricPoint convert a gloutonMetricPoint in influxDBClient.Point
