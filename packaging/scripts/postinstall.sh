@@ -30,6 +30,9 @@ if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then
         if [ "$filename" = "zzz-disabled-by-glouton.conf" ]; then
             continue
         fi
+        if [ "$filename" = "32-graphite_metrics_source.conf" -o "$filename" = "30-graphite_metrics_source.conf" ]; then
+            continue
+        fi
         if [ ! -e "/etc/glouton/conf.d/$filename" ]; then
             echo "Copy config $filename"
             cp -a "/etc/bleemeo/agent.conf.d/$filename" "/etc/glouton/conf.d/$filename"
