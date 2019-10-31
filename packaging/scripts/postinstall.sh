@@ -106,11 +106,13 @@ glouton-netstat
 if [ "$1" = "configure" ] ; then
     # Installation or upgrade on Debian-like system
     systemctl daemon-reload
-    systemctl enable --quiet --now glouton.service
+    systemctl enable --quiet glouton.service
+    systemctl start --quiet glouton.service
 elif [ "$1" = "1" ] ; then
     # Initial installation on rpm-like system
     systemctl daemon-reload
-    systemctl enable --quiet --now glouton.service
+    systemctl enable --quiet glouton.service
+    systemctl start --quiet glouton.service
 fi
 
 exit 0
