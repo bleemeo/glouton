@@ -4,7 +4,7 @@ Documentation=https://bleemeo.com
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/glouton
+ExecStart=/usr/sbin/glouton
 ExecReload=/bin/kill -HUP $MAINPID
 Restart=always
 User=glouton

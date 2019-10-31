@@ -399,7 +399,7 @@ func (a *agent) run() { //nolint:gocyclo
 	scrap := scrapper.New(targets)
 	promExporter := exporter.New(a.store, scrap)
 
-	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter)
+	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.accumulator)
 
 	a.FireTrigger(true, false, false)
 

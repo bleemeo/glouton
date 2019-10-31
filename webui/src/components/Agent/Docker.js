@@ -6,7 +6,7 @@ import { gql } from 'apollo-boost'
 import FaIcon from '../UI/FaIcon'
 import { formatDateTime, _formatCpuTime } from '../utils/formater'
 import { renderDisk } from './utils'
-import { renderNetwork, renderDonut } from '../UI'
+import { renderNetwork, renderDonutDocker } from '../UI'
 import Modal from '../UI/Modal'
 import A from '../UI/A'
 import Loading from '../UI/Loading'
@@ -106,8 +106,8 @@ const Docker = ({ container, date }) => {
           </div>
           <div className="col-xl-6 pull-xl-3 col-sm-12">
             <div className="blee-row">
-              {renderDonut('Memory', container.memUsedPerc)}
-              {renderDonut('CPU', container.cpuUsedPerc)}
+              {renderDonutDocker('Memory', container.memUsedPerc)}
+              {renderDonutDocker('CPU', container.cpuUsedPerc)}
               {renderNetwork('Network IO', container.netBitsRecv, container.netBitsSent)}
               {renderDisk('Disk IO', container.ioWriteBytes, container.ioReadBytes)}
             </div>

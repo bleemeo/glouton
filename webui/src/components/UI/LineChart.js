@@ -13,7 +13,7 @@ import {
   iopsToString
 } from '../utils/formater'
 import Loading from './Loading'
-import { fillEmptyPoints, UNIT_PERCENTAGE } from '../utils'
+import { fillEmptyPoints, UNIT_PERCENTAGE, composeMetricName } from '../utils'
 import FaIcon from './FaIcon'
 import QueryError from './QueryError'
 
@@ -57,11 +57,7 @@ const LineChart = ({
           : false
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
-        const name = metric.labels.some(l => l.key === '__name__')
-          ? metric.labels.find(l => l.key === '__name__').value
-          : ''
-        const item = metric.labels.some(l => l.key === 'item') ? metric.labels.find(l => l.key === 'item').value : ''
-        const nameDisplay = item ? name + '_' + item : name
+        const { nameDisplay, item } = composeMetricName(metric)
         let data = metric.points.map(point => [point.time, point.value])
         data = fillEmptyPoints(data, period)
         let color = colorScale(idx)

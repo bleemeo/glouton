@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
 import { gql } from 'apollo-boost'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
-import { chartTypes, computeEnd } from '../utils'
+import { chartTypes, computeEnd, composeMetricName } from '../utils'
 import LineChart from './LineChart'
 import { useFetch, POLL } from '../utils/hooks'
 
@@ -19,6 +19,10 @@ const GET_POINTS = gql`
       points {
         time
         value
+      }
+      thresholds {
+        highWarning
+        highCritical
       }
     }
   }
@@ -99,14 +103,16 @@ const WidgetDashboardItem = ({
         )[0]
         const end = computeEnd(type, period)
         let lastPoint = null
+        let thresholds = null
         if (
           resultGauge &&
           resultGauge.points &&
           new Date(resultGauge.points[resultGauge.points.length - 1].time) <= new Date(end)
         ) {
           lastPoint = resultGauge.points[resultGauge.points.length - 1].value
+          thresholds = resultGauge.thresholds
         }
-        displayWidgetItem = <MetricGaugeItem unit={unit} values={[{ value: lastPoint }]} name={title} />
+        displayWidgetItem = <MetricGaugeItem unit={unit} value={lastPoint} thresholds={thresholds} name={title} />
         break
       case chartTypes[1]:
         const resultStacked = points
@@ -125,6 +131,11 @@ const WidgetDashboardItem = ({
         break
       case chartTypes[2]:
         const resultsLines = points
+        resultsLines.sort((a, b) => {
+          const aLabel = composeMetricName(a)
+          const bLabel = composeMetricName(b)
+          return aLabel.nameDisplay.localeCompare(bLabel.nameDisplay)
+        })
         displayWidgetItem = (
           <LineChart
             metrics={resultsLines}

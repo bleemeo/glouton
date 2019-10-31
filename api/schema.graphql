@@ -12,6 +12,14 @@ type Metric {
   name: String!
   labels: [Label!]!
   points: [Point!]
+  thresholds: Threshold!
+}
+
+type Threshold {
+  lowCritical: Float
+  lowWarning: Float
+  highCritical: Float
+  highWarning: Float
 }
 
 type Container {

@@ -54,7 +54,7 @@ const AgentDetails = ({ facts }) => {
 
   let expireAgentBanner = null
   let agentDate = null
-  const agentVersion = facts.find(f => f.name === 'agent_version').value
+  const agentVersion = facts.find(f => f.name === 'glouton_version').value
   if (agentVersion) {
     const expDate = new Date()
     expDate.setDate(expDate.getDate() - 60)

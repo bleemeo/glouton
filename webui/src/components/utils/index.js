@@ -190,3 +190,10 @@ export const isEmpty = obj => {
   }
   return true
 }
+
+export function composeMetricName(metric) {
+  const name = metric.labels.some(l => l.key === '__name__') ? metric.labels.find(l => l.key === '__name__').value : ''
+  const item = metric.labels.some(l => l.key === 'item') ? metric.labels.find(l => l.key === 'item').value : ''
+  const nameDisplay = item ? name + '_' + item : name
+  return { nameDisplay, item }
+}

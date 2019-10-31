@@ -1,18 +1,6 @@
 import React from 'react'
 
-import DonutPieChart from '../UI/DonutPieChart'
-
-import { colorForStatus } from '../utils/converter'
-import { percentToString2Digits, formatToBytes, formatToBits } from '../utils/formater'
-
-export const renderDonut = (name, value, status) => (
-  <div className="small-widget">
-    <div className="content">
-      <DonutPieChart values={[{ value, color: colorForStatus(status) }]} valueFormatter={percentToString2Digits} />
-    </div>
-    <div className="title">{name}</div>
-  </div>
-)
+import { formatToBytes, formatToBits } from '../utils/formater'
 
 export const renderNetwork = (name, sentValue, recvValue) => {
   const formattedSentValue = sentValue !== null ? formatToBits(sentValue) : null

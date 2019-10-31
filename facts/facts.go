@@ -191,6 +191,8 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 			newFacts["timezone"] = strings.TrimSpace(string(v))
 		}
 	}
+	newFacts["glouton_version"] = version.Version
+	// TODO: drop agent_version. It's deprecated and is replaced by glouton_version
 	newFacts["agent_version"] = version.Version
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
