@@ -43,12 +43,12 @@ nfpms:
   formats:
   - deb
   - rpm
-  bindir: /usr/bin
+  bindir: /usr/sbin
   files:
     "packaging/common/glouton.service": "/lib/systemd/system/glouton.service"
     "packaging/common/glouton-hook-package-modified": "/usr/lib/glouton/glouton-hook-package-modified"
-    "bin/glouton-netstat": "/usr/bin/glouton-netstat"
-    "bin/glouton-gather-facts": "/usr/bin/glouton-gather-facts"
+    "bin/glouton-netstat": "/usr/sbin/glouton-netstat"
+    "bin/glouton-gather-facts": "/usr/sbin/glouton-gather-facts"
   config_files:
     "etc/glouton.conf": "/etc/glouton/glouton.conf"
     "packaging/common/glouton-05-system.conf": "/etc/glouton/conf.d/05-system.conf"
