@@ -87,7 +87,7 @@ docker run --rm -u $UID:999 -e HOME=/tmp/home -e CGO_ENABLED=0 \
    -v $(pwd):/src -w /src \
    -v /var/run/docker.sock:/var/run/docker.sock \
    --entrypoint '' \
-   goreleaser/goreleaser:v0.119.0 sh -c 'go test glouton/... && goreleaser --rm-dist --snapshot'
+   goreleaser/goreleaser:v0.120.4 sh -c 'go test glouton/... && goreleaser --rm-dist --snapshot'
 ```
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
