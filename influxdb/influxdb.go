@@ -144,7 +144,7 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 }
 
 // convertMetricPoint convert a gloutonMetricPoint in influxDBClient.Point
-func convertMetricPoint(metricPoint types.MetricPoint, pointsConverted []string) (*influxDBClient.Point, error) {
+func convertMetricPoint(metricPoint types.MetricPoint) (*influxDBClient.Point, error) {
 	measurement := metricPoint.Labels["__name__"]
 	time := metricPoint.PointStatus.Point.Time
 	fields := map[string]interface{}{
@@ -164,9 +164,8 @@ func convertMetricPoint(metricPoint types.MetricPoint, pointsConverted []string)
 func (c *Client) convertPendingPoints() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
-	var pointsConverted []string
 	for _, metricPoint := range c.gloutonPendingPoints {
-		pt, err := convertMetricPoint(metricPoint, pointsConverted)
+		pt, err := convertMetricPoint(metricPoint)
 		if err != nil {
 			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
 		} else {
