@@ -161,31 +161,34 @@ func convertMetricPoint(metricPoint types.MetricPoint) (*influxDBClient.Point, e
 	return influxDBClient.NewPoint(measurement, tags, fields, time)
 }
 
-// convertPendingPoints converts the BleemeoPendingPoints in InfluxDBPendingPoints
+// convertPendingPoints converts the 1000 older points from BleemeoPendingPoints in InfluxDBPendingPoints
 func (c *Client) convertPendingPoints() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	nbFailConversion := 0
+	points := c.influxDBBatchPoints.Points()
+	if len(points) >= pointsBatchSize {
+		logger.V(2).Printf("The influxDBBatchPoint is already full")
+		return
+	}
 	for _, metricPoint := range c.gloutonPendingPoints {
 		pt, err := convertMetricPoint(metricPoint)
 		if err != nil {
 			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
+			nbFailConversion++
 			continue
 		}
-		if len(c.influxDBBatchPoints.Points()) > pointsBatchSize {
-			newBp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
-				Database:  c.dataBaseName,
-				Precision: "s",
-			})
-			newBp.AddPoints(c.influxDBBatchPoints.Points()[100:])
-			c.influxDBBatchPoints = newBp
+		if len(c.influxDBBatchPoints.Points()) >= pointsBatchSize {
+			logger.V(2).Printf("The influxDBBatchPoint is full : stop converting points")
+			c.gloutonPendingPoints = c.gloutonPendingPoints[pointsBatchSize+nbFailConversion:]
+			return
 		}
 		c.influxDBBatchPoints.AddPoint(pt)
-
 	}
 	c.gloutonPendingPoints = c.gloutonPendingPoints[:0]
 }
 
-// sendPoints sends points and retry when it fails
+// sendPoints sends points cointain in the influxDBBatchPoint
 func (c *Client) sendPoints() error {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -222,15 +225,18 @@ func (c *Client) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		// Convert the BleemeoPendingPoints in InfluxDBPendingPoints
-		c.convertPendingPoints()
+		for len(c.gloutonPendingPoints) > 0 {
+			// Convert the BleemeoPendingPoints in InfluxDBPendingPoints
+			c.convertPendingPoints()
 
-		// Send the point to the server
-		err := c.sendPoints()
-		if err != nil {
-			logger.V(1).Printf("Fail to send the metrics to the influxdb server : %s", err.Error())
+			// Send the point to the server
+			// If sendPoints fail we retry after a tick
+			err := c.sendPoints()
+			if err != nil {
+				logger.V(1).Printf("Fail to send the metrics to the influxdb server : %s", err.Error())
+				break
+			}
 		}
-
 		// Wait the ticker or the and of the programm
 		select {
 		case <-ticker.C:
