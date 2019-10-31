@@ -450,10 +450,12 @@ func (a *agent) run() { //nolint:gocyclo
 		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
 	}
 	if a.config.Bool("influxdb.enabled") {
+		additionalTags := loadInfluxDBAdditionalTags(a.config)
 		server := influxdb.New(
 			fmt.Sprintf("http://%s:%s", a.config.String("influxdb.host"), a.config.String("influxdb.port")),
 			fmt.Sprintf("%s", a.config.String("influxdb.db_name")),
 			a.store,
+			additionalTags,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
 		logger.V(2).Printf("Influxdb is activated !")
@@ -916,4 +918,20 @@ func prometheusConfigToURLs(config interface{}) (result []scrapper.Target) {
 		result = append(result, target)
 	}
 	return result
+}
+
+// loadInfluxDBAdditionalTags search in the conf
+// if there are additional tags to adds to the influxDBMetricsPoints
+func loadInfluxDBAdditionalTags(config *config.Configuration) map[string]string {
+	hostname := config.String("influxdb.tags.hostname")
+	agentUUID := config.String("influxdb.tags.agent_uuid")
+	tags := make(map[string]string)
+	if hostname != "" {
+		tags["hostname"] = hostname
+	}
+	if agentUUID != "" {
+		tags["agentUuid"] = agentUUID
+	}
+	logger.V(2).Printf("InfluxDB: detected additionalTags are : %v", tags)
+	return tags
 }

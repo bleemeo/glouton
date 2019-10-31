@@ -41,15 +41,17 @@ type Client struct {
 	lock                 sync.Mutex
 	gloutonPendingPoints []types.MetricPoint
 	influxDBBatchPoints  influxDBClient.BatchPoints
+	additionalTags       map[string]string
 }
 
 // New create a new influxDB client
-func New(serverAddress, dataBaseName string, storeAgent *store.Store) *Client {
+func New(serverAddress, dataBaseName string, storeAgent *store.Store, additionalTags map[string]string) *Client {
 	return &Client{
-		serverAddress: serverAddress,
-		dataBaseName:  dataBaseName,
-		influxClient:  nil,
-		store:         storeAgent,
+		serverAddress:  serverAddress,
+		dataBaseName:   dataBaseName,
+		influxClient:   nil,
+		store:          storeAgent,
+		additionalTags: additionalTags,
 	}
 }
 
@@ -147,13 +149,13 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 }
 
 // convertMetricPoint convert a gloutonMetricPoint in influxDBClient.Point
-func convertMetricPoint(metricPoint types.MetricPoint) (*influxDBClient.Point, error) {
+func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string]string) (*influxDBClient.Point, error) {
 	measurement := metricPoint.Labels["__name__"]
 	time := metricPoint.PointStatus.Point.Time
 	fields := map[string]interface{}{
 		"value": metricPoint.PointStatus.Point.Value,
 	}
-	tags := make(map[string]string)
+	tags := additionalTags
 	for key, value := range metricPoint.Labels {
 		tags[key] = value
 	}
@@ -174,7 +176,7 @@ func (c *Client) convertPendingPoints() {
 		return
 	}
 	for _, metricPoint := range c.gloutonPendingPoints {
-		pt, err := convertMetricPoint(metricPoint)
+		pt, err := convertMetricPoint(metricPoint, c.additionalTags)
 		if err != nil {
 			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
 			nbFailConversion++
