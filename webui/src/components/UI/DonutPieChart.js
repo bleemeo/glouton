@@ -1,16 +1,13 @@
 import d3 from 'd3'
 import React from 'react'
 import PropTypes from 'prop-types'
-import Tooltip from 'react-tooltip'
 
-const colorScale = d3.scale.category20()
-
-const tau = Math.PI * 2
+const tau = Math.PI * 1.6
 const size = 100
 
 const radius = size / 2
 const innerRadius = radius - radius / 2
-const strokeWidth = radius / 5
+const strokeWidth = radius / 3
 const outerRadius = radius - strokeWidth
 
 const backgroundArc = d3.svg
@@ -20,78 +17,92 @@ const backgroundArc = d3.svg
   .startAngle(0)
   .endAngle(tau)
 
-const DonutPieChart = ({ values, fontSize, valueFormatter }) => {
+const createArcPath = (x, total) => {
+  return d3.svg
+    .arc()
+    .innerRadius(innerRadius)
+    .outerRadius(outerRadius)
+    .startAngle(total)
+    .endAngle(total + x)
+}
+
+const DonutPieChart = ({ value, segmentsColor, segmentsStep, fontSize, formattedValue }) => {
   let arcCmpts = []
   let totalValuesTau = 0.0
+  let previousStep = 0
   let textCmpt = null
-  const id = Math.floor(Math.random() * 1024) + 1
-  values.forEach((item, idx) => {
-    if (typeof item.value === 'number' && !isNaN(item.value)) {
-      const x = (item.value * tau) / 100
-      const arc = d3.svg
-        .arc()
-        .innerRadius(innerRadius)
-        .outerRadius(outerRadius)
-        .startAngle(totalValuesTau)
-        .endAngle(totalValuesTau + x)
-      arcCmpts.push(
-        <path key={idx.toString()} style={{ fill: `${item.color ? '#' + item.color : colorScale(idx)}` }} d={arc()} />
-      )
-      totalValuesTau += x
+  // segmentsStep indicates the number of steps that compose gauge
+  // For example, if you have [25, 50, 100]
+  // That you have a path from 0 to 25, a path from 25 to 50 and a path from 50 to 100
+  segmentsStep.forEach((item, idx) => {
+    if (typeof item === 'number' && !isNaN(item)) {
+      const tauValues = []
+      // These conditions are here to give transparency for each path
+      if (value > previousStep) {
+        if (value < item) {
+          // We have to build two paths if the value is between two steps
+          tauValues.push({ value: ((value - previousStep) * tau) / 100, isTransparent: false })
+          tauValues.push({ value: ((item - value) * tau) / 100, isTransparent: true })
+        } else {
+          tauValues.push({ value: ((item - previousStep) * tau) / 100, isTransparent: false })
+        }
+      } else {
+        tauValues.push({ value: ((item - previousStep) * tau) / 100, isTransparent: true })
+      }
+      tauValues.forEach((tauValue, idxTau) => {
+        const arc = createArcPath(tauValue.value, totalValuesTau)
+        const opacity = tauValue.isTransparent ? '55' : 'ff'
+        arcCmpts.push(
+          <path key={idx.toString() + idxTau.toString()} style={{ fill: segmentsColor[idx] + opacity }} d={arc()} />
+        )
+        totalValuesTau += tauValue.value
+      })
+      previousStep = item
     }
   })
 
-  if (values.length === 1) {
+  if (typeof value === 'number' && !isNaN(value)) {
     textCmpt = (
       <text
-        fontSize={`${fontSize}`}
+        fontSize={`${typeof InstallTrigger !== 'undefined' ? fontSize - 3 : fontSize}`}
         textAnchor="middle"
-        fill="currentColor"
-        style={{ dominantBaseline: 'middle', fontWeight: 'bold' }}
+        style={{ dominantBaseline: 'middle', fontWeight: 'bold', fill: '#000' }}
+        transform="rotate(144)"
       >
-        {valueFormatter(values[0].value)}
+        {formattedValue}
       </text>
     )
   }
 
   return (
-    <div className="d-flex justify-content-center">
+    <div className="block-fullsize d-flex justify-content-center">
       <svg
         className="opacityTransition"
-        viewBox={`0 0 ${size} ${size}`}
-        width="68%"
-        height="68%"
-        data-tip
-        data-for={id.toString()}
+        viewBox={`0 0 ${size} ${size - 10}`}
+        width="60%"
+        height="60%"
+        style={{ display: 'block' }}
       >
-        <g transform={`translate(${radius},${radius})`}>
+        <g transform={`translate(${radius},${radius}) scale(1.5) rotate(216)`}>
           <path className="gaugeBg" d={backgroundArc()} />
           {arcCmpts.map(arcCmpt => arcCmpt)}
           {textCmpt}
         </g>
       </svg>
-      {values.length > 1 ? (
-        <Tooltip id={id.toString()} effect="solid">
-          {values.map((v, idx) => (
-            <div key={idx.toString()}>
-              <span style={{ color: v.color ? '#' + v.color : colorScale(idx), fontSize: '110%' }}>
-                {v.value.toFixed(2) + '%'} <b>{v.label}</b>
-              </span>
-            </div>
-          ))}
-        </Tooltip>
-      ) : null}
     </div>
   )
 }
 
 DonutPieChart.propTypes = {
-  values: PropTypes.instanceOf(Array),
-  fontSize: PropTypes.number,
-  valueFormatter: PropTypes.func.isRequired
+  value: PropTypes.number,
+  segmentsColor: PropTypes.array.isRequired,
+  segmentsStep: PropTypes.array.isRequired,
+  fontSize: PropTypes.number.isRequired,
+  formattedValue: PropTypes.string.isRequired
 }
 
 DonutPieChart.defaultProps = {
+  color: '1F77B4',
   fontSize: 19.5
 }
 

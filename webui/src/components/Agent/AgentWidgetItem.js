@@ -52,9 +52,8 @@ const WidgetItem = ({
                           )
                         }
                         unit={1}
-                        values={[
-                          { value: metric.value, color: metricStatus ? colorForStatus(metricStatus.value) : undefined }
-                        ]}
+                        value={metric.value}
+                        status={metricStatus ? metricStatus.value : 0}
                         titleFontSize={22}
                       />
                     </div>

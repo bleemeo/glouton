@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"glouton/logger"
+	"glouton/threshold"
 	"glouton/types"
 
 	"github.com/vektah/gqlparser/gqlerror"
@@ -88,7 +89,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 // This interval could be between a start and end dates or X minutes from now
 // Metrics can also be filtered
 func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
-	if r.api.db == nil {
+	if r.api.db == nil || r.api.accumulator == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 	metrics := []types.Metric{}
@@ -138,6 +139,26 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			pointRes := &Point{Time: point.Time.UTC(), Value: point.Value}
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
+		thresholds := r.api.accumulator.GetThreshold(threshold.MetricNameItem{Item: labels["item"], Name: labels["__name__"]})
+		threshold := &Threshold{
+			LowCritical:  &thresholds.LowCritical,
+			LowWarning:   &thresholds.LowWarning,
+			HighWarning:  &thresholds.HighWarning,
+			HighCritical: &thresholds.HighCritical,
+		}
+		if math.IsNaN(*threshold.LowCritical) {
+			threshold.LowCritical = nil
+		}
+		if math.IsNaN(*threshold.LowWarning) {
+			threshold.LowWarning = nil
+		}
+		if math.IsNaN(*threshold.HighCritical) {
+			threshold.HighCritical = nil
+		}
+		if math.IsNaN(*threshold.HighWarning) {
+			threshold.HighWarning = nil
+		}
+		metricRes.Thresholds = threshold
 		metricsRes = append(metricsRes, metricRes)
 	}
 	return metricsRes, nil
