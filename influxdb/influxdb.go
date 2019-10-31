@@ -30,6 +30,7 @@ import (
 )
 
 const maxPendingPoints = 100000
+const pointsBatchSize = 1000
 
 // Client is an influxdb client for Bleemeo Cloud platform
 type Client struct {
@@ -168,9 +169,18 @@ func (c *Client) convertPendingPoints() {
 		pt, err := convertMetricPoint(metricPoint)
 		if err != nil {
 			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
-		} else {
-			c.influxDBBatchPoints.AddPoint(pt)
+			continue
 		}
+		if len(c.influxDBBatchPoints.Points()) > pointsBatchSize {
+			newBp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
+				Database:  c.dataBaseName,
+				Precision: "s",
+			})
+			newBp.AddPoints(c.influxDBBatchPoints.Points()[100:])
+			c.influxDBBatchPoints = newBp
+		}
+		c.influxDBBatchPoints.AddPoint(pt)
+
 	}
 	c.gloutonPendingPoints = c.gloutonPendingPoints[:0]
 }
