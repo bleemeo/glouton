@@ -1,5 +1,7 @@
 # Glouton Monitoring Agent
 
+![Glouton Logo](logo_glouton.svg)
+
 Glouton have been designed to be a central piece of
 a monitoring infrastructure. It gather all information and
 send it to... something. We provide drivers for storing in
