@@ -94,6 +94,24 @@ docker run --rm -u $UID:999 -e HOME=/tmp/home -e CGO_ENABLED=0 \
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
 
+### Note on building a binary with race detector
+
+Go has a great tools to detect race-condition: the race-detector. It's enabled
+by adding "-race" flag to go build or go run command.
+
+Sadly, Go package from Ubuntu does not has the race-detector built-in. In this case, we could use
+Docker image to build a binary with race-detector enabled:
+
+```
+docker run -v $(pwd):/src -e HOME=/tmp/home -u $UID -w /src golang:1.13.3 go build -race glouton
+```
+
+You can then run the resulting binary:
+
+```
+./glouton
+```
+
 ### Note on VS code
 
 Glouton use Go module. VS code support for Go module require usage of gppls.
