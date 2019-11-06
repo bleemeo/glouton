@@ -37,11 +37,11 @@ nested:
             work: yes
 
 influxdb:
-	tags:
-		hostname: Athena
-		uuid: 42
-		ip_address: 192.168.0.1
-		state: online
+    tags:
+        hostname: Athena
+        uuid: 42
+        ip_address: 192.168.0.1
+        state: online
 `
 	mergeOne = `
 d1: 1
