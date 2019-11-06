@@ -169,7 +169,7 @@ func (c Configuration) StringList(key string) []string {
 
 // Int return the given key as int.
 //
-// Return 0 if the key does not exists or could not be converted to int.
+// Return 0 if the key does not exist or could not be converted to int.
 // Use Get() if you need to known if the key exists or not.
 func (c Configuration) Int(key string) int {
 	rawValue, ok := c.Get(key)
