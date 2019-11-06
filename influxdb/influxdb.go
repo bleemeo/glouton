@@ -109,8 +109,7 @@ func (c *Client) connect(ctx context.Context) {
 	for ctx.Err() == nil {
 		err := c.doConnect()
 		if err != nil {
-			logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v", c.serverAddress, sleepDelay)
-			logger.V(2).Printf("Connexion to the influxdb server failed : %s", err.Error())
+			logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v : %s", c.serverAddress, sleepDelay, err.Error())
 			select {
 			case <-ctx.Done():
 				logger.V(2).Printf("The context is ended, stop trying to connect to the influxdb server")
