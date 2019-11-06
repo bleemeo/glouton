@@ -105,7 +105,7 @@ func (c *Client) doConnect() error {
 // connect tries to connect the influxDB client to the server and create the database.
 // connect retries this operation after a delay if it fails.
 func (c *Client) connect(ctx context.Context) {
-	var sleepDelay time.Duration = 10 * time.Second
+	var sleepDelay = 10 * time.Second
 	for ctx.Err() == nil {
 		err := c.doConnect()
 		if err != nil {
