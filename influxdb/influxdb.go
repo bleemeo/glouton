@@ -155,7 +155,10 @@ func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string
 	fields := map[string]interface{}{
 		"value": metricPoint.PointStatus.Point.Value,
 	}
-	tags := additionalTags
+	tags := make(map[string]string)
+	for key, value := range additionalTags {
+		tags[key] = value
+	}
 	for key, value := range metricPoint.Labels {
 		tags[key] = value
 	}
