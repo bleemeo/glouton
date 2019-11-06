@@ -158,7 +158,6 @@ func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string
 		tags[key] = value
 	}
 	delete(tags, "__name__")
-	tags["status"] = metricPoint.PointStatus.StatusDescription.StatusDescription
 
 	return influxDBClient.NewPoint(measurement, tags, fields, time)
 }
