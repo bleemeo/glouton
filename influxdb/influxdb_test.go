@@ -82,7 +82,7 @@ func TestConvertMetricPoint(t *testing.T) {
 	}
 
 	influxPoint2expected, err := influxDBClient.NewPoint(
-		"metric_test2",
+		"metric_test1",
 		map[string]string{
 			"hostname":   "Athena",
 			"ip_address": "192.168.0.1",
