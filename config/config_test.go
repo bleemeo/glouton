@@ -35,6 +35,13 @@ nested:
     key:
         also:
             work: yes
+
+influxdb:
+	tags:
+		hostname: Athena
+		uuid: 42
+		ip_address: 192.168.0.1
+		state: online
 `
 	mergeOne = `
 d1: 1
@@ -82,6 +89,35 @@ func TestString(t *testing.T) {
 		got := cfg.String(c.Key)
 		if c.Want != got {
 			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
+		}
+	}
+}
+
+func TestStringMap(t *testing.T) {
+	cfg := Configuration{}
+	err := cfg.LoadByte([]byte(simpleYaml))
+	if err != nil {
+		t.Error(err)
+	}
+
+	want := make(map[string]string)
+	want["hostname"] = "Athena"
+	want["uuid"] = "42"
+	want["ip-address"] = "192.168.0.1"
+	want["state"] = "online"
+
+	cases := []struct {
+		Key  string
+		Want map[string]string
+	}{
+		{Key: "influxdb.tags", Want: want},
+		{Key: "nested.key", Want: make(map[string]string)},
+		{Key: "influxdb.tag", Want: make(map[string]string)},
+	}
+	for _, c := range cases {
+		got := cfg.StringMap(c.Key)
+		if !reflect.DeepEqual(c.Want, got) {
+			t.Errorf("StringMap(%#v) = %#v, want %#v", c.Key, got, c.Want)
 		}
 	}
 }
