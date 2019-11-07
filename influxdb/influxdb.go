@@ -137,7 +137,7 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 		c.gloutonPendingPoints = make([]types.MetricPoint, c.maxPendingPoints)
 		copy(c.gloutonPendingPoints, points[len(points)-c.maxPendingPoints:])
 	case len(c.gloutonPendingPoints)+len(points) > c.maxPendingPoints:
-		copy(c.gloutonPendingPoints, c.gloutonPendingPoints[len(points):])
+		c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[len(points):]...)
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
 		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(points))
 	default:
