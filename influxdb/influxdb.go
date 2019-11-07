@@ -29,7 +29,7 @@ import (
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
-const maxPendingPoints = 100000
+const defaultMaxPendingPoints = 100000
 const pointsBatchSize = 1000
 
 // Client is an influxdb client for Bleemeo Cloud platform
@@ -42,16 +42,18 @@ type Client struct {
 	gloutonPendingPoints []types.MetricPoint
 	influxDBBatchPoints  influxDBClient.BatchPoints
 	additionalTags       map[string]string
+	maxPendingPoints     int
 }
 
 // New create a new influxDB client
 func New(serverAddress, dataBaseName string, storeAgent *store.Store, additionalTags map[string]string) *Client {
 	return &Client{
-		serverAddress:  serverAddress,
-		dataBaseName:   dataBaseName,
-		influxClient:   nil,
-		store:          storeAgent,
-		additionalTags: additionalTags,
+		serverAddress:    serverAddress,
+		dataBaseName:     dataBaseName,
+		influxClient:     nil,
+		store:            storeAgent,
+		additionalTags:   additionalTags,
+		maxPendingPoints: defaultMaxPendingPoints,
 	}
 }
 
@@ -130,11 +132,11 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	switch {
-	case len(points) >= maxPendingPoints:
+	case len(points) >= c.maxPendingPoints:
 		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(c.gloutonPendingPoints))
-		c.gloutonPendingPoints = make([]types.MetricPoint, maxPendingPoints)
-		copy(c.gloutonPendingPoints, points[len(points)-maxPendingPoints:])
-	case len(c.gloutonPendingPoints)+len(points) > maxPendingPoints:
+		c.gloutonPendingPoints = make([]types.MetricPoint, c.maxPendingPoints)
+		copy(c.gloutonPendingPoints, points[len(points)-c.maxPendingPoints:])
+	case len(c.gloutonPendingPoints)+len(points) > c.maxPendingPoints:
 		copy(c.gloutonPendingPoints, c.gloutonPendingPoints[len(points):])
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
 		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(points))
