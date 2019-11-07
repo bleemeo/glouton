@@ -174,16 +174,17 @@ func (c *Client) convertPendingPoints() {
 		logger.V(2).Printf("The influxDBBatchPoint is already full")
 		return
 	}
-	for _, metricPoint := range c.gloutonPendingPoints {
+	for i, metricPoint := range c.gloutonPendingPoints {
 		pt, err := convertMetricPoint(metricPoint, c.additionalTags)
 		if err != nil {
 			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
 			nbFailConversion++
 			continue
 		}
-		if len(c.influxDBBatchPoints.Points()) >= pointsBatchSize {
+		nbConvertPoints := i + 1 - nbFailConversion
+		if nbConvertPoints >= pointsBatchSize {
 			logger.V(2).Printf("The influxDBBatchPoint is full : stop converting points")
-			c.gloutonPendingPoints = c.gloutonPendingPoints[pointsBatchSize+nbFailConversion:]
+			c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[i+1:]...)
 			return
 		}
 		c.influxDBBatchPoints.AddPoint(pt)
