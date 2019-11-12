@@ -6,8 +6,7 @@ import { gql } from 'apollo-boost'
 import PanelErrorBoundary from '../UI/PanelErrorBoundary'
 import 'rc-switch/assets/index.css'
 import Fallback from '../UI/Fallback'
-import Loading from '../UI/Loading'
-import QueryError from '../UI/QueryError'
+import FetchSuspense from '../UI/FetchSuspense'
 import { useFetch } from '../utils/hooks'
 
 const FACTS = gql`
@@ -47,62 +46,55 @@ const menuEntries = [
 
 const AgentContainer = () => {
   const { isLoading, error, facts } = useFetch(FACTS)
-
-  let displayAgentContainer
-
-  if (isLoading) {
-    displayAgentContainer = <Loading size="xl" />
-  } else if (error) {
-    displayAgentContainer = <QueryError />
-  } else {
-    displayAgentContainer = (
-      <>
-        <div className="row">
-          <div
-            className="col-lg-12"
-            style={{
-              flexFlow: 'row wrap',
-              justifyContent: 'flex-start',
-              alignItems: 'center'
-            }}
-          >
-            <div className="d-flex align-items-center">
-              <span className="btn-group" role="group" aria-label="Agent views" style={{ display: 'inline' }}>
-                {menuEntries.map(({ key, label }) => (
-                  <NavLink
-                    className={'btn btn-outline-dark'}
-                    role="button"
-                    activeClassName="active"
-                    key={key}
-                    to={`/${key}`}
-                    href={`/${key}`}
-                  >
-                    {label}
-                  </NavLink>
-                ))}
-              </span>
-              <h2 style={{ marginBlockEnd: '0rem', marginLeft: '1rem' }}>{facts.find(f => f.name === 'fqdn').value}</h2>
-            </div>
-          </div>
-        </div>
-        <Switch>
-          <Route exact path="/dashboard" component={AgentSystemDashboard} />
-          {facts.some(f => f.name === 'docker_version') ? (
-            <Route exact path="/docker" component={AgentDockerListContainer} />
-          ) : null}
-          <Route exact path="/processes" component={AgentProcessesContainer} />
-          <Route exact path="/informations" render={() => <AgentDetails facts={facts} />} />
-          <Redirect to="/dashboard" />
-        </Switch>
-      </>
-    )
-  }
-
   return (
     <Router>
       <ScrollToTop>
         <PanelErrorBoundary>
-          <Suspense fallback={<Fallback />}>{displayAgentContainer}</Suspense>
+          <Suspense fallback={<Fallback />}>
+            <FetchSuspense isLoading={isLoading} error={error}>
+              <>
+                <div className="row">
+                  <div
+                    className="col-lg-12"
+                    style={{
+                      flexFlow: 'row wrap',
+                      justifyContent: 'flex-start',
+                      alignItems: 'center'
+                    }}
+                  >
+                    <div className="d-flex align-items-center">
+                      <span className="btn-group" role="group" aria-label="Agent views" style={{ display: 'inline' }}>
+                        {menuEntries.map(({ key, label }) => (
+                          <NavLink
+                            className={'btn btn-outline-dark'}
+                            role="button"
+                            activeClassName="active"
+                            key={key}
+                            to={`/${key}`}
+                            href={`/${key}`}
+                          >
+                            {label}
+                          </NavLink>
+                        ))}
+                      </span>
+                      <h2 style={{ marginBlockEnd: '0rem', marginLeft: '1rem' }}>
+                        {facts.find(f => f.name === 'fqdn').value}
+                      </h2>
+                    </div>
+                  </div>
+                </div>
+                <Switch>
+                  <Route exact path="/dashboard" component={AgentSystemDashboard} />
+                  {facts.some(f => f.name === 'docker_version') ? (
+                    <Route exact path="/docker" component={AgentDockerListContainer} />
+                  ) : null}
+                  <Route exact path="/processes" component={AgentProcessesContainer} />
+                  <Route exact path="/informations" render={() => <AgentDetails facts={facts} />} />
+                  <Redirect to="/dashboard" />
+                </Switch>
+              </>
+            </FetchSuspense>
+          </Suspense>
         </PanelErrorBoundary>
       </ScrollToTop>
     </Router>
