@@ -78,14 +78,14 @@ const AgentContainer = () => {
                         ))}
                       </span>
                       <h2 style={{ marginBlockEnd: '0rem', marginLeft: '1rem' }}>
-                        {facts.find(f => f.name === 'fqdn').value}
+                        {facts ? facts.find(f => f.name === 'fqdn').value : ''}
                       </h2>
                     </div>
                   </div>
                 </div>
                 <Switch>
                   <Route exact path="/dashboard" component={AgentSystemDashboard} />
-                  {facts.some(f => f.name === 'docker_version') ? (
+                  {facts && facts.some(f => f.name === 'docker_version') ? (
                     <Route exact path="/docker" component={AgentDockerListContainer} />
                   ) : null}
                   <Route exact path="/processes" component={AgentProcessesContainer} />

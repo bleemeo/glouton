@@ -15,7 +15,7 @@ const FetchSuspense = ({ children, isLoading, error, loadingComponent, fallbackC
 
 FetchSuspense.propTypes = {
   children: PropTypes.element.isRequired,
-  isLoading: PropTypes.boolean.isRequired,
+  isLoading: PropTypes.bool.isRequired,
   error: PropTypes.object,
   loadingComponent: PropTypes.element,
   fallbackComponent: PropTypes.element

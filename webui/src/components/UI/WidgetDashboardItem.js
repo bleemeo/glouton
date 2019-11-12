@@ -1,4 +1,4 @@
-import React, { useRef, useMemo } from 'react'
+import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
 import { gql } from 'apollo-boost'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
@@ -43,7 +43,8 @@ const WidgetDashboardItem = ({
     handleBackwardForward(isForward)
   }
 
-  const displayWidget = useMemo(() => {
+  const displayWidget = points => {
+    if (!points) return null
     switch (type) {
       case chartTypes[0]:
         const resultGauge = points.sort((a, b) =>
@@ -94,7 +95,7 @@ const WidgetDashboardItem = ({
           />
         )
     }
-  }, [points])
+  }
 
   let metricsFilter = []
   switch (type) {
@@ -135,7 +136,7 @@ const WidgetDashboardItem = ({
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
       <FetchSuspense
         isLoading={isLoading || !points}
-        hasError={hasError}
+        error={hasError}
         loadingComponent={
           type === chartTypes[0] ? <MetricGaugeItem loading name={title} /> : <LineChart title={title} loading />
         }
