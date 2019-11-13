@@ -17,6 +17,7 @@
 package influxdb
 
 import (
+	"fmt"
 	"glouton/store"
 	"glouton/types"
 	"reflect"
@@ -130,58 +131,26 @@ func TestConvertMetricPoint(t *testing.T) {
 func TestAddPoints(t *testing.T) {
 	var client = New("localhost", "db_name", store.New(), make(map[string]string))
 	client.maxPendingPoints = 3
-
-	metricPoint0 := types.MetricPoint{
-		PointStatus: types.PointStatus{
-			Point: types.Point{
-				Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
-				Value: 4.2,
+	metricPoints := make([]types.MetricPoint, 6)
+	for i := range metricPoints {
+		metricPoints[i] = types.MetricPoint{
+			PointStatus: types.PointStatus{
+				Point: types.Point{
+					Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
+					Value: 4.2,
+				},
+				StatusDescription: types.StatusDescription{
+					CurrentStatus:     0,
+					StatusDescription: "StatusOk",
+				},
 			},
-			StatusDescription: types.StatusDescription{
-				CurrentStatus:     0,
-				StatusDescription: "StatusOk",
+			Labels: map[string]string{
+				"__name__": fmt.Sprintf("MetricPoint%v", i),
 			},
-		},
-		Labels: map[string]string{
-			"__name__": "MetricPoint0",
-		},
+		}
 	}
 
-	metricPoint1 := types.MetricPoint{
-		PointStatus: types.PointStatus{
-			Point: types.Point{
-				Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
-				Value: 2.4,
-			},
-			StatusDescription: types.StatusDescription{
-				CurrentStatus:     0,
-				StatusDescription: "StatusOk",
-			},
-		},
-		Labels: map[string]string{
-			"__name__": "MetricPoint1",
-		},
-	}
-
-	metricPoint2 := types.MetricPoint{
-		PointStatus: types.PointStatus{
-			Point: types.Point{
-				Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
-				Value: 1.7,
-			},
-			StatusDescription: types.StatusDescription{
-				CurrentStatus:     0,
-				StatusDescription: "StatusOk",
-			},
-		},
-		Labels: map[string]string{
-			"__name__": "MetricPoint2",
-		},
-	}
-
-	var metricPointSlice1 []types.MetricPoint
-	metricPointSlice1 = append(metricPointSlice1, metricPoint0, metricPoint1)
-	client.addPoints(metricPointSlice1)
+	client.addPoints(metricPoints[0:2])
 
 	if len(client.gloutonPendingPoints) != 2 {
 		t.Errorf("len(client.gloutonPendingPoints) = %v want 2", len(client.gloutonPendingPoints))
@@ -195,9 +164,7 @@ func TestAddPoints(t *testing.T) {
 		t.Errorf("client.gloutonPendingPoints[1] = %s want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
-	var metricPointSlice2 []types.MetricPoint
-	metricPointSlice2 = append(metricPointSlice2, metricPoint2)
-	client.addPoints(metricPointSlice2)
+	client.addPoints(metricPoints[2:3])
 
 	if len(client.gloutonPendingPoints) != 3 {
 		t.Errorf("len(client.gloutonPendingPoints) = %v want 3", len(client.gloutonPendingPoints))
@@ -212,46 +179,42 @@ func TestAddPoints(t *testing.T) {
 	}
 
 	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint2" {
-		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__'] : %s want MetricPoint2", client.gloutonPendingPoints[2].Labels["__name__"])
+		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__']: %s want MetricPoint2", client.gloutonPendingPoints[2].Labels["__name__"])
 	}
 
-	var metricPointSlice3 []types.MetricPoint
-	metricPointSlice3 = append(metricPointSlice3, metricPoint0)
-	client.addPoints(metricPointSlice3)
+	client.addPoints(metricPoints[3:4])
 
 	if len(client.gloutonPendingPoints) != 3 {
 		t.Errorf("len(client.gloutonPendingPoints) = %v want 3", len(client.gloutonPendingPoints))
 	}
 
 	if client.gloutonPendingPoints[0].Labels["__name__"] != "MetricPoint1" {
-		t.Errorf("client.gloutonPendingPoints[0].Labels['__name__'] : %s want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"])
+		t.Errorf("client.gloutonPendingPoints[0].Labels['__name__']: %s want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[1].Labels["__name__"] != "MetricPoint2" {
-		t.Errorf("client.gloutonPendingPoints[1].Labels['__name__'] : %s want MetricPoint2", client.gloutonPendingPoints[1].Labels["__name__"])
+		t.Errorf("client.gloutonPendingPoints[1].Labels['__name__']: %s want MetricPoint2", client.gloutonPendingPoints[1].Labels["__name__"])
 	}
 
-	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint0" {
-		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__'] : %s want MetricPoint0", client.gloutonPendingPoints[2].Labels["__name__"])
+	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint3" {
+		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__']: %s want MetricPoint3", client.gloutonPendingPoints[2].Labels["__name__"])
 	}
 
-	var metricPointSlice4 []types.MetricPoint
-	metricPointSlice4 = append(metricPointSlice3, metricPoint0, metricPoint2, metricPoint1, metricPoint0)
-	client.addPoints(metricPointSlice4)
+	client.addPoints(metricPoints)
 
 	if len(client.gloutonPendingPoints) != 3 {
 		t.Errorf("len(client.gloutonPendingPoints) = %v want 3", len(client.gloutonPendingPoints))
 	}
 
-	if client.gloutonPendingPoints[0].Labels["__name__"] != "MetricPoint2" {
-		t.Errorf("client.gloutonPendingPoints[0].Labels['__name__'] : %s want MetricPoint2", client.gloutonPendingPoints[0].Labels["__name__"])
+	if client.gloutonPendingPoints[0].Labels["__name__"] != "MetricPoint3" {
+		t.Errorf("client.gloutonPendingPoints[0].Labels['__name__']: %s want MetricPoint3", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
-	if client.gloutonPendingPoints[1].Labels["__name__"] != "MetricPoint1" {
-		t.Errorf("client.gloutonPendingPoints[1].Labels['__name__'] : %s want MetricPoint1", client.gloutonPendingPoints[1].Labels["__name__"])
+	if client.gloutonPendingPoints[1].Labels["__name__"] != "MetricPoint4" {
+		t.Errorf("client.gloutonPendingPoints[1].Labels['__name__']: %s want MetricPoint4", client.gloutonPendingPoints[1].Labels["__name__"])
 	}
 
-	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint0" {
-		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__'] : %s want MetricPoint0", client.gloutonPendingPoints[2].Labels["__name__"])
+	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint5" {
+		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__']: %s want MetricPoint5", client.gloutonPendingPoints[2].Labels["__name__"])
 	}
 }
