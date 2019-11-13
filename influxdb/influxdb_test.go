@@ -17,7 +17,6 @@
 package influxdb
 
 import (
-	"fmt"
 	"glouton/store"
 	"glouton/types"
 	"reflect"
@@ -185,15 +184,15 @@ func TestAddPoints(t *testing.T) {
 	client.addPoints(metricPointSlice1)
 
 	if len(client.gloutonPendingPoints) != 2 {
-		t.Error(fmt.Sprintf("Default case : unexpeccted lens of client.gloutonPendingPoints : len(client.gloutonPendingPoints) = %v", len(client.gloutonPendingPoints)))
+		t.Errorf("len(client.gloutonPendingPoints) = %v want 2", len(client.gloutonPendingPoints))
 	}
 
 	if client.gloutonPendingPoints[0].Labels["__name__"] != "MetricPoint0" {
-		t.Error(fmt.Sprintf("Default case : unexpected MetricPoint in client.gloutonPendingPoints[0] : %s Want MetricPoint0", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[0] = %s want MetricPoint0", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[1].Labels["__name__"] != "MetricPoint1" {
-		t.Error(fmt.Sprintf("Default case : unexpected MetricPoint in client.gloutonPendingPoints[1] : %s Want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[1] = %s want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
 	var metricPointSlice2 []types.MetricPoint
@@ -201,19 +200,19 @@ func TestAddPoints(t *testing.T) {
 	client.addPoints(metricPointSlice2)
 
 	if len(client.gloutonPendingPoints) != 3 {
-		t.Error(fmt.Sprintf("Default case : unexpeccted lens of client.gloutonPendingPoints : len(client.gloutonPendingPoints) = %v", len(client.gloutonPendingPoints)))
+		t.Errorf("len(client.gloutonPendingPoints) = %v want 3", len(client.gloutonPendingPoints))
 	}
 
 	if client.gloutonPendingPoints[0].Labels["__name__"] != "MetricPoint0" {
-		t.Error(fmt.Sprintf("Default case : unexpected MetricPoint in client.gloutonPendingPoints[0] : %s Want MetricPoint0", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[0].Labels['__name__'] = %s want MetricPoint0", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[1].Labels["__name__"] != "MetricPoint1" {
-		t.Error(fmt.Sprintf("Default case : unexpected MetricPoint in client.gloutonPendingPoints[1] : %s Want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[1].Labels['__name__'] = %s want MetricPoint1", client.gloutonPendingPoints[1].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint2" {
-		t.Error(fmt.Sprintf("Default case : unexpected MetricPoint in client.gloutonPendingPoints[2] : %s Want MetricPoint2", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__'] : %s want MetricPoint2", client.gloutonPendingPoints[2].Labels["__name__"])
 	}
 
 	var metricPointSlice3 []types.MetricPoint
@@ -221,19 +220,19 @@ func TestAddPoints(t *testing.T) {
 	client.addPoints(metricPointSlice3)
 
 	if len(client.gloutonPendingPoints) != 3 {
-		t.Error(fmt.Sprintf("Case 2 : unexpeccted lens of client.gloutonPendingPoints : len(client.gloutonPendingPoints) = %v", len(client.gloutonPendingPoints)))
+		t.Errorf("len(client.gloutonPendingPoints) = %v want 3", len(client.gloutonPendingPoints))
 	}
 
 	if client.gloutonPendingPoints[0].Labels["__name__"] != "MetricPoint1" {
-		t.Error(fmt.Sprintf("Case 2 : unexpected MetricPoint in client.gloutonPendingPoints[0] : %s Want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[0].Labels['__name__'] : %s want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[1].Labels["__name__"] != "MetricPoint2" {
-		t.Error(fmt.Sprintf("Case 2 : unexpected MetricPoint in client.gloutonPendingPoints[1] : %s Want MetricPoint2", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[1].Labels['__name__'] : %s want MetricPoint2", client.gloutonPendingPoints[1].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint0" {
-		t.Error(fmt.Sprintf("Case 2 : unexpected MetricPoint in client.gloutonPendingPoints[2] : %s Want MetricPoint0", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__'] : %s want MetricPoint0", client.gloutonPendingPoints[2].Labels["__name__"])
 	}
 
 	var metricPointSlice4 []types.MetricPoint
@@ -241,18 +240,18 @@ func TestAddPoints(t *testing.T) {
 	client.addPoints(metricPointSlice4)
 
 	if len(client.gloutonPendingPoints) != 3 {
-		t.Error(fmt.Sprintf("case 1 : unexpeccted lens of client.gloutonPendingPoints : len(client.gloutonPendingPoints) = %v", len(client.gloutonPendingPoints)))
+		t.Errorf("len(client.gloutonPendingPoints) = %v want 3", len(client.gloutonPendingPoints))
 	}
 
 	if client.gloutonPendingPoints[0].Labels["__name__"] != "MetricPoint2" {
-		t.Error(fmt.Sprintf("case 1 : unexpected MetricPoint in client.gloutonPendingPoints[0] : %s Want MetricPoint2", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[0].Labels['__name__'] : %s want MetricPoint2", client.gloutonPendingPoints[0].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[1].Labels["__name__"] != "MetricPoint1" {
-		t.Error(fmt.Sprintf("case 1 : unexpected MetricPoint in client.gloutonPendingPoints[1] : %s Want MetricPoint1", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[1].Labels['__name__'] : %s want MetricPoint1", client.gloutonPendingPoints[1].Labels["__name__"])
 	}
 
 	if client.gloutonPendingPoints[2].Labels["__name__"] != "MetricPoint0" {
-		t.Error(fmt.Sprintf("case 1 : unexpected MetricPoint in client.gloutonPendingPoints[2] : %s Want MetricPoint0", client.gloutonPendingPoints[0].Labels["__name__"]))
+		t.Errorf("client.gloutonPendingPoints[2].Labels['__name__'] : %s want MetricPoint0", client.gloutonPendingPoints[2].Labels["__name__"])
 	}
 }
