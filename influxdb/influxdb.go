@@ -111,7 +111,7 @@ func (c *Client) connect(ctx context.Context) {
 	for ctx.Err() == nil {
 		err := c.doConnect()
 		if err != nil {
-			logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v : %s", c.serverAddress, sleepDelay, err.Error())
+			logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v: %s", c.serverAddress, sleepDelay, err.Error())
 			select {
 			case <-ctx.Done():
 				logger.V(2).Printf("The context is ended, stop trying to connect to the influxdb server")
@@ -133,13 +133,13 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	defer c.lock.Unlock()
 	switch {
 	case len(points) >= c.maxPendingPoints:
-		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(c.gloutonPendingPoints))
+		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped: the queue is full", len(c.gloutonPendingPoints))
 		c.gloutonPendingPoints = make([]types.MetricPoint, c.maxPendingPoints)
 		copy(c.gloutonPendingPoints, points[len(points)-c.maxPendingPoints:])
 	case len(c.gloutonPendingPoints)+len(points) > c.maxPendingPoints:
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[len(points):]...)
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
-		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped : the queue is full", len(points))
+		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped: the queue is full", len(points))
 	default:
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
 	}
@@ -183,7 +183,7 @@ func (c *Client) convertPendingPoints() {
 		}
 		nbConvertPoints := i + 1 - nbFailConversion
 		if nbConvertPoints >= pointsBatchSize {
-			logger.V(2).Printf("The influxDBBatchPoint is full : stop converting points")
+			logger.V(2).Printf("The influxDBBatchPoint is full: stop converting points")
 			c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[i+1:]...)
 			return
 		}
@@ -237,7 +237,7 @@ func (c *Client) Run(ctx context.Context) error {
 			// If sendPoints fail we retry after a tick
 			err := c.sendPoints()
 			if err != nil {
-				logger.V(1).Printf("Fail to send the metrics to the influxdb server : %s", err.Error())
+				logger.V(1).Printf("Fail to send the metrics to the influxdb server: %s", err.Error())
 				break
 			}
 		}
