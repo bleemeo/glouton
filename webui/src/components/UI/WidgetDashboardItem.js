@@ -189,7 +189,7 @@ WidgetDashboardItem.propTypes = {
 export default React.memo(
   WidgetDashboardItem,
   (prevProps, nextProps) =>
-    prevProps.period === nextProps.period &&
+    isShallowEqual(nextProps.period, prevProps.perio) &&
     prevProps.isVisible === nextProps.isVisible &&
     prevProps.windowWidth === nextProps.windowWidth
 )
