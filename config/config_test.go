@@ -118,7 +118,7 @@ func TestStringMap(t *testing.T) {
 	}{
 		{Key: "influxdb.tags", Want: want1},
 		{Key: "nested.key", Want: want2},
-		{Key: "influxdb.tag", Want: make(map[string]string)},
+		{Key: "influxdb.unexisting", Want: make(map[string]string)},
 	}
 	for _, c := range cases {
 		got := cfg.StringMap(c.Key)
