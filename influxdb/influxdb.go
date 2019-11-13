@@ -30,7 +30,7 @@ import (
 )
 
 const defaultMaxPendingPoints = 100000
-const pointsBatchSize = 1000
+const defaultBatchSize = 1000
 
 // Client is an influxdb client for Bleemeo Cloud platform
 type Client struct {
@@ -43,6 +43,7 @@ type Client struct {
 	influxDBBatchPoints  influxDBClient.BatchPoints
 	additionalTags       map[string]string
 	maxPendingPoints     int
+	maxBatchSize         int
 }
 
 // New create a new influxDB client
@@ -54,6 +55,7 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store, additional
 		store:            storeAgent,
 		additionalTags:   additionalTags,
 		maxPendingPoints: defaultMaxPendingPoints,
+		maxBatchSize:     defaultBatchSize,
 	}
 }
 
@@ -170,7 +172,7 @@ func (c *Client) convertPendingPoints() {
 	defer c.lock.Unlock()
 	nbFailConversion := 0
 	points := c.influxDBBatchPoints.Points()
-	if len(points) >= pointsBatchSize {
+	if len(points) >= c.maxBatchSize {
 		logger.V(2).Printf("The influxDBBatchPoint is already full")
 		return
 	}
@@ -182,7 +184,7 @@ func (c *Client) convertPendingPoints() {
 			continue
 		}
 		nbConvertPoints := i + 1 - nbFailConversion
-		if nbConvertPoints >= pointsBatchSize {
+		if nbConvertPoints >= c.maxBatchSize {
 			logger.V(2).Printf("The influxDBBatchPoint is full: stop converting points")
 			c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[i+1:]...)
 			return
