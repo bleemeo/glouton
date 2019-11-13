@@ -44,7 +44,6 @@ const WidgetDashboardItem = ({
   }
 
   const displayWidget = points => {
-    if (!points) return null
     switch (type) {
       case chartTypes[0]:
         const resultGauge = points.sort((a, b) =>
@@ -147,8 +146,9 @@ const WidgetDashboardItem = ({
             <LineChart title={title} hasError={hasError} />
           )
         }
+        points={points}
       >
-        {displayWidget(points)}
+        {({ points }) => displayWidget(points)}
       </FetchSuspense>
     </div>
   )
