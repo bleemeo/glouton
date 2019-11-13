@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, useCallback } from 'react'
+import React, { useRef, useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
 import { Card } from 'tabler-react'
 import d3 from 'd3'
