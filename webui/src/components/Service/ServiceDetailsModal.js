@@ -7,6 +7,7 @@ import { cssClassForStatus, textForStatus } from '../utils/converter'
 import Loading from '../UI/Loading'
 import QueryError from '../UI/QueryError'
 import { useFetch } from '../utils/hooks'
+import FetchSuspense from '../UI/FetchSuspense'
 
 const CONTAINER_SERVICE = gql`
   query containerService($containerId: String!) {
@@ -88,19 +89,19 @@ ServiceDetails.propTypes = {
 }
 const ServiceContainer = ({ containerId }) => {
   const { isLoading, error, containers } = useFetch(CONTAINER_SERVICE, { containerId })
-  if (isLoading) {
-    return <Loading size="xl" />
-  } else if (error) {
-    return <QueryError />
-  } else {
-    if (containers.containers[0]) {
-      return (
-        <li>
-          <strong>Docker:</strong> {containers.containers[0].name}
-        </li>
-      )
-    } else return null
-  }
+  return (
+    <FetchSuspense isLoading={isLoading} error={error} containers={containers}>
+      {({ containers }) => {
+        if (containers.containers[0]) {
+          return (
+            <li>
+              <strong>Docker:</strong> {containers.containers[0].name}
+            </li>
+          )
+        } else return null
+      }}
+    </FetchSuspense>
+  )
 }
 
 ServiceContainer.propTypes = {

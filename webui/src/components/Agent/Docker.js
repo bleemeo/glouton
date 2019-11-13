@@ -9,10 +9,9 @@ import { renderDisk } from './utils'
 import { renderNetwork, renderDonutDocker } from '../UI'
 import Modal from '../UI/Modal'
 import A from '../UI/A'
-import Loading from '../UI/Loading'
-import QueryError from '../UI/QueryError'
 import ProcessesTable from '../UI/ProcessesTable'
 import { useFetch } from '../utils/hooks'
+import FetchSuspense from '../UI/FetchSuspense'
 
 const CONTAINER_PROCESSES = gql`
   query containerProcesses($containerId: String!) {
@@ -165,44 +164,40 @@ Docker.propTypes = {
 export default Docker
 
 const DockerProcesses = ({ containerId, name }) => {
-  let render
   const { isLoading, error, processes, points } = useFetch(CONTAINER_PROCESSES, { containerId }, 10000)
-  if (isLoading) {
-    render = <Loading size="xl" />
-  } else if (error) {
-    render = <QueryError />
-  } else {
-    const result = processes
-    const dockerProcesses = result && result.processes ? result.processes : []
-    const metrics = points
-    const memRegexp = /^mem_/
-    if (!dockerProcesses || dockerProcesses.length === 0) {
-      render = <h4>There are no processes related to {name}</h4>
-    } else {
-      let memTotal = 0
-      metrics.forEach(m => {
-        if (m.points && memRegexp.test(m.labels.find(l => l.key === '__name__').value)) {
-          memTotal += m.points[m.points.length - 1].value
-        }
-      })
-      dockerProcesses.map(process => {
-        process.mem_percent = d3.format('.2r')(((process.memory_rss * 1024) / memTotal) * 100)
-        process.new_cpu_times = _formatCpuTime(process.cpu_time)
-        return process
-      })
-      render = (
-        <div style={{ overflow: 'auto' }}>
-          <ProcessesTable data={dockerProcesses} sizePage={10} classNames="dockerTable" widthLastColumn={40} />
-        </div>
-      )
-    }
-  }
   return (
     <div className="d-flex flex-column justify-content-center align-items-center" style={{ minHeight: '10rem' }}>
       <>
         <br />
         <h3>Processes</h3>
-        {render}
+        <FetchSuspense isLoading={isLoading} error={error} processes={processes} points={points}>
+          {({ processes, points }) => {
+            const result = processes
+            const dockerProcesses = result && result.processes ? result.processes : []
+            const metrics = points
+            const memRegexp = /^mem_/
+            if (!dockerProcesses || dockerProcesses.length === 0) {
+              return <h4>There are no processes related to {name}</h4>
+            } else {
+              let memTotal = 0
+              metrics.forEach(m => {
+                if (m.points && memRegexp.test(m.labels.find(l => l.key === '__name__').value)) {
+                  memTotal += m.points[m.points.length - 1].value
+                }
+              })
+              dockerProcesses.map(process => {
+                process.mem_percent = d3.format('.2r')(((process.memory_rss * 1024) / memTotal) * 100)
+                process.new_cpu_times = _formatCpuTime(process.cpu_time)
+                return process
+              })
+              return (
+                <div style={{ overflow: 'auto' }}>
+                  <ProcessesTable data={dockerProcesses} sizePage={10} classNames="dockerTable" widthLastColumn={40} />
+                </div>
+              )
+            }
+          }}
+        </FetchSuspense>
       </>
     </div>
   )

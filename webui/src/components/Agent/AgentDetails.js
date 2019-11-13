@@ -15,6 +15,7 @@ import { useFetch } from '../utils/hooks'
 import { formatDateTimeWithSeconds } from '../utils/formater'
 import Smiley from '../UI/Smiley'
 import { Problems, isNullOrUndefined } from '../utils'
+import FetchSuspense from '../UI/FetchSuspense'
 
 const AGENT_DETAILS = gql`
   query agent_details {
@@ -90,68 +91,9 @@ const AgentDetails = ({ facts }) => {
   }
 
   const { isLoading, error, services, tags, agentInformation, agentStatus } = useFetch(AGENT_DETAILS, null, 60000)
-  let displayServices
-  let displayTags
-  let problems
-  if (isLoading) {
-    displayServices = <Loading size="xl" />
-    displayTags = <Loading size="xl" />
-  } else if (
-    error ||
-    isNullOrUndefined(services) ||
-    isNullOrUndefined(tags) ||
-    isNullOrUndefined(agentInformation) ||
-    isNullOrUndefined(agentStatus)
-  ) {
-    displayServices = <QueryError />
-    displayTags = <QueryError />
-  } else {
-    displayServices = (
-      <Panel>
-        <div className="marginOffset">
-          Services running on this agent:
-          <ul className="list-inline">
-            {services
-              .filter(service => service.active)
-              .sort((a, b) => a.name.localeCompare(b.name))
-              .map((service, idx) => {
-                return (
-                  <li key={idx} className="list-inline-item">
-                    <button
-                      // TODO : Change in favor of service status
-                      className={`btn blee-label btn-${cssClassForStatus(service.status)}`}
-                      onClick={() => setShowServiceDetails(service)}
-                    >
-                      {service.name}
-                      &nbsp;
-                      <FaIcon icon="fas fa-info-circle" />
-                    </button>
-                  </li>
-                )
-              })}
-          </ul>
-        </div>
-      </Panel>
-    )
-    displayTags = (
-      <Panel>
-        <div className="marginOffset">
-          Tags for {facts.find(f => f.name === 'fqdn').value}:
-          {tags.length > 0 ? (
-            <ul className="list-inline">
-              {tags.map(tag => (
-                <li key={tag.tagName} className="list-inline-item">
-                  <span className="badge badge-info blee-label">{tag.tagName}</span>
-                </li>
-              ))}
-            </ul>
-          ) : (
-            <h4>There is no tag to display</h4>
-          )}
-        </div>
-      </Panel>
-    )
-    let tooltipType = 'info'
+  let tooltipType = 'info'
+  let problems = null
+  if (agentStatus) {
     switch (agentStatus.status) {
       case 0:
         tooltipType = 'success'
@@ -166,6 +108,7 @@ const AgentDetails = ({ facts }) => {
         tooltipType = 'info'
         break
     }
+
     problems = (
       <div className="marginOffset">
         <p className="text-center" data-tip data-for="agentStatus">
@@ -191,7 +134,45 @@ const AgentDetails = ({ facts }) => {
 
       <Grid.Row>
         <Grid.Col xl={4}>
-          {displayServices}
+          <FetchSuspense
+            isLoading={isLoading}
+            error={
+              error ||
+              isNullOrUndefined(services) ||
+              isNullOrUndefined(tags) ||
+              isNullOrUndefined(agentInformation) ||
+              isNullOrUndefined(agentStatus)
+            }
+            services={services}
+          >
+            {({ services }) => (
+              <Panel>
+                <div className="marginOffset">
+                  Services running on this agent:
+                  <ul className="list-inline">
+                    {services
+                      .filter(service => service.active)
+                      .sort((a, b) => a.name.localeCompare(b.name))
+                      .map((service, idx) => {
+                        return (
+                          <li key={idx} className="list-inline-item">
+                            <button
+                              // TODO : Change in favor of service status
+                              className={`btn blee-label btn-${cssClassForStatus(service.status)}`}
+                              onClick={() => setShowServiceDetails(service)}
+                            >
+                              {service.name}
+                              &nbsp;
+                              <FaIcon icon="fas fa-info-circle" />
+                            </button>
+                          </li>
+                        )
+                      })}
+                  </ul>
+                </div>
+              </Panel>
+            )}
+          </FetchSuspense>
           {agentInformation ? (
             <Panel>
               <div className="marginOffset">
@@ -218,7 +199,36 @@ const AgentDetails = ({ facts }) => {
           ) : null}
         </Grid.Col>
         <Grid.Col x={4}>
-          {displayTags}
+          <FetchSuspense
+            isLoading={isLoading}
+            error={
+              error ||
+              isNullOrUndefined(services) ||
+              isNullOrUndefined(tags) ||
+              isNullOrUndefined(agentInformation) ||
+              isNullOrUndefined(agentStatus)
+            }
+            tags={tags}
+          >
+            {({ tags }) => (
+              <Panel>
+                <div className="marginOffset">
+                  Tags for {facts.find(f => f.name === 'fqdn').value}:
+                  {tags.length > 0 ? (
+                    <ul className="list-inline">
+                      {tags.map(tag => (
+                        <li key={tag.tagName} className="list-inline-item">
+                          <span className="badge badge-info blee-label">{tag.tagName}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <h4>There is no tag to display</h4>
+                  )}
+                </div>
+              </Panel>
+            )}
+          </FetchSuspense>
           <Grid.Row>
             <Grid.Col xl={6} offset={3}>
               {problems ? <Panel>{problems}</Panel> : null}
