@@ -2,7 +2,7 @@ import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
 import { gql } from 'apollo-boost'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
-import { chartTypes, computeEnd, composeMetricName } from '../utils'
+import { chartTypes, computeEnd, composeMetricName, isShallowEqual } from '../utils'
 import LineChart from './LineChart'
 import { useFetch, POLL } from '../utils/hooks'
 import FetchSuspense from './FetchSuspense'
@@ -183,13 +183,13 @@ WidgetDashboardItem.propTypes = {
   refetchTime: PropTypes.number.isRequired,
   period: PropTypes.object.isRequired,
   handleBackwardForward: PropTypes.func,
-  windowWidth: PropTypes.number.isRequired
+  windowWidth: PropTypes.number
 }
 
 export default React.memo(
   WidgetDashboardItem,
   (prevProps, nextProps) =>
-    isShallowEqual(nextProps.period, prevProps.perio) &&
+    isShallowEqual(nextProps.period, prevProps.period) &&
     prevProps.isVisible === nextProps.isVisible &&
     prevProps.windowWidth === nextProps.windowWidth
 )

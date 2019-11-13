@@ -58,6 +58,8 @@ const AgentSystemDashboard = () => {
 
   const windowWidth = useWindowWidth()
 
+  console.log(windowWidth)
+
   let periodText = ''
   if (period.minutes) {
     const range = lastQuickRanges.find(p => p.value === period.minutes)

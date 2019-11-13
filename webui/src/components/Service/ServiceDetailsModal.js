@@ -4,8 +4,6 @@ import { gql } from 'apollo-boost'
 
 import Modal from '../UI/Modal'
 import { cssClassForStatus, textForStatus } from '../utils/converter'
-import Loading from '../UI/Loading'
-import QueryError from '../UI/QueryError'
 import { useFetch } from '../utils/hooks'
 import FetchSuspense from '../UI/FetchSuspense'
 
@@ -23,7 +21,6 @@ export default class ServiceDetailsModal extends React.PureComponent {
   static propTypes = {
     actions: PropTypes.object,
     service: PropTypes.object.isRequired,
-    agent: PropTypes.object.isRequired,
     closeAction: PropTypes.func.isRequired
   }
 

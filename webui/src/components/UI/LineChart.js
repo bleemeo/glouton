@@ -251,7 +251,7 @@ LineChart.propTypes = {
   hasError: PropTypes.object,
   period: PropTypes.object,
   handleBackwardForward: PropTypes.func,
-  windowWidth: PropTypes.number.isRequired
+  windowWidth: PropTypes.number
 }
 
 export default LineChart
