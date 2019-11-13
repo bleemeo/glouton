@@ -1,33 +1,15 @@
 import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
-import { gql } from 'apollo-boost'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
 import { chartTypes, computeEnd, composeMetricName, isShallowEqual } from '../utils'
 import LineChart from './LineChart'
 import { useFetch, POLL } from '../utils/hooks'
 import FetchSuspense from './FetchSuspense'
+import { GET_POINTS } from '../utils/gqlRequests'
 
 const CPU = ['cpu_steal', 'cpu_softirq', 'cpu_interrupt', 'cpu_system', 'cpu_user', 'cpu_nice', 'cpu_wait', 'cpu_idle']
 const MEMORY = ['mem_used', 'mem_buffered', 'mem_cached', 'mem_free']
 
-const GET_POINTS = gql`
-  query Points($metricsFilter: [MetricInput!]!, $start: String!, $end: String!, $minutes: Int!) {
-    points(metricsFilter: $metricsFilter, start: $start, end: $end, minutes: $minutes) {
-      labels {
-        key
-        value
-      }
-      points {
-        time
-        value
-      }
-      thresholds {
-        highWarning
-        highCritical
-      }
-    }
-  }
-`
 const WidgetDashboardItem = ({
   type,
   title,

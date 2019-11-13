@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo } from 'react'
-import { gql } from 'apollo-boost'
 
 import AgentProcesses from './AgentProcesses'
 import Loading from '../UI/Loading'
@@ -8,58 +7,7 @@ import QueryError from '../UI/QueryError'
 import { useFetch } from '../utils/hooks'
 import { isNullOrUndefined } from '../utils'
 import FetchSuspense from '../UI/FetchSuspense'
-
-const PROCESSES = gql`
-  query processesQuery {
-    processes {
-      updatedAt
-      processes {
-        pid
-        ppid
-        cmdline
-        name
-        memory_rss
-        cpu_percent
-        cpu_time
-        status
-        username
-      }
-    }
-    points(
-      metricsFilter: [
-        { labels: { key: "__name__", value: "mem_buffered" } }
-        { labels: { key: "__name__", value: "mem_cached" } }
-        { labels: { key: "__name__", value: "mem_free" } }
-        { labels: { key: "__name__", value: "mem_used" } }
-        { labels: { key: "__name__", value: "system_load1" } }
-        { labels: { key: "__name__", value: "system_load5" } }
-        { labels: { key: "__name__", value: "system_load15" } }
-        { labels: { key: "__name__", value: "swap_free" } }
-        { labels: { key: "__name__", value: "swap_used" } }
-        { labels: { key: "__name__", value: "swap_total" } }
-        { labels: { key: "__name__", value: "cpu_system" } }
-        { labels: { key: "__name__", value: "cpu_user" } }
-        { labels: { key: "__name__", value: "cpu_nice" } }
-        { labels: { key: "__name__", value: "cpu_wait" } }
-        { labels: { key: "__name__", value: "cpu_idle" } }
-        { labels: { key: "__name__", value: "uptime" } }
-        { labels: { key: "__name__", value: "users_logged" } }
-      ]
-      start: ""
-      end: ""
-      minutes: 15
-    ) {
-      labels {
-        key
-        value
-      }
-      points {
-        time
-        value
-      }
-    }
-  }
-`
+import { PROCESSES } from '../utils/gqlRequests'
 
 const AgentProcessesContainer = () => {
   useEffect(() => {

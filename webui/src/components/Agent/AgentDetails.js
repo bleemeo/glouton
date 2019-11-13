@@ -3,11 +3,8 @@ import d3 from 'd3'
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
 import { Grid } from 'tabler-react'
-import { gql } from 'apollo-boost'
 import ReactTooltip from 'react-tooltip'
 import Panel from '../UI/Panel'
-import QueryError from '../UI/QueryError'
-import Loading from '../UI/Loading'
 import { cssClassForStatus, textForStatus } from '../utils/converter'
 import FaIcon from '../UI/FaIcon'
 import ServiceDetailsModal from '../Service/ServiceDetailsModal'
@@ -16,33 +13,7 @@ import { formatDateTimeWithSeconds } from '../utils/formater'
 import Smiley from '../UI/Smiley'
 import { Problems, isNullOrUndefined } from '../utils'
 import FetchSuspense from '../UI/FetchSuspense'
-
-const AGENT_DETAILS = gql`
-  query agent_details {
-    services(isActive: true) {
-      name
-      containerId
-      ipAddress
-      listenAddresses
-      exePath
-      active
-      status
-      statusDescription
-    }
-    agentInformation {
-      registrationAt
-      lastReport
-      isConnected
-    }
-    tags {
-      tagName
-    }
-    agentStatus {
-      status
-      statusDescription
-    }
-  }
-`
+import { AGENT_DETAILS } from '../utils/gqlRequests'
 
 const AgentDetails = ({ facts }) => {
   const [showServiceDetails, setShowServiceDetails] = useState(null)

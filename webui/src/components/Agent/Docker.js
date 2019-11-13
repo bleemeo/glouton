@@ -1,7 +1,6 @@
 import React, { useState } from 'react'
 import d3 from 'd3'
 import PropTypes from 'prop-types'
-import { gql } from 'apollo-boost'
 
 import FaIcon from '../UI/FaIcon'
 import { formatDateTime, _formatCpuTime } from '../utils/formater'
@@ -12,43 +11,7 @@ import A from '../UI/A'
 import ProcessesTable from '../UI/ProcessesTable'
 import { useFetch } from '../utils/hooks'
 import FetchSuspense from '../UI/FetchSuspense'
-
-const CONTAINER_PROCESSES = gql`
-  query containerProcesses($containerId: String!) {
-    processes(containerId: $containerId) {
-      processes {
-        pid
-        cmdline
-        name
-        memory_rss
-        cpu_percent
-        cpu_time
-        status
-        username
-      }
-    }
-    points(
-      metricsFilter: [
-        { labels: { key: "__name__", value: "mem_buffered" } }
-        { labels: { key: "__name__", value: "mem_cached" } }
-        { labels: { key: "__name__", value: "mem_free" } }
-        { labels: { key: "__name__", value: "mem_used" } }
-      ]
-      start: ""
-      end: ""
-      minutes: 15
-    ) {
-      labels {
-        key
-        value
-      }
-      points {
-        time
-        value
-      }
-    }
-  }
-`
+import { CONTAINER_PROCESSES } from '../utils/gqlRequests'
 
 const Docker = ({ container, date }) => {
   const [dockerInspect, setDockerInspect] = useState(null)

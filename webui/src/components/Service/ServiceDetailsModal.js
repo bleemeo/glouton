@@ -1,21 +1,11 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-import { gql } from 'apollo-boost'
 
 import Modal from '../UI/Modal'
 import { cssClassForStatus, textForStatus } from '../utils/converter'
 import { useFetch } from '../utils/hooks'
 import FetchSuspense from '../UI/FetchSuspense'
-
-const CONTAINER_SERVICE = gql`
-  query containerService($containerId: String!) {
-    containers(search: $containerId, allContainers: true) {
-      containers {
-        name
-      }
-    }
-  }
-`
+import { CONTAINER_SERVICE } from '../utils/gqlRequests'
 
 export default class ServiceDetailsModal extends React.PureComponent {
   static propTypes = {

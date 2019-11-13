@@ -1,22 +1,13 @@
 import React, { lazy, Suspense, useEffect } from 'react'
 import { NavLink, BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom'
 import { withRouter } from 'react-router'
-import { gql } from 'apollo-boost'
 
 import PanelErrorBoundary from '../UI/PanelErrorBoundary'
 import 'rc-switch/assets/index.css'
 import Fallback from '../UI/Fallback'
 import FetchSuspense from '../UI/FetchSuspense'
 import { useFetch } from '../utils/hooks'
-
-const FACTS = gql`
-  query facts {
-    facts {
-      name
-      value
-    }
-  }
-`
+import { FACTS } from '../utils/gqlRequests'
 
 const ScrollToTopComponent = props => {
   useEffect(() => {
