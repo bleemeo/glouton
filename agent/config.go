@@ -82,7 +82,7 @@ var defaultConfig = map[string]interface{}{
 		"^rsxx[0-9]$",
 		"^[A-Z]:$",
 	},
-	"influxdb.db_name":                 "metrics", // TODO: influxdb connector
+	"influxdb.db_name":                 "glouton", // TODO: influxdb connector
 	"influxdb.enabled":                 false,
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
