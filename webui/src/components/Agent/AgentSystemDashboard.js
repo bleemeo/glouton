@@ -7,6 +7,7 @@ import EditPeriodModal, { lastQuickRanges } from './EditPeriodModal'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
 import LineChart from '../UI/LineChart'
 import { useWindowWidth } from '../utils/hooks'
+import { getStorageItem, setStorageItem } from '../utils/storage'
 
 const gaugesBar = [
   { title: 'CPU', name: 'cpu_used', unit: UNIT_PERCENTAGE },
@@ -45,21 +46,19 @@ const widgets = [
 ]
 
 const AgentSystemDashboard = () => {
-  const [period, setPeriod] = useState(
-    window.localStorage.getItem('GLOUTON_STORAGE_period')
-      ? JSON.parse(window.localStorage.getItem('GLOUTON_STORAGE_period'))
-      : { minutes: 60 }
-  )
+  const [period, setPeriod] = useState(getStorageItem('period') || { minutes: 60 })
   const [showEditPeriodMal, setShowEditPeriodMal] = useState(false)
   useEffect(() => {
     document.title = 'Dashboard | Glouton'
   }, [])
 
   useEffect(() => {
-    window.localStorage.setItem('GLOUTON_STORAGE_period', JSON.stringify(period))
+    setStorageItem('period', period)
   }, [period])
 
   const windowWidth = useWindowWidth()
+
+  console.log(windowWidth)
 
   let periodText = ''
   if (period.minutes) {
@@ -140,7 +139,6 @@ const AgentSystemDashboard = () => {
                         unit={gaugeItem.unit}
                         refetchTime={refetchTime}
                         period={period}
-                        isVisible={renderProps.isVisible}
                       />
                     )
                   } else {
@@ -185,7 +183,5 @@ const AgentSystemDashboard = () => {
     </>
   )
 }
-
-AgentSystemDashboard.propTypes = {}
 
 export default AgentSystemDashboard

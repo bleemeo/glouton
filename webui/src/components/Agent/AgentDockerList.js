@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { gql } from 'apollo-boost'
 
 import Docker from './Docker'
 import Loading from '../UI/Loading'
@@ -9,34 +8,9 @@ import Toggle from '../UI/Toggle'
 import QueryError from '../UI/QueryError'
 import { useFetch } from '../utils/hooks'
 import { isNullOrUndefined } from '../utils'
+import { CONTAINERS_DETAILS } from '../utils/gqlRequests'
 
 const PAGE_SIZE = 10
-
-const CONTAINERS_DETAILS = gql`
-  query containersDetails($offset: Int!, $limit: Int!, $allContainers: Boolean!, $search: String!) {
-    containers(input: { offset: $offset, limit: $limit }, allContainers: $allContainers, search: $search) {
-      count
-      currentCount
-      containers {
-        command
-        createdAt
-        id
-        image
-        inspectJSON
-        name
-        startedAt
-        state
-        finishedAt
-        ioWriteBytes
-        ioReadBytes
-        netBitsRecv
-        netBitsSent
-        memUsedPerc
-        cpuUsedPerc
-      }
-    }
-  }
-`
 
 const AgentDockerList = () => {
   const [offset, setOffset] = useState(0)
