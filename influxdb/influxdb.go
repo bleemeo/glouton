@@ -183,10 +183,10 @@ func (c *Client) convertPendingPoints() {
 			nbFailConversion++
 			continue
 		}
-		nbConvertPoints := i + 1 - nbFailConversion
+		nbConvertPoints := i - nbFailConversion
 		if nbConvertPoints >= c.maxBatchSize {
 			logger.V(2).Printf("The influxDBBatchPoint is full: stop converting points")
-			c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[i+1:]...)
+			c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[i:]...)
 			return
 		}
 		c.influxDBBatchPoints.AddPoint(pt)
