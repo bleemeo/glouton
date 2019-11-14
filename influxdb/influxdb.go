@@ -146,13 +146,13 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	defer c.lock.Unlock()
 	switch {
 	case len(points) >= c.maxPendingPoints:
-		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped: the queue is full", len(c.gloutonPendingPoints))
+		logger.Printf("The %v old metrics to send to the influxDB server have been dropped: the queue is full", len(c.gloutonPendingPoints))
 		c.gloutonPendingPoints = make([]types.MetricPoint, c.maxPendingPoints)
 		copy(c.gloutonPendingPoints, points[len(points)-c.maxPendingPoints:])
 	case len(c.gloutonPendingPoints)+len(points) > c.maxPendingPoints:
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[len(points):]...)
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
-		logger.V(1).Printf("The %v old metrics to send to the influxDB server have been dropped: the queue is full", len(points))
+		logger.Printf("The %v old metrics to send to the influxDB server have been dropped: the queue is full", len(points))
 	default:
 		c.gloutonPendingPoints = append(c.gloutonPendingPoints, points...)
 	}
