@@ -44,6 +44,10 @@ type Client struct {
 	additionalTags       map[string]string
 	maxPendingPoints     int
 	maxBatchSize         int
+	sendPointsState      struct {
+		err       error
+		hasChange bool
+	}
 }
 
 // New create a new influxDB client
@@ -56,6 +60,13 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store, additional
 		additionalTags:   additionalTags,
 		maxPendingPoints: defaultMaxPendingPoints,
 		maxBatchSize:     defaultBatchSize,
+		sendPointsState: struct {
+			err       error
+			hasChange bool
+		}{
+			err:       nil,
+			hasChange: false,
+		},
 	}
 }
 
@@ -195,15 +206,21 @@ func (c *Client) convertPendingPoints() {
 }
 
 // sendPoints sends points cointain in the influxDBBatchPoint
-func (c *Client) sendPoints() error {
+func (c *Client) sendPoints() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	err := c.influxClient.Write(c.influxDBBatchPoints)
 
-	// If the write function failed we don't refresh the batchPoint and send an error
-	// to retry later
+	// If the write function failed we don't refresh the batchPoint and we update c.sendPointState
 	if err != nil {
-		return err
+		if c.sendPointsState.err != nil {
+			c.sendPointsState.err = err
+			c.sendPointsState.hasChange = false
+			return
+		}
+		c.sendPointsState.err = err
+		c.sendPointsState.hasChange = true
+		return
 	}
 
 	// If the write function succed we create a new empty batchPoint
@@ -214,7 +231,13 @@ func (c *Client) sendPoints() error {
 	})
 
 	c.influxDBBatchPoints = newBp
-	return nil
+	if c.sendPointsState.err != nil {
+		c.sendPointsState.err = nil
+		c.sendPointsState.hasChange = true
+		return
+	}
+	c.sendPointsState.hasChange = false
+	return
 }
 
 // Run runs the influxDB service
@@ -237,10 +260,17 @@ func (c *Client) Run(ctx context.Context) error {
 
 			// Send the point to the server
 			// If sendPoints fail we retry after a tick
-			err := c.sendPoints()
-			if err != nil {
-				logger.V(1).Printf("Fail to send the metrics to the influxdb server: %s", err.Error())
+			c.sendPoints()
+			if c.sendPointsState.err != nil {
+				if c.sendPointsState.hasChange {
+					logger.Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
+				} else {
+					logger.V(2).Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
+				}
 				break
+			}
+			if c.sendPointsState.hasChange {
+				logger.Printf("All waiting points have been sent to the influxdb server")
 			}
 		}
 		// Wait the ticker or the and of the programm
