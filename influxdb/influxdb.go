@@ -240,6 +240,24 @@ func (c *Client) sendPoints() {
 	return
 }
 
+// SendCheck performs some health checks after running sendPoints and logs the result
+func (c *Client) SendCheck() bool {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if c.sendPointsState.err != nil {
+		if c.sendPointsState.hasChange {
+			logger.Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
+		} else {
+			logger.V(2).Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
+		}
+		return true
+	}
+	if c.sendPointsState.hasChange {
+		logger.Printf("All waiting points have been sent to the influxdb server")
+	}
+	return false
+}
+
 // Run runs the influxDB service
 func (c *Client) Run(ctx context.Context) error {
 
@@ -261,18 +279,16 @@ func (c *Client) Run(ctx context.Context) error {
 			// Send the point to the server
 			// If sendPoints fail we retry after a tick
 			c.sendPoints()
-			if c.sendPointsState.err != nil {
-				if c.sendPointsState.hasChange {
-					logger.Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
-				} else {
-					logger.V(2).Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
-				}
+			breakstate := c.SendCheck()
+			if breakstate {
 				break
 			}
-			if c.sendPointsState.hasChange {
-				logger.Printf("All waiting points have been sent to the influxdb server")
-			}
 		}
+
+		if len(c.gloutonPendingPoints) > 1000 {
+			logger.Printf("%d points are waiting to be sent to the influxdb server", len(c.gloutonPendingPoints))
+		}
+
 		// Wait the ticker or the and of the programm
 		select {
 		case <-ticker.C:
