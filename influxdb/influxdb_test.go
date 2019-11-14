@@ -18,7 +18,6 @@ package influxdb
 
 import (
 	"fmt"
-	"glouton/store"
 	"glouton/types"
 	"reflect"
 	"testing"
@@ -129,7 +128,7 @@ func TestConvertMetricPoint(t *testing.T) {
 }
 
 func TestAddPoints(t *testing.T) {
-	var client = New("localhost", "db_name", store.New(), make(map[string]string))
+	var client Client
 	client.maxPendingPoints = 3
 	metricPoints := make([]types.MetricPoint, 6)
 	for i := range metricPoints {
@@ -220,7 +219,7 @@ func TestAddPoints(t *testing.T) {
 }
 
 func TestConvertPendingPoints(t *testing.T) {
-	var client = New("localhost", "db_name", store.New(), make(map[string]string))
+	var client Client
 	client.maxPendingPoints = 50
 	client.maxBatchSize = 5
 	bp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
