@@ -60,13 +60,6 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store, additional
 		additionalTags:   additionalTags,
 		maxPendingPoints: defaultMaxPendingPoints,
 		maxBatchSize:     defaultBatchSize,
-		sendPointsState: struct {
-			err       error
-			hasChange bool
-		}{
-			err:       nil,
-			hasChange: false,
-		},
 	}
 }
 
@@ -239,8 +232,8 @@ func (c *Client) sendPoints() {
 	c.sendPointsState.hasChange = false
 }
 
-// SendCheck performs some health checks after running sendPoints and logs the result
-func (c *Client) SendCheck() bool {
+// sendCheck performs some health checks after running sendPoints and logs the result
+func (c *Client) sendCheck() bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
 	if c.sendPointsState.err != nil {
@@ -278,7 +271,7 @@ func (c *Client) Run(ctx context.Context) error {
 			// Send the point to the server
 			// If sendPoints fail we retry after a tick
 			c.sendPoints()
-			breakstate := c.SendCheck()
+			breakstate := c.sendCheck()
 			if breakstate {
 				break
 			}
