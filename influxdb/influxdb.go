@@ -250,6 +250,22 @@ func (c *Client) sendCheck() bool {
 	return false
 }
 
+// HealthCheck perform some health check and logger any issue found
+func (c *Client) HealthCheck() bool {
+	ok := true
+	_, _, pingErr := c.influxClient.Ping(5 * time.Second)
+	if pingErr != nil {
+		ok = false
+		logger.Printf("Bleemeo connection influxdb server is currently not responding")
+	}
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	if len(c.gloutonPendingPoints) > 1000 {
+		logger.Printf("%d points are waiting to be sent to the influxdb server", len(c.gloutonPendingPoints))
+	}
+	return ok
+}
+
 // Run runs the influxDB service
 func (c *Client) Run(ctx context.Context) error {
 
@@ -275,10 +291,6 @@ func (c *Client) Run(ctx context.Context) error {
 			if breakstate {
 				break
 			}
-		}
-
-		if len(c.gloutonPendingPoints) > 1000 {
-			logger.Printf("%d points are waiting to be sent to the influxdb server", len(c.gloutonPendingPoints))
 		}
 
 		// Wait the ticker or the and of the programm

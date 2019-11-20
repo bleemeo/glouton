@@ -64,13 +64,14 @@ type agent struct {
 	state        *state.State
 	cancel       context.CancelFunc
 
-	discovery        *discovery.Discovery
-	dockerFact       *facts.DockerProvider
-	collector        *collector.Collector
-	factProvider     *facts.FactProvider
-	bleemeoConnector *bleemeo.Connector
-	accumulator      *threshold.Accumulator
-	store            *store.Store
+	discovery         *discovery.Discovery
+	dockerFact        *facts.DockerProvider
+	collector         *collector.Collector
+	factProvider      *facts.FactProvider
+	bleemeoConnector  *bleemeo.Connector
+	influxdbConnector *influxdb.Client
+	accumulator       *threshold.Accumulator
+	store             *store.Store
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -456,6 +457,7 @@ func (a *agent) run() { //nolint:gocyclo
 			a.store,
 			a.config.StringMap("influxdb.tags"),
 		)
+		a.influxdbConnector = server
 		tasks = append(tasks, taskInfo{server.Run, "influxdb"})
 		logger.V(2).Printf("Influxdb is activated !")
 	}
@@ -547,6 +549,9 @@ func (a *agent) healthCheck(ctx context.Context) error {
 		}
 		if a.bleemeoConnector != nil {
 			a.bleemeoConnector.HealthCheck()
+		}
+		if a.influxdbConnector != nil {
+			a.influxdbConnector.HealthCheck()
 		}
 	}
 }
