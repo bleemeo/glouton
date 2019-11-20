@@ -237,7 +237,6 @@ func (c *Client) sendPoints() {
 		return
 	}
 	c.sendPointsState.hasChange = false
-	return
 }
 
 // SendCheck performs some health checks after running sendPoints and logs the result

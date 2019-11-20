@@ -452,7 +452,7 @@ func (a *agent) run() { //nolint:gocyclo
 	if a.config.Bool("influxdb.enabled") {
 		server := influxdb.New(
 			fmt.Sprintf("http://%s:%s", a.config.String("influxdb.host"), a.config.String("influxdb.port")),
-			fmt.Sprintf("%s", a.config.String("influxdb.db_name")),
+			a.config.String("influxdb.db_name"),
 			a.store,
 			a.config.StringMap("influxdb.tags"),
 		)
