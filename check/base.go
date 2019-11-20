@@ -54,10 +54,13 @@ type baseCheck struct {
 	timer    *time.Timer
 	dialer   *net.Dialer
 	triggerC chan interface{}
-	cancel   func()
 	wg       sync.WaitGroup
 
 	persistentConnection bool
+
+	lock           sync.Locker
+	cancel         func()
+	previousStatus types.StatusDescription
 }
 
 func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, labels map[string]string, acc accumulator) *baseCheck {
@@ -103,6 +106,8 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 		CurrentStatus:     types.StatusOk,
 		StatusDescription: "initial status - description is ignored",
 	}
+	bc.previousStatus = result
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -116,21 +121,21 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 			if !bc.timer.Stop() {
 				<-bc.timer.C
 			}
-			result = bc.check(ctx, result)
+			bc.check(ctx)
 		case <-bc.timer.C:
-			result = bc.check(ctx, result)
+			bc.check(ctx)
 		}
 	}
 }
 
-func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescription) types.StatusDescription {
+func (bc *baseCheck) check(ctx context.Context) {
 	// do the check
 	// if successful, ensure socket are open
 	// if fail, ensure socket are closed
 	// if just fail (ok -> critical), do a fast check
 	result := bc.doCheck(ctx)
 	if ctx.Err() != nil {
-		return previousStatus
+		return
 	}
 	timerDone := false
 	if result.CurrentStatus != types.StatusOk {
@@ -139,7 +144,7 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescr
 			bc.wg.Wait()
 			bc.cancel = nil
 		}
-		if previousStatus.CurrentStatus == types.StatusOk {
+		if bc.previousStatus.CurrentStatus == types.StatusOk {
 			bc.timer.Reset(30 * time.Second)
 			timerDone = true
 		}
@@ -160,7 +165,7 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescr
 		map[string]types.StatusDescription{bc.metricName: result},
 		false,
 	)
-	return result
+	bc.previousStatus = result
 }
 
 func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {
