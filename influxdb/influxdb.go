@@ -34,20 +34,21 @@ const defaultBatchSize = 1000
 
 // Client is an influxdb client for Bleemeo Cloud platform
 type Client struct {
-	serverAddress        string
-	dataBaseName         string
-	influxClient         influxDBClient.Client
-	store                *store.Store
-	lock                 sync.Mutex
-	gloutonPendingPoints []types.MetricPoint
-	influxDBBatchPoints  influxDBClient.BatchPoints
-	additionalTags       map[string]string
-	maxPendingPoints     int
-	maxBatchSize         int
-	sendPointsState      struct {
+	serverAddress       string
+	dataBaseName        string
+	store               *store.Store
+	influxDBBatchPoints influxDBClient.BatchPoints
+	additionalTags      map[string]string
+	maxPendingPoints    int
+	maxBatchSize        int
+	sendPointsState     struct {
 		err       error
 		hasChange bool
 	}
+
+	lock                 sync.Mutex
+	gloutonPendingPoints []types.MetricPoint
+	influxClient         influxDBClient.Client
 }
 
 // New create a new influxDB client
@@ -198,8 +199,10 @@ func (c *Client) convertPendingPoints() {
 
 // sendPoints sends points cointain in the influxDBBatchPoint
 func (c *Client) sendPoints() {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	if c.influxClient == nil {
+		logger.Printf("influxdbClient is not initialized, impossible to send points to the influxdb server")
+		return
+	}
 	err := c.influxClient.Write(c.influxDBBatchPoints)
 
 	// If the write function failed we don't refresh the batchPoint and we update c.sendPointState
@@ -250,14 +253,18 @@ func (c *Client) sendCheck() bool {
 
 // HealthCheck perform some health check and logger any issue found
 func (c *Client) HealthCheck() bool {
-	ok := true
-	_, _, pingErr := c.influxClient.Ping(5 * time.Second)
-	if pingErr != nil {
-		ok = false
-		logger.Printf("Bleemeo connection influxdb server is currently not responding")
-	}
 	c.lock.Lock()
 	defer c.lock.Unlock()
+	ok := true
+	if c.influxClient != nil {
+		_, _, pingErr := c.influxClient.Ping(5 * time.Second)
+		if pingErr != nil {
+			ok = false
+			logger.Printf("Bleemeo connection influxdb server is currently not responding")
+		}
+	} else {
+		logger.Printf("influxClient is not initialized, impossible to contact the influxdb server")
+	}
 	if len(c.gloutonPendingPoints) > defaultBatchSize {
 		logger.Printf("%d points are waiting to be sent to the influxdb server", len(c.gloutonPendingPoints))
 	}
@@ -265,6 +272,13 @@ func (c *Client) HealthCheck() bool {
 		logger.Printf("%d points are waiting to be sent to the influxdb server. Older points are being dropped", len(c.gloutonPendingPoints))
 	}
 	return ok
+}
+
+// lenGloutonPendingPoints return the len of the slice c.gloutonPendingPoints
+func (c *Client) lenGloutonPendingPoints() int {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	return len(c.gloutonPendingPoints)
 }
 
 // Run runs the influxDB service
@@ -281,7 +295,7 @@ func (c *Client) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		for len(c.gloutonPendingPoints) > 0 {
+		for c.lenGloutonPendingPoints() > 0 {
 			// Convert the BleemeoPendingPoints in InfluxDBPendingPoints
 			c.convertPendingPoints()
 
