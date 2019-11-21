@@ -132,12 +132,12 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 // if successful, ensure sockets are openned
 // if fail, ensure sockets are closed
 // if just fail (ok -> critical), does a fast check and add the metric to the accumulator even if addMetric is false
-func (bc *baseCheck) check(ctx context.Context, addMetric bool) {
+func (bc *baseCheck) check(ctx context.Context, addMetric bool) types.StatusDescription {
 	bc.lock.Lock()
 	defer bc.lock.Unlock()
 	result := bc.doCheck(ctx)
 	if ctx.Err() != nil {
-		return
+		return result
 	}
 	timerDone := false
 	if result.CurrentStatus != types.StatusOk {
@@ -172,11 +172,12 @@ func (bc *baseCheck) check(ctx context.Context, addMetric bool) {
 	}
 	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels["item"], result)
 	bc.previousStatus = result
+	return result
 }
 
 // ChechNow runs the check now without waiting the timer
-func (bc *baseCheck) CheckNow(ctx context.Context) {
-	bc.check(ctx, false)
+func (bc *baseCheck) CheckNow(ctx context.Context) types.StatusDescription {
+	return bc.check(ctx, false)
 }
 
 func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {
