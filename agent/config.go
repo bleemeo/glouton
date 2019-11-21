@@ -82,10 +82,11 @@ var defaultConfig = map[string]interface{}{
 		"^rsxx[0-9]$",
 		"^[A-Z]:$",
 	},
-	"influxdb.db_name":                 "metrics", // TODO: influxdb connector
+	"influxdb.db_name":                 "glouton", // TODO: influxdb connector
 	"influxdb.enabled":                 false,
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
+	"influxdb.tags":                    map[string]string{},
 	"jmx.enabled":                      true, // TODO: JMX metric gathering
 	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
 	"kubernetes.enabled":               false, // TODO: add support for k8s

@@ -35,6 +35,12 @@ nested:
     key:
         also:
             work: yes
+
+influxdb:
+    tags:
+        hostname: Athena
+        uuid: 42
+        42 : random_number
 `
 	mergeOne = `
 d1: 1
@@ -46,6 +52,11 @@ nested:
   sub_dict:
     d1: 1
     remplaced: 1
+influxdb:
+    tags:
+        hostname: Hestia
+        ip_address: 192.168.0.1
+        state: online
 `
 	mergeTwo = `
 d2: 2
@@ -82,6 +93,54 @@ func TestString(t *testing.T) {
 		got := cfg.String(c.Key)
 		if c.Want != got {
 			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
+		}
+	}
+}
+
+func TestStringMap(t *testing.T) {
+	cfg := Configuration{}
+	err := cfg.LoadByte([]byte(simpleYaml))
+	if err != nil {
+		t.Error(err)
+	}
+
+	want1 := make(map[string]string)
+	want1["hostname"] = "Athena"
+	want1["uuid"] = "42"
+	want1["42"] = "random_number"
+
+	want2 := make(map[string]string)
+	want2["also"] = "map[work:yes]"
+
+	cases := []struct {
+		Key  string
+		Want map[string]string
+	}{
+		{Key: "influxdb.tags", Want: want1},
+		{Key: "nested.key", Want: want2},
+		{Key: "influxdb.unexisting", Want: make(map[string]string)},
+	}
+	for _, c := range cases {
+		got := cfg.StringMap(c.Key)
+		if !reflect.DeepEqual(c.Want, got) {
+			t.Errorf("StringMap(%#v) = %#v, want %#v", c.Key, got, c.Want)
+		}
+	}
+
+	// Test after a merge
+	err = cfg.LoadByte([]byte(mergeOne))
+	if err != nil {
+		t.Error(err)
+	}
+
+	want1["hostname"] = "Hestia"
+	want1["ip_address"] = "192.168.0.1"
+	want1["state"] = "online"
+
+	for _, c := range cases {
+		got := cfg.StringMap(c.Key)
+		if !reflect.DeepEqual(c.Want, got) {
+			t.Errorf("StringMap(%#v) = %#v, want %#v", c.Key, got, c.Want)
 		}
 	}
 }

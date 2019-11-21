@@ -167,9 +167,31 @@ func (c Configuration) StringList(key string) []string {
 	}
 }
 
+// StringMap return the given key as a string map
+//
+// Return an empty map if the key does not existor could not be converted to a string map
+func (c Configuration) StringMap(key string) map[string]string {
+	rawValue, ok := c.Get(key)
+	if !ok {
+		return make(map[string]string)
+	}
+	switch value := rawValue.(type) {
+	case map[string]string:
+		return value
+	case map[string]interface{}:
+		finalMap := make(map[string]string)
+		for k, v := range value {
+			finalMap[k] = fmt.Sprintf("%v", v)
+		}
+		return finalMap
+	default:
+		return make(map[string]string)
+	}
+}
+
 // Int return the given key as int.
 //
-// Return 0 if the key does not exists or could not be converted to int.
+// Return 0 if the key does not exist or could not be converted to int.
 // Use Get() if you need to known if the key exists or not.
 func (c Configuration) Int(key string) int {
 	rawValue, ok := c.Get(key)
