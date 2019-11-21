@@ -121,18 +121,20 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 			if !bc.timer.Stop() {
 				<-bc.timer.C
 			}
-			bc.check(ctx)
+			bc.check(ctx, true)
 		case <-bc.timer.C:
-			bc.check(ctx)
+			bc.check(ctx, true)
 		}
 	}
 }
 
-func (bc *baseCheck) check(ctx context.Context) {
-	// do the check
-	// if successful, ensure socket are open
-	// if fail, ensure socket are closed
-	// if just fail (ok -> critical), do a fast check
+// check does the check and add the metric depends of addMetric
+// if successful, ensure sockets are openned
+// if fail, ensure sockets are closed
+// if just fail (ok -> critical), does a fast check and add the metric to the accumulator even if addMetric is false
+func (bc *baseCheck) check(ctx context.Context, addMetric bool) {
+	bc.lock.Lock()
+	defer bc.lock.Unlock()
 	result := bc.doCheck(ctx)
 	if ctx.Err() != nil {
 		return
@@ -152,20 +154,28 @@ func (bc *baseCheck) check(ctx context.Context) {
 		bc.openSockets(ctx)
 	}
 
-	if !timerDone {
+	if !timerDone && addMetric {
 		bc.timer.Reset(time.Minute)
 	}
+
+	if addMetric || timerDone {
+		bc.acc.AddFieldsWithStatus(
+			"",
+			map[string]interface{}{
+				bc.metricName: result.CurrentStatus.NagiosCode(),
+			},
+			bc.labels,
+			map[string]types.StatusDescription{bc.metricName: result},
+			false,
+		)
+	}
 	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels["item"], result)
-	bc.acc.AddFieldsWithStatus(
-		"",
-		map[string]interface{}{
-			bc.metricName: result.CurrentStatus.NagiosCode(),
-		},
-		bc.labels,
-		map[string]types.StatusDescription{bc.metricName: result},
-		false,
-	)
 	bc.previousStatus = result
+}
+
+// ChechNow runs the check now without waiting the timer
+func (bc *baseCheck) CheckNow(ctx context.Context) {
+	bc.check(ctx, false)
 }
 
 func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {
