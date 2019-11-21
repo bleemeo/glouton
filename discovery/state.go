@@ -120,7 +120,7 @@ func servicesFromState(state State) []Service {
 	return result
 }
 
-func saveState(state State, servicesMap map[nameContainer]Service) {
+func saveState(state State, servicesMap map[NameContainer]Service) {
 	services := make([]Service, 0, len(servicesMap))
 	for _, srv := range servicesMap {
 		services = append(services, srv)

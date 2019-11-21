@@ -44,7 +44,7 @@ type CheckDetails struct {
 	check Check
 }
 
-func (d *Discovery) configureChecks(oldServices, services map[nameContainer]Service) {
+func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
 			d.removeCheck(key)
@@ -60,7 +60,7 @@ func (d *Discovery) configureChecks(oldServices, services map[nameContainer]Serv
 	}
 }
 
-func (d *Discovery) removeCheck(key nameContainer) {
+func (d *Discovery) removeCheck(key NameContainer) {
 	if d.taskRegistry == nil {
 		return
 	}
@@ -229,7 +229,7 @@ func (d *Discovery) addCheck(check Check, service Service) {
 	if d.acc == nil || d.taskRegistry == nil {
 		return
 	}
-	key := nameContainer{
+	key := NameContainer{
 		name:          service.Name,
 		containerName: service.ContainerName,
 	}

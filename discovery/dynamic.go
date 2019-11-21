@@ -223,7 +223,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		allPids = append(allPids, p)
 	}
 
-	servicesMap := make(map[nameContainer]Service)
+	servicesMap := make(map[NameContainer]Service)
 	for _, pid := range allPids {
 		process, ok := processes[pid]
 		if !ok {
@@ -243,7 +243,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			Stack:         dd.defaultStack,
 		}
 
-		key := nameContainer{
+		key := NameContainer{
 			name:          service.Name,
 			containerName: service.ContainerName,
 		}

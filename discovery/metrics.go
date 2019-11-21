@@ -127,7 +127,7 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 	return nil
 }
 
-func (d *Discovery) configureMetricInputs(oldServices, services map[nameContainer]Service) (err error) {
+func (d *Discovery) configureMetricInputs(oldServices, services map[NameContainer]Service) (err error) {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
 			d.removeInput(key)
@@ -165,7 +165,7 @@ func serviceNeedUpdate(oldService, service Service) bool {
 	return false
 }
 
-func (d *Discovery) removeInput(key nameContainer) {
+func (d *Discovery) removeInput(key NameContainer) {
 	if d.coll == nil {
 		return
 	}
@@ -301,7 +301,7 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 	if err != nil {
 		return err
 	}
-	key := nameContainer{
+	key := NameContainer{
 		name:          service.Name,
 		containerName: service.ContainerName,
 	}

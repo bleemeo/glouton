@@ -201,13 +201,13 @@ func TestDiscoverySingle(t *testing.T) {
 
 func Test_applyOveride(t *testing.T) {
 	type args struct {
-		discoveredServicesMap map[nameContainer]Service
-		servicesOverride      map[nameContainer]map[string]string
+		discoveredServicesMap map[NameContainer]Service
+		servicesOverride      map[NameContainer]map[string]string
 	}
 	tests := []struct {
 		name string
 		args args
-		want map[nameContainer]Service
+		want map[NameContainer]Service
 	}{
 		{
 			name: "empty",
@@ -215,12 +215,12 @@ func Test_applyOveride(t *testing.T) {
 				discoveredServicesMap: nil,
 				servicesOverride:      nil,
 			},
-			want: make(map[nameContainer]Service),
+			want: make(map[NameContainer]Service),
 		},
 		{
 			name: "no override",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
+				discoveredServicesMap: map[NameContainer]Service{
 					{name: "apache"}: {
 						Name:            "apache",
 						ServiceType:     ApacheService,
@@ -230,7 +230,7 @@ func Test_applyOveride(t *testing.T) {
 				},
 				servicesOverride: nil,
 			},
-			want: map[nameContainer]Service{
+			want: map[NameContainer]Service{
 				{name: "apache"}: {
 					Name:            "apache",
 					ServiceType:     ApacheService,
@@ -242,19 +242,19 @@ func Test_applyOveride(t *testing.T) {
 		{
 			name: "address override",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
+				discoveredServicesMap: map[NameContainer]Service{
 					{name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[nameContainer]map[string]string{
+				servicesOverride: map[NameContainer]map[string]string{
 					{name: "apache"}: {
 						"address": "10.0.1.2",
 					},
 				},
 			},
-			want: map[nameContainer]Service{
+			want: map[NameContainer]Service{
 				{name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -267,20 +267,20 @@ func Test_applyOveride(t *testing.T) {
 		{
 			name: "address override & ignore unknown override",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
+				discoveredServicesMap: map[NameContainer]Service{
 					{name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[nameContainer]map[string]string{
+				servicesOverride: map[NameContainer]map[string]string{
 					{name: "apache"}: {
 						"address":         "10.0.1.2",
 						"this-is-unknown": "so-unused",
 					},
 				},
 			},
-			want: map[nameContainer]Service{
+			want: map[NameContainer]Service{
 				{name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -293,13 +293,13 @@ func Test_applyOveride(t *testing.T) {
 		{
 			name: "add custom check",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
+				discoveredServicesMap: map[NameContainer]Service{
 					{name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[nameContainer]map[string]string{
+				servicesOverride: map[NameContainer]map[string]string{
 					{name: "myapplication"}: {
 						"port":          "8080",
 						"check_type":    customCheckNagios,
@@ -310,7 +310,7 @@ func Test_applyOveride(t *testing.T) {
 					},
 				},
 			},
-			want: map[nameContainer]Service{
+			want: map[NameContainer]Service{
 				{name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
@@ -342,7 +342,7 @@ func Test_applyOveride(t *testing.T) {
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[nameContainer]map[string]string{
+				servicesOverride: map[NameContainer]map[string]string{
 					{name: "myapplication"}: { // the check_command is missing
 						"port":       "8080",
 						"check_type": customCheckNagios,
@@ -352,7 +352,7 @@ func Test_applyOveride(t *testing.T) {
 					},
 				},
 			},
-			want: map[nameContainer]Service{},
+			want: map[NameContainer]Service{},
 		},
 	}
 	for _, tt := range tests {

@@ -39,7 +39,8 @@ type PersistentDiscoverer interface {
 	RemoveIfNonRunning(ctx context.Context, services []Service)
 }
 
-type nameContainer struct {
+// NameContainer contains the service and container names
+type NameContainer struct {
 	name          string
 	containerName string
 }

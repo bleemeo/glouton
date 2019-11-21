@@ -43,19 +43,19 @@ type Discovery struct {
 
 	dynamicDiscovery Discoverer
 
-	discoveredServicesMap map[nameContainer]Service
-	servicesMap           map[nameContainer]Service
+	discoveredServicesMap map[NameContainer]Service
+	servicesMap           map[NameContainer]Service
 	lastDiscoveryUpdate   time.Time
 
 	acc                   Accumulator
-	lastConfigservicesMap map[nameContainer]Service
-	activeInput           map[nameContainer]int
-	activeCheck           map[nameContainer]CheckDetails
+	lastConfigservicesMap map[NameContainer]Service
+	activeInput           map[NameContainer]int
+	activeCheck           map[NameContainer]CheckDetails
 	coll                  Collector
 	taskRegistry          Registry
 	containerInfo         containerInfoProvider
 	state                 State
-	servicesOverride      map[nameContainer]map[string]string
+	servicesOverride      map[NameContainer]map[string]string
 }
 
 // Collector will gather metrics for added inputs
@@ -73,15 +73,15 @@ type Registry interface {
 // New returns a new Discovery
 func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string) *Discovery {
 	initialServices := servicesFromState(state)
-	discoveredServicesMap := make(map[nameContainer]Service, len(initialServices))
+	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
-		key := nameContainer{
+		key := NameContainer{
 			name:          v.Name,
 			containerName: v.ContainerName,
 		}
 		discoveredServicesMap[key] = v
 	}
-	servicesOverrideMap := make(map[nameContainer]map[string]string)
+	servicesOverrideMap := make(map[NameContainer]map[string]string)
 	for _, fragment := range servicesOverride {
 		fragmentCopy := make(map[string]string)
 		for k, v := range fragment {
@@ -90,7 +90,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 			}
 			fragmentCopy[k] = v
 		}
-		key := nameContainer{
+		key := NameContainer{
 			fragment["id"],
 			fragment["instance"],
 		}
@@ -103,8 +103,8 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		taskRegistry:          taskRegistry,
 		containerInfo:         (*dockerWrapper)(containerInfo),
 		acc:                   acc,
-		activeInput:           make(map[nameContainer]int),
-		activeCheck:           make(map[nameContainer]CheckDetails),
+		activeInput:           make(map[NameContainer]int),
+		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverrideMap,
 	}
@@ -161,7 +161,7 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	defer d.l.Unlock()
 	deleted := false
 	for _, v := range services {
-		key := nameContainer{name: v.Name, containerName: v.ContainerName}
+		key := NameContainer{name: v.Name, containerName: v.ContainerName}
 		if _, ok := d.servicesMap[key]; ok {
 			deleted = true
 		}
@@ -190,7 +190,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 		return err
 	}
 
-	servicesMap := make(map[nameContainer]Service)
+	servicesMap := make(map[NameContainer]Service)
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
 			if _, found := d.containerInfo.Container(service.ContainerID); !found {
@@ -205,7 +205,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	}
 
 	for _, service := range r {
-		key := nameContainer{
+		key := NameContainer{
 			name:          service.Name,
 			containerName: service.ContainerName,
 		}
@@ -224,8 +224,8 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	return nil
 }
 
-func applyOveride(discoveredServicesMap map[nameContainer]Service, servicesOverride map[nameContainer]map[string]string) map[nameContainer]Service {
-	servicesMap := make(map[nameContainer]Service)
+func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]map[string]string) map[NameContainer]Service {
+	servicesMap := make(map[NameContainer]Service)
 
 	for k, v := range discoveredServicesMap {
 		servicesMap[k] = v
@@ -293,4 +293,9 @@ func applyOveride(discoveredServicesMap map[nameContainer]Service, servicesOverr
 	}
 
 	return servicesMap
+}
+
+// GetCheckNow return the function CheckNow associated to a NameContainer
+func (d *Discovery) GetCheckNow(nameContainer NameContainer) task.Runner {
+	return d.activeCheck[nameContainer].check.Run
 }
