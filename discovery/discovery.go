@@ -50,7 +50,7 @@ type Discovery struct {
 	acc                   Accumulator
 	lastConfigservicesMap map[nameContainer]Service
 	activeInput           map[nameContainer]int
-	activeCheck           map[nameContainer]int
+	activeCheck           map[nameContainer]CheckDetails
 	coll                  Collector
 	taskRegistry          Registry
 	containerInfo         containerInfoProvider
@@ -104,7 +104,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		containerInfo:         (*dockerWrapper)(containerInfo),
 		acc:                   acc,
 		activeInput:           make(map[nameContainer]int),
-		activeCheck:           make(map[nameContainer]int),
+		activeCheck:           make(map[nameContainer]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverrideMap,
 	}

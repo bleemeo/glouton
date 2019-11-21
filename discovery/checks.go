@@ -17,10 +17,11 @@
 package discovery
 
 import (
+	"context"
 	"fmt"
 	"glouton/check"
 	"glouton/logger"
-	"glouton/task"
+	"glouton/types"
 	"net"
 	"strconv"
 )
@@ -30,6 +31,18 @@ const (
 	customCheckHTTP   = "http"
 	customCheckNagios = "nagios"
 )
+
+// Check is an interface which specify a check
+type Check interface {
+	CheckNow(ctx context.Context) types.StatusDescription
+	Run(ctx context.Context) error
+}
+
+// CheckDetails is used to save a check and his id
+type CheckDetails struct {
+	id    int
+	check Check
+}
 
 func (d *Discovery) configureChecks(oldServices, services map[nameContainer]Service) {
 	for key := range oldServices {
@@ -51,10 +64,10 @@ func (d *Discovery) removeCheck(key nameContainer) {
 	if d.taskRegistry == nil {
 		return
 	}
-	if checkID, ok := d.activeCheck[key]; ok {
+	if check, ok := d.activeCheck[key]; ok {
 		logger.V(2).Printf("Remove check for service %v on container %s", key.name, key.containerName)
 		delete(d.activeCheck, key)
-		d.taskRegistry.RemoveTask(checkID)
+		d.taskRegistry.RemoveTask(check.id)
 	}
 }
 
@@ -105,7 +118,7 @@ func (d *Discovery) createCheck(service Service) {
 				labels,
 				d.acc,
 			)
-			d.addCheck(check.Run, service)
+			d.addCheck(check, service)
 		} else {
 			d.createTCPCheck(service, di, "", tcpAddresses, labels)
 		}
@@ -157,7 +170,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		labels,
 		d.acc,
 	)
-	d.addCheck(tcpCheck.Run, service)
+	d.addCheck(tcpCheck, service)
 }
 
 func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
@@ -194,7 +207,7 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		labels,
 		d.acc,
 	)
-	d.addCheck(httpCheck.Run, service)
+	d.addCheck(httpCheck, service)
 }
 
 func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string) {
@@ -209,10 +222,10 @@ func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, la
 		labels,
 		d.acc,
 	)
-	d.addCheck(httpCheck.Run, service)
+	d.addCheck(httpCheck, service)
 }
 
-func (d *Discovery) addCheck(task task.Runner, service Service) {
+func (d *Discovery) addCheck(check Check, service Service) {
 	if d.acc == nil || d.taskRegistry == nil {
 		return
 	}
@@ -220,9 +233,13 @@ func (d *Discovery) addCheck(task task.Runner, service Service) {
 		name:          service.Name,
 		containerName: service.ContainerName,
 	}
-	id, err := d.taskRegistry.AddTask(task, fmt.Sprintf("check for %s", service.Name))
+	id, err := d.taskRegistry.AddTask(check.Run, fmt.Sprintf("check for %s", service.Name))
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)
 	}
-	d.activeCheck[key] = id
+	savedCheck := CheckDetails{
+		check: check,
+		id:    id,
+	}
+	d.activeCheck[key] = savedCheck
 }
