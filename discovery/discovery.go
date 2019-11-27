@@ -295,7 +295,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 	return servicesMap
 }
 
-// GetCheckNow return the function CheckNow associated to a NameContainer
-func (d *Discovery) GetCheckNow(nameContainer NameContainer) task.Runner {
-	return d.activeCheck[nameContainer].check.Run
+// GetCheck return the check associated to a NameContainer
+func (d *Discovery) GetCheck(nameContainer NameContainer) Check {
+	return d.activeCheck[nameContainer].check
 }

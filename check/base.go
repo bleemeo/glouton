@@ -149,7 +149,6 @@ func (bc *baseCheck) check(ctx context.Context, addMetric bool) types.StatusDesc
 		if bc.previousStatus.CurrentStatus == types.StatusOk {
 			bc.timer.Reset(30 * time.Second)
 			timerDone = true
-			addMetric = true // If the check fail we add the the metric and do a fast check
 		}
 	} else {
 		bc.openSockets(ctx)
@@ -159,7 +158,7 @@ func (bc *baseCheck) check(ctx context.Context, addMetric bool) types.StatusDesc
 		bc.timer.Reset(time.Minute)
 	}
 
-	if addMetric {
+	if addMetric || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
 		bc.acc.AddFieldsWithStatus(
 			"",
 			map[string]interface{}{
