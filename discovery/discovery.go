@@ -76,8 +76,8 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
 		key := NameContainer{
-			name:          v.Name,
-			containerName: v.ContainerName,
+			Name:          v.Name,
+			ContainerName: v.ContainerName,
 		}
 		discoveredServicesMap[key] = v
 	}
@@ -161,7 +161,7 @@ func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) 
 	defer d.l.Unlock()
 	deleted := false
 	for _, v := range services {
-		key := NameContainer{name: v.Name, containerName: v.ContainerName}
+		key := NameContainer{Name: v.Name, ContainerName: v.ContainerName}
 		if _, ok := d.servicesMap[key]; ok {
 			deleted = true
 		}
@@ -206,8 +206,8 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for _, service := range r {
 		key := NameContainer{
-			name:          service.Name,
-			containerName: service.ContainerName,
+			Name:          service.Name,
+			ContainerName: service.ContainerName,
 		}
 		if previousService, ok := servicesMap[key]; ok {
 			if previousService.HasNetstatInfo && !service.HasNetstatInfo {
@@ -238,16 +238,16 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 		}
 		service := servicesMap[serviceKey]
 		if service.ServiceType == "" {
-			if serviceKey.containerName != "" {
+			if serviceKey.ContainerName != "" {
 				logger.V(1).Printf(
 					"Custom check for service %#v with a container (%#v) is not supported. Please unset the container",
-					serviceKey.name,
-					serviceKey.containerName,
+					serviceKey.Name,
+					serviceKey.ContainerName,
 				)
 				continue
 			}
 			service.ServiceType = CustomService
-			service.Name = serviceKey.name
+			service.Name = serviceKey.Name
 			service.Active = true
 		}
 		if service.ExtraAttributes == nil {
