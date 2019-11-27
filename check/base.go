@@ -58,7 +58,7 @@ type baseCheck struct {
 
 	persistentConnection bool
 
-	lock           sync.Locker
+	lock           sync.Mutex
 	cancel         func()
 	previousStatus types.StatusDescription
 }
