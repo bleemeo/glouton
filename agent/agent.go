@@ -84,10 +84,6 @@ type agent struct {
 	taskIDs map[string]int
 }
 
-func nrpeResponse(ctx context.Context, request string) (string, int16, error) {
-	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
-}
-
 func zabbixResponse(key string, args []string) (string, error) {
 	if key == "agent.ping" {
 		return "1", nil
@@ -437,7 +433,7 @@ func (a *agent) run() { //nolint:gocyclo
 		server := nrpe.New(
 			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
 			a.config.Bool("nrpe.ssl"),
-			nrpeResponse,
+			nrpe.nrpeResponse,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}

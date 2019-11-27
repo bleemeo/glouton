@@ -15,3 +15,12 @@
 // limitations under the License.
 
 package nrpe
+
+import (
+	"context"
+	"fmt"
+)
+
+func nrpeResponse(ctx context.Context, request string) (string, int16, error) {
+	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
+}
