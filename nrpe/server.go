@@ -59,7 +59,7 @@ type Server struct {
 func New(bindAddress string, enableTLS bool, servicesOverride []map[string]string, d *discovery.Discovery) Server {
 	customChecks := make(map[string]discovery.NameContainer)
 	for _, fragment := range servicesOverride {
-		customChecks[fragment["nrpe_name"]] = discovery.NameContainer{
+		customChecks[fragment["nagios_nrpe_name"]] = discovery.NameContainer{
 			Name:          fragment["id"],
 			ContainerName: fragment["instance"],
 		}
