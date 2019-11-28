@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"glouton/facts"
 	"glouton/logger"
 	"glouton/task"
@@ -295,7 +296,14 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 	return servicesMap
 }
 
-// GetCheck return the check associated to a NameContainer
-func (d *Discovery) GetCheck(nameContainer NameContainer) Check {
-	return d.activeCheck[nameContainer].check
+// CheckNow is type of check function
+type CheckNow func(ctx context.Context) types.StatusDescription
+
+// GetCheckNow returns the GetCheckNow function associated to a NameContainer
+func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
+	getCheckNow := d.activeCheck[nameContainer].check.CheckNow
+	if getCheckNow == nil {
+		return nil, fmt.Errorf("GetCheckNow is not implemented")
+	}
+	return getCheckNow, nil
 }

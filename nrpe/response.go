@@ -21,6 +21,18 @@ import (
 	"fmt"
 )
 
-func nrpeResponse(ctx context.Context, request string) (string, int16, error) {
-	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
+// Response return the response of an NRPE request
+func (s Server) Response(ctx context.Context, request string) (string, int16, error) {
+	nameContainer, ok := s.customCheck[request]
+	if ok == false {
+		return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
+	}
+
+	checkNow, err := s.discovery.GetCheckNow(nameContainer)
+	if err != nil {
+		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but hasn't an associated check", request)
+	}
+
+	statusDescription := checkNow(ctx)
+	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil
 }

@@ -378,6 +378,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.collector = collector.New(a.accumulator)
 
 	services, _ := a.config.Get("service")
+	overrideServices := serivcesOverrideFromInterface(services)
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
@@ -385,7 +386,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.state,
 		a.accumulator,
 		a.dockerFact,
-		serivcesOverrideFromInterface(services),
+		overrideServices,
 	)
 
 	var targets []scrapper.Target
@@ -433,7 +434,8 @@ func (a *agent) run() { //nolint:gocyclo
 		server := nrpe.New(
 			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
 			a.config.Bool("nrpe.ssl"),
-			nrpe.nrpeResponse,
+			overrideServices,
+			a.discovery,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
