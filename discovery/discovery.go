@@ -303,7 +303,7 @@ type CheckNow func(ctx context.Context) types.StatusDescription
 func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
 	getCheckNow := d.activeCheck[nameContainer].check.CheckNow
 	if getCheckNow == nil {
-		return nil, fmt.Errorf("GetCheckNow is not implemented")
+		return nil, fmt.Errorf("There is now check associated with the container %s", nameContainer.Name)
 	}
 	return getCheckNow, nil
 }

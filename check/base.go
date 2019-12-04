@@ -58,7 +58,7 @@ type baseCheck struct {
 
 	persistentConnection bool
 
-	lock           sync.Mutex
+	l              sync.Mutex
 	cancel         func()
 	previousStatus types.StatusDescription
 }
@@ -106,7 +106,9 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 		CurrentStatus:     types.StatusOk,
 		StatusDescription: "initial status - description is ignored",
 	}
+	bc.l.Lock()
 	bc.previousStatus = result
+	bc.l.Unlock()
 
 	for {
 		select {
@@ -131,10 +133,10 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 // check does the check and add the metric depends of addMetric
 // if successful, ensure sockets are openned
 // if fail, ensure sockets are closed
-// if just fail (ok -> critical), does a fast check and add the metric to the accumulator even if addMetric is false
-func (bc *baseCheck) check(ctx context.Context, addMetric bool) types.StatusDescription {
-	bc.lock.Lock()
-	defer bc.lock.Unlock()
+// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed
+func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.StatusDescription {
+	bc.l.Lock()
+	defer bc.l.Unlock()
 	result := bc.doCheck(ctx)
 	if ctx.Err() != nil {
 		return result
@@ -154,11 +156,11 @@ func (bc *baseCheck) check(ctx context.Context, addMetric bool) types.StatusDesc
 		bc.openSockets(ctx)
 	}
 
-	if !timerDone && addMetric {
+	if !timerDone && callFromSchedule {
 		bc.timer.Reset(time.Minute)
 	}
 
-	if addMetric || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
+	if callFromSchedule || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
 		bc.acc.AddFieldsWithStatus(
 			"",
 			map[string]interface{}{
