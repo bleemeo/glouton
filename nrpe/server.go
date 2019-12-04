@@ -28,7 +28,6 @@ import (
 	"encoding/pem"
 	"errors"
 	"fmt"
-	"glouton/discovery"
 	"glouton/logger"
 	"glouton/version"
 	"hash/crc32"
@@ -50,25 +49,16 @@ type reducedPacket struct {
 type Server struct {
 	bindAddress string
 	enableTLS   bool
-	discovery   *discovery.Discovery
-	customCheck map[string]discovery.NameContainer
+	callback    callback
 }
 
 // New returns a NRPE server
 // callback is the function responsible to generate the response for a given query.
-func New(bindAddress string, enableTLS bool, servicesOverride []map[string]string, d *discovery.Discovery) Server {
-	customChecks := make(map[string]discovery.NameContainer)
-	for _, fragment := range servicesOverride {
-		customChecks[fragment["nagios_nrpe_name"]] = discovery.NameContainer{
-			Name:          fragment["id"],
-			ContainerName: fragment["instance"],
-		}
-	}
+func New(bindAddress string, enableTLS bool, callback callback) Server {
 	return Server{
 		bindAddress: bindAddress,
 		enableTLS:   enableTLS,
-		discovery:   d,
-		customCheck: customChecks,
+		callback:    callback,
 	}
 }
 
@@ -411,7 +401,7 @@ func (s Server) Run(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			handleConnection(ctx, c, s.Response, [2]byte{0x53, 0x51})
+			handleConnection(ctx, c, s.callback, [2]byte{0x53, 0x51})
 		}()
 	}
 	wg.Wait()
