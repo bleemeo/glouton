@@ -27,15 +27,15 @@ import (
 	"strings"
 )
 
-// Response is used to build the NRPE answer
-type Response struct {
+// Responder is used to build the NRPE answer
+type Responder struct {
 	discovery    *discovery.Discovery
 	customCheck  map[string]discovery.NameContainer
 	nrpeCommands map[string]string
 }
 
 // NewResponse returns a Response
-func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery) Response {
+func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery) Responder {
 	customChecks := make(map[string]discovery.NameContainer)
 	for _, fragment := range servicesOverride {
 		customChecks[fragment["nagios_nrpe_name"]] = discovery.NameContainer{
@@ -44,7 +44,7 @@ func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery) R
 		}
 	}
 	nrpeCommands := readNRPEConf()
-	return Response{
+	return Responder{
 		discovery:    d,
 		customCheck:  customChecks,
 		nrpeCommands: nrpeCommands,
@@ -52,7 +52,7 @@ func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery) R
 }
 
 // Response return the response of an NRPE request
-func (r Response) Response(ctx context.Context, request string) (string, int16, error) {
+func (r Responder) Response(ctx context.Context, request string) (string, int16, error) {
 	requestArgs := strings.Split(request, " ")
 	_, ok := r.customCheck[requestArgs[0]]
 	if ok {
@@ -60,13 +60,13 @@ func (r Response) Response(ctx context.Context, request string) (string, int16, 
 	}
 	_, ok = r.nrpeCommands[requestArgs[0]]
 	if ok {
-		return r.responseNRPEConf(ctx, requestArgs)
+		return r.responseNRPEConf(requestArgs)
 	}
 	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
 }
 
-func (r Response) responseCustomCheck(ctx context.Context, request string) (string, int16, error) {
-	nameContainer, _ := r.customCheck[request]
+func (r Responder) responseCustomCheck(ctx context.Context, request string) (string, int16, error) {
+	nameContainer := r.customCheck[request]
 
 	checkNow, err := r.discovery.GetCheckNow(nameContainer)
 	if err != nil {
@@ -77,13 +77,14 @@ func (r Response) responseCustomCheck(ctx context.Context, request string) (stri
 	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil
 }
 
-func (r Response) responseNRPEConf(ctx context.Context, requestArgs []string) (string, int16, error) {
-	nrpeCommand, _ := r.nrpeCommands[requestArgs[0]]
+func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error) {
+	nrpeCommand := r.nrpeCommands[requestArgs[0]]
 	nrpeCommandArgs := strings.Split(nrpeCommand, " ")
 	argPatern := "\\$ARG([0-9])+\\$"
+	regex, _ := regexp.Compile(argPatern)
 	nbArgs := 0
 	for i, arg := range nrpeCommandArgs {
-		match, _ := regexp.MatchString(argPatern, arg)
+		match := regex.MatchString(arg)
 		if match {
 			nbArgs++
 			if len(requestArgs) > nbArgs {
@@ -92,30 +93,16 @@ func (r Response) responseNRPEConf(ctx context.Context, requestArgs []string) (s
 		}
 	}
 	if len(requestArgs) != nbArgs {
-		return "", 0, fmt.Errorf("Wrong number of arguments for %s command : %v given, %v needed", requestArgs[0], len(requestArgs), nbArgs)
+		return "", 0, fmt.Errorf("wrong number of arguments for %s command : %v given, %v needed", requestArgs[0], len(requestArgs), nbArgs)
 	}
-
-	nrpeCommand = unSplit(nrpeCommandArgs)
 
 	out, err := exec.Command(nrpeCommand).Output()
 	if err != nil {
 		return "", 2, fmt.Errorf("NRPE command %s failed : %s", nrpeCommand, err)
 	}
 
-	output := string(out[:])
+	output := string(out)
 	return output, 0, nil
-}
-
-func unSplit(sliceString []string) string {
-	finalString := ""
-	for _, s := range sliceString {
-		if finalString == "" {
-			finalString = finalString + s
-		} else {
-			finalString = finalString + " " + s
-		}
-	}
-	return finalString
 }
 
 func readNRPEConf() map[string]string {
@@ -125,10 +112,11 @@ func readNRPEConf() map[string]string {
 	}
 	confString := string(confBytes)
 	confLines := strings.Split(confString, "\n")
-	patern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]="
+	patern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
+	regex, _ := regexp.Compile(patern)
 	nrpeConfMap := make(map[string]string)
 	for _, line := range confLines {
-		matched, err := regexp.MatchString(patern, line)
+		matched := regex.MatchString(line)
 		if err != nil {
 			logger.V(2).Printf("NRPE conf, MatchString failed for: %s", line)
 			continue
