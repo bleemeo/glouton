@@ -23,7 +23,7 @@ const Docker = ({ container, date }) => {
       <Modal
         title={dockerInspect.name}
         closeAction={() => setDockerInspect(null)}
-        closeLabel={'Cancel'}
+        closeLabel="Cancel"
         className=" modal-xlg"
       >
         <pre

@@ -35,7 +35,7 @@ const ServiceDetails = ({ service }) => {
     return null
   }
 
-  let currentStatus = service.status
+  const currentStatus = service.status
 
   return (
     <div className="marginOffset">

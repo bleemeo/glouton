@@ -4,9 +4,9 @@ import FaIcon from './FaIcon'
 
 const Toggle = ({ firstOption, secondOption, onClick, type = 'md', defaultOption = 0 }) => {
   const [option, setOption] = useState(defaultOption)
-  let firstSpan = useRef(null)
-  let secondSpan = useRef(null)
-  let flap = useRef(null)
+  const firstSpan = useRef(null)
+  const secondSpan = useRef(null)
+  const flap = useRef(null)
 
   useEffect(() => {
     if (defaultOption === 0) navFlipStyle(1, 0)

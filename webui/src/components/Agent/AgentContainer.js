@@ -58,7 +58,7 @@ const AgentContainer = () => {
                         <span className="btn-group" role="group" aria-label="Agent views" style={{ display: 'inline' }}>
                           {menuEntries.map(({ key, label }) => (
                             <NavLink
-                              className={'btn btn-outline-dark'}
+                              className="btn btn-outline-dark"
                               role="button"
                               activeClassName="active"
                               key={key}

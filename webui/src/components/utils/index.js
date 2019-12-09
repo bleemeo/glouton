@@ -185,7 +185,7 @@ export const computeBackwardForward = (
 }
 
 export const isEmpty = obj => {
-  for (let key in obj) {
+  for (const key in obj) {
     if (obj.hasOwnProperty(key)) return false
   }
   return true
@@ -199,13 +199,13 @@ export function composeMetricName(metric) {
 }
 
 export function isShallowEqual(v, o) {
-  for (let key in v) {
+  for (const key in v) {
     if (!(key in o) || v[key] !== o[key]) {
       return false
     }
   }
 
-  for (let key in o) {
+  for (const key in o) {
     if (!(key in v) || v[key] !== o[key]) {
       return false
     }

@@ -27,7 +27,7 @@ const createArcPath = (x, total) => {
 }
 
 const DonutPieChart = ({ value, segmentsColor, segmentsStep, fontSize, formattedValue }) => {
-  let arcCmpts = []
+  const arcCmpts = []
   let totalValuesTau = 0.0
   let previousStep = 0
   let textCmpt = null

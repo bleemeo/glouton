@@ -103,12 +103,12 @@ export const lightenDarkenColor = (color, percent) => {
 }
 
 export const convertURLToObjectParams = (url: string): Object => {
-  let result = {}
-  let getParams = url.split('?')[1]
+  const result = {}
+  const getParams = url.split('?')[1]
   if (getParams) {
     getParams.split('&').map(param => {
-      let key = param.split('=')[0]
-      let value = param.split('=')[1]
+      const key = param.split('=')[0]
+      const value = param.split('=')[1]
       result[key] = value
     })
   }

@@ -78,7 +78,7 @@ const WidgetDashboardItem = ({
     }
   }
 
-  let metricsFilter = []
+  const metricsFilter = []
   switch (type) {
     case chartTypes[1]:
       if (title === 'Processor Usage') {
@@ -126,7 +126,7 @@ const WidgetDashboardItem = ({
             <MetricGaugeItem hasError={hasError} name={title} />
           ) : (
             <LineChart title={title} hasError={hasError} />
-          )
+        )
         }
         points={points}
       >

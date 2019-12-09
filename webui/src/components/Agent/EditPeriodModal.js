@@ -206,7 +206,7 @@ export default class EditPeriodModal extends React.Component {
         title="Period"
         mainBtnAction={this._onMainAction}
         closeAction={this._onCloseAction}
-        closeLabel={'Cancel'}
+        closeLabel="Cancel"
         size="lg"
       >
         <div className="marginOffset">
@@ -295,7 +295,7 @@ class DateTimeColumn extends React.PureComponent {
           <Form.MaskedInput
             style={{ width: '4.5rem', float: 'left', marginRight: '0.5rem' }}
             value={timeValue}
-            placeholder={'00:00'}
+            placeholder="00:00"
             onChange={e => onTimeChange(e.target.value)}
             mask={[/\d/, /\d/, ':', /\d/, /\d/]}
           />
