@@ -233,8 +233,7 @@ export default class AgentProcesses extends React.Component {
       )
       const timeDate = new Date(updatedAt)
       const maxLoad = Math.max(...Object.values(loadTypes))
-      const loadTooltipMdg =
-        loadTypes.system_load1 + '\n' + loadTypes.system_load5 + '\n' + loadTypes.system_load15
+      const loadTooltipMdg = loadTypes.system_load1 + '\n' + loadTypes.system_load5 + '\n' + loadTypes.system_load15
 
       const usernames = []
       const filterFn = createFilterFn(this.state.filter)

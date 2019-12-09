@@ -32,14 +32,14 @@ export default class Modal extends React.Component {
       isOpen: false
     }
 
-    this.toggle = this.toggle.bind(this)
+    this.toggle = this.handleToggle.bind(this)
   }
 
   componentDidMount() {
-    this.toggle()
+    this.handleToggle()
   }
 
-  toggle() {
+  handleToggle() {
     this.setState({ isOpen: !this.state.isOpen }, () => {
       if (!this.state.isOpen) this.props.closeAction()
     })
@@ -83,7 +83,7 @@ export default class Modal extends React.Component {
             type="button"
             className="btn btn-secondary"
             data-dismiss="modal"
-            onClick={this.toggle}
+            onClick={this.handleToggle}
             disabled={disabledCloseBtn}
           >
             {closeLabel}
@@ -96,11 +96,11 @@ export default class Modal extends React.Component {
     return (
       <ModalStrap
         isOpen={this.state.isOpen}
-        toggle={this.toggle}
+        oggle={() => this.handleToggle()}
         className={classnames(`modal-dialog ${className}`)}
         size={size}
       >
-        <ModalHeader toggle={this.toggle}>
+        <ModalHeader toggle={() => this.handleToggle()}>
           <span className="modal-title" id="myModalLabel">
             {typeof title === 'string' ? <h4>{title}</h4> : title}
           </span>

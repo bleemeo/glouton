@@ -129,7 +129,7 @@ const WidgetDashboardItem = ({
             <MetricGaugeItem hasError={hasError} name={title} />
           ) : (
             <LineChart title={title} hasError={hasError} />
-          )
+          ) /* eslint-disable-line react/jsx-indent */
         }
         points={points}
       >
