@@ -96,7 +96,7 @@ export default class Modal extends React.Component {
     return (
       <ModalStrap
         isOpen={this.state.isOpen}
-        oggle={() => this.handleToggle()}
+        toggle={() => this.handleToggle()}
         className={classnames(`modal-dialog ${className}`)}
         size={size}
       >
