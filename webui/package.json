@@ -14,23 +14,6 @@
   },
   "author": "Tom Darneix",
   "license": "ISC",
-  "unusedDependencies": {
-    "echarts": "4.2.0-rc.2",
-    "intersection-observer": "^0.5.1",
-    "localforage": "^1.7.2",
-    "popper.js": "^1.14.4",
-    "react-addons-shallow-compare": "^15.6.2",
-    "react-color": "^2.14.1",
-    "react-day-picker": "^7.2.4",
-    "react-gravatar": "^2.6.3",
-    "react-grid-layout": "^0.16.6",
-    "react-notification-system": "^0.2.17",
-    "react-select": "^2.1.0",
-    "react-stripe-elements": "^2.0.1",
-    "react-visibility-sensor": "^5.0.1",
-    "resize-observer-polyfill": "^1.5.0",
-    "tether": "^1.4.5"
-  },
   "dependencies": {
     "@apollo/react-hooks": "3.0.0",
     "apollo-boost": "^0.4.3",
