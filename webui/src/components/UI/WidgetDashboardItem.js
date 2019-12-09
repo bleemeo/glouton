@@ -27,7 +27,7 @@ const WidgetDashboardItem = ({
 
   const displayWidget = points => {
     switch (type) {
-      case chartTypes[0]:
+      case chartTypes[0]: {
         const resultGauge = points.sort((a, b) =>
           a.labels.find(l => l.key === 'item').value.localeCompare(b.labels.find(l => l.key === 'item').value)
         )[0]
@@ -43,7 +43,8 @@ const WidgetDashboardItem = ({
           thresholds = resultGauge.thresholds
         }
         return <MetricGaugeItem unit={unit} value={lastPoint} thresholds={thresholds} name={title} />
-      case chartTypes[1]:
+      }
+      case chartTypes[1]: {
         const resultStacked = points
         return (
           <LineChart
@@ -57,7 +58,8 @@ const WidgetDashboardItem = ({
             windowWidth={windowWidth}
           />
         )
-      case chartTypes[2]:
+      }
+      case chartTypes[2]: {
         const resultsLines = points
         resultsLines.sort((a, b) => {
           const aLabel = composeMetricName(a)
@@ -75,6 +77,7 @@ const WidgetDashboardItem = ({
             windowWidth={windowWidth}
           />
         )
+      }
     }
   }
 
@@ -126,7 +129,7 @@ const WidgetDashboardItem = ({
             <MetricGaugeItem hasError={hasError} name={title} />
           ) : (
             <LineChart title={title} hasError={hasError} />
-        )
+          )
         }
         points={points}
       >
