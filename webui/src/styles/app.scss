@@ -1,7 +1,7 @@
-$brand-success: #5CB85C;
-$brand-warning: #F0AD4E;
-$brand-danger: #D9534F;
-$brand-info: #0275D8;
+$brand-success: #5cb85c;
+$brand-warning: #f0ad4e;
+$brand-danger: #d9534f;
+$brand-info: #0275d8;
 
 @mixin fa-mixin() {
   font-family: FontAwesome;
@@ -37,7 +37,7 @@ body {
 
 // TODO do we still use label somewhere?
 label {
-  margin-bottom: .2rem;
+  margin-bottom: 0.2rem;
   font-size: 90%;
   font-weight: bold;
 }
@@ -50,15 +50,15 @@ a {
 
 .btn:disabled {
   cursor: not-allowed;
-  opacity: .4;
+  opacity: 0.4;
 }
 
 .btn + .btn {
   margin-left: 5px;
 }
 
-.marginOffset{
-  margin: .8rem;
+.marginOffset {
+  margin: 0.8rem;
 }
 
 .modal-xlg {
@@ -69,7 +69,7 @@ a {
   min-width: 60% !important;
 }
 
-.modal-header>.close>span {
+.modal-header > .close > span {
   display: none;
 }
 
@@ -109,7 +109,7 @@ a {
 // ---nav bar---
 .navbar-fixed-top {
   background: #ededed;
-  border-bottom: 1px solid #D9DEE4;
+  border-bottom: 1px solid #d9dee4;
   max-height: 3rem;
   //.navbar-nav {
   //  padding-left: 20px;
@@ -149,7 +149,7 @@ $left-side-navbar-background-color: #2a3f54;
     height: 100%;
 
     &:hover {
-      color: rgba(255, 255, 255, .75);
+      color: rgba(255, 255, 255, 0.75);
     }
     &:focus {
       outline: none;
@@ -169,19 +169,19 @@ $left-side-navbar-background-color: #2a3f54;
 // ---Reactable style---
 .reactable-header-sortable {
   &:after {
-    content: "\00a0\f0dc";
-    @include fa-mixin()
+    content: '\00a0\f0dc';
+    @include fa-mixin();
   }
 }
 
 .reactable-header-sort-desc {
   &:after {
-    content: "\00a0\f0dd";
+    content: '\00a0\f0dd';
   }
 }
 .reactable-header-sort-asc {
   &:after {
-    content: "\00a0\f0de";
+    content: '\00a0\f0de';
   }
 }
 
@@ -194,12 +194,12 @@ $left-side-navbar-background-color: #2a3f54;
 .name-col {
   white-space: nowrap;
   overflow: hidden;
-  text-overflow:ellipsis;
+  text-overflow: ellipsis;
   width: 60rem;
 }
 
 .processes-cell {
-  padding: .3rem 0.75rem !important;
+  padding: 0.3rem 0.75rem !important;
   width: 8rem;
 }
 
@@ -210,7 +210,7 @@ $left-side-navbar-background-color: #2a3f54;
   // taken from bootstrap 4 alpha CSS
   padding-right: 2.25rem;
   background-repeat: no-repeat;
-  background-position: center right .59375rem;
+  background-position: center right 0.59375rem;
   background-size: 1.2rem 1.2rem;
   // Font awesome Search icon in SVG
   background-image: url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTc5MiIgaGVpZ2h0PSIxNzkyIiB2aWV3Qm94PSIwIDAgMTc5MiAxNzkyIiB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciPjxwYXRoIGQ9Ik0xMjE2IDgzMnEwLTE4NS0xMzEuNS0zMTYuNXQtMzE2LjUtMTMxLjUtMzE2LjUgMTMxLjUtMTMxLjUgMzE2LjUgMTMxLjUgMzE2LjUgMzE2LjUgMTMxLjUgMzE2LjUtMTMxLjUgMTMxLjUtMzE2LjV6bTUxMiA4MzJxMCA1Mi0zOCA5MHQtOTAgMzhxLTU0IDAtOTAtMzhsLTM0My0zNDJxLTE3OSAxMjQtMzk5IDEyNC0xNDMgMC0yNzMuNS01NS41dC0yMjUtMTUwLTE1MC0yMjUtNTUuNS0yNzMuNSA1NS41LTI3My41IDE1MC0yMjUgMjI1LTE1MCAyNzMuNS01NS41IDI3My41IDU1LjUgMjI1IDE1MCAxNTAgMjI1IDU1LjUgMjczLjVxMCAyMjAtMTI0IDM5OWwzNDMgMzQzcTM3IDM3IDM3IDkweiIvPjwvc3ZnPg==);
@@ -240,14 +240,14 @@ $left-side-navbar-background-color: #2a3f54;
 }
 
 .react-bootstrap-table-pagination {
-  display: none !important
+  display: none !important;
 }
 
 .cellEllipsis {
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
-  width: 48vw
+  width: 48vw;
 }
 
 .blee-tool-bar {
@@ -255,7 +255,6 @@ $left-side-navbar-background-color: #2a3f54;
   flex-flow: row wrap;
   justify-content: flex-start;
   align-items: center;
-
 }
 
 .blee-tool-bar-item {
@@ -276,7 +275,7 @@ $left-side-navbar-background-color: #2a3f54;
   width: 1.5rem;
   overflow: hidden;
   white-space: nowrap;
-  background-color: #CCCCCC;
+  background-color: #cccccc;
 
   &.success {
     background-color: $brand-success;
@@ -324,12 +323,17 @@ $left-side-navbar-background-color: #2a3f54;
   height: 25rem;
 }
 
-.widget, .widgetError {
+.widget,
+.widgetError {
   animation: fadeIn 0.3s ease-in;
 }
 
 .smaller {
-  font-size: 95%
+  font-size: 95%;
+}
+
+.list-group-item {
+  border-width: 1px !important;
 }
 
 $small-widget-size: 100px;
@@ -344,7 +348,7 @@ $small-widget-size: 100px;
 
     small {
       font-size: 70%;
-      line-height: 0.75
+      line-height: 0.75;
     }
 
     &.wide {
@@ -358,7 +362,7 @@ $small-widget-size: 100px;
   }
 
   .title {
-    margin-top: -1.2rem
+    margin-top: -1.2rem;
   }
 }
 
@@ -389,7 +393,7 @@ $small-widget-size: 100px;
 }
 
 .gaugeBg {
-  fill: #F1F1F1
+  fill: #f1f1f1;
 }
 
 .blee-card {
@@ -421,7 +425,7 @@ $small-widget-size: 100px;
 }
 
 .__react_component_tooltip.type-dark {
-  background-color: #444
+  background-color: #444;
 }
 .__react_component_tooltip.show {
   opacity: 1;
@@ -431,7 +435,7 @@ $small-widget-size: 100px;
   display: flex;
   flex-direction: row;
   justify-content: center;
-  align-items: center
+  align-items: center;
 }
 
 .noPaddingHorizontal {
@@ -440,8 +444,12 @@ $small-widget-size: 100px;
 }
 
 @keyframes fadeIn {
-  from {opacity: 0}
-  to {opacity: 1}
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 #toggle > ul {
@@ -452,7 +460,7 @@ $small-widget-size: 100px;
   margin: 0;
 }
 #toggle > ul > li {
-  text-align: center; 
+  text-align: center;
   cursor: pointer;
   width: 100%;
   font-size: 0.9375rem;
@@ -496,7 +504,7 @@ $small-widget-size: 100px;
 }
 
 .graphcellBg {
-  background-color: rgb(211, 209, 209)
+  background-color: rgb(211, 209, 209);
 }
 
 .isConnected {
