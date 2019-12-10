@@ -307,7 +307,7 @@ export const formatDateAgo = date => {
     if (diffMinut % 60 > 1) plurial = 's'
     return `${diffMinut % 60} minute${plurial} ago`
   } else {
-    return `a moment ago`
+    return 'a moment ago'
   }
 }
 

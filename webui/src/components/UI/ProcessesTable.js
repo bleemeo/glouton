@@ -253,7 +253,7 @@ export const PercentBar = ({ color, title, percent }) => (
   <div
     className="percent-bar"
     title={title}
-    data-toggle={'tooltip'}
+    data-toggle="tooltip"
     style={{ backgroundColor: color, width: percent + '%', height: '100%' }}
   />
 )

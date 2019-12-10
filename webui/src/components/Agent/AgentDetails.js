@@ -42,7 +42,7 @@ const AgentDetails = ({ facts }) => {
           <div className="col-xl-12">
             <div className="alert alert-danger" role="alert">
               This agent is more than 60 days old. You should update it. See the
-              <a href="https://docs.bleemeo.com/agent/upgrade-agent/" target="_blank">
+              <a href="https://docs.bleemeo.com/agent/upgrade-agent/" target="_blank" rel="noopener noreferrer">
                 {' '}
                 documentation
               </a>

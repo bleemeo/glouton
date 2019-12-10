@@ -61,10 +61,10 @@ const getSystemInfo = points => {
   const loadRegexp = /^system_load/
   const swapRegexp = /^swap_/
   const cpuRegexp = /^cpu_/
-  let memTypes = {}
-  let loadTypes = {}
-  let swapTypes = {}
-  let cpuTypes = {}
+  const memTypes = {}
+  const loadTypes = {}
+  const swapTypes = {}
+  const cpuTypes = {}
   let uptime = 0
   let usersLogged = 0
   systemMetrics.forEach(m => {

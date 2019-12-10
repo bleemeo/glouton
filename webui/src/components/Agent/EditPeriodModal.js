@@ -167,7 +167,7 @@ export default class EditPeriodModal extends React.Component {
   handleRelativeQuickRange = name => {
     const { onPeriodChange, onClose } = this.props
     switch (name) {
-      case 'yesterday':
+      case 'yesterday': {
         const from = new Date()
         const to = new Date()
         from.setDate(from.getDate() - 1)
@@ -177,6 +177,7 @@ export default class EditPeriodModal extends React.Component {
         onPeriodChange({ from, to })
         onClose()
         break
+      }
       default:
         break
     }
@@ -206,7 +207,7 @@ export default class EditPeriodModal extends React.Component {
         title="Period"
         mainBtnAction={this._onMainAction}
         closeAction={this._onCloseAction}
-        closeLabel={'Cancel'}
+        closeLabel="Cancel"
         size="lg"
       >
         <div className="marginOffset">
@@ -295,7 +296,7 @@ class DateTimeColumn extends React.PureComponent {
           <Form.MaskedInput
             style={{ width: '4.5rem', float: 'left', marginRight: '0.5rem' }}
             value={timeValue}
-            placeholder={'00:00'}
+            placeholder="00:00"
             onChange={e => onTimeChange(e.target.value)}
             mask={[/\d/, /\d/, ':', /\d/, /\d/]}
           />

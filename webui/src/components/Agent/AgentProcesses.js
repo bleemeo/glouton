@@ -191,38 +191,38 @@ export default class AgentProcesses extends React.Component {
       // sometimes the sum of all CPU percentage make more than 100%
       // which broke the bar, so we have to re-compute them
       const cpuTotal = Object.values(cpuTypes).reduce((acc, v) => acc + v)
-      const cpuSystemPerc = (cpuTypes['cpu_system'] / cpuTotal) * 100
-      const cpuUserPerc = (cpuTypes['cpu_user'] / cpuTotal) * 100
-      const cpuNicePerc = (cpuTypes['cpu_nice'] / cpuTotal) * 100
-      const cpuWaitPerc = (cpuTypes['cpu_wait'] / cpuTotal) * 100
-      const cpuIdlePerc = (cpuTypes['cpu_idle'] / cpuTotal) * 100
+      const cpuSystemPerc = (cpuTypes.cpu_system / cpuTotal) * 100
+      const cpuUserPerc = (cpuTypes.cpu_user / cpuTotal) * 100
+      const cpuNicePerc = (cpuTypes.cpu_nice / cpuTotal) * 100
+      const cpuWaitPerc = (cpuTypes.cpu_wait / cpuTotal) * 100
+      const cpuIdlePerc = (cpuTypes.cpu_idle / cpuTotal) * 100
 
       const cpuTooltipMsg =
-        `${d3.format('.2r')(cpuTypes['cpu_system'])}% system` +
-        ` ‒ ${d3.format('.2r')(cpuTypes['cpu_user'])}% user` +
-        ` ‒ ${d3.format('.2r')(cpuTypes['cpu_nice'])}% nice` +
-        ` ‒ ${d3.format('.2r')(cpuTypes['cpu_wait'])}% wait` +
-        ` ‒ ${d3.format('.2r')(cpuTypes['cpu_idle'])}% idle`
+        `${d3.format('.2r')(cpuTypes.cpu_system)}% system` +
+        ` ‒ ${d3.format('.2r')(cpuTypes.cpu_user)}% user` +
+        ` ‒ ${d3.format('.2r')(cpuTypes.cpu_nice)}% nice` +
+        ` ‒ ${d3.format('.2r')(cpuTypes.cpu_wait)}% wait` +
+        ` ‒ ${d3.format('.2r')(cpuTypes.cpu_idle)}% idle`
 
-      let memTotal = Object.values(memTypes).reduce((acc, v) => acc + v)
+      const memTotal = Object.values(memTypes).reduce((acc, v) => acc + v)
 
-      let memUsed = memTypes['mem_used']
+      const memUsed = memTypes.mem_used
       const memUsedPerc = (memUsed / memTotal) * 100
-      const memFreePerc = (memTypes['mem_free'] / memTotal) * 100
-      const memBuffersPerc = (memTypes['mem_buffered'] / memTotal) * 100
-      const memCachedPerc = (memTypes['mem_cached'] / memTotal) * 100
+      const memFreePerc = (memTypes.mem_free / memTotal) * 100
+      const memBuffersPerc = (memTypes.mem_buffered / memTotal) * 100
+      const memCachedPerc = (memTypes.mem_cached / memTotal) * 100
 
       const memTooltipMsg =
         `${bytesToString(memUsed)} used` +
-        ` ‒ ${bytesToString(memTypes['mem_buffered'])} buffers` +
-        ` ‒ ${bytesToString(memTypes['mem_cached'])} cached` +
-        ` ‒ ${bytesToString(memTypes['mem_free'])} free`
+        ` ‒ ${bytesToString(memTypes.mem_buffered)} buffers` +
+        ` ‒ ${bytesToString(memTypes.mem_cached)} cached` +
+        ` ‒ ${bytesToString(memTypes.mem_free)} free`
 
-      const swapUsedPerc = (swapTypes['swap_used'] / swapTypes['swap_total']) * 100
-      const swapFreePerc = (swapTypes['swap_free'] / swapTypes['swap_total']) * 100
+      const swapUsedPerc = (swapTypes.swap_used / swapTypes.swap_total) * 100
+      const swapFreePerc = (swapTypes.swap_free / swapTypes.swap_total) * 100
 
       const swapTooltipMsg =
-        `${bytesToString(swapTypes['swap_used'])} used` + ` ‒ ${bytesToString(swapTypes['swap_free'])} free`
+        `${bytesToString(swapTypes.swap_used)} used` + ` ‒ ${bytesToString(swapTypes.swap_free)} free`
       filterInput = (
         <Form.Input
           className="mb-3 form-control form-control-sm w-25"
@@ -233,8 +233,7 @@ export default class AgentProcesses extends React.Component {
       )
       const timeDate = new Date(updatedAt)
       const maxLoad = Math.max(...Object.values(loadTypes))
-      const loadTooltipMdg =
-        loadTypes['system_load1'] + '\n' + loadTypes['system_load5'] + '\n' + loadTypes['system_load15']
+      const loadTooltipMdg = loadTypes.system_load1 + '\n' + loadTypes.system_load5 + '\n' + loadTypes.system_load15
 
       const usernames = []
       const filterFn = createFilterFn(this.state.filter)
@@ -358,21 +357,21 @@ export default class AgentProcesses extends React.Component {
                         <div className="percent-bars littleBorderRadius" style={{ height: '8px' }}>
                           <PercentBar
                             color={colorScale(0)}
-                            percent={(loadTypes['system_load1'] / maxLoad) * 100}
+                            percent={(loadTypes.system_load1 / maxLoad) * 100}
                             title={loadTooltipMdg}
                           />
                         </div>
                         <div className="percent-bars littleBorderRadius" style={{ height: '8px' }}>
                           <PercentBar
                             color={colorScale(1)}
-                            percent={(loadTypes['system_load5'] / maxLoad) * 100}
+                            percent={(loadTypes.system_load5 / maxLoad) * 100}
                             title={loadTooltipMdg}
                           />
                         </div>
                         <div className="percent-bars littleBorderRadius" style={{ height: '8px' }}>
                           <PercentBar
                             color={colorScale(2)}
-                            percent={(loadTypes['system_load15'] / maxLoad) * 100}
+                            percent={(loadTypes.system_load15 / maxLoad) * 100}
                             title={loadTooltipMdg}
                           />
                         </div>
@@ -414,7 +413,7 @@ export default class AgentProcesses extends React.Component {
       )
     }
     if (processes && !isEmpty(memTypes)) {
-      let memTotal = Object.values(memTypes).reduce((acc, v) => acc + v)
+      const memTotal = Object.values(memTypes).reduce((acc, v) => acc + v)
       const filteredProcesses = this.getFilteredProcesses()
       const processesTmp = filteredProcesses.map(process => {
         process.mem_percent = parseFloat(d3.format('.2r')(((process.memory_rss * 1024) / memTotal) * 100))
@@ -539,7 +538,7 @@ const PercentBar = ({ color, title, percent }) => (
   <div
     className="percent-bar"
     title={title}
-    data-toggle={'tooltip'}
+    data-toggle="tooltip"
     style={{ backgroundColor: color, width: percent + '%' }}
   />
 )
