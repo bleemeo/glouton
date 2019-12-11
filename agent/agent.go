@@ -431,7 +431,8 @@ func (a *agent) run() { //nolint:gocyclo
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 	if a.config.Bool("nrpe.enabled") {
-		nrperesponse := nrpe.NewResponse(overrideServices, a.discovery)
+		nrpeConfFile := a.config.StringList("nrpe.conf_path")
+		nrperesponse := nrpe.NewResponse(overrideServices, a.discovery, nrpeConfFile)
 		server := nrpe.New(
 			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
 			a.config.Bool("nrpe.ssl"),

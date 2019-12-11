@@ -35,7 +35,7 @@ type Responder struct {
 }
 
 // NewResponse returns a Response
-func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery) Responder {
+func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery, nrpeConfPath []string) Responder {
 	customChecks := make(map[string]discovery.NameContainer)
 	for _, fragment := range servicesOverride {
 		customChecks[fragment["nagios_nrpe_name"]] = discovery.NameContainer{
@@ -43,7 +43,7 @@ func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery) R
 			ContainerName: fragment["instance"],
 		}
 	}
-	nrpeCommands := readNRPEConf()
+	nrpeCommands := readNRPEConf(nrpeConfPath)
 	return Responder{
 		discovery:    d,
 		customCheck:  customChecks,
@@ -105,27 +105,33 @@ func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error)
 	return output, 0, nil
 }
 
-func readNRPEConf() map[string]string {
-	confBytes, err := ioutil.ReadFile("/etc/nagios/nrpe.cfg")
-	if err != nil {
-		logger.V(1).Printf("Impossible to read '/etc/nagios/nrpe.cfg' : %s", err)
-	}
-	confString := string(confBytes)
-	confLines := strings.Split(confString, "\n")
-	patern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
-	regex, _ := regexp.Compile(patern)
+func readNRPEConf(nrpeConfPath []string) map[string]string {
 	nrpeConfMap := make(map[string]string)
-	for _, line := range confLines {
-		matched := regex.MatchString(line)
+	if nrpeConfPath == nil {
+		return nrpeConfMap
+	}
+	commandLinePatern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
+	commandLineRegex, err := regexp.Compile(commandLinePatern)
+	if err != nil {
+		logger.V(2).Printf("Regex: impossible to compile as regex: %s", commandLinePatern)
+		return nrpeConfMap
+	}
+	for _, nrpeConfFile := range nrpeConfPath {
+		confBytes, err := ioutil.ReadFile(nrpeConfFile)
 		if err != nil {
-			logger.V(2).Printf("NRPE conf, MatchString failed for: %s", line)
+			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 			continue
 		}
-		if matched {
-			splitLine := strings.Split(line, "=")
-			command := splitLine[1]
-			commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
-			nrpeConfMap[commandName] = command
+		confString := string(confBytes)
+		confLines := strings.Split(confString, "\n")
+		for _, line := range confLines {
+			matched := commandLineRegex.MatchString(line)
+			if matched {
+				splitLine := strings.Split(line, "=")
+				command := splitLine[1]
+				commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
+				nrpeConfMap[commandName] = command
+			}
 		}
 	}
 	return nrpeConfMap
