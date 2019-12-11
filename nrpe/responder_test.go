@@ -45,11 +45,25 @@ command[check_zombie_procs]=new command again
 pid_file=/var/run/nagios/nrpe.pid
 dont_blame_nrpe=1
 `
+var nrpeConf4 = `
+dont_blame_nrpe=1
+`
+
+var nrpeConf5 = `
+# Empty configuration file
+`
+
+var nrpeConf6 = `
+dont_blame_nrpe=0
+# NRPE Command
+command[list_partitions]=lsblk
+`
 
 func TestReadNRPEConfFile(t *testing.T) {
 	type Entries struct {
-		Bytes []byte
-		Map   map[string]string
+		Bytes            []byte
+		Map              map[string]string
+		CommandArguments CommandArguments
 	}
 	type Want struct {
 		Map              map[string]string
@@ -61,8 +75,9 @@ func TestReadNRPEConfFile(t *testing.T) {
 	}{
 		{
 			Entries: Entries{
-				Bytes: []byte(nrpeConf1),
-				Map:   make(map[string]string),
+				Bytes:            []byte(nrpeConf1),
+				Map:              make(map[string]string),
+				CommandArguments: undefined,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -77,6 +92,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 				Map: map[string]string{
 					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
 				},
+				CommandArguments: undefined,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -95,6 +111,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
 					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
 				},
+				CommandArguments: notAllowed,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -103,13 +120,48 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"check_zombie_procs": "new command again",
 					"check_hda1":         "/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1",
 				},
+				CommandArguments: notAllowed,
+			},
+		},
+		{
+			Entries: Entries{
+				Bytes:            []byte(nrpeConf4),
+				Map:              make(map[string]string),
+				CommandArguments: undefined,
+			},
+			Want: Want{
+				Map:              make(map[string]string),
 				CommandArguments: allowed,
+			},
+		},
+		{
+			Entries: Entries{
+				Bytes:            []byte(nrpeConf5),
+				Map:              make(map[string]string),
+				CommandArguments: allowed,
+			},
+			Want: Want{
+				Map:              make(map[string]string),
+				CommandArguments: allowed,
+			},
+		},
+		{
+			Entries: Entries{
+				Bytes:            []byte(nrpeConf6),
+				Map:              make(map[string]string),
+				CommandArguments: allowed,
+			},
+			Want: Want{
+				Map: map[string]string{
+					"list_partitions": "lsblk",
+				},
+				CommandArguments: notAllowed,
 			},
 		},
 	}
 
 	for _, c := range cases {
-		mapResult, commandArgumentsResult := readNRPEConfFile(c.Entries.Bytes, c.Entries.Map)
+		mapResult, commandArgumentsResult := readNRPEConfFile(c.Entries.Bytes, c.Entries.Map, c.Entries.CommandArguments)
 		if !reflect.DeepEqual(mapResult, c.Want.Map) {
 			t.Errorf("readNRPEConfFile(args) == %v, want %v", mapResult, c.Want.Map)
 		}

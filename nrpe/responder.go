@@ -92,8 +92,14 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error) {
 	nrpeCommand := r.nrpeCommands[requestArgs[0]]
 	nrpeCommandArgs := strings.Split(nrpeCommand, " ")
+
 	argPatern := "\\$ARG([0-9])+\\$"
-	regex, _ := regexp.Compile(argPatern)
+	regex, err := regexp.Compile(argPatern)
+	if err != nil {
+		logger.V(2).Printf("Regex: impossible to compile as regex: %s", argPatern)
+		return "", 0, err
+	}
+
 	nbArgs := 0
 	for i, arg := range nrpeCommandArgs {
 		match := regex.MatchString(arg)
@@ -117,44 +123,47 @@ func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error)
 	return output, 0, nil
 }
 
+// readNRPEConf reads all the conf files of nrpeConfPath and returns a map which contains all the commands
+// and a boolean to allow or not the arguments in NRPE requests
 func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 	nrpeConfMap := make(map[string]string)
 	if nrpeConfPath == nil {
 		return nrpeConfMap, false
 	}
+
 	allowArguments := undefined
-	currentCommandArguments := undefined
 	for _, nrpeConfFile := range nrpeConfPath {
 		confBytes, err := ioutil.ReadFile(nrpeConfFile)
 		if err != nil {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 			continue
 		}
-		nrpeConfMap, currentCommandArguments = readNRPEConfFile(confBytes, nrpeConfMap)
-		if allowArguments != notAllowed {
-			allowArguments = currentCommandArguments
-		}
+		nrpeConfMap, allowArguments = readNRPEConfFile(confBytes, nrpeConfMap, allowArguments)
 	}
+
 	if allowArguments == allowed {
 		return nrpeConfMap, true
 	}
 	return nrpeConfMap, false
 }
 
-func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[string]string, CommandArguments) {
+// readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument
+func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArguments CommandArguments) (map[string]string, CommandArguments) {
 	commandLinePatern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
 	commandLineRegex, err := regexp.Compile(commandLinePatern)
 	if err != nil {
 		logger.V(2).Printf("Regex: impossible to compile as regex: %s", commandLinePatern)
-		return nrpeConfMap, undefined
+		return nrpeConfMap, allowArguments
 	}
+
 	allowArgumentPatern := "^dont_blame_nrpe=[0-1]$"
 	allowArgumentRegex, err := regexp.Compile(allowArgumentPatern)
 	if err != nil {
 		logger.V(2).Printf("Regex: impossible to compile as regex: %s", allowArgumentPatern)
-		return nrpeConfMap, undefined
+		return nrpeConfMap, allowArguments
 	}
-	commandArguments := undefined
+
+	confCommandArguments := undefined
 	confString := string(confBytes)
 	confLines := strings.Split(confString, "\n")
 	for _, line := range confLines {
@@ -171,11 +180,22 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[stri
 			splitLine := strings.Split(line, "=")[1]
 			switch splitLine {
 			case "0":
-				commandArguments = notAllowed
+				confCommandArguments = notAllowed
 			case "1":
-				commandArguments = allowed
+				confCommandArguments = allowed
 			}
 		}
 	}
-	return nrpeConfMap, commandArguments
+	allowArguments = updateCommandArgument(confCommandArguments, allowArguments)
+	return nrpeConfMap, allowArguments
+}
+
+func updateCommandArgument(currentCommandArguments CommandArguments, lastCommandArguments CommandArguments) CommandArguments {
+	if lastCommandArguments == notAllowed {
+		return notAllowed
+	}
+	if currentCommandArguments != undefined {
+		return currentCommandArguments
+	}
+	return lastCommandArguments
 }
