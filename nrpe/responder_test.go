@@ -21,7 +21,8 @@ import (
 	"testing"
 )
 
-var nrpeConf string = `
+func TestReadNRPEConfFile(t *testing.T) {
+	var nrpeConf = `
 # NRPE Commands
 command[check_users]=/usr/local/nagios/libexec/check_users -w 5 -c 10
 command[check_load]=/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20
@@ -34,8 +35,6 @@ include=/etc/nagios/nrpe_local.cfg
 ssl_logging=0x00
 connection_timeout=300
 `
-
-func TestReadNRPEConfFile(t *testing.T) {
 	expectedResult := map[string]string{
 		"check_users":        "/usr/local/nagios/libexec/check_users -w 5 -c 10",
 		"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
