@@ -304,6 +304,23 @@ func TestReturnCommand(t *testing.T) {
 				Err:     fmt.Errorf("wrong number of arguments for check_users command : 1 given, 2 needed"),
 			},
 		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "argument0"},
+			},
+			Want: Want{
+				Command: "",
+				Err:     fmt.Errorf("wrong number of arguments for check_users command : 1 given, 0 needed"),
+			},
+		},
 	}
 
 	for _, c := range cases {
