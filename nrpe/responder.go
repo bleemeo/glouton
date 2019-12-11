@@ -110,28 +110,33 @@ func readNRPEConf(nrpeConfPath []string) map[string]string {
 	if nrpeConfPath == nil {
 		return nrpeConfMap
 	}
-	commandLinePatern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
-	commandLineRegex, err := regexp.Compile(commandLinePatern)
-	if err != nil {
-		logger.V(2).Printf("Regex: impossible to compile as regex: %s", commandLinePatern)
-		return nrpeConfMap
-	}
 	for _, nrpeConfFile := range nrpeConfPath {
 		confBytes, err := ioutil.ReadFile(nrpeConfFile)
 		if err != nil {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 			continue
 		}
-		confString := string(confBytes)
-		confLines := strings.Split(confString, "\n")
-		for _, line := range confLines {
-			matched := commandLineRegex.MatchString(line)
-			if matched {
-				splitLine := strings.Split(line, "=")
-				command := splitLine[1]
-				commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
-				nrpeConfMap[commandName] = command
-			}
+		nrpeConfMap = readNRPEConfFile(confBytes, nrpeConfMap)
+	}
+	return nrpeConfMap
+}
+
+func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) map[string]string {
+	commandLinePatern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
+	commandLineRegex, err := regexp.Compile(commandLinePatern)
+	if err != nil {
+		logger.V(2).Printf("Regex: impossible to compile as regex: %s", commandLinePatern)
+		return nrpeConfMap
+	}
+	confString := string(confBytes)
+	confLines := strings.Split(confString, "\n")
+	for _, line := range confLines {
+		matched := commandLineRegex.MatchString(line)
+		if matched {
+			splitLine := strings.Split(line, "=")
+			command := splitLine[1]
+			commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
+			nrpeConfMap[commandName] = command
 		}
 	}
 	return nrpeConfMap
