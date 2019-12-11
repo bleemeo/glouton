@@ -17,6 +17,7 @@
 package nrpe
 
 import (
+	"fmt"
 	"reflect"
 	"testing"
 )
@@ -167,6 +168,151 @@ func TestReadNRPEConfFile(t *testing.T) {
 		}
 		if commandArgumentsResult != c.Want.CommandArguments {
 			t.Errorf("readNRPEConfFile(args) == %v, want %v", commandArgumentsResult, c.Want.CommandArguments)
+		}
+	}
+}
+
+func TestReturnCommand(t *testing.T) {
+	type Entries struct {
+		Responder Responder
+		Args      []string
+	}
+	type Want struct {
+		Command string
+		Err     error
+	}
+	cases := []struct {
+		Entries Entries
+		Want    Want
+	}{
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option -a",
+					},
+					allowArguments: false,
+				},
+				Args: []string{"check_users"},
+			},
+			Want: Want{
+				Command: "command --option -a",
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option -a",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users"},
+			},
+			Want: Want{
+				Command: "command --option -a",
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG0$ -a",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "argument"},
+			},
+			Want: Want{
+				Command: "command --option argument -a",
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG0$ -a $ARG1$",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "argument0", "argument1"},
+			},
+			Want: Want{
+				Command: "command --option argument0 -a argument1",
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG0$ -a",
+					},
+					allowArguments: false,
+				},
+				Args: []string{"check_users", "argument"},
+			},
+			Want: Want{
+				Command: "",
+				Err:     fmt.Errorf("impossible to create the command custom arguments are not allowed"),
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG0$ -a",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "argument0", "argument1"},
+			},
+			Want: Want{
+				Command: "",
+				Err:     fmt.Errorf("wrong number of arguments for check_users command : 2 given, 1 needed"),
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG0$ -a $ARG1$",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "argument0"},
+			},
+			Want: Want{
+				Command: "",
+				Err:     fmt.Errorf("wrong number of arguments for check_users command : 1 given, 2 needed"),
+			},
+		},
+	}
+
+	for _, c := range cases {
+		commandResult, errResult := c.Entries.Responder.returnCommand(c.Entries.Args)
+		if commandResult != c.Want.Command {
+			t.Errorf("r.retunrCommand(%v) == '%v', want '%v'", c.Entries.Args, commandResult, c.Want.Command)
+		}
+		if !reflect.DeepEqual(errResult, c.Want.Err) {
+			t.Errorf("r.returnCommand(%v) == '%v', want '%v'", c.Entries.Args, errResult, c.Want.Err)
 		}
 	}
 }

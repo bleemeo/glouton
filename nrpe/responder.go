@@ -90,28 +90,9 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 }
 
 func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error) {
-	nrpeCommand := r.nrpeCommands[requestArgs[0]]
-	nrpeCommandArgs := strings.Split(nrpeCommand, " ")
-
-	argPatern := "\\$ARG([0-9])+\\$"
-	regex, err := regexp.Compile(argPatern)
+	nrpeCommand, err := r.returnCommand(requestArgs)
 	if err != nil {
-		logger.V(2).Printf("Regex: impossible to compile as regex: %s", argPatern)
-		return "", 0, err
-	}
-
-	nbArgs := 0
-	for i, arg := range nrpeCommandArgs {
-		match := regex.MatchString(arg)
-		if match {
-			nbArgs++
-			if len(requestArgs) > nbArgs {
-				nrpeCommandArgs[i] = requestArgs[nbArgs]
-			}
-		}
-	}
-	if len(requestArgs) != nbArgs {
-		return "", 0, fmt.Errorf("wrong number of arguments for %s command : %v given, %v needed", requestArgs[0], len(requestArgs), nbArgs)
+		return "", 2, fmt.Errorf("Impossible to create the NRPE command : %s", err)
 	}
 
 	out, err := exec.Command(nrpeCommand).Output()
@@ -121,6 +102,39 @@ func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error)
 
 	output := string(out)
 	return output, 0, nil
+}
+
+func (r Responder) returnCommand(requestArgs []string) (string, error) {
+	nrpeCommand := r.nrpeCommands[requestArgs[0]]
+	nrpeCommandArgs := strings.Split(nrpeCommand, " ")
+
+	argPatern := "\\$ARG([0-9])+\\$"
+	regex, err := regexp.Compile(argPatern)
+	if err != nil {
+		logger.V(2).Printf("regex: impossible to compile as regex: %s", argPatern)
+		return "", err
+	}
+
+	nbCustomArgs := 0
+	finalCommand := make([]string, len(nrpeCommandArgs))
+	copy(finalCommand, nrpeCommandArgs)
+	for i, arg := range nrpeCommandArgs {
+		match := regex.MatchString(arg)
+		if match {
+			if !r.allowArguments {
+				return "", fmt.Errorf("impossible to create the command custom arguments are not allowed")
+			}
+			nbCustomArgs++
+			if len(requestArgs) > nbCustomArgs {
+				finalCommand[i] = requestArgs[nbCustomArgs]
+			}
+		}
+	}
+
+	if len(requestArgs)-1 != nbCustomArgs {
+		return "", fmt.Errorf("wrong number of arguments for %s command : %v given, %v needed", requestArgs[0], len(requestArgs)-1, nbCustomArgs)
+	}
+	return strings.Join(finalCommand, " "), nil
 }
 
 // readNRPEConf reads all the conf files of nrpeConfPath and returns a map which contains all the commands
