@@ -21,30 +21,100 @@ import (
 	"testing"
 )
 
-func TestReadNRPEConfFile(t *testing.T) {
-	var nrpeConf = `
+var nrpeConf1 = `
 # NRPE Commands
 command[check_users]=/usr/local/nagios/libexec/check_users -w 5 -c 10
-command[check_load]=/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20
-command[check_hda1]=/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1
-command[check_zombie_procs]=/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z
-command[check_total_procs]=/usr/local/nagios/libexec/check_procs -w 150 -c 200
 # Other parameters
 pid_file=/var/run/nagios/nrpe.pid
 include=/etc/nagios/nrpe_local.cfg
-ssl_logging=0x00
-connection_timeout=300
 `
-	expectedResult := map[string]string{
-		"check_users":        "/usr/local/nagios/libexec/check_users -w 5 -c 10",
-		"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
-		"check_hda1":         "/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1",
-		"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
-		"check_total_procs":  "/usr/local/nagios/libexec/check_procs -w 150 -c 200",
+var nrpeConf2 = `
+# NRPE Commands
+command[check_load]=/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20
+command[check_zombie_procs]=/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z
+# Other parameters
+connection_timeout=300
+dont_blame_nrpe=0
+`
+var nrpeConf3 = `
+# NRPE Commands
+command[check_users]=new command
+command[check_hda1]=/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1
+command[check_zombie_procs]=new command again
+# Other parameters
+pid_file=/var/run/nagios/nrpe.pid
+dont_blame_nrpe=1
+`
+
+func TestReadNRPEConfFile(t *testing.T) {
+	type Entries struct {
+		Bytes []byte
+		Map   map[string]string
 	}
-	nrpeConfByte := []byte(nrpeConf)
-	readNRPEConfFileResult := readNRPEConfFile(nrpeConfByte, make(map[string]string))
-	if !reflect.DeepEqual(readNRPEConfFileResult, expectedResult) {
-		t.Errorf("readNRPEConfFile(configurationFile) == %v, want %v", readNRPEConfFileResult, expectedResult)
+	type Want struct {
+		Map              map[string]string
+		CommandArguments CommandArguments
+	}
+	cases := []struct {
+		Entries Entries
+		Want    Want
+	}{
+		{
+			Entries: Entries{
+				Bytes: []byte(nrpeConf1),
+				Map:   make(map[string]string),
+			},
+			Want: Want{
+				Map: map[string]string{
+					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
+				},
+				CommandArguments: undefined,
+			},
+		},
+		{
+			Entries: Entries{
+				Bytes: []byte(nrpeConf2),
+				Map: map[string]string{
+					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
+				},
+			},
+			Want: Want{
+				Map: map[string]string{
+					"check_users":        "/usr/local/nagios/libexec/check_users -w 5 -c 10",
+					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
+					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
+				},
+				CommandArguments: notAllowed,
+			},
+		},
+		{
+			Entries: Entries{
+				Bytes: []byte(nrpeConf3),
+				Map: map[string]string{
+					"check_users":        "/usr/local/nagios/libexec/check_users -w 5 -c 10",
+					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
+					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
+				},
+			},
+			Want: Want{
+				Map: map[string]string{
+					"check_users":        "new command",
+					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
+					"check_zombie_procs": "new command again",
+					"check_hda1":         "/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1",
+				},
+				CommandArguments: allowed,
+			},
+		},
+	}
+
+	for _, c := range cases {
+		mapResult, commandArgumentsResult := readNRPEConfFile(c.Entries.Bytes, c.Entries.Map)
+		if !reflect.DeepEqual(mapResult, c.Want.Map) {
+			t.Errorf("readNRPEConfFile(args) == %v, want %v", mapResult, c.Want.Map)
+		}
+		if commandArgumentsResult != c.Want.CommandArguments {
+			t.Errorf("readNRPEConfFile(args) == %v, want %v", commandArgumentsResult, c.Want.CommandArguments)
+		}
 	}
 }

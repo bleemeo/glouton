@@ -29,10 +29,21 @@ import (
 
 // Responder is used to build the NRPE answer
 type Responder struct {
-	discovery    *discovery.Discovery
-	customCheck  map[string]discovery.NameContainer
-	nrpeCommands map[string]string
+	discovery      *discovery.Discovery
+	customCheck    map[string]discovery.NameContainer
+	nrpeCommands   map[string]string
+	allowArguments bool
 }
+
+// CommandArguments is an enumeration of (undefined, allowed, notAllowed).
+type CommandArguments uint8
+
+// Possible values for the allowArguments enum.
+const (
+	undefined CommandArguments = iota
+	allowed
+	notAllowed
+)
 
 // NewResponse returns a Response
 func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery, nrpeConfPath []string) Responder {
@@ -43,11 +54,12 @@ func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery, n
 			ContainerName: fragment["instance"],
 		}
 	}
-	nrpeCommands := readNRPEConf(nrpeConfPath)
+	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 	return Responder{
-		discovery:    d,
-		customCheck:  customChecks,
-		nrpeCommands: nrpeCommands,
+		discovery:      d,
+		customCheck:    customChecks,
+		nrpeCommands:   nrpeCommands,
+		allowArguments: allowArguments,
 	}
 }
 
@@ -105,29 +117,44 @@ func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error)
 	return output, 0, nil
 }
 
-func readNRPEConf(nrpeConfPath []string) map[string]string {
+func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 	nrpeConfMap := make(map[string]string)
 	if nrpeConfPath == nil {
-		return nrpeConfMap
+		return nrpeConfMap, false
 	}
+	allowArguments := undefined
+	currentCommandArguments := undefined
 	for _, nrpeConfFile := range nrpeConfPath {
 		confBytes, err := ioutil.ReadFile(nrpeConfFile)
 		if err != nil {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 			continue
 		}
-		nrpeConfMap = readNRPEConfFile(confBytes, nrpeConfMap)
+		nrpeConfMap, currentCommandArguments = readNRPEConfFile(confBytes, nrpeConfMap)
+		if allowArguments != notAllowed {
+			allowArguments = currentCommandArguments
+		}
 	}
-	return nrpeConfMap
+	if allowArguments == allowed {
+		return nrpeConfMap, true
+	}
+	return nrpeConfMap, false
 }
 
-func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) map[string]string {
+func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[string]string, CommandArguments) {
 	commandLinePatern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
 	commandLineRegex, err := regexp.Compile(commandLinePatern)
 	if err != nil {
 		logger.V(2).Printf("Regex: impossible to compile as regex: %s", commandLinePatern)
-		return nrpeConfMap
+		return nrpeConfMap, undefined
 	}
+	allowArgumentPatern := "^dont_blame_nrpe=[0-1]$"
+	allowArgumentRegex, err := regexp.Compile(allowArgumentPatern)
+	if err != nil {
+		logger.V(2).Printf("Regex: impossible to compile as regex: %s", allowArgumentPatern)
+		return nrpeConfMap, undefined
+	}
+	commandArguments := undefined
 	confString := string(confBytes)
 	confLines := strings.Split(confString, "\n")
 	for _, line := range confLines {
@@ -137,7 +164,18 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) map[strin
 			command := splitLine[1]
 			commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
 			nrpeConfMap[commandName] = command
+			continue
+		}
+		matched = allowArgumentRegex.MatchString(line)
+		if matched {
+			splitLine := strings.Split(line, "=")[1]
+			switch splitLine {
+			case "0":
+				commandArguments = notAllowed
+			case "1":
+				commandArguments = allowed
+			}
 		}
 	}
-	return nrpeConfMap
+	return nrpeConfMap, commandArguments
 }
