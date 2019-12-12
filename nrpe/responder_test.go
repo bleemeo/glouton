@@ -121,7 +121,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"check_zombie_procs": "new command again",
 					"check_hda1":         "/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1",
 				},
-				CommandArguments: notAllowed,
+				CommandArguments: allowed,
 			},
 		},
 		{
@@ -143,7 +143,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 			},
 			Want: Want{
 				Map:              make(map[string]string),
-				CommandArguments: allowed,
+				CommandArguments: undefined,
 			},
 		},
 		{
@@ -178,7 +178,7 @@ func TestReturnCommand(t *testing.T) {
 		Args      []string
 	}
 	type Want struct {
-		Command string
+		Command []string
 		Err     error
 	}
 	cases := []struct {
@@ -198,7 +198,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users"},
 			},
 			Want: Want{
-				Command: "command --option -a",
+				Command: []string{"command", "--option", "-a"},
 				Err:     nil,
 			},
 		},
@@ -215,7 +215,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users"},
 			},
 			Want: Want{
-				Command: "command --option -a",
+				Command: []string{"command", "--option", "-a"},
 				Err:     nil,
 			},
 		},
@@ -232,7 +232,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument"},
 			},
 			Want: Want{
-				Command: "command --option argument -a",
+				Command: []string{"command", "--option", "argument", "-a"},
 				Err:     nil,
 			},
 		},
@@ -249,7 +249,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument0", "argument1"},
 			},
 			Want: Want{
-				Command: "command --option argument0 -a argument1",
+				Command: []string{"command", "--option", "argument0", "-a", "argument1"},
 				Err:     nil,
 			},
 		},
@@ -266,7 +266,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument"},
 			},
 			Want: Want{
-				Command: "",
+				Command: []string{},
 				Err:     fmt.Errorf("impossible to create the command custom arguments are not allowed"),
 			},
 		},
@@ -283,7 +283,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument0", "argument1"},
 			},
 			Want: Want{
-				Command: "",
+				Command: []string{},
 				Err:     fmt.Errorf("wrong number of arguments for check_users command : 2 given, 1 needed"),
 			},
 		},
@@ -300,7 +300,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument0"},
 			},
 			Want: Want{
-				Command: "",
+				Command: []string{},
 				Err:     fmt.Errorf("wrong number of arguments for check_users command : 1 given, 2 needed"),
 			},
 		},
@@ -317,19 +317,19 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument0"},
 			},
 			Want: Want{
-				Command: "",
+				Command: []string{},
 				Err:     fmt.Errorf("wrong number of arguments for check_users command : 1 given, 0 needed"),
 			},
 		},
 	}
 
-	for _, c := range cases {
+	for i, c := range cases {
 		commandResult, errResult := c.Entries.Responder.returnCommand(c.Entries.Args)
-		if commandResult != c.Want.Command {
-			t.Errorf("r.retunrCommand(%v) == '%v', want '%v'", c.Entries.Args, commandResult, c.Want.Command)
+		if !reflect.DeepEqual(commandResult, c.Want.Command) {
+			t.Errorf("%v r.retunrCommand(%v) == '%v', want '%v'", i, c.Entries.Args, commandResult, c.Want.Command)
 		}
 		if !reflect.DeepEqual(errResult, c.Want.Err) {
-			t.Errorf("r.returnCommand(%v) == '%v', want '%v'", c.Entries.Args, errResult, c.Want.Err)
+			t.Errorf("%v r.returnCommand(%v) == '%v', want '%v'", i, c.Entries.Args, errResult, c.Want.Err)
 		}
 	}
 }

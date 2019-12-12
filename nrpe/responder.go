@@ -95,7 +95,7 @@ func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error)
 		return "", 2, fmt.Errorf("Impossible to create the NRPE command : %s", err)
 	}
 
-	out, err := exec.Command(nrpeCommand).Output()
+	out, err := exec.Command(nrpeCommand[0], nrpeCommand[1:]...).Output()
 	if err != nil {
 		return "", 2, fmt.Errorf("NRPE command %s failed : %s", nrpeCommand, err)
 	}
@@ -104,7 +104,7 @@ func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error)
 	return output, 0, nil
 }
 
-func (r Responder) returnCommand(requestArgs []string) (string, error) {
+func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 	nrpeCommand := r.nrpeCommands[requestArgs[0]]
 	nrpeCommandArgs := strings.Split(nrpeCommand, " ")
 
@@ -112,7 +112,7 @@ func (r Responder) returnCommand(requestArgs []string) (string, error) {
 	regex, err := regexp.Compile(argPatern)
 	if err != nil {
 		logger.V(2).Printf("regex: impossible to compile as regex: %s", argPatern)
-		return "", err
+		return make([]string, 0), err
 	}
 
 	nbCustomArgs := 0
@@ -122,7 +122,7 @@ func (r Responder) returnCommand(requestArgs []string) (string, error) {
 		match := regex.MatchString(arg)
 		if match {
 			if !r.allowArguments {
-				return "", fmt.Errorf("impossible to create the command custom arguments are not allowed")
+				return make([]string, 0), fmt.Errorf("impossible to create the command custom arguments are not allowed")
 			}
 			nbCustomArgs++
 			if len(requestArgs) > nbCustomArgs {
@@ -132,9 +132,9 @@ func (r Responder) returnCommand(requestArgs []string) (string, error) {
 	}
 
 	if len(requestArgs)-1 != nbCustomArgs {
-		return "", fmt.Errorf("wrong number of arguments for %s command : %v given, %v needed", requestArgs[0], len(requestArgs)-1, nbCustomArgs)
+		return make([]string, 0), fmt.Errorf("wrong number of arguments for %s command : %v given, %v needed", requestArgs[0], len(requestArgs)-1, nbCustomArgs)
 	}
-	return strings.Join(finalCommand, " "), nil
+	return finalCommand, nil
 }
 
 // readNRPEConf reads all the conf files of nrpeConfPath and returns a map which contains all the commands
@@ -200,16 +200,5 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArgu
 			}
 		}
 	}
-	allowArguments = updateCommandArgument(confCommandArguments, allowArguments)
-	return nrpeConfMap, allowArguments
-}
-
-func updateCommandArgument(currentCommandArguments CommandArguments, lastCommandArguments CommandArguments) CommandArguments {
-	if lastCommandArguments == notAllowed {
-		return notAllowed
-	}
-	if currentCommandArguments != undefined {
-		return currentCommandArguments
-	}
-	return lastCommandArguments
+	return nrpeConfMap, confCommandArguments
 }
