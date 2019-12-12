@@ -101,6 +101,7 @@ func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error)
 	}
 
 	output := string(out)
+	output = strings.TrimSuffix(output, "\n")
 	return output, 0, nil
 }
 
