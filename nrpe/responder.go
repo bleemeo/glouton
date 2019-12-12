@@ -92,7 +92,7 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error) {
 	nrpeCommand, err := r.returnCommand(requestArgs)
 	if err != nil {
-		return "", 2, fmt.Errorf("Impossible to create the NRPE command : %s", err)
+		return "", 2, fmt.Errorf("impossible to create the NRPE command : %s", err)
 	}
 
 	out, err := exec.Command(nrpeCommand[0], nrpeCommand[1:]...).Output()

@@ -22,14 +22,14 @@ import (
 	"testing"
 )
 
-var nrpeConf1 = `
+const nrpeConf1 = `
 # NRPE Commands
 command[check_users]=/usr/local/nagios/libexec/check_users -w 5 -c 10
 # Other parameters
 pid_file=/var/run/nagios/nrpe.pid
 include=/etc/nagios/nrpe_local.cfg
 `
-var nrpeConf2 = `
+const nrpeConf2 = `
 # NRPE Commands
 command[check_load]=/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20
 command[check_zombie_procs]=/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z
@@ -37,7 +37,7 @@ command[check_zombie_procs]=/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s 
 connection_timeout=300
 dont_blame_nrpe=0
 `
-var nrpeConf3 = `
+const nrpeConf3 = `
 # NRPE Commands
 command[check_users]=new command
 command[check_hda1]=/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1
@@ -46,15 +46,15 @@ command[check_zombie_procs]=new command again
 pid_file=/var/run/nagios/nrpe.pid
 dont_blame_nrpe=1
 `
-var nrpeConf4 = `
+const nrpeConf4 = `
 dont_blame_nrpe=1
 `
 
-var nrpeConf5 = `
+const nrpeConf5 = `
 # Empty configuration file
 `
 
-var nrpeConf6 = `
+const nrpeConf6 = `
 dont_blame_nrpe=0
 # NRPE Command
 command[list_partitions]=lsblk
