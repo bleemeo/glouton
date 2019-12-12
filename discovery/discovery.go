@@ -30,6 +30,8 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
+const ingnoredConfField string = "nagios_nrpe_name"
+
 // Accumulator will gather metrics point for added checks
 type Accumulator interface {
 	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
@@ -264,9 +266,13 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 		if len(overrideCopy) > 0 {
 			ignoredNames := make([]string, 0, len(overrideCopy))
 			for k := range overrideCopy {
-				ignoredNames = append(ignoredNames, k)
+				if k != ingnoredConfField {
+					ignoredNames = append(ignoredNames, k)
+				}
 			}
-			logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
+			if len(ignoredNames) != 0 {
+				logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
+			}
 		}
 		if service.ServiceType == CustomService {
 			if service.ExtraAttributes["port"] != "" {
