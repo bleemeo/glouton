@@ -362,7 +362,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "POSTGRES_PASSWORD=")
 				}
 				if strings.HasPrefix(e, "POSTGRES_USER=") {
-					service.ExtraAttributes["user"] = strings.TrimPrefix(e, "POSTGRES_USER=")
+					service.ExtraAttributes["username"] = strings.TrimPrefix(e, "POSTGRES_USER=")
 				}
 			}
 		}
