@@ -17,7 +17,6 @@
 package nrpe
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 )
@@ -191,14 +190,14 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --option -a",
+						"check_users": "command --option -h",
 					},
 					allowArguments: false,
 				},
 				Args: []string{"check_users"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "-a"},
+				Command: []string{"command", "--option", "-h"},
 				Err:     nil,
 			},
 		},
@@ -208,14 +207,14 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --option -a",
+						"check_users": "command --option -s",
 					},
 					allowArguments: true,
 				},
 				Args: []string{"check_users"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "-a"},
+				Command: []string{"command", "--option", "-s"},
 				Err:     nil,
 			},
 		},
@@ -225,14 +224,14 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG0$ -a",
+						"check_users": "command --option $ARG1$ -s",
 					},
 					allowArguments: true,
 				},
-				Args: []string{"check_users", "argument"},
+				Args: []string{"check_users", "argument1"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "argument", "-a"},
+				Command: []string{"command", "--option", "argument1", "-s"},
 				Err:     nil,
 			},
 		},
@@ -242,14 +241,14 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG0$ -a $ARG1$",
+						"check_users": "command --option $ARG1$ -p $ARG1$",
 					},
 					allowArguments: true,
 				},
-				Args: []string{"check_users", "argument0", "argument1"},
+				Args: []string{"check_users", "argument1", "1234"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "argument0", "-a", "argument1"},
+				Command: []string{"command", "--option", "argument1", "-p", "1234"},
 				Err:     nil,
 			},
 		},
@@ -259,15 +258,15 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG0$ -a",
+						"check_users": "command --option $ARG1$ -h",
 					},
 					allowArguments: false,
 				},
-				Args: []string{"check_users", "argument"},
+				Args: []string{"check_users", "argument1"},
 			},
 			Want: Want{
-				Command: []string{},
-				Err:     fmt.Errorf("impossible to create the command custom arguments are not allowed"),
+				Command: []string{"command", "--option", "-h"},
+				Err:     nil,
 			},
 		},
 		{
@@ -276,15 +275,15 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG0$ -a",
+						"check_users": "command --option $ARG1$ -a",
 					},
 					allowArguments: true,
 				},
-				Args: []string{"check_users", "argument0", "argument1"},
+				Args: []string{"check_users", "argument1", "argument2"},
 			},
 			Want: Want{
-				Command: []string{},
-				Err:     fmt.Errorf("wrong number of arguments for check_users command : 2 given, 1 needed"),
+				Command: []string{"command", "--option", "argument1", "-a"},
+				Err:     nil,
 			},
 		},
 		{
@@ -293,15 +292,15 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --option $ARG0$ -a $ARG1$",
+						"check_users": "command --option $ARG1$ -a $ARG2$",
 					},
 					allowArguments: true,
 				},
-				Args: []string{"check_users", "argument0"},
+				Args: []string{"check_users", "argument1"},
 			},
 			Want: Want{
-				Command: []string{},
-				Err:     fmt.Errorf("wrong number of arguments for check_users command : 1 given, 2 needed"),
+				Command: []string{"command", "--option", "argument1", "-a"},
+				Err:     nil,
 			},
 		},
 		{
@@ -317,8 +316,59 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument0"},
 			},
 			Want: Want{
-				Command: []string{},
-				Err:     fmt.Errorf("wrong number of arguments for check_users command : 1 given, 0 needed"),
+				Command: []string{"command", "--option"},
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --args '$ARG1$@$ARG2$.com'",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "glouton", "bleemeo"},
+			},
+			Want: Want{
+				Command: []string{"command", "--args", "glouton@bleemeo.com"},
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --args '$ARG1$ by $ARG1$'",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "glouton", "bleemeo"},
+			},
+			Want: Want{
+				Command: []string{"command", "--args", "glouton by bleemeo"},
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --args '$ARG1$ by $ARG5$'",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "glouton", "bleemeo"},
+			},
+			Want: Want{
+				Command: []string{"command", "--args", "glouton by bleemeo"},
+				Err:     nil,
 			},
 		},
 	}

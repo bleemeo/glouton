@@ -26,6 +26,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/google/shlex"
 )
 
 // Responder is used to build the NRPE answer
@@ -66,7 +68,7 @@ func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery, n
 
 // Response return the response of an NRPE request
 func (r Responder) Response(ctx context.Context, request string) (string, int16, error) {
-	requestArgs := strings.Split(request, " ")
+	requestArgs := strings.Split(request, "!")
 	_, ok := r.customCheck[requestArgs[0]]
 	if ok {
 		return r.responseCustomCheck(ctx, requestArgs[0])
@@ -111,7 +113,6 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 
 func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 	nrpeCommand := r.nrpeCommands[requestArgs[0]]
-	nrpeCommandArgs := strings.Split(nrpeCommand, " ")
 
 	argPatern := "\\$ARG([0-9])+\\$"
 	regex, err := regexp.Compile(argPatern)
@@ -120,26 +121,16 @@ func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 		return make([]string, 0), err
 	}
 
-	nbCustomArgs := 0
-	finalCommand := make([]string, len(nrpeCommandArgs))
-	copy(finalCommand, nrpeCommandArgs)
-	for i, arg := range nrpeCommandArgs {
-		match := regex.MatchString(arg)
-		if match {
-			if !r.allowArguments {
-				return make([]string, 0), fmt.Errorf("impossible to create the command custom arguments are not allowed")
-			}
-			nbCustomArgs++
-			if len(requestArgs) > nbCustomArgs {
-				finalCommand[i] = requestArgs[nbCustomArgs]
-			}
+	argsToReplace := regex.FindAllString(nrpeCommand, -1)
+
+	for i, arg := range argsToReplace {
+		if len(requestArgs) > i+1 && r.allowArguments {
+			nrpeCommand = strings.Replace(nrpeCommand, arg, requestArgs[i+1], 1)
+		} else {
+			nrpeCommand = strings.Replace(nrpeCommand, arg, "", 1)
 		}
 	}
-
-	if len(requestArgs)-1 != nbCustomArgs {
-		return make([]string, 0), fmt.Errorf("wrong number of arguments for %s command : %v given, %v needed", requestArgs[0], len(requestArgs)-1, nbCustomArgs)
-	}
-	return finalCommand, nil
+	return shlex.Split(nrpeCommand)
 }
 
 // readNRPEConf reads all the conf files of nrpeConfPath and returns a map which contains all the commands
