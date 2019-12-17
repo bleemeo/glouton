@@ -371,6 +371,23 @@ func TestReturnCommand(t *testing.T) {
 				Err:     nil,
 			},
 		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --args '$ARG1$ by $ARG1$'",
+					},
+					allowArguments: false,
+				},
+				Args: []string{"check_users", "glouton", "bleemeo"},
+			},
+			Want: Want{
+				Command: []string{"command", "--args", " by "},
+				Err:     nil,
+			},
+		},
 	}
 
 	for i, c := range cases {
