@@ -98,17 +98,25 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 		return "", 0, fmt.Errorf("impossible to create the NRPE command : %s", err)
 	}
 
+	if len(nrpeCommand) == 0 {
+		return "", 0, fmt.Errorf("the nrpe command is empty")
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...).Output()
-	if err != nil {
+	cmd := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...)
+	out, err := cmd.CombinedOutput()
+	nagiosCode := 0
+	if exitError, ok := err.(*exec.ExitError); ok {
+		nagiosCode = exitError.ExitCode()
+	} else if err != nil {
 		logger.V(1).Printf("NRPE command %s failed : %s", nrpeCommand, err)
 		return "", 0, fmt.Errorf("NRPE: Unable to read output")
 	}
 
 	output := string(out)
 	output = strings.TrimSuffix(output, "\n")
-	return output, 0, nil
+	return output, int16(nagiosCode), nil
 }
 
 func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
