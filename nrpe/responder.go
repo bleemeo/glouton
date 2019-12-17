@@ -25,6 +25,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Responder is used to build the NRPE answer
@@ -72,7 +73,7 @@ func (r Responder) Response(ctx context.Context, request string) (string, int16,
 	}
 	_, ok = r.nrpeCommands[requestArgs[0]]
 	if ok {
-		return r.responseNRPEConf(requestArgs)
+		return r.responseNRPEConf(ctx, requestArgs)
 	}
 	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
 }
@@ -89,15 +90,18 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil
 }
 
-func (r Responder) responseNRPEConf(requestArgs []string) (string, int16, error) {
+func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (string, int16, error) {
 	nrpeCommand, err := r.returnCommand(requestArgs)
 	if err != nil {
-		return "", 2, fmt.Errorf("impossible to create the NRPE command : %s", err)
+		return "", 0, fmt.Errorf("impossible to create the NRPE command : %s", err)
 	}
 
-	out, err := exec.Command(nrpeCommand[0], nrpeCommand[1:]...).Output()
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...).Output()
 	if err != nil {
-		return "", 2, fmt.Errorf("NRPE command %s failed : %s", nrpeCommand, err)
+		logger.V(1).Printf("NRPE command %s failed : %s", nrpeCommand, err)
+		return "", 0, fmt.Errorf("NRPE: Unable to read output")
 	}
 
 	output := string(out)
