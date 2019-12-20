@@ -312,11 +312,17 @@ func decodeOsRelease(data string) (map[string]string, error) {
 func guessVirtual(facts map[string]string) string {
 	vendorName := strings.ToLower(facts["system_vendor"])
 	biosVendor := strings.ToLower(facts["bios_vendor"])
+	biosVersion := strings.ToLower(facts["bios_version"])
 	switch {
 	case strings.Contains(vendorName, "qemu"), strings.Contains(vendorName, "bochs"), strings.Contains(vendorName, "digitalocean"):
 		return "kvm"
 	case strings.Contains(vendorName, "xen"):
+		if strings.Contains(biosVersion, "amazon") {
+			return "aws"
+		}
 		return "xen"
+	case strings.Contains(vendorName, "amazon ec2"):
+		return "aws"
 	case strings.Contains(vendorName, "innotek"):
 		return "virtualbox"
 	case strings.Contains(vendorName, "microsoft"):
