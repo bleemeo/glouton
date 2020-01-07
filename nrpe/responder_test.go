@@ -241,6 +241,57 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG1$ -s",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "space in args"},
+			},
+			Want: Want{
+				Command: []string{"command", "--option", "space", "in", "args", "-s"},
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG1$ -s '$ARG2$'",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "the argument one", "the argument two"},
+			},
+			Want: Want{
+				Command: []string{"command", "--option", "the", "argument", "one", "-s", "the argument two"},
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --option $ARG1$ -s \"$ARG2$\"",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "the argument one", "the argument two"},
+			},
+			Want: Want{
+				Command: []string{"command", "--option", "the", "argument", "one", "-s", "the argument two"},
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
 						"check_users": "command --option $ARG1$ -p $ARG1$",
 					},
 					allowArguments: true,
@@ -248,7 +299,7 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "argument1", "1234"},
 			},
 			Want: Want{
-				Command: []string{"command", "--option", "argument1", "-p", "1234"},
+				Command: []string{"command", "--option", "argument1", "-p", "argument1"},
 				Err:     nil,
 			},
 		},
@@ -367,7 +418,24 @@ func TestReturnCommand(t *testing.T) {
 				Args: []string{"check_users", "glouton", "bleemeo"},
 			},
 			Want: Want{
-				Command: []string{"command", "--args", "glouton by bleemeo"},
+				Command: []string{"command", "--args", "glouton by "},
+				Err:     nil,
+			},
+		},
+		{
+			Entries: Entries{
+				Responder: Responder{
+					discovery:   nil,
+					customCheck: nil,
+					nrpeCommands: map[string]string{
+						"check_users": "command --args '$ARG1$ by $ARG5$'",
+					},
+					allowArguments: true,
+				},
+				Args: []string{"check_users", "glouton", "bleemeo company", "three as number", "four (4)", "the number five"},
+			},
+			Want: Want{
+				Command: []string{"command", "--args", "glouton by the number five"},
 				Err:     nil,
 			},
 		},
