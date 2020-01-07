@@ -59,6 +59,16 @@ dont_blame_nrpe=0
 command[list_partitions]=lsblk
 `
 
+const nrpeConf7 = `
+command[check_with_unexpected_char]=command with [] and =
+command[check_event_worse]=command[check_event_worse]=ls
+command[ check with space]= command --followed-by-tailing-space      
+
+# Note: nagios-nrpe-server don't support "dont_blame_nrpe =1", but support the
+# following:
+dont_blame_nrpe= 1
+`
+
 func TestReadNRPEConfFile(t *testing.T) {
 	type Entries struct {
 		Bytes            []byte
@@ -156,6 +166,21 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"list_partitions": "lsblk",
 				},
 				CommandArguments: notAllowed,
+			},
+		},
+		{
+			Entries: Entries{
+				Bytes:            []byte(nrpeConf7),
+				Map:              make(map[string]string),
+				CommandArguments: allowed,
+			},
+			Want: Want{
+				Map: map[string]string{
+					"check_with_unexpected_char": "command with [] and =",
+					"check_event_worse":          "command[check_event_worse]=ls",
+					"check with space":           " command --followed-by-tailing-space",
+				},
+				CommandArguments: allowed,
 			},
 		},
 	}
