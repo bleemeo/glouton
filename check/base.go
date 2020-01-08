@@ -92,6 +92,10 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		dialer:   &net.Dialer{},
 		timer:    time.NewTimer(0),
 		triggerC: make(chan interface{}),
+		previousStatus: types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: "initial status - description is ignored",
+		},
 	}
 }
 
@@ -102,14 +106,6 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 	// when port goes from open to close, back to step 1
 	// If step 1 fail => trigger check
 	// trigger check every minutes (or 30 seconds)
-	result := types.StatusDescription{
-		CurrentStatus:     types.StatusOk,
-		StatusDescription: "initial status - description is ignored",
-	}
-	bc.l.Lock()
-	bc.previousStatus = result
-	bc.l.Unlock()
-
 	for {
 		select {
 		case <-ctx.Done():
