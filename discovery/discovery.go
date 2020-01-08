@@ -30,7 +30,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-const ingnoredConfField string = "nagios_nrpe_name"
+const ignoredConfField string = "nagios_nrpe_name"
 
 // Accumulator will gather metrics point for added checks
 type Accumulator interface {
@@ -266,7 +266,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 		if len(overrideCopy) > 0 {
 			ignoredNames := make([]string, 0, len(overrideCopy))
 			for k := range overrideCopy {
-				if k != ingnoredConfField {
+				if k != ignoredConfField {
 					ignoredNames = append(ignoredNames, k)
 				}
 			}
