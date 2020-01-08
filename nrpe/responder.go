@@ -158,17 +158,17 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 			continue
 		}
-		nrpeConfMap, allowArguments = readNRPEConfFile(confBytes, nrpeConfMap, allowArguments)
+		nrpeConfMap, allowArguments = readNRPEConfFile(confBytes, nrpeConfMap)
 	}
 
-	if allowArguments == true {
+	if allowArguments {
 		return nrpeConfMap, true
 	}
 	return nrpeConfMap, false
 }
 
 // readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument
-func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArguments bool) (map[string]string, bool) {
+func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[string]string, bool) {
 	commandLinePatern := "^command\\[(.+)\\]=.*$"
 	commandLineRegex := regexp.MustCompile(commandLinePatern)
 

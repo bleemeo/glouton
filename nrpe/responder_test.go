@@ -72,9 +72,8 @@ dont_blame_nrpe= 1
 
 func TestReadNRPEConfFile(t *testing.T) {
 	type Entries struct {
-		Bytes            []byte
-		Map              map[string]string
-		CommandArguments bool
+		Bytes []byte
+		Map   map[string]string
 	}
 	type Want struct {
 		Map              map[string]string
@@ -86,9 +85,8 @@ func TestReadNRPEConfFile(t *testing.T) {
 	}{
 		{
 			Entries: Entries{
-				Bytes:            []byte(nrpeConf1),
-				Map:              make(map[string]string),
-				CommandArguments: false,
+				Bytes: []byte(nrpeConf1),
+				Map:   make(map[string]string),
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -103,7 +101,6 @@ func TestReadNRPEConfFile(t *testing.T) {
 				Map: map[string]string{
 					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
 				},
-				CommandArguments: false,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -122,7 +119,6 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
 					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
 				},
-				CommandArguments: false,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -136,9 +132,8 @@ func TestReadNRPEConfFile(t *testing.T) {
 		},
 		{
 			Entries: Entries{
-				Bytes:            []byte(nrpeConf4),
-				Map:              make(map[string]string),
-				CommandArguments: false,
+				Bytes: []byte(nrpeConf4),
+				Map:   make(map[string]string),
 			},
 			Want: Want{
 				Map:              make(map[string]string),
@@ -147,9 +142,8 @@ func TestReadNRPEConfFile(t *testing.T) {
 		},
 		{
 			Entries: Entries{
-				Bytes:            []byte(nrpeConf5),
-				Map:              make(map[string]string),
-				CommandArguments: true,
+				Bytes: []byte(nrpeConf5),
+				Map:   make(map[string]string),
 			},
 			Want: Want{
 				Map:              make(map[string]string),
@@ -158,9 +152,8 @@ func TestReadNRPEConfFile(t *testing.T) {
 		},
 		{
 			Entries: Entries{
-				Bytes:            []byte(nrpeConf6),
-				Map:              make(map[string]string),
-				CommandArguments: true,
+				Bytes: []byte(nrpeConf6),
+				Map:   make(map[string]string),
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -171,9 +164,8 @@ func TestReadNRPEConfFile(t *testing.T) {
 		},
 		{
 			Entries: Entries{
-				Bytes:            []byte(nrpeConf7),
-				Map:              make(map[string]string),
-				CommandArguments: true,
+				Bytes: []byte(nrpeConf7),
+				Map:   make(map[string]string),
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -188,7 +180,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		mapResult, commandArgumentsResult := readNRPEConfFile(c.Entries.Bytes, c.Entries.Map, c.Entries.CommandArguments)
+		mapResult, commandArgumentsResult := readNRPEConfFile(c.Entries.Bytes, c.Entries.Map)
 		if !reflect.DeepEqual(mapResult, c.Want.Map) {
 			t.Errorf("readNRPEConfFile(args) == %v, want %v", mapResult, c.Want.Map)
 		}
