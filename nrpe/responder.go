@@ -68,7 +68,7 @@ func (r Responder) Response(ctx context.Context, request string) (string, int16,
 	if ok {
 		return r.responseNRPEConf(ctx, requestArgs)
 	}
-	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
+	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0])
 }
 
 func (r Responder) responseCustomCheck(ctx context.Context, request string) (string, int16, error) {
@@ -114,11 +114,7 @@ func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 	nrpeCommand := r.nrpeCommands[requestArgs[0]]
 
 	argPatern := "\\$ARG([0-9])+\\$"
-	regex, err := regexp.Compile(argPatern)
-	if err != nil {
-		logger.V(2).Printf("regex: impossible to compile as regex: %s", argPatern)
-		return make([]string, 0), err
-	}
+	regex := regexp.MustCompile(argPatern)
 
 	argsToReplace := regex.FindAllString(nrpeCommand, -1)
 
@@ -162,18 +158,10 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 // readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument
 func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArguments bool) (map[string]string, bool) {
 	commandLinePatern := "^command\\[(.+)\\]=.*$"
-	commandLineRegex, err := regexp.Compile(commandLinePatern)
-	if err != nil {
-		logger.V(2).Printf("Regex: impossible to compile as regex: %s", commandLinePatern)
-		return nrpeConfMap, allowArguments
-	}
+	commandLineRegex := regexp.MustCompile(commandLinePatern)
 
 	allowArgumentPatern := "^dont_blame_nrpe=( *)[0-1]$"
-	allowArgumentRegex, err := regexp.Compile(allowArgumentPatern)
-	if err != nil {
-		logger.V(2).Printf("Regex: impossible to compile as regex: %s", allowArgumentPatern)
-		return nrpeConfMap, allowArguments
-	}
+	allowArgumentRegex := regexp.MustCompile(allowArgumentPatern)
 
 	confCommandArguments := false
 	confString := string(confBytes)
