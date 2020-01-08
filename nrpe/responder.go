@@ -31,16 +31,20 @@ import (
 	"github.com/google/shlex"
 )
 
+type checkRegistry interface {
+	GetCheckNow(discovery.NameContainer) (discovery.CheckNow, error)
+}
+
 // Responder is used to build the NRPE answer
 type Responder struct {
-	discovery      *discovery.Discovery
+	discovery      checkRegistry
 	customCheck    map[string]discovery.NameContainer
 	nrpeCommands   map[string]string
 	allowArguments bool
 }
 
 // NewResponse returns a Response
-func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery, nrpeConfPath []string) Responder {
+func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
 	customChecks := make(map[string]discovery.NameContainer)
 	for _, fragment := range servicesOverride {
 		customChecks[fragment["nagios_nrpe_name"]] = discovery.NameContainer{
@@ -50,7 +54,7 @@ func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery, n
 	}
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 	return Responder{
-		discovery:      d,
+		discovery:      checkRegistry,
 		customCheck:    customChecks,
 		nrpeCommands:   nrpeCommands,
 		allowArguments: allowArguments,
