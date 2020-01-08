@@ -167,14 +167,14 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 
 // readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument
 func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArguments CommandArguments) (map[string]string, CommandArguments) {
-	commandLinePatern := "^command\\[(([a-z]|[A-Z]|[0-9]|[_])+)\\]=.*$"
+	commandLinePatern := "^command\\[(.+)\\]=.*$"
 	commandLineRegex, err := regexp.Compile(commandLinePatern)
 	if err != nil {
 		logger.V(2).Printf("Regex: impossible to compile as regex: %s", commandLinePatern)
 		return nrpeConfMap, allowArguments
 	}
 
-	allowArgumentPatern := "^dont_blame_nrpe=[0-1]$"
+	allowArgumentPatern := "^dont_blame_nrpe=( *)[0-1]$"
 	allowArgumentRegex, err := regexp.Compile(allowArgumentPatern)
 	if err != nil {
 		logger.V(2).Printf("Regex: impossible to compile as regex: %s", allowArgumentPatern)
@@ -187,15 +187,16 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArgu
 	for _, line := range confLines {
 		matched := commandLineRegex.MatchString(line)
 		if matched {
-			splitLine := strings.Split(line, "=")
+			splitLine := strings.SplitN(line, "=", 2)
 			command := splitLine[1]
+			command = strings.TrimRight(command, " ")
 			commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
 			nrpeConfMap[commandName] = command
 			continue
 		}
 		matched = allowArgumentRegex.MatchString(line)
 		if matched {
-			splitLine := strings.Split(line, "=")[1]
+			splitLine := strings.TrimLeft(strings.Split(line, "=")[1], " ")
 			switch splitLine {
 			case "0":
 				confCommandArguments = notAllowed

@@ -63,6 +63,7 @@ const nrpeConf7 = `
 command[check_with_unexpected_char]=command with [] and =
 command[check_event_worse]=command[check_event_worse]=ls
 command[ check with space]= command --followed-by-tailing-space      
+command[strange command?/$µ]=strange command characters §#@
 
 # Note: nagios-nrpe-server don't support "dont_blame_nrpe =1", but support the
 # following:
@@ -178,7 +179,8 @@ func TestReadNRPEConfFile(t *testing.T) {
 				Map: map[string]string{
 					"check_with_unexpected_char": "command with [] and =",
 					"check_event_worse":          "command[check_event_worse]=ls",
-					"check with space":           " command --followed-by-tailing-space",
+					" check with space":          " command --followed-by-tailing-space",
+					"strange command?/$µ":        "strange command characters §#@",
 				},
 				CommandArguments: allowed,
 			},
