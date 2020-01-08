@@ -421,7 +421,7 @@ func TestReturnCommand(t *testing.T) {
 					discovery:   nil,
 					customCheck: nil,
 					nrpeCommands: map[string]string{
-						"check_users": "command --args '$ARG1$ by $ARG1$'",
+						"check_users": "command --args '$ARG1$ by $ARG2$'",
 					},
 					allowArguments: true,
 				},

@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -131,9 +132,12 @@ func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 
 	argsToReplace := regex.FindAllString(nrpeCommand, -1)
 
-	for i, arg := range argsToReplace {
-		if len(requestArgs) > i+1 && r.allowArguments {
-			nrpeCommand = strings.Replace(nrpeCommand, arg, requestArgs[i+1], 1)
+	for _, arg := range argsToReplace {
+		argNumber := strings.TrimRight(strings.TrimLeft(arg, "$ARG"), "$")
+		argInt, _ := strconv.Atoi(argNumber)
+
+		if len(requestArgs) > argInt && r.allowArguments {
+			nrpeCommand = strings.ReplaceAll(nrpeCommand, arg, requestArgs[argInt])
 		} else {
 			nrpeCommand = strings.Replace(nrpeCommand, arg, "", 1)
 		}
