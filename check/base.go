@@ -53,7 +53,7 @@ type baseCheck struct {
 
 	timer    *time.Timer
 	dialer   *net.Dialer
-	triggerC chan interface{}
+	triggerC chan chan<- types.StatusDescription
 	wg       sync.WaitGroup
 
 	persistentConnection bool
@@ -91,7 +91,7 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 
 		dialer:   &net.Dialer{},
 		timer:    time.NewTimer(0),
-		triggerC: make(chan interface{}),
+		triggerC: make(chan chan<- types.StatusDescription),
 		previousStatus: types.StatusDescription{
 			CurrentStatus:     types.StatusOk,
 			StatusDescription: "initial status - description is ignored",
@@ -115,11 +115,14 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 			}
 			bc.wg.Wait()
 			return nil
-		case <-bc.triggerC:
+		case replyChannel := <-bc.triggerC:
 			if !bc.timer.Stop() {
 				<-bc.timer.C
 			}
-			bc.check(ctx, true)
+			result := bc.check(ctx, false)
+			if replyChannel != nil {
+				replyChannel <- result
+			}
 		case <-bc.timer.C:
 			bc.check(ctx, true)
 		}
@@ -174,7 +177,10 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 
 // ChechNow runs the check now without waiting the timer
 func (bc *baseCheck) CheckNow(ctx context.Context) types.StatusDescription {
-	return bc.check(ctx, false)
+	replyChan := make(chan types.StatusDescription)
+	bc.triggerC <- replyChan
+	response := <-replyChan
+	return response
 }
 
 func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {
