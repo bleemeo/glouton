@@ -39,16 +39,6 @@ type Responder struct {
 	allowArguments bool
 }
 
-// CommandArguments is an enumeration of (undefined, allowed, notAllowed).
-type CommandArguments uint8
-
-// Possible values for the allowArguments enum.
-const (
-	undefined CommandArguments = iota
-	allowed
-	notAllowed
-)
-
 // NewResponse returns a Response
 func NewResponse(servicesOverride []map[string]string, d *discovery.Discovery, nrpeConfPath []string) Responder {
 	customChecks := make(map[string]discovery.NameContainer)
@@ -153,7 +143,7 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 		return nrpeConfMap, false
 	}
 
-	allowArguments := undefined
+	allowArguments := false
 	for _, nrpeConfFile := range nrpeConfPath {
 		confBytes, err := ioutil.ReadFile(nrpeConfFile)
 		if err != nil {
@@ -163,14 +153,14 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 		nrpeConfMap, allowArguments = readNRPEConfFile(confBytes, nrpeConfMap, allowArguments)
 	}
 
-	if allowArguments == allowed {
+	if allowArguments == true {
 		return nrpeConfMap, true
 	}
 	return nrpeConfMap, false
 }
 
 // readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument
-func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArguments CommandArguments) (map[string]string, CommandArguments) {
+func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArguments bool) (map[string]string, bool) {
 	commandLinePatern := "^command\\[(.+)\\]=.*$"
 	commandLineRegex, err := regexp.Compile(commandLinePatern)
 	if err != nil {
@@ -185,7 +175,7 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArgu
 		return nrpeConfMap, allowArguments
 	}
 
-	confCommandArguments := undefined
+	confCommandArguments := false
 	confString := string(confBytes)
 	confLines := strings.Split(confString, "\n")
 	for _, line := range confLines {
@@ -203,9 +193,9 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string, allowArgu
 			splitLine := strings.TrimLeft(strings.Split(line, "=")[1], " ")
 			switch splitLine {
 			case "0":
-				confCommandArguments = notAllowed
+				confCommandArguments = false
 			case "1":
-				confCommandArguments = allowed
+				confCommandArguments = true
 			}
 		}
 	}

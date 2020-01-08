@@ -74,11 +74,11 @@ func TestReadNRPEConfFile(t *testing.T) {
 	type Entries struct {
 		Bytes            []byte
 		Map              map[string]string
-		CommandArguments CommandArguments
+		CommandArguments bool
 	}
 	type Want struct {
 		Map              map[string]string
-		CommandArguments CommandArguments
+		CommandArguments bool
 	}
 	cases := []struct {
 		Entries Entries
@@ -88,13 +88,13 @@ func TestReadNRPEConfFile(t *testing.T) {
 			Entries: Entries{
 				Bytes:            []byte(nrpeConf1),
 				Map:              make(map[string]string),
-				CommandArguments: undefined,
+				CommandArguments: false,
 			},
 			Want: Want{
 				Map: map[string]string{
 					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
 				},
-				CommandArguments: undefined,
+				CommandArguments: false,
 			},
 		},
 		{
@@ -103,7 +103,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 				Map: map[string]string{
 					"check_users": "/usr/local/nagios/libexec/check_users -w 5 -c 10",
 				},
-				CommandArguments: undefined,
+				CommandArguments: false,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -111,7 +111,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
 					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
 				},
-				CommandArguments: notAllowed,
+				CommandArguments: false,
 			},
 		},
 		{
@@ -122,7 +122,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"check_load":         "/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20",
 					"check_zombie_procs": "/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s Z",
 				},
-				CommandArguments: notAllowed,
+				CommandArguments: false,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -131,49 +131,49 @@ func TestReadNRPEConfFile(t *testing.T) {
 					"check_zombie_procs": "new command again",
 					"check_hda1":         "/usr/local/nagios/libexec/check_disk -w 20% -c 10% -p /dev/hda1",
 				},
-				CommandArguments: allowed,
+				CommandArguments: true,
 			},
 		},
 		{
 			Entries: Entries{
 				Bytes:            []byte(nrpeConf4),
 				Map:              make(map[string]string),
-				CommandArguments: undefined,
+				CommandArguments: false,
 			},
 			Want: Want{
 				Map:              make(map[string]string),
-				CommandArguments: allowed,
+				CommandArguments: true,
 			},
 		},
 		{
 			Entries: Entries{
 				Bytes:            []byte(nrpeConf5),
 				Map:              make(map[string]string),
-				CommandArguments: allowed,
+				CommandArguments: true,
 			},
 			Want: Want{
 				Map:              make(map[string]string),
-				CommandArguments: undefined,
+				CommandArguments: false,
 			},
 		},
 		{
 			Entries: Entries{
 				Bytes:            []byte(nrpeConf6),
 				Map:              make(map[string]string),
-				CommandArguments: allowed,
+				CommandArguments: true,
 			},
 			Want: Want{
 				Map: map[string]string{
 					"list_partitions": "lsblk",
 				},
-				CommandArguments: notAllowed,
+				CommandArguments: false,
 			},
 		},
 		{
 			Entries: Entries{
 				Bytes:            []byte(nrpeConf7),
 				Map:              make(map[string]string),
-				CommandArguments: allowed,
+				CommandArguments: true,
 			},
 			Want: Want{
 				Map: map[string]string{
@@ -182,7 +182,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 					" check with space":          " command --followed-by-tailing-space",
 					"strange command?/$µ":        "strange command characters §#@",
 				},
-				CommandArguments: allowed,
+				CommandArguments: true,
 			},
 		},
 	}
