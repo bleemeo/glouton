@@ -401,6 +401,7 @@ func (s Server) Run(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
+			logger.V(2).Printf("new NRPE connection from %v", c.RemoteAddr())
 			handleConnection(ctx, c, s.callback, [2]byte{0x53, 0x51})
 		}()
 	}

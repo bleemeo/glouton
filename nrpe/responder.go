@@ -67,6 +67,7 @@ func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegist
 // Response return the response of an NRPE request
 func (r Responder) Response(ctx context.Context, request string) (string, int16, error) {
 	requestArgs := strings.Split(request, "!")
+	logger.V(2).Printf("Received request for NRPE command %s", requestArgs[0])
 	_, ok := r.customCheck[requestArgs[0]]
 	if ok {
 		return r.responseCustomCheck(ctx, requestArgs[0])
