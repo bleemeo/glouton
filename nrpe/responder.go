@@ -165,7 +165,7 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 
 // readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument
 func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[string]string, bool) {
-	commandLinePatern := "^command\\[(.+)\\]=.*$"
+	commandLinePatern := "^command\\[(.+)\\]( *)=.*$"
 	commandLineRegex := regexp.MustCompile(commandLinePatern)
 
 	allowArgumentPatern := "^dont_blame_nrpe=( *)[0-1]$"
