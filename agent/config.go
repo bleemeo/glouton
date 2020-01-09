@@ -104,7 +104,7 @@ var defaultConfig = map[string]interface{}{
 	},
 	"network_interface_blacklist":     []interface{}{"docker", "lo", "veth", "virbr", "vnet", "isatap"},
 	"nrpe.enabled":                    false,
-	"nrpe.address":                    "127.0.0.1",
+	"nrpe.address":                    "0.0.0.0",
 	"nrpe.port":                       5666,
 	"nrpe.ssl":                        true,
 	"nrpe.conf_paths":                 []interface{}{"/etc/nagios/nrpe.cfg"},
