@@ -53,11 +53,14 @@ type baseCheck struct {
 
 	timer    *time.Timer
 	dialer   *net.Dialer
-	triggerC chan interface{}
-	cancel   func()
+	triggerC chan chan<- types.StatusDescription
 	wg       sync.WaitGroup
 
 	persistentConnection bool
+
+	l              sync.Mutex
+	cancel         func()
+	previousStatus types.StatusDescription
 }
 
 func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, labels map[string]string, acc accumulator) *baseCheck {
@@ -88,7 +91,11 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 
 		dialer:   &net.Dialer{},
 		timer:    time.NewTimer(0),
-		triggerC: make(chan interface{}),
+		triggerC: make(chan chan<- types.StatusDescription),
+		previousStatus: types.StatusDescription{
+			CurrentStatus:     types.StatusOk,
+			StatusDescription: "initial status - description is ignored",
+		},
 	}
 }
 
@@ -99,10 +106,6 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 	// when port goes from open to close, back to step 1
 	// If step 1 fail => trigger check
 	// trigger check every minutes (or 30 seconds)
-	result := types.StatusDescription{
-		CurrentStatus:     types.StatusOk,
-		StatusDescription: "initial status - description is ignored",
-	}
 	for {
 		select {
 		case <-ctx.Done():
@@ -112,25 +115,30 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 			}
 			bc.wg.Wait()
 			return nil
-		case <-bc.triggerC:
+		case replyChannel := <-bc.triggerC:
 			if !bc.timer.Stop() {
 				<-bc.timer.C
 			}
-			result = bc.check(ctx, result)
+			result := bc.check(ctx, false)
+			if replyChannel != nil {
+				replyChannel <- result
+			}
 		case <-bc.timer.C:
-			result = bc.check(ctx, result)
+			bc.check(ctx, true)
 		}
 	}
 }
 
-func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescription) types.StatusDescription {
-	// do the check
-	// if successful, ensure socket are open
-	// if fail, ensure socket are closed
-	// if just fail (ok -> critical), do a fast check
+// check does the check and add the metric depends of addMetric
+// if successful, ensure sockets are openned
+// if fail, ensure sockets are closed
+// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed
+func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.StatusDescription {
+	bc.l.Lock()
+	defer bc.l.Unlock()
 	result := bc.doCheck(ctx)
 	if ctx.Err() != nil {
-		return previousStatus
+		return result
 	}
 	timerDone := false
 	if result.CurrentStatus != types.StatusOk {
@@ -139,7 +147,7 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescr
 			bc.wg.Wait()
 			bc.cancel = nil
 		}
-		if previousStatus.CurrentStatus == types.StatusOk {
+		if bc.previousStatus.CurrentStatus == types.StatusOk {
 			bc.timer.Reset(30 * time.Second)
 			timerDone = true
 		}
@@ -147,20 +155,32 @@ func (bc *baseCheck) check(ctx context.Context, previousStatus types.StatusDescr
 		bc.openSockets(ctx)
 	}
 
-	if !timerDone {
+	if !timerDone && callFromSchedule {
 		bc.timer.Reset(time.Minute)
 	}
+
+	if callFromSchedule || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
+		bc.acc.AddFieldsWithStatus(
+			"",
+			map[string]interface{}{
+				bc.metricName: result.CurrentStatus.NagiosCode(),
+			},
+			bc.labels,
+			map[string]types.StatusDescription{bc.metricName: result},
+			false,
+		)
+	}
 	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels["item"], result)
-	bc.acc.AddFieldsWithStatus(
-		"",
-		map[string]interface{}{
-			bc.metricName: result.CurrentStatus.NagiosCode(),
-		},
-		bc.labels,
-		map[string]types.StatusDescription{bc.metricName: result},
-		false,
-	)
+	bc.previousStatus = result
 	return result
+}
+
+// ChechNow runs the check now without waiting the timer
+func (bc *baseCheck) CheckNow(ctx context.Context) types.StatusDescription {
+	replyChan := make(chan types.StatusDescription)
+	bc.triggerC <- replyChan
+	response := <-replyChan
+	return response
 }
 
 func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescription) {

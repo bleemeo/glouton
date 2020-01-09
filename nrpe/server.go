@@ -47,18 +47,18 @@ type reducedPacket struct {
 
 // Server is an NRPE server than use Callback for reply to queries
 type Server struct {
-	callback    callback
 	bindAddress string
 	enableTLS   bool
+	callback    callback
 }
 
 // New returns a NRPE server
 // callback is the function responsible to generate the response for a given query.
 func New(bindAddress string, enableTLS bool, callback callback) Server {
 	return Server{
-		callback:    callback,
 		bindAddress: bindAddress,
 		enableTLS:   enableTLS,
+		callback:    callback,
 	}
 }
 

@@ -201,13 +201,13 @@ func TestDiscoverySingle(t *testing.T) {
 
 func Test_applyOveride(t *testing.T) {
 	type args struct {
-		discoveredServicesMap map[nameContainer]Service
-		servicesOverride      map[nameContainer]map[string]string
+		discoveredServicesMap map[NameContainer]Service
+		servicesOverride      map[NameContainer]map[string]string
 	}
 	tests := []struct {
 		name string
 		args args
-		want map[nameContainer]Service
+		want map[NameContainer]Service
 	}{
 		{
 			name: "empty",
@@ -215,13 +215,13 @@ func Test_applyOveride(t *testing.T) {
 				discoveredServicesMap: nil,
 				servicesOverride:      nil,
 			},
-			want: make(map[nameContainer]Service),
+			want: make(map[NameContainer]Service),
 		},
 		{
 			name: "no override",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
-					{name: "apache"}: {
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
 						Name:            "apache",
 						ServiceType:     ApacheService,
 						IPAddress:       "127.0.0.1",
@@ -230,8 +230,8 @@ func Test_applyOveride(t *testing.T) {
 				},
 				servicesOverride: nil,
 			},
-			want: map[nameContainer]Service{
-				{name: "apache"}: {
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
 					Name:            "apache",
 					ServiceType:     ApacheService,
 					IPAddress:       "127.0.0.1",
@@ -242,20 +242,20 @@ func Test_applyOveride(t *testing.T) {
 		{
 			name: "address override",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
-					{name: "apache"}: {
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[nameContainer]map[string]string{
-					{name: "apache"}: {
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "apache"}: {
 						"address": "10.0.1.2",
 					},
 				},
 			},
-			want: map[nameContainer]Service{
-				{name: "apache"}: {
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
 					ExtraAttributes: map[string]string{
@@ -267,21 +267,21 @@ func Test_applyOveride(t *testing.T) {
 		{
 			name: "address override & ignore unknown override",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
-					{name: "apache"}: {
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[nameContainer]map[string]string{
-					{name: "apache"}: {
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "apache"}: {
 						"address":         "10.0.1.2",
 						"this-is-unknown": "so-unused",
 					},
 				},
 			},
-			want: map[nameContainer]Service{
-				{name: "apache"}: {
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
 					ExtraAttributes: map[string]string{
@@ -293,29 +293,29 @@ func Test_applyOveride(t *testing.T) {
 		{
 			name: "add custom check",
 			args: args{
-				discoveredServicesMap: map[nameContainer]Service{
-					{name: "apache"}: {
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
 						Name:        "apache",
 						ServiceType: ApacheService,
 					},
 				},
-				servicesOverride: map[nameContainer]map[string]string{
-					{name: "myapplication"}: {
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "myapplication"}: {
 						"port":          "8080",
 						"check_type":    customCheckNagios,
 						"check_command": "command-to-run",
 					},
-					{name: "custom_webserver"}: {
+					{Name: "custom_webserver"}: {
 						"port": "8081",
 					},
 				},
 			},
-			want: map[nameContainer]Service{
-				{name: "apache"}: {
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
 					Name:        "apache",
 					ServiceType: ApacheService,
 				},
-				{name: "myapplication"}: {
+				{Name: "myapplication"}: {
 					ServiceType: CustomService,
 					ExtraAttributes: map[string]string{
 						"address":       "127.0.0.1", // default as soon as port is set
@@ -326,7 +326,7 @@ func Test_applyOveride(t *testing.T) {
 					Name:   "myapplication",
 					Active: true,
 				},
-				{name: "custom_webserver"}: {
+				{Name: "custom_webserver"}: {
 					ServiceType: CustomService,
 					ExtraAttributes: map[string]string{
 						"address":    "127.0.0.1", // default as soon as port is set
@@ -342,17 +342,17 @@ func Test_applyOveride(t *testing.T) {
 			name: "bad custom check",
 			args: args{
 				discoveredServicesMap: nil,
-				servicesOverride: map[nameContainer]map[string]string{
-					{name: "myapplication"}: { // the check_command is missing
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "myapplication"}: { // the check_command is missing
 						"port":       "8080",
 						"check_type": customCheckNagios,
 					},
-					{name: "custom_webserver"}: { // port is missing
+					{Name: "custom_webserver"}: { // port is missing
 						"check_type": customCheckHTTP,
 					},
 				},
 			},
-			want: map[nameContainer]Service{},
+			want: map[NameContainer]Service{},
 		},
 	}
 	for _, tt := range tests {

@@ -107,6 +107,7 @@ var defaultConfig = map[string]interface{}{
 	"nrpe.address":                    "127.0.0.1",
 	"nrpe.port":                       5666,
 	"nrpe.ssl":                        true,
+	"nrpe.conf_paths":                 []interface{}{"/etc/nagios/nrpe.cfg"},
 	"service_ignore_check":            []interface{}{}, // TODO
 	"service_ignore_metrics":          []interface{}{}, // TODO
 	"service":                         []interface{}{}, // TODO: custom checks

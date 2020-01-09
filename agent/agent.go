@@ -86,10 +86,6 @@ type agent struct {
 	taskIDs map[string]int
 }
 
-func nrpeResponse(ctx context.Context, request string) (string, int16, error) {
-	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", request)
-}
-
 func zabbixResponse(key string, args []string) (string, error) {
 	if key == "agent.ping" {
 		return "1", nil
@@ -384,6 +380,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.collector = collector.New(a.accumulator)
 
 	services, _ := a.config.Get("service")
+	overrideServices := serivcesOverrideFromInterface(services)
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
@@ -391,7 +388,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.state,
 		a.accumulator,
 		a.dockerFact,
-		serivcesOverrideFromInterface(services),
+		overrideServices,
 	)
 
 	var targets []scrapper.Target
@@ -436,10 +433,12 @@ func (a *agent) run() { //nolint:gocyclo
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 	if a.config.Bool("nrpe.enabled") {
+		nrpeConfFile := a.config.StringList("nrpe.conf_paths")
+		nrperesponse := nrpe.NewResponse(overrideServices, a.discovery, nrpeConfFile)
 		server := nrpe.New(
 			fmt.Sprintf("%s:%d", a.config.String("nrpe.address"), a.config.Int("nrpe.port")),
 			a.config.Bool("nrpe.ssl"),
-			nrpeResponse,
+			nrperesponse.Response,
 		)
 		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
