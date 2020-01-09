@@ -53,11 +53,6 @@ func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegist
 				Name:          fragment["id"],
 				ContainerName: fragment["instance"],
 			}
-		} else {
-			customChecks[""] = discovery.NameContainer{
-				Name:          fragment["id"],
-				ContainerName: fragment["instance"],
-			}
 		}
 	}
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
