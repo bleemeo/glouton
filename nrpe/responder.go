@@ -93,11 +93,12 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (string, int16, error) {
 	nrpeCommand, err := r.returnCommand(requestArgs)
 	if err != nil {
-		return "", 0, fmt.Errorf("impossible to create the NRPE command : %s", err)
+		logger.V(1).Printf("Impossible to create the NRPE command : %s", err)
+		return "", 0, fmt.Errorf("NRPE: Unable to read output")
 	}
 
 	if len(nrpeCommand) == 0 {
-		return "", 0, fmt.Errorf("the nrpe command is empty")
+		return "", 0, fmt.Errorf("NRPE: config file contains an empty command")
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -181,6 +182,9 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[stri
 			command = strings.TrimRight(command, " ")
 			commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
 			nrpeConfMap[commandName] = command
+			if command == "" {
+				logger.V(0).Printf("WARNING: NRPE configuration file contains an empty command for %s", commandName)
+			}
 			continue
 		}
 		matched = allowArgumentRegex.MatchString(line)
