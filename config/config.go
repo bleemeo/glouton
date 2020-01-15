@@ -104,6 +104,12 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 			return false, err
 		}
 		c.Set(key, int(value))
+	case TypeMap:
+		mapValue, err := convertMap(value)
+		if err != nil {
+			return false, err
+		}
+		c.Set(key, mapValue)
 	default:
 		return false, fmt.Errorf("unknown variable type %v", varType)
 	}
