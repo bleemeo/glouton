@@ -17,6 +17,7 @@
 package config
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -31,6 +32,7 @@ const (
 	TypeStringList
 	TypeInteger
 	TypeBoolean
+	TypeMap
 )
 
 func convertBoolean(value string) (bool, error) {
@@ -47,4 +49,20 @@ func convertBoolean(value string) (bool, error) {
 		}
 	}
 	return result, err
+}
+
+func convertMap(value string) (map[string]string, error) {
+	finalMap := make(map[string]string)
+	elementsList := strings.Split(value, ",")
+	for i, element := range elementsList {
+		values := strings.Split(element, "=")
+		if i == len(elementsList)-1 && element == "" {
+			return finalMap, nil
+		}
+		if len(values) < 2 {
+			return make(map[string]string), fmt.Errorf("wrong map format, impossible to convert variable in map[string]string")
+		}
+		finalMap[strings.TrimLeft(values[0], " ")] = strings.TrimRight(strings.Join(values[1:], "="), " ")
+	}
+	return finalMap, nil
 }

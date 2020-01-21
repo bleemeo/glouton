@@ -199,6 +199,8 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 		varType = config.TypeInteger
 	case bool:
 		varType = config.TypeBoolean
+	case map[string]string:
+		varType = config.TypeMap
 	}
 	found, err = cfg.LoadEnv(key, varType, envName)
 	if varType == config.TypeUnknown && found {
