@@ -278,14 +278,14 @@ func convertToString(rawValue interface{}) string {
 	}
 }
 
-func serivcesFromInterface(input interface{}) []map[string]string {
+func confFieldToSliceMap(input interface{}, confType string) []map[string]string {
 	if input == nil {
 		return nil
 	}
 
 	inputMap, ok := input.([]interface{})
 	if !ok {
-		logger.Printf("services override in configuration file is not a list")
+		logger.Printf("%s in configuration file is not a list", confType)
 		return nil
 	}
 	result := make([]map[string]string, 0, len(inputMap))
@@ -293,7 +293,7 @@ func serivcesFromInterface(input interface{}) []map[string]string {
 	for i, v := range inputMap {
 		vMap, ok := convertToMap(v)
 		if !ok {
-			logger.Printf("services override entry #%d is not a map, ignoring, %#v", i, v)
+			logger.Printf("%s entry #%d is not a map, ignoring, %#v", confType, i, v)
 			continue
 		}
 		override := make(map[string]string, len(vMap))
