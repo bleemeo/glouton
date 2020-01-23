@@ -380,7 +380,10 @@ func (a *agent) run() { //nolint:gocyclo
 	a.collector = collector.New(a.accumulator)
 
 	services, _ := a.config.Get("service")
-	overrideServices := serivcesOverrideFromInterface(services)
+	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
+	overrideServices := serivcesFromInterface(services)
+	serviceIgnoreCheck := serivcesFromInterface(servicesIgnoreCheck)
+	logger.V(1).Printf("Ignored Checks : %v", serviceIgnoreCheck)
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
@@ -389,6 +392,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.accumulator,
 		a.dockerFact,
 		overrideServices,
+		serviceIgnoreCheck,
 	)
 
 	var targets []scrapper.Target

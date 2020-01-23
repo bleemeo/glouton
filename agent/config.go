@@ -278,7 +278,7 @@ func convertToString(rawValue interface{}) string {
 	}
 }
 
-func serivcesOverrideFromInterface(input interface{}) []map[string]string {
+func serivcesFromInterface(input interface{}) []map[string]string {
 	if input == nil {
 		return nil
 	}

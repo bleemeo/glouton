@@ -233,6 +233,12 @@ func (d *Discovery) addCheck(check Check, service Service) {
 		Name:          service.Name,
 		ContainerName: service.ContainerName,
 	}
+	if d.isCheckIgnored(key) {
+		logger.V(2).Printf("The service %s, '%s' is ignored by the configuration", key.Name, key.ContainerName)
+		return
+	}
+	logger.V(2).Printf("The service %s, '%s' is added", key.Name, key.ContainerName) // To remove
+
 	id, err := d.taskRegistry.AddTask(check.Run, fmt.Sprintf("check for %s", service.Name))
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)
