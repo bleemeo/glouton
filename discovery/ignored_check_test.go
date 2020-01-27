@@ -43,6 +43,26 @@ func TestIsCheckIgnored(t *testing.T) {
 			"name":     "influxdb",
 			"instance": "host:*",
 		},
+		{
+			"name":     "prefix",
+			"instance": "container:name-prefix*",
+		},
+		{
+			"name":     "suffix",
+			"instance": "container:*name-suffix",
+		},
+		{
+			"name":     "prefix-suffix",
+			"instance": "container:starts-with-*-end-withs",
+		},
+		{
+			"name":     "two-placeholder",
+			"instance": "container:web-??",
+		},
+		{
+			"name":     "fixed-hostname",
+			"instance": "container:web.example.com",
+		},
 	}
 
 	ignoredChecks := NewIgnoredCheck(checksIgnored)
@@ -167,6 +187,125 @@ func TestIsCheckIgnored(t *testing.T) {
 			nameContainer: NameContainer{
 				Name:          "influxdb",
 				ContainerName: "influxdb",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "prefix",
+				ContainerName: "name-prefix",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "prefix",
+				ContainerName: "name-prefixSomething",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "prefix",
+				ContainerName: "Something-name-prefix",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "suffix",
+				ContainerName: "123-name-suffix",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "suffix",
+				ContainerName: "name-suffix",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "suffix",
+				ContainerName: "name-suffix123",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "prefix-suffix",
+				ContainerName: "starts-with-###-end-withs",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "prefix-suffix",
+				ContainerName: "starts-with--end-withs",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "prefix-suffix",
+				ContainerName: "Astarts-with-###-end-withs",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "prefix-suffix",
+				ContainerName: "starts-with-###-end-withsB",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "two-placeholder",
+				ContainerName: "web-",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "two-placeholder",
+				ContainerName: "web-1",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "two-placeholder",
+				ContainerName: "web-01",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "two-placeholder",
+				ContainerName: "web-001",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "not-in-the-list",
+				ContainerName: "does-matter",
+			},
+			expectedResult: false,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "fixed-hostname",
+				ContainerName: "web.example.com",
+			},
+			expectedResult: true,
+		},
+		{
+			nameContainer: NameContainer{
+				Name:          "fixed-hostname",
+				ContainerName: "web-example-com",
 			},
 			expectedResult: false,
 		},
