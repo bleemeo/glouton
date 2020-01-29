@@ -76,6 +76,10 @@ func (d *Discovery) createCheck(service Service) {
 		return
 	}
 
+	if service.CheckIgnored {
+		logger.V(2).Printf("The check associated to the service '%s' on container '%s' is ignored by the configuration", service.Name, service.ContainerID)
+		return
+	}
 	logger.V(2).Printf("Add check for service %v on container %s", service.Name, service.ContainerID)
 
 	di := servicesDiscoveryInfo[service.ServiceType]
@@ -233,11 +237,6 @@ func (d *Discovery) addCheck(check Check, service Service) {
 		Name:          service.Name,
 		ContainerName: service.ContainerName,
 	}
-	if d.isCheckIgnored(key) {
-		logger.V(2).Printf("The check associated to the service '%s' is ignored by the configuration", key.Name)
-		return
-	}
-	logger.V(2).Printf("The check associated to the service '%s' is added", key.Name)
 
 	id, err := d.taskRegistry.AddTask(check.Run, fmt.Sprintf("check for %s", service.Name))
 	if err != nil {
