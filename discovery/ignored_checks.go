@@ -17,7 +17,7 @@
 package discovery
 
 import (
-	"regexp"
+	"path/filepath"
 	"strings"
 )
 
@@ -58,39 +58,17 @@ func matchInstance(instance, containerName string) bool {
 		return false
 	}
 	instanceName := instanceDetails[0]
-	instanceValue := instanceDetails[1]
-	if instanceName == "container" {
-		if instanceValue != "" && containerName != "" {
-			re := buildRegex(instanceValue)
-			matched := re.MatchString(containerName)
-			if matched {
-				return true
-			}
-		}
-	}
+	instancePatern := instanceDetails[1]
 
 	if instanceName == "host" && containerName == "" {
 		return true
 	}
 
+	if instanceName == "container" && containerName != "" {
+		matched, err := filepath.Match(instancePatern, containerName)
+		if err == nil {
+			return matched
+		}
+	}
 	return false
-}
-
-func buildRegex(instanceValue string) *regexp.Regexp {
-	regexRule := ""
-	hasSuffix := strings.HasSuffix(instanceValue, "*")
-	hasPrefix := strings.HasPrefix(instanceValue, "*")
-	if hasPrefix {
-		regexRule += "^.*"
-	}
-	values := strings.Split(instanceValue, "*")
-	for _, value := range values {
-		regexRule += value + ".*"
-	}
-	if hasSuffix {
-		regexRule += "$"
-	} else {
-		regexRule = strings.TrimRight(regexRule, ".*") + "$"
-	}
-	return regexp.MustCompile(regexRule)
 }

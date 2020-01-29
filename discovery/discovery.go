@@ -59,7 +59,6 @@ type Discovery struct {
 	containerInfo         containerInfoProvider
 	state                 State
 	servicesOverride      map[NameContainer]map[string]string
-	serviceIgnoreCheck    []NameContainer
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
 }

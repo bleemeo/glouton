@@ -383,7 +383,7 @@ func (a *agent) run() { //nolint:gocyclo
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
 	overrideServices := confFieldToSliceMap(services, "service override")
 	serviceIgnoreCheck := confFieldToSliceMap(servicesIgnoreCheck, "service ignore check")
-	logger.V(1).Printf("Ignored Checks : %v", serviceIgnoreCheck)
+	logger.V(2).Printf("Ignored Checks : %v", serviceIgnoreCheck)
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
