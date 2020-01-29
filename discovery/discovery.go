@@ -230,7 +230,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
-	d.ignoreCheck()
+	d.ignoreServices()
 
 	return nil
 }
@@ -310,10 +310,11 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 	return servicesMap
 }
 
-func (d *Discovery) ignoreCheck() {
+func (d *Discovery) ignoreServices() {
 	servicesMap := d.servicesMap
 	for nameContainer, service := range servicesMap {
 		service.CheckIgnored = d.isCheckIgnored(nameContainer)
+		service.MetricsIgnored = d.isInputIgnored(nameContainer)
 		d.servicesMap[nameContainer] = service
 	}
 
