@@ -21,20 +21,20 @@ import (
 	"strings"
 )
 
-// IgnoredCheck save the ignored checks imported from the configuration file
-type IgnoredCheck struct {
+// IgnoredService saves the ignored checks or metrics imported from the configuration file
+type IgnoredService struct {
 	ignoredChecks []map[string]string
 }
 
-// NewIgnoredCheck initialize ignoredCheck
-func NewIgnoredCheck(ignoredChecks []map[string]string) IgnoredCheck {
-	return IgnoredCheck{
+// NewIgnoredService initializes IgnoredCheckOrMetrics struct
+func NewIgnoredService(ignoredChecks []map[string]string) IgnoredService {
+	return IgnoredService{
 		ignoredChecks: ignoredChecks,
 	}
 }
 
-// IsCheckIgnored return if the check is ignored or not
-func (ic IgnoredCheck) IsCheckIgnored(nameContainer NameContainer) bool {
+// IsServiceIgnored returns if the check or the metrics are ignored or not
+func (ic IgnoredService) IsServiceIgnored(nameContainer NameContainer) bool {
 	for _, ignoredCheck := range ic.ignoredChecks {
 		if ignoredCheck["name"] == nameContainer.Name {
 			instances := strings.Split(ignoredCheck["instance"], " ")

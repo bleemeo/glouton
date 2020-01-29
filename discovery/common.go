@@ -102,7 +102,7 @@ type Service struct {
 	ExtraAttributes map[string]string
 	Active          bool
 
-	CheckIgnored bool // TODO: fill this value
+	CheckIgnored bool
 
 	HasNetstatInfo bool
 	container      container

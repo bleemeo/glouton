@@ -65,7 +65,7 @@ func TestIsCheckIgnored(t *testing.T) {
 		},
 	}
 
-	ignoredChecks := NewIgnoredCheck(checksIgnored)
+	ignoredChecks := NewIgnoredService(checksIgnored)
 
 	cases := []struct {
 		nameContainer  NameContainer
@@ -312,7 +312,7 @@ func TestIsCheckIgnored(t *testing.T) {
 	}
 
 	for i, c := range cases {
-		result := ignoredChecks.IsCheckIgnored(c.nameContainer)
+		result := ignoredChecks.IsServiceIgnored(c.nameContainer)
 		if result != c.expectedResult {
 			t.Errorf("%v ignoredChecks.IsCheckIgnored(%v) == '%v', want '%v'", i, c.nameContainer, result, c.expectedResult)
 		}

@@ -181,6 +181,14 @@ func (d *Discovery) createInput(service Service) error {
 	if !service.Active {
 		return nil
 	}
+	nameContainer := NameContainer{
+		Name:          service.Name,
+		ContainerName: service.ContainerName,
+	}
+	if d.isInputIgnored(nameContainer) {
+		logger.V(2).Printf("The input associated to the service '%s' on container '%s' is ignored by the configuration", service.Name, service.ContainerID)
+		return nil
+	}
 
 	logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
 	var input telegraf.Input
