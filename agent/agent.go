@@ -385,6 +385,8 @@ func (a *agent) run() { //nolint:gocyclo
 	overrideServices := confFieldToSliceMap(services, "service override")
 	serviceIgnoreCheck := confFieldToSliceMap(servicesIgnoreCheck, "service ignore check")
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
+	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
+	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
 	logger.V(2).Printf("Ignored Checks : %v", serviceIgnoreCheck)
 	logger.V(2).Printf("Ignored Metrics : %v", serviceIgnoreMetrics)
 	a.discovery = discovery.New(
@@ -395,8 +397,8 @@ func (a *agent) run() { //nolint:gocyclo
 		a.accumulator,
 		a.dockerFact,
 		overrideServices,
-		serviceIgnoreCheck,
-		serviceIgnoreMetrics,
+		isCheckIgnored,
+		isInputIgnored,
 	)
 
 	var targets []scrapper.Target

@@ -76,7 +76,7 @@ type Registry interface {
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, ignoredChecks []map[string]string, ignoredMetrics []map[string]string) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
@@ -101,8 +101,6 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		}
 		servicesOverrideMap[key] = fragmentCopy
 	}
-	ignoredServiceChecks := NewIgnoredService(ignoredChecks)
-	ignoredServiceMetrics := NewIgnoredService(ignoredMetrics)
 	return &Discovery{
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
@@ -114,8 +112,8 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverrideMap,
-		isCheckIgnored:        ignoredServiceChecks.IsServiceIgnored,
-		isInputIgnored:        ignoredServiceMetrics.IsServiceIgnored,
+		isCheckIgnored:        isCheckIgnored,
+		isInputIgnored:        isInputIgnored,
 	}
 }
 
