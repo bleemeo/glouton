@@ -270,7 +270,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 	if r.api.psFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
 	}
-	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, time.Hour)
+	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, time.Second*15)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve processes: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve processes")
