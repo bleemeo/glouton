@@ -387,8 +387,6 @@ func (a *agent) run() { //nolint:gocyclo
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
-	logger.V(2).Printf("Ignored Checks : %v", serviceIgnoreCheck)
-	logger.V(2).Printf("Ignored Metrics : %v", serviceIgnoreMetrics)
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
