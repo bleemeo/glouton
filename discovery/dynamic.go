@@ -117,10 +117,10 @@ var (
 		"mosquitto":    MosquittoService, //nolint:misspell
 		"mysqld":       MySQLService,
 		"named":        BindService,
-		"nginx:":       NginxService,
+		"nginx":        NginxService,
 		"ntpd":         NTPService,
 		"openvpn":      OpenVPNService,
-		"php-fpm:":     PHPFPMService,
+		"php-fpm":      PHPFPMService,
 		"postgres":     PostgreSQLService,
 		"redis-server": RedisService,
 		"slapd":        OpenLDAPService,
@@ -390,8 +390,8 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	// To catch second (nginx and php-fpm), check if command starts with one word
 	// immediately followed by ":".
 	alteredName := strings.Split(cmdLine[0], " ")[0]
-	if alteredName[len(alteredName)-2] == ':' {
-		if serviceName, ok := knownProcesses[alteredName]; ok {
+	if alteredName[len(alteredName)-1] == ':' {
+		if serviceName, ok := knownProcesses[alteredName[:len(alteredName)-1]]; ok {
 			return serviceName, ok
 		}
 	}

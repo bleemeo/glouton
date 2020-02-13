@@ -178,6 +178,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		containerIP        string
 		containerEnv       []string
 		want               Service
+		noMatch            bool
 	}{
 		{
 			testName:         "simple-bind-all",
@@ -232,7 +233,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 		},
 		{
-			testName:           "containers",
+			testName:           "redis-container",
 			cmdLine:            []string{"redis-server *:6379"},
 			containerID:        "5b8f83412931055bcc5da35e41ada85fd70015673163d56911cac4fe6693273f",
 			netstatAddresses:   nil, // netstat won't provide information
@@ -247,7 +248,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 		},
 		{
-			testName: "java-process",
+			testName: "elasticsearch",
 			cmdLine:  []string{"/opt/jdk-11.0.1/bin/java", "-Xms1g", "-Xmx1g", "-XX:+UseConcMarkSweepGC", "[...]", "/usr/share/elasticsearch/lib/*", "org.elasticsearch.bootstrap.Elasticsearch"},
 			want: Service{
 				Name:            "elasticsearch",
@@ -286,13 +287,398 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 		},
 		{
-			testName: "erlang-process",
+			testName: "rabbitmq",
 			cmdLine:  []string{"/usr/lib/erlang/erts-9.3.3.3/bin/beam.smp", "-W", "w", "[...]", "-noinput", "-s", "rabbit", "boot", "-sname", "[...]"},
 			want: Service{
 				Name:            "rabbitmq",
 				ServiceType:     RabbitMQService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
 				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "influxdb.deb",
+			cmdLine:  []string{"/opt/influxdb/influxd", "-config", "/etc/opt/influxdb/influxdb.conf"},
+			want: Service{
+				Name:            "influxdb",
+				ServiceType:     InfluxDBService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 8086}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		// Service from Ubuntu 16.04, default config
+		{
+			testName: "mysql-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/mysqld"},
+			want: Service{
+				Name:            "mysql",
+				ServiceType:     MySQLService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "ntp-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/ntpd", "-p", "/var/run/ntpd.pid", "-g", "-u", "107:114"},
+			want: Service{
+				Name:            "ntp",
+				ServiceType:     NTPService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "udp", Address: "127.0.0.1", Port: 123}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "slapd-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/slapd", "-h", "ldap:/// ldapi:///", "-g", "openldap", "-u", "openldap", "-F", "/etc/ldap/slapd.d"},
+			want: Service{
+				Name:            "openldap",
+				ServiceType:     OpenLDAPService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 389}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "apache2-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/apache2", "-k", "start"},
+			want: Service{
+				Name:            "apache",
+				ServiceType:     ApacheService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "asterisk-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/asterisk", "-p", "-U", "asterisk"},
+			want: Service{
+				Name:            "asterisk",
+				ServiceType:     AsteriskService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "bind-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/named", "-u", "bind"},
+			want: Service{
+				Name:            "bind",
+				ServiceType:     BindService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 53}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "dovecot-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/dovecot", "-F", "-c", "/etc/dovecot/dovecot.conf"},
+			want: Service{
+				Name:            "dovecot",
+				ServiceType:     DovecoteService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 143}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "ejabberd-ubuntu-14.04",
+			cmdLine: []string{
+				"/usr/lib/erlang/erts-5.10.4/bin/beam", "-K", "false", "-P", "250000", "--", "-root", "/usr/lib/erlang", "-progname", "erl", "--", "-home", "/var/lib/ejabberd", "--", "-sname",
+				"ejabberd", "-pa", "/usr/lib/ejabberd/ebin", "-s", "ejabberd", "-kernel", "inetrc", "\"/etc/ejabberd/inetrc\"", "-ejabberd", "config", "\"/etc/ejabberd/ejabberd.cfg\"", "log_path",
+				"\"/var/log/ejabberd/ejabberd.log\"", "erlang_log_path", "\"/var/log/ejabberd/erlang.log\"", "-sasl", "sasl_error_logger", "false", "-mnesia", "dir", "\"/var/lib/ejabberd\"",
+				"-smp", "disable", "-noshell", "-noshell", "-noinput",
+			},
+			want: Service{
+				Name:            "ejabberd",
+				ServiceType:     EjabberService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5222}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "rabbitmq-ubuntu-14.04",
+			cmdLine: []string{
+				"/usr/lib/erlang/erts-5.10.4/bin/beam", "-W", "w", "-K", "true", "-A30", "-P", "1048576", "--", "-root", "/usr/lib/erlang", "-progname", "erl", "--", "-home", "/var/lib/rabbitmq",
+				"--", "-pa", "/usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../ebin", "-noshell", "-noinput", "-s", "rabbit", "boot", "-sname", "rabbit@trusty", "-boot", "start_sasl", "-kernel",
+				"inet_default_connect_options", "[{nodelay,true}]", "-sasl", "errlog_type", "error", "-sasl", "sasl_error_logger", "false", "-rabbit", "error_logger",
+				"{file,\"/var/log/rabbitmq/rabbit@trusty.log\"}", "-rabbit", "sasl_error_logger", "{file,\"/var/log/rabbitmq/rabbit@trusty-sasl.log\"}", "-rabbit", "enabled_plugins_file",
+				"\"/etc/rabbitmq/enabled_plugins\"", "-rabbit", "plugins_dir", "\"/usr/lib/rabbitmq/lib/rabbitmq_server-3.2.4/sbin/../plugins\"", "-rabbit", "plugins_expand_dir",
+				"\"/var/lib/rabbitmq/mnesia/rabbit@trusty-plugins-expand\"", "-os_mon", "start_cpu_sup", "false", "-os_mon", "start_disksup", "false", "-os_mon", "start_memsup", "false", "-mnesia",
+				"dir", "\"/var/lib/rabbitmq/mnesia/rabbit@trusty\"",
+			},
+			want: Service{
+				Name:            "rabbitmq",
+				ServiceType:     RabbitMQService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5672}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "mongodb-ubuntu-14.04",
+			cmdLine:  []string{"/usr/bin/mongod", "--config", "/etc/mongodb.conf"},
+			want: Service{
+				Name:            "mongodb",
+				ServiceType:     MongoDBService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 27017}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "mosquitto-ubuntu-14.04",                                               // nolint: misspell
+			cmdLine:  []string{"/usr/sbin/mosquitto", "-c", "/etc/mosquitto/mosquitto.conf"}, // nolint: misspell
+			want: Service{
+				Name:            "mosquitto", // nolint: misspell
+				ServiceType:     MosquittoService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1883}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "redis-ubuntu-14.04",
+			cmdLine:  []string{"/usr/bin/redis-server 127.0.0.1:6379"},
+			want: Service{
+				Name:            "redis",
+				ServiceType:     RedisService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6379}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "memcached-ubuntu-14.04",
+			cmdLine:  []string{"/usr/bin/memcached", "-", "64", "-p", "11211", "-u", "memcache", "-l", "127.0.0.1"},
+			want: Service{
+				Name:            "memcached",
+				ServiceType:     MemcachedService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "squid-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/squid3", "-N", "-YC", "-f", "/etc/squid3/squid.conf"},
+			want: Service{
+				Name:            "squid",
+				ServiceType:     SquidService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "postgresql-ubuntu-14.04",
+			cmdLine:  []string{"/usr/lib/postgresql/9.3/bin/postgres", "-D", "/var/lib/postgresql/9.3/main", "-c", "config_file=/etc/postgresql/9.3/main/postgresql.conf"},
+			want: Service{
+				Name:            "postgresql",
+				ServiceType:     PostgreSQLService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 5432}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "zookeeper-ubuntu-14.04",
+			cmdLine: []string{
+				"/usr/bin/java", "-cp",
+				"/etc/zookeeper/conf:/usr/share/java/jline.jar:/usr/share/java/log4j-1.2.jar:/usr/share/java/xercesImpl.jar:/usr/share/java/xmlParserAPIs.jar:/usr/share/java/netty.jar:/usr/share/java/slf4j-api.jar:/usr/share/java/slf4j-log4j12.jar:/usr/share/java/zookeeper.jar",
+				"-Dcom.sun.management.jmxremote", "-Dcom.sun.management.jmxremote.local.only=false", "-Dzookeeper.log.dir=/var/log/zookeeper", "-Dzookeeper.root.logger=INFO,ROLLINGFILE",
+				"org.apache.zookeeper.server.quorum.QuorumPeerMain", "/etc/zookeeper/conf/zoo.cfg",
+			},
+			want: Service{
+				Name:            "zookeeper",
+				ServiceType:     ZookeeperService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 2181}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "salt-master-ubuntu-14.04",
+			cmdLine:  []string{"/usr/bin/python", "/usr/bin/salt-master"},
+			want: Service{
+				Name:            "salt-master",
+				ServiceType:     SaltMasterService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4505}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "postfix-ubuntu-14.04",
+			cmdLine:  []string{"/usr/lib/postfix/master"},
+			want: Service{
+				Name:            "postfix",
+				ServiceType:     PostfixService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "nginx-ubuntu-14.04",
+			cmdLine:  []string{"nginx: master process /usr/sbin/nginx"},
+			want: Service{
+				Name:            "nginx",
+				ServiceType:     NginxService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "exim-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/exim4", "-bd", "-q30m"},
+			want: Service{
+				Name:            "exim",
+				ServiceType:     EximService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 25}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "freeradius-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/freeradius", "-f"},
+			want: Service{
+				Name:            "freeradius",
+				ServiceType:     FreeradiusService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "varnish-ubuntu-14.04",
+			cmdLine:  []string{"/usr/sbin/varnishd", "-P", "/var/run/varnishd.pid", "-a", ":6081", "-T", "localhost:6082", "-f", "/etc/varnish/default.vcl", "-S", "/etc/varnish/secret", "-s", "malloc,256m"},
+			want: Service{
+				Name:            "varnish",
+				ServiceType:     VarnishService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 6082}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		// Service from Ubunut 16.04, default config
+		{
+			testName: "elasticsearch-ubuntu-16.04",
+			cmdLine: []string{
+				"/usr/lib/jvm/java-8-openjdk-amd64/bin/java", "-Xms256m", "-Xmx1g", "-Djava.awt.headless=true", "-XX:+UseParNewGC", "-XX:+UseConcMarkSweepGC", "-XX:CMSInitiatingOccupancyFraction=75",
+				"-XX:+UseCMSInitiatingOccupancyOnly", "-XX:+HeapDumpOnOutOfMemoryError", "-XX:+DisableExplicitGC", "-Dfile.encoding=UTF-8", "-Delasticsearch", "-Des.pidfile=/var/run/elasticsearch.pid",
+				"-Des.path.home=/usr/share/elasticsearch", "-cp",
+				":/usr/share/java/lucene-sandbox-4.10.4.jar:/usr/share/java/sigar.jar:/usr/share/java/lucene-analyzers-morfologik-4.10.4.jar:/usr/share/java/spatial4j-0.4.1.jar:/usr/share/java/lucene-expressions-4.10.4.jar:/usr/share/java/lucene-analyzers-uima-4.10.4.jar:/usr/share/java/groovy-all-2.x.jar:/usr/share/java/lucene-analyzers-kuromoji-4.10.4.jar:/usr/share/java/lucene-facet-4.10.4.jar:/usr/share/java/jna.jar:/usr/share/java/lucene-analyzers-common-4.10.4.jar:/usr/share/java/lucene-core-4.10.4.jar:/usr/share/java/apache-log4j-extras-1.2.17.jar:/usr/share/java/lucene-queries-4.10.4.jar:/usr/share/java/lucene-demo-4.10.4.jar:/usr/share/java/lucene-suggest-4.10.4.jar:/usr/share/java/lucene-analyzers-stempel-4.10.4.jar:/usr/share/java/lucene-highlighter-4.10.4.jar:/usr/share/java/lucene-memory-4.10.4.jar:/usr/share/java/lucene-classification-4.10.4.jar:/usr/share/java/lucene-replicator-4.10.4.jar:/usr/share/java/lucene-grouping-4.10.4.jar:/usr/share/java/log4j-1.2-1.2.17.jar:/usr/share/java/lucene-join-4.10.4.jar:/usr/share/java/lucene-analyzers-smartcn-4.10.4.jar:/usr/share/java/lucene-spatial-4.10.4.jar:/usr/share/java/elasticsearch-1.7.3.jar:/usr/share/java/lucene-codecs-4.10.4.jar:/usr/share/java/lucene-misc-4.10.4.jar:/usr/share/java/lucene-queryparser-4.10.4.jar:/usr/share/java/lucene-test-framework-4.10.4.jar:/usr/share/java/jts.jar:/usr/share/java/lucene-benchmark-4.10.4.jar:/usr/share/java/lucene-analyzers-icu-4.10.4.jar:/usr/share/java/lucene-analyzers-phonetic-4.10.4.jar:",
+				"-Des.default.config=/etc/elasticsearch/elasticsearch.yml", "-Des.default.path.home=/usr/share/elasticsearch", "-Des.default.path.logs=/var/log/elasticsearch",
+				"-Des.default.path.data=/var/lib/elasticsearch", "-Des.default.path.work=/tmp/elasticsearch", "-Des.default.path.conf=/etc/elasticsearch", "org.elasticsearch.bootstrap.Elasticsearch",
+			},
+			want: Service{
+				Name:            "elasticsearch",
+				ServiceType:     ElasticSearchService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 9200}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "squid-ubuntu-16.04",
+			cmdLine:  []string{"/usr/sbin/squid", "-YC", "-f", "/etc/squid/squid.conf"},
+			want: Service{
+				Name:            "squid",
+				ServiceType:     SquidService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3128}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "openvpn",
+			cmdLine:  []string{"/usr/sbin/openvpn", "--writepid", "/run/openvpn/server.pid", "--daemon", "ovpn-server", "--cd", "/etc/openvpn", "--config", "/etc/openvpn/server.conf", "--script-security", "2"},
+			want: Service{
+				Name:            "openvpn",
+				ServiceType:     OpenVPNService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "libvirt",
+			cmdLine:  []string{"/usr/sbin/libvirtd", "-d"},
+			want: Service{
+				Name:            "libvirt",
+				ServiceType:     LibvirtService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "haproxy",
+			cmdLine:  []string{"haproxy", "-f", "/usr/local/etc/haproxy/haproxy.cfg"},
+			want: Service{
+				Name:            "haproxy",
+				ServiceType:     HAProxyService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "uwsgi",
+			cmdLine:  []string{"uwsgi", "--ini", "/srv/app/deploy/uwsgi.ini"},
+			want: Service{
+				Name:            "uwsgi",
+				ServiceType:     UWSGIService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "service-install",
+			cmdLine:  []string{"apt", "install", "apache2", "redis-server", "postgresql", "mosquitto", "slapd", "squid3"}, // nolint: misspell
+			noMatch:  true,
+		},
+		{
+			testName: "docker-run",
+			cmdLine:  []string{"docker", "run", "-d", "--name", "mysqld", "mysql"},
+			noMatch:  true,
+		},
+		{
+			testName: "random-java",
+			cmdLine:  []string{"/usr/bin/java", "com.example.HelloWorld"},
+			noMatch:  true,
+		},
+		{
+			testName: "random-python",
+			cmdLine:  []string{"/usr/bin/python", "random_script.py"},
+			noMatch:  true,
+		},
+		{
+			testName: "random-erlang",
+			cmdLine:  []string{"/usr/lib/erlang/erts-6.2/bin/beam", "--", "-root", "/usr/lib/erlang", "-progname", "erl", "--", "-home", "/root", "--"},
+			noMatch:  true,
+		},
+		{
+			testName: "mysql-with-space",
+			cmdLine:  []string{"/opt/program files/mysql/mysqld"},
+			want: Service{
+				Name:            "mysql",
+				ServiceType:     MySQLService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 3306}},
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "php-fpm",
+			cmdLine:  []string{"php-fpm: master process (/etc/php/7.0/fpm/php-fpm.conf)"},
+			want: Service{
+				Name:            "phpfpm",
+				ServiceType:     PHPFPMService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "chrome",
+			cmdLine:  []string{"/opt/google/chrome/chrome http://127.0.0.1:5000/"},
+			noMatch:  true,
+		},
+		{
+			testName: "chrome2",
+			cmdLine:  []string{"/opt/ google/chrome/chrome http://127.0.0.1:5000/"},
+			noMatch:  true,
+		},
+		{
+			testName:    "nginx-docker-net-host",
+			containerID: "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+			containerIP: "127.0.0.1",
+			cmdLine:     []string{"nginx: master process nginx -g daemon off;"},
+			want: Service{
+				Name:            "nginx",
+				ServiceType:     NginxService,
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
+				IPAddress:       "127.0.0.1",
+				ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
 			},
 		},
 	}
@@ -330,8 +716,15 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+		if c.noMatch {
+			if len(srv) != 0 {
+				t.Errorf("Case %s: len(srv=%v) == %v, want 0", c.testName, srv, len(srv))
+			}
+			continue
+		}
 		if len(srv) != 1 {
 			t.Errorf("Case %s: len(srv) == %v, want 1", c.testName, len(srv))
+			continue
 		}
 		if srv[0].Name != c.want.Name {
 			t.Errorf("Case %s: Name == %#v, want %#v", c.testName, srv[0].Name, c.want.Name)
