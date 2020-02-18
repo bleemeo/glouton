@@ -311,8 +311,12 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 func (d *Discovery) ignoreServices() {
 	servicesMap := d.servicesMap
 	for nameContainer, service := range servicesMap {
-		service.CheckIgnored = d.isCheckIgnored(nameContainer)
-		service.MetricsIgnored = d.isInputIgnored(nameContainer)
+		if d.isCheckIgnored != nil {
+			service.CheckIgnored = d.isCheckIgnored(nameContainer)
+		}
+		if d.isInputIgnored != nil {
+			service.MetricsIgnored = d.isInputIgnored(nameContainer)
+		}
 		d.servicesMap[nameContainer] = service
 	}
 
