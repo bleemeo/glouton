@@ -59,6 +59,8 @@ type Discovery struct {
 	containerInfo         containerInfoProvider
 	state                 State
 	servicesOverride      map[NameContainer]map[string]string
+	isCheckIgnored        func(NameContainer) bool
+	isInputIgnored        func(NameContainer) bool
 }
 
 // Collector will gather metrics for added inputs
@@ -74,7 +76,7 @@ type Registry interface {
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
@@ -110,6 +112,8 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverrideMap,
+		isCheckIgnored:        isCheckIgnored,
+		isInputIgnored:        isInputIgnored,
 	}
 }
 
@@ -224,6 +228,8 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
+	d.ignoreServices()
+
 	return nil
 }
 
@@ -300,6 +306,20 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 	}
 
 	return servicesMap
+}
+
+func (d *Discovery) ignoreServices() {
+	servicesMap := d.servicesMap
+	for nameContainer, service := range servicesMap {
+		if d.isCheckIgnored != nil {
+			service.CheckIgnored = d.isCheckIgnored(nameContainer)
+		}
+		if d.isInputIgnored != nil {
+			service.MetricsIgnored = d.isInputIgnored(nameContainer)
+		}
+		d.servicesMap[nameContainer] = service
+	}
+
 }
 
 // CheckNow is type of check function
