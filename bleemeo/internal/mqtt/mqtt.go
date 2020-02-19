@@ -81,7 +81,8 @@ type Client struct {
 type metricPayload struct {
 	UUID             string            `json:"uuid"`
 	Measurement      string            `json:"measurement"`
-	Timestamp        int64             `json:"time"`
+	Timestamp        int64             `json:"time"` // TODO: could drop this field once consumer is updated to support time_ms
+	TimestampMS      int64             `json:"time_ms"`
 	Value            forceDecimalFloat `json:"value"`
 	Item             string            `json:"item,omitempty"`
 	Status           string            `json:"status,omitempty"`
@@ -368,6 +369,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				UUID:        m.ID,
 				Measurement: p.Labels["__name__"],
 				Timestamp:   p.Time.Unix(),
+				TimestampMS: p.Time.UnixNano() / 1e6,
 				Value:       forceDecimalFloat(p.Value),
 				Item:        p.Labels["item"],
 			}
