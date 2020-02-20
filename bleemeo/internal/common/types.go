@@ -54,7 +54,7 @@ func (key MetricLabelItem) String() string {
 // MetricLabelItemFromMetric create a MetricLabelItem from a local or remote metric (or labels of local one)
 func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
 	if metric, ok := input.(bleemeoTypes.Metric); ok {
-		key := MetricLabelItem{Label: metric.Label, Item: metric.Labels["item"]}
+		key := MetricLabelItem{Label: metric.Label, Item: metric.Item}
 		key.TruncateItem(metric.ServiceID != "")
 		return key
 	}
@@ -78,7 +78,7 @@ func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
 func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[MetricLabelItem]bleemeoTypes.Metric {
 	registeredMetricsByKey := make(map[MetricLabelItem]bleemeoTypes.Metric, len(registeredMetrics))
 	for _, v := range registeredMetrics {
-		key := MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
+		key := MetricLabelItem{Label: v.Label, Item: v.Item}
 		if existing, ok := registeredMetricsByKey[key]; !ok || !existing.DeactivatedAt.IsZero() {
 			registeredMetricsByKey[key] = v
 		}

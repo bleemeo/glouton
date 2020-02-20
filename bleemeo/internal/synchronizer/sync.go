@@ -46,7 +46,6 @@ type Synchronizer struct {
 	lastFactUpdatedAt       string
 	successiveErrors        int
 	warnAccountMismatchDone bool
-	apiSupportLabels        bool
 	lastMetricCount         int
 	agentID                 string
 
