@@ -170,7 +170,7 @@ func (s Service) LabelsOfStatus() map[string]string {
 	if s.ContainerName != "" {
 		labels[types.LabelBleemeoItem] = s.ContainerName
 		labels[types.LabelContainerID] = s.ContainerID
-		labels["container_name"] = s.ContainerName
+		labels[types.LabelContainerName] = s.ContainerName
 	}
 	return labels
 }

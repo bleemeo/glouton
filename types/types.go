@@ -42,11 +42,13 @@ const (
 // Using constant here allow to change their name only here.
 // LabelName and LabelBleemeoItem constants are duplicated in JavaScript file
 const (
-	LabelName        = "__name__"
-	LabelBleemeoItem = "item"
-	LabelContainerID = "container_id"
-	LabelServiceName = "service_name"
-	LabelStatusOf    = "status_of"
+	LabelName          = "__name__"
+	LabelContainerName = "container_name"
+	// The following labels are only used internally.
+	LabelBleemeoItem = "__bleemeo_item"
+	LabelContainerID = "__glouton_container_id"
+	LabelServiceName = "__glouton_service_name"
+	LabelStatusOf    = "__glouton__status_of"
 )
 
 // IsSet return true if the status is set
@@ -128,6 +130,22 @@ type PointStatus struct {
 type StatusDescription struct {
 	CurrentStatus     Status
 	StatusDescription string
+}
+
+// RemoveInternalLabels remove labels that are used by Glouton to associate metric with other objects (like containers or service)
+func RemoveInternalLabels(labels map[string]string) map[string]string {
+	internalLabels := []string{LabelBleemeoItem, LabelContainerID, LabelServiceName, LabelStatusOf}
+
+	copyLabel := make(map[string]string, len(labels))
+	for k, v := range labels {
+		copyLabel[k] = v
+	}
+
+	for _, k := range internalLabels {
+		delete(copyLabel, k)
+	}
+
+	return copyLabel
 }
 
 // LabelsToText return a text version of a labels set

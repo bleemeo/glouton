@@ -112,16 +112,17 @@ func (e Exporter) Collect(ch chan<- prometheus.Metric) {
 	}
 	for _, m := range metrics {
 		if p, ok := getLastPoint(m); ok {
+			labelsMap := types.RemoveInternalLabels(m.Labels())
 			labels := make([]string, 0)
 			labelValues := make([]string, 0)
-			for l, v := range m.Labels() {
+			for l, v := range labelsMap {
 				if l != types.LabelName {
 					labels = append(labels, l)
 					labelValues = append(labelValues, v)
 				}
 			}
 			ch <- prometheus.NewMetricWithTimestamp(p.Time, prometheus.MustNewConstMetric(
-				prometheus.NewDesc(m.Labels()[types.LabelName], "", labels, nil),
+				prometheus.NewDesc(labelsMap[types.LabelName], "", labels, nil),
 				prometheus.UntypedValue,
 				p.Value,
 				labelValues...,

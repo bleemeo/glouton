@@ -213,8 +213,8 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 			}
 			for _, m := range containerMetrics {
 				metricFilters := map[string]string{
-					types.LabelBleemeoItem: container.Name(),
-					types.LabelName:        m,
+					types.LabelContainerName: container.Name(),
+					types.LabelName:          m,
 				}
 				metrics, err := r.api.db.Metrics(metricFilters)
 				if err != nil {

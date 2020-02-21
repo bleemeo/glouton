@@ -703,8 +703,9 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 			"container_health_status": status.CurrentStatus.NagiosCode(),
 		},
 		map[string]string{
-			types.LabelBleemeoItem: container.Name(),
-			types.LabelContainerID: container.ID(),
+			types.LabelContainerName: container.Name(),
+			types.LabelBleemeoItem:   container.Name(),
+			types.LabelContainerID:   container.ID(),
 		},
 		map[string]types.StatusDescription{
 			"container_health_status": status,

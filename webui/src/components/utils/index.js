@@ -17,7 +17,7 @@ export const UNIT_BYTE = 2
 export const UNIT_NUMBER = 0
 
 export const LabelName = '__name__'
-export const LabelBleemeoItem = 'item'
+export const LabelBleemeoItem = '__bleemeo_item'
 
 export const isNullOrUndefined = variable => variable === null || variable === undefined
 

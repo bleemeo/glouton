@@ -91,6 +91,7 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 		}
 	}
 	newContext.Tags[types.LabelBleemeoItem] = item
+	newContext.Tags["mountpoint"] = item
 	return
 }
 

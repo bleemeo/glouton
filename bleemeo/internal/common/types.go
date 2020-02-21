@@ -38,7 +38,7 @@ func LabelsToText(labels map[string]string, bleemeoMode bool) string {
 		return types.LabelsToText(labelsCopy)
 	}
 
-	return types.LabelsToText(labels)
+	return types.LabelsToText(types.RemoveInternalLabels(labels))
 }
 
 // TruncateItem truncate the item to match maximal length allowed by Bleemeo API
