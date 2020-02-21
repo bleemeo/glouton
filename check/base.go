@@ -173,7 +173,7 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 			false,
 		)
 	}
-	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels["item"], result)
+	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels[types.LabelBleemeoItem], result)
 	bc.previousStatus = result
 	return result
 }

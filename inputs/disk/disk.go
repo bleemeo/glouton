@@ -19,6 +19,7 @@ package disk
 import (
 	"errors"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -89,7 +90,7 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 			return
 		}
 	}
-	newContext.Tags["item"] = item
+	newContext.Tags[types.LabelBleemeoItem] = item
 	return
 }
 

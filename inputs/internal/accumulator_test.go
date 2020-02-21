@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"glouton/types"
 	"math"
 	"reflect"
 	"strings"
@@ -312,9 +313,9 @@ func TestDeriveMultipleTag(t *testing.T) {
 	}
 	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
 		var want float64
-		if tags["item"] == "sda" {
+		if tags[types.LabelBleemeoItem] == "sda" {
 			want = 4.2
-		} else if tags["item"] == "nvme0n1" {
+		} else if tags[types.LabelBleemeoItem] == "nvme0n1" {
 			want = 1204.0
 		}
 		if len(fields) != 1 {
@@ -339,7 +340,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 100,
 		},
 		map[string]string{
-			"item": "sda",
+			types.LabelBleemeoItem: "sda",
 		},
 		t0,
 	)
@@ -350,7 +351,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 5748,
 		},
 		map[string]string{
-			"item": "nvme0n1",
+			types.LabelBleemeoItem: "nvme0n1",
 		},
 		t0,
 	)
@@ -362,7 +363,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 100 + int(4.2*20),
 		},
 		map[string]string{
-			"item": "sda",
+			types.LabelBleemeoItem: "sda",
 		},
 		t1,
 	)
@@ -373,7 +374,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 5748 + int(1204*20),
 		},
 		map[string]string{
-			"item": "nvme0n1",
+			types.LabelBleemeoItem: "nvme0n1",
 		},
 		t1,
 	)
@@ -445,8 +446,8 @@ func TestMeasurementMap(t *testing.T) {
 func TestStaticLabels(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		"service_name": "mysql",
-		"item":         "mysql_1",
+		types.LabelServiceName: "mysql",
+		types.LabelBleemeoItem: "mysql_1",
 	}
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
@@ -458,8 +459,8 @@ func TestStaticLabels(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
 		StaticLabels: map[string]string{
-			"service_name": "mysql",
-			"item":         "mysql_1",
+			types.LabelServiceName: "mysql",
+			types.LabelBleemeoItem: "mysql_1",
 		},
 	}
 	acc.PrepareGather()
@@ -490,9 +491,9 @@ func TestStaticLabels(t *testing.T) {
 func TestStaticLabels2(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		"service_name": "postgresql",
-		"container_id": "1234",
-		"item":         "postgres_1_dbname",
+		types.LabelServiceName: "postgresql",
+		types.LabelContainerID: "1234",
+		types.LabelBleemeoItem: "postgres_1_dbname",
 	}
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
@@ -504,12 +505,12 @@ func TestStaticLabels2(t *testing.T) {
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
 		StaticLabels: map[string]string{
-			"service_name": "postgresql",
-			"container_id": "1234",
-			"item":         "postgres_1",
+			types.LabelServiceName: "postgresql",
+			types.LabelContainerID: "1234",
+			types.LabelBleemeoItem: "postgres_1",
 		},
 	}
-	tags := map[string]string{"item": "dbname"}
+	tags := map[string]string{types.LabelBleemeoItem: "dbname"}
 	acc.PrepareGather()
 	acc.processMetrics(
 		finalFunc,
@@ -538,9 +539,9 @@ func TestStaticLabels2(t *testing.T) {
 func TestLabelsMutation(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		"service_name": "postgresql",
-		"container_id": "1234",
-		"item":         "postgres_1_dbname",
+		types.LabelServiceName: "postgresql",
+		types.LabelContainerID: "1234",
+		types.LabelBleemeoItem: "postgres_1_dbname",
 	}
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
@@ -555,13 +556,13 @@ func TestLabelsMutation(t *testing.T) {
 				Measurement: originalContext.Measurement,
 				Tags:        make(map[string]string),
 			}
-			newContext.Tags["item"] = originalContext.Tags["db"]
+			newContext.Tags[types.LabelBleemeoItem] = originalContext.Tags["db"]
 			return newContext, false
 		},
 		StaticLabels: map[string]string{
-			"service_name": "postgresql",
-			"container_id": "1234",
-			"item":         "postgres_1",
+			types.LabelServiceName: "postgresql",
+			types.LabelContainerID: "1234",
+			types.LabelBleemeoItem: "postgres_1",
 		},
 	}
 	tags := map[string]string{"db": "dbname"}

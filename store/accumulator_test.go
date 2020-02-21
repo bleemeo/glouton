@@ -32,8 +32,8 @@ func TestStoreAccumulator(t *testing.T) {
 		"fieldUint64": uint64(42),
 	}
 	tags := map[string]string{
-		"tag1": "value1",
-		"item": "/home",
+		"tag1":                 "value1",
+		types.LabelBleemeoItem: "/home",
 	}
 
 	db := New()
@@ -62,14 +62,14 @@ func TestStoreAccumulator(t *testing.T) {
 
 	for _, m := range allMetrics {
 		labels := m.Labels()
-		name := labels["__name__"]
+		name := labels[types.LabelName]
 		if !strings.HasPrefix(name, "measurement_") {
 			t.Errorf("name == %v, want measurement_*", name)
 		}
 		if _, ok := fields[name[len("measurement_"):]]; !ok {
 			t.Errorf("fields[%v] == nil, want it to exists", name)
 		}
-		delete(labels, "__name__")
+		delete(labels, types.LabelName)
 		if !reflect.DeepEqual(labels, tags) {
 			t.Errorf("m.Labels() = %v, want %v", labels, tags)
 		}
@@ -77,7 +77,7 @@ func TestStoreAccumulator(t *testing.T) {
 
 	for k, v := range fields {
 		name := "measurement_" + k
-		metrics, err := db.Metrics(map[string]string{"__name__": name})
+		metrics, err := db.Metrics(map[string]string{types.LabelName: name})
 		if err != nil {
 			t.Errorf("db.Metrics(__name__=%v) raise err == %v", name, err)
 		}
@@ -86,10 +86,10 @@ func TestStoreAccumulator(t *testing.T) {
 		}
 		m := metrics[0]
 		labels := m.Labels()
-		if labels["__name__"] != name {
-			t.Errorf("labels[__name__] == %v, want %v", labels["__name__"], name)
+		if labels[types.LabelName] != name {
+			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
 		}
-		delete(labels, "__name__")
+		delete(labels, types.LabelName)
 		if !reflect.DeepEqual(labels, tags) {
 			t.Errorf("db.Metrics(__name__=%v).Labels() = %v, want %v", name, labels, tags)
 		}
@@ -121,8 +121,8 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 		"user": {CurrentStatus: types.StatusWarning, StatusDescription: "CPU 81%"},
 	}
 	tags := map[string]string{
-		"tag1": "value1",
-		"item": "/home",
+		"tag1":                 "value1",
+		types.LabelBleemeoItem: "/home",
 	}
 	want := map[string]float64{
 		"cpu_used":        97.0,
@@ -163,7 +163,7 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	}
 
 	for name, v := range want {
-		metrics, err := db.Metrics(map[string]string{"__name__": name})
+		metrics, err := db.Metrics(map[string]string{types.LabelName: name})
 		if err != nil {
 			t.Errorf("db.Metrics(__name__=%v) raise err == %v", name, err)
 		}
@@ -172,17 +172,17 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 		}
 		m := metrics[0]
 		labels := m.Labels()
-		if labels["__name__"] != name {
-			t.Errorf("labels[__name__] == %v, want %v", labels["__name__"], name)
+		if labels[types.LabelName] != name {
+			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
 		}
 		if strings.HasSuffix(name, "_status") {
 			strippedName := strings.TrimSuffix(name, "_status")
-			if labels["status_of"] != strippedName {
-				t.Errorf("labels[status_of] == %v, want %v", labels["status_of"], strippedName)
+			if labels[types.LabelStatusOf] != strippedName {
+				t.Errorf("labels[%v] == %v, want %v", types.LabelStatusOf, labels[types.LabelStatusOf], strippedName)
 			}
-			delete(labels, "status_of")
+			delete(labels, types.LabelStatusOf)
 		}
-		delete(labels, "__name__")
+		delete(labels, types.LabelName)
 		if !reflect.DeepEqual(labels, tags) {
 			t.Errorf("db.Metrics(__name__=%v).Labels() = %v, want %v", name, labels, tags)
 		}

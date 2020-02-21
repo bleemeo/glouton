@@ -703,8 +703,8 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 			"container_health_status": status.CurrentStatus.NagiosCode(),
 		},
 		map[string]string{
-			"item":         container.Name(),
-			"container_id": container.ID(),
+			types.LabelBleemeoItem: container.Name(),
+			types.LabelContainerID: container.ID(),
 		},
 		map[string]types.StatusDescription{
 			"container_health_status": status,
@@ -825,7 +825,7 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 	for _, m := range metrics {
 		labels := m.Labels()
 		for _, c := range containersID {
-			if labels["container_id"] == c {
+			if labels[types.LabelContainerID] == c {
 				metricToDelete = append(metricToDelete, labels)
 			}
 		}

@@ -19,6 +19,7 @@ package postgresql
 import (
 	"errors"
 	"glouton/inputs/internal"
+	"glouton/types"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -57,7 +58,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	if originalContext.Tags["db"] == "template0" || originalContext.Tags["db"] == "template1" {
 		return originalContext, true
 	}
-	originalContext.Tags["item"] = originalContext.Tags["db"]
+	originalContext.Tags[types.LabelBleemeoItem] = originalContext.Tags["db"]
 
 	return originalContext, false
 }

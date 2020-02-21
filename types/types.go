@@ -37,7 +37,10 @@ const (
 	StatusUnknown
 )
 
-// List of internal label names
+// List of special label names that some part of Glouton will assume to be named
+// as such.
+// Using constant here allow to change their name only here.
+// LabelName and LabelBleemeoItem constants are duplicated in JavaScript file
 const (
 	LabelName        = "__name__"
 	LabelBleemeoItem = "item"

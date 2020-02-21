@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"reflect"
 
 	"github.com/influxdata/telegraf"
@@ -71,7 +72,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	if originalContext.Tags["sv"] != "BACKEND" && originalContext.Tags["sv"] != "FRONTEND" {
 		drop = true
 	}
-	newContext.Tags["item"] = newContext.Tags["proxy"]
+	newContext.Tags[types.LabelBleemeoItem] = newContext.Tags["proxy"]
 	return
 }
 

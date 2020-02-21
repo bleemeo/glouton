@@ -16,6 +16,9 @@ export const UNIT_PERCENTAGE = 1
 export const UNIT_BYTE = 2
 export const UNIT_NUMBER = 0
 
+export const LabelName = '__name__'
+export const LabelBleemeoItem = 'item'
+
 export const isNullOrUndefined = variable => variable === null || variable === undefined
 
 export const isUndefined = variable => variable === undefined
@@ -62,13 +65,13 @@ export const MetricStatusLabel = ({ metric }) => {
     <span data-tip data-for={`metricStatusLabel${metric.id}`} className={`badge badge-${cssClassForStatus(status)}`}>
       {textForStatus(status)}
       {typeof metric.current_status_changed_at === 'string' ||
-      (metric.status_descriptions && metric.status_descriptions.length > 0) ? (
-        <ReactTooltip id={`metricStatusLabel${metric.id}`} place="bottom" type={tooltipColor(status)} effect="solid">
-          <div style={{ marginBottom: '0rem' }}>{tooltipContent(metric)}</div>
-        </ReactTooltip>
-      ) : (
-        <noscript />
-      )}
+        (metric.status_descriptions && metric.status_descriptions.length > 0) ? (
+          <ReactTooltip id={`metricStatusLabel${metric.id}`} place="bottom" type={tooltipColor(status)} effect="solid">
+            <div style={{ marginBottom: '0rem' }}>{tooltipContent(metric)}</div>
+          </ReactTooltip>
+        ) : (
+          <noscript />
+        )}
     </span>
   )
 }
@@ -83,8 +86,8 @@ const tooltipContent = metric => {
       {typeof metric.current_status_changed_at === 'string' ? (
         <span>Since {formatDateTime(metric.current_status_changed_at)}</span>
       ) : (
-        <noscript />
-      )}
+          <noscript />
+        )}
       <MetricDescription description={metric.status_descriptions[0]} />
     </div>
   )
@@ -192,8 +195,8 @@ export const isEmpty = obj => {
 }
 
 export function composeMetricName(metric) {
-  const name = metric.labels.some(l => l.key === '__name__') ? metric.labels.find(l => l.key === '__name__').value : ''
-  const item = metric.labels.some(l => l.key === 'item') ? metric.labels.find(l => l.key === 'item').value : ''
+  const name = metric.labels.some(l => l.key === LabelName) ? metric.labels.find(l => l.key === LabelName).value : ''
+  const item = metric.labels.some(l => l.key === LabelBleemeoItem) ? metric.labels.find(l => l.key === LabelBleemeoItem).value : ''
   const nameDisplay = item ? name + '_' + item : name
   return { nameDisplay, item }
 }

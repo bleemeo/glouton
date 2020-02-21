@@ -41,6 +41,7 @@ import (
 	"glouton/inputs/system"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
+	"glouton/types"
 	"strconv"
 
 	"github.com/influxdata/telegraf"
@@ -284,11 +285,11 @@ func (d *Discovery) createInput(service Service) error {
 
 	if input != nil {
 		extraLabels := map[string]string{
-			"service_name": service.Name,
+			types.LabelServiceName: service.Name,
 		}
 		if service.ContainerName != "" {
-			extraLabels["item"] = service.ContainerName
-			extraLabels["container_id"] = service.ContainerID
+			extraLabels[types.LabelBleemeoItem] = service.ContainerName
+			extraLabels[types.LabelContainerID] = service.ContainerID
 			extraLabels["container_name"] = service.ContainerName
 		}
 		input = modify.AddLabels(input, extraLabels)

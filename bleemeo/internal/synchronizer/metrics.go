@@ -80,7 +80,7 @@ func (m fakeMetric) Points(time.Time, time.Time) ([]types.PointStatus, error) {
 }
 func (m fakeMetric) Labels() map[string]string {
 	return map[string]string{
-		"__name__": m.label,
+		types.LabelName: m.label,
 	}
 }
 
@@ -95,7 +95,7 @@ type metricPayload struct {
 func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 	if mp.Item != "" || mp.LabelsText == "" {
 		mp.Labels = map[string]string{
-			"__name__":             mp.Name,
+			types.LabelName:        mp.Name,
 			types.LabelBleemeoItem: mp.Item,
 		}
 		mp.LabelsText = types.LabelsToText(mp.Labels)
@@ -108,7 +108,7 @@ func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 func prioritizeMetrics(metrics []types.Metric) {
 	swapIdx := 0
 	for i, m := range metrics {
-		switch m.Labels()["__name__"] {
+		switch m.Labels()[types.LabelName] {
 		case "cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal",
 			"mem_free", "mem_cached", "mem_buffered", "mem_used",
 			"io_utilization", "io_read_bytes", "io_write_bytes", "io_reads",
@@ -251,7 +251,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
 	for _, m := range s.option.Cache.Metrics() {
-		key := threshold.MetricNameItem{Name: m.Labels["__name__"], Item: m.Labels["item"]}
+		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelBleemeoItem]}
 		thresholds[key] = m.Threshold.ToInternalThreshold()
 		units[key] = m.Unit
 	}
@@ -312,7 +312,7 @@ func (s *Synchronizer) metricUpdateListSearch(requests []string) error {
 		}
 		if s.option.BleemeoMode {
 			labels := types.TextToLabels(key)
-			params["label"] = labels["__name__"]
+			params["label"] = labels[types.LabelName]
 			params["item"] = labels[types.LabelBleemeoItem]
 			delete(params, "labels_text")
 		}
@@ -522,6 +522,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		payload.LabelsText = ""
 	}
 
+	var containerName string
 	var result metricPayload
 	if labels[types.LabelStatusOf] != "" {
 		subLabels := make(map[string]string, len(labels))
@@ -540,19 +541,20 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		}
 		payload.StatusOf = metricStatusOf.ID
 	}
-	if labels["container_id"] != "" {
-		container, ok := containersByContainerID[labels["container_id"]]
+	if labels[types.LabelContainerID] != "" {
+		container, ok := containersByContainerID[labels[types.LabelContainerID]]
 		if !ok {
 			// No error. When container get registered we trigger a metric synchronization
 			return nil
 		}
+		containerName = container.Name
 		payload.ContainerID = container.ID
 		// TODO: For now all metrics are created no-associated with a container.
 		// PRODUCT-970 track the progress on this point
 		payload.ContainerID = ""
 	}
-	if labels["service_name"] != "" {
-		srvKey := serviceNameInstance{name: labels["service_name"], instance: labels["container_name"]}
+	if labels[types.LabelServiceName] != "" {
+		srvKey := serviceNameInstance{name: labels[types.LabelServiceName], instance: containerName}
 		srvKey.truncateInstance()
 		service, ok := servicesByKey[srvKey]
 		if !ok {

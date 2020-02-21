@@ -24,8 +24,9 @@ import (
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/types"
 	"math"
 	"math/big"
 	"math/rand"
@@ -51,19 +52,19 @@ type Synchronizer struct {
 
 	l                    sync.Mutex
 	disabledUntil        time.Time
-	disableReason        types.DisableReason
+	disableReason        bleemeoTypes.DisableReason
 	forceSync            map[string]bool
 	pendingMetricsUpdate []string
 }
 
 // Option are parameter for the syncrhonizer
 type Option struct {
-	types.GlobalOption
+	bleemeoTypes.GlobalOption
 	Cache *cache.Cache
 
 	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
 	// reason state why it's disabled and until set for how long it should be disabled.
-	DisableCallback func(reason types.DisableReason, until time.Time)
+	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func()
@@ -124,7 +125,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		if err != nil {
 			s.successiveErrors++
 			delay := common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
-			s.disable(time.Now().Add(delay), types.DisableTooManyErrors, false)
+			s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors, false)
 			switch {
 			case client.IsAuthError(err) && s.agentID != "":
 				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
@@ -224,12 +225,12 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 func (s *Synchronizer) waitCPUMetric() {
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
-		if m.Labels["__name__"] == "cpu_used" || m.Labels["__name__"] == "node_cpu_seconds_total" {
+		if m.Labels[types.LabelName] == "cpu_used" || m.Labels[types.LabelName] == "node_cpu_seconds_total" {
 			return
 		}
 	}
-	filter := map[string]string{"__name__": "cpu_used"}
-	filter2 := map[string]string{"__name__": "node_cpu_seconds_total"}
+	filter := map[string]string{types.LabelName: "cpu_used"}
+	filter2 := map[string]string{types.LabelName: "node_cpu_seconds_total"}
 	count := 0
 	for s.ctx.Err() == nil && count < 20 {
 		count++
@@ -248,7 +249,7 @@ func (s *Synchronizer) waitCPUMetric() {
 	}
 }
 
-func (s *Synchronizer) getDisabledUntil() (time.Time, types.DisableReason) {
+func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
 	return s.disabledUntil, s.disableReason
@@ -256,11 +257,11 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, types.DisableReason) {
 
 // Disable will disable (or re-enable) the Synchronized until given time.
 // To re-enable, set a time in the past.
-func (s *Synchronizer) Disable(until time.Time, reason types.DisableReason) {
+func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	s.disable(until, reason, true)
 }
 
-func (s *Synchronizer) disable(until time.Time, reason types.DisableReason, force bool) {
+func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReason, force bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 	if force || s.disabledUntil.Before(until) {
@@ -413,9 +414,9 @@ func (s *Synchronizer) checkDuplicated() error {
 			continue
 		}
 		until := time.Now().Add(common.JitterDelay(900, 0.05, 900))
-		s.Disable(until, types.DisableDuplicatedAgent)
+		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
 		if s.option.DisableCallback != nil {
-			s.option.DisableCallback(types.DisableDuplicatedAgent, until)
+			s.option.DisableCallback(bleemeoTypes.DisableDuplicatedAgent, until)
 		}
 		logger.Printf(
 			"Detected duplicated state.json. Another agent changed %#v from %#v to %#v",

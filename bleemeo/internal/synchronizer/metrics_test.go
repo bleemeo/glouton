@@ -28,7 +28,7 @@ type mockMetric struct {
 }
 
 func (m mockMetric) Labels() map[string]string {
-	return map[string]string{"__name__": m.Name}
+	return map[string]string{types.LabelName: m.Name}
 }
 func (m mockMetric) Points(start, end time.Time) ([]types.PointStatus, error) {
 	return nil, errors.New("not implemented")
@@ -58,11 +58,11 @@ func TestPrioritizeMetrics(t *testing.T) {
 	}
 	prioritizeMetrics(metrics)
 	for i, m := range metrics {
-		if !isHighPriority[m.Labels()["__name__"]] && i < countHighPriority {
-			t.Errorf("Found metrics %#v at index %d, want after %d", m.Labels()["__name__"], i, countHighPriority)
+		if !isHighPriority[m.Labels()[types.LabelName]] && i < countHighPriority {
+			t.Errorf("Found metrics %#v at index %d, want after %d", m.Labels()[types.LabelName], i, countHighPriority)
 		}
-		if isHighPriority[m.Labels()["__name__"]] && i >= countHighPriority {
-			t.Errorf("Found metrics %#v at index %d, want before %d", m.Labels()["__name__"], i, countHighPriority)
+		if isHighPriority[m.Labels()[types.LabelName]] && i >= countHighPriority {
+			t.Errorf("Found metrics %#v at index %d, want before %d", m.Labels()[types.LabelName], i, countHighPriority)
 		}
 	}
 }

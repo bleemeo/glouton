@@ -367,17 +367,17 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 		if m, ok := registreredMetricByKey[key]; ok {
 			value := metricPayload{
 				UUID:        m.ID,
-				Measurement: p.Labels["__name__"],
+				Measurement: p.Labels[types.LabelName],
 				Timestamp:   p.Time.Unix(),
 				TimestampMS: p.Time.UnixNano() / 1e6,
 				Value:       forceDecimalFloat(p.Value),
-				Item:        p.Labels["item"],
+				Item:        p.Labels[types.LabelBleemeoItem],
 			}
 			if p.CurrentStatus.IsSet() {
 				value.Status = p.CurrentStatus.String()
 				value.ProblemOrigin = p.StatusDescription.StatusDescription
-				if p.Labels["container_id"] != "" {
-					lastKilledAt := c.option.Docker.ContainerLastKill(p.Labels["container_id"])
+				if p.Labels[types.LabelContainerID] != "" {
+					lastKilledAt := c.option.Docker.ContainerLastKill(p.Labels[types.LabelContainerID])
 					gracePeriod := time.Since(lastKilledAt) + 300*time.Second
 					if gracePeriod > 60*time.Second {
 						value.EventGracePeriod = int(gracePeriod.Seconds())

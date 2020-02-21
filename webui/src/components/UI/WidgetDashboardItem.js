@@ -1,7 +1,7 @@
 import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
-import { chartTypes, computeEnd, composeMetricName, isShallowEqual } from '../utils'
+import { chartTypes, computeEnd, composeMetricName, isShallowEqual, LabelName, LabelBleemeoItem } from '../utils'
 import LineChart from './LineChart'
 import { useFetch, POLL } from '../utils/hooks'
 import FetchSuspense from './FetchSuspense'
@@ -29,7 +29,7 @@ const WidgetDashboardItem = ({
     switch (type) {
       case chartTypes[0]: {
         const resultGauge = points.sort((a, b) =>
-          a.labels.find(l => l.key === 'item').value.localeCompare(b.labels.find(l => l.key === 'item').value)
+          a.labels.find(l => l.key === LabelBleemeoItem).value.localeCompare(b.labels.find(l => l.key === LabelBleemeoItem).value)
         )[0]
         const end = computeEnd(type, period)
         let lastPoint = null
@@ -86,18 +86,18 @@ const WidgetDashboardItem = ({
     case chartTypes[1]:
       if (title === 'Processor Usage') {
         CPU.forEach(name => {
-          metricsFilter.push({ labels: [{ key: '__name__', value: name }] })
+          metricsFilter.push({ labels: [{ key: LabelName, value: name }] })
         })
       } else if (title === 'Memory Usage') {
         MEMORY.forEach(name => {
-          metricsFilter.push({ labels: [{ key: '__name__', value: name }] })
+          metricsFilter.push({ labels: [{ key: LabelName, value: name }] })
         })
       }
       break
     default:
       namesItems.forEach(nameItem => {
-        metricsFilter.push({ labels: [{ key: '__name__', value: nameItem.name }] })
-        if (nameItem.item) metricsFilter.push({ labels: [{ key: 'item', value: nameItem.item }] })
+        metricsFilter.push({ labels: [{ key: LabelName, value: nameItem.name }] })
+        if (nameItem.item) metricsFilter.push({ labels: [{ key: LabelBleemeoItem, value: nameItem.item }] })
       })
   }
   const { isLoading, error, points, networkStatus } = useFetch(
@@ -128,8 +128,8 @@ const WidgetDashboardItem = ({
           type === chartTypes[0] ? (
             <MetricGaugeItem hasError={hasError} name={title} />
           ) : (
-            <LineChart title={title} hasError={hasError} />
-          ) /* eslint-disable-line react/jsx-indent */
+              <LineChart title={title} hasError={hasError} />
+            ) /* eslint-disable-line react/jsx-indent */
         }
         points={points}
       >

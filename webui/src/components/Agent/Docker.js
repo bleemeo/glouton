@@ -3,6 +3,7 @@ import d3 from 'd3'
 import PropTypes from 'prop-types'
 
 import FaIcon from '../UI/FaIcon'
+import { LabelName } from '../utils'
 import { formatDateTime, _formatCpuTime } from '../utils/formater'
 import { renderDisk } from './utils'
 import { renderNetwork, renderDonutDocker } from '../UI'
@@ -59,10 +60,10 @@ const Docker = ({ container, date }) => {
                     <FaIcon icon="fa fa-caret-down" /> Close Processes
                   </>
                 ) : (
-                  <>
-                    <FaIcon icon="fa fa-caret-right" /> Show Processes
+                    <>
+                      <FaIcon icon="fa fa-caret-right" /> Show Processes
                   </>
-                )}
+                  )}
               </a>
             </small>
           </div>
@@ -142,7 +143,7 @@ const DockerProcesses = ({ containerId, name }) => {
           } else {
             let memTotal = 0
             metrics.forEach(m => {
-              if (m.points && memRegexp.test(m.labels.find(l => l.key === '__name__').value)) {
+              if (m.points && memRegexp.test(m.labels.find(l => l.key === LabelName).value)) {
                 memTotal += m.points[m.points.length - 1].value
               }
             })

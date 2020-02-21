@@ -13,7 +13,7 @@ import {
   iopsToString
 } from '../utils/formater'
 import Loading from './Loading'
-import { fillEmptyPoints, UNIT_PERCENTAGE, composeMetricName } from '../utils'
+import { fillEmptyPoints, UNIT_PERCENTAGE, composeMetricName, LabelName } from '../utils'
 import FaIcon from './FaIcon'
 import QueryError from './QueryError'
 
@@ -50,10 +50,10 @@ const LineChart = ({
       const onlyDisplayItem =
         metrics.length > 1
           ? metrics.every(
-              m =>
-                m.labels.find(l => l.key === '__name__').value ===
-                metrics[0].labels.find(l => l.key === '__name__').value
-            )
+            m =>
+              m.labels.find(l => l.key === LabelName).value ===
+              metrics[0].labels.find(l => l.key === LabelName).value
+          )
           : false
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
@@ -272,7 +272,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       boundaryGap: false,
       splitNumber: 10,
       axisLabel: {
-        formatter: function(value, index) {
+        formatter: function (value, index) {
           // Formatted to be month/day; display year only in the first label
           var date = new Date(value)
           return tickFormatDate(date)
@@ -298,7 +298,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       min: 0,
       max: unit === UNIT_PERCENTAGE ? 100 : null,
       axisLabel: {
-        formatter: function(value) {
+        formatter: function (value) {
           // Formatted to be month/day; display year only in the first label
           return funcConverter(value)
         },
@@ -329,7 +329,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
     axisPointer: {
       type: 'line'
     },
-    formatter: function(params, ticket) {
+    formatter: function (params, ticket) {
       let total = -1
       if (stacked) {
         total = 0
@@ -374,23 +374,23 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
 const selectUnitConverter = unit => {
   switch (unit) {
     case 1:
-      return function(value) {
+      return function (value) {
         return percentToString(value)
       }
     case 2:
-      return function(value) {
+      return function (value) {
         return bytesToString(value)
       }
     case 3:
-      return function(value) {
+      return function (value) {
         return bitsToString(value)
       }
     case 4:
-      return function(value) {
+      return function (value) {
         return iopsToString(value)
       }
     default:
-      return function(value) {
+      return function (value) {
         return value.toFixed(2)
       }
   }

@@ -129,9 +129,9 @@ func (a *Accumulator) addMetricsLock(measurement string, fields map[string]inter
 			labels[k] = v
 		}
 		if measurement == "" {
-			labels["__name__"] = name
+			labels[types.LabelName] = name
 		} else {
-			labels["__name__"] = measurement + "_" + name
+			labels[types.LabelName] = measurement + "_" + name
 		}
 		value, err := convertInterface(value)
 		if err != nil {
@@ -151,8 +151,8 @@ func (a *Accumulator) addMetricsLock(measurement string, fields map[string]inter
 				for k, v := range labels {
 					copyLabels[k] = v
 				}
-				copyLabels["__name__"] += "_status"
-				copyLabels["status_of"] = labels["__name__"]
+				copyLabels[types.LabelName] += "_status"
+				copyLabels[types.LabelStatusOf] = labels[types.LabelName]
 				metric2 := a.store.metricGetOrCreate(copyLabels, metric.metricID)
 				if returnPoints {
 					result = append(result, types.MetricPoint{

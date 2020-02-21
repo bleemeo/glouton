@@ -30,52 +30,52 @@ func TestLabelsMatchNotExact(t *testing.T) {
 	}{
 		{
 			map[string]string{
-				"__name__": "cpu_used",
+				types.LabelName: "cpu_used",
 			},
 			map[string]string{
-				"__name__": "cpu_used",
-			},
-			true,
-		},
-		{
-			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
-			},
-			map[string]string{
-				"__name__": "disk_used",
+				types.LabelName: "cpu_used",
 			},
 			true,
 		},
 		{
 			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
 			},
 			map[string]string{
-				"__name__": "cpu_used",
+				types.LabelName: "disk_used",
+			},
+			true,
+		},
+		{
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
+			},
+			map[string]string{
+				types.LabelName: "cpu_used",
 			},
 			false,
 		},
 		{
 			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
 			},
 			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/",
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/",
 			},
 			false,
 		},
 		{
 			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
 			},
 			map[string]string{
-				"__name__": "disk_used",
-				"extra":    "label",
+				types.LabelName: "disk_used",
+				"extra":         "label",
 			},
 			false,
 		},
@@ -96,64 +96,64 @@ func TestLabelsMatchExact(t *testing.T) {
 	}{
 		{
 			map[string]string{
-				"__name__": "cpu_used",
+				types.LabelName: "cpu_used",
 			},
 			map[string]string{
-				"__name__": "cpu_used",
-			},
-			true,
-		},
-		{
-			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
-			},
-			map[string]string{
-				"__name__": "disk_used",
-			},
-			false,
-		},
-		{
-			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
-			},
-			map[string]string{
-				"__name__": "cpu_used",
-			},
-			false,
-		},
-		{
-			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
-			},
-			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/",
-			},
-			false,
-		},
-		{
-			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
-			},
-			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
+				types.LabelName: "cpu_used",
 			},
 			true,
 		},
 		{
 			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
 			},
 			map[string]string{
-				"__name__": "disk_used",
-				"item":     "/home",
-				"extra":    "label",
+				types.LabelName: "disk_used",
+			},
+			false,
+		},
+		{
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
+			},
+			map[string]string{
+				types.LabelName: "cpu_used",
+			},
+			false,
+		},
+		{
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
+			},
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/",
+			},
+			false,
+		},
+		{
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
+			},
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
+			},
+			true,
+		},
+		{
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
+			},
+			map[string]string{
+				types.LabelName:        "disk_used",
+				types.LabelBleemeoItem: "/home",
+				"extra":                "label",
 			},
 			false,
 		},
@@ -170,7 +170,7 @@ func TestLabelsMatchExact(t *testing.T) {
 func TestMetricsSimple(t *testing.T) {
 
 	labels := map[string]string{
-		"__name__": "measurement_fieldFloat",
+		types.LabelName: "measurement_fieldFloat",
 	}
 	db := New()
 	m := db.metricGetOrCreate(labels, 0)
@@ -194,16 +194,16 @@ func TestMetricsSimple(t *testing.T) {
 func TestMetricsMultiple(t *testing.T) {
 
 	labels1 := map[string]string{
-		"__name__": "cpu_used",
+		types.LabelName: "cpu_used",
 	}
 	labels2 := map[string]string{
-		"__name__": "disk_used",
-		"item":     "/home",
+		types.LabelName:        "disk_used",
+		types.LabelBleemeoItem: "/home",
 	}
 	labels3 := map[string]string{
-		"__name__": "disk_used",
-		"item":     "/srv",
-		"fstype":   "ext4",
+		types.LabelName:        "disk_used",
+		types.LabelBleemeoItem: "/srv",
+		"fstype":               "ext4",
 	}
 	db := New()
 	db.metricGetOrCreate(labels1, 0)
@@ -221,7 +221,7 @@ func TestMetricsMultiple(t *testing.T) {
 		t.Errorf("metrics[0].Labels() == %v, want %v", metrics[0].Labels(), labels1)
 	}
 
-	metrics, err = db.Metrics(map[string]string{"__name__": "disk_used"})
+	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -229,12 +229,12 @@ func TestMetricsMultiple(t *testing.T) {
 		t.Errorf("len(metrics) == %v, want %v", len(metrics), 2)
 	}
 	for _, m := range metrics {
-		if m.Labels()["item"] != "/home" && m.Labels()["item"] != "/srv" {
-			t.Errorf("m.Labels()[\"item\"] == %v, want %v or %v", m.Labels()["item"], "/home", "/srv")
+		if m.Labels()[types.LabelBleemeoItem] != "/home" && m.Labels()[types.LabelBleemeoItem] != "/srv" {
+			t.Errorf("m.Labels()[%v] == %v, want %v or %v", types.LabelBleemeoItem, m.Labels()[types.LabelBleemeoItem], "/home", "/srv")
 		}
 	}
 
-	metrics, err = db.Metrics(map[string]string{"__name__": "disk_used", "item": "/srv"})
+	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used", types.LabelBleemeoItem: "/srv"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -248,7 +248,7 @@ func TestMetricsMultiple(t *testing.T) {
 
 func TestPoints(t *testing.T) {
 	labels := map[string]string{
-		"__name__": "cpu_used",
+		types.LabelName: "cpu_used",
 	}
 	db := New()
 	m := db.metricGetOrCreate(labels, 0)

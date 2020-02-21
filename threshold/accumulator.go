@@ -481,7 +481,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 		if measurement == "" {
 			flatName = name
 		}
-		key := MetricNameItem{Name: flatName, Item: tags["item"]}
+		key := MetricNameItem{Name: flatName, Item: tags[types.LabelBleemeoItem]}
 		threshold := a.getThreshold(key)
 		if threshold.IsZero() {
 			continue

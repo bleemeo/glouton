@@ -1,4 +1,5 @@
 import { gql } from 'apollo-boost'
+import { LabelName } from '.'
 
 // FACTS AND DETAILS
 
@@ -82,10 +83,10 @@ export const CONTAINER_PROCESSES = gql`
     }
     points(
       metricsFilter: [
-        { labels: { key: "__name__", value: "mem_buffered" } }
-        { labels: { key: "__name__", value: "mem_cached" } }
-        { labels: { key: "__name__", value: "mem_free" } }
-        { labels: { key: "__name__", value: "mem_used" } }
+        { labels: { key: "${LabelName}", value: "mem_buffered" } }
+        { labels: { key: "${LabelName}", value: "mem_cached" } }
+        { labels: { key: "${LabelName}", value: "mem_free" } }
+        { labels: { key: "${LabelName}", value: "mem_used" } }
       ]
       start: ""
       end: ""
@@ -133,23 +134,23 @@ export const PROCESSES = gql`
     }
     points(
       metricsFilter: [
-        { labels: { key: "__name__", value: "mem_buffered" } }
-        { labels: { key: "__name__", value: "mem_cached" } }
-        { labels: { key: "__name__", value: "mem_free" } }
-        { labels: { key: "__name__", value: "mem_used" } }
-        { labels: { key: "__name__", value: "system_load1" } }
-        { labels: { key: "__name__", value: "system_load5" } }
-        { labels: { key: "__name__", value: "system_load15" } }
-        { labels: { key: "__name__", value: "swap_free" } }
-        { labels: { key: "__name__", value: "swap_used" } }
-        { labels: { key: "__name__", value: "swap_total" } }
-        { labels: { key: "__name__", value: "cpu_system" } }
-        { labels: { key: "__name__", value: "cpu_user" } }
-        { labels: { key: "__name__", value: "cpu_nice" } }
-        { labels: { key: "__name__", value: "cpu_wait" } }
-        { labels: { key: "__name__", value: "cpu_idle" } }
-        { labels: { key: "__name__", value: "uptime" } }
-        { labels: { key: "__name__", value: "users_logged" } }
+        { labels: { key: "${LabelName}", value: "mem_buffered" } }
+        { labels: { key: "${LabelName}", value: "mem_cached" } }
+        { labels: { key: "${LabelName}", value: "mem_free" } }
+        { labels: { key: "${LabelName}", value: "mem_used" } }
+        { labels: { key: "${LabelName}", value: "system_load1" } }
+        { labels: { key: "${LabelName}", value: "system_load5" } }
+        { labels: { key: "${LabelName}", value: "system_load15" } }
+        { labels: { key: "${LabelName}", value: "swap_free" } }
+        { labels: { key: "${LabelName}", value: "swap_used" } }
+        { labels: { key: "${LabelName}", value: "swap_total" } }
+        { labels: { key: "${LabelName}", value: "cpu_system" } }
+        { labels: { key: "${LabelName}", value: "cpu_user" } }
+        { labels: { key: "${LabelName}", value: "cpu_nice" } }
+        { labels: { key: "${LabelName}", value: "cpu_wait" } }
+        { labels: { key: "${LabelName}", value: "cpu_idle" } }
+        { labels: { key: "${LabelName}", value: "uptime" } }
+        { labels: { key: "${LabelName}", value: "users_logged" } }
       ]
       start: ""
       end: ""

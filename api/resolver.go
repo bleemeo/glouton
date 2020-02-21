@@ -139,7 +139,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			pointRes := &Point{Time: point.Time.UTC(), Value: point.Value}
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
-		thresholds := r.api.accumulator.GetThreshold(threshold.MetricNameItem{Item: labels["item"], Name: labels["__name__"]})
+		thresholds := r.api.accumulator.GetThreshold(threshold.MetricNameItem{Item: labels[types.LabelBleemeoItem], Name: labels[types.LabelName]})
 		threshold := &Threshold{
 			LowCritical:  &thresholds.LowCritical,
 			LowWarning:   &thresholds.LowWarning,
@@ -213,8 +213,8 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 			}
 			for _, m := range containerMetrics {
 				metricFilters := map[string]string{
-					"item":     container.Name(),
-					"__name__": m,
+					types.LabelBleemeoItem: container.Name(),
+					types.LabelName:        m,
 				}
 				metrics, err := r.api.db.Metrics(metricFilters)
 				if err != nil {
@@ -337,7 +337,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 			for _, addr := range service.ListenAddresses {
 				netAddrs = append(netAddrs, addr.String())
 			}
-			metrics, err := r.api.db.Metrics(map[string]string{"__name__": service.Name + "_status"})
+			metrics, err := r.api.db.Metrics(map[string]string{types.LabelName: service.Name + "_status"})
 			var point types.PointStatus
 			if len(metrics) > 0 {
 				if err != nil {
@@ -428,9 +428,9 @@ func (r *queryResolver) AgentStatus(ctx context.Context) (*AgentStatus, error) {
 		}
 		if len(points) > 0 && points[0].CurrentStatus.IsSet() {
 			status := points[0].CurrentStatus.NagiosCode()
-			statuses[labels["__name__"]] = float64(status)
+			statuses[labels[types.LabelName]] = float64(status)
 			if status > 0 {
-				statusDescription = append(statusDescription, labels["__name__"]+": "+points[0].StatusDescription.StatusDescription)
+				statusDescription = append(statusDescription, labels[types.LabelName]+": "+points[0].StatusDescription.StatusDescription)
 			}
 		}
 

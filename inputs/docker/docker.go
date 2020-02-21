@@ -19,6 +19,7 @@ package docker
 import (
 	"errors"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -55,11 +56,11 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	newContext.Measurement = originalContext.Measurement
 	newContext.Tags = make(map[string]string)
 	if name, ok := originalContext.Tags["container_name"]; ok {
-		newContext.Tags["item"] = name
+		newContext.Tags[types.LabelBleemeoItem] = name
 	}
 	if id, ok := originalContext.OriginalFields["container_id"]; ok {
 		if containerID, ok := id.(string); ok {
-			newContext.Tags["container_id"] = containerID
+			newContext.Tags[types.LabelContainerID] = containerID
 		}
 	}
 	if enable, ok := originalContext.Tags["glouton.enable"]; ok {
