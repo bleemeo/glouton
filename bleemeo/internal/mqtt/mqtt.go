@@ -323,16 +323,16 @@ func (c *Client) sendPoints() {
 		if err != nil {
 			return
 		}
-		localExistsByKey := make(map[common.MetricLabelItem]bool, len(localMetrics))
+		localExistsByKey := make(map[string]bool, len(localMetrics))
 		for _, m := range localMetrics {
-			key := common.MetricLabelItemFromMetric(m)
+			key := common.LabelsToText(m.Labels(), c.option.BleemeoMode)
 			localExistsByKey[key] = true
 		}
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
 		newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 		for _, p := range c.failedPoints {
-			key := common.MetricLabelItemFromMetric(p.Labels)
+			key := common.LabelsToText(p.Labels, c.option.BleemeoMode)
 			if localExistsByKey[key] {
 				newPoints = append(newPoints, p)
 			}
@@ -361,9 +361,9 @@ func (c *Client) sendPoints() {
 	c.failedPointsCount = len(c.failedPoints)
 }
 
-func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[common.MetricLabelItem]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
+func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
 	for _, p := range points {
-		key := common.MetricLabelItemFromMetric(p.Labels)
+		key := common.LabelsToText(p.Labels, c.option.BleemeoMode)
 		if m, ok := registreredMetricByKey[key]; ok {
 			value := metricPayload{
 				UUID:        m.ID,
@@ -583,7 +583,7 @@ func (c *Client) ready() bool {
 		return false
 	}
 	for _, m := range c.option.Cache.Metrics() {
-		if m.Label == "agent_status" && m.Item == "" {
+		if m.Labels[types.LabelName] == "agent_status" && m.Labels[types.LabelBleemeoItem] == "" {
 			return true
 		}
 	}

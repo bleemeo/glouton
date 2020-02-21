@@ -37,6 +37,9 @@ type GlobalOption struct {
 	Store     Store
 	Acc       telegraf.Accumulator
 	Discovery discovery.PersistentDiscoverer
+	// BleemeoMode means that metrics are identified with the couple name, item
+	// Ourside this mode, metrics are identified with all labels.
+	BleemeoMode bool
 
 	UpdateMetricResolution func(resolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)

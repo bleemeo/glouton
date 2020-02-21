@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/node_exporter/collector"
@@ -73,7 +74,8 @@ func addNodeExporter(reg prometheus.Registerer) {
 	if _, err := kingpin.CommandLine.Parse(nil); err != nil {
 		logger.Printf("Failed to initialize kingpin (used by Prometheus node_exporter): %v", err)
 	}
-	collector, err := collector.NewNodeCollector()
+	l := log.NewNopLogger()
+	collector, err := collector.NewNodeCollector(l)
 	if err != nil {
 		logger.Printf("Failed to create node_exporter: %v", err)
 	}

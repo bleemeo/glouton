@@ -48,7 +48,7 @@ type TCPCheck struct {
 // On tcpAddresses (which are supposed to contains addresse) a TCP connection is openned and closed on each check.
 //
 // If persistentConnection is set, a persistent TCP connection will be openned to detect service incident quickyl.
-func NewTCP(address string, tcpAddresses []string, persistentConnection bool, send []byte, expect []byte, closeMsg []byte, metricName string, labels map[string]string, acc accumulator) *TCPCheck {
+func NewTCP(address string, tcpAddresses []string, persistentConnection bool, send []byte, expect []byte, closeMsg []byte, labels map[string]string, acc accumulator) *TCPCheck {
 
 	tc := &TCPCheck{
 		mainAddress: address,
@@ -60,7 +60,7 @@ func NewTCP(address string, tcpAddresses []string, persistentConnection bool, se
 	if address == "" {
 		mainCheck = nil
 	}
-	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, metricName, labels, acc)
+	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, labels, acc)
 	return tc
 }
 

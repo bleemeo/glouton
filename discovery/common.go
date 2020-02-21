@@ -18,8 +18,10 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/types"
 	"net"
 	"strconv"
 	"time"
@@ -157,6 +159,20 @@ func (s Service) AddressPort() (string, int) {
 		return "", 0
 	}
 	return s.AddressForPort(port, di.ServiceProtocol, force), port
+}
+
+// LabelsOfStatus returns the labels for the status metrics of this service
+func (s Service) LabelsOfStatus() map[string]string {
+	labels := map[string]string{
+		types.LabelName:        fmt.Sprintf("%s_status", s.Name),
+		types.LabelServiceName: s.Name,
+	}
+	if s.ContainerName != "" {
+		labels[types.LabelBleemeoItem] = s.ContainerName
+		labels[types.LabelContainerID] = s.ContainerID
+		labels["container_name"] = s.ContainerName
+	}
+	return labels
 }
 
 // nolint:gochecknoglobals

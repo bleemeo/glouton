@@ -224,15 +224,20 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 func (s *Synchronizer) waitCPUMetric() {
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
-		if m.Label == "cpu_used" {
+		if m.Labels["__name__"] == "cpu_used" || m.Labels["__name__"] == "node_cpu_seconds_total" {
 			return
 		}
 	}
 	filter := map[string]string{"__name__": "cpu_used"}
+	filter2 := map[string]string{"__name__": "node_cpu_seconds_total"}
 	count := 0
 	for s.ctx.Err() == nil && count < 20 {
 		count++
 		m, _ := s.option.Store.Metrics(filter)
+		if len(m) > 0 {
+			return
+		}
+		m, _ = s.option.Store.Metrics(filter2)
 		if len(m) > 0 {
 			return
 		}

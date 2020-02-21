@@ -63,7 +63,7 @@ type baseCheck struct {
 	previousStatus types.StatusDescription
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, labels map[string]string, acc accumulator) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, acc accumulator) *baseCheck {
 	if mainTCPAddress != "" {
 		found := false
 		for _, v := range tcpAddresses {
@@ -79,6 +79,9 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 			tcpAddresses = tmp
 		}
 	}
+
+	metricName := labels[types.LabelName]
+	delete(labels, types.LabelName)
 
 	return &baseCheck{
 		metricName:           metricName,

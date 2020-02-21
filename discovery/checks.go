@@ -99,14 +99,7 @@ func (d *Discovery) createCheck(service Service) {
 		tcpAddresses = append(tcpAddresses, a.String())
 	}
 
-	labels := map[string]string{
-		"service_name": service.Name,
-	}
-	if service.ContainerName != "" {
-		labels["item"] = service.ContainerName
-		labels["container_id"] = service.ContainerID
-		labels["container_name"] = service.ContainerName
-	}
+	labels := service.LabelsOfStatus()
 
 	switch service.ServiceType {
 	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
@@ -118,7 +111,6 @@ func (d *Discovery) createCheck(service Service) {
 			check := check.NewNTP(
 				primaryAddress,
 				tcpAddresses,
-				fmt.Sprintf("%s_status", service.Name),
 				labels,
 				d.acc,
 			)
@@ -170,7 +162,6 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpSend,
 		tcpExpect,
 		tcpClose,
-		fmt.Sprintf("%s_status", service.Name),
 		labels,
 		d.acc,
 	)
@@ -207,7 +198,6 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		url,
 		tcpAddresses,
 		expectedStatusCode,
-		fmt.Sprintf("%s_status", service.Name),
 		labels,
 		d.acc,
 	)
@@ -222,7 +212,6 @@ func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, la
 	httpCheck := check.NewNagios(
 		service.ExtraAttributes["check_command"],
 		tcpAddress,
-		fmt.Sprintf("%s_status", service.Name),
 		labels,
 		d.acc,
 	)

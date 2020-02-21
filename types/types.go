@@ -17,7 +17,12 @@
 package types
 
 import (
+	"glouton/logger"
+	"sort"
+	"strings"
 	"time"
+
+	"github.com/prometheus/prometheus/promql"
 )
 
 // Status is an enumeration of status (ok, warning, critical, unknown).
@@ -30,6 +35,15 @@ const (
 	StatusWarning
 	StatusCritical
 	StatusUnknown
+)
+
+// List of internal label names
+const (
+	LabelName        = "__name__"
+	LabelBleemeoItem = "item"
+	LabelContainerID = "container_id"
+	LabelServiceName = "service_name"
+	LabelStatusOf    = "status_of"
 )
 
 // IsSet return true if the status is set
@@ -111,4 +125,57 @@ type PointStatus struct {
 type StatusDescription struct {
 	CurrentStatus     Status
 	StatusDescription string
+}
+
+// LabelsToText return a text version of a labels set
+// The text representation has a one-to-one relation with labels set.
+// It does because:
+// * labels are sorted by label name
+// * labels values are quoted
+//
+// Result looks like __name__="node_cpu_seconds_total",cpu="0",mode="idle"
+func LabelsToText(labels map[string]string) string {
+	if len(labels) == 0 {
+		return ""
+	}
+
+	labelNames := make([]string, 0, len(labels))
+	for k := range labels {
+		labelNames = append(labelNames, k)
+	}
+
+	sort.Strings(labelNames)
+
+	strLabels := make([]string, 0, len(labels))
+	quoter := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
+
+	for _, name := range labelNames {
+		value := labels[name]
+		if value == "" {
+			continue
+		}
+		str := name + "=\"" + quoter.Replace(value) + "\""
+
+		strLabels = append(strLabels, str)
+	}
+
+	str := strings.Join(strLabels, ",")
+
+	return str
+}
+
+// TextToLabels is the reverse of LabelsToText
+func TextToLabels(text string) map[string]string {
+	labels, err := promql.ParseMetricSelector("{" + text + "}")
+	if err != nil {
+		logger.Printf("unable to decode labels %#v: %v", text, err)
+		return nil
+	}
+
+	results := make(map[string]string, len(labels))
+	for _, v := range labels {
+		results[v.Name] = v.Value
+	}
+
+	return results
 }

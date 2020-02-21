@@ -437,6 +437,7 @@ func (a *agent) run() { //nolint:gocyclo
 			UpdateMetricResolution: a.collector.UpdateDelay,
 			UpdateThresholds:       a.UpdateThresholds,
 			UpdateUnits:            a.accumulator.SetUnits,
+			BleemeoMode:            true,
 		})
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
