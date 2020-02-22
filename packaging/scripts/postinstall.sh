@@ -91,6 +91,28 @@ fi
 
 chown glouton:glouton /var/lib/glouton
 
+if [ -d /etc/init ]; then
+   cat > /etc/init/glouton.conf <<EOF
+# glouton - Monitoring agent for Bleemeo solution
+
+description     "Glouton"
+
+start on runlevel [2345]
+stop on runlevel [!2345]
+
+respawn
+respawn limit 10 5
+umask 022
+
+setuid glouton
+exec /usr/sbin/glouton
+
+EOF
+fi
+
+if [ -e /etc/sudoers.d/glouton ]; then
+   chmod 0440 /etc/sudoers.d/glouton
+fi
 
 if [ -e /etc/glouton/conf.d/30-install.conf ]; then
     chown glouton:glouton /etc/glouton/conf.d/30-install.conf
@@ -105,14 +127,15 @@ glouton-netstat 2> /dev/null
 
 if [ "$1" = "configure" ] ; then
     # Installation or upgrade on Debian-like system
-    systemctl daemon-reload
-    systemctl enable --quiet glouton.service
-    systemctl start --quiet glouton.service
+    test -e /lib/init/upstart-job && start --quiet glouton
+    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl daemon-reload
+    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl enable --quiet glouton.service
+    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl start --quiet glouton.service
 elif [ "$1" = "1" ] ; then
     # Initial installation on rpm-like system
-    systemctl daemon-reload
-    systemctl enable --quiet glouton.service
-    systemctl start --quiet glouton.service
+    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl daemon-reload
+    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl enable --quiet glouton.service
+    test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl start --quiet glouton.service
 fi
 
 exit 0
