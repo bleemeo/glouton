@@ -79,15 +79,13 @@ type Client struct {
 }
 
 type metricPayload struct {
-	UUID             string            `json:"uuid"`
-	Measurement      string            `json:"measurement"`
-	Timestamp        int64             `json:"time"` // TODO: could drop this field once consumer is updated to support time_ms
-	TimestampMS      int64             `json:"time_ms"`
-	Value            forceDecimalFloat `json:"value"`
-	Item             string            `json:"item,omitempty"`
-	Status           string            `json:"status,omitempty"`
-	EventGracePeriod int               `json:"event_grace_period,omitempty"`
-	ProblemOrigin    string            `json:"check_output,omitempty"`
+	UUID              string  `json:"uuid,omitempty"`
+	LabelsText        string  `json:"labels_text"`
+	TimestampMS       int64   `json:"time_ms"`
+	Value             float64 `json:"value"`
+	Status            string  `json:"status,omitempty"`
+	StatusDescription string  `json:"status_description,omitempty"`
+	EventGracePeriod  int     `json:"event_grace_period,omitempty"`
 }
 
 // This type is only used because the Bleemeo consumer require Value to be a float,
@@ -365,17 +363,21 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 	for _, p := range points {
 		key := common.LabelsToText(p.Labels, c.option.BleemeoMode)
 		if m, ok := registreredMetricByKey[key]; ok {
+
 			value := metricPayload{
-				UUID:        m.ID,
-				Measurement: p.Labels[types.LabelName],
-				Timestamp:   p.Time.Unix(),
+				LabelsText:  m.LabelsText,
 				TimestampMS: p.Time.UnixNano() / 1e6,
-				Value:       forceDecimalFloat(p.Value),
-				Item:        p.Labels[types.LabelBleemeoItem],
+				Value:       p.Value,
 			}
+
+			if c.option.BleemeoMode {
+				value.UUID = m.ID
+				value.LabelsText = ""
+			}
+
 			if p.CurrentStatus.IsSet() {
 				value.Status = p.CurrentStatus.String()
-				value.ProblemOrigin = p.StatusDescription.StatusDescription
+				value.StatusDescription = p.StatusDescription.StatusDescription
 				if p.Labels[types.LabelContainerID] != "" {
 					lastKilledAt := c.option.Docker.ContainerLastKill(p.Labels[types.LabelContainerID])
 					gracePeriod := time.Since(lastKilledAt) + 300*time.Second
@@ -384,7 +386,9 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 					}
 				}
 			}
+
 			payload = append(payload, value)
+
 		} else {
 			c.failedPoints = append(c.failedPoints, p)
 		}

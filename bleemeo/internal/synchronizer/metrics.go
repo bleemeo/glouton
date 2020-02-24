@@ -266,7 +266,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 	params := map[string]string{
 		"agent":  s.agentID,
-		"fields": "id,item,label,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
+		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
 	}
 	if !includeInactive {
 		params["active"] = "True"
@@ -344,7 +344,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	for _, key := range requests {
 		var metric metricPayload
 		params := map[string]string{
-			"fields": "id,label,item,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 		_, err := s.client.Do(
 			"GET",
@@ -408,7 +408,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 	}
 
 	params := map[string]string{
-		"fields": "id,label,item,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent",
+		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent",
 	}
 	regCountBeforeUpdate := 30
 	errorCount := 0
