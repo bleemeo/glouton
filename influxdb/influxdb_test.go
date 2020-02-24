@@ -36,15 +36,9 @@ const metricName49 = "MetricPoint49"
 
 func TestConvertMetricPoint(t *testing.T) {
 	metricPoint1 := types.MetricPoint{
-		PointStatus: types.PointStatus{
-			Point: types.Point{
-				Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
-				Value: 4.2,
-			},
-			StatusDescription: types.StatusDescription{
-				CurrentStatus:     0,
-				StatusDescription: "StatusOk",
-			},
+		Point: types.Point{
+			Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
+			Value: 4.2,
 		},
 		Labels: map[string]string{
 			types.LabelName: "metric_test1",
@@ -53,15 +47,9 @@ func TestConvertMetricPoint(t *testing.T) {
 	}
 
 	metricPoint2 := types.MetricPoint{
-		PointStatus: types.PointStatus{
-			Point: types.Point{
-				Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
-				Value: 2.4,
-			},
-			StatusDescription: types.StatusDescription{
-				CurrentStatus:     0,
-				StatusDescription: "StatusOk",
-			},
+		Point: types.Point{
+			Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
+			Value: 2.4,
 		},
 		Labels: map[string]string{
 			types.LabelName: "metric_test1",
@@ -141,15 +129,9 @@ func TestAddPoints(t *testing.T) {
 	metricPoints := make([]types.MetricPoint, 6)
 	for i := range metricPoints {
 		metricPoints[i] = types.MetricPoint{
-			PointStatus: types.PointStatus{
-				Point: types.Point{
-					Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
-					Value: 4.2,
-				},
-				StatusDescription: types.StatusDescription{
-					CurrentStatus:     0,
-					StatusDescription: "StatusOk",
-				},
+			Point: types.Point{
+				Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
+				Value: 4.2,
 			},
 			Labels: map[string]string{
 				types.LabelName: fmt.Sprintf("MetricPoint%v", i),
@@ -238,15 +220,9 @@ func TestConvertPendingPoints(t *testing.T) {
 	metricPoints := make([]types.MetricPoint, 50)
 	for i := range metricPoints {
 		metricPoints[i] = types.MetricPoint{
-			PointStatus: types.PointStatus{
-				Point: types.Point{
-					Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
-					Value: 4.2,
-				},
-				StatusDescription: types.StatusDescription{
-					CurrentStatus:     0,
-					StatusDescription: "StatusOk",
-				},
+			Point: types.Point{
+				Time:  time.Date(2009, 11, 17, 20, 34, 58, 651387237, time.UTC),
+				Value: 4.2,
 			},
 			Labels: map[string]string{
 				types.LabelName: fmt.Sprintf("MetricPoint%v", i),

@@ -94,7 +94,7 @@ func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 	for _, p := range points {
 		ok = true
 		if p.Time.After(point.Time) {
-			point = p.Point
+			point = p
 		}
 	}
 	return
@@ -112,7 +112,7 @@ func (e Exporter) Collect(ch chan<- prometheus.Metric) {
 	}
 	for _, m := range metrics {
 		if p, ok := getLastPoint(m); ok {
-			labelsMap := types.RemoveInternalLabels(m.Labels())
+			labelsMap := m.Labels()
 			labels := make([]string, 0)
 			labelValues := make([]string, 0)
 			for l, v := range labelsMap {

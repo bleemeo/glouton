@@ -19,7 +19,6 @@ package net
 import (
 	"errors"
 	"glouton/inputs/internal"
-	"glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -70,7 +69,7 @@ func (nt netTransformer) renameGlobal(originalContext internal.GatherContext) (n
 			return
 		}
 	}
-	newContext.Tags[types.LabelBleemeoItem] = item
+	newContext.Annotations.BleemeoItem = item
 	newContext.Tags["device"] = item
 	return
 }

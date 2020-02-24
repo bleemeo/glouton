@@ -47,7 +47,7 @@ const LineChart = ({
     ) {
       const series = []
       /* eslint-disable indent */
-      const onlyDisplayItem =
+      const skipMetricName =
         metrics.length > 1
           ? metrics.every(
             m =>
@@ -57,7 +57,7 @@ const LineChart = ({
           : false
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
-        const { nameDisplay, item } = composeMetricName(metric)
+        const nameDisplay = composeMetricName(metric, skipMetricName)
         let data = metric.points.map(point => [point.time, point.value])
         data = fillEmptyPoints(data, period)
         let color = colorScale(idx)
@@ -71,7 +71,7 @@ const LineChart = ({
           type: 'line',
           color: color,
           name: nameDisplay,
-          seriesName: !onlyDisplayItem ? nameDisplay : item,
+          seriesName: nameDisplay,
           data,
           symbol: 'none',
           areaStyle: stacked ? { opacity: 0.9 } : null,

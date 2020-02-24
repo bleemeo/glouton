@@ -27,7 +27,7 @@ import (
 
 func TestDefault(t *testing.T) {
 	called := false
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		if len(fields) != 1 {
 			t.Errorf("len(fields) = %v, want %v", len(fields), 1)
 		}
@@ -85,7 +85,7 @@ func TestRename(t *testing.T) {
 			},
 		}, false
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		if measurement != "cpu2" {
 			t.Errorf("measurement == %#v, want %#v", measurement, "cpu2")
 		}
@@ -137,7 +137,7 @@ func TestRename(t *testing.T) {
 func TestDerive(t *testing.T) {
 	called1 := false
 	called2 := false
-	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -154,7 +154,7 @@ func TestDerive(t *testing.T) {
 		}
 		called1 = true
 	}
-	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -221,7 +221,7 @@ func TestDerive(t *testing.T) {
 func TestDeriveFunc(t *testing.T) {
 	called1 := false
 	called2 := false
-	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -238,7 +238,7 @@ func TestDeriveFunc(t *testing.T) {
 		}
 		called1 = true
 	}
-	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		cases := []struct {
 			name  string
 			value float64
@@ -305,17 +305,17 @@ func TestDeriveFunc(t *testing.T) {
 func TestDeriveMultipleTag(t *testing.T) {
 	called1 := 0
 	called2 := 0
-	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc1 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		called1++
 		if len(fields) != 0 {
 			t.Errorf("len(fields) == %v, want %v", len(fields), 0)
 		}
 	}
-	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc2 := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		var want float64
-		if tags[types.LabelBleemeoItem] == "sda" {
+		if tags["device"] == "sda" {
 			want = 4.2
-		} else if tags[types.LabelBleemeoItem] == "nvme0n1" {
+		} else if tags["device"] == "nvme0n1" {
 			want = 1204.0
 		}
 		if len(fields) != 1 {
@@ -340,7 +340,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 100,
 		},
 		map[string]string{
-			types.LabelBleemeoItem: "sda",
+			"device": "sda",
 		},
 		t0,
 	)
@@ -351,7 +351,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 5748,
 		},
 		map[string]string{
-			types.LabelBleemeoItem: "nvme0n1",
+			"device": "nvme0n1",
 		},
 		t0,
 	)
@@ -363,7 +363,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 100 + int(4.2*20),
 		},
 		map[string]string{
-			types.LabelBleemeoItem: "sda",
+			"device": "sda",
 		},
 		t1,
 	)
@@ -374,7 +374,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			"io_reads": 5748 + int(1204*20),
 		},
 		map[string]string{
-			types.LabelBleemeoItem: "nvme0n1",
+			"device": "nvme0n1",
 		},
 		t1,
 	)
@@ -388,7 +388,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 
 func TestMeasurementMap(t *testing.T) {
 	called := 0
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		if len(fields) != 1 {
 			t.Errorf("len(fields) == %v, want 1", len(fields))
 		}
@@ -443,13 +443,13 @@ func TestMeasurementMap(t *testing.T) {
 	}
 }
 
-func TestStaticLabels(t *testing.T) {
+func TestRenameCallback(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		types.LabelServiceName: "mysql",
-		types.LabelBleemeoItem: "mysql_1",
+		"service":      "mysql",
+		"service_name": "mysql_1",
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
@@ -458,9 +458,13 @@ func TestStaticLabels(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		StaticLabels: map[string]string{
-			types.LabelServiceName: "mysql",
-			types.LabelBleemeoItem: "mysql_1",
+		RenameCallbacks: []RenameCallback{
+			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+				labels["service_name"] = "mysql_1"
+				labels["service"] = "mysql"
+				annotations.BleemeoItem = "somevalue"
+				return labels, annotations
+			},
 		},
 	}
 	acc.PrepareGather()
@@ -488,29 +492,49 @@ func TestStaticLabels(t *testing.T) {
 	}
 }
 
-func TestStaticLabels2(t *testing.T) {
+func TestRenameCallback2(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		types.LabelServiceName: "postgresql",
-		types.LabelContainerID: "1234",
-		types.LabelBleemeoItem: "postgres_1_dbname",
+		"container_name": "postgres_1",
+		"db":             "dbname",
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	wantAnnotation := types.MetricAnnotations{
+		BleemeoItem: "postgres_1_dbname",
+		ContainerID: "1234",
+	}
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
+		}
+		if !reflect.DeepEqual(annotations, wantAnnotation) {
+			t.Errorf("annotaions == %v, want %v", annotations, wantAnnotation)
 		}
 		called++
 	}
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		StaticLabels: map[string]string{
-			types.LabelServiceName: "postgresql",
-			types.LabelContainerID: "1234",
-			types.LabelBleemeoItem: "postgres_1",
+		RenameGlobal: func(originalContext GatherContext) (newContext GatherContext, drop bool) {
+			newContext = originalContext
+			newContext.Annotations = types.MetricAnnotations{
+				BleemeoItem: "dbname",
+			}
+			return newContext, false
+		},
+		RenameCallbacks: []RenameCallback{
+			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+				labels["container_name"] = "postgres_1"
+				annotations.ContainerID = "1234"
+				if annotations.BleemeoItem != "" {
+					annotations.BleemeoItem = labels["container_name"] + "_" + annotations.BleemeoItem
+				} else {
+					annotations.BleemeoItem = labels["container_name"]
+				}
+				return labels, annotations
+			},
 		},
 	}
-	tags := map[string]string{types.LabelBleemeoItem: "dbname"}
+	tags := map[string]string{"db": "dbname"}
 	acc.PrepareGather()
 	acc.processMetrics(
 		finalFunc,
@@ -539,11 +563,11 @@ func TestStaticLabels2(t *testing.T) {
 func TestLabelsMutation(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		types.LabelServiceName: "postgresql",
-		types.LabelContainerID: "1234",
-		types.LabelBleemeoItem: "postgres_1_dbname",
+		"service":        "postgresql",
+		"container_name": "name",
+		"db":             "dbname",
 	}
-	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, t_ ...time.Time) {
+	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
 			t.Errorf("tags == %v, want %v", tags, want)
 		}
@@ -556,13 +580,15 @@ func TestLabelsMutation(t *testing.T) {
 				Measurement: originalContext.Measurement,
 				Tags:        make(map[string]string),
 			}
-			newContext.Tags[types.LabelBleemeoItem] = originalContext.Tags["db"]
+			newContext.Tags["db"] = "dbname"
 			return newContext, false
 		},
-		StaticLabels: map[string]string{
-			types.LabelServiceName: "postgresql",
-			types.LabelContainerID: "1234",
-			types.LabelBleemeoItem: "postgres_1",
+		RenameCallbacks: []RenameCallback{
+			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+				labels["service"] = "postgresql"
+				labels["container_name"] = "name"
+				return labels, annotations
+			},
 		},
 	}
 	tags := map[string]string{"db": "dbname"}

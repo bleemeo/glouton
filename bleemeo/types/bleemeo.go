@@ -94,6 +94,7 @@ type Metric struct {
 	ID          string            `json:"id"`
 	LabelsText  string            `json:"labels_text,omitempty"`
 	Labels      map[string]string `json:"-"`
+	Item        string            `json:"item,omitempty"`
 	ServiceID   string            `json:"service,omitempty"`
 	ContainerID string            `json:"container,omitempty"`
 	StatusOf    string            `json:"status_of,omitempty"`

@@ -19,7 +19,6 @@ package disk
 import (
 	"errors"
 	"glouton/inputs/internal"
-	"glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -90,7 +89,7 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 			return
 		}
 	}
-	newContext.Tags[types.LabelBleemeoItem] = item
+	newContext.Annotations.BleemeoItem = item
 	newContext.Tags["mountpoint"] = item
 	return
 }

@@ -30,7 +30,10 @@ type mockMetric struct {
 func (m mockMetric) Labels() map[string]string {
 	return map[string]string{types.LabelName: m.Name}
 }
-func (m mockMetric) Points(start, end time.Time) ([]types.PointStatus, error) {
+func (m mockMetric) Annotations() types.MetricAnnotations {
+	return types.MetricAnnotations{}
+}
+func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
 	return nil, errors.New("not implemented")
 }
 

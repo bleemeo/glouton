@@ -153,9 +153,9 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 // convertMetricPoint convert a gloutonMetricPoint in influxDBClient.Point
 func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string]string) (*influxDBClient.Point, error) {
 	measurement := metricPoint.Labels[types.LabelName]
-	time := metricPoint.PointStatus.Point.Time
+	time := metricPoint.Point.Time
 	fields := map[string]interface{}{
-		"value": metricPoint.PointStatus.Point.Value,
+		"value": metricPoint.Point.Value,
 	}
 	tags := make(map[string]string)
 	for key, value := range additionalTags {

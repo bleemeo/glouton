@@ -697,20 +697,19 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 		status.StatusDescription = fmt.Sprintf("Unknown health status %#v", healthStatus)
 	}
 
-	a.accumulator.AddFieldsWithStatus(
+	a.accumulator.AddFieldsWithAnnotations(
 		"docker",
 		map[string]interface{}{
 			"container_health_status": status.CurrentStatus.NagiosCode(),
 		},
 		map[string]string{
 			types.LabelContainerName: container.Name(),
-			types.LabelBleemeoItem:   container.Name(),
-			types.LabelContainerID:   container.ID(),
 		},
-		map[string]types.StatusDescription{
-			"container_health_status": status,
+		types.MetricAnnotations{
+			Status:      status,
+			ContainerID: container.ID(),
+			BleemeoItem: container.Name(),
 		},
-		false,
 	)
 }
 
@@ -824,10 +823,10 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 	}
 	var metricToDelete []map[string]string
 	for _, m := range metrics {
-		labels := m.Labels()
+		annotations := m.Annotations()
 		for _, c := range containersID {
-			if labels[types.LabelContainerID] == c {
-				metricToDelete = append(metricToDelete, labels)
+			if annotations.ContainerID == c {
+				metricToDelete = append(metricToDelete, m.Labels())
 			}
 		}
 	}

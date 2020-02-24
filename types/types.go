@@ -37,18 +37,13 @@ const (
 	StatusUnknown
 )
 
-// List of special label names that some part of Glouton will assume to be named
+// List of label names that some part of Glouton will assume to be named
 // as such.
 // Using constant here allow to change their name only here.
-// LabelName and LabelBleemeoItem constants are duplicated in JavaScript file
+// LabelName constants is duplicated in JavaScript file
 const (
 	LabelName          = "__name__"
 	LabelContainerName = "container_name"
-	// The following labels are only used internally.
-	LabelBleemeoItem = "__bleemeo_item"
-	LabelContainerID = "__glouton_container_id"
-	LabelServiceName = "__glouton_service_name"
-	LabelStatusOf    = "__glouton__status_of"
 )
 
 // IsSet return true if the status is set
@@ -101,11 +96,24 @@ func FromNagios(value int) Status {
 
 // Metric represent a metric object
 type Metric interface {
-	// Labels returns labels of the metric
+	// Labels returns labels of the metric. A metric is identified by its labels
 	Labels() map[string]string
 
+	// Annotations of this metric. A annotation is similar to a label but do not participate
+	// in the metric identification and may change.
+	Annotations() MetricAnnotations
+
 	// Points returns points between the two given time range (boundary are included).
-	Points(start, end time.Time) ([]PointStatus, error)
+	Points(start, end time.Time) ([]Point, error)
+}
+
+// MetricAnnotations contains additional information about a metrics
+type MetricAnnotations struct {
+	BleemeoItem string
+	ContainerID string
+	ServiceName string
+	StatusOf    string
+	Status      StatusDescription
 }
 
 // Point is the value of one metric at a given time
@@ -114,38 +122,17 @@ type Point struct {
 	Value float64
 }
 
-// MetricPoint is one point for one metrics (identified by labels)
+// MetricPoint is one point for one metrics (identified by labels) with its annotation at the time of emission
 type MetricPoint struct {
-	PointStatus
-	Labels map[string]string
-}
-
-// PointStatus is a point (value) and a status
-type PointStatus struct {
 	Point
-	StatusDescription
+	Labels      map[string]string
+	Annotations MetricAnnotations
 }
 
 // StatusDescription store a service/metric status with an optional description
 type StatusDescription struct {
 	CurrentStatus     Status
 	StatusDescription string
-}
-
-// RemoveInternalLabels remove labels that are used by Glouton to associate metric with other objects (like containers or service)
-func RemoveInternalLabels(labels map[string]string) map[string]string {
-	internalLabels := []string{LabelBleemeoItem, LabelContainerID, LabelServiceName, LabelStatusOf}
-
-	copyLabel := make(map[string]string, len(labels))
-	for k, v := range labels {
-		copyLabel[k] = v
-	}
-
-	for _, k := range internalLabels {
-		delete(copyLabel, k)
-	}
-
-	return copyLabel
 }
 
 // LabelsToText return a text version of a labels set

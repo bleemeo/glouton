@@ -1,7 +1,7 @@
 import React, { useRef } from 'react'
 import PropTypes from 'prop-types'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
-import { chartTypes, computeEnd, composeMetricName, isShallowEqual, LabelName, LabelBleemeoItem } from '../utils'
+import { chartTypes, computeEnd, composeMetricName, isShallowEqual, LabelName } from '../utils'
 import LineChart from './LineChart'
 import { useFetch, POLL } from '../utils/hooks'
 import FetchSuspense from './FetchSuspense'
@@ -13,7 +13,7 @@ const MEMORY = ['mem_used', 'mem_buffered', 'mem_cached', 'mem_free']
 const WidgetDashboardItem = ({
   type,
   title,
-  namesItems,
+  metrics,
   unit,
   period,
   refetchTime,
@@ -28,9 +28,11 @@ const WidgetDashboardItem = ({
   const displayWidget = points => {
     switch (type) {
       case chartTypes[0]: {
-        const resultGauge = points.sort((a, b) =>
-          a.labels.find(l => l.key === LabelBleemeoItem).value.localeCompare(b.labels.find(l => l.key === LabelBleemeoItem).value)
-        )[0]
+        const resultGauge = points.sort((a, b) => {
+          aString = a.labels.map(l => "${l.key}=${l.value}").join(",")
+          bString = b.labels.map(l => "${l.key}=${l.value}").join(",")
+          return a.String.localeCompare(bString)
+        })[0]
         const end = computeEnd(type, period)
         let lastPoint = null
         let thresholds = null
@@ -64,7 +66,7 @@ const WidgetDashboardItem = ({
         resultsLines.sort((a, b) => {
           const aLabel = composeMetricName(a)
           const bLabel = composeMetricName(b)
-          return aLabel.nameDisplay.localeCompare(bLabel.nameDisplay)
+          return aLabel.localeCompare(bLabel)
         })
         return (
           <LineChart
@@ -95,9 +97,12 @@ const WidgetDashboardItem = ({
       }
       break
     default:
-      namesItems.forEach(nameItem => {
-        metricsFilter.push({ labels: [{ key: LabelName, value: nameItem.name }] })
-        if (nameItem.item) metricsFilter.push({ labels: [{ key: LabelBleemeoItem, value: nameItem.item }] })
+      metrics.forEach(metric => {
+        let labels = []
+        for (let [key, value] of Object.entries(metric)) {
+          labels.push({ key: key, value: value })
+        }
+        metricsFilter.push({ labels: labels })
       })
   }
   const { isLoading, error, points, networkStatus } = useFetch(
@@ -163,7 +168,7 @@ const WidgetDashboardItem = ({
 WidgetDashboardItem.propTypes = {
   type: PropTypes.string.isRequired,
   title: PropTypes.string.isRequired,
-  namesItems: PropTypes.instanceOf(Array),
+  labels: PropTypes.instanceOf(Array),
   unit: PropTypes.number,
   refetchTime: PropTypes.number.isRequired,
   period: PropTypes.object.isRequired,

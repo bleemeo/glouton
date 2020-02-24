@@ -17,7 +17,6 @@ export const UNIT_BYTE = 2
 export const UNIT_NUMBER = 0
 
 export const LabelName = '__name__'
-export const LabelBleemeoItem = '__bleemeo_item'
 
 export const isNullOrUndefined = variable => variable === null || variable === undefined
 
@@ -194,11 +193,22 @@ export const isEmpty = obj => {
   return true
 }
 
-export function composeMetricName(metric) {
-  const name = metric.labels.some(l => l.key === LabelName) ? metric.labels.find(l => l.key === LabelName).value : ''
-  const item = metric.labels.some(l => l.key === LabelBleemeoItem) ? metric.labels.find(l => l.key === LabelBleemeoItem).value : ''
-  const nameDisplay = item ? name + '_' + item : name
-  return { nameDisplay, item }
+export function composeMetricName(metric, skipMetricName = false) {
+  let keys = metric.labels.map(l => l.key).sort()
+
+  if (skipMetricName) {
+    keys = keys.filter(l => l !== LabelName)
+  }
+
+  const labelsMap = metric.labels.reduce(
+    (acc, l) => {
+      acc[l.key] = l.value
+      return acc
+    },
+    {},
+  )
+  const nameDisplay = keys.map(key => labelsMap[key]).join(' ')
+  return nameDisplay
 }
 
 export function isShallowEqual(v, o) {

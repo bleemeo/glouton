@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"time"
 
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"glouton/version"
@@ -45,7 +46,7 @@ type HTTPCheck struct {
 //
 // If expectedStatusCode is 0, StatusCode below 400 will generate Ok, between 400 and 499 => warning and above 500 => critical
 // If expectedStatusCode is not 0, StatusCode must match the value or result will be critical
-func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode int, labels map[string]string, acc accumulator) *HTTPCheck {
+func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode int, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *HTTPCheck {
 	myTransport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
@@ -72,7 +73,7 @@ func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode in
 			Transport: myTransport,
 		},
 	}
-	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, true, hc.doCheck, labels, acc)
+	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, true, hc.doCheck, labels, annotations, acc)
 	return hc
 }
 

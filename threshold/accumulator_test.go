@@ -17,11 +17,69 @@
 package threshold
 
 import (
+	"fmt"
 	"glouton/types"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 )
+
+type mockState struct{}
+
+func (m mockState) Get(key string, result interface{}) error {
+	return nil
+}
+func (m mockState) Set(key string, object interface{}) error {
+	return nil
+}
+
+type mockAccumulator struct {
+	points []types.MetricPoint
+	err    error
+}
+
+func (acc *mockAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+	for name, value := range fields {
+		labels := make(map[string]string, len(tags))
+		for k, v := range tags {
+			labels[k] = v
+		}
+
+		if measurement == "" {
+			labels[types.LabelName] = name
+		} else {
+			labels[types.LabelName] = measurement + "_" + name
+		}
+
+		valueF, ok := value.(float64)
+		if !ok {
+			acc.AddError(fmt.Errorf("%v is not a float", value))
+			return
+		}
+
+		t0 := time.Now()
+		if len(t) > 0 {
+			t0 = t[0]
+		}
+
+		point := types.MetricPoint{
+			Annotations: annotations,
+			Labels:      labels,
+			Point: types.Point{
+				Time:  t0,
+				Value: valueF,
+			},
+		}
+		acc.points = append(acc.points, point)
+	}
+}
+func (acc *mockAccumulator) AddError(err error) {
+	if err == nil {
+		return
+	}
+	acc.err = err
+}
 
 func TestStateUpdate(t *testing.T) {
 	cases := [][]struct {
@@ -264,4 +322,90 @@ func TestThresholdEqual(t *testing.T) {
 			t.Errorf("case %d: right.Equal(left) == %v, want %v", i, got, c.want)
 		}
 	}
+}
+
+func TestAccumulator(t *testing.T) {
+
+	acc := &mockAccumulator{}
+	threshold := New(acc, mockState{})
+	threshold.SetThresholds(
+		nil,
+		map[string]Threshold{"cpu_used": {
+			HighWarning:  80,
+			HighCritical: 90,
+		}},
+	)
+
+	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
+	wantPoints := map[string]types.MetricPoint{
+		`__name__="cpu_idle"`: {
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "some-item",
+			},
+			Labels: map[string]string{types.LabelName: "cpu_idle"},
+			Point: types.Point{
+				Time:  t0,
+				Value: 20.0,
+			},
+		},
+		`__name__="cpu_used"`: {
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "some-item",
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusWarning,
+					StatusDescription: "Current value: 88.00 threshold (80.00) exceeded over last 5 minutes",
+				},
+			},
+			Labels: map[string]string{types.LabelName: "cpu_used"},
+			Point: types.Point{
+				Time:  t0,
+				Value: 88.0,
+			},
+		},
+		`__name__="cpu_used_status"`: {
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "some-item",
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusWarning,
+					StatusDescription: "Current value: 88.00 threshold (80.00) exceeded over last 5 minutes",
+				},
+				StatusOf: "cpu_used",
+			},
+			Labels: map[string]string{types.LabelName: "cpu_used_status"},
+			Point: types.Point{
+				Time:  t0,
+				Value: 1.0,
+			},
+		},
+	}
+
+	threshold.AddFieldsWithAnnotations(
+		"cpu",
+		map[string]interface{}{
+			"used": 88.0,
+			"idle": 20.0,
+		},
+		nil,
+		types.MetricAnnotations{
+			BleemeoItem: "some-item",
+		},
+		t0,
+	)
+
+	if acc.err != nil {
+		t.Errorf("AddError(%v) called", acc.err)
+	}
+	if len(acc.points) != 3 {
+		t.Errorf("len(points) == %d, want 3", len(acc.points))
+	}
+
+	for i, got := range acc.points {
+		labelsText := types.LabelsToText(got.Labels)
+		want := wantPoints[labelsText]
+		delete(wantPoints, labelsText)
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("points[%d] = %v, want %v", i, got, want)
+		}
+	}
+
 }

@@ -39,8 +39,8 @@ func TestLabelsMatchNotExact(t *testing.T) {
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
@@ -49,8 +49,8 @@ func TestLabelsMatchNotExact(t *testing.T) {
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
 				types.LabelName: "cpu_used",
@@ -59,19 +59,19 @@ func TestLabelsMatchNotExact(t *testing.T) {
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/",
 			},
 			false,
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
@@ -105,8 +105,8 @@ func TestLabelsMatchExact(t *testing.T) {
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
 				types.LabelName: "disk_used",
@@ -115,8 +115,8 @@ func TestLabelsMatchExact(t *testing.T) {
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
 				types.LabelName: "cpu_used",
@@ -125,35 +125,35 @@ func TestLabelsMatchExact(t *testing.T) {
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/",
 			},
 			false,
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			true,
 		},
 		{
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
 			},
 			map[string]string{
-				types.LabelName:        "disk_used",
-				types.LabelBleemeoItem: "/home",
-				"extra":                "label",
+				types.LabelName: "disk_used",
+				"mountpoint":    "/home",
+				"extra":         "label",
 			},
 			false,
 		},
@@ -173,7 +173,7 @@ func TestMetricsSimple(t *testing.T) {
 		types.LabelName: "measurement_fieldFloat",
 	}
 	db := New()
-	m := db.metricGetOrCreate(labels, 0)
+	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	if _, ok := db.metrics[m.metricID]; !ok {
 		t.Errorf("db.metrics[%v] == nil, want it to exists", m.metricID)
@@ -197,18 +197,18 @@ func TestMetricsMultiple(t *testing.T) {
 		types.LabelName: "cpu_used",
 	}
 	labels2 := map[string]string{
-		types.LabelName:        "disk_used",
-		types.LabelBleemeoItem: "/home",
+		types.LabelName: "disk_used",
+		"mountpoint":    "/home",
 	}
 	labels3 := map[string]string{
-		types.LabelName:        "disk_used",
-		types.LabelBleemeoItem: "/srv",
-		"fstype":               "ext4",
+		types.LabelName: "disk_used",
+		"mountpoint":    "/srv",
+		"fstype":        "ext4",
 	}
 	db := New()
-	db.metricGetOrCreate(labels1, 0)
-	db.metricGetOrCreate(labels2, 0)
-	db.metricGetOrCreate(labels3, 0)
+	db.metricGetOrCreate(labels1, types.MetricAnnotations{})
+	db.metricGetOrCreate(labels2, types.MetricAnnotations{})
+	db.metricGetOrCreate(labels3, types.MetricAnnotations{})
 
 	metrics, err := db.Metrics(labels1)
 	if err != nil {
@@ -229,12 +229,12 @@ func TestMetricsMultiple(t *testing.T) {
 		t.Errorf("len(metrics) == %v, want %v", len(metrics), 2)
 	}
 	for _, m := range metrics {
-		if m.Labels()[types.LabelBleemeoItem] != "/home" && m.Labels()[types.LabelBleemeoItem] != "/srv" {
-			t.Errorf("m.Labels()[%v] == %v, want %v or %v", types.LabelBleemeoItem, m.Labels()[types.LabelBleemeoItem], "/home", "/srv")
+		if m.Labels()["mountpoint"] != "/home" && m.Labels()["mountpoint"] != "/srv" {
+			t.Errorf("m.Labels()[mountpoint] == %v, want %v or %v", m.Labels()["mountpoint"], "/home", "/srv")
 		}
 	}
 
-	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used", types.LabelBleemeoItem: "/srv"})
+	metrics, err = db.Metrics(map[string]string{types.LabelName: "disk_used", "mountpoint": "/srv"})
 	if err != nil {
 		t.Error(err)
 	}
@@ -251,14 +251,14 @@ func TestPoints(t *testing.T) {
 		types.LabelName: "cpu_used",
 	}
 	db := New()
-	m := db.metricGetOrCreate(labels, 0)
+	m := db.metricGetOrCreate(labels, types.MetricAnnotations{})
 
 	t0 := time.Now().Add(-60 * time.Second)
 	t1 := t0.Add(10 * time.Second)
 	t2 := t0.Add(20 * time.Second)
-	p0 := types.PointStatus{Point: types.Point{Time: t0, Value: 42.0}}
-	p1 := types.PointStatus{Point: types.Point{Time: t1, Value: -88}}
-	p2 := types.PointStatus{Point: types.Point{Time: t2, Value: 13.37}}
+	p0 := types.Point{Time: t0, Value: 42.0}
+	p1 := types.Point{Time: t1, Value: -88}
+	p2 := types.Point{Time: t2, Value: 13.37}
 	db.addPoint(m.metricID, p0)
 
 	if len(db.points) != 1 {

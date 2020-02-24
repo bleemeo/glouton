@@ -32,8 +32,8 @@ func TestStoreAccumulator(t *testing.T) {
 		"fieldUint64": uint64(42),
 	}
 	tags := map[string]string{
-		"tag1":                 "value1",
-		types.LabelBleemeoItem: "/home",
+		"tag1":       "value1",
+		"mountpoint": "/home",
 	}
 
 	db := New()
@@ -102,41 +102,56 @@ func TestStoreAccumulator(t *testing.T) {
 		}
 		vFloat, _ := convertInterface(v)
 		want := types.Point{Time: t0, Value: vFloat}
-		if !reflect.DeepEqual(points[0].Point, want) {
-			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, points[0].Point, want)
+		if !reflect.DeepEqual(points[0], want) {
+			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, points[0], want)
 		}
 	}
 }
 
 func TestStoreAccumulatorWithStatus(t *testing.T) {
 	t0 := time.Now()
-	fields := map[string]interface{}{
-		"used":   97.0,
-		"user":   81.0,
+	fields1 := map[string]interface{}{
 		"system": 16.0,
 		"idle":   3.0,
 	}
-	statuses := map[string]types.StatusDescription{
-		"used": {CurrentStatus: types.StatusCritical, StatusDescription: "CPU 97%"},
-		"user": {CurrentStatus: types.StatusWarning, StatusDescription: "CPU 81%"},
+	fields2 := map[string]interface{}{
+		"used": 97.0,
 	}
+	fields3 := map[string]interface{}{
+		"user": 81.0,
+	}
+	fields4 := map[string]interface{}{
+		"user_status": 1.0,
+	}
+	statusUsed := types.StatusDescription{CurrentStatus: types.StatusCritical, StatusDescription: "CPU 97%"}
+	statusUser := types.StatusDescription{CurrentStatus: types.StatusWarning, StatusDescription: "CPU 81%"}
+	annotations1 := types.MetricAnnotations{}
+	annotations2 := types.MetricAnnotations{
+		Status: statusUsed,
+	}
+	annotations3 := types.MetricAnnotations{
+		Status: statusUser,
+	}
+	annotations4 := types.MetricAnnotations{
+		Status:   statusUser,
+		StatusOf: "cpu_user",
+	}
+
 	tags := map[string]string{
-		"tag1":                 "value1",
-		types.LabelBleemeoItem: "/home",
+		"tag1":       "value1",
+		"mountpoint": "/home",
 	}
 	want := map[string]float64{
 		"cpu_used":        97.0,
 		"cpu_user":        81.0,
 		"cpu_system":      16.0,
 		"cpu_idle":        3.0,
-		"cpu_used_status": 2.0,
 		"cpu_user_status": 1.0,
 	}
 	wantStatus := map[string]types.StatusDescription{
-		"cpu_used":        statuses["used"],
-		"cpu_user":        statuses["user"],
-		"cpu_used_status": statuses["used"],
-		"cpu_user_status": statuses["user"],
+		"cpu_used":        statusUsed,
+		"cpu_user":        statusUser,
+		"cpu_user_status": statusUser,
 	}
 
 	db := New()
@@ -145,12 +160,32 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	if len(db.metrics) != 0 {
 		t.Errorf("len(db.metrics) == %v, want %v", len(db.metrics), 0)
 	}
-	acc.AddFieldsWithStatus(
+	acc.AddFieldsWithAnnotations(
 		"cpu",
-		fields,
+		fields1,
 		tags,
-		statuses,
-		true,
+		annotations1,
+		t0,
+	)
+	acc.AddFieldsWithAnnotations(
+		"cpu",
+		fields2,
+		tags,
+		annotations2,
+		t0,
+	)
+	acc.AddFieldsWithAnnotations(
+		"cpu",
+		fields3,
+		tags,
+		annotations3,
+		t0,
+	)
+	acc.AddFieldsWithAnnotations(
+		"cpu",
+		fields4,
+		tags,
+		annotations4,
 		t0,
 	)
 
@@ -172,15 +207,15 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 		}
 		m := metrics[0]
 		labels := m.Labels()
+		annotations := m.Annotations()
 		if labels[types.LabelName] != name {
 			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
 		}
 		if strings.HasSuffix(name, "_status") {
 			strippedName := strings.TrimSuffix(name, "_status")
-			if labels[types.LabelStatusOf] != strippedName {
-				t.Errorf("labels[%v] == %v, want %v", types.LabelStatusOf, labels[types.LabelStatusOf], strippedName)
+			if annotations.StatusOf != strippedName {
+				t.Errorf("annotations.StatusOf == %v, want %v", annotations.StatusOf, strippedName)
 			}
-			delete(labels, types.LabelStatusOf)
 		}
 		delete(labels, types.LabelName)
 		if !reflect.DeepEqual(labels, tags) {
@@ -195,15 +230,15 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 		}
 		vFloat, _ := convertInterface(v)
 		want := types.Point{Time: t0, Value: vFloat}
-		if !reflect.DeepEqual(points[0].Point, want) {
-			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, points[0].Point, want)
+		if !reflect.DeepEqual(points[0], want) {
+			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, points[0], want)
 		}
 		if st, ok := wantStatus[name]; ok {
-			if !reflect.DeepEqual(points[0].StatusDescription, st) {
-				t.Errorf("db.Metrics(__name__=%v).Points(...)[0].StatusDescription == %v, want %v", name, points[0].StatusDescription, st)
+			if !reflect.DeepEqual(annotations.Status, st) {
+				t.Errorf("db.Metrics(__name__=%v).Status == %v, want %v", name, annotations.Status, st)
 			}
-		} else if points[0].CurrentStatus.IsSet() {
-			t.Errorf("db.Metrics(__name__=%v).Points(...)[0].StatusDescription == %v, want none", name, points[0].StatusDescription)
+		} else if annotations.Status.CurrentStatus.IsSet() {
+			t.Errorf("db.Metrics(__name__=%v).StatusDescription == %v, want none", name, annotations.Status)
 		}
 	}
 }

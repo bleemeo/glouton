@@ -27,18 +27,23 @@ const (
 	APIMetricItemLengthIfService int = 50
 )
 
-// LabelsToText convert labels to a string version.
-// When using the Bleemeo Mode, the only labels used are name and __bleemeo_item
-func LabelsToText(labels map[string]string, bleemeoMode bool) string {
+const (
+	// LabelBleemeoItem is the label used for item when using Bleemeo mode
+	LabelBleemeoItem = "_item"
+)
+
+// LabelsToText convert labels & annotation to a string version.
+// When using the Bleemeo Mode, result is the name + the item annotation
+func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
 	if bleemeoMode {
 		labelsCopy := map[string]string{
-			types.LabelName:        labels[types.LabelName],
-			types.LabelBleemeoItem: TruncateItem(labels[types.LabelBleemeoItem], labels[types.LabelServiceName] != ""),
+			types.LabelName:  labels[types.LabelName],
+			LabelBleemeoItem: TruncateItem(annotations.BleemeoItem, annotations.ServiceName != ""),
 		}
 		return types.LabelsToText(labelsCopy)
 	}
 
-	return types.LabelsToText(types.RemoveInternalLabels(labels))
+	return types.LabelsToText(labels)
 }
 
 // TruncateItem truncate the item to match maximal length allowed by Bleemeo API

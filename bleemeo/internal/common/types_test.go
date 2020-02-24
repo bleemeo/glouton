@@ -28,38 +28,38 @@ func TestMetricLookupFromList(t *testing.T) {
 	input := []bleemeoTypes.Metric{
 		{
 			Labels: map[string]string{
-				types.LabelName:        "io_reads",
-				types.LabelBleemeoItem: "sda",
+				types.LabelName: "io_reads",
+				"device":        "sda",
 			},
 			ID: "index-0",
 		},
 		{
 			Labels: map[string]string{
-				types.LabelName:        "io_reads",
-				types.LabelBleemeoItem: "sda",
+				types.LabelName: "io_reads",
+				"device":        "sda",
 			},
 			ID:            "index-1",
 			DeactivatedAt: time.Now(),
 		},
 		{
 			Labels: map[string]string{
-				types.LabelName:        "io_reads",
-				types.LabelBleemeoItem: "sdb",
+				types.LabelName: "io_reads",
+				"device":        "sdb",
 			},
 			ID:            "index-2",
 			DeactivatedAt: time.Now(),
 		},
 		{
 			Labels: map[string]string{
-				types.LabelName:        "io_reads",
-				types.LabelBleemeoItem: "sdb",
+				types.LabelName: "io_reads",
+				"device":        "sdb",
 			},
 			ID: "index-3",
 		},
 		{
 			Labels: map[string]string{
-				types.LabelName:        "cpu_user",
-				types.LabelBleemeoItem: "",
+				types.LabelName: "cpu_user",
+				"device":        "",
 			},
 			ID: "index-4",
 		},

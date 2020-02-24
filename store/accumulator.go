@@ -48,27 +48,27 @@ func (s *Store) Accumulator() *Accumulator {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, nil, false, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
 func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, nil, false, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type
 func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, nil, false, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type
 func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, nil, false, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
 func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, nil, false, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // SetPrecision do nothing right now
@@ -94,16 +94,18 @@ func (a *Accumulator) AddError(err error) {
 	}
 }
 
-// AddFieldsWithStatus have extra fields for the status of each points
+// AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields
 //
-// It works like AddFields, but:
-// * If a metric in fields also have an entry in statuses, a status for this point will be set
-// * If createStatusOf is true, each metric which has a statuses will also generate an additional metrics named "$NAME_status"
-func (a *Accumulator) AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, statuses, createStatusOf, t...)
+// Note the annotation are not attached to the measurement, but to the resulting labels set.
+// Resulting labels set are all tags + the metric name which is measurement concatened with field name.
+//
+// This also means that if the same measurement (e.g. "cpu") need different annotations (e.g. a status for field "used" but none for field "system"),
+// you must to multiple call to AddFieldsWithAnnotations
+func (a *Accumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, annotations, t...)
 }
 
-func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time) {
+func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 	var ts time.Time
 	if len(t) == 1 {
 		ts = t[0]
@@ -113,16 +115,17 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 	a.store.notifeeLock.Lock()
 	defer a.store.notifeeLock.Unlock()
 	hasNotifiee := len(a.store.notifyCallbacks) > 0
-	points := a.addMetricsLock(measurement, fields, tags, statuses, createStatusOf, ts, hasNotifiee)
+	points := a.addMetricsLock(measurement, fields, tags, annotations, ts, hasNotifiee)
 	for _, cb := range a.store.notifyCallbacks {
 		cb(points)
 	}
 }
 
-func (a *Accumulator) addMetricsLock(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, ts time.Time, returnPoints bool) []types.MetricPoint {
+func (a *Accumulator) addMetricsLock(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, ts time.Time, returnPoints bool) []types.MetricPoint {
 	a.store.lock.Lock()
 	defer a.store.lock.Unlock()
 	var result []types.MetricPoint
+
 	for name, value := range fields {
 		labels := make(map[string]string)
 		for k, v := range tags {
@@ -138,35 +141,14 @@ func (a *Accumulator) addMetricsLock(measurement string, fields map[string]inter
 			logger.V(1).Printf("convertInterface failed. Ignoring point: %s", err)
 			continue
 		}
-		metric := a.store.metricGetOrCreate(labels, 0)
-		point := types.PointStatus{
-			Point: types.Point{Time: ts, Value: value},
-		}
-		if status, ok := statuses[name]; ok {
-			point.StatusDescription = status
-			if createStatusOf {
-				copyPoint := point
-				copyPoint.Value = float64(point.CurrentStatus.NagiosCode())
-				copyLabels := make(map[string]string)
-				for k, v := range labels {
-					copyLabels[k] = v
-				}
-				copyLabels[types.LabelName] += "_status"
-				copyLabels[types.LabelStatusOf] = labels[types.LabelName]
-				metric2 := a.store.metricGetOrCreate(copyLabels, metric.metricID)
-				if returnPoints {
-					result = append(result, types.MetricPoint{
-						PointStatus: copyPoint,
-						Labels:      copyLabels,
-					})
-				}
-				a.store.addPoint(metric2.metricID, copyPoint)
-			}
-		}
+		metric := a.store.metricGetOrCreate(labels, annotations)
+		point := types.Point{Time: ts, Value: value}
+
 		if returnPoints {
 			result = append(result, types.MetricPoint{
-				PointStatus: point,
+				Point:       point,
 				Labels:      labels,
+				Annotations: annotations,
 			})
 		}
 		a.store.addPoint(metric.metricID, point)

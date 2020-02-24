@@ -19,7 +19,6 @@ package threshold
 import (
 	"context"
 	"fmt"
-	"glouton/agent/state"
 	"glouton/logger"
 	"glouton/types"
 	"math"
@@ -32,18 +31,23 @@ import (
 
 const statusCacheKey = "CacheStatusState"
 
-// StatusAccumulator is the type used by Accumulator to send metrics. It's a subset of store.Accumulator
-type StatusAccumulator interface {
-	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
-	AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time)
+// AnnotationAccumulator is the type used by Accumulator to send metrics. It's a subset of store.Accumulator
+type AnnotationAccumulator interface {
+	AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
 	AddError(err error)
 }
 
-// Accumulator implement telegraf.Accumulator (+AddFieldsWithStatus, cf store package) but check threshold and
-// emit the metric points with a status
+// State store information about current firing threshold
+type State interface {
+	Get(key string, result interface{}) error
+	Set(key string, object interface{}) error
+}
+
+// Accumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations, cf store package) but check threshold and
+// emit the metric points with a status set in the annotations
 type Accumulator struct {
-	acc   StatusAccumulator
-	state *state.State
+	acc   AnnotationAccumulator
+	state State
 
 	l                 sync.Mutex
 	states            map[MetricNameItem]statusState
@@ -55,7 +59,7 @@ type Accumulator struct {
 }
 
 // New returns a new Accumulator
-func New(acc StatusAccumulator, state *state.State) *Accumulator {
+func New(acc AnnotationAccumulator, state State) *Accumulator {
 	self := &Accumulator{
 		acc:               acc,
 		state:             state,
@@ -108,27 +112,27 @@ func (a *Accumulator) SetUnits(units map[MetricNameItem]Unit) {
 // NOTE: tags is expected to be owned by the caller, don't mutate
 // it after passing to Add.
 func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
 func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddCounter is the same as AddFields, but will add the metric as a "Counter" type
 func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddSummary is the same as AddFields, but will add the metric as a "Summary" type
 func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
 func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, t...)
+	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
 // SetPrecision do nothing right now
@@ -158,9 +162,9 @@ func (a *Accumulator) AddError(err error) {
 	}
 }
 
-// AddFieldsWithStatus is the same as store.Accumulator.AddFieldsWithStatus
-func (a *Accumulator) AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time) {
-	a.acc.AddFieldsWithStatus(measurement, fields, tags, statuses, createStatusOf, t...)
+// AddFieldsWithAnnotations is the same as store.Accumulator.AddFieldsWithAnnotations but check for threshold if status is not already present in annocation
+func (a *Accumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+	a.addMetrics(measurement, fields, tags, annotations, t...)
 }
 
 // MetricNameItem is the couple Name and Item
@@ -471,17 +475,21 @@ func formatDuration(period time.Duration) string {
 	return fmt.Sprintf("%.0f %s", value, currentUnit)
 }
 
-func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 	a.l.Lock()
 	defer a.l.Unlock()
 
-	statuses := make(map[string]types.StatusDescription)
+	if annotations.Status.CurrentStatus.IsSet() {
+		a.acc.AddFieldsWithAnnotations(measurement, fields, tags, annotations, t...)
+		return
+	}
+
 	for name, value := range fields {
 		flatName := measurement + "_" + name
 		if measurement == "" {
 			flatName = name
 		}
-		key := MetricNameItem{Name: flatName, Item: tags[types.LabelBleemeoItem]}
+		key := MetricNameItem{Name: flatName, Item: annotations.BleemeoItem}
 		threshold := a.getThreshold(key)
 		if threshold.IsZero() {
 			continue
@@ -516,10 +524,27 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 				)
 			}
 		}
-		statuses[name] = types.StatusDescription{
+		delete(fields, name)
+
+		status := types.StatusDescription{
 			CurrentStatus:     newState.CurrentStatus,
 			StatusDescription: statusDescription,
 		}
+		statusField := map[string]interface{}{
+			name: value,
+		}
+		annotationsCopy := annotations
+		annotationsCopy.Status = status
+
+		a.acc.AddFieldsWithAnnotations(measurement, statusField, tags, annotationsCopy, t...)
+
+		statusField = map[string]interface{}{
+			name + "_status": float64(status.CurrentStatus.NagiosCode()),
+		}
+		annotationsCopy.StatusOf = flatName
+
+		a.acc.AddFieldsWithAnnotations(measurement, statusField, tags, annotationsCopy, t...)
+
 	}
-	a.acc.AddFieldsWithStatus(measurement, fields, tags, statuses, true, t...)
+	a.acc.AddFieldsWithAnnotations(measurement, fields, tags, annotations, t...)
 }

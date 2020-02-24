@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"glouton/inputs/internal"
-	"glouton/types"
 	"regexp"
 
 	"github.com/influxdata/telegraf"
@@ -83,7 +82,7 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 		drop = true
 		return
 	}
-	newContext.Tags[types.LabelBleemeoItem] = item
+	newContext.Annotations.BleemeoItem = item
 	newContext.Tags["device"] = item
 	return
 }

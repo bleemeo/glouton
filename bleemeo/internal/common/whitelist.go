@@ -22,11 +22,11 @@ import (
 )
 
 // AllowMetric return True if current configuration allow this metrics
-func AllowMetric(labels map[string]string, whitelist map[string]bool) bool {
+func AllowMetric(labels map[string]string, annotations types.MetricAnnotations, whitelist map[string]bool) bool {
 	if len(whitelist) == 0 {
 		return true
 	}
-	if labels[types.LabelServiceName] != "" && strings.HasSuffix(labels[types.LabelName], "_status") {
+	if annotations.ServiceName != "" && strings.HasSuffix(labels[types.LabelName], "_status") {
 		return true
 	}
 	return whitelist[labels[types.LabelName]]

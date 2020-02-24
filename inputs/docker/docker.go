@@ -56,12 +56,12 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	newContext.Measurement = originalContext.Measurement
 	newContext.Tags = make(map[string]string)
 	if name, ok := originalContext.Tags["container_name"]; ok {
-		newContext.Tags[types.LabelBleemeoItem] = name
+		newContext.Annotations.BleemeoItem = name
 		newContext.Tags[types.LabelContainerName] = name
 	}
 	if id, ok := originalContext.OriginalFields["container_id"]; ok {
 		if containerID, ok := id.(string); ok {
-			newContext.Tags[types.LabelContainerID] = containerID
+			newContext.Annotations.ContainerID = containerID
 		}
 	}
 	if enable, ok := originalContext.Tags["glouton.enable"]; ok {

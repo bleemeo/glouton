@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"glouton/facts"
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/task"
 	"glouton/types"
@@ -31,11 +32,6 @@ import (
 )
 
 const ignoredConfField string = "nagios_nrpe_name"
-
-// Accumulator will gather metrics point for added checks
-type Accumulator interface {
-	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
-}
 
 // Discovery implement the full discovery mecanisme. It will take informations
 // from both the dynamic discovery (service currently running) and previously
@@ -50,7 +46,7 @@ type Discovery struct {
 	servicesMap           map[NameContainer]Service
 	lastDiscoveryUpdate   time.Time
 
-	acc                   Accumulator
+	acc                   inputs.AnnotationAccumulator
 	lastConfigservicesMap map[NameContainer]Service
 	activeInput           map[NameContainer]int
 	activeCheck           map[NameContainer]CheckDetails
@@ -76,7 +72,7 @@ type Registry interface {
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {

@@ -323,14 +323,14 @@ func (c *Client) sendPoints() {
 		}
 		localExistsByKey := make(map[string]bool, len(localMetrics))
 		for _, m := range localMetrics {
-			key := common.LabelsToText(m.Labels(), c.option.BleemeoMode)
+			key := common.LabelsToText(m.Labels(), m.Annotations(), c.option.BleemeoMode)
 			localExistsByKey[key] = true
 		}
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
 		newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 		for _, p := range c.failedPoints {
-			key := common.LabelsToText(p.Labels, c.option.BleemeoMode)
+			key := common.LabelsToText(p.Labels, p.Annotations, c.option.BleemeoMode)
 			if localExistsByKey[key] {
 				newPoints = append(newPoints, p)
 			}
@@ -361,7 +361,7 @@ func (c *Client) sendPoints() {
 
 func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
 	for _, p := range points {
-		key := common.LabelsToText(p.Labels, c.option.BleemeoMode)
+		key := common.LabelsToText(p.Labels, p.Annotations, c.option.BleemeoMode)
 		if m, ok := registreredMetricByKey[key]; ok {
 
 			value := metricPayload{
@@ -375,11 +375,11 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				value.LabelsText = ""
 			}
 
-			if p.CurrentStatus.IsSet() {
-				value.Status = p.CurrentStatus.String()
-				value.StatusDescription = p.StatusDescription.StatusDescription
-				if p.Labels[types.LabelContainerID] != "" {
-					lastKilledAt := c.option.Docker.ContainerLastKill(p.Labels[types.LabelContainerID])
+			if p.Annotations.Status.CurrentStatus.IsSet() {
+				value.Status = p.Annotations.Status.CurrentStatus.String()
+				value.StatusDescription = p.Annotations.Status.StatusDescription
+				if p.Annotations.ContainerID != "" {
+					lastKilledAt := c.option.Docker.ContainerLastKill(p.Annotations.ContainerID)
 					gracePeriod := time.Since(lastKilledAt) + 300*time.Second
 					if gracePeriod > 60*time.Second {
 						value.EventGracePeriod = int(gracePeriod.Seconds())
@@ -573,7 +573,7 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0)
 	for _, m := range input {
-		if common.AllowMetric(m.Labels, metricWhitelist) {
+		if common.AllowMetric(m.Labels, m.Annotations, metricWhitelist) {
 			result = append(result, m)
 		}
 	}
@@ -587,7 +587,7 @@ func (c *Client) ready() bool {
 		return false
 	}
 	for _, m := range c.option.Cache.Metrics() {
-		if m.Labels[types.LabelName] == "agent_status" && m.Labels[types.LabelBleemeoItem] == "" {
+		if m.Labels[types.LabelName] == "agent_status" && len(m.Labels) == 1 {
 			return true
 		}
 	}
