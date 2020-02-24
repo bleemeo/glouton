@@ -94,6 +94,29 @@ docker run --rm -u $UID:999 -e HOME=/tmp/home -e CGO_ENABLED=0 \
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
 
+# Developping the local UI JavaScript
+
+When working on the JavaScript rebuilding the Javascript bundle and running go generate could be slow
+and will use minified JavaScript file which are harded to debug.
+
+To avoid this, you may want to run and use webpack-dev-server which will serve non-minified
+JavaScript file and rebuild the JavaScript bundle on the file. When doing a change in
+any JavaScript files, you will only need to refresh the page on your browser.
+
+To run with this configuration, start webpack-dev-server:
+```
+docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
+   -v $(pwd):/src -w /src/webui \
+   node:12.13.0 \
+   sh -c 'npm install && npm start'
+```
+
+Then tell Glouton to use JavaScript file from webpack-dev-server:
+```
+export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
+go run glouton
+```
+
 ### Note on building a binary with race detector
 
 Go has a great tools to detect race-condition: the race-detector. It's enabled

@@ -121,6 +121,7 @@ var defaultConfig = map[string]interface{}{
 	"web.enabled":                     true,
 	"web.listener.address":            "127.0.0.1",
 	"web.listener.port":               8015,
+	"web.static_cdn_url":              "/static/",
 	"zabbix.enabled":                  false,
 	"zabbix.address":                  "127.0.0.1",
 	"zabbix.port":                     10050,

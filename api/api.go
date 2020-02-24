@@ -20,6 +20,7 @@ package api
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -63,8 +64,12 @@ type API struct {
 	accumulator  *threshold.Accumulator
 }
 
+type gloutonUIConfig struct {
+	StaticCDNURL string
+}
+
 // New : Function that instantiate a new API's port from environment variable or from a default port
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, accumulator *threshold.Accumulator) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, accumulator *threshold.Accumulator, staticCDNURL string) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
@@ -75,14 +80,30 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
+	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
+	indexBody, err := boxHTML.Find("index.html")
+	if err != nil {
+		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
+		indexBody = fallbackIndex
+	}
+	indexTmpl, err := template.New("index").Parse(string(indexBody))
+	if err != nil {
+		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
+	}
 
 	router.Handle("/metrics", promExporter) // promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
 	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
-		html, _ := boxHTML.Find("index.html")
-		_, err := w.Write(html)
+		var err error
+		if indexTmpl == nil {
+			_, err = w.Write(fallbackIndex)
+		} else {
+			err = indexTmpl.Execute(w, gloutonUIConfig{
+				StaticCDNURL: staticCDNURL,
+			})
+		}
 		if err != nil {
 			logger.V(2).Printf("fail to serve index.html: %v", err)
 		}
