@@ -34,10 +34,10 @@ type State interface {
 	Set(key string, object interface{}) error
 }
 
-// Pusher implement PointPusher and do threshold.
-type Pusher struct {
-	pusher types.PointPusher
-	state  State
+// Registry keep track of threshold states to update metrics if the exceed a threshold for a period
+// Use WithPusher() to create a pusher and sent metric points to it.
+type Registry struct {
+	state State
 
 	l                 sync.Mutex
 	states            map[MetricNameItem]statusState
@@ -48,10 +48,9 @@ type Pusher struct {
 	softPeriods       map[string]time.Duration
 }
 
-// New returns a new Accumulator
-func New(pusher types.PointPusher, state State) *Pusher {
-	self := &Pusher{
-		pusher:            pusher,
+// New returns a new ThresholdState
+func New(state State) *Registry {
+	self := &Registry{
 		state:             state,
 		states:            make(map[MetricNameItem]statusState),
 		defaultSoftPeriod: 300 * time.Second,
@@ -69,29 +68,29 @@ func New(pusher types.PointPusher, state State) *Pusher {
 // SetThresholds configure thresholds.
 // The thresholdWithItem is searched first and only match if both the metric name and item match
 // Then thresholdAllItem is searched and match is the metric name match regardless of the metric item.
-func (p *Pusher) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold, thresholdAllItem map[string]Threshold) {
-	p.l.Lock()
-	defer p.l.Unlock()
-	p.thresholdsAllItem = thresholdAllItem
-	p.thresholds = thresholdWithItem
+func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold, thresholdAllItem map[string]Threshold) {
+	r.l.Lock()
+	defer r.l.Unlock()
+	r.thresholdsAllItem = thresholdAllItem
+	r.thresholds = thresholdWithItem
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
 }
 
 // SetSoftPeriod configure soft status period. A metric must stay in higher status for at least this period before its status actually change.
 // For example, CPU usage must be above 80% for at least 5 minutes before being alerted. The term soft-status is taken from Nagios.
-func (p *Pusher) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
-	p.l.Lock()
-	defer p.l.Unlock()
-	p.softPeriods = periodPerMetrics
-	p.defaultSoftPeriod = defaultPeriod
+func (r *Registry) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
+	r.l.Lock()
+	defer r.l.Unlock()
+	r.softPeriods = periodPerMetrics
+	r.defaultSoftPeriod = defaultPeriod
 	logger.V(2).Printf("SoftPeriod contains %d definitions", len(periodPerMetrics))
 }
 
 // SetUnits configure the units
-func (p *Pusher) SetUnits(units map[MetricNameItem]Unit) {
-	p.l.Lock()
-	defer p.l.Unlock()
-	p.units = units
+func (r *Registry) SetUnits(units map[MetricNameItem]Unit) {
+	r.l.Lock()
+	defer r.l.Unlock()
+	r.units = units
 	logger.V(2).Printf("Units contains %d definitions", len(units))
 }
 
@@ -274,17 +273,17 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 }
 
 // GetThreshold return the current threshold for given Metric
-func (p *Pusher) GetThreshold(key MetricNameItem) Threshold {
-	p.l.Lock()
-	defer p.l.Unlock()
-	return p.getThreshold(key)
+func (r *Registry) GetThreshold(key MetricNameItem) Threshold {
+	r.l.Lock()
+	defer r.l.Unlock()
+	return r.getThreshold(key)
 }
 
-func (p *Pusher) getThreshold(key MetricNameItem) Threshold {
-	if threshold, ok := p.thresholds[key]; ok {
+func (r *Registry) getThreshold(key MetricNameItem) Threshold {
+	if threshold, ok := r.thresholds[key]; ok {
 		return threshold
 	}
-	v := p.thresholdsAllItem[key.Name]
+	v := r.thresholdsAllItem[key.Name]
 	if v.IsZero() {
 		return Threshold{
 			LowCritical:  math.NaN(),
@@ -297,7 +296,7 @@ func (p *Pusher) getThreshold(key MetricNameItem) Threshold {
 }
 
 // Run will periodically save status state and clean it.
-func (p *Pusher) Run(ctx context.Context) error {
+func (r *Registry) Run(ctx context.Context) error {
 	lastSave := time.Now()
 	for ctx.Err() == nil {
 		save := false
@@ -309,7 +308,7 @@ func (p *Pusher) Run(ctx context.Context) error {
 		if time.Since(lastSave) > 60*time.Minute {
 			save = true
 		}
-		p.run(save)
+		r.run(save)
 		if save {
 			lastSave = time.Now()
 		}
@@ -317,13 +316,13 @@ func (p *Pusher) Run(ctx context.Context) error {
 	return nil
 }
 
-func (p *Pusher) run(save bool) {
-	p.l.Lock()
-	defer p.l.Unlock()
-	jsonList := make([]jsonState, 0, len(p.states))
-	for k, v := range p.states {
+func (r *Registry) run(save bool) {
+	r.l.Lock()
+	defer r.l.Unlock()
+	jsonList := make([]jsonState, 0, len(r.states))
+	for k, v := range r.states {
 		if time.Since(v.LastUpdate) > 60*time.Minute {
-			delete(p.states, k)
+			delete(r.states, k)
 		} else {
 			jsonList = append(jsonList, jsonState{
 				MetricNameItem: k,
@@ -332,7 +331,7 @@ func (p *Pusher) run(save bool) {
 		}
 	}
 	if save {
-		_ = p.state.Set(statusCacheKey, jsonList)
+		_ = r.state.Set(statusCacheKey, jsonList)
 	}
 }
 
@@ -386,10 +385,22 @@ func formatDuration(period time.Duration) string {
 	return fmt.Sprintf("%.0f %s", value, currentUnit)
 }
 
+type pusher struct {
+	registry *Registry
+	pusher   types.PointPusher
+}
+
+// WithPusher return the same threshold instance with specified point pusher
+func (r *Registry) WithPusher(p types.PointPusher) types.PointPusher {
+	return pusher{
+		registry: r,
+		pusher:   p,
+	}
+}
+
 // PushPoints implement PointPusher and do threshold.
-func (p *Pusher) PushPoints(points []types.MetricPoint) {
-	p.l.Lock()
-	defer p.l.Unlock()
+func (p pusher) PushPoints(points []types.MetricPoint) {
+	p.registry.l.Lock()
 
 	result := make([]types.MetricPoint, 0, len(points))
 
@@ -399,7 +410,7 @@ func (p *Pusher) PushPoints(points []types.MetricPoint) {
 				Name: point.Labels[types.LabelName],
 				Item: point.Annotations.BleemeoItem,
 			}
-			threshold := p.getThreshold(key)
+			threshold := p.registry.getThreshold(key)
 			if !threshold.IsZero() {
 				result = p.addPointWithThreshold(result, point, threshold, key)
 				continue
@@ -407,21 +418,22 @@ func (p *Pusher) PushPoints(points []types.MetricPoint) {
 		}
 		result = append(result, point)
 	}
+	p.registry.l.Unlock()
 	p.pusher.PushPoints(result)
 }
 
-func (p *Pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {
+func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {
 
 	softStatus, thresholdLimit := threshold.CurrentStatus(point.Value)
-	previousState := p.states[key]
-	period := p.defaultSoftPeriod
-	if tmp, ok := p.softPeriods[key.Name]; ok {
+	previousState := p.registry.states[key]
+	period := p.registry.defaultSoftPeriod
+	if tmp, ok := p.registry.softPeriods[key.Name]; ok {
 		period = tmp
 	}
 	newState := previousState.Update(softStatus, period, time.Now())
-	p.states[key] = newState
+	p.registry.states[key] = newState
 
-	unit := p.units[key]
+	unit := p.registry.units[key]
 	// Consumer expect status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", formatValue(point.Value, unit))
 	if newState.CurrentStatus != types.StatusOk {

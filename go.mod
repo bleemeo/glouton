@@ -9,6 +9,7 @@ require (
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/agnivade/levenshtein v1.0.3 // indirect
+	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/containerd/containerd v1.3.0 // indirect
 	github.com/dgryski/trifles v0.0.0-20190809233526-a06f71cd0619 // indirect

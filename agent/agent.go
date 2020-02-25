@@ -47,7 +47,7 @@ import (
 	"glouton/inputs/statsd"
 	"glouton/logger"
 	"glouton/nrpe"
-	"glouton/prometheus/exporter"
+	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
@@ -71,8 +71,9 @@ type agent struct {
 	factProvider      *facts.FactProvider
 	bleemeoConnector  *bleemeo.Connector
 	influxdbConnector *influxdb.Client
-	pointPusher       *threshold.Pusher
+	threshold         *threshold.Registry
 	store             *store.Store
+	metricRegistry    *registry.Registry
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -276,15 +277,15 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 			Name: name,
 			Item: "",
 		}
-		oldThresholds[name] = a.pointPusher.GetThreshold(key)
+		oldThresholds[name] = a.threshold.GetThreshold(key)
 	}
-	a.pointPusher.SetThresholds(thresholds, configThreshold)
+	a.threshold.SetThresholds(thresholds, configThreshold)
 	for name := range oldThresholds {
 		key := threshold.MetricNameItem{
 			Name: name,
 			Item: "",
 		}
-		newThreshold := a.pointPusher.GetThreshold(key)
+		newThreshold := a.threshold.GetThreshold(key)
 		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
 			a.FireTrigger(false, false, true)
 		}
@@ -361,10 +362,11 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	a.store = store.New()
-	a.pointPusher = threshold.New(
-		a.store,
-		a.state,
-	)
+	a.metricRegistry = &registry.Registry{
+		PushPoint: a.store,
+	}
+	a.threshold = threshold.New(a.state)
+	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.metricRegistry.WithTTL(5 * time.Minute))}
 	a.dockerFact = facts.NewDocker(a.deletedContainersCallback)
 	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
 	if !useProc {
@@ -378,7 +380,7 @@ func (a *agent) run() { //nolint:gocyclo
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
-	a.collector = collector.New(&inputs.Accumulator{Pusher: a.pointPusher})
+	a.collector = collector.New(acc)
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -393,7 +395,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.collector,
 		a.taskRegistry,
 		a.state,
-		&inputs.Accumulator{Pusher: a.pointPusher},
+		acc,
 		a.dockerFact,
 		overrideServices,
 		isCheckIgnored,
@@ -405,9 +407,16 @@ func (a *agent) run() { //nolint:gocyclo
 		targets = prometheusConfigToURLs(promCfg)
 	}
 	scrap := scrapper.New(targets)
-	promExporter := exporter.New(a.store, scrap)
 
-	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.pointPusher, a.config.String("web.static_cdn_url"))
+	a.metricRegistry.AddDefaultCollector()
+	if err := a.metricRegistry.AddNodeExporter(); err != nil {
+		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
+	}
+	a.metricRegistry.RegisterGatherer(scrap)
+
+	promExporter := a.metricRegistry.Exporter()
+
+	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.threshold, a.config.String("web.static_cdn_url"))
 
 	a.FireTrigger(true, false, false)
 
@@ -433,11 +442,11 @@ func (a *agent) run() { //nolint:gocyclo
 			Process:                psFact,
 			Docker:                 a.dockerFact,
 			Store:                  a.store,
-			Acc:                    &inputs.Accumulator{Pusher: a.pointPusher},
+			Acc:                    acc,
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 			UpdateThresholds:       a.UpdateThresholds,
-			UpdateUnits:            a.pointPusher.SetUnits,
+			UpdateUnits:            a.threshold.SetUnits,
 			BleemeoMode:            true,
 		})
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
@@ -477,7 +486,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.bleemeoConnector.UpdateUnitsAndThresholds(true)
 	}
 	tmp, _ := a.config.Get("metric.softstatus_period")
-	a.pointPusher.SetSoftPeriod(
+	a.threshold.SetSoftPeriod(
 		time.Duration(a.config.Int("metric.softstatus_period_default"))*time.Second,
 		softPeriodsFromInterface(tmp),
 	)
@@ -698,7 +707,7 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 		status.StatusDescription = fmt.Sprintf("Unknown health status %#v", healthStatus)
 	}
 
-	a.pointPusher.PushPoints([]types.MetricPoint{
+	a.metricRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
 				types.LabelName:          "docker_container_health_status",
@@ -825,7 +834,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				},
 			})
 		}
-		a.pointPusher.PushPoints(points)
+		a.threshold.WithPusher(a.metricRegistry.WithTTL(time.Hour)).PushPoints(points)
 	}
 }
 

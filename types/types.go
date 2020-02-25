@@ -129,7 +129,7 @@ type MetricPoint struct {
 	Annotations MetricAnnotations
 }
 
-// PointPusher push new points. points must not be mutated after call
+// PointPusher push new points. Points must not be mutated after call
 type PointPusher interface {
 	PushPoints(points []MetricPoint)
 }

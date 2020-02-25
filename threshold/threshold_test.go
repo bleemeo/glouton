@@ -287,7 +287,7 @@ func TestThresholdEqual(t *testing.T) {
 func TestAccumulatorThreshold(t *testing.T) {
 
 	db := &mockStore{}
-	threshold := New(db, mockState{})
+	threshold := New(mockState{})
 	threshold.SetThresholds(
 		nil,
 		map[string]Threshold{"cpu_used": {
@@ -339,7 +339,8 @@ func TestAccumulatorThreshold(t *testing.T) {
 		},
 	}
 
-	threshold.PushPoints([]types.MetricPoint{
+	pusher := threshold.WithPusher(db)
+	pusher.PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
 				"__name__": "cpu_used",
