@@ -17,10 +17,10 @@
 package threshold
 
 import (
-	"fmt"
 	"glouton/types"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 )
@@ -34,51 +34,21 @@ func (m mockState) Set(key string, object interface{}) error {
 	return nil
 }
 
-type mockAccumulator struct {
+type mockStore struct {
 	points []types.MetricPoint
-	err    error
 }
 
-func (acc *mockAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
-	for name, value := range fields {
-		labels := make(map[string]string, len(tags))
-		for k, v := range tags {
-			labels[k] = v
-		}
-
-		if measurement == "" {
-			labels[types.LabelName] = name
-		} else {
-			labels[types.LabelName] = measurement + "_" + name
-		}
-
-		valueF, ok := value.(float64)
-		if !ok {
-			acc.AddError(fmt.Errorf("%v is not a float", value))
-			return
-		}
-
-		t0 := time.Now()
-		if len(t) > 0 {
-			t0 = t[0]
-		}
-
-		point := types.MetricPoint{
-			Annotations: annotations,
-			Labels:      labels,
-			Point: types.Point{
-				Time:  t0,
-				Value: valueF,
-			},
-		}
-		acc.points = append(acc.points, point)
-	}
+func (s *mockStore) AddMetricPoints(points []types.MetricPoint) {
+	s.points = append(s.points, points...)
 }
-func (acc *mockAccumulator) AddError(err error) {
-	if err == nil {
-		return
+func (s mockStore) getByName(name string) []types.MetricPoint {
+	result := make([]types.MetricPoint, 0, 1)
+	for _, p := range s.points {
+		if p.Labels[types.LabelName] == name {
+			result = append(result, p)
+		}
 	}
-	acc.err = err
+	return result
 }
 
 func TestStateUpdate(t *testing.T) {
@@ -324,10 +294,10 @@ func TestThresholdEqual(t *testing.T) {
 	}
 }
 
-func TestAccumulator(t *testing.T) {
+func TestAccumulatorThreshold(t *testing.T) {
 
-	acc := &mockAccumulator{}
-	threshold := New(acc, mockState{})
+	db := &mockStore{}
+	threshold := New(db.AddMetricPoints, mockState{})
 	threshold.SetThresholds(
 		nil,
 		map[string]Threshold{"cpu_used": {
@@ -392,14 +362,11 @@ func TestAccumulator(t *testing.T) {
 		t0,
 	)
 
-	if acc.err != nil {
-		t.Errorf("AddError(%v) called", acc.err)
-	}
-	if len(acc.points) != 3 {
-		t.Errorf("len(points) == %d, want 3", len(acc.points))
+	if len(db.points) != 3 {
+		t.Errorf("len(points) == %d, want 3", len(db.points))
 	}
 
-	for i, got := range acc.points {
+	for i, got := range db.points {
 		labelsText := types.LabelsToText(got.Labels)
 		want := wantPoints[labelsText]
 		delete(wantPoints, labelsText)
@@ -408,4 +375,194 @@ func TestAccumulator(t *testing.T) {
 		}
 	}
 
+}
+
+func TestAccumulator(t *testing.T) {
+	t0 := time.Now()
+	fields := map[string]interface{}{
+		"fieldFloat":  42.6,
+		"fieldInt":    -42,
+		"fieldUint64": uint64(42),
+	}
+	tags := map[string]string{
+		"tag1":       "value1",
+		"mountpoint": "/home",
+	}
+
+	db := &mockStore{}
+	acc := New(db.AddMetricPoints, &mockState{})
+
+	if len(db.points) != 0 {
+		t.Errorf("len(db.points) == %v, want %v", len(db.points), 0)
+	}
+	acc.AddFields(
+		"measurement",
+		fields,
+		tags,
+		t0,
+	)
+
+	if len(db.points) != len(fields) {
+		t.Errorf("len(db.metrics) == %v, want %v", len(db.points), len(fields))
+	}
+
+	for _, points := range db.points {
+		labels := points.Labels
+		name := labels[types.LabelName]
+		if !strings.HasPrefix(name, "measurement_") {
+			t.Errorf("name == %v, want measurement_*", name)
+		}
+		if _, ok := fields[name[len("measurement_"):]]; !ok {
+			t.Errorf("fields[%v] == nil, want it to exists", name)
+		}
+		tags[types.LabelName] = name
+		if !reflect.DeepEqual(labels, tags) {
+			t.Errorf("m.Labels() = %v, want %v", labels, tags)
+		}
+	}
+
+	for k, v := range fields {
+		name := "measurement_" + k
+		metrics := db.getByName(name)
+		if len(metrics) != 1 {
+			t.Errorf("len(db.Metrics(__name__=%v)) == %v, want %v", name, len(metrics), 1)
+		}
+		m := metrics[0]
+		labels := m.Labels
+		if labels[types.LabelName] != name {
+			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
+		}
+		tags[types.LabelName] = name
+		if !reflect.DeepEqual(labels, tags) {
+			t.Errorf("db.Metrics(__name__=%v).Labels() = %v, want %v", name, labels, tags)
+		}
+		point := m.Point
+		vFloat, _ := convertInterface(v)
+		want := types.Point{Time: t0, Value: vFloat}
+		if !reflect.DeepEqual(point, want) {
+			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, point, want)
+		}
+	}
+}
+
+func TestStoreAccumulatorWithStatus(t *testing.T) {
+	t0 := time.Now()
+	fields1 := map[string]interface{}{
+		"system": 16.0,
+		"idle":   3.0,
+	}
+	fields2 := map[string]interface{}{
+		"used": 97.0,
+	}
+	fields3 := map[string]interface{}{
+		"user": 81.0,
+	}
+	fields4 := map[string]interface{}{
+		"user_status": 1.0,
+	}
+	statusUsed := types.StatusDescription{CurrentStatus: types.StatusCritical, StatusDescription: "CPU 97%"}
+	statusUser := types.StatusDescription{CurrentStatus: types.StatusWarning, StatusDescription: "CPU 81%"}
+	annotations1 := types.MetricAnnotations{}
+	annotations2 := types.MetricAnnotations{
+		Status: statusUsed,
+	}
+	annotations3 := types.MetricAnnotations{
+		Status: statusUser,
+	}
+	annotations4 := types.MetricAnnotations{
+		Status:   statusUser,
+		StatusOf: "cpu_user",
+	}
+
+	tags := map[string]string{
+		"tag1":       "value1",
+		"mountpoint": "/home",
+	}
+	want := map[string]float64{
+		"cpu_used":        97.0,
+		"cpu_user":        81.0,
+		"cpu_system":      16.0,
+		"cpu_idle":        3.0,
+		"cpu_user_status": 1.0,
+	}
+	wantStatus := map[string]types.StatusDescription{
+		"cpu_used":        statusUsed,
+		"cpu_user":        statusUser,
+		"cpu_user_status": statusUser,
+	}
+
+	db := &mockStore{}
+	acc := New(db.AddMetricPoints, &mockState{})
+
+	if len(db.points) != 0 {
+		t.Errorf("len(db.metrics) == %v, want %v", len(db.points), 0)
+	}
+	acc.AddFieldsWithAnnotations(
+		"cpu",
+		fields1,
+		tags,
+		annotations1,
+		t0,
+	)
+	acc.AddFieldsWithAnnotations(
+		"cpu",
+		fields2,
+		tags,
+		annotations2,
+		t0,
+	)
+	acc.AddFieldsWithAnnotations(
+		"cpu",
+		fields3,
+		tags,
+		annotations3,
+		t0,
+	)
+	acc.AddFieldsWithAnnotations(
+		"cpu",
+		fields4,
+		tags,
+		annotations4,
+		t0,
+	)
+
+	if len(db.points) != len(want) {
+		t.Errorf("len(db.points) == %v, want %v", len(db.points), len(want))
+	}
+
+	for name, v := range want {
+		metrics := db.getByName(name)
+		if len(metrics) != 1 {
+			t.Errorf("len(db.Metrics(__name__=%v)) == %v, want %v", name, len(metrics), 1)
+		}
+		m := metrics[0]
+		labels := m.Labels
+		annotations := m.Annotations
+		if labels[types.LabelName] != name {
+			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
+		}
+		if strings.HasSuffix(name, "_status") {
+			strippedName := strings.TrimSuffix(name, "_status")
+			if annotations.StatusOf != strippedName {
+				t.Errorf("annotations.StatusOf == %v, want %v", annotations.StatusOf, strippedName)
+			}
+		}
+		delete(labels, types.LabelName)
+		if !reflect.DeepEqual(labels, tags) {
+			t.Errorf("db.Metrics(__name__=%v).Labels() = %v, want %v", name, labels, tags)
+		}
+		point := m.Point
+		vFloat, _ := convertInterface(v)
+		want := types.Point{Time: t0, Value: vFloat}
+		if !reflect.DeepEqual(point, want) {
+			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, point, want)
+		}
+		if st, ok := wantStatus[name]; ok {
+			if !reflect.DeepEqual(annotations.Status, st) {
+				t.Errorf("db.Metrics(__name__=%v).Status == %v, want %v", name, annotations.Status, st)
+			}
+		} else if annotations.Status.CurrentStatus.IsSet() {
+			t.Errorf("db.Metrics(__name__=%v).StatusDescription == %v, want none", name, annotations.Status)
+		}
+	}
 }
