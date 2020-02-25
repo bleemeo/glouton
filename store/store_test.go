@@ -259,7 +259,7 @@ func TestPoints(t *testing.T) {
 	p0 := types.Point{Time: t0, Value: 42.0}
 	p1 := types.Point{Time: t1, Value: -88}
 	p2 := types.Point{Time: t2, Value: 13.37}
-	db.AddMetricPoints([]types.MetricPoint{
+	db.PushPoints([]types.MetricPoint{
 		{Point: p0, Labels: labels},
 	})
 
@@ -273,10 +273,10 @@ func TestPoints(t *testing.T) {
 		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], p0)
 	}
 
-	db.AddMetricPoints([]types.MetricPoint{
+	db.PushPoints([]types.MetricPoint{
 		{Point: p1, Labels: labels},
 	})
-	db.AddMetricPoints([]types.MetricPoint{
+	db.PushPoints([]types.MetricPoint{
 		{Point: p2, Labels: labels},
 	})
 

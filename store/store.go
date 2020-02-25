@@ -237,11 +237,10 @@ func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.Me
 	return m
 }
 
-// AddMetricPoints append new metric points to the store, creating new metric
+// PushPoints append new metric points to the store, creating new metric
 // if needed.
-// The labels & annotations are not copied and should NOT be mutated after
-// calling AddMetricPoints
-func (s *Store) AddMetricPoints(points []types.MetricPoint) {
+// The points must not be mutated after this call
+func (s *Store) PushPoints(points []types.MetricPoint) {
 	s.lock.Lock()
 	for _, point := range points {
 		metric := s.metricGetOrCreate(point.Labels, point.Annotations)

@@ -22,17 +22,11 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"math"
-	"reflect"
 	"sync"
 	"time"
-
-	"github.com/influxdata/telegraf"
 )
 
 const statusCacheKey = "CacheStatusState"
-
-// AddMetricPointFunction is the type used by Accumulator to send metrics.
-type AddMetricPointFunction func(points []types.MetricPoint)
 
 // State store information about current firing threshold
 type State interface {
@@ -40,11 +34,10 @@ type State interface {
 	Set(key string, object interface{}) error
 }
 
-// Accumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) but check threshold and
-// emit the metric points with a status set in the annotations
-type Accumulator struct {
-	send  AddMetricPointFunction
-	state State
+// Pusher implement PointPusher and do threshold.
+type Pusher struct {
+	pusher types.PointPusher
+	state  State
 
 	l                 sync.Mutex
 	states            map[MetricNameItem]statusState
@@ -56,9 +49,9 @@ type Accumulator struct {
 }
 
 // New returns a new Accumulator
-func New(send AddMetricPointFunction, state State) *Accumulator {
-	self := &Accumulator{
-		send:              send,
+func New(pusher types.PointPusher, state State) *Pusher {
+	self := &Pusher{
+		pusher:            pusher,
 		state:             state,
 		states:            make(map[MetricNameItem]statusState),
 		defaultSoftPeriod: 300 * time.Second,
@@ -76,96 +69,30 @@ func New(send AddMetricPointFunction, state State) *Accumulator {
 // SetThresholds configure thresholds.
 // The thresholdWithItem is searched first and only match if both the metric name and item match
 // Then thresholdAllItem is searched and match is the metric name match regardless of the metric item.
-func (a *Accumulator) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold, thresholdAllItem map[string]Threshold) {
-	a.l.Lock()
-	defer a.l.Unlock()
-	a.thresholdsAllItem = thresholdAllItem
-	a.thresholds = thresholdWithItem
+func (p *Pusher) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold, thresholdAllItem map[string]Threshold) {
+	p.l.Lock()
+	defer p.l.Unlock()
+	p.thresholdsAllItem = thresholdAllItem
+	p.thresholds = thresholdWithItem
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
 }
 
 // SetSoftPeriod configure soft status period. A metric must stay in higher status for at least this period before its status actually change.
 // For example, CPU usage must be above 80% for at least 5 minutes before being alerted. The term soft-status is taken from Nagios.
-func (a *Accumulator) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
-	a.l.Lock()
-	defer a.l.Unlock()
-	a.softPeriods = periodPerMetrics
-	a.defaultSoftPeriod = defaultPeriod
+func (p *Pusher) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
+	p.l.Lock()
+	defer p.l.Unlock()
+	p.softPeriods = periodPerMetrics
+	p.defaultSoftPeriod = defaultPeriod
 	logger.V(2).Printf("SoftPeriod contains %d definitions", len(periodPerMetrics))
 }
 
 // SetUnits configure the units
-func (a *Accumulator) SetUnits(units map[MetricNameItem]Unit) {
-	a.l.Lock()
-	defer a.l.Unlock()
-	a.units = units
+func (p *Pusher) SetUnits(units map[MetricNameItem]Unit) {
+	p.l.Lock()
+	defer p.l.Unlock()
+	p.units = units
 	logger.V(2).Printf("Units contains %d definitions", len(units))
-}
-
-// AddFields adds a metric to the accumulator with the given measurement
-// name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".
-// Create a point with a value, decorating it with tags
-// NOTE: tags is expected to be owned by the caller, don't mutate
-// it after passing to Add.
-func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
-}
-
-// AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
-func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
-}
-
-// AddCounter is the same as AddFields, but will add the metric as a "Counter" type
-func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
-}
-
-// AddSummary is the same as AddFields, but will add the metric as a "Summary" type
-func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
-}
-
-// AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
-func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
-}
-
-// SetPrecision do nothing right now
-func (a *Accumulator) SetPrecision(precision time.Duration) {
-	a.AddError(fmt.Errorf("SetPrecision not implemented"))
-}
-
-// AddMetric is not yet implemented
-func (a *Accumulator) AddMetric(telegraf.Metric) {
-	a.AddError(fmt.Errorf("AddMetric not implemented"))
-}
-
-// WithTracking is not yet implemented
-func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.AddError(fmt.Errorf("WithTracking not implemented"))
-	return nil
-}
-
-// AddError add an error to the Accumulator
-func (a *Accumulator) AddError(err error) {
-	if err != nil {
-		logger.V(1).Printf("Add error called with: %v", err)
-	}
-}
-
-// AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields
-//
-// Note the annotation are not attached to the measurement, but to the resulting labels set.
-// Resulting labels set are all tags + the metric name which is measurement concatened with field name.
-//
-// This also means that if the same measurement (e.g. "cpu") need different annotations (e.g. a status for field "used" but none for field "system"),
-// you must to multiple call to AddFieldsWithAnnotations
-//
-// If a status is set in the annotation, not threshold will be applied on the metrics
-func (a *Accumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
-	a.addMetrics(measurement, fields, tags, annotations, t...)
 }
 
 // MetricNameItem is the couple Name and Item
@@ -347,17 +274,17 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 }
 
 // GetThreshold return the current threshold for given Metric
-func (a *Accumulator) GetThreshold(key MetricNameItem) Threshold {
-	a.l.Lock()
-	defer a.l.Unlock()
-	return a.getThreshold(key)
+func (p *Pusher) GetThreshold(key MetricNameItem) Threshold {
+	p.l.Lock()
+	defer p.l.Unlock()
+	return p.getThreshold(key)
 }
 
-func (a *Accumulator) getThreshold(key MetricNameItem) Threshold {
-	if threshold, ok := a.thresholds[key]; ok {
+func (p *Pusher) getThreshold(key MetricNameItem) Threshold {
+	if threshold, ok := p.thresholds[key]; ok {
 		return threshold
 	}
-	v := a.thresholdsAllItem[key.Name]
+	v := p.thresholdsAllItem[key.Name]
 	if v.IsZero() {
 		return Threshold{
 			LowCritical:  math.NaN(),
@@ -369,25 +296,8 @@ func (a *Accumulator) getThreshold(key MetricNameItem) Threshold {
 	return v
 }
 
-// convertInterface convert the interface type in float64
-func convertInterface(value interface{}) (float64, error) {
-	switch value := value.(type) {
-	case uint64:
-		return float64(value), nil
-	case float64:
-		return value, nil
-	case int:
-		return float64(value), nil
-	case int64:
-		return float64(value), nil
-	default:
-		var valueType = reflect.TypeOf(value)
-		return float64(0), fmt.Errorf("value type not supported :(%v)", valueType)
-	}
-}
-
 // Run will periodically save status state and clean it.
-func (a *Accumulator) Run(ctx context.Context) error {
+func (p *Pusher) Run(ctx context.Context) error {
 	lastSave := time.Now()
 	for ctx.Err() == nil {
 		save := false
@@ -399,7 +309,7 @@ func (a *Accumulator) Run(ctx context.Context) error {
 		if time.Since(lastSave) > 60*time.Minute {
 			save = true
 		}
-		a.run(save)
+		p.run(save)
 		if save {
 			lastSave = time.Now()
 		}
@@ -407,13 +317,13 @@ func (a *Accumulator) Run(ctx context.Context) error {
 	return nil
 }
 
-func (a *Accumulator) run(save bool) {
-	a.l.Lock()
-	defer a.l.Unlock()
-	jsonList := make([]jsonState, 0, len(a.states))
-	for k, v := range a.states {
+func (p *Pusher) run(save bool) {
+	p.l.Lock()
+	defer p.l.Unlock()
+	jsonList := make([]jsonState, 0, len(p.states))
+	for k, v := range p.states {
 		if time.Since(v.LastUpdate) > 60*time.Minute {
-			delete(a.states, k)
+			delete(p.states, k)
 		} else {
 			jsonList = append(jsonList, jsonState{
 				MetricNameItem: k,
@@ -422,7 +332,7 @@ func (a *Accumulator) run(save bool) {
 		}
 	}
 	if save {
-		_ = a.state.Set(statusCacheKey, jsonList)
+		_ = p.state.Set(statusCacheKey, jsonList)
 	}
 }
 
@@ -476,68 +386,44 @@ func formatDuration(period time.Duration) string {
 	return fmt.Sprintf("%.0f %s", value, currentUnit)
 }
 
-func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
-	a.l.Lock()
-	defer a.l.Unlock()
+// PushPoints implement PointPusher and do threshold.
+func (p *Pusher) PushPoints(points []types.MetricPoint) {
+	p.l.Lock()
+	defer p.l.Unlock()
 
-	var ts time.Time
+	result := make([]types.MetricPoint, 0, len(points))
 
-	if len(t) == 1 {
-		ts = t[0]
-	} else {
-		ts = time.Now()
-	}
-
-	points := make([]types.MetricPoint, 0, len(fields))
-
-	for name, valueRaw := range fields {
-		labels := make(map[string]string)
-		for k, v := range tags {
-			labels[k] = v
-		}
-		if measurement == "" {
-			labels[types.LabelName] = name
-		} else {
-			labels[types.LabelName] = measurement + "_" + name
-		}
-
-		value, err := convertInterface(valueRaw)
-		if err != nil {
-			logger.V(1).Printf("convertInterface failed. Ignoring point: %s", err)
-			continue
-		}
-
-		if !annotations.Status.CurrentStatus.IsSet() {
-			key := MetricNameItem{Name: labels[types.LabelName], Item: annotations.BleemeoItem}
-			threshold := a.getThreshold(key)
+	for _, point := range points {
+		if !point.Annotations.Status.CurrentStatus.IsSet() {
+			key := MetricNameItem{
+				Name: point.Labels[types.LabelName],
+				Item: point.Annotations.BleemeoItem,
+			}
+			threshold := p.getThreshold(key)
 			if !threshold.IsZero() {
-				points = a.addPointWithThreshold(points, ts, labels, annotations, threshold, key, value)
+				result = p.addPointWithThreshold(result, point, threshold, key)
 				continue
 			}
 		}
-		points = append(points, types.MetricPoint{
-			Point:       types.Point{Time: ts, Value: value},
-			Labels:      labels,
-			Annotations: annotations,
-		})
+		result = append(result, point)
 	}
-	a.send(points)
+	p.pusher.PushPoints(result)
 }
 
-func (a *Accumulator) addPointWithThreshold(points []types.MetricPoint, ts time.Time, labels map[string]string, annotations types.MetricAnnotations, threshold Threshold, key MetricNameItem, value float64) []types.MetricPoint {
+func (p *Pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {
 
-	softStatus, thresholdLimit := threshold.CurrentStatus(value)
-	previousState := a.states[key]
-	period := a.defaultSoftPeriod
-	if tmp, ok := a.softPeriods[key.Name]; ok {
+	softStatus, thresholdLimit := threshold.CurrentStatus(point.Value)
+	previousState := p.states[key]
+	period := p.defaultSoftPeriod
+	if tmp, ok := p.softPeriods[key.Name]; ok {
 		period = tmp
 	}
 	newState := previousState.Update(softStatus, period, time.Now())
-	a.states[key] = newState
+	p.states[key] = newState
 
-	unit := a.units[key]
+	unit := p.units[key]
 	// Consumer expect status description from threshold to start with "Current value:"
-	statusDescription := fmt.Sprintf("Current value: %s", formatValue(value, unit))
+	statusDescription := fmt.Sprintf("Current value: %s", formatValue(point.Value, unit))
 	if newState.CurrentStatus != types.StatusOk {
 		if period > 0 {
 			statusDescription += fmt.Sprintf(
@@ -557,25 +443,25 @@ func (a *Accumulator) addPointWithThreshold(points []types.MetricPoint, ts time.
 		CurrentStatus:     newState.CurrentStatus,
 		StatusDescription: statusDescription,
 	}
-	annotationsCopy := annotations
+	annotationsCopy := point.Annotations
 	annotationsCopy.Status = status
 
 	points = append(points, types.MetricPoint{
-		Point:       types.Point{Time: ts, Value: value},
-		Labels:      labels,
+		Point:       point.Point,
+		Labels:      point.Labels,
 		Annotations: annotationsCopy,
 	})
 
-	labelsCopy := make(map[string]string, len(labels))
-	for k, v := range labels {
+	labelsCopy := make(map[string]string, len(point.Labels))
+	for k, v := range point.Labels {
 		labelsCopy[k] = v
 	}
 	labelsCopy[types.LabelName] += "_status"
 
-	annotationsCopy.StatusOf = labels[types.LabelName]
+	annotationsCopy.StatusOf = point.Labels[types.LabelName]
 
 	points = append(points, types.MetricPoint{
-		Point:       types.Point{Time: ts, Value: float64(status.CurrentStatus.NagiosCode())},
+		Point:       types.Point{Time: point.Time, Value: float64(status.CurrentStatus.NagiosCode())},
 		Labels:      labelsCopy,
 		Annotations: annotationsCopy,
 	})

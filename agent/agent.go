@@ -42,6 +42,7 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/influxdb"
+	"glouton/inputs"
 	"glouton/inputs/docker"
 	"glouton/inputs/statsd"
 	"glouton/logger"
@@ -70,7 +71,7 @@ type agent struct {
 	factProvider      *facts.FactProvider
 	bleemeoConnector  *bleemeo.Connector
 	influxdbConnector *influxdb.Client
-	accumulator       *threshold.Accumulator
+	pointPusher       *threshold.Pusher
 	store             *store.Store
 
 	triggerHandler            *debouncer.Debouncer
@@ -275,15 +276,15 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 			Name: name,
 			Item: "",
 		}
-		oldThresholds[name] = a.accumulator.GetThreshold(key)
+		oldThresholds[name] = a.pointPusher.GetThreshold(key)
 	}
-	a.accumulator.SetThresholds(thresholds, configThreshold)
+	a.pointPusher.SetThresholds(thresholds, configThreshold)
 	for name := range oldThresholds {
 		key := threshold.MetricNameItem{
 			Name: name,
 			Item: "",
 		}
-		newThreshold := a.accumulator.GetThreshold(key)
+		newThreshold := a.pointPusher.GetThreshold(key)
 		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
 			a.FireTrigger(false, false, true)
 		}
@@ -360,8 +361,8 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	a.store = store.New()
-	a.accumulator = threshold.New(
-		a.store.Accumulator(),
+	a.pointPusher = threshold.New(
+		a.store,
 		a.state,
 	)
 	a.dockerFact = facts.NewDocker(a.deletedContainersCallback)
@@ -377,7 +378,7 @@ func (a *agent) run() { //nolint:gocyclo
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
-	a.collector = collector.New(a.accumulator)
+	a.collector = collector.New(&inputs.Accumulator{Pusher: a.pointPusher})
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -392,7 +393,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.collector,
 		a.taskRegistry,
 		a.state,
-		a.accumulator,
+		&inputs.Accumulator{Pusher: a.pointPusher},
 		a.dockerFact,
 		overrideServices,
 		isCheckIgnored,
@@ -406,7 +407,7 @@ func (a *agent) run() { //nolint:gocyclo
 	scrap := scrapper.New(targets)
 	promExporter := exporter.New(a.store, scrap)
 
-	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.accumulator, a.config.String("web.static_cdn_url"))
+	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.pointPusher, a.config.String("web.static_cdn_url"))
 
 	a.FireTrigger(true, false, false)
 
@@ -432,11 +433,11 @@ func (a *agent) run() { //nolint:gocyclo
 			Process:                psFact,
 			Docker:                 a.dockerFact,
 			Store:                  a.store,
-			Acc:                    a.accumulator,
+			Acc:                    &inputs.Accumulator{Pusher: a.pointPusher},
 			Discovery:              a.discovery,
 			UpdateMetricResolution: a.collector.UpdateDelay,
 			UpdateThresholds:       a.UpdateThresholds,
-			UpdateUnits:            a.accumulator.SetUnits,
+			UpdateUnits:            a.pointPusher.SetUnits,
 			BleemeoMode:            true,
 		})
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
@@ -476,7 +477,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.bleemeoConnector.UpdateUnitsAndThresholds(true)
 	}
 	tmp, _ := a.config.Get("metric.softstatus_period")
-	a.accumulator.SetSoftPeriod(
+	a.pointPusher.SetSoftPeriod(
 		time.Duration(a.config.Int("metric.softstatus_period_default"))*time.Second,
 		softPeriodsFromInterface(tmp),
 	)
@@ -697,20 +698,23 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 		status.StatusDescription = fmt.Sprintf("Unknown health status %#v", healthStatus)
 	}
 
-	a.accumulator.AddFieldsWithAnnotations(
-		"docker",
-		map[string]interface{}{
-			"container_health_status": status.CurrentStatus.NagiosCode(),
+	a.pointPusher.PushPoints([]types.MetricPoint{
+		{
+			Labels: map[string]string{
+				types.LabelName:          "docker_container_health_status",
+				types.LabelContainerName: container.Name(),
+			},
+			Annotations: types.MetricAnnotations{
+				Status:      status,
+				ContainerID: container.ID(),
+				BleemeoItem: container.Name(),
+			},
+			Point: types.Point{
+				Time:  time.Now(),
+				Value: float64(status.CurrentStatus.NagiosCode()),
+			},
 		},
-		map[string]string{
-			types.LabelContainerName: container.Name(),
-		},
-		types.MetricAnnotations{
-			Status:      status,
-			ContainerID: container.ID(),
-			BleemeoItem: container.Name(),
-		},
-	)
+	})
 }
 
 func (a *agent) netstatWatcher(ctx context.Context) error {
@@ -798,20 +802,30 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			a.config.String("container.type") != "",
 			rootPath,
 		)
-		fields := make(map[string]interface{})
+		points := make([]types.MetricPoint, 0)
 		if pendingUpdate >= 0 {
-			fields["pending_updates"] = pendingUpdate
+			points = append(points, types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName: "system_pending_updates",
+				},
+				Point: types.Point{
+					Time:  time.Now(),
+					Value: float64(pendingUpdate),
+				},
+			})
 		}
 		if pendingSecurityUpdate >= 0 {
-			fields["pending_security_updates"] = pendingSecurityUpdate
+			points = append(points, types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName: "system_pending_security_updates",
+				},
+				Point: types.Point{
+					Time:  time.Now(),
+					Value: float64(pendingSecurityUpdate),
+				},
+			})
 		}
-		if len(fields) > 0 {
-			a.accumulator.AddFields(
-				"system",
-				fields,
-				nil,
-			)
-		}
+		a.pointPusher.PushPoints(points)
 	}
 }
 

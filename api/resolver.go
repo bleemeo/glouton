@@ -89,7 +89,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 // This interval could be between a start and end dates or X minutes from now
 // Metrics can also be filtered
 func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
-	if r.api.db == nil || r.api.accumulator == nil {
+	if r.api.db == nil || r.api.threshold == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 	metrics := []types.Metric{}
@@ -140,7 +140,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			pointRes := &Point{Time: point.Time.UTC(), Value: point.Value}
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
-		thresholds := r.api.accumulator.GetThreshold(threshold.MetricNameItem{Item: annotations.BleemeoItem, Name: labels[types.LabelName]})
+		thresholds := r.api.threshold.GetThreshold(threshold.MetricNameItem{Item: annotations.BleemeoItem, Name: labels[types.LabelName]})
 		threshold := &Threshold{
 			LowCritical:  &thresholds.LowCritical,
 			LowWarning:   &thresholds.LowWarning,

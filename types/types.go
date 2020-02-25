@@ -129,6 +129,11 @@ type MetricPoint struct {
 	Annotations MetricAnnotations
 }
 
+// PointPusher push new points. points must not be mutated after call
+type PointPusher interface {
+	PushPoints(points []MetricPoint)
+}
+
 // StatusDescription store a service/metric status with an optional description
 type StatusDescription struct {
 	CurrentStatus     Status
