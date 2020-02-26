@@ -39,6 +39,7 @@ var defaultConfig = map[string]interface{}{
 	"agent.state_file":               "state.json",
 	"agent.upgrade_file":             "upgrade",
 	"agent.metrics_format":           "Bleemeo",
+	"agent.node_exporter.collectors": []string{},
 	"bleemeo.account_id":             "",
 	"bleemeo.api_base":               "https://api.bleemeo.com/",
 	"bleemeo.api_ssl_insecure":       false,
@@ -71,7 +72,8 @@ var defaultConfig = map[string]interface{}{
 		"/var/lib/docker/plugins",
 		"/snap",
 	},
-	"disk_monitor": []interface{}{
+	"disk_ignore": []string{},
+	"disk_monitor": []string{
 		"^(hd|sd|vd|xvd)[a-z]$",
 		"^mmcblk[0-9]$",
 		"^nvme[0-9]n[0-9]$",

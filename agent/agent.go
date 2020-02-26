@@ -26,6 +26,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -416,7 +417,13 @@ func (a *agent) run() { //nolint:gocyclo
 	scrap := scrapper.New(targets)
 
 	a.metricRegistry.AddDefaultCollector()
-	if err := a.metricRegistry.AddNodeExporter(); err != nil {
+	nodeOption := registry.NodeExporterOption{
+		RootFS:            rootPath,
+		EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
+	}
+	nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
+	nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
+	if err := a.metricRegistry.AddNodeExporter(nodeOption); err != nil {
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
 	}
 	a.metricRegistry.RegisterGatherer(scrap)
@@ -498,6 +505,14 @@ func (a *agent) run() { //nolint:gocyclo
 		softPeriodsFromInterface(tmp),
 	)
 
+	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig["disk_monitor"]) {
+		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.StringList("disk_ignore")) > 0 {
+			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
+		} else if a.metricFormat != types.MetricFormatBleemeo {
+			logger.Printf("Warning: configuration \"disk_monitor\" is not used in Prometheus mode. Use \"disk_ignore\"")
+		}
+	}
+
 	if a.metricFormat == types.MetricFormatBleemeo {
 		err = discovery.AddDefaultInputs(
 			a.collector,
@@ -505,6 +520,7 @@ func (a *agent) run() { //nolint:gocyclo
 				DFRootPath:      rootPath,
 				NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
 				IODiskWhitelist: a.config.StringList("disk_monitor"),
+				IODiskBlacklist: a.config.StringList("disk_ignore"),
 				DFPathBlacklist: a.config.StringList("df.path_ignore"),
 			},
 		)

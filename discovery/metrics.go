@@ -53,6 +53,7 @@ type InputOption struct {
 	DFPathBlacklist []string
 	NetIfBlacklist  []string
 	IODiskWhitelist []string
+	IODiskBlacklist []string
 }
 
 // AddDefaultInputs adds system inputs to a collector
@@ -118,7 +119,7 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		}
 	}
 
-	input, err = diskio.New(option.IODiskWhitelist)
+	input, err = diskio.New(option.IODiskWhitelist, option.IODiskBlacklist)
 	if err != nil {
 		return err
 	}

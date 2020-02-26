@@ -22,21 +22,17 @@ package registry
 
 import (
 	"context"
-	"fmt"
 	"glouton/logger"
 	"glouton/types"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 	"github.com/prometheus/common/model"
-	"github.com/prometheus/node_exporter/collector"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
@@ -107,12 +103,8 @@ func (r *Registry) AddDefaultCollector() {
 }
 
 // AddNodeExporter add a node_exporter to collector
-func (r *Registry) AddNodeExporter() error {
-	if _, err := kingpin.CommandLine.Parse(nil); err != nil {
-		return fmt.Errorf("kingpin initialization: %v", err)
-	}
-	l := log.NewNopLogger()
-	collector, err := collector.NewNodeCollector(l)
+func (r *Registry) AddNodeExporter(option NodeExporterOption) error {
+	collector, err := nodeExporterCollector(option)
 	if err != nil {
 		return err
 	}
