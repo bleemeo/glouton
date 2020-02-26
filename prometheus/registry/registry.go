@@ -59,7 +59,7 @@ type Registry struct {
 
 	l                       sync.Mutex
 	collectors              []prometheus.Collector
-	gatherers               Gatherers
+	gatherersPull           Gatherers
 	registyPull             *prometheus.Registry
 	registyPush             *prometheus.Registry
 	pushedPoints            map[string]types.MetricPoint
@@ -84,9 +84,8 @@ func (r *Registry) init() {
 	}
 
 	r.registyPull = prometheus.NewRegistry()
-	r.gatherers = append(r.gatherers, r.registyPull)
+	r.gatherersPull = append(r.gatherersPull, r.registyPull)
 	r.registyPush = prometheus.NewRegistry()
-	r.gatherers = append(r.gatherers, r.registyPush)
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
 	r.currentDelay = 10 * time.Second
@@ -146,7 +145,7 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	r.gatherers = append(r.gatherers, gatherer)
+	r.gatherersPull = append(r.gatherersPull, gatherer)
 }
 
 // MustRegister add a new collector to the list of metric sources.
@@ -250,7 +249,7 @@ func (r *Registry) run(ctx context.Context) {
 }
 
 func (r *Registry) runOnce() {
-	families, err := r.registyPull.Gather()
+	families, err := r.gatherersPull.Gather()
 	if err != nil {
 		logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
 	}
@@ -328,7 +327,19 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 
 // Gather gathers all metric sources, including push metric source
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
-	return r.gatherers.Gather()
+	r.l.Lock()
+
+	gatherers := make(Gatherers, len(r.gatherersPull)+1)
+
+	for i, g := range r.gatherersPull {
+		gatherers[i] = g
+	}
+
+	gatherers[len(gatherers)-1] = r.registyPush
+
+	r.l.Unlock()
+
+	return gatherers.Gather()
 }
 
 // Describe implement prometheus.Collector
