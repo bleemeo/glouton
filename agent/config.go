@@ -38,6 +38,7 @@ var defaultConfig = map[string]interface{}{
 	"agent.public_ip_indicator":      "https://myip.bleemeo.com",
 	"agent.state_file":               "state.json",
 	"agent.upgrade_file":             "upgrade",
+	"agent.metrics_format":           "Bleemeo",
 	"bleemeo.account_id":             "",
 	"bleemeo.api_base":               "https://api.bleemeo.com/",
 	"bleemeo.api_ssl_insecure":       false,

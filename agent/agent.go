@@ -74,6 +74,7 @@ type agent struct {
 	threshold         *threshold.Registry
 	store             *store.Store
 	metricRegistry    *registry.Registry
+	metricFormat      types.MetricFormat
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -351,6 +352,12 @@ func (a *agent) run() { //nolint:gocyclo
 	logger.Printf("Starting agent version %v (commit %v)", version.Version, version.BuildHash)
 	_ = os.Remove(a.config.String("agent.upgrade_file"))
 
+	a.metricFormat = types.StringToMetricFormat(a.config.String("agent.metrics_format"))
+	if a.metricFormat == types.MetricFormatUnknown {
+		logger.Printf("Invalid metric format %#v. Supported option are \"Bleemeo\" and \"Prometheus\". Falling back to Bleemeo", a.config.String("agent.metrics_format"))
+		a.metricFormat = types.MetricFormatBleemeo
+	}
+
 	apiBindAddress := fmt.Sprintf("%s:%d", a.config.String("web.listener.address"), a.config.Int("web.listener.port"))
 
 	if a.config.Bool("agent.http_debug.enabled") {
@@ -444,10 +451,10 @@ func (a *agent) run() { //nolint:gocyclo
 			Store:                  a.store,
 			Acc:                    acc,
 			Discovery:              a.discovery,
-			UpdateMetricResolution: a.collector.UpdateDelay,
+			UpdateMetricResolution: a.updateMetricResolution,
 			UpdateThresholds:       a.UpdateThresholds,
 			UpdateUnits:            a.threshold.SetUnits,
-			BleemeoMode:            true,
+			MetricFormat:           a.metricFormat,
 		})
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
@@ -491,18 +498,25 @@ func (a *agent) run() { //nolint:gocyclo
 		softPeriodsFromInterface(tmp),
 	)
 
-	err = discovery.AddDefaultInputs(
-		a.collector,
-		discovery.InputOption{
-			DFRootPath:      rootPath,
-			NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
-			IODiskWhitelist: a.config.StringList("disk_monitor"),
-			DFPathBlacklist: a.config.StringList("df.path_ignore"),
-		},
-	)
-	if err != nil {
-		logger.Printf("Unable to initialize system collector: %v", err)
-		return
+	if a.metricFormat == types.MetricFormatBleemeo {
+		err = discovery.AddDefaultInputs(
+			a.collector,
+			discovery.InputOption{
+				DFRootPath:      rootPath,
+				NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
+				IODiskWhitelist: a.config.StringList("disk_monitor"),
+				DFPathBlacklist: a.config.StringList("df.path_ignore"),
+			},
+		)
+		if err != nil {
+			logger.Printf("Unable to initialize system collector: %v", err)
+			return
+		}
+	} else {
+		tasks = append(tasks, taskInfo{
+			a.metricRegistry.RunCollection,
+			"Metric collector",
+		})
 	}
 
 	if a.config.Bool("telegraf.statsd.enabled") {
@@ -856,6 +870,11 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 	if len(metricToDelete) > 0 {
 		a.store.DropMetrics(metricToDelete)
 	}
+}
+
+func (a *agent) updateMetricResolution(resolution time.Duration) {
+	a.collector.UpdateDelay(resolution)
+	a.metricRegistry.UpdateDelay(resolution)
 }
 
 func parseIPOutput(content []byte) string {

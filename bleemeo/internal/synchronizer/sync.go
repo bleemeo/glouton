@@ -49,6 +49,7 @@ type Synchronizer struct {
 	warnAccountMismatchDone bool
 	lastMetricCount         int
 	agentID                 string
+	instanceAddress         string
 
 	l                    sync.Mutex
 	disabledUntil        time.Time

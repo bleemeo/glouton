@@ -34,7 +34,7 @@ const (
 
 // LabelsToText convert labels & annotation to a string version.
 // When using the Bleemeo Mode, result is the name + the item annotation
-func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
+func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, instance string, bleemeoMode bool) string {
 	if bleemeoMode {
 		labelsCopy := map[string]string{
 			types.LabelName:  labels[types.LabelName],
@@ -43,7 +43,15 @@ func LabelsToText(labels map[string]string, annotations types.MetricAnnotations,
 		return types.LabelsToText(labelsCopy)
 	}
 
-	return types.LabelsToText(labels)
+	labelsCopy := make(map[string]string, len(labels)+1)
+	for k, v := range labels {
+		labelsCopy[k] = v
+	}
+
+	labelsCopy["instance"] = instance
+	labelsCopy["job"] = "glouton"
+
+	return types.LabelsToText(labelsCopy)
 }
 
 // TruncateItem truncate the item to match maximal length allowed by Bleemeo API

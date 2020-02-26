@@ -94,7 +94,7 @@ type metricPayload struct {
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric
-func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
+func (mp metricPayload) metricFromAPI(instance string) bleemeoTypes.Metric {
 	if mp.Item != "" || mp.LabelsText == "" {
 		mp.Labels = map[string]string{
 			types.LabelName: mp.Name,
@@ -102,7 +102,7 @@ func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 		annotations := types.MetricAnnotations{
 			BleemeoItem: mp.Item,
 		}
-		mp.LabelsText = common.LabelsToText(mp.Labels, annotations, true)
+		mp.LabelsText = common.LabelsToText(mp.Labels, annotations, instance, true)
 	} else {
 		mp.Labels = types.TextToLabels(mp.LabelsText)
 	}
@@ -143,7 +143,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []string 
 
 	result := make([]string, 0)
 	for _, v := range metrics {
-		key := common.LabelsToText(v.Labels(), v.Annotations(), s.option.BleemeoMode)
+		key := common.LabelsToText(v.Labels(), v.Annotations(), s.instanceAddress, s.option.MetricFormat == types.MetricFormatBleemeo)
 
 		if _, ok := registeredMetricsByKey[key]; ok {
 			continue
@@ -154,6 +154,12 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []string 
 }
 
 func (s *Synchronizer) syncMetrics(fullSync bool) error {
+
+	instance, err := s.option.GetInstance(s.ctx)
+	if err != nil {
+		return err
+	}
+	s.instanceAddress = instance
 
 	metricWhitelist := s.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
 
@@ -294,7 +300,7 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 		if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 			continue
 		}
-		metricsByUUID[metric.ID] = metric.metricFromAPI()
+		metricsByUUID[metric.ID] = metric.metricFromAPI(s.instanceAddress)
 	}
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
@@ -314,7 +320,7 @@ func (s *Synchronizer) metricUpdateListSearch(requests []string) error {
 			"labels_text": key,
 			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
-		if s.option.BleemeoMode {
+		if s.option.MetricFormat == types.MetricFormatBleemeo {
 			labels := types.TextToLabels(key)
 			params["label"] = labels[types.LabelName]
 			params["item"] = labels[common.LabelBleemeoItem]
@@ -331,7 +337,7 @@ func (s *Synchronizer) metricUpdateListSearch(requests []string) error {
 			if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 				continue
 			}
-			metricsByUUID[metric.ID] = metric.metricFromAPI()
+			metricsByUUID[metric.ID] = metric.metricFromAPI(s.instanceAddress)
 		}
 	}
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
@@ -363,7 +369,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		} else if err != nil {
 			return err
 		}
-		metricsByUUID[metric.ID] = metric.metricFromAPI()
+		metricsByUUID[metric.ID] = metric.metricFromAPI(s.instanceAddress)
 	}
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
 	for _, m := range metricsByUUID {
@@ -388,7 +394,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	localMetricToDelete := make([]map[string]string, 0)
 	for _, m := range localMetrics {
 		labels := m.Labels()
-		key := common.LabelsToText(labels, m.Annotations(), s.option.BleemeoMode)
+		key := common.LabelsToText(labels, m.Annotations(), s.instanceAddress, s.option.MetricFormat == types.MetricFormatBleemeo)
 
 		if _, ok := deletedMetricLabelItem[key]; ok {
 			localMetricToDelete = append(localMetricToDelete, labels)
@@ -439,7 +445,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 				requests := make([]string, len(registerMetrics))
 				for i, m := range registerMetrics {
 					labels := m.Labels()
-					requests[i] = common.LabelsToText(labels, m.Annotations(), s.option.BleemeoMode)
+					requests[i] = common.LabelsToText(labels, m.Annotations(), s.instanceAddress, s.option.MetricFormat == types.MetricFormatBleemeo)
 				}
 				if err := s.metricUpdateListSearch(requests); err != nil {
 					return err
@@ -502,7 +508,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registeredMetricsByUUID map[string]bleemeoTypes.Metric, registeredMetricsByKey map[string]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container, servicesByKey map[serviceNameInstance]bleemeoTypes.Service, params map[string]string) error {
 	labels := metric.Labels()
 	annotations := metric.Annotations()
-	key := common.LabelsToText(labels, annotations, s.option.BleemeoMode)
+	key := common.LabelsToText(labels, annotations, s.instanceAddress, s.option.MetricFormat == types.MetricFormatBleemeo)
 	remoteMetric, remoteFound := registeredMetricsByKey[key]
 	if remoteFound {
 		result, err := s.metricUpdateOne(key, metric, remoteMetric)
@@ -522,7 +528,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		Agent: s.agentID,
 	}
 
-	if s.option.BleemeoMode {
+	if s.option.MetricFormat == types.MetricFormatBleemeo {
 		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
 		payload.LabelsText = ""
 	}
@@ -537,7 +543,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		}
 		subLabels[types.LabelName] = annotations.StatusOf
 
-		subKey := common.LabelsToText(subLabels, annotations, s.option.BleemeoMode)
+		subKey := common.LabelsToText(subLabels, annotations, s.instanceAddress, s.option.MetricFormat == types.MetricFormatBleemeo)
 		metricStatusOf, ok := registeredMetricsByKey[subKey]
 		if !ok {
 			return errRetryLater
@@ -571,8 +577,8 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		return err
 	}
 	logger.V(2).Printf("Metric %v registrered with UUID %s", key, result.ID)
-	registeredMetricsByKey[key] = result.metricFromAPI()
-	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
+	registeredMetricsByKey[key] = result.metricFromAPI(s.instanceAddress)
+	registeredMetricsByUUID[result.ID] = result.metricFromAPI(s.instanceAddress)
 	return nil
 }
 
@@ -634,7 +640,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 			continue
 		}
 		labels := srv.LabelsOfStatus()
-		metricKey := common.LabelsToText(labels, srv.AnnotationsOfStatus(), s.option.BleemeoMode)
+		metricKey := common.LabelsToText(labels, srv.AnnotationsOfStatus(), s.instanceAddress, s.option.MetricFormat == types.MetricFormatBleemeo)
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
 			_, err := s.client.Do("DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
 			if err != nil {
@@ -659,7 +665,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	localByMetricKey := make(map[string]types.Metric, len(localMetrics))
 	for _, v := range localMetrics {
 		labels := v.Labels()
-		key := common.LabelsToText(labels, v.Annotations(), s.option.BleemeoMode)
+		key := common.LabelsToText(labels, v.Annotations(), s.instanceAddress, s.option.MetricFormat == types.MetricFormatBleemeo)
 		localByMetricKey[key] = v
 	}
 

@@ -21,18 +21,22 @@
 package registry
 
 import (
+	"context"
 	"fmt"
+	"glouton/logger"
 	"glouton/types"
 	"net/http"
 	"sync"
 	"time"
 
-	"github.com/alecthomas/kingpin"
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/expfmt"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/node_exporter/collector"
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
@@ -61,6 +65,8 @@ type Registry struct {
 	pushedPoints            map[string]types.MetricPoint
 	pushedPointsExpiration  map[string]time.Time
 	lastPushedPointsCleanup time.Time
+	currentDelay            time.Duration
+	updateDelayC            chan interface{}
 }
 
 // This type is used to have another Collecto() method private which only return pulled points
@@ -154,6 +160,114 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	return pushFunction(func(points []types.MetricPoint) {
 		r.pushPoint(points, ttl)
 	})
+}
+
+// RunCollection runs collection of all collector & gatherer at regular interval.
+// The interval could be updated by call to UpdateDelay
+func (r *Registry) RunCollection(ctx context.Context) error {
+	var registyPull prometheus.Registerer
+
+	r.l.Lock()
+
+	if r.registyPull == nil {
+		r.registyPull = prometheus.NewRegistry()
+		r.gatherers = append(r.gatherers, r.registyPull)
+		registyPull = r.registyPull
+	}
+
+	if r.currentDelay == 0 {
+		r.currentDelay = 10 * time.Second
+	}
+
+	r.l.Unlock()
+
+	if registyPull != nil {
+		_ = registyPull.Register((*pullCollector)(r))
+	}
+
+	for ctx.Err() == nil {
+		r.run(ctx)
+	}
+	return nil
+}
+
+// UpdateDelay change the delay between metric gather
+func (r *Registry) UpdateDelay(delay time.Duration) {
+	r.l.Lock()
+	if r.currentDelay == delay {
+		r.l.Unlock()
+		return
+	}
+	r.currentDelay = delay
+	r.l.Unlock()
+	logger.V(2).Printf("Change metric collector delay to %v", delay)
+	r.updateDelayC <- nil
+}
+
+func (r *Registry) run(ctx context.Context) {
+	r.l.Lock()
+	currentDelay := r.currentDelay
+	r.l.Unlock()
+
+	sleepToAlign(currentDelay)
+	ticker := time.NewTicker(currentDelay)
+	defer ticker.Stop()
+	for {
+		r.runOnce()
+		select {
+		case <-r.updateDelayC:
+			return
+		case <-ticker.C:
+		case <-ctx.Done():
+			return
+		}
+	}
+}
+
+func (r *Registry) runOnce() {
+	families, err := r.registyPull.Gather()
+	if err != nil {
+		logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
+	}
+	points := familiesToMetricPoints(families)
+	r.PushPoint.PushPoints(points)
+}
+
+func familiesToMetricPoints(families []*dto.MetricFamily) []types.MetricPoint {
+	samples, err := expfmt.ExtractSamples(
+		&expfmt.DecodeOptions{Timestamp: model.Now()},
+		families...,
+	)
+	if err != nil {
+		logger.Printf("Conversion of metrics failed, some metrics may be missing: %v", err)
+	}
+	result := make([]types.MetricPoint, len(samples))
+	for i, sample := range samples {
+		labels := make(map[string]string, len(sample.Metric))
+		for k, v := range sample.Metric {
+			labels[string(k)] = string(v)
+		}
+
+		result[i] = types.MetricPoint{
+			Labels: labels,
+			Point: types.Point{
+				Time:  sample.Timestamp.Time(),
+				Value: float64(sample.Value),
+			},
+		}
+	}
+	return result
+}
+
+// sleep such are time.Now() is aligned on a multiple of interval
+func sleepToAlign(interval time.Duration) {
+	now := time.Now()
+	previousMultiple := now.Truncate(interval)
+	if previousMultiple == now {
+		return
+	}
+	nextMultiple := previousMultiple.Add(interval)
+	time.Sleep(nextMultiple.Sub(now))
 }
 
 // pushPoint add a new point to the list of pushed point with a specified TTL.

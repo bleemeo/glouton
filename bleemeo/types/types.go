@@ -18,10 +18,12 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/threshold"
 	"glouton/types"
+	"strings"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -29,21 +31,31 @@ import (
 
 // GlobalOption are option user by most component of bleemeo.Connector
 type GlobalOption struct {
-	Config    Config
-	State     State
-	Facts     FactProvider
-	Process   ProcessProvider
-	Docker    DockerProvider
-	Store     Store
-	Acc       telegraf.Accumulator
-	Discovery discovery.PersistentDiscoverer
-	// BleemeoMode means that metrics are identified with the couple name, item
-	// Ourside this mode, metrics are identified with all labels.
-	BleemeoMode bool
+	Config       Config
+	State        State
+	Facts        FactProvider
+	Process      ProcessProvider
+	Docker       DockerProvider
+	Store        Store
+	Acc          telegraf.Accumulator
+	Discovery    discovery.PersistentDiscoverer
+	MetricFormat types.MetricFormat
 
 	UpdateMetricResolution func(resolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
+}
+
+// GetInstance return the "Prometheus" instance of this Glouton
+// It's the FQDN:api-port
+func (o GlobalOption) GetInstance(ctx context.Context) (string, error) {
+	facts, err := o.Facts.Facts(ctx, time.Hour)
+	if err != nil {
+		return "", err
+	}
+	port := o.Config.Int("web.listener.port")
+	instance := fmt.Sprintf("%s:%d", facts["fqdn"], port)
+	return strings.ToLower(instance), nil
 }
 
 // Config is the interface used by Bleemeo to access Config

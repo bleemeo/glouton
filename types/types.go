@@ -37,6 +37,43 @@ const (
 	StatusUnknown
 )
 
+// MetricFormat specify the metric format used
+type MetricFormat int
+
+// List of known metrics format.
+// Currently only Bleemeo and Prometheus are supported.
+// The Bleemeo format is the initial format supported. It provide fewer metrics
+// which are usually directly queriable (e.g. disk_used_perc instead of a free bytes and total bytes)
+// The Prometheus format use same format as node_exporter and try to be as close as Prometheus way
+const (
+	MetricFormatUnknown MetricFormat = iota
+	MetricFormatBleemeo
+	MetricFormatPrometheus
+)
+
+// StringToMetricFormat convert a string to a MetricFormat. Return MetricFormatUnknown if input is invalid
+func StringToMetricFormat(input string) MetricFormat {
+	switch strings.ToLower(input) {
+	case "bleemeo":
+		return MetricFormatBleemeo
+	case "prometheus":
+		return MetricFormatPrometheus
+	default:
+		return MetricFormatUnknown
+	}
+}
+
+func (f MetricFormat) String() string {
+	switch f {
+	case MetricFormatBleemeo:
+		return "Bleemeo"
+	case MetricFormatPrometheus:
+		return "Prometheus"
+	default:
+		return "unknown"
+	}
+}
+
 // List of label names that some part of Glouton will assume to be named
 // as such.
 // Using constant here allow to change their name only here.
