@@ -59,7 +59,7 @@ type Registry struct {
 
 	l                       sync.Mutex
 	collectors              []prometheus.Collector
-	gatherers               prometheus.Gatherers
+	gatherers               Gatherers
 	registyPull             *prometheus.Registry
 	registyPush             *prometheus.Registry
 	pushedPoints            map[string]types.MetricPoint
@@ -74,6 +74,32 @@ type pullCollector Registry
 
 // This type is used to have another Collecto() method private which only return pushed points
 type pushCollector Registry
+
+func (r *Registry) init() {
+	r.l.Lock()
+
+	if r.registyPull != nil {
+		r.l.Unlock()
+		return
+	}
+
+	r.registyPull = prometheus.NewRegistry()
+	r.gatherers = append(r.gatherers, r.registyPull)
+	r.registyPush = prometheus.NewRegistry()
+	r.gatherers = append(r.gatherers, r.registyPush)
+	r.pushedPoints = make(map[string]types.MetricPoint)
+	r.pushedPointsExpiration = make(map[string]time.Time)
+	r.currentDelay = 10 * time.Second
+	r.updateDelayC = make(chan interface{})
+
+	r.l.Unlock()
+
+	// Gather & Register shouldn't be done with the lock, as is will call
+	// Describe and/or Collect which may take the lock
+
+	_ = r.registyPush.Register((*pushCollector)(r))
+	_ = r.registyPull.Register((*pullCollector)(r))
+}
 
 // AddDefaultCollector add GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
 func (r *Registry) AddDefaultCollector() {
@@ -97,6 +123,7 @@ func (r *Registry) AddNodeExporter() error {
 
 // Register add a new collector to the list of metric sources.
 func (r *Registry) Register(collector prometheus.Collector) error {
+	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -115,6 +142,7 @@ func (r *Registry) Register(collector prometheus.Collector) error {
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
 func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer) {
+	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
 
@@ -147,16 +175,29 @@ func (r *Registry) Unregister(collector prometheus.Collector) bool {
 	return false
 }
 
+type prefixLogger string
+
+func (l prefixLogger) Println(v ...interface{}) {
+	all := make([]interface{}, 0, len(v)+1)
+	all = append(all, l)
+	all = append(all, v...)
+	logger.V(1).Println(all...)
+}
+
 // Exporter return an HTTP exporter
 func (r *Registry) Exporter() http.Handler {
 	return promhttp.InstrumentMetricHandler(
 		r,
-		promhttp.HandlerFor(r, promhttp.HandlerOpts{}),
+		promhttp.HandlerFor(r, promhttp.HandlerOpts{
+			ErrorHandling: promhttp.ContinueOnError,
+			ErrorLog:      prefixLogger("/metrics endpoint:"),
+		}),
 	)
 }
 
 // WithTTL return a AddMetricPointFunction with TTL on pushed points.
 func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
+	r.init()
 	return pushFunction(func(points []types.MetricPoint) {
 		r.pushPoint(points, ttl)
 	})
@@ -165,25 +206,7 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 // RunCollection runs collection of all collector & gatherer at regular interval.
 // The interval could be updated by call to UpdateDelay
 func (r *Registry) RunCollection(ctx context.Context) error {
-	var registyPull prometheus.Registerer
-
-	r.l.Lock()
-
-	if r.registyPull == nil {
-		r.registyPull = prometheus.NewRegistry()
-		r.gatherers = append(r.gatherers, r.registyPull)
-		registyPull = r.registyPull
-	}
-
-	if r.currentDelay == 0 {
-		r.currentDelay = 10 * time.Second
-	}
-
-	r.l.Unlock()
-
-	if registyPull != nil {
-		_ = registyPull.Register((*pullCollector)(r))
-	}
+	r.init()
 
 	for ctx.Err() == nil {
 		r.run(ctx)
@@ -193,6 +216,8 @@ func (r *Registry) RunCollection(ctx context.Context) error {
 
 // UpdateDelay change the delay between metric gather
 func (r *Registry) UpdateDelay(delay time.Duration) {
+	r.init()
+
 	r.l.Lock()
 	if r.currentDelay == delay {
 		r.l.Unlock()
@@ -278,11 +303,6 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	now := time.Now()
 	deadline := now.Add(ttl)
 
-	if r.pushedPoints == nil {
-		r.pushedPoints = make(map[string]types.MetricPoint)
-		r.pushedPointsExpiration = make(map[string]time.Time)
-	}
-
 	for _, point := range points {
 		key := types.LabelsToText(point.Labels)
 		r.pushedPoints[key] = point
@@ -308,36 +328,6 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 
 // Gather gathers all metric sources, including push metric source
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
-	r.l.Lock()
-
-	var (
-		registyPull prometheus.Registerer
-		registyPush prometheus.Registerer
-	)
-
-	if r.registyPull == nil {
-		r.registyPull = prometheus.NewRegistry()
-		r.gatherers = append(r.gatherers, r.registyPull)
-		registyPull = r.registyPull
-	}
-	if r.registyPush == nil {
-		r.registyPush = prometheus.NewRegistry()
-		r.gatherers = append(r.gatherers, r.registyPush)
-		registyPush = r.registyPush
-	}
-
-	r.l.Unlock()
-
-	// Gather & Register shouldn't be done with the lock, as is will call
-	// Describe and/or Collect which may take the lock
-
-	if registyPush != nil {
-		_ = registyPush.Register((*pushCollector)(r))
-	}
-	if registyPull != nil {
-		_ = registyPull.Register((*pullCollector)(r))
-	}
-
 	return r.gatherers.Gather()
 }
 
