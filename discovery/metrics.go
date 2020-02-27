@@ -288,12 +288,15 @@ func (d *Discovery) createInput(service Service) error {
 		input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 			annotations.ServiceName = service.Name
 			annotations.ContainerID = service.ContainerID
-			labels[types.LabelContainerName] = service.ContainerName
 
-			if annotations.BleemeoItem != "" {
-				annotations.BleemeoItem = service.ContainerName + "_" + annotations.BleemeoItem
-			} else {
-				annotations.BleemeoItem = service.ContainerName
+			if service.ContainerName != "" {
+				labels[types.LabelContainerName] = service.ContainerName
+
+				if annotations.BleemeoItem != "" {
+					annotations.BleemeoItem = service.ContainerName + "_" + annotations.BleemeoItem
+				} else {
+					annotations.BleemeoItem = service.ContainerName
+				}
 			}
 			return labels, annotations
 		})
