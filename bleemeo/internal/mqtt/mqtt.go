@@ -588,7 +588,7 @@ func (c *Client) ready() bool {
 		return false
 	}
 	for _, m := range c.option.Cache.Metrics() {
-		if m.Labels[types.LabelName] == "agent_status" && len(m.Labels) == 1 {
+		if m.Labels[types.LabelName] == "agent_status" {
 			return true
 		}
 	}
