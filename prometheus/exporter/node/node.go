@@ -1,8 +1,10 @@
-package registry
+package node
 
 import (
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/exporter/buildinfo"
+	"glouton/version"
 	"regexp/syntax"
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
@@ -13,9 +15,9 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-// NodeExporterOption are options for node_exporter. If absent, the default of node_exporter will be used.
+// Option are options for node_exporter. If absent, the default of node_exporter will be used.
 // All Ingored string are a regular expression
-type NodeExporterOption struct {
+type Option struct {
 	RootFS                       string
 	FilesystemIgnoredMountPoints string
 	NetworkIgnoredDevices        string
@@ -49,8 +51,8 @@ func setCollector(collectorName []string) {
 	}
 }
 
-// nodeExporterCollector return a node_exporter
-func nodeExporterCollector(option NodeExporterOption) (prometheus.Collector, error) {
+// NewCollector return a node_exporter
+func NewCollector(option Option) (prometheus.Collector, error) {
 	var args []string
 
 	if option.RootFS != "" {
@@ -74,13 +76,19 @@ func nodeExporterCollector(option NodeExporterOption) (prometheus.Collector, err
 	setCollector(option.EnabledCollectors)
 
 	l := log.NewNopLogger()
-	return collector.NewNodeCollector(l)
+	c, err := collector.NewNodeCollector(l)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return buildinfo.AddBuildInfo(c, "node_exporter", "1.0.0-rc.0", version.BuildHash, "glouton"), nil
 }
 
 // WithPathIgnore set the of mount points to ignore.
 // It use path-prefix, which means that if "/mnt" is to ignore, "/mnt" and "/mnt/disk" are ignored, but not "/mnt-disk"
 // If any error occur, the ignored paths is not updated
-func (o *NodeExporterOption) WithPathIgnore(prefixes []string) *NodeExporterOption {
+func (o *Option) WithPathIgnore(prefixes []string) *Option {
 	var err error
 
 	res := make([]string, len(prefixes))
@@ -101,7 +109,7 @@ func (o *NodeExporterOption) WithPathIgnore(prefixes []string) *NodeExporterOpti
 
 // WithNetworkIgnore set the of device prefixes to ignore.
 // If any error occur, the list is not updated
-func (o *NodeExporterOption) WithNetworkIgnore(prefixes []string) *NodeExporterOption {
+func (o *Option) WithNetworkIgnore(prefixes []string) *Option {
 	var err error
 
 	res := make([]string, len(prefixes))

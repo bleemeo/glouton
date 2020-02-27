@@ -23,6 +23,7 @@ package registry
 import (
 	"context"
 	"glouton/logger"
+	"glouton/prometheus/exporter/node"
 	"glouton/types"
 	"net/http"
 	"sync"
@@ -103,8 +104,8 @@ func (r *Registry) AddDefaultCollector() {
 }
 
 // AddNodeExporter add a node_exporter to collector
-func (r *Registry) AddNodeExporter(option NodeExporterOption) error {
-	collector, err := nodeExporterCollector(option)
+func (r *Registry) AddNodeExporter(option node.Option) error {
+	collector, err := node.NewCollector(option)
 	if err != nil {
 		return err
 	}

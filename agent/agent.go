@@ -48,6 +48,7 @@ import (
 	"glouton/inputs/statsd"
 	"glouton/logger"
 	"glouton/nrpe"
+	"glouton/prometheus/exporter/node"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/store"
@@ -417,7 +418,7 @@ func (a *agent) run() { //nolint:gocyclo
 	scrap := scrapper.New(targets)
 
 	a.metricRegistry.AddDefaultCollector()
-	nodeOption := registry.NodeExporterOption{
+	nodeOption := node.Option{
 		RootFS:            rootPath,
 		EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
 	}

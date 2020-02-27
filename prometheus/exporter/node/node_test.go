@@ -1,5 +1,5 @@
 // nolint: scopelint
-package registry
+package node
 
 import (
 	"regexp"
