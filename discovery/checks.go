@@ -24,6 +24,8 @@ import (
 	"glouton/types"
 	"net"
 	"strconv"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const (
@@ -42,6 +44,14 @@ type Check interface {
 type CheckDetails struct {
 	id    int
 	check Check
+}
+
+// collectorDetails contains information about a collector.
+// It could be a Telegraf input of a Prometheus collector
+type collectorDetails struct {
+	inputID            int
+	prometheusGatherer prometheus.Gatherer
+	closeFunc          func()
 }
 
 func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {

@@ -402,6 +402,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
+		a.metricRegistry,
 		a.taskRegistry,
 		a.state,
 		acc,

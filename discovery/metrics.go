@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"glouton/collector"
 	"glouton/inputs/apache"
@@ -45,6 +46,10 @@ import (
 	"strconv"
 
 	"github.com/influxdata/telegraf"
+)
+
+var (
+	errNotSupported = errors.New("service not supported by Prometheus collector")
 )
 
 // InputOption are option used by system inputs
@@ -171,11 +176,28 @@ func (d *Discovery) removeInput(key NameContainer) {
 	if d.coll == nil {
 		return
 	}
-	if inputID, ok := d.activeInput[key]; ok {
+	if collector, ok := d.activeCollector[key]; ok {
 		logger.V(2).Printf("Remove input for service %v on container %s", key.Name, key.ContainerName)
-		delete(d.activeInput, key)
-		d.coll.RemoveInput(inputID)
+		delete(d.activeCollector, key)
+		if collector.prometheusGatherer == nil {
+			d.coll.RemoveInput(collector.inputID)
+		} else if !d.metricRegistry.UnregisterGatherer(collector.prometheusGatherer) {
+			logger.V(2).Printf("The gatherer wasn't present")
+		}
+		collector.prometheusGatherer = nil
+		if collector.closeFunc != nil {
+			collector.closeFunc()
+		}
 	}
+}
+
+// createPrometheusCollector create a Prometheus collector for given service
+// Return errNotSupported if no Prometheus collector exists for this service
+func (d *Discovery) createPrometheusCollector(service Service) error {
+	if service.ServiceType == MemcachedService {
+		return d.createPrometheusMemcached(service)
+	}
+	return errNotSupported
 }
 
 //nolint: gocyclo
@@ -189,9 +211,15 @@ func (d *Discovery) createInput(service Service) error {
 		return nil
 	}
 
-	logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
+	err := d.createPrometheusCollector(service)
+	if err != errNotSupported {
+		logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
+		return err
+	}
+
+	err = nil
+
 	var input telegraf.Input
-	var err error
 	switch service.ServiceType {
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
@@ -285,6 +313,7 @@ func (d *Discovery) createInput(service Service) error {
 	}
 
 	if input != nil {
+		logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
 		input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 			annotations.ServiceName = service.Name
 			annotations.ContainerID = service.ContainerID
@@ -318,7 +347,9 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 		Name:          service.Name,
 		ContainerName: service.ContainerName,
 	}
-	d.activeInput[key] = inputID
+	d.activeCollector[key] = collectorDetails{
+		inputID: inputID,
+	}
 	return nil
 }
 

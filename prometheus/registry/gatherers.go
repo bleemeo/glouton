@@ -2,10 +2,35 @@ package registry
 
 import (
 	"fmt"
+	"glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 )
+
+// AnnotatedGatherer is a gatherer which also return a metric annotation to be used by all samples
+type AnnotatedGatherer interface {
+	prometheus.Gatherer
+	Annotations() types.MetricAnnotations
+}
+
+// WrapWithAnnotation add annotations to a gatherer.
+// This is used by the Registry when collecting metric from gatherers to the store
+func WrapWithAnnotation(g prometheus.Gatherer, annotations types.MetricAnnotations) AnnotatedGatherer {
+	return wrappedGatherer{
+		Gatherer:    g,
+		annotations: annotations,
+	}
+}
+
+type wrappedGatherer struct {
+	prometheus.Gatherer
+	annotations types.MetricAnnotations
+}
+
+func (g wrappedGatherer) Annotations() types.MetricAnnotations {
+	return g.annotations
+}
 
 type sliceGatherer []*dto.MetricFamily
 
@@ -80,4 +105,29 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	}
 
 	return sortedResult, errs.MaybeUnwrap()
+}
+
+// GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily
+func (gs Gatherers) GatherPoints() ([]types.MetricPoint, error) {
+	result := []types.MetricPoint{}
+
+	var errs prometheus.MultiError
+
+	for _, g := range gs {
+		mfs, err := g.Gather()
+		if err != nil {
+			errs = append(errs, err)
+		}
+		points := familiesToMetricPoints(mfs)
+
+		if annotatedGatherer, ok := g.(AnnotatedGatherer); ok {
+			annotations := annotatedGatherer.Annotations()
+			for i := range points {
+				points[i].Annotations = annotations
+			}
+		}
+		result = append(result, points...)
+	}
+
+	return result, errs.MaybeUnwrap()
 }

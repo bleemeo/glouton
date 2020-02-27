@@ -9,7 +9,6 @@ require (
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
 	github.com/agnivade/levenshtein v1.0.3 // indirect
-	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/cockroachdb/apd v1.1.0 // indirect
 	github.com/containerd/containerd v1.3.0 // indirect
 	github.com/dgryski/trifles v0.0.0-20190809233526-a06f71cd0619 // indirect
@@ -29,6 +28,7 @@ require (
 	github.com/gogo/protobuf v1.3.1 // indirect
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/gopherjs/gopherjs v0.0.0-20190915194858-d3ddacdb130f // indirect
+	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665
 	github.com/hashicorp/golang-lru v0.5.3 // indirect
 	github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d
 	github.com/influxdata/telegraf v0.10.2-0.20191023195903-9a4f08e94774

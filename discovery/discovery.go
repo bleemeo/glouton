@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const ignoredConfField string = "nagios_nrpe_name"
@@ -48,10 +49,11 @@ type Discovery struct {
 
 	acc                   inputs.AnnotationAccumulator
 	lastConfigservicesMap map[NameContainer]Service
-	activeInput           map[NameContainer]int
+	activeCollector       map[NameContainer]collectorDetails
 	activeCheck           map[NameContainer]CheckDetails
 	coll                  Collector
 	taskRegistry          Registry
+	metricRegistry        MetricRegistry
 	containerInfo         containerInfoProvider
 	state                 State
 	servicesOverride      map[NameContainer]map[string]string
@@ -71,8 +73,14 @@ type Registry interface {
 	RemoveTask(int)
 }
 
+// MetricRegistry allow to register/unregister prometheus Gatherer
+type MetricRegistry interface {
+	RegisterGatherer(gatherer prometheus.Gatherer)
+	UnregisterGatherer(gatherer prometheus.Gatherer) bool
+}
+
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry MetricRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
@@ -101,10 +109,11 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
 		coll:                  coll,
+		metricRegistry:        metricRegistry,
 		taskRegistry:          taskRegistry,
 		containerInfo:         (*dockerWrapper)(containerInfo),
 		acc:                   acc,
-		activeInput:           make(map[NameContainer]int),
+		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverrideMap,

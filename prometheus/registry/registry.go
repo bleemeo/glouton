@@ -141,6 +141,24 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer) {
 	r.gatherersPull = append(r.gatherersPull, gatherer)
 }
 
+// UnregisterGatherer remove a collector from the list of metric sources.
+func (r *Registry) UnregisterGatherer(gatherer prometheus.Gatherer) bool {
+	r.init()
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	for i, g := range r.gatherersPull {
+		if g == gatherer {
+			r.gatherersPull[i] = r.gatherersPull[len(r.gatherersPull)-1]
+			r.gatherersPull[len(r.gatherersPull)-1] = nil
+			r.gatherersPull = r.gatherersPull[:len(r.gatherersPull)-1]
+			return true
+		}
+	}
+
+	return false
+}
+
 // MustRegister add a new collector to the list of metric sources.
 func (r *Registry) MustRegister(collectors ...prometheus.Collector) {
 	for _, c := range collectors {
@@ -242,11 +260,17 @@ func (r *Registry) run(ctx context.Context) {
 }
 
 func (r *Registry) runOnce() {
-	families, err := r.gatherersPull.Gather()
+	r.l.Lock()
+
+	gatherers := make(Gatherers, len(r.gatherersPull))
+	copy(gatherers, r.gatherersPull)
+
+	r.l.Unlock()
+
+	points, err := gatherers.GatherPoints()
 	if err != nil {
 		logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
 	}
-	points := familiesToMetricPoints(families)
 	r.PushPoint.PushPoints(points)
 }
 
