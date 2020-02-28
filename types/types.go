@@ -79,8 +79,20 @@ func (f MetricFormat) String() string {
 // Using constant here allow to change their name only here.
 // LabelName constants is duplicated in JavaScript file
 const (
-	LabelName          = "__name__"
-	LabelContainerName = "container_name"
+	LabelName = "__name__"
+
+	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
+	// They are actually dropped by the metric registry and/or the
+	LabelContainerName  = "__meta_container_name"
+	LabelContainerID    = "__meta_container_id"
+	LabelServiceName    = "__meta_service_name"
+	LabelGloutonFQDN    = "__meta__fqdn"
+	LabelGloutonPort    = "__meta_glouton_port"
+	LabelServicePort    = "__meta_service_port"
+	LabelPort           = "__meta_port"
+	LabelScrapeInstance = "__meta_scrape_instance"
+	LabelScrapeJob      = "__meta_scrape_job"
+	LabelBleemeoUUID    = "__meta_bleemeo_uuid"
 )
 
 // IsSet return true if the status is set

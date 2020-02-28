@@ -49,9 +49,9 @@ type CheckDetails struct {
 // collectorDetails contains information about a collector.
 // It could be a Telegraf input of a Prometheus collector
 type collectorDetails struct {
-	inputID            int
-	prometheusGatherer prometheus.Gatherer
-	closeFunc          func()
+	inputID             int
+	prometheusCollector prometheus.Collector
+	closeFunc           func()
 }
 
 func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {

@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -331,6 +332,15 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 	}()
 
+	factsMap, err := a.factProvider.Facts(ctx, 0)
+	if err != nil {
+		logger.Printf("Warning: get facts failed, some information (e.g. name of this server) may be wrong. %v", err)
+	}
+	fqdn := factsMap["fqdn"]
+	if fqdn == "" {
+		fqdn = "localhost"
+	}
+
 	cloudImageFile := a.config.String("agent.cloudimage_creation_file")
 	content, err := ioutil.ReadFile(cloudImageFile)
 	if err != nil && !os.IsNotExist(err) {
@@ -338,11 +348,7 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 	if err == nil || !os.IsNotExist(err) {
 		initialMac := parseIPOutput(content)
-		facts, err := a.factProvider.Facts(ctx, 0)
-		currentMac := ""
-		if err == nil {
-			currentMac = facts["primary_mac_address"]
-		}
+		currentMac := factsMap["primary_mac_address"]
 		if currentMac == initialMac || currentMac == "" || initialMac == "" {
 			logger.Printf("Not starting Glouton since installation for creation of a cloud image was requested and agent is still running on the same machine")
 			logger.Printf("If this is wrong and agent should run on this machine, remove %#v file", cloudImageFile)
@@ -372,7 +378,10 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.store = store.New()
 	a.metricRegistry = &registry.Registry{
-		PushPoint: a.store,
+		PushPoint:           a.store,
+		FQDN:                fqdn,
+		GetBleemeoAgentUUID: a.BleemeoAgentID,
+		GloutonPort:         strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.metricRegistry.WithTTL(5 * time.Minute))}
@@ -410,6 +419,7 @@ func (a *agent) run() { //nolint:gocyclo
 		overrideServices,
 		isCheckIgnored,
 		isInputIgnored,
+		a.metricFormat,
 	)
 
 	var targets []scrapper.Target
@@ -428,7 +438,9 @@ func (a *agent) run() { //nolint:gocyclo
 	if err := a.metricRegistry.AddNodeExporter(nodeOption); err != nil {
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
 	}
-	a.metricRegistry.RegisterGatherer(scrap)
+	if err := a.metricRegistry.RegisterGatherer(scrap, nil); err != nil {
+		logger.Printf("Unable to add Prometheus scrapper target to metric registry: %v", err)
+	}
 
 	promExporter := a.metricRegistry.Exporter()
 

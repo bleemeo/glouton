@@ -179,12 +179,12 @@ func (d *Discovery) removeInput(key NameContainer) {
 	if collector, ok := d.activeCollector[key]; ok {
 		logger.V(2).Printf("Remove input for service %v on container %s", key.Name, key.ContainerName)
 		delete(d.activeCollector, key)
-		if collector.prometheusGatherer == nil {
+		if collector.prometheusCollector == nil {
 			d.coll.RemoveInput(collector.inputID)
-		} else if !d.metricRegistry.UnregisterGatherer(collector.prometheusGatherer) {
+		} else if !d.metricRegistry.Unregister(collector.prometheusCollector) {
 			logger.V(2).Printf("The gatherer wasn't present")
 		}
-		collector.prometheusGatherer = nil
+		collector.prometheusCollector = nil
 		if collector.closeFunc != nil {
 			collector.closeFunc()
 		}
@@ -211,13 +211,15 @@ func (d *Discovery) createInput(service Service) error {
 		return nil
 	}
 
-	err := d.createPrometheusCollector(service)
-	if err != errNotSupported {
-		logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
-		return err
+	if d.metricFormat == types.MetricFormatPrometheus {
+		err := d.createPrometheusCollector(service)
+		if err != errNotSupported {
+			logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
+			return err
+		}
 	}
 
-	err = nil
+	var err error
 
 	var input telegraf.Input
 	switch service.ServiceType {
@@ -318,8 +320,17 @@ func (d *Discovery) createInput(service Service) error {
 			annotations.ServiceName = service.Name
 			annotations.ContainerID = service.ContainerID
 
-			if service.ContainerName != "" {
+			if d.metricFormat == types.MetricFormatPrometheus {
 				labels[types.LabelContainerName] = service.ContainerName
+				labels[types.LabelServiceName] = service.ContainerName
+				labels[types.LabelContainerID] = service.ContainerName
+				_, port := service.AddressPort()
+				if port != 0 {
+					labels[types.LabelServicePort] = strconv.FormatInt(int64(port), 10)
+				}
+			}
+
+			if service.ContainerName != "" {
 
 				if annotations.BleemeoItem != "" {
 					annotations.BleemeoItem = service.ContainerName + "_" + annotations.BleemeoItem

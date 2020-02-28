@@ -25,7 +25,7 @@ require (
 	github.com/gobuffalo/packr/v2 v2.7.1
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
-	github.com/gogo/protobuf v1.3.1 // indirect
+	github.com/gogo/protobuf v1.3.1
 	github.com/google/shlex v0.0.0-20181106134648-c34317bd91bf
 	github.com/gopherjs/gopherjs v0.0.0-20190915194858-d3ddacdb130f // indirect
 	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665

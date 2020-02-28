@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"glouton/logger"
+	"glouton/types"
 	"glouton/version"
 	"io"
 	"io/ioutil"
@@ -167,7 +168,7 @@ func fetchURL(ctx context.Context, target Target) map[string]*dto.MetricFamily {
 	}
 	for _, family := range result {
 		for _, m := range family.Metric {
-			key := "glouton_job"
+			key := types.LabelScrapeJob
 			x := dto.LabelPair{Name: &key, Value: &target.Name}
 			m.Label = append(m.Label, &x)
 		}

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"glouton/facts"
+	"glouton/types"
 	"reflect"
 	"testing"
 	"time"
@@ -169,7 +170,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc := New(mockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil)
+		disc := New(mockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {

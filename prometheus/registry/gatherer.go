@@ -3,33 +3,89 @@ package registry
 import (
 	"fmt"
 	"glouton/types"
+	"strings"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
+	"github.com/prometheus/common/model"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
-// AnnotatedGatherer is a gatherer which also return a metric annotation to be used by all samples
-type AnnotatedGatherer interface {
-	prometheus.Gatherer
-	Annotations() types.MetricAnnotations
+// gathlabeledGatherererer provide a gatherer that will add provided labels to all metrics.
+// It also allow to gather to MetricPoints
+type labeledGatherer struct {
+	source      prometheus.Gatherer
+	labels      []*dto.LabelPair
+	annotations types.MetricAnnotations
 }
 
-// WrapWithAnnotation add annotations to a gatherer.
-// This is used by the Registry when collecting metric from gatherers to the store
-func WrapWithAnnotation(g prometheus.Gatherer, annotations types.MetricAnnotations) AnnotatedGatherer {
-	return wrappedGatherer{
-		Gatherer:    g,
+func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annotations types.MetricAnnotations) labeledGatherer {
+
+	labels := make([]*dto.LabelPair, 0, len(extraLabels))
+
+	for _, l := range extraLabels {
+		l := l
+		if !strings.HasPrefix(l.Name, model.ReservedLabelPrefix) {
+			labels = append(labels, &dto.LabelPair{
+				Name:  &l.Name,
+				Value: &l.Value,
+			})
+		}
+	}
+
+	return labeledGatherer{
+		source:      g,
+		labels:      labels,
 		annotations: annotations,
 	}
 }
 
-type wrappedGatherer struct {
-	prometheus.Gatherer
-	annotations types.MetricAnnotations
+func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
+	mfs, err := g.source.Gather()
+
+	if len(g.labels) == 0 {
+		return mfs, err
+	}
+
+	for _, mf := range mfs {
+		for i, m := range mf.Metric {
+			m.Label = mergeLabels(m.Label, g.labels)
+			mf.Metric[i] = m
+		}
+	}
+	return mfs, err
 }
 
-func (g wrappedGatherer) Annotations() types.MetricAnnotations {
-	return g.annotations
+// mergeLabels merge two sorted list of labels. In case of name conflict, value from b wins
+func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
+	result := make([]*dto.LabelPair, 0, len(a)+len(b))
+	aIndex := 0
+	for _, bLabel := range b {
+		for aIndex < len(a) && a[aIndex].GetName() < bLabel.GetName() {
+			result = append(result, a[aIndex])
+			aIndex++
+		}
+		if aIndex < len(a) && a[aIndex].GetName() == bLabel.GetName() {
+			aIndex++
+		}
+		result = append(result, bLabel)
+	}
+	for aIndex < len(a) {
+		result = append(result, a[aIndex])
+		aIndex++
+	}
+	return result
+}
+
+func (g labeledGatherer) GatherPoints() ([]types.MetricPoint, error) {
+	mfs, err := g.Gather()
+	points := familiesToMetricPoints(mfs)
+	if (g.annotations != types.MetricAnnotations{}) {
+		for i := range points {
+			points[i].Annotations = g.annotations
+		}
+	}
+	return points, err
 }
 
 type sliceGatherer []*dto.MetricFamily
@@ -107,24 +163,18 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	return sortedResult, errs.MaybeUnwrap()
 }
 
+type labeledGatherers []labeledGatherer
+
 // GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily
-func (gs Gatherers) GatherPoints() ([]types.MetricPoint, error) {
+func (gs labeledGatherers) GatherPoints() ([]types.MetricPoint, error) {
 	result := []types.MetricPoint{}
 
 	var errs prometheus.MultiError
 
 	for _, g := range gs {
-		mfs, err := g.Gather()
+		points, err := g.GatherPoints()
 		if err != nil {
 			errs = append(errs, err)
-		}
-		points := familiesToMetricPoints(mfs)
-
-		if annotatedGatherer, ok := g.(AnnotatedGatherer); ok {
-			annotations := annotatedGatherer.Annotations()
-			for i := range points {
-				points[i].Annotations = annotations
-			}
 		}
 		result = append(result, points...)
 	}

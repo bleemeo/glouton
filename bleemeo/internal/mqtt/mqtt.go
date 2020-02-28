@@ -299,10 +299,9 @@ func (c *Client) popPendingPoints() []types.MetricPoint {
 }
 
 func (c *Client) sendPoints() {
-	instance, err := c.option.GetInstance(c.ctx)
 	metricWhitelist := c.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
 	points := filterPoints(c.popPendingPoints(), metricWhitelist)
-	if !c.Connected() || err != nil {
+	if !c.Connected() {
 		c.failedPoints = append(c.failedPoints, points...)
 		if len(c.failedPoints) > maxPendingPoints {
 			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
@@ -324,14 +323,14 @@ func (c *Client) sendPoints() {
 		}
 		localExistsByKey := make(map[string]bool, len(localMetrics))
 		for _, m := range localMetrics {
-			key := common.LabelsToText(m.Labels(), m.Annotations(), instance, c.option.MetricFormat == types.MetricFormatBleemeo)
+			key := common.LabelsToText(m.Labels(), m.Annotations(), c.option.MetricFormat == types.MetricFormatBleemeo)
 			localExistsByKey[key] = true
 		}
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
 		newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 		for _, p := range c.failedPoints {
-			key := common.LabelsToText(p.Labels, p.Annotations, instance, c.option.MetricFormat == types.MetricFormatBleemeo)
+			key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
 			if localExistsByKey[key] {
 				newPoints = append(newPoints, p)
 			}
@@ -341,7 +340,7 @@ func (c *Client) sendPoints() {
 	}
 
 	payload := make([]metricPayload, 0, len(points))
-	payload = c.preparePoints(payload, registreredMetricByKey, points, instance)
+	payload = c.preparePoints(payload, registreredMetricByKey, points)
 	logger.V(2).Printf("MQTT send %d points", len(payload))
 	for i := 0; i < len(payload); i += pointsBatchSize {
 		end := i + pointsBatchSize
@@ -360,9 +359,9 @@ func (c *Client) sendPoints() {
 	c.failedPointsCount = len(c.failedPoints)
 }
 
-func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint, instance string) []metricPayload {
+func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
 	for _, p := range points {
-		key := common.LabelsToText(p.Labels, p.Annotations, instance, c.option.MetricFormat == types.MetricFormatBleemeo)
+		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
 		if m, ok := registreredMetricByKey[key]; ok {
 
 			value := metricPayload{

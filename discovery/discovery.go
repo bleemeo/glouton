@@ -59,6 +59,7 @@ type Discovery struct {
 	servicesOverride      map[NameContainer]map[string]string
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
+	metricFormat          types.MetricFormat
 }
 
 // Collector will gather metrics for added inputs
@@ -75,12 +76,12 @@ type Registry interface {
 
 // MetricRegistry allow to register/unregister prometheus Gatherer
 type MetricRegistry interface {
-	RegisterGatherer(gatherer prometheus.Gatherer)
-	UnregisterGatherer(gatherer prometheus.Gatherer) bool
+	RegisterWithLabels(collector prometheus.Collector, extraLabels map[string]string) error
+	Unregister(collector prometheus.Collector) bool
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry MetricRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry MetricRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {
@@ -119,6 +120,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry MetricRegis
 		servicesOverride:      servicesOverrideMap,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
+		metricFormat:          metricFormat,
 	}
 }
 
