@@ -60,6 +60,7 @@ import (
 	"glouton/zabbix"
 
 	"net/http"
+	"net/url"
 )
 
 type agent struct {
@@ -429,11 +430,26 @@ func (a *agent) run() { //nolint:gocyclo
 		a.metricFormat,
 	)
 
-	var targets []scrapper.Target
+	var targets map[string]string
 	if promCfg, found := a.config.Get("metric.prometheus"); found {
 		targets = prometheusConfigToURLs(promCfg)
 	}
-	scrap := scrapper.New(targets)
+	for name, value := range targets {
+		u, err := url.Parse(value)
+		if err != nil {
+			logger.Printf("ignoring invalid exporter config: %v", err)
+			continue
+		}
+		target := (*scrapper.Target)(u)
+
+		extraLabels := map[string]string{
+			types.LabelScrapeJob:      name,
+			types.LabelScrapeInstance: target.HostPort(),
+		}
+		if err := a.metricRegistry.RegisterGatherer(target, extraLabels); err != nil {
+			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", u.String(), err)
+		}
+	}
 
 	a.metricRegistry.AddDefaultCollector()
 	nodeOption := node.Option{
@@ -444,9 +460,6 @@ func (a *agent) run() { //nolint:gocyclo
 	nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
 	if err := a.metricRegistry.AddNodeExporter(nodeOption); err != nil {
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
-	}
-	if err := a.metricRegistry.RegisterGatherer(scrap, nil); err != nil {
-		logger.Printf("Unable to add Prometheus scrapper target to metric registry: %v", err)
 	}
 
 	promExporter := a.metricRegistry.Exporter()
@@ -466,7 +479,6 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.dailyFact, "Facts gatherer"},
 		{a.dockerWatcher, "Docker event watcher"},
 		{a.netstatWatcher, "Netstat file watcher"},
-		{scrap.Run, "Prometheus Scrapper"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -984,13 +996,14 @@ func setupContainer(hostRootPath string) {
 	}
 }
 
-// prometheusConfigToURLs convert metric.prometheus config to a list of URL
+// prometheusConfigToURLs convert metric.prometheus config to a map of target name to URL
 //
 // the config is expected to be a like:
 // config:
 //   your_custom_name_here:
 //     url: http://localhost:9100/metrics
-func prometheusConfigToURLs(config interface{}) (result []scrapper.Target) {
+func prometheusConfigToURLs(config interface{}) map[string]string {
+	result := make(map[string]string)
 	configMap, ok := config.(map[string]interface{})
 	if !ok {
 		return nil
@@ -1004,11 +1017,7 @@ func prometheusConfigToURLs(config interface{}) (result []scrapper.Target) {
 		if !ok {
 			continue
 		}
-		target := scrapper.Target{URL: url, Name: name}
-		if prefix, ok := vMap["prefix"].(string); ok {
-			target.Prefix = prefix
-		}
-		result = append(result, target)
+		result[name] = url
 	}
 	return result
 }
