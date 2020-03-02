@@ -390,6 +390,7 @@ func (a *agent) run() { //nolint:gocyclo
 		FQDN:           fqdn,
 		BleemeoAgentID: a.BleemeoAgentID(),
 		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
+		MetricFormat:   a.metricFormat,
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
@@ -407,6 +408,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 	a.collector = collector.New(acc)
+	a.gathererRegistry.UpdatePushedPoints = a.collector.RunGather
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -472,7 +474,6 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.store.Run, "Metric store"},
 		{a.triggerHandler.Run, "Internal trigger handler"},
 		{a.dockerFact.Run, "Docker connector"},
-		{a.collector.Run, "Metric collector"},
 		{api.Run, "Local Web UI"},
 		{a.healthCheck, "Agent healthcheck"},
 		{a.hourlyDiscovery, "Service Discovery"},
@@ -491,7 +492,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Store:                   a.store,
 			Acc:                     acc,
 			Discovery:               a.discovery,
-			UpdateMetricResolution:  a.updateMetricResolution,
+			UpdateMetricResolution:  a.gathererRegistry.UpdateDelay,
 			UpdateThresholds:        a.UpdateThresholds,
 			UpdateUnits:             a.threshold.SetUnits,
 			MetricFormat:            a.metricFormat,
@@ -563,12 +564,11 @@ func (a *agent) run() { //nolint:gocyclo
 			logger.Printf("Unable to initialize system collector: %v", err)
 			return
 		}
-	} else {
-		tasks = append(tasks, taskInfo{
-			a.gathererRegistry.RunCollection,
-			"Metric collector",
-		})
 	}
+	tasks = append(tasks, taskInfo{
+		a.gathererRegistry.RunCollection,
+		"Metric collector",
+	})
 
 	if a.config.Bool("telegraf.statsd.enabled") {
 		input, err := statsd.New(fmt.Sprintf("%s:%d", a.config.String("telegraf.statsd.address"), a.config.Int("telegraf.statsd.port")))
@@ -921,11 +921,6 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 	if len(metricToDelete) > 0 {
 		a.store.DropMetrics(metricToDelete)
 	}
-}
-
-func (a *agent) updateMetricResolution(resolution time.Duration) {
-	a.collector.UpdateDelay(resolution)
-	a.gathererRegistry.UpdateDelay(resolution)
 }
 
 func parseIPOutput(content []byte) string {

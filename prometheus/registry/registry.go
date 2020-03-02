@@ -58,25 +58,33 @@ func (f pushFunction) PushPoints(points []types.MetricPoint) {
 // but it allow to attach labels to each Gatherers.
 // It also support pushed metrics.
 type Registry struct {
-	PushPoint      types.PointPusher
-	FQDN           string
-	GloutonPort    string
-	BleemeoAgentID string
+	UpdatePushedPoints func()
+	PushPoint          types.PointPusher
+	FQDN               string
+	GloutonPort        string
+	BleemeoAgentID     string
+	MetricFormat       types.MetricFormat
 
 	l sync.Mutex
 
-	condition            *sync.Cond
-	countPushPending     int
-	updateAgentIDPending bool
+	condition       *sync.Cond
+	countRunOnce    int
+	countPushPoints int
+	blockRunOnce    bool
+	blockPushPoint  bool
 
-	relabelConfigs          []*relabel.Config
-	registrations           map[int]registration
-	registyPush             *prometheus.Registry
-	pushedPoints            map[string]types.MetricPoint
-	pushedPointsExpiration  map[string]time.Time
-	lastPushedPointsCleanup time.Time
-	currentDelay            time.Duration
-	updateDelayC            chan interface{}
+	metricLegacyGatherTime     prometheus.Gauge
+	metricGatherBackgroundTime prometheus.Summary
+	metricGatherExporterTime   prometheus.Summary
+	relabelConfigs             []*relabel.Config
+	registrations              map[int]registration
+	registyPush                *prometheus.Registry
+	internalRegistry           *prometheus.Registry
+	pushedPoints               map[string]types.MetricPoint
+	pushedPointsExpiration     map[string]time.Time
+	lastPushedPointsCleanup    time.Time
+	currentDelay               time.Duration
+	updateDelayC               chan interface{}
 }
 
 type registration struct {
@@ -152,10 +160,42 @@ func (r *Registry) init() {
 
 	r.registrations = make(map[int]registration)
 	r.registyPush = prometheus.NewRegistry()
+	r.internalRegistry = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
 	r.currentDelay = 10 * time.Second
 	r.updateDelayC = make(chan interface{})
+	if r.MetricFormat == types.MetricFormatBleemeo {
+		r.metricLegacyGatherTime = prometheus.NewGauge(prometheus.GaugeOpts{
+			Help:      "Time of last metrics gather in seconds",
+			Namespace: "",
+			Subsystem: "",
+			Name:      "agent_gather_time",
+		})
+		r.internalRegistry.MustRegister(r.metricLegacyGatherTime)
+	} else if r.MetricFormat == types.MetricFormatPrometheus {
+		r.metricGatherBackgroundTime = prometheus.NewSummary(prometheus.SummaryOpts{
+			Help:      "Total metrics gathering time in seconds (either triggered by the /metrics exporter or the scheduled background task)",
+			Namespace: "glouton",
+			Subsystem: "gatherer",
+			Name:      "execution_seconds",
+			ConstLabels: prometheus.Labels{
+				"trigger": "background",
+			},
+		})
+		r.metricGatherExporterTime = prometheus.NewSummary(prometheus.SummaryOpts{
+			Help:      "Total metrics gathering time in seconds (either triggered by the /metrics exporter or the scheduled background task)",
+			Namespace: "glouton",
+			Subsystem: "gatherer",
+			Name:      "execution_seconds",
+			ConstLabels: prometheus.Labels{
+				"trigger": "exporter",
+			},
+		})
+
+		r.internalRegistry.MustRegister(r.metricGatherBackgroundTime)
+		r.internalRegistry.MustRegister(r.metricGatherExporterTime)
+	}
 
 	r.relabelConfigs = getDefaultRelabelConfig()
 
@@ -175,17 +215,28 @@ func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	r.updateAgentIDPending = true
+	r.blockRunOnce = true
+
+	// Wait for runOnce to finish since it may sent points with old labels.
+	// We use a two step lock (first runOnce, then also pushPoints) because
+	// runOnce trigger update of pushed points so while runOnce we can't block
+	// pushPoints
+	for r.countRunOnce > 0 {
+		r.condition.Wait()
+	}
+
+	r.blockPushPoint = true
+
+	// Wait for all pending gorouting that may be sending points with old labels
+	for r.countPushPoints > 0 {
+		r.condition.Wait()
+	}
+
 	r.BleemeoAgentID = agentID
 
 	// Since the updated Agent ID may change metrics labels, drop pushed points
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
-
-	// Wait for all pending gorouting that may be sending points with old labels
-	for r.countPushPending > 0 {
-		r.condition.Wait()
-	}
 
 	// Update labels of all gatherers
 	for id, reg := range r.registrations {
@@ -194,7 +245,8 @@ func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
 		r.registrations[id] = reg
 	}
 
-	r.updateAgentIDPending = false
+	r.blockRunOnce = false
+	r.blockPushPoint = false
 	r.condition.Broadcast()
 }
 
@@ -249,6 +301,7 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 
 // Gather implement prometheus Gatherer
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
+	r.init()
 	r.l.Lock()
 
 	gatherers := make(Gatherers, 0, len(r.registrations)+1)
@@ -258,7 +311,13 @@ func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	gatherers = append(gatherers, r.registyPush)
 
 	r.l.Unlock()
-	return gatherers.Gather()
+	t0 := time.Now()
+	mfs, err := gatherers.Gather()
+
+	if r.metricGatherExporterTime != nil {
+		r.metricGatherExporterTime.Observe(time.Since(t0).Seconds())
+	}
+	return mfs, err
 }
 
 type prefixLogger string
@@ -270,13 +329,16 @@ func (l prefixLogger) Println(v ...interface{}) {
 	logger.V(1).Println(all...)
 }
 
-// AddDefaultCollector add GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
+// AddDefaultCollector adds the following collectors:
+// GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
+// Internal registry which contains all glouton metrics
 func (r *Registry) AddDefaultCollector() {
-	reg := prometheus.NewRegistry()
-	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	reg.MustRegister(prometheus.NewGoCollector())
+	r.init()
 
-	_, _ = r.RegisterGatherer(reg, nil, nil)
+	r.internalRegistry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	r.internalRegistry.MustRegister(prometheus.NewGoCollector())
+
+	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil)
 }
 
 // AddNodeExporter add a node_exporter to collector
@@ -301,7 +363,7 @@ func (r *Registry) Exporter() http.Handler {
 		ErrorHandling: promhttp.ContinueOnError,
 		ErrorLog:      prefixLogger("/metrics endpoint:"),
 	}))
-	r.RegisterGatherer(reg, nil, nil)
+	_, _ = r.RegisterGatherer(reg, nil, nil)
 	return handler
 }
 
@@ -362,11 +424,11 @@ func (r *Registry) run(ctx context.Context) {
 func (r *Registry) runOnce() {
 	r.l.Lock()
 
-	for r.updateAgentIDPending {
+	for r.blockRunOnce {
 		r.condition.Wait()
 	}
 
-	r.countPushPending++
+	r.countRunOnce++
 	gatherers := make([]labeledGatherer, 0, len(r.registrations))
 	for _, reg := range r.registrations {
 		gatherers = append(gatherers, reg.gatherer)
@@ -374,14 +436,49 @@ func (r *Registry) runOnce() {
 
 	r.l.Unlock()
 
-	points, err := labeledGatherers(gatherers).GatherPoints()
-	if err != nil {
-		logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
+	t0 := time.Now()
+
+	if r.UpdatePushedPoints != nil {
+		r.UpdatePushedPoints()
 	}
-	r.PushPoint.PushPoints(points)
+
+	var points []types.MetricPoint
+
+	if r.MetricFormat == types.MetricFormatPrometheus {
+		var err error
+
+		points, err = labeledGatherers(gatherers).GatherPoints()
+		if err != nil {
+			logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
+		}
+	} else if r.MetricFormat == types.MetricFormatBleemeo {
+		var metric dto.Metric
+		err := r.metricLegacyGatherTime.Write(&metric)
+		if err != nil {
+			logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
+		} else {
+			value := metric.GetGauge().GetValue()
+			points = append(points, types.MetricPoint{
+				Point: types.Point{Time: t0, Value: value},
+				Labels: map[string]string{
+					"__name__": "agent_gather_time",
+				},
+			})
+		}
+	}
+
+	if r.metricLegacyGatherTime != nil {
+		r.metricLegacyGatherTime.Set(time.Since(t0).Seconds())
+	} else {
+		r.metricGatherBackgroundTime.Observe(time.Since(t0).Seconds())
+	}
+
+	if len(points) > 0 {
+		r.PushPoint.PushPoints(points)
+	}
 
 	r.l.Lock()
-	r.countPushPending--
+	r.countRunOnce--
 	r.condition.Broadcast()
 	r.l.Unlock()
 }
@@ -428,11 +525,11 @@ func sleepToAlign(interval time.Duration) {
 func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	r.l.Lock()
 
-	for r.updateAgentIDPending {
+	for r.blockPushPoint {
 		r.condition.Wait()
 	}
 
-	r.countPushPending++
+	r.countPushPoints++
 
 	now := time.Now()
 	deadline := now.Add(ttl)
@@ -464,7 +561,7 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	}
 
 	r.l.Lock()
-	r.countPushPending--
+	r.countPushPoints--
 	r.condition.Broadcast()
 	r.l.Unlock()
 }
