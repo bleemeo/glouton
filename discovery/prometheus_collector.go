@@ -7,6 +7,8 @@ import (
 	"runtime"
 	"strconv"
 	"time"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func (d *Discovery) createPrometheusMemcached(service Service) error {
@@ -30,7 +32,21 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		return nil
 	}
 
-	if err := d.metricRegistry.RegisterWithLabels(collector, labels); err != nil {
+	reg := prometheus.NewRegistry()
+	if err := reg.Register(collector); err != nil {
+		return err
+	}
+
+	stopCallback := func() {
+		// The memcached client used by memcached exporter does not provide
+		// any way to close connection :(
+		// It rely on GC to close file description.
+		// Trigger a GC now to avoid too much leaking of FDs
+		runtime.GC()
+	}
+
+	id, err := d.metricRegistry.RegisterGatherer(reg, stopCallback, labels)
+	if err != nil {
 		return err
 	}
 	key := NameContainer{
@@ -38,14 +54,7 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		ContainerName: service.ContainerName,
 	}
 	d.activeCollector[key] = collectorDetails{
-		prometheusCollector: collector,
-		closeFunc: func() {
-			// The memcached client used by memcached exporter does not provide
-			// any way to close connection :(
-			// It rely on GC to close file description.
-			// Trigger a GC now to avoid too much leaking of FDs
-			runtime.GC()
-		},
+		gathererID: id,
 	}
 
 	return nil

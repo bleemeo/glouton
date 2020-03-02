@@ -53,7 +53,7 @@ type Discovery struct {
 	activeCheck           map[NameContainer]CheckDetails
 	coll                  Collector
 	taskRegistry          Registry
-	metricRegistry        MetricRegistry
+	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
 	servicesOverride      map[NameContainer]map[string]string
@@ -74,14 +74,14 @@ type Registry interface {
 	RemoveTask(int)
 }
 
-// MetricRegistry allow to register/unregister prometheus Gatherer
-type MetricRegistry interface {
-	RegisterWithLabels(collector prometheus.Collector, extraLabels map[string]string) error
-	Unregister(collector prometheus.Collector) bool
+// GathererRegistry allow to register/unregister prometheus Gatherer
+type GathererRegistry interface {
+	RegisterGatherer(gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string) (int, error)
+	UnregisterGatherer(id int) bool
 }
 
 // New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry MetricRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 	for _, v := range initialServices {

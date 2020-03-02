@@ -179,14 +179,10 @@ func (d *Discovery) removeInput(key NameContainer) {
 	if collector, ok := d.activeCollector[key]; ok {
 		logger.V(2).Printf("Remove input for service %v on container %s", key.Name, key.ContainerName)
 		delete(d.activeCollector, key)
-		if collector.prometheusCollector == nil {
+		if collector.gathererID == 0 {
 			d.coll.RemoveInput(collector.inputID)
-		} else if !d.metricRegistry.Unregister(collector.prometheusCollector) {
+		} else if !d.metricRegistry.UnregisterGatherer(collector.gathererID) {
 			logger.V(2).Printf("The gatherer wasn't present")
-		}
-		collector.prometheusCollector = nil
-		if collector.closeFunc != nil {
-			collector.closeFunc()
 		}
 	}
 }

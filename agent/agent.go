@@ -77,7 +77,7 @@ type agent struct {
 	influxdbConnector *influxdb.Client
 	threshold         *threshold.Registry
 	store             *store.Store
-	metricRegistry    *registry.Registry
+	gathererRegistry  *registry.Registry
 	metricFormat      types.MetricFormat
 
 	triggerHandler            *debouncer.Debouncer
@@ -245,7 +245,7 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
-	a.metricRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+	a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 	a.store.DropAllMetrics()
 }
 
@@ -385,14 +385,14 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	a.store = store.New()
-	a.metricRegistry = &registry.Registry{
+	a.gathererRegistry = &registry.Registry{
 		PushPoint:      a.store,
 		FQDN:           fqdn,
 		BleemeoAgentID: a.BleemeoAgentID(),
 		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 	}
 	a.threshold = threshold.New(a.state)
-	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.metricRegistry.WithTTL(5 * time.Minute))}
+	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 	a.dockerFact = facts.NewDocker(a.deletedContainersCallback)
 	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
 	if !useProc {
@@ -419,7 +419,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.discovery = discovery.New(
 		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
 		a.collector,
-		a.metricRegistry,
+		a.gathererRegistry,
 		a.taskRegistry,
 		a.state,
 		acc,
@@ -446,23 +446,23 @@ func (a *agent) run() { //nolint:gocyclo
 			types.LabelScrapeJob:      name,
 			types.LabelScrapeInstance: target.HostPort(),
 		}
-		if err := a.metricRegistry.RegisterGatherer(target, extraLabels); err != nil {
+		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, extraLabels); err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", u.String(), err)
 		}
 	}
 
-	a.metricRegistry.AddDefaultCollector()
+	a.gathererRegistry.AddDefaultCollector()
 	nodeOption := node.Option{
 		RootFS:            rootPath,
 		EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
 	}
 	nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
 	nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
-	if err := a.metricRegistry.AddNodeExporter(nodeOption); err != nil {
+	if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
 	}
 
-	promExporter := a.metricRegistry.Exporter()
+	promExporter := a.gathererRegistry.Exporter()
 
 	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.threshold, a.config.String("web.static_cdn_url"))
 
@@ -497,7 +497,7 @@ func (a *agent) run() { //nolint:gocyclo
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 		})
-		a.metricRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 	if a.config.Bool("nrpe.enabled") {
@@ -565,7 +565,7 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 	} else {
 		tasks = append(tasks, taskInfo{
-			a.metricRegistry.RunCollection,
+			a.gathererRegistry.RunCollection,
 			"Metric collector",
 		})
 	}
@@ -772,7 +772,7 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 		status.StatusDescription = fmt.Sprintf("Unknown health status %#v", healthStatus)
 	}
 
-	a.metricRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
 				types.LabelName:          "docker_container_health_status",
@@ -899,7 +899,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				},
 			})
 		}
-		a.threshold.WithPusher(a.metricRegistry.WithTTL(time.Hour)).PushPoints(points)
+		a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(points)
 	}
 }
 
@@ -925,7 +925,7 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 
 func (a *agent) updateMetricResolution(resolution time.Duration) {
 	a.collector.UpdateDelay(resolution)
-	a.metricRegistry.UpdateDelay(resolution)
+	a.gathererRegistry.UpdateDelay(resolution)
 }
 
 func parseIPOutput(content []byte) string {

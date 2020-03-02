@@ -29,34 +29,32 @@ import (
 	"time"
 
 	"github.com/gogo/protobuf/proto"
-	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
 )
 
-type fakeCollector struct {
-	name      string
-	callCount int
-}
-
-func (c *fakeCollector) Collect(ch chan<- prometheus.Metric) {
-	c.callCount++
-
-	ch <- prometheus.MustNewConstMetric(
-		prometheus.NewDesc(c.name, "fake metric", nil, nil),
-		prometheus.GaugeValue,
-		1.0,
-	)
-}
-func (c *fakeCollector) Describe(chan<- *prometheus.Desc) {
-
-}
-
 type fakeGatherer struct {
 	name      string
 	callCount int
 	response  []*dto.MetricFamily
+}
+
+func (g *fakeGatherer) fillResponse() {
+	helpStr := "fake metric"
+	value := 1.0
+
+	g.response = append(g.response, &dto.MetricFamily{
+		Help: &helpStr,
+		Name: &g.name,
+		Type: dto.MetricType_GAUGE.Enum(),
+		Metric: []*dto.Metric{
+			{
+				Label: []*dto.LabelPair{},
+				Gauge: &dto.Gauge{Value: &value},
+			},
+		},
+	})
 }
 
 func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
@@ -83,102 +81,78 @@ func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 func TestRegistry_Register(t *testing.T) {
 	reg := &Registry{}
 
-	coll1 := &fakeCollector{
-		name: "coll1",
-	}
-	coll2 := &fakeCollector{
-		name: "coll2",
-	}
+	var (
+		id1 int
+		id2 int
+		err error
+	)
+
 	gather1 := &fakeGatherer{
 		name: "gather1",
 	}
+	gather1.fillResponse()
 
-	if err := reg.Register(coll1); err != nil {
-		t.Errorf("reg.Register(coll1) failed: %v", err)
+	gather2 := &fakeGatherer{
+		name: "gather2",
 	}
-	if err := reg.Register(coll1); err == nil {
-		t.Errorf("Second reg.Register(coll1) succeeded, want fail")
-	}
+	gather2.fillResponse()
 
-	_, _ = reg.Gather()
-	if coll1.callCount != 1 {
-		t.Errorf("coll1.callCount = %v, want 1", coll1.callCount)
-	}
-
-	if !reg.Unregister(coll1) {
-		t.Errorf("reg.Unregister(coll1) failed")
-	}
-
-	_, _ = reg.Gather()
-	if coll1.callCount != 1 {
-		t.Errorf("coll1.callCount = %v, want 1", coll1.callCount)
-	}
-
-	if err := reg.RegisterWithLabels(coll1, map[string]string{"name": "value"}); err != nil {
-		t.Errorf("re-reg.Register(coll1) failed: %v", err)
-	}
-	if err := reg.Register(coll2); err != nil {
-		t.Errorf("re-reg.Register(coll2) failed: %v", err)
-	}
-
-	_, _ = reg.Gather()
-	if coll1.callCount != 2 {
-		t.Errorf("coll1.callCount = %v, want 2", coll1.callCount)
-	}
-	if coll2.callCount != 1 {
-		t.Errorf("coll2.callCount = %v, want 1", coll2.callCount)
-	}
-
-	if !reg.Unregister(coll1) {
-		t.Errorf("reg.Unregister(coll1) failed")
-	}
-	if !reg.Unregister(coll2) {
-		t.Errorf("reg.Unregister(coll2) failed")
-	}
-
-	_, _ = reg.Gather()
-	if coll1.callCount != 2 {
-		t.Errorf("coll1.callCount = %v, want 2", coll1.callCount)
-	}
-	if coll2.callCount != 1 {
-		t.Errorf("coll2.callCount = %v, want 1", coll2.callCount)
-	}
-
-	if err := reg.RegisterGatherer(gather1, map[string]string{"name": "value"}); err != nil {
+	if id1, err = reg.RegisterGatherer(gather1, nil, nil); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
 	_, _ = reg.Gather()
-	if coll1.callCount != 2 {
-		t.Errorf("coll1.callCount = %v, want 2", coll1.callCount)
-	}
-	if coll2.callCount != 1 {
-		t.Errorf("coll2.callCount = %v, want 1", coll2.callCount)
-	}
 	if gather1.callCount != 1 {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if !reg.UnregisterGatherer(gather1) {
-		t.Errorf("reg.Unregister(coll1) failed")
+	if !reg.UnregisterGatherer(id1) {
+		t.Errorf("reg.UnregisterGatherer(%d) failed", id1)
 	}
 
 	_, _ = reg.Gather()
-	if coll1.callCount != 2 {
-		t.Errorf("coll1.callCount = %v, want 2", coll1.callCount)
-	}
-	if coll2.callCount != 1 {
-		t.Errorf("coll2.callCount = %v, want 1", coll2.callCount)
-	}
 	if gather1.callCount != 1 {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if err := reg.RegisterWithLabels(coll1, map[string]string{"dummy": "value"}); err != nil {
-		t.Errorf("re-reg.Register(coll1) failed: %v", err)
+	if id1, err = reg.RegisterGatherer(gather1, nil, map[string]string{"name": "value"}); err != nil {
+		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
-	if err := reg.Register(coll2); err != nil {
-		t.Errorf("re-reg.Register(coll2) failed: %v", err)
+	if id2, err = reg.RegisterGatherer(gather2, nil, nil); err != nil {
+		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
+	}
+
+	_, _ = reg.Gather()
+	if gather1.callCount != 2 {
+		t.Errorf("gather1.callCount = %v, want 2", gather1.callCount)
+	}
+	if gather2.callCount != 1 {
+		t.Errorf("gather2.callCount = %v, want 1", gather2.callCount)
+	}
+
+	if !reg.UnregisterGatherer(id1) {
+		t.Errorf("reg.UnregisterGatherer(%d) failed", id1)
+	}
+	if !reg.UnregisterGatherer(id2) {
+		t.Errorf("reg.UnregisterGatherer(%d) failed", id2)
+	}
+
+	_, _ = reg.Gather()
+	if gather1.callCount != 2 {
+		t.Errorf("gather1.callCount = %v, want 2", gather1.callCount)
+	}
+	if gather2.callCount != 1 {
+		t.Errorf("gather2.callCount = %v, want 1", gather2.callCount)
+	}
+
+	stopCallCount := 0
+
+	if id1, err = reg.RegisterGatherer(gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value"}); err != nil {
+		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
+	}
+
+	if _, err = reg.RegisterGatherer(gather2, nil, nil); err != nil {
+		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 	reg.UpdateBleemeoAgentID(context.Background(), "fake-uuid")
 
@@ -196,7 +170,7 @@ func TestRegistry_Register(t *testing.T) {
 	value := 1.0
 	want := []*dto.MetricFamily{
 		{
-			Name: &coll1.name,
+			Name: &gather1.name,
 			Help: &helpText,
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
@@ -213,7 +187,7 @@ func TestRegistry_Register(t *testing.T) {
 			},
 		},
 		{
-			Name: &coll2.name,
+			Name: &gather2.name,
 			Help: &helpText,
 			Type: dto.MetricType_GAUGE.Enum(),
 			Metric: []*dto.Metric{
@@ -232,6 +206,11 @@ func TestRegistry_Register(t *testing.T) {
 
 	if !reflect.DeepEqual(result, want) {
 		t.Errorf("reg.Gather() = %v, want %v", result, want)
+	}
+
+	reg.UnregisterGatherer(id1)
+	if stopCallCount != 1 {
+		t.Errorf("stopCallCount = %v, want 1", stopCallCount)
 	}
 }
 

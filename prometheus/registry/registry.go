@@ -22,6 +22,7 @@ package registry
 
 import (
 	"context"
+	"errors"
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
 	"glouton/types"
@@ -69,10 +70,7 @@ type Registry struct {
 	updateAgentIDPending bool
 
 	relabelConfigs          []*relabel.Config
-	registrations           []registration
-	collectors              []prometheus.Collector
-	gatherersPull           []labeledGatherer
-	registyPull             *prometheus.Registry
+	registrations           map[int]registration
 	registyPush             *prometheus.Registry
 	pushedPoints            map[string]types.MetricPoint
 	pushedPointsExpiration  map[string]time.Time
@@ -82,15 +80,10 @@ type Registry struct {
 }
 
 type registration struct {
-	originalCollector   prometheus.Collector
-	originalGatherer    prometheus.Gatherer
 	originalExtraLabels map[string]string
-	registeredCollector prometheus.Collector
-	registeredGatherer  labeledGatherer
+	stopCallback        func()
+	gatherer            labeledGatherer
 }
-
-// This type is used to have another Collecto() method private which only return pulled points
-type pullCollector Registry
 
 // This type is used to have another Collecto() method private which only return pushed points
 type pushCollector Registry
@@ -150,14 +143,14 @@ func getDefaultRelabelConfig() []*relabel.Config {
 func (r *Registry) init() {
 	r.l.Lock()
 
-	if r.registyPull != nil {
+	if r.registrations != nil {
 		r.l.Unlock()
 		return
 	}
 
 	r.condition = sync.NewCond(&r.l)
 
-	r.registyPull = prometheus.NewRegistry()
+	r.registrations = make(map[int]registration)
 	r.registyPush = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
 	r.pushedPointsExpiration = make(map[string]time.Time)
@@ -168,13 +161,10 @@ func (r *Registry) init() {
 
 	r.l.Unlock()
 
-	_ = r.RegisterGatherer(r.registyPull, nil)
-
 	// Gather & Register shouldn't be done with the lock, as is will call
 	// Describe and/or Collect which may take the lock
 
 	_ = r.registyPush.Register((*pushCollector)(r))
-	_ = r.registyPull.Register((*pullCollector)(r))
 }
 
 // UpdateBleemeoAgentID change the BleemeoAgentID and wait for all pending metrics emission.
@@ -197,184 +187,75 @@ func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
 		r.condition.Wait()
 	}
 
-	// re-register all collector/gatherer to update labels
-	r.collectors = make([]prometheus.Collector, 0, len(r.collectors))
-	r.gatherersPull = make([]labeledGatherer, 0, len(r.gatherersPull))
-
-	for _, reg := range r.registrations {
-		_ = r.register(reg)
+	// Update labels of all gatherers
+	for id, reg := range r.registrations {
+		reg := reg
+		r.setupGatherer(&reg, reg.gatherer.source)
+		r.registrations[id] = reg
 	}
 
 	r.updateAgentIDPending = false
 	r.condition.Broadcast()
 }
 
-// AddDefaultCollector add GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
-func (r *Registry) AddDefaultCollector() {
-	r.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	r.MustRegister(prometheus.NewGoCollector())
-}
-
-// AddNodeExporter add a node_exporter to collector
-func (r *Registry) AddNodeExporter(option node.Option) error {
-	collector, err := node.NewCollector(option)
-	if err != nil {
-		return err
-	}
-	err = r.Register(collector)
-	return err
-}
-
-// Register add a new collector to the list of metric sources.
-func (r *Registry) Register(collector prometheus.Collector) error {
-	return r.RegisterWithLabels(collector, nil)
-}
-
-// RegisterWithLabels add a new collector to the list of metric sources with labels
-func (r *Registry) RegisterWithLabels(collector prometheus.Collector, extraLabels map[string]string) error {
-	r.init()
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	for _, existingReg := range r.registrations {
-		if existingReg.originalCollector == collector {
-			return prometheus.AlreadyRegisteredError{
-				ExistingCollector: existingReg.originalCollector,
-				NewCollector:      collector,
-			}
-		}
-	}
-
-	return r.register(registration{
-		originalCollector:   collector,
-		originalExtraLabels: extraLabels,
-	})
-}
-
 // RegisterGatherer add a new gatherer to the list of metric sources.
-func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, extraLabels map[string]string) error {
+func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string) (int, error) {
 	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for _, existingReg := range r.registrations {
-		if existingReg.originalGatherer == gatherer {
-			return prometheus.AlreadyRegisteredError{}
+	id := 1
+	_, ok := r.registrations[id]
+	for ok {
+		id++
+		if id == 0 {
+			return 0, errors.New("too many gatheres in the registry. Unable to find new slot")
 		}
+		_, ok = r.registrations[id]
 	}
 
-	return r.register(registration{
-		originalGatherer:    gatherer,
+	reg := registration{
 		originalExtraLabels: extraLabels,
-	})
-}
-
-func (r *Registry) register(reg registration) error {
-	if reg.originalCollector != nil && len(reg.originalExtraLabels) == 0 {
-		r.collectors = append(r.collectors, reg.originalCollector)
-		reg.registeredCollector = reg.originalCollector
-	} else {
-		var gatherer prometheus.Gatherer
-
-		if reg.originalCollector != nil {
-			g := prometheus.NewRegistry()
-			if err := g.Register(reg.originalCollector); err != nil {
-				return err
-			}
-			gatherer = g
-		} else {
-			gatherer = reg.originalGatherer
-		}
-
-		extraLabels := r.addMetaLabels(reg.originalExtraLabels)
-		promLabels, annotations := r.applyRelabel(extraLabels)
-		g := newLabeledGatherer(gatherer, promLabels, annotations)
-		r.gatherersPull = append(r.gatherersPull, g)
-
-		reg.registeredGatherer = g
+		stopCallback:        stopCallback,
 	}
+	r.setupGatherer(&reg, gatherer)
 
-	r.registrations = append(r.registrations, reg)
-
-	return nil
+	r.registrations[id] = reg
+	return id, nil
 }
 
 // UnregisterGatherer remove a collector from the list of metric sources.
-func (r *Registry) UnregisterGatherer(gatherer prometheus.Gatherer) bool {
+func (r *Registry) UnregisterGatherer(id int) bool {
 	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for i, reg := range r.registrations {
-		if reg.originalGatherer == gatherer {
-			r.registrations[i] = r.registrations[len(r.registrations)-1]
-			r.registrations[len(r.registrations)-1] = registration{}
-			r.registrations = r.registrations[:len(r.registrations)-1]
-			r.removeRegistration(reg)
-			return true
-		}
-	}
-	return false
-}
+	reg, ok := r.registrations[id]
 
-// MustRegister add a new collector to the list of metric sources.
-func (r *Registry) MustRegister(collectors ...prometheus.Collector) {
-	for _, c := range collectors {
-		err := r.Register(c)
-		if err != nil {
-			panic(err)
-		}
+	if !ok {
+		return false
 	}
-}
+	// Remove reference to original gatherer first, because some gatherer
+	// stopCallback will rely on runtime.GC() to cleanup resource.
+	delete(r.registrations, id)
+	reg.gatherer.source = nil
 
-// Unregister remove a collector from the list of metric sources.
-func (r *Registry) Unregister(collector prometheus.Collector) bool {
-	r.l.Lock()
-	defer r.l.Unlock()
-
-	for i, reg := range r.registrations {
-		if reg.originalCollector == collector {
-			r.registrations[i] = r.registrations[len(r.registrations)-1]
-			r.registrations[len(r.registrations)-1] = registration{}
-			r.registrations = r.registrations[:len(r.registrations)-1]
-			r.removeRegistration(reg)
-			return true
-		}
+	if reg.stopCallback != nil {
+		reg.stopCallback()
 	}
-	return false
-}
 
-func (r *Registry) removeRegistration(reg registration) {
-	if reg.registeredCollector != nil {
-		for i, c := range r.collectors {
-			if c == reg.registeredCollector {
-				r.collectors[i] = r.collectors[len(r.collectors)-1]
-				r.collectors[len(r.collectors)-1] = nil
-				r.collectors = r.collectors[:len(r.collectors)-1]
-				return
-			}
-		}
-	} else {
-		for i, g := range r.gatherersPull {
-			if g.source == reg.registeredGatherer.source {
-				r.gatherersPull[i] = r.gatherersPull[len(r.gatherersPull)-1]
-				r.gatherersPull[len(r.gatherersPull)-1] = labeledGatherer{}
-				r.gatherersPull = r.gatherersPull[:len(r.gatherersPull)-1]
-				return
-			}
-		}
-	}
+	return true
 }
 
 // Gather implement prometheus Gatherer
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	r.l.Lock()
 
-	gatherers := make(Gatherers, len(r.gatherersPull)+1)
-	for i, g := range r.gatherersPull {
-		gatherers[i] = g
+	gatherers := make(Gatherers, 0, len(r.registrations)+1)
+	for _, reg := range r.registrations {
+		gatherers = append(gatherers, reg.gatherer)
 	}
-	gatherers[len(gatherers)-1] = r.registyPush
+	gatherers = append(gatherers, r.registyPush)
 
 	r.l.Unlock()
 	return gatherers.Gather()
@@ -389,15 +270,39 @@ func (l prefixLogger) Println(v ...interface{}) {
 	logger.V(1).Println(all...)
 }
 
+// AddDefaultCollector add GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
+func (r *Registry) AddDefaultCollector() {
+	reg := prometheus.NewRegistry()
+	reg.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
+	reg.MustRegister(prometheus.NewGoCollector())
+
+	_, _ = r.RegisterGatherer(reg, nil, nil)
+}
+
+// AddNodeExporter add a node_exporter to collector
+func (r *Registry) AddNodeExporter(option node.Option) error {
+	collector, err := node.NewCollector(option)
+	if err != nil {
+		return err
+	}
+	reg := prometheus.NewRegistry()
+	err = reg.Register(collector)
+	if err != nil {
+		return err
+	}
+	_, err = r.RegisterGatherer(reg, nil, nil)
+	return err
+}
+
 // Exporter return an HTTP exporter
 func (r *Registry) Exporter() http.Handler {
-	return promhttp.InstrumentMetricHandler(
-		r,
-		promhttp.HandlerFor(r, promhttp.HandlerOpts{
-			ErrorHandling: promhttp.ContinueOnError,
-			ErrorLog:      prefixLogger("/metrics endpoint:"),
-		}),
-	)
+	reg := prometheus.NewRegistry()
+	handler := promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(r, promhttp.HandlerOpts{
+		ErrorHandling: promhttp.ContinueOnError,
+		ErrorLog:      prefixLogger("/metrics endpoint:"),
+	}))
+	r.RegisterGatherer(reg, nil, nil)
+	return handler
 }
 
 // WithTTL return a AddMetricPointFunction with TTL on pushed points.
@@ -462,8 +367,10 @@ func (r *Registry) runOnce() {
 	}
 
 	r.countPushPending++
-	gatherers := make([]labeledGatherer, len(r.gatherersPull))
-	copy(gatherers, r.gatherersPull)
+	gatherers := make([]labeledGatherer, 0, len(r.registrations))
+	for _, reg := range r.registrations {
+		gatherers = append(gatherers, reg.gatherer)
+	}
 
 	r.l.Unlock()
 
@@ -612,29 +519,11 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	return result, annotations
 }
 
-// Describe implement prometheus.Collector
-func (c *pullCollector) Describe(chan<- *prometheus.Desc) {
-}
-
-// Collect collect non-pushed points from all registered collectors
-func (c *pullCollector) Collect(ch chan<- prometheus.Metric) {
-	c.l.Lock()
-
-	collectorsCopy := make([]prometheus.Collector, len(c.collectors))
-	copy(collectorsCopy, c.collectors)
-	c.l.Unlock()
-
-	var wg sync.WaitGroup
-
-	for _, collector := range collectorsCopy {
-		collector := collector
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			collector.Collect(ch)
-		}()
-	}
-	wg.Wait()
+func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
+	extraLabels := r.addMetaLabels(reg.originalExtraLabels)
+	promLabels, annotations := r.applyRelabel(extraLabels)
+	g := newLabeledGatherer(source, promLabels, annotations)
+	reg.gatherer = g
 }
 
 // Describe implement prometheus.Collector
