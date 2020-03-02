@@ -22,9 +22,11 @@
 package registry
 
 import (
+	"context"
 	"glouton/types"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,8 +40,14 @@ type fakeCollector struct {
 	callCount int
 }
 
-func (c *fakeCollector) Collect(chan<- prometheus.Metric) {
+func (c *fakeCollector) Collect(ch chan<- prometheus.Metric) {
 	c.callCount++
+
+	ch <- prometheus.MustNewConstMetric(
+		prometheus.NewDesc(c.name, "fake metric", nil, nil),
+		prometheus.GaugeValue,
+		1.0,
+	)
 }
 func (c *fakeCollector) Describe(chan<- *prometheus.Desc) {
 
@@ -164,6 +172,175 @@ func TestRegistry_Register(t *testing.T) {
 	}
 	if gather1.callCount != 1 {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
+	}
+
+	if err := reg.RegisterWithLabels(coll1, map[string]string{"dummy": "value"}); err != nil {
+		t.Errorf("re-reg.Register(coll1) failed: %v", err)
+	}
+	if err := reg.Register(coll2); err != nil {
+		t.Errorf("re-reg.Register(coll2) failed: %v", err)
+	}
+	reg.UpdateBleemeoAgentID(context.Background(), "fake-uuid")
+
+	result, err := reg.Gather()
+	if err != nil {
+		t.Error(err)
+	}
+	helpText := "fake metric"
+	jobName := "job"
+	jobValue := "glouton"
+	dummyName := "dummy"
+	dummyValue := "value"
+	instanceIDName := "instance_uuid"
+	instanceIDValue := "fake-uuid"
+	value := 1.0
+	want := []*dto.MetricFamily{
+		{
+			Name: &coll1.name,
+			Help: &helpText,
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: &dummyName, Value: &dummyValue},
+						{Name: &instanceIDName, Value: &instanceIDValue},
+						{Name: &jobName, Value: &jobValue},
+					},
+					Gauge: &dto.Gauge{
+						Value: &value,
+					},
+				},
+			},
+		},
+		{
+			Name: &coll2.name,
+			Help: &helpText,
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: &instanceIDName, Value: &instanceIDValue},
+						{Name: &jobName, Value: &jobValue},
+					},
+					Gauge: &dto.Gauge{
+						Value: &value,
+					},
+				},
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(result, want) {
+		t.Errorf("reg.Gather() = %v, want %v", result, want)
+	}
+}
+
+func TestRegistry_pushPoint(t *testing.T) {
+	reg := &Registry{}
+
+	t0 := time.Date(2020, 3, 2, 10, 30, 0, 0, time.UTC)
+	t0MS := t0.UnixNano() / 1e6
+
+	pusher := reg.WithTTL(24 * time.Hour)
+	pusher.PushPoints(
+		[]types.MetricPoint{
+			{
+				Point: types.Point{Value: 1.0, Time: t0},
+				Labels: map[string]string{
+					"__name__": "point1",
+					"dummy":    "value",
+				},
+			},
+		},
+	)
+
+	got, err := reg.Gather()
+	if err != nil {
+		t.Error(err)
+	}
+	metricName := "point1"
+	helpText := ""
+	jobName := "job"
+	jobValue := "glouton"
+	dummyName := "dummy"
+	dummyValue := "value"
+	instanceIDName := "instance_uuid"
+	instanceIDValue := "fake-uuid"
+	value := 1.0
+	want := []*dto.MetricFamily{
+		{
+			Name: &metricName,
+			Help: &helpText,
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: &dummyName, Value: &dummyValue},
+						{Name: &jobName, Value: &jobValue},
+					},
+					Untyped: &dto.Untyped{
+						Value: &value,
+					},
+					TimestampMs: &t0MS,
+				},
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("reg.Gather() = %v, want %v", got, want)
+	}
+
+	reg.UpdateBleemeoAgentID(context.Background(), "fake-uuid")
+
+	got, err = reg.Gather()
+	if err != nil {
+		t.Error(err)
+	}
+	if len(got) > 0 {
+		t.Errorf("reg.Gather() len=%v, want 0", len(got))
+	}
+
+	pusher.PushPoints(
+		[]types.MetricPoint{
+			{
+				Point: types.Point{Value: 1.0, Time: t0},
+				Labels: map[string]string{
+					"__name__": "point1",
+					"dummy":    "value",
+				},
+			},
+		},
+	)
+
+	got, err = reg.Gather()
+	if err != nil {
+		t.Error(err)
+	}
+
+	want = []*dto.MetricFamily{
+		{
+			Name: &metricName,
+			Help: &helpText,
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: &dummyName, Value: &dummyValue},
+						{Name: &instanceIDName, Value: &instanceIDValue},
+						{Name: &jobName, Value: &jobValue},
+					},
+					Untyped: &dto.Untyped{
+						Value: &value,
+					},
+					TimestampMs: &t0MS,
+				},
+			},
+		},
+	}
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("reg.Gather() = %v, want %v", got, want)
 	}
 }
 

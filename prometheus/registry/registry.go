@@ -57,12 +57,16 @@ func (f pushFunction) PushPoints(points []types.MetricPoint) {
 // but it allow to attach labels to each Gatherers.
 // It also support pushed metrics.
 type Registry struct {
-	PushPoint           types.PointPusher
-	FQDN                string
-	GloutonPort         string
-	GetBleemeoAgentUUID func() string
+	PushPoint      types.PointPusher
+	FQDN           string
+	GloutonPort    string
+	BleemeoAgentID string
 
 	l sync.Mutex
+
+	condition            *sync.Cond
+	countPushPending     int
+	updateAgentIDPending bool
 
 	relabelConfigs          []*relabel.Config
 	registrations           []registration
@@ -78,10 +82,11 @@ type Registry struct {
 }
 
 type registration struct {
-	originalCollector prometheus.Collector
-	originalGatherer  prometheus.Gatherer
-	collector         prometheus.Collector
-	gatherer          prometheus.Gatherer
+	originalCollector   prometheus.Collector
+	originalGatherer    prometheus.Gatherer
+	originalExtraLabels map[string]string
+	registeredCollector prometheus.Collector
+	registeredGatherer  labeledGatherer
 }
 
 // This type is used to have another Collecto() method private which only return pulled points
@@ -92,6 +97,14 @@ type pushCollector Registry
 
 func getDefaultRelabelConfig() []*relabel.Config {
 	return []*relabel.Config{
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelBleemeoUUID},
+			TargetLabel:  "instance_uuid",
+			Replacement:  "$1",
+		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
@@ -142,6 +155,8 @@ func (r *Registry) init() {
 		return
 	}
 
+	r.condition = sync.NewCond(&r.l)
+
 	r.registyPull = prometheus.NewRegistry()
 	r.registyPush = prometheus.NewRegistry()
 	r.pushedPoints = make(map[string]types.MetricPoint)
@@ -160,6 +175,38 @@ func (r *Registry) init() {
 
 	_ = r.registyPush.Register((*pushCollector)(r))
 	_ = r.registyPull.Register((*pullCollector)(r))
+}
+
+// UpdateBleemeoAgentID change the BleemeoAgentID and wait for all pending metrics emission.
+// When this function return, it's guaratee that all call to r.PushPoint will use new labels
+func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
+	r.init()
+
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	r.updateAgentIDPending = true
+	r.BleemeoAgentID = agentID
+
+	// Since the updated Agent ID may change metrics labels, drop pushed points
+	r.pushedPoints = make(map[string]types.MetricPoint)
+	r.pushedPointsExpiration = make(map[string]time.Time)
+
+	// Wait for all pending gorouting that may be sending points with old labels
+	for r.countPushPending > 0 {
+		r.condition.Wait()
+	}
+
+	// re-register all collector/gatherer to update labels
+	r.collectors = make([]prometheus.Collector, 0, len(r.collectors))
+	r.gatherersPull = make([]labeledGatherer, 0, len(r.gatherersPull))
+
+	for _, reg := range r.registrations {
+		_ = r.register(reg)
+	}
+
+	r.updateAgentIDPending = false
+	r.condition.Broadcast()
 }
 
 // AddDefaultCollector add GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
@@ -189,38 +236,19 @@ func (r *Registry) RegisterWithLabels(collector prometheus.Collector, extraLabel
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for _, reg := range r.registrations {
-		if reg.originalCollector == collector {
+	for _, existingReg := range r.registrations {
+		if existingReg.originalCollector == collector {
 			return prometheus.AlreadyRegisteredError{
-				ExistingCollector: reg.originalCollector,
+				ExistingCollector: existingReg.originalCollector,
 				NewCollector:      collector,
 			}
 		}
 	}
 
-	var reg registration
-
-	if len(extraLabels) == 0 {
-		reg = registration{
-			originalCollector: collector,
-			collector:         collector,
-		}
-		r.collectors = append(r.collectors, collector)
-	} else {
-		g := prometheus.NewRegistry()
-		if err := g.Register(collector); err != nil {
-			return err
-		}
-		r.addGatherer(g, extraLabels)
-		reg = registration{
-			originalCollector: collector,
-			gatherer:          g,
-		}
-	}
-
-	r.registrations = append(r.registrations, reg)
-
-	return nil
+	return r.register(registration{
+		originalCollector:   collector,
+		originalExtraLabels: extraLabels,
+	})
 }
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
@@ -229,32 +257,46 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, extraLabels ma
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for _, reg := range r.registrations {
-		if reg.originalGatherer == gatherer {
+	for _, existingReg := range r.registrations {
+		if existingReg.originalGatherer == gatherer {
 			return prometheus.AlreadyRegisteredError{}
 		}
 	}
 
-	r.addGatherer(gatherer, extraLabels)
-	reg := registration{
-		originalGatherer: gatherer,
-		gatherer:         gatherer,
+	return r.register(registration{
+		originalGatherer:    gatherer,
+		originalExtraLabels: extraLabels,
+	})
+}
+
+func (r *Registry) register(reg registration) error {
+	if reg.originalCollector != nil && len(reg.originalExtraLabels) == 0 {
+		r.collectors = append(r.collectors, reg.originalCollector)
+		reg.registeredCollector = reg.originalCollector
+	} else {
+		var gatherer prometheus.Gatherer
+
+		if reg.originalCollector != nil {
+			g := prometheus.NewRegistry()
+			if err := g.Register(reg.originalCollector); err != nil {
+				return err
+			}
+			gatherer = g
+		} else {
+			gatherer = reg.originalGatherer
+		}
+
+		extraLabels := r.addMetaLabels(reg.originalExtraLabels)
+		promLabels, annotations := r.applyRelabel(extraLabels)
+		g := newLabeledGatherer(gatherer, promLabels, annotations)
+		r.gatherersPull = append(r.gatherersPull, g)
+
+		reg.registeredGatherer = g
 	}
+
 	r.registrations = append(r.registrations, reg)
 
 	return nil
-}
-
-func (r *Registry) addGatherer(gatherer prometheus.Gatherer, extraLabels map[string]string) {
-
-	if extraLabels == nil {
-		extraLabels = make(map[string]string)
-	}
-	r.addMetaLabels(extraLabels)
-	promLabels, annotations := r.applyRelabel(extraLabels)
-
-	g := newLabeledGatherer(gatherer, promLabels, annotations)
-	r.gatherersPull = append(r.gatherersPull, g)
 }
 
 // UnregisterGatherer remove a collector from the list of metric sources.
@@ -303,9 +345,9 @@ func (r *Registry) Unregister(collector prometheus.Collector) bool {
 }
 
 func (r *Registry) removeRegistration(reg registration) {
-	if reg.collector != nil {
+	if reg.registeredCollector != nil {
 		for i, c := range r.collectors {
-			if c == reg.collector {
+			if c == reg.registeredCollector {
 				r.collectors[i] = r.collectors[len(r.collectors)-1]
 				r.collectors[len(r.collectors)-1] = nil
 				r.collectors = r.collectors[:len(r.collectors)-1]
@@ -314,7 +356,7 @@ func (r *Registry) removeRegistration(reg registration) {
 		}
 	} else {
 		for i, g := range r.gatherersPull {
-			if g.source == reg.gatherer {
+			if g.source == reg.registeredGatherer.source {
 				r.gatherersPull[i] = r.gatherersPull[len(r.gatherersPull)-1]
 				r.gatherersPull[len(r.gatherersPull)-1] = labeledGatherer{}
 				r.gatherersPull = r.gatherersPull[:len(r.gatherersPull)-1]
@@ -415,6 +457,11 @@ func (r *Registry) run(ctx context.Context) {
 func (r *Registry) runOnce() {
 	r.l.Lock()
 
+	for r.updateAgentIDPending {
+		r.condition.Wait()
+	}
+
+	r.countPushPending++
 	gatherers := make([]labeledGatherer, len(r.gatherersPull))
 	copy(gatherers, r.gatherersPull)
 
@@ -425,6 +472,11 @@ func (r *Registry) runOnce() {
 		logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
 	}
 	r.PushPoint.PushPoints(points)
+
+	r.l.Lock()
+	r.countPushPending--
+	r.condition.Broadcast()
+	r.l.Unlock()
 }
 
 func familiesToMetricPoints(families []*dto.MetricFamily) []types.MetricPoint {
@@ -469,15 +521,18 @@ func sleepToAlign(interval time.Duration) {
 func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	r.l.Lock()
 
+	for r.updateAgentIDPending {
+		r.condition.Wait()
+	}
+
+	r.countPushPending++
+
 	now := time.Now()
 	deadline := now.Add(ttl)
 
 	for _, point := range points {
-		if point.Labels == nil {
-			point.Labels = make(map[string]string)
-		}
-		r.addMetaLabels(point.Labels)
-		newLabels, _ := r.applyRelabel(point.Labels)
+		extraLabels := r.addMetaLabels(point.Labels)
+		newLabels, _ := r.applyRelabel(extraLabels)
 		newLabelsMap := newLabels.Map()
 		key := types.LabelsToText(newLabelsMap)
 		point.Labels = newLabelsMap
@@ -500,20 +555,32 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	if r.PushPoint != nil {
 		r.PushPoint.PushPoints(points)
 	}
+
+	r.l.Lock()
+	r.countPushPending--
+	r.condition.Broadcast()
+	r.l.Unlock()
 }
 
-func (r *Registry) addMetaLabels(input map[string]string) {
-	input[types.LabelGloutonFQDN] = r.FQDN
-	input[types.LabelGloutonPort] = r.GloutonPort
-	if r.GetBleemeoAgentUUID != nil {
-		input[types.LabelBleemeoUUID] = r.GetBleemeoAgentUUID()
+func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
+	result := make(map[string]string)
+	for k, v := range input {
+		result[k] = v
 	}
 
-	servicePort := input[types.LabelServicePort]
+	result[types.LabelGloutonFQDN] = r.FQDN
+	result[types.LabelGloutonPort] = r.GloutonPort
+	if r.BleemeoAgentID != "" {
+		result[types.LabelBleemeoUUID] = r.BleemeoAgentID
+	}
+
+	servicePort := result[types.LabelServicePort]
 	if servicePort == "" {
 		servicePort = r.GloutonPort
 	}
-	input[types.LabelPort] = servicePort
+	result[types.LabelPort] = servicePort
+
+	return result
 }
 
 func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.MetricAnnotations) {

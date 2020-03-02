@@ -241,6 +241,13 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 	a.updateThresholds(thresholds, firstUpdate)
 }
 
+// notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
+// This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
+func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
+	a.metricRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+	a.store.DropAllMetrics()
+}
+
 func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	rawValue, ok := a.config.Get("thresholds")
 	if !ok {
@@ -378,10 +385,10 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.store = store.New()
 	a.metricRegistry = &registry.Registry{
-		PushPoint:           a.store,
-		FQDN:                fqdn,
-		GetBleemeoAgentUUID: a.BleemeoAgentID,
-		GloutonPort:         strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
+		PushPoint:      a.store,
+		FQDN:           fqdn,
+		BleemeoAgentID: a.BleemeoAgentID(),
+		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.metricRegistry.WithTTL(5 * time.Minute))}
@@ -464,19 +471,21 @@ func (a *agent) run() { //nolint:gocyclo
 
 	if a.config.Bool("bleemeo.enabled") {
 		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
-			Config:                 a.config,
-			State:                  a.state,
-			Facts:                  a.factProvider,
-			Process:                psFact,
-			Docker:                 a.dockerFact,
-			Store:                  a.store,
-			Acc:                    acc,
-			Discovery:              a.discovery,
-			UpdateMetricResolution: a.updateMetricResolution,
-			UpdateThresholds:       a.UpdateThresholds,
-			UpdateUnits:            a.threshold.SetUnits,
-			MetricFormat:           a.metricFormat,
+			Config:                  a.config,
+			State:                   a.state,
+			Facts:                   a.factProvider,
+			Process:                 psFact,
+			Docker:                  a.dockerFact,
+			Store:                   a.store,
+			Acc:                     acc,
+			Discovery:               a.discovery,
+			UpdateMetricResolution:  a.updateMetricResolution,
+			UpdateThresholds:        a.UpdateThresholds,
+			UpdateUnits:             a.threshold.SetUnits,
+			MetricFormat:            a.metricFormat,
+			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 		})
+		a.metricRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 	if a.config.Bool("nrpe.enabled") {

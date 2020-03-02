@@ -29,15 +29,16 @@ import (
 
 // GlobalOption are option user by most component of bleemeo.Connector
 type GlobalOption struct {
-	Config       Config
-	State        State
-	Facts        FactProvider
-	Process      ProcessProvider
-	Docker       DockerProvider
-	Store        Store
-	Acc          telegraf.Accumulator
-	Discovery    discovery.PersistentDiscoverer
-	MetricFormat types.MetricFormat
+	Config                  Config
+	State                   State
+	Facts                   FactProvider
+	Process                 ProcessProvider
+	Docker                  DockerProvider
+	Store                   Store
+	Acc                     telegraf.Accumulator
+	Discovery               discovery.PersistentDiscoverer
+	MetricFormat            types.MetricFormat
+	NotifyFirstRegistration func(ctx context.Context)
 
 	UpdateMetricResolution func(resolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)

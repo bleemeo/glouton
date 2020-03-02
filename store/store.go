@@ -107,6 +107,15 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 	}
 }
 
+// DropAllMetrics clear the full content of the store
+func (s *Store) DropAllMetrics() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.metrics = make(map[int]metric)
+	s.points = make(map[int][]types.Point)
+}
+
 // Metrics return a list of Metric matching given labels filter
 func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err error) {
 	result = make([]types.Metric, 0)

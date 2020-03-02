@@ -289,6 +289,7 @@ func (s *Synchronizer) runOnce() error {
 		if err := s.register(); err != nil {
 			return err
 		}
+		s.option.NotifyFirstRegistration(s.ctx)
 	}
 
 	syncMethods := s.syncToPerform()
