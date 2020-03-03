@@ -37,14 +37,17 @@ func Load(path string) (*State, error) {
 		path: path,
 		data: make(map[string]json.RawMessage),
 	}
+
 	f, err := os.Open(path)
 	if err != nil && os.IsNotExist(err) {
 		return &state, nil
 	} else if err != nil {
 		return nil, err
 	}
+
 	decoder := json.NewDecoder(f)
 	err = decoder.Decode(&state.data)
+
 	return &state, err
 }
 
@@ -52,6 +55,7 @@ func Load(path string) (*State, error) {
 func (s *State) Save() error {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	return s.save()
 }
 
@@ -60,7 +64,9 @@ func (s *State) save() error {
 	if err != nil {
 		return err
 	}
+
 	err = os.Rename(s.path+".tmp", s.path)
+
 	return err
 }
 
@@ -69,13 +75,18 @@ func (s *State) saveTo(path string) error {
 	if err != nil {
 		return err
 	}
+
 	defer w.Close()
+
 	encoder := json.NewEncoder(w)
+
 	err = encoder.Encode(s.data)
 	if err != nil {
 		return err
 	}
+
 	_ = w.Sync()
+
 	return nil
 }
 
@@ -88,11 +99,14 @@ func (s *State) Set(key string, object interface{}) error {
 	if err != nil {
 		return err
 	}
+
 	s.data[key] = json.RawMessage(buffer)
+
 	err = s.save()
 	if err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
 	}
+
 	return nil
 }
 
@@ -105,6 +119,8 @@ func (s *State) Get(key string, result interface{}) error {
 	if !ok {
 		return nil
 	}
+
 	err := json.Unmarshal(buffer, &result)
+
 	return err
 }

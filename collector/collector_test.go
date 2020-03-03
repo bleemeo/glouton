@@ -50,9 +50,11 @@ func TestAddRemove(t *testing.T) {
 	}
 
 	c.RemoveInput(id1)
+
 	if len(c.inputs) != 1 {
 		t.Errorf("len(c.inputs) == %v, want %v", len(c.inputs), 1)
 	}
+
 	if input, ok := c.inputs[id2]; !ok {
 		t.Errorf("c.inputs[id2=%v] == nil, want input2", id2)
 	} else if input.Description() != "input2" {
@@ -65,15 +67,20 @@ func TestRun(t *testing.T) {
 	c.runOnce()
 
 	input := &mockInput{Name: "input1"}
+
 	_, err := c.AddInput(input, "input1")
 	if err != nil {
 		t.Error(err)
 	}
+
 	c.runOnce()
+
 	if input.GatherCallCount != 1 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 1)
 	}
+
 	c.runOnce()
+
 	if input.GatherCallCount != 2 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 2)
 	}

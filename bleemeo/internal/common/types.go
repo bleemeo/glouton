@@ -39,6 +39,7 @@ func (key *MetricLabelItem) TruncateItem(isService bool) {
 	if len(key.Item) > APIMetricItemLength {
 		key.Item = key.Item[:APIMetricItemLength]
 	}
+
 	if isService && len(key.Item) > APIMetricItemLengthIfService {
 		key.Item = key.Item[:APIMetricItemLengthIfService]
 	}
@@ -48,6 +49,7 @@ func (key MetricLabelItem) String() string {
 	if key.Item != "" {
 		return fmt.Sprintf("%s (item %s)", key.Label, key.Item)
 	}
+
 	return key.Label
 }
 
@@ -56,32 +58,40 @@ func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
 	if metric, ok := input.(bleemeoTypes.Metric); ok {
 		key := MetricLabelItem{Label: metric.Label, Item: metric.Labels["item"]}
 		key.TruncateItem(metric.ServiceID != "")
+
 		return key
 	}
+
 	if metric, ok := input.(types.Metric); ok {
 		labels := metric.Labels()
 		key := MetricLabelItem{Label: labels["__name__"], Item: labels["item"]}
 		key.TruncateItem(labels["service_name"] != "")
+
 		return key
 	}
+
 	if labels, ok := input.(map[string]string); ok {
 		key := MetricLabelItem{Label: labels["__name__"], Item: labels["item"]}
 		key.TruncateItem(labels["service_name"] != "")
+
 		return key
 	}
 
 	key := MetricLabelItem{}
+
 	return key
 }
 
 // MetricLookupFromList return a map[MetricLabelItem]Metric
 func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[MetricLabelItem]bleemeoTypes.Metric {
 	registeredMetricsByKey := make(map[MetricLabelItem]bleemeoTypes.Metric, len(registeredMetrics))
+
 	for _, v := range registeredMetrics {
 		key := MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
 		if existing, ok := registeredMetricsByKey[key]; !ok || !existing.DeactivatedAt.IsZero() {
 			registeredMetricsByKey[key] = v
 		}
 	}
+
 	return registeredMetricsByKey
 }

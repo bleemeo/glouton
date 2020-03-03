@@ -75,10 +75,12 @@ func TestReadNRPEConfFile(t *testing.T) {
 		Bytes []byte
 		Map   map[string]string
 	}
+
 	type Want struct {
 		Map              map[string]string
 		CommandArguments bool
 	}
+
 	cases := []struct {
 		Entries Entries
 		Want    Want
@@ -184,6 +186,7 @@ func TestReadNRPEConfFile(t *testing.T) {
 		if !reflect.DeepEqual(mapResult, c.Want.Map) {
 			t.Errorf("readNRPEConfFile(args) == %v, want %v", mapResult, c.Want.Map)
 		}
+
 		if commandArgumentsResult != c.Want.CommandArguments {
 			t.Errorf("readNRPEConfFile(args) == %v, want %v", commandArgumentsResult, c.Want.CommandArguments)
 		}
@@ -195,10 +198,12 @@ func TestReturnCommand(t *testing.T) {
 		Responder Responder
 		Args      []string
 	}
+
 	type Want struct {
 		Command []string
 		Err     error
 	}
+
 	cases := []struct {
 		Entries Entries
 		Want    Want
@@ -482,6 +487,7 @@ func TestReturnCommand(t *testing.T) {
 		if !reflect.DeepEqual(commandResult, c.Want.Command) {
 			t.Errorf("%v r.retunrCommand(%v) == '%v', want '%v'", i, c.Entries.Args, commandResult, c.Want.Command)
 		}
+
 		if !reflect.DeepEqual(errResult, c.Want.Err) {
 			t.Errorf("%v r.returnCommand(%v) == '%v', want '%v'", i, c.Entries.Args, errResult, c.Want.Err)
 		}

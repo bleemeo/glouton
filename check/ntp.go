@@ -42,11 +42,11 @@ type NTPCheck struct {
 // For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
 func NewNTP(address string, persitentAddresses []string, metricName string, labels map[string]string, acc accumulator) *NTPCheck {
-
 	nc := &NTPCheck{
 		mainAddress: address,
 	}
 	nc.baseCheck = newBase("", persitentAddresses, true, nc.doCheck, metricName, labels, acc)
+
 	return nc
 }
 
@@ -103,6 +103,7 @@ func decodeLeapVersionMode(value uint8) (leapIndicator int, version int, mode in
 	leapIndicator = int(value / 64)
 	version = int((value / 8) & 0x7)
 	mode = int(value & 0x7)
+
 	return
 }
 
@@ -112,20 +113,25 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 			CurrentStatus: types.StatusOk,
 		}
 	}
+
 	start := time.Now()
+
 	conn, err := net.ListenPacket("udp", ":0")
 	if err != nil {
 		logger.V(1).Printf("Unable to create UDP socket: %v", err)
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to create UDP socket",
 		}
 	}
+
 	defer conn.Close()
 
 	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err != nil {
 		logger.V(1).Printf("Unable to set Deadline: %v", err)
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to set Deadline",
@@ -135,28 +141,35 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	dst, err := net.ResolveUDPAddr("udp", nc.mainAddress)
 	if err != nil {
 		logger.V(1).Printf("Unable to resolve UDP address: %v", err)
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: fmt.Sprintf("Unable to resolve address %#v", nc.mainAddress),
 		}
 	}
+
 	buf := new(bytes.Buffer)
 	packet := ntpV3Packet{
 		LeapVersionMode: encodeLeapVersionMode(0, 3, 3),
 	}
+
 	err = binary.Write(buf, binary.BigEndian, packet)
 	if err != nil {
 		logger.V(1).Printf("Unable to encode NTP packet: %v", err)
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to encode NTP packet",
 		}
 	}
+
 	_, err = conn.WriteTo(buf.Bytes(), dst)
 	if err != nil {
 		logger.V(1).Printf("ntp check, failed to send data: %v", err)
 	}
+
 	data := make([]byte, 48)
+
 	n, _, err := conn.ReadFrom(data)
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return types.StatusDescription{
@@ -164,6 +177,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 			StatusDescription: "Connection timed out after 10 seconds",
 		}
 	}
+
 	if err != nil || n != len(data) {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
@@ -174,6 +188,7 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	err = binary.Read(bytes.NewReader(data), binary.BigEndian, &packet)
 	if err != nil {
 		logger.V(1).Printf("NTP packet format unknown: %v", err)
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Unknown response from NTP server",
@@ -186,12 +201,14 @@ func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 			StatusDescription: "NTP server not (yet) synchronized",
 		}
 	}
+
 	if math.Abs(time.Since(packet.ReceiveTS.Time()).Seconds()) > 10 {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: "Local time and NTP time does not match",
 		}
 	}
+
 	return types.StatusDescription{
 		CurrentStatus:     types.StatusOk,
 		StatusDescription: fmt.Sprintf("NTP OK - %v response time", time.Since(start)),

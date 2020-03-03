@@ -62,13 +62,16 @@ func New(acc StatusAccumulator, state *state.State) *Accumulator {
 		states:            make(map[MetricNameItem]statusState),
 		defaultSoftPeriod: 300 * time.Second,
 	}
+
 	var jsonList []jsonState
+
 	err := state.Get(statusCacheKey, &jsonList)
 	if err != nil {
 		for _, v := range jsonList {
 			self.states[v.MetricNameItem] = v.statusState
 		}
 	}
+
 	return self
 }
 
@@ -78,8 +81,10 @@ func New(acc StatusAccumulator, state *state.State) *Accumulator {
 func (a *Accumulator) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold, thresholdAllItem map[string]Threshold) {
 	a.l.Lock()
 	defer a.l.Unlock()
+
 	a.thresholdsAllItem = thresholdAllItem
 	a.thresholds = thresholdWithItem
+
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
 }
 
@@ -88,8 +93,10 @@ func (a *Accumulator) SetThresholds(thresholdWithItem map[MetricNameItem]Thresho
 func (a *Accumulator) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
 	a.l.Lock()
 	defer a.l.Unlock()
+
 	a.softPeriods = periodPerMetrics
 	a.defaultSoftPeriod = defaultPeriod
+
 	logger.V(2).Printf("SoftPeriod contains %d definitions", len(periodPerMetrics))
 }
 
@@ -97,7 +104,9 @@ func (a *Accumulator) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetric
 func (a *Accumulator) SetUnits(units map[MetricNameItem]Unit) {
 	a.l.Lock()
 	defer a.l.Unlock()
+
 	a.units = units
+
 	logger.V(2).Printf("Units contains %d definitions", len(units))
 }
 
@@ -153,6 +162,7 @@ func (a *Accumulator) AddError(err error) {
 		a.acc.AddError(err)
 		return
 	}
+
 	if err != nil {
 		logger.V(1).Printf("Add error called with: %v", err)
 	}
@@ -190,6 +200,7 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 	if s.CriticalSince.After(now) {
 		s.CriticalSince = time.Time{}
 	}
+
 	if s.WarningSince.After(now) {
 		s.WarningSince = time.Time{}
 	}
@@ -202,16 +213,20 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		if s.CriticalSince.IsZero() {
 			s.CriticalSince = now
 		}
+
 		if s.WarningSince.IsZero() {
 			s.WarningSince = now
 		}
+
 		criticalDuration = now.Sub(s.CriticalSince)
 		warningDuration = now.Sub(s.WarningSince)
 	case types.StatusWarning:
 		s.CriticalSince = time.Time{}
+
 		if s.WarningSince.IsZero() {
 			s.WarningSince = now
 		}
+
 		warningDuration = now.Sub(s.WarningSince)
 	default:
 		s.CriticalSince = time.Time{}
@@ -232,7 +247,9 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		// downgrade status immediately
 		s.CurrentStatus = types.StatusOk
 	}
+
 	s.LastUpdate = time.Now()
+
 	return s
 }
 
@@ -254,15 +271,19 @@ func (t Threshold) Equal(other Threshold) bool {
 	if t.LowCritical != other.LowCritical && (!math.IsNaN(t.LowCritical) || !math.IsNaN(other.LowCritical)) {
 		return false
 	}
+
 	if t.LowWarning != other.LowWarning && (!math.IsNaN(t.LowWarning) || !math.IsNaN(other.LowWarning)) {
 		return false
 	}
+
 	if t.HighWarning != other.HighWarning && (!math.IsNaN(t.HighWarning) || !math.IsNaN(other.HighWarning)) {
 		return false
 	}
+
 	if t.HighCritical != other.HighCritical && (!math.IsNaN(t.HighCritical) || !math.IsNaN(other.HighCritical)) {
 		return false
 	}
+
 	return true
 }
 
@@ -288,9 +309,11 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 		HighWarning:  math.NaN(),
 		HighCritical: math.NaN(),
 	}
+
 	for _, name := range []string{"low_critical", "low_warning", "high_warning", "high_critical"} {
 		if raw, ok := input[name]; ok {
 			var value float64
+
 			switch v := raw.(type) {
 			case float64:
 				value = v
@@ -299,6 +322,7 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 			default:
 				return result, fmt.Errorf("%v is not a float", raw)
 			}
+
 			switch name {
 			case "low_critical":
 				result.LowCritical = value
@@ -311,6 +335,7 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 			}
 		}
 	}
+
 	return result, nil
 }
 
@@ -321,6 +346,7 @@ func (t Threshold) IsZero() bool {
 	if math.IsNaN(t.LowCritical) && math.IsNaN(t.LowWarning) && math.IsNaN(t.HighWarning) && math.IsNaN(t.HighCritical) {
 		return true
 	}
+
 	return t.LowCritical == 0.0 && t.LowWarning == 0.0 && t.HighWarning == 0.0 && t.HighCritical == 0.0
 }
 
@@ -329,15 +355,19 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 	if !math.IsNaN(t.LowCritical) && value < t.LowCritical {
 		return types.StatusCritical, t.LowCritical
 	}
+
 	if !math.IsNaN(t.LowWarning) && value < t.LowWarning {
 		return types.StatusWarning, t.LowWarning
 	}
+
 	if !math.IsNaN(t.HighCritical) && value > t.HighCritical {
 		return types.StatusCritical, t.HighCritical
 	}
+
 	if !math.IsNaN(t.HighWarning) && value > t.HighWarning {
 		return types.StatusWarning, t.HighWarning
 	}
+
 	return types.StatusOk, math.NaN()
 }
 
@@ -345,6 +375,7 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 func (a *Accumulator) GetThreshold(key MetricNameItem) Threshold {
 	a.l.Lock()
 	defer a.l.Unlock()
+
 	return a.getThreshold(key)
 }
 
@@ -352,6 +383,7 @@ func (a *Accumulator) getThreshold(key MetricNameItem) Threshold {
 	if threshold, ok := a.thresholds[key]; ok {
 		return threshold
 	}
+
 	v := a.thresholdsAllItem[key.Name]
 	if v.IsZero() {
 		return Threshold{
@@ -361,6 +393,7 @@ func (a *Accumulator) getThreshold(key MetricNameItem) Threshold {
 			HighCritical: math.NaN(),
 		}
 	}
+
 	return v
 }
 
@@ -384,28 +417,36 @@ func convertInterface(value interface{}) (float64, error) {
 // Run will periodically save status state and clean it.
 func (a *Accumulator) Run(ctx context.Context) error {
 	lastSave := time.Now()
+
 	for ctx.Err() == nil {
 		save := false
+
 		select {
 		case <-ctx.Done():
 			save = true
 		case <-time.After(time.Minute):
 		}
+
 		if time.Since(lastSave) > 60*time.Minute {
 			save = true
 		}
+
 		a.run(save)
+
 		if save {
 			lastSave = time.Now()
 		}
 	}
+
 	return nil
 }
 
 func (a *Accumulator) run(save bool) {
 	a.l.Lock()
 	defer a.l.Unlock()
+
 	jsonList := make([]jsonState, 0, len(a.states))
+
 	for k, v := range a.states {
 		if time.Since(v.LastUpdate) > 60*time.Minute {
 			delete(a.states, k)
@@ -416,6 +457,7 @@ func (a *Accumulator) run(save bool) {
 			})
 		}
 	}
+
 	if save {
 		_ = a.state.Set(statusCacheKey, jsonList)
 	}
@@ -427,11 +469,14 @@ func formatValue(value float64, unit Unit) string {
 		return fmt.Sprintf("%.2f", value)
 	case UnitTypeBit, UnitTypeByte:
 		scales := []string{"", "K", "M", "G", "T", "P", "E"}
+
 		i := 0
 		for i < len(scales)-1 && math.Abs(value) >= 1024 {
 			i++
+
 			value /= 1024
 		}
+
 		return fmt.Sprintf("%.2f %s%ss", value, scales[i], unit.UnitText)
 	default:
 		return fmt.Sprintf("%.2f %s", value, unit.UnitText)
@@ -455,6 +500,7 @@ func formatDuration(period time.Duration) string {
 
 	currentUnit := ""
 	value := period.Seconds()
+
 	for _, unit := range units {
 		if math.Round(value/unit.Scale) >= 1 {
 			value /= unit.Scale
@@ -468,6 +514,7 @@ func formatDuration(period time.Duration) string {
 	if value > 1 {
 		currentUnit += "s"
 	}
+
 	return fmt.Sprintf("%.0f %s", value, currentUnit)
 }
 
@@ -476,32 +523,40 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 	defer a.l.Unlock()
 
 	statuses := make(map[string]types.StatusDescription)
+
 	for name, value := range fields {
 		flatName := measurement + "_" + name
 		if measurement == "" {
 			flatName = name
 		}
+
 		key := MetricNameItem{Name: flatName, Item: tags["item"]}
+
 		threshold := a.getThreshold(key)
 		if threshold.IsZero() {
 			continue
 		}
+
 		valueF, err := convertInterface(value)
 		if err != nil {
 			continue
 		}
+
 		softStatus, thresholdLimit := threshold.CurrentStatus(valueF)
 		previousState := a.states[key]
 		period := a.defaultSoftPeriod
+
 		if tmp, ok := a.softPeriods[key.Name]; ok {
 			period = tmp
 		}
+
 		newState := previousState.Update(softStatus, period, time.Now())
 		a.states[key] = newState
 
 		unit := a.units[key]
 		// Consumer expect status description from threshold to start with "Current value:"
 		statusDescription := fmt.Sprintf("Current value: %s", formatValue(valueF, unit))
+
 		if newState.CurrentStatus != types.StatusOk {
 			if period > 0 {
 				statusDescription += fmt.Sprintf(
@@ -516,10 +571,12 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 				)
 			}
 		}
+
 		statuses[name] = types.StatusDescription{
 			CurrentStatus:     newState.CurrentStatus,
 			StatusDescription: statusDescription,
 		}
 	}
+
 	a.acc.AddFieldsWithStatus(measurement, fields, tags, statuses, true, t...)
 }

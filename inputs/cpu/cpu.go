@@ -44,6 +44,7 @@ func New() (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input cpu not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -56,8 +57,12 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	finalFields := make(map[string]float64)
-	var cpuOther float64
-	var cpuUsed float64
+
+	var (
+		cpuOther float64
+		cpuUsed  float64
+	)
+
 	for metricName, value := range fields {
 		finalMetricName := strings.Replace(metricName, "usage_", "", -1)
 		if finalMetricName == "irq" {
@@ -65,7 +70,9 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		} else if finalMetricName == "iowait" {
 			finalMetricName = "wait"
 		}
+
 		finalFields[finalMetricName] = value
+
 		switch finalMetricName {
 		case "user":
 			cpuUsed += value
@@ -84,7 +91,9 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			cpuOther += value
 		}
 	}
+
 	finalFields["other"] = cpuOther
 	finalFields["used"] = cpuUsed
+
 	return finalFields
 }

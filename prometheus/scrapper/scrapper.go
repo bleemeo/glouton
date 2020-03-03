@@ -56,6 +56,7 @@ func New(targets []Target) *Scrapper {
 func (s *Scrapper) Run(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
+
 	for {
 		select {
 		case <-ticker.C:
@@ -70,35 +71,48 @@ func (s *Scrapper) Run(ctx context.Context) error {
 func (s *Scrapper) Gather() ([]*dto.MetricFamily, error) {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	result := make([]*dto.MetricFamily, 0, len(s.metrics))
+
 	for _, m := range s.metrics {
 		result = append(result, m)
 	}
+
 	return result, nil
 }
 
 func (s *Scrapper) run(ctx context.Context) {
-	var wg sync.WaitGroup
+	var (
+		wg sync.WaitGroup
+		l  sync.Mutex
+	)
 
 	wg.Add(len(s.targets))
+
 	result := make(map[string]*dto.MetricFamily)
-	var l sync.Mutex
+
 	for _, target := range s.targets {
 		target := target
+
 		go func() {
 			defer wg.Done()
+
 			tmp := fetchURL(ctx, target)
 			if len(tmp) > 0 {
 				l.Lock()
 				defer l.Unlock()
+
 				result = merge(result, tmp)
 			}
 		}()
 	}
+
 	wg.Wait()
 	l.Lock()
 	s.l.Lock()
+
 	s.metrics = result
+
 	s.l.Unlock()
 	l.Unlock()
 }
@@ -115,6 +129,7 @@ func merge(left map[string]*dto.MetricFamily, right map[string]*dto.MetricFamily
 		// Assume no duplicate
 		leftValue.Metric = append(leftValue.Metric, rightValue.Metric...)
 	}
+
 	return left
 }
 
@@ -126,22 +141,26 @@ func fetchURL(ctx context.Context, target Target) map[string]*dto.MetricFamily {
 		logger.V(1).Printf("Failed to prepare request for Prometheus exporter %s: %v", target.Name, err)
 		return nil
 	}
+
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
 		logger.V(1).Printf("Failed to get metrics for Prometheus exporter %s: %v", target.Name, err)
 		return nil
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		logger.V(1).Printf("Failed to read metrics for Prometheus exporter %s: HTTP status is %s", target.Name, resp.Status)
 		// Ensure response body is read to allow HTTP keep-alive to works
 		_, _ = io.Copy(ioutil.Discard, resp.Body)
+
 		return nil
 	}
 
@@ -152,19 +171,25 @@ func fetchURL(ctx context.Context, target Target) map[string]*dto.MetricFamily {
 	}
 
 	reader := bytes.NewReader(body)
+
 	var parser expfmt.TextParser
+
 	result, err := parser.TextToMetricFamilies(reader)
 	if err != nil {
 		logger.V(1).Printf("Failed to parse metrics for Prometheus exporter %s: %v", target.Name, err)
 		return nil
 	}
+
 	if target.Prefix != "" {
 		newResult := make(map[string]*dto.MetricFamily, len(result))
+
 		for k, v := range result {
 			newResult[target.Prefix+k] = v
 		}
+
 		result = newResult
 	}
+
 	for _, family := range result {
 		for _, m := range family.Metric {
 			key := "glouton_job"
@@ -172,5 +197,6 @@ func fetchURL(ctx context.Context, target Target) map[string]*dto.MetricFamily {
 			m.Label = append(m.Label, &x)
 		}
 	}
+
 	return result
 }

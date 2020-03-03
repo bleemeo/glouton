@@ -50,12 +50,12 @@ func (ms mockState) Get(key string, object interface{}) error {
 		*services = ms.DiscoveredService
 		return nil
 	}
+
 	return errors.New("not implemented")
 }
 
 // Test dynamic Discovery with single service present
 func TestDiscoverySingle(t *testing.T) {
-
 	cases := []struct {
 		dynamicResult   Service
 		previousService Service
@@ -161,11 +161,14 @@ func TestDiscoverySingle(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	for i, c := range cases {
 		var previousService []Service
+
 		if c.previousService.ServiceType != "" {
 			previousService = append(previousService, c.previousService)
 		}
+
 		state := mockState{
 			DiscoveredService: previousService,
 		}
@@ -175,24 +178,31 @@ func TestDiscoverySingle(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+
 		if len(srv) != 1 {
 			t.Errorf("Case #%d: len(srv) == %v, want 1", i, len(srv))
 		}
+
 		if srv[0].Name != c.want.Name {
 			t.Errorf("Case #%d: Name == %#v, want %#v", i, srv[0].Name, c.want.Name)
 		}
+
 		if srv[0].ServiceType != c.want.ServiceType {
 			t.Errorf("Case #%d: ServiceType == %#v, want %#v", i, srv[0].ServiceType, c.want.ServiceType)
 		}
+
 		if srv[0].ContainerID != c.want.ContainerID {
 			t.Errorf("Case #%d: ContainerID == %#v, want %#v", i, srv[0].ContainerID, c.want.ContainerID)
 		}
+
 		if srv[0].IPAddress != c.want.IPAddress {
 			t.Errorf("Case #%d: IPAddress == %#v, want %#v", i, srv[0].IPAddress, c.want.IPAddress)
 		}
+
 		if !reflect.DeepEqual(srv[0].ListenAddresses, c.want.ListenAddresses) {
 			t.Errorf("Case #%d: ListenAddresses == %v, want %v", i, srv[0].ListenAddresses, c.want.ListenAddresses)
 		}
+
 		if srv[0].HasNetstatInfo != c.want.HasNetstatInfo {
 			t.Errorf("Case #%d: hasNetstatInfo == %#v, want %#v", i, srv[0].HasNetstatInfo, c.want.HasNetstatInfo)
 		}
@@ -204,6 +214,7 @@ func Test_applyOveride(t *testing.T) {
 		discoveredServicesMap map[NameContainer]Service
 		servicesOverride      map[NameContainer]map[string]string
 	}
+
 	tests := []struct {
 		name string
 		args args

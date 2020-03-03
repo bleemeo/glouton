@@ -43,9 +43,11 @@ func TestDecode(t *testing.T) {
 			key:     c.QueryKey,
 			args:    c.QueryArgs,
 		}
+
 		if !reflect.DeepEqual(got, want) {
 			t.Errorf("decode(zabbixPacket) == %v, want %v", got, want)
 		}
+
 		if err != nil {
 			t.Error(err)
 		}
@@ -132,6 +134,7 @@ func TestEncode(t *testing.T) {
 			t.Errorf("encodev1(%#v, %#v) == %v, want %v", c.ReplyString, c.ReplyError, got, c.ReplyRaw)
 			break
 		}
+
 		if err != nil {
 			t.Error(err)
 		}
@@ -159,17 +162,18 @@ func TestHandleConnection(t *testing.T) {
 			bytes.NewReader(c.QueryRaw),
 			new(bytes.Buffer),
 		}
+
 		handleConnection(
 			socket,
 			func(key string, args []string) (string, error) {
 				return c.ReplyString, c.ReplyError //nolint: scopelint
 			},
 		)
+
 		got := socket.writer.Bytes()
 		if !bytes.Equal(got, c.ReplyRaw) {
 			t.Errorf("handleConnection([case %s]) writes %v, want %v", c.Description, got, c.ReplyRaw)
 			break
 		}
-
 	}
 }

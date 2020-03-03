@@ -36,5 +36,6 @@ func AddLabels(input telegraf.Input, labels map[string]string) telegraf.Input {
 			},
 		}
 	}
+
 	return input
 }

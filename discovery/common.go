@@ -114,28 +114,35 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 	if s.ExtraAttributes["address"] != "" {
 		return s.ExtraAttributes["address"]
 	}
+
 	for _, a := range s.ListenAddresses {
 		if a.Network() != network {
 			continue
 		}
+
 		address, portStr, err := net.SplitHostPort(a.String())
 		if err != nil {
 			continue
 		}
+
 		p, err := strconv.ParseInt(portStr, 10, 0)
 		if err != nil {
 			continue
 		}
+
 		if address == net.IPv4zero.String() {
 			address = s.IPAddress
 		}
+
 		if int(p) == port {
 			return address
 		}
 	}
+
 	if force {
 		return s.IPAddress
 	}
+
 	return ""
 }
 
@@ -144,6 +151,7 @@ func (s Service) AddressPort() (string, int) {
 	di := servicesDiscoveryInfo[s.ServiceType]
 	port := di.ServicePort
 	force := false
+
 	if s.ExtraAttributes["port"] != "" {
 		tmp, err := strconv.ParseInt(s.ExtraAttributes["port"], 10, 0)
 		if err != nil {
@@ -153,9 +161,11 @@ func (s Service) AddressPort() (string, int) {
 			force = true
 		}
 	}
+
 	if port == 0 {
 		return "", 0
 	}
+
 	return s.AddressForPort(port, di.ServiceProtocol, force), port
 }
 

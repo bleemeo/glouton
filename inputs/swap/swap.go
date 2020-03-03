@@ -39,6 +39,7 @@ func New() (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input swap is not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -47,5 +48,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		delete(fields, "used_percent")
 		fields["used_perc"] = value
 	}
+
 	return fields
 }

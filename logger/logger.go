@@ -37,9 +37,11 @@ type Logger bool
 func V(level int) Logger {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
+
 	if level <= cfg.level {
 		return Logger(true)
 	}
+
 	if _, file, _, ok := runtime.Caller(1); ok {
 		// file is something like a/b/package/file.go
 		// We only want package
@@ -47,11 +49,14 @@ func V(level int) Logger {
 		if len(part) < 2 {
 			return Logger(false)
 		}
+
 		pkg := part[len(part)-2]
+
 		if level <= cfg.pkgLevels[pkg] {
 			return Logger(true)
 		}
 	}
+
 	return Logger(false)
 }
 
@@ -72,18 +77,22 @@ func (l Logger) Println(v ...interface{}) {
 func printf(fmtArg string, a ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
+
 	if !cfg.useSyslog {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
+
 	_, _ = fmt.Fprintf(cfg.writer, fmtArg+"\n", a...)
 }
 
 func println(v ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
+
 	if !cfg.useSyslog {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
+
 	_, _ = fmt.Fprintln(cfg.writer, v...)
 }
 
@@ -109,14 +118,20 @@ var cfg = config{writer: os.Stderr}
 func UseSyslog(useSyslog bool) error {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
+
 	cfg.useSyslog = useSyslog
+
 	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
 		closer.Close()
 	}
+
 	cfg.writer = nil
+
 	var err error
+
 	if useSyslog {
 		cfg.writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "")
+
 		if err != nil {
 			cfg.writer = os.Stderr
 			cfg.useSyslog = false
@@ -124,7 +139,9 @@ func UseSyslog(useSyslog bool) error {
 	} else {
 		cfg.writer = os.Stderr
 	}
+
 	log.SetOutput(cfg.writer)
+
 	return err
 }
 
@@ -132,6 +149,7 @@ func UseSyslog(useSyslog bool) error {
 func SetLevel(level int) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
+
 	cfg.level = level
 }
 
@@ -140,19 +158,25 @@ func SetLevel(level int) {
 func SetPkgLevels(levels string) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
+
 	pkgLevels := make(map[string]int)
+
 	part := strings.Split(levels, ",")
 	for _, p := range part {
 		tmp := strings.Split(p, "=")
 		if len(tmp) != 2 {
 			continue
 		}
+
 		pkg := tmp[0]
+
 		level, err := strconv.ParseInt(tmp[1], 10, 0)
 		if err != nil {
 			continue
 		}
+
 		pkgLevels[pkg] = int(level)
 	}
+
 	cfg.pkgLevels = pkgLevels
 }

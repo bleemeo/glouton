@@ -24,7 +24,7 @@ import (
 	"os"
 	"strings"
 
-	_ "net/http/pprof"
+	_ "net/http/pprof" //nolint: gosec
 )
 
 //nolint: gochecknoglobals
@@ -44,14 +44,18 @@ func main() {
 	if version != "" {
 		versionPkg.Version = version
 	}
+
 	if commit != "" {
 		versionPkg.BuildHash = commit
 	}
+
 	flag.Parse()
+
 	if *showVersion {
 		fmt.Println(versionPkg.Version)
 		return
 	}
+
 	if os.Getuid() == 0 && !*runAsRoot {
 		fmt.Println("Error: trying to run Glouton as root without \"--yes-run-as-root\" option.")
 		fmt.Println("If Glouton is installed using standard method, start it with:")
@@ -59,5 +63,6 @@ func main() {
 		fmt.Println("")
 		os.Exit(1)
 	}
+
 	agent.Run(strings.Split(*configFiles, ","))
 }

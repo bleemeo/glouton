@@ -66,7 +66,6 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store, additional
 
 // doConnect connects an influxDB client to the server and returns true if the connection is established
 func (c *Client) doConnect() error {
-
 	// Create the influxBD client
 	if c.influxClient == nil {
 		influxClient, err := influxDBClient.NewHTTPClient(influxDBClient.HTTPConfig{
@@ -75,7 +74,9 @@ func (c *Client) doConnect() error {
 		if err != nil {
 			return err
 		}
+
 		c.influxClient = influxClient
+
 		logger.V(2).Printf("InfluxDB client created")
 	}
 
@@ -107,7 +108,9 @@ func (c *Client) doConnect() error {
 		Precision: "s",
 	})
 	c.influxDBBatchPoints = bp
+
 	logger.V(2).Printf("Database created: %s", c.dataBaseName)
+
 	return nil
 }
 
@@ -115,22 +118,24 @@ func (c *Client) doConnect() error {
 // connect retries this operation after a delay if it fails.
 func (c *Client) connect(ctx context.Context) {
 	var sleepDelay = 10 * time.Second
+
 	for ctx.Err() == nil {
 		err := c.doConnect()
 		if err != nil {
 			logger.V(1).Printf("Connexion to the influxdb server '%s' failed. Next attempt in %v: %s", c.serverAddress, sleepDelay, err.Error())
+
 			select {
 			case <-ctx.Done():
 				logger.V(2).Printf("The context is ended, stop trying to connect to the influxdb server")
 				return
 			case <-time.After(sleepDelay):
 			}
+
 			sleepDelay = time.Duration(math.Min(sleepDelay.Seconds()*2, 300)) * time.Second
 		} else {
 			logger.V(1).Printf("Connexion to the influxdb server '%s' succed", c.serverAddress)
 			return
 		}
-
 	}
 }
 
@@ -138,6 +143,7 @@ func (c *Client) connect(ctx context.Context) {
 func (c *Client) addPoints(points []types.MetricPoint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	switch {
 	case len(points) >= c.maxPendingPoints:
 		c.gloutonPendingPoints = make([]types.MetricPoint, c.maxPendingPoints)
@@ -158,12 +164,15 @@ func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string
 		"value": metricPoint.PointStatus.Point.Value,
 	}
 	tags := make(map[string]string)
+
 	for key, value := range additionalTags {
 		tags[key] = value
 	}
+
 	for key, value := range metricPoint.Labels {
 		tags[key] = value
 	}
+
 	delete(tags, "__name__")
 
 	return influxDBClient.NewPoint(measurement, tags, fields, time)
@@ -173,27 +182,36 @@ func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string
 func (c *Client) convertPendingPoints() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	nbFailConversion := 0
 	points := c.influxDBBatchPoints.Points()
+
 	if len(points) >= c.maxBatchSize {
 		logger.V(2).Printf("The influxDBBatchPoint is already full")
 		return
 	}
+
 	for i, metricPoint := range c.gloutonPendingPoints {
 		pt, err := convertMetricPoint(metricPoint, c.additionalTags)
 		if err != nil {
 			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
 			nbFailConversion++
+
 			continue
 		}
+
 		nbConvertPoints := i - nbFailConversion
 		if nbConvertPoints >= c.maxBatchSize {
 			logger.V(2).Printf("The influxDBBatchPoint is full: stop converting points")
+
 			c.gloutonPendingPoints = append(c.gloutonPendingPoints[:0], c.gloutonPendingPoints[i:]...)
+
 			return
 		}
+
 		c.influxDBBatchPoints.AddPoint(pt)
 	}
+
 	c.gloutonPendingPoints = c.gloutonPendingPoints[:0]
 }
 
@@ -203,6 +221,7 @@ func (c *Client) sendPoints() {
 		logger.Printf("influxdbClient is not initialized, impossible to send points to the influxdb server")
 		return
 	}
+
 	err := c.influxClient.Write(c.influxDBBatchPoints)
 
 	// If the write function failed we don't refresh the batchPoint and we update c.sendPointState
@@ -210,10 +229,13 @@ func (c *Client) sendPoints() {
 		if c.sendPointsState.err != nil {
 			c.sendPointsState.err = err
 			c.sendPointsState.hasChange = false
+
 			return
 		}
+
 		c.sendPointsState.err = err
 		c.sendPointsState.hasChange = true
+
 		return
 	}
 
@@ -225,11 +247,14 @@ func (c *Client) sendPoints() {
 	})
 
 	c.influxDBBatchPoints = newBp
+
 	if c.sendPointsState.err != nil {
 		c.sendPointsState.err = nil
 		c.sendPointsState.hasChange = true
+
 		return
 	}
+
 	c.sendPointsState.hasChange = false
 }
 
@@ -237,17 +262,21 @@ func (c *Client) sendPoints() {
 func (c *Client) sendCheck() bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	if c.sendPointsState.err != nil {
 		if c.sendPointsState.hasChange {
 			logger.Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
 		} else {
 			logger.V(2).Printf("Fail to send the metrics to the influxdb server: %s", c.sendPointsState.err.Error())
 		}
+
 		return true
 	}
+
 	if c.sendPointsState.hasChange {
 		logger.Printf("All waiting points have been sent to the influxdb server")
 	}
+
 	return false
 }
 
@@ -255,22 +284,28 @@ func (c *Client) sendCheck() bool {
 func (c *Client) HealthCheck() bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	ok := true
+
 	if c.influxClient != nil {
 		_, _, pingErr := c.influxClient.Ping(5 * time.Second)
 		if pingErr != nil {
 			ok = false
+
 			logger.Printf("Bleemeo connection influxdb server is currently not responding")
 		}
 	} else {
 		logger.Printf("influxClient is not initialized, impossible to contact the influxdb server")
 	}
+
 	if len(c.gloutonPendingPoints) > defaultBatchSize {
 		logger.Printf("%d points are waiting to be sent to the influxdb server", len(c.gloutonPendingPoints))
 	}
+
 	if len(c.gloutonPendingPoints) >= defaultMaxPendingPoints {
 		logger.Printf("%d points are waiting to be sent to the influxdb server. Older points are being dropped", len(c.gloutonPendingPoints))
 	}
+
 	return ok
 }
 
@@ -278,12 +313,12 @@ func (c *Client) HealthCheck() bool {
 func (c *Client) lenGloutonPendingPoints() int {
 	c.lock.Lock()
 	defer c.lock.Unlock()
+
 	return len(c.gloutonPendingPoints)
 }
 
 // Run runs the influxDB service
 func (c *Client) Run(ctx context.Context) error {
-
 	// Connect the client to the server and create the database
 	c.connect(ctx)
 
@@ -302,6 +337,7 @@ func (c *Client) Run(ctx context.Context) error {
 			// Send the point to the server
 			// If sendPoints fail we retry after a tick
 			c.sendPoints()
+
 			breakstate := c.sendCheck()
 			if breakstate {
 				break
@@ -314,5 +350,6 @@ func (c *Client) Run(ctx context.Context) error {
 		case <-ctx.Done():
 		}
 	}
+
 	return nil
 }

@@ -73,6 +73,7 @@ nested:
 
 func TestString(t *testing.T) {
 	cfg := Configuration{}
+
 	err := cfg.LoadByte([]byte(simpleYaml))
 	if err != nil {
 		t.Error(err)
@@ -89,6 +90,7 @@ func TestString(t *testing.T) {
 		{Key: "not.found", Want: ""},
 		{Key: "logging.notfound", Want: ""},
 	}
+
 	for _, c := range cases {
 		got := cfg.String(c.Key)
 		if c.Want != got {
@@ -99,6 +101,7 @@ func TestString(t *testing.T) {
 
 func TestStringMap(t *testing.T) {
 	cfg := Configuration{}
+
 	err := cfg.LoadByte([]byte(simpleYaml))
 	if err != nil {
 		t.Error(err)
@@ -147,10 +150,12 @@ func TestStringMap(t *testing.T) {
 
 func TestMerge(t *testing.T) {
 	cfg := Configuration{}
+
 	err := cfg.LoadByte([]byte(mergeOne))
 	if err != nil {
 		t.Error(err)
 	}
+
 	err = cfg.LoadByte([]byte(mergeTwo))
 	if err != nil {
 		t.Error(err)
@@ -180,14 +185,17 @@ func TestMerge(t *testing.T) {
 
 func TestData(t *testing.T) {
 	cfg := Configuration{}
+
 	data, err := ioutil.ReadFile("testdata/main.conf")
 	if err != nil {
 		t.Error(err)
 	}
+
 	err = cfg.LoadByte(data)
 	if err != nil {
 		t.Error(err)
 	}
+
 	err = cfg.LoadDirectory("testdata/conf.d")
 	if err != nil {
 		t.Error(err)
@@ -212,10 +220,12 @@ func TestData(t *testing.T) {
 			t.Errorf("String(%#v) = %#v, want %#v", c.Key, got, c.Want)
 		}
 	}
+
 	got, ok := cfg.Get("merged_list")
 	if !ok {
 		t.Errorf("Get(%v) not found", "merged_list")
 	}
+
 	want := []interface{}{
 		"duplicated between main.conf & second.conf",
 		"item from main.conf",
@@ -226,11 +236,11 @@ func TestData(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("merged_list = %v, want %v", got, want)
 	}
-	// assert len(warnings) == 1
 }
 
 func TestSet(t *testing.T) {
 	cfg := Configuration{}
+
 	cfg.Set("test-int", 5)
 	cfg.Set("test-str", "string")
 	cfg.Set("test-change-type", "string")
@@ -284,6 +294,7 @@ func TestSet(t *testing.T) {
 		if !ok {
 			t.Errorf("cfg.Get(%#v) not found", c.key)
 		}
+
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("cfg.Get(%#v) == %v, want %v", c.key, got, c.want)
 		}
@@ -390,16 +401,20 @@ func TestLoadEnv(t *testing.T) {
 		if err != nil {
 			t.Errorf("LoadEnv(%v) failed: %v", c.envName, err)
 		}
+
 		if found != c.wantFound {
 			t.Errorf("LoadEnv(%v) == %v, want %v", c.envName, found, c.wantFound)
 		}
 	}
+
 	for _, c := range cases {
 		got, ok := cfg.Get(c.key)
+
 		if c.wantFound {
 			if !ok {
 				t.Errorf("Get(%v) not found", c.key)
 			}
+
 			if !reflect.DeepEqual(got, c.want) {
 				t.Errorf("Get(%v) == %#v, want %#v", c.key, got, c.want)
 			}

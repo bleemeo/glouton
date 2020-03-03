@@ -56,8 +56,10 @@ func TestStateUpdate(t *testing.T) {
 		},
 	}
 	now := time.Now()
+
 	for i, c := range cases {
 		state := statusState{}
+
 		for _, step := range c {
 			state = state.Update(step.status, 300*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
 			if state.CurrentStatus != step.want {
@@ -86,8 +88,10 @@ func TestStateUpdatePeriodChange(t *testing.T) {
 		},
 	}
 	now := time.Now()
+
 	for i, c := range cases {
 		state := statusState{}
+
 		for _, step := range c {
 			state = state.Update(step.status, time.Duration(step.period)*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
 			if state.CurrentStatus != step.want {
@@ -259,6 +263,7 @@ func TestThresholdEqual(t *testing.T) {
 		if got != c.want {
 			t.Errorf("case %d: left.Equal(right) == %v, want %v", i, got, c.want)
 		}
+
 		got = c.right.Equal(c.left)
 		if got != c.want {
 			t.Errorf("case %d: right.Equal(left) == %v, want %v", i, got, c.want)

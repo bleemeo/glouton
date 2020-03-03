@@ -49,10 +49,12 @@ UBUNTU_CODENAME=bionic
 		"VERSION_CODENAME":   "bionic",
 		"UBUNTU_CODENAME":    "bionic",
 	}
+
 	got, err := decodeOsRelease(in)
 	if err != nil {
 		t.Error(err)
 	}
+
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("decodeOsRelease(...) == %v, want %v", got, want)
 	}

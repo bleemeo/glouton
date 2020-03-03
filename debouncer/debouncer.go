@@ -47,6 +47,7 @@ func New(target func(context.Context), delay time.Duration) *Debouncer {
 // Run perform the call to target() when trigger is called
 func (dd *Debouncer) Run(ctx context.Context) error {
 	dd.run(ctx, false)
+
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
@@ -57,9 +58,11 @@ func (dd *Debouncer) Run(ctx context.Context) error {
 			dd.run(ctx, true)
 		}
 	}
+
 	if !dd.timer.Stop() {
 		<-dd.timer.C
 	}
+
 	return nil
 }
 
@@ -69,7 +72,9 @@ func (dd *Debouncer) Run(ctx context.Context) error {
 func (dd *Debouncer) Trigger() {
 	dd.l.Lock()
 	defer dd.l.Unlock()
+
 	dd.trigger = true
+
 	select {
 	case dd.wakeC <- nil:
 	default:
@@ -86,6 +91,7 @@ func (dd *Debouncer) shouldTrigger(fromTimer bool) bool {
 		if !dd.timer.Stop() && !fromTimer {
 			<-dd.timer.C
 		}
+
 		dd.timer.Reset(dd.delay - discoveryAgo)
 	} else if fromTimer {
 		dd.timer.Reset(dd.delay)
@@ -95,6 +101,7 @@ func (dd *Debouncer) shouldTrigger(fromTimer bool) bool {
 		dd.trigger = false
 		return true
 	}
+
 	return false
 }
 
@@ -103,6 +110,7 @@ func (dd *Debouncer) run(ctx context.Context, fromTimer bool) {
 		dd.target(ctx)
 		dd.l.Lock()
 		defer dd.l.Unlock()
+
 		dd.lastRun = time.Now()
 	}
 }

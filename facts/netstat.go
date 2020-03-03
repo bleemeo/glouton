@@ -47,18 +47,23 @@ func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]Listen
 	if err != nil && !os.IsNotExist(err) {
 		logger.V(1).Printf("Unable to read netstat file: %v", err)
 	}
+
 	netstat = decodeNetstatFile(string(netstatData))
+
 	dynamicNetstat, err := psutilNet.Connections("inet")
 	if err == nil {
 		for _, c := range dynamicNetstat {
 			if c.Pid == 0 {
 				continue
 			}
+
 			if c.Status != "LISTEN" {
 				continue
 			}
+
 			address := c.Laddr.IP
 			protocol := ""
+
 			switch {
 			case c.Type == syscall.SOCK_STREAM:
 				protocol = "tcp"
@@ -67,6 +72,7 @@ func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]Listen
 			default:
 				continue
 			}
+
 			if c.Family == syscall.AF_INET6 {
 				protocol += "6"
 			}
@@ -78,6 +84,7 @@ func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]Listen
 			})
 		}
 	}
+
 	return netstat, nil
 }
 
@@ -107,24 +114,31 @@ func (l ListenAddress) String() string {
 	if l.NetworkFamily == "unix" {
 		return l.Address
 	}
+
 	return fmt.Sprintf("%s:%d", l.Address, l.Port)
 }
 
 func decodeNetstatFile(data string) map[int][]ListenAddress {
 	result := make(map[int][]ListenAddress)
 	lines := strings.Split(data, "\n")
+
 	for _, line := range lines {
-		var protocol, address string
-		var pid, port int64
-		var err error
+		var (
+			protocol, address string
+			pid, port         int64
+			err               error
+		)
+
 		r := netstatRE.FindStringSubmatch(line)
 		if r != nil {
 			protocol = r[1]
 			address = r[2]
+
 			port, err = strconv.ParseInt(r[3], 10, 0)
 			if err != nil {
 				continue
 			}
+
 			pid, err = strconv.ParseInt(r[5], 10, 0)
 			if err != nil {
 				continue
@@ -134,12 +148,15 @@ func decodeNetstatFile(data string) map[int][]ListenAddress {
 			if r == nil {
 				continue
 			}
+
 			protocol = r[1]
 			address = r[7]
+
 			pid, err = strconv.ParseInt(r[5], 10, 0)
 			if err != nil {
 				continue
 			}
+
 			port = 0
 		}
 
@@ -147,29 +164,35 @@ func decodeNetstatFile(data string) map[int][]ListenAddress {
 		if addresses == nil {
 			addresses = make([]ListenAddress, 0)
 		}
+
 		result[int(pid)] = addAddress(addresses, ListenAddress{
 			NetworkFamily: protocol,
 			Address:       address,
 			Port:          int(port),
 		})
 	}
+
 	return result
 }
 
 func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddress {
 	duplicate := false
+
 	if newAddr.NetworkFamily != "unix" {
 		if newAddr.NetworkFamily == "tcp6" || newAddr.NetworkFamily == "udp6" {
 			if newAddr.Address == "::" {
 				newAddr.Address = "0.0.0.0"
 			}
+
 			if newAddr.Address == "::1" {
 				newAddr.Address = "127.0.0.1"
 			}
+
 			if strings.Contains(newAddr.Address, ":") {
 				// It's still an IPv6 address, we don't know how to convert it to IPv4
 				return addresses
 			}
+
 			newAddr.NetworkFamily = newAddr.NetworkFamily[:3]
 		}
 
@@ -177,28 +200,35 @@ func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddres
 			if v.Network() != newAddr.Network() {
 				continue
 			}
+
 			_, otherPortStr, err := net.SplitHostPort(v.String())
+
 			if err != nil {
 				logger.V(1).Printf("unable to split host/port for %#v: %v", v.String(), err)
 				return addresses
 			}
+
 			otherPort, err := strconv.ParseInt(otherPortStr, 10, 0)
 			if err != nil {
 				logger.V(1).Printf("unable to parse port %#v: %v", otherPortStr, err)
 				return addresses
 			}
+
 			if int(otherPort) == newAddr.Port {
 				duplicate = true
 				// We prefere 127.* address
 				if strings.HasPrefix(newAddr.Address, "127.") {
 					addresses[i] = newAddr
 				}
+
 				break
 			}
 		}
 	}
+
 	if !duplicate {
 		addresses = append(addresses, newAddr)
 	}
+
 	return addresses
 }

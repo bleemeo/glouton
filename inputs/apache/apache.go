@@ -48,12 +48,14 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input Apache not enabled in Telegraf")
 	}
+
 	return
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 	maxWorker := 0.0
+
 	for metricName, value := range fields {
 		switch metricName {
 		case "IdleWorkers":
@@ -73,12 +75,15 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			}
 		}
 	}
+
 	newFields["max_workers"] = maxWorker
+
 	if idleWorker, ok := newFields["scoreboard_waiting"]; ok {
 		if openWorker, ok := newFields["scoreboard_open"]; ok {
 			newFields["busy_workers"] = maxWorker - idleWorker - openWorker
 			newFields["busy_workers_perc"] = newFields["busy_workers"] / maxWorker * 100
 		}
 	}
+
 	return newFields
 }

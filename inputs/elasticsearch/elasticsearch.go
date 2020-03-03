@@ -48,25 +48,30 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input Elasticsearch not enabled in Telegraf")
 	}
+
 	return
 }
 
 func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext.Tags = originalContext.Tags
 	newContext.Measurement = "elasticsearch"
+
 	return
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	switch originalContext.Measurement {
 	case "elasticsearch_indices":
 		if value, ok := fields["docs_count"]; ok {
 			newFields["docs_count"] = value
 		}
+
 		if value, ok := fields["store_size_in_bytes"]; ok {
 			newFields["size"] = value
 		}
+
 		if searchCount, ok := fields["search_query_total"]; ok {
 			newFields["search"] = searchCount
 			if searchTime, ok2 := fields["search_query_time_in_millis"]; ok2 {
@@ -76,6 +81,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 	case "elasticsearch_jvm":
 		jvmGcTime := 0.0
 		jvmGCCount := 0.0
+
 		for name, value := range fields {
 			switch name {
 			case "mem_heap_used_in_bytes":
@@ -88,9 +94,11 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 				jvmGcTime += value
 			}
 		}
+
 		newFields["jvm_gc_time"] = jvmGcTime
 		newFields["jvm_gc_utilization"] = jvmGcTime / 10.
 		newFields["jvm_gc"] = jvmGCCount
 	}
+
 	return newFields
 }

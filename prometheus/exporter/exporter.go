@@ -43,23 +43,26 @@ type storeInterface interface {
 
 // New return a new exporter
 func New(db storeInterface, gatherer prometheus.Gatherer) *Exporter {
-
 	e := &Exporter{
 		db: db,
 	}
 	reg := prometheus.NewRegistry()
+
 	reg.MustRegister(
 		e,
 		prometheus.NewGoCollector(),
 		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
 	)
 	addNodeExporter(reg)
+
 	e.registry = reg
+
 	if gatherer != nil {
 		e.gatherers = prometheus.Gatherers{reg, gatherer}
 	} else {
 		e.gatherers = prometheus.Gatherers{reg}
 	}
+
 	e.handler = promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(e.gatherers, promhttp.HandlerOpts{}))
 
 	return e
@@ -73,10 +76,12 @@ func addNodeExporter(reg prometheus.Registerer) {
 	if _, err := kingpin.CommandLine.Parse(nil); err != nil {
 		logger.Printf("Failed to initialize kingpin (used by Prometheus node_exporter): %v", err)
 	}
+
 	collector, err := collector.NewNodeCollector()
 	if err != nil {
 		logger.Printf("Failed to create node_exporter: %v", err)
 	}
+
 	err = reg.Register(collector)
 	if err != nil {
 		logger.Printf("Failed to register node_exporter: %v", err)
@@ -89,12 +94,15 @@ func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 	if err != nil {
 		return
 	}
+
 	for _, p := range points {
 		ok = true
+
 		if p.Time.After(point.Time) {
 			point = p.Point
 		}
 	}
+
 	return
 }
 
@@ -108,16 +116,19 @@ func (e Exporter) Collect(ch chan<- prometheus.Metric) {
 	if err != nil {
 		return
 	}
+
 	for _, m := range metrics {
 		if p, ok := getLastPoint(m); ok {
 			labels := make([]string, 0)
 			labelValues := make([]string, 0)
+
 			for l, v := range m.Labels() {
 				if l != "__name__" {
 					labels = append(labels, l)
 					labelValues = append(labelValues, v)
 				}
 			}
+
 			ch <- prometheus.NewMetricWithTimestamp(p.Time, prometheus.MustNewConstMetric(
 				prometheus.NewDesc(m.Labels()["__name__"], "", labels, nil),
 				prometheus.UntypedValue,

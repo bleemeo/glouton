@@ -51,6 +51,7 @@ func New(server string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input MySQL is not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -63,20 +64,25 @@ func shouldDerivateMetrics(originalContext internal.GatherContext, currentContex
 			return true
 		}
 	}
+
 	if strings.HasPrefix(metricName, "table_locks_") {
 		return true
 	}
+
 	if strings.HasPrefix(metricName, "commands_") {
 		return true
 	}
+
 	if strings.HasPrefix(metricName, "handler_") {
 		return true
 	}
+
 	return false
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	for metricName, value := range fields {
 		if strings.HasPrefix(metricName, "qcache_") {
 			metricName = strings.ReplaceAll(metricName, "qcache_", "cache_result_qcache_")
@@ -94,29 +100,37 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			default:
 				newFields[metricName] = value
 			}
+
 			continue
 		}
+
 		if strings.HasPrefix(metricName, "table_locks_") {
 			metricName = strings.ReplaceAll(metricName, "table_locks_", "locks_")
 			newFields[metricName] = value
+
 			continue
 		}
+
 		if strings.HasPrefix(metricName, "commands_") {
 			newFields[metricName] = value
 			continue
 		}
+
 		if strings.HasPrefix(metricName, "handler_") {
 			newFields[metricName] = value
 			continue
 		}
+
 		if strings.HasPrefix(metricName, "threads_") {
 			if metricName == "threads_created" {
 				newFields["total_threads_created"] = value
 			} else {
 				newFields[metricName] = value
 			}
+
 			continue
 		}
+
 		switch metricName {
 		case "bytes_received":
 			newFields["octets_rx"] = value
@@ -130,5 +144,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			newFields["history_list_len"] = value
 		}
 	}
+
 	return newFields
 }

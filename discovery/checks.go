@@ -64,6 +64,7 @@ func (d *Discovery) removeCheck(key NameContainer) {
 	if d.taskRegistry == nil {
 		return
 	}
+
 	if check, ok := d.activeCheck[key]; ok {
 		logger.V(2).Printf("Remove check for service %v on container %s", key.Name, key.ContainerName)
 		delete(d.activeCheck, key)
@@ -80,28 +81,36 @@ func (d *Discovery) createCheck(service Service) {
 		logger.V(2).Printf("The check associated to the service '%s' on container '%s' is ignored by the configuration", service.Name, service.ContainerID)
 		return
 	}
+
 	logger.V(2).Printf("Add check for service %v on container %s", service.Name, service.ContainerID)
 
 	di := servicesDiscoveryInfo[service.ServiceType]
+
 	var primaryAddress string
+
 	primaryIP, primaryPort := service.AddressPort()
 	if primaryIP != "" {
 		primaryAddress = fmt.Sprintf("%s:%d", primaryIP, primaryPort)
 	}
+
 	tcpAddresses := make([]string, 0)
+
 	for _, a := range service.ListenAddresses {
 		if a.Network() != tcpPortocol {
 			continue
 		}
+
 		if a.Address == net.IPv4zero.String() {
 			a.Address = service.IPAddress
 		}
+
 		tcpAddresses = append(tcpAddresses, a.String())
 	}
 
 	labels := map[string]string{
 		"service_name": service.Name,
 	}
+
 	if service.ContainerName != "" {
 		labels["item"] = service.ContainerName
 		labels["container_id"] = service.ContainerID
@@ -143,8 +152,8 @@ func (d *Discovery) createCheck(service Service) {
 }
 
 func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
-
 	var tcpSend, tcpExpect, tcpClose []byte
+
 	switch service.ServiceType {
 	case DovecoteService:
 		tcpSend = []byte("001 NOOP\n")
@@ -163,6 +172,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpSend = []byte("ruok\n")
 		tcpExpect = []byte("imok")
 	}
+
 	tcpCheck := check.NewTCP(
 		primaryAddress,
 		tcpAddresses,
@@ -174,6 +184,7 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		labels,
 		d.acc,
 	)
+
 	d.addCheck(tcpCheck, service)
 }
 
@@ -182,19 +193,24 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
 		return
 	}
+
 	url := fmt.Sprintf("http://%s", primaryAddress)
 	expectedStatusCode := 0
+
 	if service.ServiceType == SquidService {
 		// Agent does a normal HTTP request, but squid expect a proxy. It expect
 		// squid to reply with a 400 - Bad request.
 		expectedStatusCode = 400
 	}
+
 	if service.ServiceType == InfluxDBService {
 		url += "/ping"
 	}
+
 	if service.ServiceType == CustomService && service.ExtraAttributes["http_path"] != "" {
 		url += service.ExtraAttributes["http_path"]
 	}
+
 	if service.ServiceType == CustomService && service.ExtraAttributes["http_status_code"] != "" {
 		tmp, err := strconv.ParseInt(service.ExtraAttributes["http_status_code"], 10, 0)
 		if err != nil {
@@ -203,6 +219,7 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 			expectedStatusCode = int(tmp)
 		}
 	}
+
 	httpCheck := check.NewHTTP(
 		url,
 		tcpAddresses,
@@ -211,14 +228,17 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		labels,
 		d.acc,
 	)
+
 	d.addCheck(httpCheck, service)
 }
 
 func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string) {
 	var tcpAddress []string
+
 	if primaryAddress != "" {
 		tcpAddress = []string{primaryAddress}
 	}
+
 	httpCheck := check.NewNagios(
 		service.ExtraAttributes["check_command"],
 		tcpAddress,
@@ -226,6 +246,7 @@ func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, la
 		labels,
 		d.acc,
 	)
+
 	d.addCheck(httpCheck, service)
 }
 
@@ -233,6 +254,7 @@ func (d *Discovery) addCheck(check Check, service Service) {
 	if d.acc == nil || d.taskRegistry == nil {
 		return
 	}
+
 	key := NameContainer{
 		Name:          service.Name,
 		ContainerName: service.ContainerName,
@@ -242,6 +264,7 @@ func (d *Discovery) addCheck(check Check, service Service) {
 	if err != nil {
 		logger.V(1).Printf("Unable to add check: %v", err)
 	}
+
 	savedCheck := CheckDetails{
 		check: check,
 		id:    id,

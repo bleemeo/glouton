@@ -46,11 +46,13 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input MongoDB is not enabled in Telegraf")
 	}
+
 	return
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	for metricName, value := range fields {
 		switch metricName {
 		case "open_connections", "queued_reads", "queued_writes", "active_reads", "active_writes", "net_out_bytes", "net_in_bytes":
@@ -59,5 +61,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			newFields["queries"] = value
 		}
 	}
+
 	return newFields
 }

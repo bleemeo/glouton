@@ -56,6 +56,7 @@ func Test_confFieldToSliceMap(t *testing.T) {
 		input    interface{}
 		confType string
 	}
+
 	tests := []struct {
 		name string
 		args args
@@ -118,6 +119,7 @@ func Test_confFieldToSliceMap(t *testing.T) {
 			want: []map[string]string{},
 		},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// nolint: scopelint

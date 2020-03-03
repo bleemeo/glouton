@@ -51,6 +51,7 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 			statsdInput.MetricSeparator = "_"
 			statsdInput.AllowedPendingMessages = 10000
 			statsdInput.PercentileLimit = 1000
+
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
@@ -59,6 +60,7 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 				}()
 				reflectSetPercentile(statsdInput)
 			}()
+
 			i = &internal.Input{
 				Input: statsdInput,
 				Accumulator: internal.Accumulator{
@@ -73,12 +75,14 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input StatsD is not enabled in Telegraf")
 	}
+
 	return i, nil
 }
 
 func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext.Measurement = "statsd"
 	newContext.Tags = nil
+
 	return
 }
 
@@ -88,16 +92,18 @@ func shouldDerivateMetrics(originalContext internal.GatherContext, currentContex
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	if originalContext.Tags["metric_type"] == "timing" {
 		for key, value := range fields {
 			if key == "count" {
 				value /= 10
 			}
+
 			newFields[fmt.Sprintf("%s_%s", originalContext.Measurement, key)] = value
 		}
-
 	} else if _, ok := fields["value"]; ok {
 		newFields[originalContext.Measurement] = fields["value"]
 	}
+
 	return newFields
 }

@@ -2,3 +2,7 @@ linters:
   enable-all: true
   disable:
     - lll
+    - funlen
+    - gomnd # too picky. For example it say that all service port in our known services list is a magic number (even if present only once)
+    - godox # too many TODO in code, but should be removed and TODO fixed :)
+    - gocognit

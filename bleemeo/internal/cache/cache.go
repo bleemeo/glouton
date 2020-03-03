@@ -131,6 +131,7 @@ func (c *Cache) FactsByKey() map[string]types.AgentFact {
 	for _, v := range c.data.Facts {
 		result[v.Key] = v
 	}
+
 	return result
 }
 
@@ -138,10 +139,13 @@ func (c *Cache) FactsByKey() map[string]types.AgentFact {
 func (c *Cache) FactsByUUID() map[string]types.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	result := make(map[string]types.AgentFact)
+
 	for _, v := range c.data.Facts {
 		result[v.ID] = v
 	}
+
 	return result
 }
 
@@ -149,8 +153,10 @@ func (c *Cache) FactsByUUID() map[string]types.AgentFact {
 func (c *Cache) Facts() []types.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	result := make([]types.AgentFact, len(c.data.Facts))
 	copy(result, c.data.Facts)
+
 	return result
 }
 
@@ -158,8 +164,10 @@ func (c *Cache) Facts() []types.AgentFact {
 func (c *Cache) Services() []types.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	result := make([]types.Service, len(c.data.Services))
 	copy(result, c.data.Services)
+
 	return result
 }
 
@@ -167,10 +175,13 @@ func (c *Cache) Services() []types.Service {
 func (c *Cache) ServicesByUUID() map[string]types.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	result := make(map[string]types.Service)
+
 	for _, v := range c.data.Services {
 		result[v.ID] = v
 	}
+
 	return result
 }
 
@@ -181,6 +192,7 @@ func (c *Cache) Containers() (containers []types.Container) {
 
 	result := make([]types.Container, len(c.data.Containers))
 	copy(result, c.data.Containers)
+
 	return result
 }
 
@@ -188,10 +200,13 @@ func (c *Cache) Containers() (containers []types.Container) {
 func (c *Cache) ContainersByContainerID() map[string]types.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	result := make(map[string]types.Container)
+
 	for _, v := range c.data.Containers {
 		result[v.DockerID] = v
 	}
+
 	return result
 }
 
@@ -199,10 +214,13 @@ func (c *Cache) ContainersByContainerID() map[string]types.Container {
 func (c *Cache) ContainersByUUID() map[string]types.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	result := make(map[string]types.Container)
+
 	for _, v := range c.data.Containers {
 		result[v.ID] = v
 	}
+
 	return result
 }
 
@@ -222,6 +240,7 @@ func (c *Cache) Metrics() (metrics []types.Metric) {
 
 	result := make([]types.Metric, len(c.data.Metrics))
 	copy(result, c.data.Metrics)
+
 	return result
 }
 
@@ -229,10 +248,13 @@ func (c *Cache) Metrics() (metrics []types.Metric) {
 func (c *Cache) MetricsByUUID() map[string]types.Metric {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	result := make(map[string]types.Metric)
+
 	for _, v := range c.data.Metrics {
 		result[v.ID] = v
 	}
+
 	return result
 }
 
@@ -253,6 +275,7 @@ func (c *Cache) Save() {
 		logger.V(1).Printf("Unable to save Bleemeo connector cache: %v", err)
 		return
 	}
+
 	c.dirty = false
 }
 
@@ -261,19 +284,25 @@ func Load(state types.State) *Cache {
 	cache := &Cache{
 		state: state,
 	}
+
 	var newData data
+
 	if err := state.Get(cacheKey, &newData); err != nil {
 		logger.V(1).Printf("Unable to load Bleemeo connector cache: %v", err)
 	}
+
 	switch newData.Version {
 	case 0:
 		logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
+
 		cache.data.Version = cacheVersion
 	case cacheVersion:
 		cache.data = newData
 	default:
 		logger.V(2).Printf("Bleemeo connector cache is too recent. Discarding content")
+
 		cache.data.Version = cacheVersion
 	}
+
 	return cache
 }

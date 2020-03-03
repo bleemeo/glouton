@@ -36,7 +36,9 @@ type diskIOTransformer struct {
 // whitelist is a list of regular expretion for device to include
 func New(whitelist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
+
 	whitelistRE := make([]*regexp.Regexp, len(whitelist))
+
 	for index, v := range whitelist {
 		whitelistRE[index], err = regexp.Compile(v)
 		if err != nil {
@@ -44,6 +46,7 @@ func New(whitelist []string) (i telegraf.Input, err error) {
 			return
 		}
 	}
+
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
 		dt := diskIOTransformer{
@@ -60,29 +63,36 @@ func New(whitelist []string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input diskio not enabled in Telegraf")
 	}
-	return
+
+	return i, err
 }
 
 func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext.Measurement = "io"
 	newContext.Tags = make(map[string]string)
 	item, ok := originalContext.Tags["name"]
+
 	if !ok {
 		drop = true
 		return
 	}
+
 	match := false
+
 	for _, r := range dt.whitelist {
 		if r.MatchString(item) {
 			match = true
 			break
 		}
 	}
+
 	if !match {
 		drop = true
 		return
 	}
+
 	newContext.Tags["item"] = item
+
 	return
 }
 
@@ -93,7 +103,9 @@ func (dt diskIOTransformer) transformMetrics(originalContext internal.GatherCont
 		// io_time is millisecond per second.
 		fields["utilization"] = ioTime / 1000. * 100.
 	}
+
 	delete(fields, "weighted_io_time")
 	delete(fields, "iops_in_progress")
+
 	return fields
 }

@@ -42,13 +42,16 @@ func TestDecode(t *testing.T) {
 			packetType:    1, // query
 			buffer:        c.QueryString,
 		}
+
 		if got != want {
 			t.Errorf("decode([data of case %s) == %v, want %v", c.Description, got, want)
 		}
+
 		if err != nil {
 			t.Error(err)
 		}
 	}
+
 	for _, c := range allPackets {
 		got, err := decode(bytes.NewReader(c.ReplyRaw))
 		want := reducedPacket{
@@ -57,16 +60,20 @@ func TestDecode(t *testing.T) {
 			resultCode:    c.ReplyCode,
 			buffer:        c.ReplyString,
 		}
+
 		if c.ReplyError != nil {
 			want.resultCode = 3
 			want.buffer = c.ReplyError.Error()
+
 			if c.Version == 2 && len(want.buffer) > 1023 {
 				want.buffer = want.buffer[:1023]
 			}
 		}
+
 		if got != want {
 			t.Errorf("decode([data of case %s) == %v, want %v", c.Description, got, want)
 		}
+
 		if err != nil {
 			t.Error(err)
 		}
@@ -77,7 +84,9 @@ func TestDecodecrc32(t *testing.T) {
 	for _, c := range allPackets {
 		nrpePacketCopy := make([]byte, len(checkLoad.QueryRaw))
 		copy(nrpePacketCopy, c.QueryRaw)
+
 		nrpePacketCopy[18] += 42 // alter packet to break crc32
+
 		_, err := decode(bytes.NewReader(nrpePacketCopy))
 		if err == nil {
 			t.Errorf("No error for CRC32 check on test %s", c.Description)
@@ -87,12 +96,13 @@ func TestDecodecrc32(t *testing.T) {
 
 func TestDecodeEncodeV3(t *testing.T) {
 	cases := reducedPacket{3, 2, 0, "connection successful"}
-
 	inter, _ := encodeV3(cases)
+
 	got, err := decode(bytes.NewReader(inter))
 	if got != cases {
 		t.Errorf("decode(encodeV3(%v)) == %v, want %v", cases, got, cases)
 	}
+
 	if err != nil {
 		t.Error(err)
 	}
@@ -106,25 +116,32 @@ func TestDecodeEncode(t *testing.T) {
 			resultCode:    c.ReplyCode,
 			buffer:        c.ReplyString,
 		}
+
 		if c.ReplyError != nil {
 			packet.resultCode = 3
 			packet.buffer = c.ReplyError.Error()
 		}
+
 		var inter []byte
+
 		if c.Version == 3 {
 			inter, _ = encodeV3(packet)
 		} else if c.Version == 2 {
 			var rndBytes [2]byte
+
 			copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
+
 			inter, _ = encodeV2(packet, rndBytes)
 			if len(packet.buffer) > 1023 {
 				packet.buffer = packet.buffer[:1023]
 			}
 		}
+
 		got, err := decode(bytes.NewReader(inter))
 		if got != packet {
 			t.Errorf("decode(encodeV3([case %s])) == %v, want %v", c.Description, got, packet)
 		}
+
 		if err != nil {
 			t.Error(err)
 		}
@@ -139,23 +156,32 @@ func TestEncode(t *testing.T) {
 			resultCode:    c.ReplyCode,
 			buffer:        c.ReplyString,
 		}
-		var got []byte
-		var err error
+
+		var (
+			got []byte
+			err error
+		)
+
 		if c.ReplyError != nil {
 			inPacket.resultCode = 3
 			inPacket.buffer = c.ReplyError.Error()
 		}
+
 		if c.Version == 2 {
 			var rndBytes [2]byte
+
 			copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
+
 			got, err = encodeV2(inPacket, rndBytes)
 		} else if c.Version == 3 {
 			got, err = encodeV3(inPacket)
 		}
+
 		if !bytes.Equal(got, c.ReplyRaw) {
 			t.Errorf("encodeV%d(%v) == %v, want %v", c.Version, inPacket, got, c.ReplyRaw)
 			break
 		}
+
 		if err != nil {
 			t.Error(err)
 		}
@@ -183,7 +209,9 @@ func TestHandleConnection(t *testing.T) {
 			bytes.NewReader(c.QueryRaw),
 			new(bytes.Buffer),
 		}
+
 		var rndBytes [2]byte
+
 		copy(rndBytes[:], c.ReplyRaw[len(c.ReplyRaw)-2:])
 		handleConnection(
 			context.TODO(),
@@ -193,6 +221,7 @@ func TestHandleConnection(t *testing.T) {
 			},
 			rndBytes,
 		)
+
 		got := socket.writer.Bytes()
 		if !bytes.Equal(got, c.ReplyRaw) {
 			t.Errorf("handleConnection([case %s]) == %v, want %v", c.Description, got, c.ReplyRaw)

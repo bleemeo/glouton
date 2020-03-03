@@ -47,6 +47,7 @@ func New() *Store {
 		points:          make(map[int][]types.PointStatus),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
 	}
+
 	return s
 }
 
@@ -54,6 +55,7 @@ func New() *Store {
 func (s *Store) Run(ctx context.Context) error {
 	for {
 		s.run()
+
 		select {
 		case <-time.After(300 * time.Second):
 		case <-ctx.Done():
@@ -70,14 +72,18 @@ func (s *Store) AddNotifiee(cb func([]types.MetricPoint)) int {
 
 	id := 1
 	_, ok := s.notifyCallbacks[id]
+
 	for ok {
 		id++
 		if id == 0 {
 			panic("too many notifiee in the store. Unable to find new slot")
 		}
+
 		_, ok = s.notifyCallbacks[id]
 	}
+
 	s.notifyCallbacks[id] = cb
+
 	return id
 }
 
@@ -110,13 +116,16 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 // Metrics return a list of Metric matching given labels filter
 func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err error) {
 	result = make([]types.Metric, 0)
+
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
 	for _, m := range s.metrics {
 		if labelsMatch(m.labels, filters, false) {
 			result = append(result, m)
 		}
 	}
+
 	return
 }
 
@@ -124,15 +133,18 @@ func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err e
 func (s *Store) MetricsCount() int {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
 	return len(s.metrics)
 }
 
 // Labels returns all label of the metric
 func (m metric) Labels() map[string]string {
 	labels := make(map[string]string)
+
 	for k, v := range m.labels {
 		labels[k] = v
 	}
+
 	return labels
 }
 
@@ -140,14 +152,17 @@ func (m metric) Labels() map[string]string {
 func (m metric) Points(start, end time.Time) (result []types.PointStatus, err error) {
 	m.store.lock.Lock()
 	defer m.store.lock.Unlock()
+
 	points := m.store.points[m.metricID]
 	result = make([]types.PointStatus, 0)
+
 	for _, point := range points {
 		pointTimeUTC := point.Time.UTC()
 		if !pointTimeUTC.Before(start) && !pointTimeUTC.After(end) {
 			result = append(result, point)
 		}
 	}
+
 	return
 }
 
@@ -163,40 +178,49 @@ func labelsMatch(labels, filter map[string]string, exact bool) bool {
 	if exact && len(labels) != len(filter) {
 		return false
 	}
+
 	for k, v := range filter {
 		if v2, ok := labels[k]; !ok || v2 != v {
 			return false
 		}
 	}
+
 	return true
 }
 
 func (s *Store) run() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
+
 	deletedPoints := 0
 	totalPoints := 0
 	metricToDelete := make([]int, 0)
+
 	for metricID := range s.metrics {
 		points := s.points[metricID]
 		newPoints := make([]types.PointStatus, 0)
+
 		for _, p := range points {
 			if time.Since(p.Time) < time.Hour {
 				newPoints = append(newPoints, p)
 			}
 		}
+
 		if len(newPoints) == 0 {
 			metricToDelete = append(metricToDelete, metricID)
 		} else {
 			s.points[metricID] = newPoints
 		}
+
 		totalPoints += len(newPoints)
 		deletedPoints += len(points) - len(newPoints)
 	}
+
 	for _, metricID := range metricToDelete {
 		delete(s.metrics, metricID)
 		delete(s.points, metricID)
 	}
+
 	logger.V(2).Printf("deleted %d points. Total point: %d", deletedPoints, totalPoints)
 }
 
@@ -211,15 +235,19 @@ func (s *Store) metricGetOrCreate(labels map[string]string, statusOf int) metric
 			return m
 		}
 	}
+
 	newID := 1
 	_, ok := s.metrics[newID]
+
 	for ok {
 		newID++
 		if newID == 0 {
 			panic("too many metric in the store. Unable to find new slot")
 		}
+
 		_, ok = s.metrics[newID]
 	}
+
 	m := metric{
 		labels:   labels,
 		store:    s,
@@ -227,6 +255,7 @@ func (s *Store) metricGetOrCreate(labels map[string]string, statusOf int) metric
 		metricID: newID,
 	}
 	s.metrics[newID] = m
+
 	return m
 }
 
@@ -237,5 +266,6 @@ func (s *Store) addPoint(metricID int, point types.PointStatus) {
 	if _, ok := s.points[metricID]; !ok {
 		s.points[metricID] = make([]types.PointStatus, 0)
 	}
+
 	s.points[metricID] = append(s.points[metricID], point)
 }

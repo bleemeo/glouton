@@ -79,6 +79,7 @@ type Registry interface {
 func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
+
 	for _, v := range initialServices {
 		key := NameContainer{
 			Name:          v.Name,
@@ -86,21 +87,27 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		}
 		discoveredServicesMap[key] = v
 	}
+
 	servicesOverrideMap := make(map[NameContainer]map[string]string)
+
 	for _, fragment := range servicesOverride {
 		fragmentCopy := make(map[string]string)
+
 		for k, v := range fragment {
 			if k == "id" || k == "instance" {
 				continue
 			}
+
 			fragmentCopy[k] = v
 		}
+
 		key := NameContainer{
 			fragment["id"],
 			fragment["instance"],
 		}
 		servicesOverrideMap[key] = fragmentCopy
 	}
+
 	return &Discovery{
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
@@ -121,7 +128,9 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 func (d *Discovery) Close() {
 	d.l.Lock()
 	defer d.l.Unlock()
+
 	_ = d.configureMetricInputs(d.servicesMap, nil)
+
 	d.configureChecks(d.servicesMap, nil)
 }
 
@@ -131,6 +140,7 @@ func (d *Discovery) Close() {
 func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	d.l.Lock()
 	defer d.l.Unlock()
+
 	return d.discovery(ctx, maxAge)
 }
 
@@ -138,25 +148,29 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 func (d *Discovery) LastUpdate() time.Time {
 	d.l.Lock()
 	defer d.l.Unlock()
+
 	return d.lastDiscoveryUpdate
 }
 
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
-
 	if time.Since(d.lastDiscoveryUpdate) > maxAge {
 		err := d.updateDiscovery(ctx, maxAge)
 		if err != nil {
 			return nil, err
 		}
+
 		saveState(d.state, d.discoveredServicesMap)
 		d.reconfigure()
+
 		d.lastDiscoveryUpdate = time.Now()
 	}
 
 	services = make([]Service, 0, len(d.servicesMap))
+
 	for _, v := range d.servicesMap {
 		services = append(services, v)
 	}
+
 	return services, nil
 }
 
@@ -166,15 +180,19 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 func (d *Discovery) RemoveIfNonRunning(ctx context.Context, services []Service) {
 	d.l.Lock()
 	defer d.l.Unlock()
+
 	deleted := false
+
 	for _, v := range services {
 		key := NameContainer{Name: v.Name, ContainerName: v.ContainerName}
 		if _, ok := d.servicesMap[key]; ok {
 			deleted = true
 		}
+
 		delete(d.servicesMap, key)
 		delete(d.discoveredServicesMap, key)
 	}
+
 	if deleted {
 		if _, err := d.discovery(ctx, 0); err != nil {
 			logger.V(2).Printf("Error during discovery during RemoveIfNonRunning: %v", err)
@@ -187,7 +205,9 @@ func (d *Discovery) reconfigure() {
 	if err != nil {
 		logger.Printf("Unable to update metric inputs: %v", err)
 	}
+
 	d.configureChecks(d.lastConfigservicesMap, d.servicesMap)
+
 	d.lastConfigservicesMap = d.servicesMap
 }
 
@@ -198,6 +218,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	}
 
 	servicesMap := make(map[NameContainer]Service)
+
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
 			if _, found := d.containerInfo.Container(service.ContainerID); !found {
@@ -208,6 +229,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 				service.Active = false
 			}
 		}
+
 		servicesMap[key] = service
 	}
 
@@ -216,6 +238,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 			Name:          service.Name,
 			ContainerName: service.ContainerName,
 		}
+
 		if previousService, ok := servicesMap[key]; ok {
 			if previousService.HasNetstatInfo && !service.HasNetstatInfo {
 				service.ListenAddresses = previousService.ListenAddresses
@@ -223,11 +246,13 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 				service.HasNetstatInfo = previousService.HasNetstatInfo
 			}
 		}
+
 		servicesMap[key] = service
 	}
 
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
+
 	d.ignoreServices()
 
 	return nil
@@ -242,9 +267,11 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 
 	for serviceKey, override := range servicesOverride {
 		overrideCopy := make(map[string]string, len(override))
+
 		for k, v := range override {
 			overrideCopy[k] = v
 		}
+
 		service := servicesMap[serviceKey]
 		if service.ServiceType == "" {
 			if serviceKey.ContainerName != "" {
@@ -253,55 +280,69 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 					serviceKey.Name,
 					serviceKey.ContainerName,
 				)
+
 				continue
 			}
+
 			service.ServiceType = CustomService
 			service.Name = serviceKey.Name
 			service.Active = true
 		}
+
 		if service.ExtraAttributes == nil {
 			service.ExtraAttributes = make(map[string]string)
 		}
+
 		di := servicesDiscoveryInfo[service.ServiceType]
 		for _, name := range di.ExtraAttributeNames {
 			if value, ok := overrideCopy[name]; ok {
 				service.ExtraAttributes[name] = value
+
 				delete(overrideCopy, name)
 			}
 		}
+
 		if len(overrideCopy) > 0 {
 			ignoredNames := make([]string, 0, len(overrideCopy))
+
 			for k := range overrideCopy {
 				if k != ignoredConfField {
 					ignoredNames = append(ignoredNames, k)
 				}
 			}
+
 			if len(ignoredNames) != 0 {
 				logger.V(1).Printf("Unknown field for service override on %v: %v", serviceKey, ignoredNames)
 			}
 		}
+
 		if service.ServiceType == CustomService {
 			if service.ExtraAttributes["port"] != "" {
 				if service.ExtraAttributes["address"] == "" {
 					service.ExtraAttributes["address"] = "127.0.0.1"
 				}
+
 				if _, port := service.AddressPort(); port == 0 {
 					logger.V(1).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
 					continue
 				}
 			}
+
 			if service.ExtraAttributes["check_type"] == "" {
 				service.ExtraAttributes["check_type"] = customCheckTCP
 			}
+
 			if service.ExtraAttributes["check_type"] == customCheckNagios && service.ExtraAttributes["check_command"] == "" {
 				logger.V(1).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
 				continue
 			}
+
 			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["port"] == "" {
 				logger.V(1).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
 				continue
 			}
 		}
+
 		servicesMap[serviceKey] = service
 	}
 
@@ -314,12 +355,13 @@ func (d *Discovery) ignoreServices() {
 		if d.isCheckIgnored != nil {
 			service.CheckIgnored = d.isCheckIgnored(nameContainer)
 		}
+
 		if d.isInputIgnored != nil {
 			service.MetricsIgnored = d.isInputIgnored(nameContainer)
 		}
+
 		d.servicesMap[nameContainer] = service
 	}
-
 }
 
 // CheckNow is type of check function
@@ -331,5 +373,6 @@ func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
 	if !ok {
 		return nil, fmt.Errorf("there is now check associated with the container %s", nameContainer.Name)
 	}
+
 	return CheckDetails.check.CheckNow, nil
 }

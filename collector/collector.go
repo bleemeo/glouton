@@ -49,6 +49,7 @@ func New(acc telegraf.Accumulator) *Collector {
 		currentDelay: 10 * time.Second,
 		updateDelayC: make(chan interface{}),
 	}
+
 	return c
 }
 
@@ -58,14 +59,17 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	defer c.l.Unlock()
 
 	id := 1
+
 	_, ok := c.inputs[id]
 	for ok {
 		id++
 		if id == 0 {
 			return 0, errors.New("too many inputs in the collectors. Unable to find new slot")
 		}
+
 		_, ok = c.inputs[id]
 	}
+
 	c.inputs[id] = input
 	c.inputNames[id] = shortName
 
@@ -108,33 +112,41 @@ func (c *Collector) Run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		c.run(ctx)
 	}
+
 	return nil
 }
 
 func (c *Collector) getCurrentDelay() time.Duration {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	return c.currentDelay
 }
 
 func (c *Collector) setCurrentDelay(delay time.Duration) (changed bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
+
 	if c.currentDelay == delay {
 		return false
 	}
+
 	c.currentDelay = delay
+
 	return true
 }
 
 // sleep such are time.Now() is aligned on a multiple of interval
 func (c *Collector) sleepToAlign(interval time.Duration) {
 	now := time.Now()
+
 	previousMultiple := now.Truncate(interval)
 	if previousMultiple == now {
 		return
 	}
+
 	nextMultiple := previousMultiple.Add(interval)
+
 	time.Sleep(nextMultiple.Sub(now))
 }
 
@@ -144,20 +156,25 @@ func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
 
 	inputsCopy := make([]telegraf.Input, 0)
 	inputsNameCopy := make([]string, 0)
+
 	for id, v := range c.inputs {
 		inputsCopy = append(inputsCopy, v)
 		inputsNameCopy = append(inputsNameCopy, c.inputNames[id])
 	}
+
 	return inputsCopy, inputsNameCopy
 }
 
 func (c *Collector) run(ctx context.Context) {
 	currentDelay := c.getCurrentDelay()
 	c.sleepToAlign(currentDelay)
+
 	ticker := time.NewTicker(currentDelay)
 	defer ticker.Stop()
+
 	for {
 		c.runOnce()
+
 		select {
 		case <-c.updateDelayC:
 			return
@@ -170,23 +187,31 @@ func (c *Collector) run(ctx context.Context) {
 
 func (c *Collector) runOnce() {
 	inputsCopy, inputsNameCopy := c.inputsForCollection()
+
 	var wg sync.WaitGroup
 
 	t0 := time.Now()
+
 	for i, input := range inputsCopy {
 		i := i
 		input := input
+
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			err := input.Gather(c.acc)
 			if err != nil {
 				logger.Printf("Input %s failed: %v", inputsNameCopy[i], err)
 			}
 		}()
 	}
+
 	wg.Wait()
+
 	delta := time.Since(t0)
+
 	if c.acc != nil {
 		c.acc.AddFields("agent", map[string]interface{}{"gather_time": delta.Seconds()}, nil)
 	}

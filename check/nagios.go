@@ -38,15 +38,18 @@ type NagiosCheck struct {
 // For each persitentAddresses (in the format "IP:port") this checker will maintain a TCP connection open, if broken (and unable to re-open),
 // the check will be immediately run.
 func NewNagios(nagiosCommand string, persitentAddresses []string, metricName string, labels map[string]string, acc accumulator) *NagiosCheck {
-
 	nc := &NagiosCheck{
 		nagiosCommand: nagiosCommand,
 	}
+
 	var mainTCPAddress string
+
 	if len(persitentAddresses) > 0 {
 		mainTCPAddress = persitentAddresses[0]
 	}
+
 	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, true, nc.doCheck, metricName, labels, acc)
+
 	return nc
 }
 
@@ -58,23 +61,27 @@ func (nc *NagiosCheck) doCheck(ctx context.Context) types.StatusDescription {
 			StatusDescription: fmt.Sprintf("UNKNOWN - failed to parse command line: %v", err),
 		}
 	}
+
 	if len(part) == 0 {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: fmt.Sprintf("UNKNOWN - command %#v looks empty", nc.nagiosCommand),
 		}
 	}
-	cmd := exec.Command(part[0], part[1:]...)
+
+	cmd := exec.Command(part[0], part[1:]...) // nolint: gosec
 	output, err := cmd.CombinedOutput()
 	result := types.StatusDescription{
 		CurrentStatus:     types.StatusOk,
 		StatusDescription: string(output),
 	}
+
 	if exitError, ok := err.(*exec.ExitError); ok {
 		result.CurrentStatus = types.FromNagios(exitError.ExitCode())
 	} else if err != nil {
 		result.CurrentStatus = types.StatusUnknown
 		result.StatusDescription = fmt.Sprintf("UNKNOWN - unable to run command %#v: %v", nc.nagiosCommand, err)
 	}
+
 	return result
 }

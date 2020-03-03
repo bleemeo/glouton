@@ -83,7 +83,7 @@ alias go=$GOCMD
 
 Glouton use golangci-lint as linter. You may run it with:
 ```
-mkdir -p /tmp/golangci-lint-cache; docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -w /app golangci/golangci-lint:v1.17.1 golangci-lint run
+mkdir -p /tmp/golangci-lint-cache; docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -w /app golangci/golangci-lint:v1.23.7 golangci-lint run
 ```
 
 Glouton use Go tests, you may run them with:

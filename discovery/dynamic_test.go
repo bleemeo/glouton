@@ -31,9 +31,11 @@ type mockProcess struct {
 
 func (mp mockProcess) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error) {
 	m := make(map[int]facts.Process)
+
 	for _, p := range mp.result {
 		m[p.PID] = p
 	}
+
 	return m, nil
 }
 
@@ -43,9 +45,11 @@ type mockNetstat struct {
 
 func (mn mockNetstat) Netstat(ctx context.Context) (netstat map[int][]facts.ListenAddress, err error) {
 	result := make(map[int][]facts.ListenAddress, len(mn.result))
+
 	for pid, l := range mn.result {
 		result[pid] = l
 	}
+
 	return result, nil
 }
 
@@ -94,6 +98,7 @@ func (mfr mockFileReader) ReadFile(path string) ([]byte, error) {
 	if !ok {
 		return nil, os.ErrNotExist
 	}
+
 	return []byte(content), nil
 }
 
@@ -150,15 +155,19 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(srv) != 1 {
 		t.Errorf("len(srv) == %v, want 1", len(srv))
 	}
+
 	if srv[0].Name != "memcached" {
 		t.Errorf("Name == %#v, want %#v", srv[0].Name, "memcached")
 	}
+
 	if srv[0].ServiceType != MemcachedService {
 		t.Errorf("Name == %#v, want %#v", srv[0].ServiceType, MemcachedService)
 	}
+
 	want := []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}}
 	if !reflect.DeepEqual(srv[0].ListenAddresses, want) {
 		t.Errorf("ListenAddresses == %v, want %v", srv[0].ListenAddresses, want)
@@ -167,7 +176,6 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 
 // Test dynamic Discovery with single process present
 func TestDynamicDiscoverySingle(t *testing.T) {
-
 	cases := []struct {
 		testName           string
 		cmdLine            []string
@@ -684,6 +692,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 	}
 
 	ctx := context.Background()
+
 	for _, c := range cases {
 		dd := &DynamicDiscovery{
 			ps: mockProcess{
@@ -716,34 +725,44 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+
 		if c.noMatch {
 			if len(srv) != 0 {
 				t.Errorf("Case %s: len(srv=%v) == %v, want 0", c.testName, srv, len(srv))
 			}
+
 			continue
 		}
+
 		if len(srv) != 1 {
 			t.Errorf("Case %s: len(srv) == %v, want 1", c.testName, len(srv))
 			continue
 		}
+
 		if srv[0].Name != c.want.Name {
 			t.Errorf("Case %s: Name == %#v, want %#v", c.testName, srv[0].Name, c.want.Name)
 		}
+
 		if srv[0].ServiceType != c.want.ServiceType {
 			t.Errorf("Case %s: ServiceType == %#v, want %#v", c.testName, srv[0].ServiceType, c.want.ServiceType)
 		}
+
 		if srv[0].ContainerID != c.want.ContainerID {
 			t.Errorf("Case %s: ContainerID == %#v, want %#v", c.testName, srv[0].ContainerID, c.want.ContainerID)
 		}
+
 		if srv[0].IPAddress != c.want.IPAddress {
 			t.Errorf("Case %s: IPAddress == %#v, want %#v", c.testName, srv[0].IPAddress, c.want.IPAddress)
 		}
+
 		if !reflect.DeepEqual(srv[0].ListenAddresses, c.want.ListenAddresses) {
 			t.Errorf("Case %s: ListenAddresses == %v, want %v", c.testName, srv[0].ListenAddresses, c.want.ListenAddresses)
 		}
+
 		if c.want.ExtraAttributes == nil {
 			c.want.ExtraAttributes = make(map[string]string)
 		}
+
 		if !reflect.DeepEqual(srv[0].ExtraAttributes, c.want.ExtraAttributes) {
 			t.Errorf("Case %s: ExtraAttributes == %v, want %v", c.testName, srv[0].ExtraAttributes, c.want.ExtraAttributes)
 		}

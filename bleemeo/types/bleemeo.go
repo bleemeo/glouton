@@ -111,12 +111,15 @@ func (c *Container) FillInspectHash() {
 // MetricsAgentWhitelistMap return a map with all whitelisted agent metrics
 func (ac AccountConfig) MetricsAgentWhitelistMap() map[string]bool {
 	result := make(map[string]bool)
+
 	if len(ac.MetricsAgentWhitelist) == 0 {
 		return nil
 	}
+
 	for _, n := range strings.Split(ac.MetricsAgentWhitelist, ",") {
 		result[strings.Trim(n, " \t\n")] = true
 	}
+
 	return result
 }
 
@@ -127,20 +130,24 @@ func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 	} else {
 		result.LowWarning = math.NaN()
 	}
+
 	if t.LowCrictical != nil {
 		result.LowCritical = *t.LowCrictical
 	} else {
 		result.LowCritical = math.NaN()
 	}
+
 	if t.HighWarning != nil {
 		result.HighWarning = *t.HighWarning
 	} else {
 		result.HighWarning = math.NaN()
 	}
+
 	if t.HighCrictical != nil {
 		result.HighCritical = *t.HighCrictical
 	} else {
 		result.HighCritical = math.NaN()
 	}
+
 	return result
 }

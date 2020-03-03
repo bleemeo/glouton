@@ -39,6 +39,7 @@ func TestMetricLookupFromList(t *testing.T) {
 		{Label: "cpu_system", Item: ""}:  input[5],
 	}
 	got := MetricLookupFromList(input)
+
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("MetricLookupFromList(...) == %v, want %v", got, want)
 	}

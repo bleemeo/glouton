@@ -27,6 +27,7 @@ func TestConvertMap(t *testing.T) {
 		Exit map[string]string
 		Err  error
 	}
+
 	cases := []struct {
 		Entry string
 		Want  Want
@@ -94,6 +95,7 @@ func TestConvertMap(t *testing.T) {
 		if !reflect.DeepEqual(mapResult, c.Want.Exit) {
 			t.Errorf("convertMap(%s) == %v, want %v", c.Entry, mapResult, c.Want.Exit)
 		}
+
 		if !reflect.DeepEqual(errResult, c.Want.Err) {
 			t.Errorf("convertMap(%s) == '%v', want '%v'", c.Entry, errResult, c.Want.Err)
 		}

@@ -49,7 +49,6 @@ type TCPCheck struct {
 //
 // If persistentConnection is set, a persistent TCP connection will be openned to detect service incident quickyl.
 func NewTCP(address string, tcpAddresses []string, persistentConnection bool, send []byte, expect []byte, closeMsg []byte, metricName string, labels map[string]string, acc accumulator) *TCPCheck {
-
 	tc := &TCPCheck{
 		mainAddress: address,
 		send:        send,
@@ -57,10 +56,13 @@ func NewTCP(address string, tcpAddresses []string, persistentConnection bool, se
 		closeMsg:    closeMsg,
 	}
 	mainCheck := tc.doCheck
+
 	if address == "" {
 		mainCheck = nil
 	}
+
 	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, metricName, labels, acc)
+
 	return tc
 }
 
@@ -68,6 +70,7 @@ func (tc *TCPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	if tc.mainAddress == "" {
 		return types.StatusDescription{}
 	}
+
 	return checkTCP(ctx, tc.mainAddress, tc.send, tc.expect, tc.closeMsg)
 }
 
@@ -79,6 +82,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 			StatusDescription: fmt.Sprintf("Invalid TCP address %#v", address),
 		}
 	}
+
 	port, err := strconv.ParseInt(portStr, 10, 0)
 	if err != nil {
 		return types.StatusDescription{
@@ -88,10 +92,12 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 	}
 
 	start := time.Now()
+
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	var dialer net.Dialer
+
 	conn, err := dialer.DialContext(ctx2, "tcp", address)
 	if err != nil {
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
@@ -100,15 +106,19 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 				StatusDescription: fmt.Sprintf("TCP port %d, connection timed out after 10 seconds", port),
 			}
 		}
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: fmt.Sprintf("TCP port %d, Connection refused", port),
 		}
 	}
+
 	defer conn.Close()
+
 	err = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	if err != nil {
 		logger.V(1).Printf("Unable to set Deadline: %v", err)
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusUnknown,
 			StatusDescription: "Checker error. Unable to set Deadline",
@@ -123,6 +133,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 				StatusDescription: fmt.Sprintf("TCP port %d, connection timed out after 10 seconds", port),
 			}
 		}
+
 		if err != nil || n != len(send) {
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusCritical,
@@ -130,8 +141,10 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 			}
 		}
 	}
+
 	if len(expect) > 0 {
 		firstBytes, found, err := readUntilPatternFound(conn, expect)
+
 		if netErr, ok := err.(net.Error); ok && netErr.Timeout() && len(firstBytes) == 0 {
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusCritical,
@@ -143,6 +156,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 				StatusDescription: fmt.Sprintf("TCP port %d, connection closed", port),
 			}
 		}
+
 		if !found {
 			if len(firstBytes) == 0 {
 				return types.StatusDescription{
@@ -150,6 +164,7 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 					StatusDescription: fmt.Sprintf("TCP port %d, no data received from host", port),
 				}
 			}
+
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusCritical,
 				StatusDescription: fmt.Sprintf("TCP port %d, unexpected response %#v", port, string(firstBytes)),
@@ -161,9 +176,11 @@ func checkTCP(ctx context.Context, address string, send []byte, expect []byte, c
 		// Write the close message, but ignore any errors
 		_, _ = conn.Write(closeMsg)
 		readBuffer := make([]byte, 4096)
+
 		err = conn.SetDeadline(time.Now().Add(1 * time.Second))
 		if err != nil {
 			logger.V(1).Printf("Unable to set Deadline: %v", err)
+
 			return types.StatusDescription{
 				CurrentStatus:     types.StatusUnknown,
 				StatusDescription: "Checker error. Unable to set Deadline",
@@ -183,6 +200,7 @@ func readUntilPatternFound(conn io.Reader, expect []byte) (firstBytes []byte, fo
 	// The following assume expect is less that 4096 bytes
 	readBuffer := make([]byte, 4096)
 	workBuffer := make([]byte, 0, 8192)
+
 	for {
 		n, err := conn.Read(readBuffer)
 		if n > 0 {
@@ -190,7 +208,9 @@ func readUntilPatternFound(conn io.Reader, expect []byte) (firstBytes []byte, fo
 				copy(workBuffer[:cap(workBuffer)-n], workBuffer[n:])
 				workBuffer = workBuffer[:cap(workBuffer)-n]
 			}
+
 			workBuffer = append(workBuffer, readBuffer[:n]...)
+
 			if len(firstBytes) < 100 && len(workBuffer) > len(firstBytes) {
 				if len(workBuffer) > 50 {
 					firstBytes = workBuffer[:50]
@@ -198,13 +218,16 @@ func readUntilPatternFound(conn io.Reader, expect []byte) (firstBytes []byte, fo
 					firstBytes = workBuffer
 				}
 			}
+
 			if bytes.Contains(workBuffer, expect) {
 				return firstBytes, true, nil
 			}
 		}
+
 		if err != nil && err == io.EOF {
 			return firstBytes, false, nil
 		}
+
 		if err != nil {
 			return firstBytes, false, err
 		}

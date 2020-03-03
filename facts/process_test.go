@@ -79,9 +79,11 @@ func TestDecodeDocker(t *testing.T) {
 		if len(got) != 1 {
 			t.Errorf("Case #%v: len(got) == %v, want 1", i, len(got))
 		}
+
 		if got[0].CmdLineList[0] != "python3" {
 			t.Errorf("Case #%v: CmdLine[0] == %v, want %v", i, got[0].CmdLineList[0], "python3")
 		}
+
 		if got[0].ContainerID != "theDockerID" {
 			t.Errorf("Case #%v: ContainerID == %v, want %v", i, got[0].ContainerID, "theDockerID")
 		}
@@ -108,6 +110,7 @@ func TestPsTime2Second(t *testing.T) {
 		if err != nil {
 			t.Errorf("psTime2second(%#v) raise %v", c.in, err)
 		}
+
 		if got != c.want {
 			t.Errorf("psTime2second(%#v) == %v, want %v", c.in, got, c.want)
 		}
@@ -142,7 +145,6 @@ func TestPsStat2Status(t *testing.T) {
 }
 
 func TestContainerIDFromCGroupData(t *testing.T) {
-
 	cases := []struct {
 		name string
 		in   string
@@ -206,6 +208,7 @@ func (m mockDockerProcess) pidExists(pid int32) (bool, error) {
 			return true, nil
 		}
 	}
+
 	return false, nil
 }
 
@@ -288,10 +291,12 @@ func TestUpdateProcesses(t *testing.T) {
 			}
 		},
 	}
+
 	err := pp.updateProcesses(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
+
 	cases := []Process{
 		{
 			PID:         12,
@@ -345,15 +350,19 @@ func TestUpdateProcesses(t *testing.T) {
 	if len(pp.processes) != len(cases) {
 		t.Errorf("len(pp.processe) == %v, want %v", len(pp.processes), len(cases))
 	}
+
 	if pp.lastProcessesUpdate.After(time.Now()) || time.Since(pp.lastProcessesUpdate) > time.Second {
 		t.Errorf("pp.lastProcessesUpdate = %v, want %v", pp.lastProcessesUpdate, time.Now())
 	}
+
 	epsilon := 0.01
+
 	for _, c := range cases {
 		got := pp.processes[c.PID]
 		if math.Abs(got.CPUPercent-c.CPUPercent) < epsilon {
 			got.CPUPercent = c.CPUPercent
 		}
+
 		if !reflect.DeepEqual(got, c) {
 			t.Errorf("pp.processes[%v] == %v, want %v", c.PID, got, c)
 		}
@@ -361,14 +370,12 @@ func TestUpdateProcesses(t *testing.T) {
 }
 
 func TestDeltaCPUPercent(t *testing.T) {
-
 	// In this test:
 	// * t0 is the date of create of most process
 	// * t1 is the date used to fill pp.processes and pp.lastProcessesUpdate as if updateProcesses was called on t1
 	// * t2 is the date one new process is created
 	// * t3 (now) is the date when updateProcesses is called (and use value from mockDockerProcess)
 	// * we will check that CPU percent is updated based on t2 - t1 interval.
-
 	t3 := time.Now()
 	t0 := t3.Add(-time.Hour)
 	t1 := t3.Add(-time.Minute)
@@ -430,10 +437,12 @@ func TestDeltaCPUPercent(t *testing.T) {
 			},
 		},
 	}
+
 	err := pp.updateProcesses(context.Background())
 	if err != nil {
 		t.Error(err)
 	}
+
 	cases := []Process{
 		{
 			PID:        1,
@@ -467,15 +476,19 @@ func TestDeltaCPUPercent(t *testing.T) {
 	if len(pp.processes) != len(cases) {
 		t.Errorf("len(pp.processe) == %v, want %v", len(pp.processes), len(cases))
 	}
+
 	if pp.lastProcessesUpdate.After(time.Now()) || time.Since(pp.lastProcessesUpdate) > time.Second {
 		t.Errorf("pp.lastProcessesUpdate = %v, want %v", pp.lastProcessesUpdate, t3)
 	}
+
 	epsilon := 0.01
+
 	for _, c := range cases {
 		got := pp.processes[c.PID]
 		if math.Abs(got.CPUPercent-c.CPUPercent) < epsilon {
 			got.CPUPercent = c.CPUPercent
 		}
+
 		if !reflect.DeepEqual(got, c) {
 			t.Errorf("pp.processes[%v] == %v, want %v", c.PID, got, c)
 		}

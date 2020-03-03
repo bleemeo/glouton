@@ -105,15 +105,19 @@ func (a *Accumulator) AddFieldsWithStatus(measurement string, fields map[string]
 
 func (a *Accumulator) addMetrics(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time) {
 	var ts time.Time
+
 	if len(t) == 1 {
 		ts = t[0]
 	} else {
 		ts = time.Now()
 	}
+
 	a.store.notifeeLock.Lock()
 	defer a.store.notifeeLock.Unlock()
+
 	hasNotifiee := len(a.store.notifyCallbacks) > 0
 	points := a.addMetricsLock(measurement, fields, tags, statuses, createStatusOf, ts, hasNotifiee)
+
 	for _, cb := range a.store.notifyCallbacks {
 		cb(points)
 	}
@@ -122,55 +126,70 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 func (a *Accumulator) addMetricsLock(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, ts time.Time, returnPoints bool) []types.MetricPoint {
 	a.store.lock.Lock()
 	defer a.store.lock.Unlock()
+
 	var result []types.MetricPoint
+
 	for name, value := range fields {
 		labels := make(map[string]string)
+
 		for k, v := range tags {
 			labels[k] = v
 		}
+
 		if measurement == "" {
 			labels["__name__"] = name
 		} else {
 			labels["__name__"] = measurement + "_" + name
 		}
+
 		value, err := convertInterface(value)
 		if err != nil {
 			logger.V(1).Printf("convertInterface failed. Ignoring point: %s", err)
 			continue
 		}
+
 		metric := a.store.metricGetOrCreate(labels, 0)
 		point := types.PointStatus{
 			Point: types.Point{Time: ts, Value: value},
 		}
+
 		if status, ok := statuses[name]; ok {
 			point.StatusDescription = status
+
 			if createStatusOf {
 				copyPoint := point
 				copyPoint.Value = float64(point.CurrentStatus.NagiosCode())
 				copyLabels := make(map[string]string)
+
 				for k, v := range labels {
 					copyLabels[k] = v
 				}
+
 				copyLabels["__name__"] += "_status"
 				copyLabels["status_of"] = labels["__name__"]
 				metric2 := a.store.metricGetOrCreate(copyLabels, metric.metricID)
+
 				if returnPoints {
 					result = append(result, types.MetricPoint{
 						PointStatus: copyPoint,
 						Labels:      copyLabels,
 					})
 				}
+
 				a.store.addPoint(metric2.metricID, copyPoint)
 			}
 		}
+
 		if returnPoints {
 			result = append(result, types.MetricPoint{
 				PointStatus: point,
 				Labels:      labels,
 			})
 		}
+
 		a.store.addPoint(metric.metricID, point)
 	}
+
 	return result
 }
 

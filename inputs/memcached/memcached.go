@@ -48,6 +48,7 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input Memcached is not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -55,26 +56,32 @@ func shouldDerivateMetrics(originalContext internal.GatherContext, currentContex
 	if strings.HasPrefix(metricName, "cmd_") {
 		return true
 	}
+
 	if strings.HasSuffix(metricName, "_misses") {
 		return true
 	}
+
 	if strings.HasSuffix(metricName, "_hits") {
 		return true
 	}
+
 	return false
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	for metricName, value := range fields {
 		if strings.HasPrefix(metricName, "cmd_") {
 			metricName = strings.ReplaceAll(metricName, "cmd_", "command_")
 			newFields[metricName] = value
 		}
+
 		if strings.HasSuffix(metricName, "_misses") || strings.HasSuffix(metricName, "_hits") {
 			metricName = "ops_" + metricName
 			newFields[metricName] = value
 		}
+
 		switch metricName {
 		case "curr_connections":
 			newFields["connections_current"] = value
@@ -92,5 +99,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			newFields[metricName] = value
 		}
 	}
+
 	return newFields
 }

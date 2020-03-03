@@ -41,10 +41,11 @@ type containerPayload struct {
 }
 
 func (s *Synchronizer) syncContainers(fullSync bool) error {
-
 	var localContainers []facts.Container
+
 	if s.option.Cache.AccountConfig().DockerIntegration {
 		var err error
+
 		localContainers, err = s.option.Docker.Containers(s.ctx, 24*time.Second, false)
 		if err != nil {
 			return err
@@ -67,9 +68,11 @@ func (s *Synchronizer) syncContainers(fullSync bool) error {
 	if err := s.containerRegisterAndUpdate(localContainers); err != nil {
 		return err
 	}
+
 	if err := s.containerDeleteFromLocal(localContainers); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -78,14 +81,17 @@ func (s *Synchronizer) containerUpdateList() error {
 		"agent":  s.agentID,
 		"fields": "id,name,docker_id,docker_inspect",
 	}
+
 	result, err := s.client.Iter("container", params)
 	if err != nil {
 		return err
 	}
 
 	containers := make([]types.Container, len(result))
+
 	for i, jsonMessage := range result {
 		var container types.Container
+
 		if err := json.Unmarshal(jsonMessage, &container); err != nil {
 			continue
 		}
@@ -94,12 +100,13 @@ func (s *Synchronizer) containerUpdateList() error {
 		container.DockerInspect = ""
 		containers[i] = container
 	}
+
 	s.option.Cache.SetContainers(containers)
+
 	return nil
 }
 
 func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Container) error {
-
 	facts, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 	if err != nil {
 		return nil
@@ -107,6 +114,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 	remoteContainers := s.option.Cache.Containers()
 	remoteIndexByName := make(map[string]int, len(remoteContainers))
+
 	for i, v := range remoteContainers {
 		remoteIndexByName[v.Name] = i
 	}
@@ -114,25 +122,33 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	params := map[string]string{
 		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at,docker_api_version,docker_image_id,docker_image_name",
 	}
+
 	for _, container := range localContainers {
 		name := container.Name()
 		if len(name) > apiContainerNameLength {
 			name = name[:apiContainerNameLength]
 		}
+
 		remoteIndex, remoteFound := remoteIndexByName[name]
+
 		var remoteContainer types.Container
+
 		if remoteFound {
 			remoteContainer = remoteContainers[remoteIndex]
 		}
+
 		payloadContainer := types.Container{
 			Name:          name,
 			DockerID:      container.ID(),
 			DockerInspect: container.InspectJSON(),
 		}
+
 		payloadContainer.FillInspectHash()
+
 		if remoteFound && payloadContainer.DockerInspectHash == remoteContainer.DockerInspectHash {
 			continue
 		}
+
 		payloadContainer.DockerInspectHash = "" // we don't send inspect hash to API
 		payload := containerPayload{
 			Container:        payloadContainer,
@@ -146,12 +162,15 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			DockerImageID:    container.Inspect().Image,
 			DockerImageName:  container.Image(),
 		}
+
 		var result types.Container
+
 		if remoteFound {
 			_, err := s.client.Do("PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
 			if err != nil {
 				return err
 			}
+
 			logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 			remoteContainers[remoteIndex] = result
 		} else {
@@ -159,12 +178,14 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			if err != nil {
 				return err
 			}
+
 			logger.V(2).Printf("Container %v registrered with UUID %s", result.Name, result.ID)
 			remoteContainers = append(remoteContainers, result)
 		}
 	}
 
 	s.option.Cache.SetContainers(remoteContainers)
+
 	return nil
 }
 
@@ -172,6 +193,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 	deletedPerformed := false
 	duplicatedKey := make(map[string]bool)
 	localByContainerID := make(map[string]facts.Container, len(localContainers))
+
 	for _, v := range localContainers {
 		localByContainerID[v.ID()] = v
 	}
@@ -182,24 +204,33 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 			duplicatedKey[v.DockerID] = true
 			continue
 		}
+
 		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/container/%s/", v.ID), nil, nil, nil)
 		if err != nil {
 			logger.V(1).Printf("Failed to delete container %v on Bleemeo API: %v", v.Name, err)
 			continue
 		}
+
 		logger.V(2).Printf("Container %v deleted (UUID %s)", v.Name, v.ID)
 		delete(registeredContainers, k)
+
 		deletedPerformed = true
 	}
+
 	containers := make([]types.Container, 0, len(registeredContainers))
+
 	for _, v := range registeredContainers {
 		containers = append(containers, v)
 	}
+
 	s.option.Cache.SetContainers(containers)
+
 	if deletedPerformed {
 		s.l.Lock()
 		defer s.l.Unlock()
+
 		s.forceSync["services"] = true
 	}
+
 	return nil
 }

@@ -50,6 +50,7 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input PostgreSQL is not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -57,6 +58,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	if originalContext.Tags["db"] == "template0" || originalContext.Tags["db"] == "template1" {
 		return originalContext, true
 	}
+
 	originalContext.Tags["item"] = originalContext.Tags["db"]
 
 	return originalContext, false
@@ -64,6 +66,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	for metricName, value := range fields {
 		switch metricName {
 		case "xact_commit":
@@ -76,5 +79,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			newFields[metricName] = value
 		}
 	}
+
 	return newFields
 }

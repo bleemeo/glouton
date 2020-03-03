@@ -57,6 +57,7 @@ func TestMetricsAgentWhitelistMap(t *testing.T) {
 		ac := AccountConfig{
 			MetricsAgentWhitelist: c.flat,
 		}
+
 		got := ac.MetricsAgentWhitelistMap()
 		if !reflect.DeepEqual(got, c.want) {
 			t.Errorf("MetricsAgentWhitelistMap(%#v) == %v, want %v", c.flat, got, c.want)
