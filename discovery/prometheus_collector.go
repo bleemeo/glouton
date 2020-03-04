@@ -49,6 +49,7 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 	if err != nil {
 		return err
 	}
+
 	key := NameContainer{
 		Name:          service.Name,
 		ContainerName: service.ContainerName,

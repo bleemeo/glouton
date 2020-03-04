@@ -55,13 +55,16 @@ func New(state State) *Registry {
 		states:            make(map[MetricNameItem]statusState),
 		defaultSoftPeriod: 300 * time.Second,
 	}
+
 	var jsonList []jsonState
+
 	err := state.Get(statusCacheKey, &jsonList)
 	if err != nil {
 		for _, v := range jsonList {
 			self.states[v.MetricNameItem] = v.statusState
 		}
 	}
+
 	return self
 }
 
@@ -71,8 +74,10 @@ func New(state State) *Registry {
 func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold, thresholdAllItem map[string]Threshold) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	r.thresholdsAllItem = thresholdAllItem
 	r.thresholds = thresholdWithItem
+
 	logger.V(2).Printf("Thresholds contains %d definitions for specific item and %d definitions for any item", len(thresholdWithItem), len(thresholdAllItem))
 }
 
@@ -81,8 +86,10 @@ func (r *Registry) SetThresholds(thresholdWithItem map[MetricNameItem]Threshold,
 func (r *Registry) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics map[string]time.Duration) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	r.softPeriods = periodPerMetrics
 	r.defaultSoftPeriod = defaultPeriod
+
 	logger.V(2).Printf("SoftPeriod contains %d definitions", len(periodPerMetrics))
 }
 
@@ -90,7 +97,9 @@ func (r *Registry) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics m
 func (r *Registry) SetUnits(units map[MetricNameItem]Unit) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	r.units = units
+
 	logger.V(2).Printf("Units contains %d definitions", len(units))
 }
 
@@ -121,6 +130,7 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 	if s.CriticalSince.After(now) {
 		s.CriticalSince = time.Time{}
 	}
+
 	if s.WarningSince.After(now) {
 		s.WarningSince = time.Time{}
 	}
@@ -133,16 +143,20 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		if s.CriticalSince.IsZero() {
 			s.CriticalSince = now
 		}
+
 		if s.WarningSince.IsZero() {
 			s.WarningSince = now
 		}
+
 		criticalDuration = now.Sub(s.CriticalSince)
 		warningDuration = now.Sub(s.WarningSince)
 	case types.StatusWarning:
 		s.CriticalSince = time.Time{}
+
 		if s.WarningSince.IsZero() {
 			s.WarningSince = now
 		}
+
 		warningDuration = now.Sub(s.WarningSince)
 	default:
 		s.CriticalSince = time.Time{}
@@ -163,7 +177,9 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		// downgrade status immediately
 		s.CurrentStatus = types.StatusOk
 	}
+
 	s.LastUpdate = time.Now()
+
 	return s
 }
 
@@ -185,15 +201,19 @@ func (t Threshold) Equal(other Threshold) bool {
 	if t.LowCritical != other.LowCritical && (!math.IsNaN(t.LowCritical) || !math.IsNaN(other.LowCritical)) {
 		return false
 	}
+
 	if t.LowWarning != other.LowWarning && (!math.IsNaN(t.LowWarning) || !math.IsNaN(other.LowWarning)) {
 		return false
 	}
+
 	if t.HighWarning != other.HighWarning && (!math.IsNaN(t.HighWarning) || !math.IsNaN(other.HighWarning)) {
 		return false
 	}
+
 	if t.HighCritical != other.HighCritical && (!math.IsNaN(t.HighCritical) || !math.IsNaN(other.HighCritical)) {
 		return false
 	}
+
 	return true
 }
 
@@ -219,9 +239,11 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 		HighWarning:  math.NaN(),
 		HighCritical: math.NaN(),
 	}
+
 	for _, name := range []string{"low_critical", "low_warning", "high_warning", "high_critical"} {
 		if raw, ok := input[name]; ok {
 			var value float64
+
 			switch v := raw.(type) {
 			case float64:
 				value = v
@@ -230,6 +252,7 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 			default:
 				return result, fmt.Errorf("%v is not a float", raw)
 			}
+
 			switch name {
 			case "low_critical":
 				result.LowCritical = value
@@ -242,6 +265,7 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 			}
 		}
 	}
+
 	return result, nil
 }
 
@@ -252,6 +276,7 @@ func (t Threshold) IsZero() bool {
 	if math.IsNaN(t.LowCritical) && math.IsNaN(t.LowWarning) && math.IsNaN(t.HighWarning) && math.IsNaN(t.HighCritical) {
 		return true
 	}
+
 	return t.LowCritical == 0.0 && t.LowWarning == 0.0 && t.HighWarning == 0.0 && t.HighCritical == 0.0
 }
 
@@ -260,15 +285,19 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 	if !math.IsNaN(t.LowCritical) && value < t.LowCritical {
 		return types.StatusCritical, t.LowCritical
 	}
+
 	if !math.IsNaN(t.LowWarning) && value < t.LowWarning {
 		return types.StatusWarning, t.LowWarning
 	}
+
 	if !math.IsNaN(t.HighCritical) && value > t.HighCritical {
 		return types.StatusCritical, t.HighCritical
 	}
+
 	if !math.IsNaN(t.HighWarning) && value > t.HighWarning {
 		return types.StatusWarning, t.HighWarning
 	}
+
 	return types.StatusOk, math.NaN()
 }
 
@@ -276,6 +305,7 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 func (r *Registry) GetThreshold(key MetricNameItem) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	return r.getThreshold(key)
 }
 
@@ -283,6 +313,7 @@ func (r *Registry) getThreshold(key MetricNameItem) Threshold {
 	if threshold, ok := r.thresholds[key]; ok {
 		return threshold
 	}
+
 	v := r.thresholdsAllItem[key.Name]
 	if v.IsZero() {
 		return Threshold{
@@ -292,34 +323,43 @@ func (r *Registry) getThreshold(key MetricNameItem) Threshold {
 			HighCritical: math.NaN(),
 		}
 	}
+
 	return v
 }
 
 // Run will periodically save status state and clean it.
 func (r *Registry) Run(ctx context.Context) error {
 	lastSave := time.Now()
+
 	for ctx.Err() == nil {
 		save := false
+
 		select {
 		case <-ctx.Done():
 			save = true
 		case <-time.After(time.Minute):
 		}
+
 		if time.Since(lastSave) > 60*time.Minute {
 			save = true
 		}
+
 		r.run(save)
+
 		if save {
 			lastSave = time.Now()
 		}
 	}
+
 	return nil
 }
 
 func (r *Registry) run(save bool) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	jsonList := make([]jsonState, 0, len(r.states))
+
 	for k, v := range r.states {
 		if time.Since(v.LastUpdate) > 60*time.Minute {
 			delete(r.states, k)
@@ -330,6 +370,7 @@ func (r *Registry) run(save bool) {
 			})
 		}
 	}
+
 	if save {
 		_ = r.state.Set(statusCacheKey, jsonList)
 	}
@@ -341,11 +382,14 @@ func formatValue(value float64, unit Unit) string {
 		return fmt.Sprintf("%.2f", value)
 	case UnitTypeBit, UnitTypeByte:
 		scales := []string{"", "K", "M", "G", "T", "P", "E"}
+
 		i := 0
 		for i < len(scales)-1 && math.Abs(value) >= 1024 {
 			i++
+
 			value /= 1024
 		}
+
 		return fmt.Sprintf("%.2f %s%ss", value, scales[i], unit.UnitText)
 	default:
 		return fmt.Sprintf("%.2f %s", value, unit.UnitText)
@@ -369,6 +413,7 @@ func formatDuration(period time.Duration) string {
 
 	currentUnit := ""
 	value := period.Seconds()
+
 	for _, unit := range units {
 		if math.Round(value/unit.Scale) >= 1 {
 			value /= unit.Scale
@@ -382,6 +427,7 @@ func formatDuration(period time.Duration) string {
 	if value > 1 {
 		currentUnit += "s"
 	}
+
 	return fmt.Sprintf("%.0f %s", value, currentUnit)
 }
 
@@ -410,32 +456,37 @@ func (p pusher) PushPoints(points []types.MetricPoint) {
 				Name: point.Labels[types.LabelName],
 				Item: point.Annotations.BleemeoItem,
 			}
+
 			threshold := p.registry.getThreshold(key)
 			if !threshold.IsZero() {
 				result = p.addPointWithThreshold(result, point, threshold, key)
 				continue
 			}
 		}
+
 		result = append(result, point)
 	}
+
 	p.registry.l.Unlock()
 	p.pusher.PushPoints(result)
 }
 
 func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.MetricPoint, threshold Threshold, key MetricNameItem) []types.MetricPoint {
-
 	softStatus, thresholdLimit := threshold.CurrentStatus(point.Value)
 	previousState := p.registry.states[key]
 	period := p.registry.defaultSoftPeriod
+
 	if tmp, ok := p.registry.softPeriods[key.Name]; ok {
 		period = tmp
 	}
+
 	newState := previousState.Update(softStatus, period, time.Now())
 	p.registry.states[key] = newState
 
 	unit := p.registry.units[key]
 	// Consumer expect status description from threshold to start with "Current value:"
 	statusDescription := fmt.Sprintf("Current value: %s", formatValue(point.Value, unit))
+
 	if newState.CurrentStatus != types.StatusOk {
 		if period > 0 {
 			statusDescription += fmt.Sprintf(
@@ -465,9 +516,11 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 	})
 
 	labelsCopy := make(map[string]string, len(point.Labels))
+
 	for k, v := range point.Labels {
 		labelsCopy[k] = v
 	}
+
 	labelsCopy[types.LabelName] += "_status"
 
 	annotationsCopy.StatusOf = point.Labels[types.LabelName]
@@ -477,5 +530,6 @@ func (p *pusher) addPointWithThreshold(points []types.MetricPoint, point types.M
 		Labels:      labelsCopy,
 		Annotations: annotationsCopy,
 	})
+
 	return points
 }

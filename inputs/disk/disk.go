@@ -42,7 +42,9 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	for i, v := range blacklist {
 		blacklistTrimed[i] = strings.TrimRight(v, "/")
 	}
-	var input, ok = telegraf_inputs.Inputs["disk"]
+
+	input, ok := telegraf_inputs.Inputs["disk"]
+
 	if ok {
 		diskInput := input().(*disk.DiskStats)
 		diskInput.IgnoreFS = []string{
@@ -62,6 +64,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input disk not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -69,36 +72,44 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 	newContext.Measurement = originalContext.Measurement
 	newContext.Tags = make(map[string]string)
 	item, ok := originalContext.Tags["path"]
+
 	if !ok {
 		drop = true
 		return
 	}
+
 	if !strings.HasPrefix(item, dt.mountPoint) {
 		// partition don't start with mountPoint, so it's a parition
 		// which is only inside the container. Ignore it
 		drop = true
 		return
 	}
+
 	item = strings.TrimPrefix(item, dt.mountPoint)
 	if item == "" {
 		item = "/"
 	}
+
 	for _, v := range dt.blacklist {
 		if v == item || strings.HasPrefix(item, v+"/") {
 			drop = true
 			return
 		}
 	}
+
 	newContext.Annotations.BleemeoItem = item
 	newContext.Tags["mountpoint"] = item
-	return
+
+	return newContext, drop
 }
 
 func (dt diskTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	usedPerc, ok := fields["used_percent"]
 	delete(fields, "used_percent")
+
 	if ok {
 		fields["used_perc"] = usedPerc
 	}
+
 	return fields
 }

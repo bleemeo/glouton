@@ -46,13 +46,16 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input Redis is not enabled in Telegraf")
 	}
+
 	return
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	for metricName, value := range fields {
 		finalMetricName := metricName
+
 		switch metricName {
 		case "evicted_keys", "expired_keys", "keyspace_hits", "keyspace_misses":
 			// Keep name unchanged.
@@ -79,7 +82,9 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		default:
 			continue
 		}
+
 		newFields[finalMetricName] = value
 	}
+
 	return newFields
 }

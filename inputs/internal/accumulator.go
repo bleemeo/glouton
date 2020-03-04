@@ -117,6 +117,7 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 		var valueType = reflect.TypeOf(value)
 		err = fmt.Errorf("value type not supported: %v", valueType)
 	}
+
 	return
 }
 
@@ -140,22 +141,29 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 		if err != nil {
 			return 0.0, err
 		}
+
 		currentValue, err := convertToFloat(currentPoint.Value)
 		if err != nil {
 			return 0.0, err
 		}
+
 		value = currentValue - pastValueFloat
 	}
+
 	value /= float64(currentPoint.Time.Unix() - pastPoint.Time.Unix())
-	return
+
+	return value, err
 }
 
 func flattenTag(tags map[string]string) string {
 	tagsList := make([]string, 0, len(tags))
+
 	for k, v := range tags {
 		tagsList = append(tagsList, fmt.Sprintf("%s=%s", k, v))
 	}
+
 	sort.Strings(tagsList)
+
 	return strings.Join(tagsList, ",")
 }
 
@@ -163,6 +171,7 @@ func flattenTag(tags map[string]string) string {
 func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContext GatherContext, fields map[string]interface{}, metricTime time.Time) map[string]float64 {
 	a.l.Lock()
 	defer a.l.Unlock()
+
 	result := make(map[string]float64)
 	searchMetrics := make(map[string]bool)
 
@@ -181,10 +190,13 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 			// we ignore string without error
 			continue
 		}
+
 		derive := false
+
 		if _, ok := searchMetrics[metricName]; ok {
 			derive = true
 		}
+
 		if !derive && a.ShouldDerivateMetrics != nil && a.ShouldDerivateMetrics(originalContext, currentContext, metricName) {
 			derive = true
 		}
@@ -196,13 +208,17 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 			} else {
 				a.AddError(err)
 			}
+
 			continue
 		}
+
 		pastMetricPoint, ok := a.pastValues[flatTag][metricName]
 		currentPoint := metricPoint{Time: metricTime, Value: value}
 		a.currentValues[flatTag][metricName] = currentPoint
+
 		if ok {
 			valueFloat, err := rateAsFloat(pastMetricPoint, currentPoint)
+
 			switch {
 			case err == nil && valueFloat >= 0:
 				result[metricName] = valueFloat
@@ -215,6 +231,7 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 			continue
 		}
 	}
+
 	return result
 }
 
@@ -228,17 +245,22 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 	}
 	currentContext := originalContext
 	currentContext.Tags = make(map[string]string, len(tags))
+
 	for k, v := range tags {
 		currentContext.Tags[k] = v
 	}
+
 	if a.RenameGlobal != nil {
 		drop := false
 		currentContext, drop = a.RenameGlobal(currentContext)
+
 		if drop {
 			return
 		}
 	}
+
 	var metricTime time.Time
+
 	if len(t) != 1 {
 		metricTime = time.Now()
 	} else {
@@ -246,17 +268,20 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 	}
 
 	floatFields := a.applyDerivate(originalContext, currentContext, fields, metricTime)
+
 	if a.TransformMetrics != nil {
 		floatFields = a.TransformMetrics(originalContext, currentContext, floatFields, fields)
 	}
 
 	fieldsPerMeasurements := make(map[string]map[string]interface{})
+
 	if a.RenameMetrics != nil {
 		for metricName, value := range floatFields {
 			newMeasurement, newMetricName := a.RenameMetrics(originalContext, currentContext, metricName)
 			if _, ok := fieldsPerMeasurements[newMeasurement]; !ok {
 				fieldsPerMeasurements[newMeasurement] = make(map[string]interface{})
 			}
+
 			fieldsPerMeasurements[newMeasurement][newMetricName] = value
 		}
 	} else {
@@ -266,9 +291,11 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		}
 		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
+
 	for _, f := range a.RenameCallbacks {
 		currentContext.Tags, currentContext.Annotations = f(currentContext.Tags, currentContext.Annotations)
 	}
+
 	for measurementName, fields := range fieldsPerMeasurements {
 		finalFunc(measurementName, fields, currentContext.Tags, currentContext.Annotations, metricTime)
 	}
@@ -279,7 +306,9 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 	if annocationAcc, ok := a.Accumulator.(inputs.AnnotationAccumulator); ok {
 		return annocationAcc.AddFieldsWithAnnotations
 	}
+
 	fallbackMethod := a.Accumulator.AddFields
+
 	switch metricType {
 	case "gauge":
 		fallbackMethod = a.Accumulator.AddGauge
@@ -290,6 +319,7 @@ func (a *Accumulator) wrapAdd(metricType string) accumulatorFunc {
 	case "histogram":
 		fallbackMethod = a.Accumulator.AddHistogram
 	}
+
 	return func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 		fallbackMethod(measurement, fields, tags, t...)
 	}

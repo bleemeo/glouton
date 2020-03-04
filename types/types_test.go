@@ -16,14 +16,16 @@
 
 package types
 
-import "testing"
-
-import "reflect"
+import (
+	"reflect"
+	"testing"
+)
 
 func TestLabelsToText(t *testing.T) {
 	type args struct {
 		labels map[string]string
 	}
+
 	tests := []struct {
 		name     string
 		args     args

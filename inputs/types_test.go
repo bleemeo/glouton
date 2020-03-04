@@ -17,11 +17,13 @@ func (s *mockStore) PushPoints(points []types.MetricPoint) {
 }
 func (s mockStore) getByName(name string) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, 1)
+
 	for _, p := range s.points {
 		if p.Labels[types.LabelName] == name {
 			result = append(result, p)
 		}
 	}
+
 	return result
 }
 
@@ -43,6 +45,7 @@ func TestAccumulator(t *testing.T) {
 	if len(db.points) != 0 {
 		t.Errorf("len(db.points) == %v, want %v", len(db.points), 0)
 	}
+
 	acc.AddFields(
 		"measurement",
 		fields,
@@ -57,12 +60,15 @@ func TestAccumulator(t *testing.T) {
 	for _, points := range db.points {
 		labels := points.Labels
 		name := labels[types.LabelName]
+
 		if !strings.HasPrefix(name, "measurement_") {
 			t.Errorf("name == %v, want measurement_*", name)
 		}
+
 		if _, ok := fields[name[len("measurement_"):]]; !ok {
 			t.Errorf("fields[%v] == nil, want it to exists", name)
 		}
+
 		tags[types.LabelName] = name
 		if !reflect.DeepEqual(labels, tags) {
 			t.Errorf("m.Labels() = %v, want %v", labels, tags)
@@ -71,22 +77,28 @@ func TestAccumulator(t *testing.T) {
 
 	for k, v := range fields {
 		name := "measurement_" + k
+
 		metrics := db.getByName(name)
 		if len(metrics) != 1 {
 			t.Errorf("len(db.Metrics(__name__=%v)) == %v, want %v", name, len(metrics), 1)
 		}
+
 		m := metrics[0]
+
 		labels := m.Labels
 		if labels[types.LabelName] != name {
 			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
 		}
+
 		tags[types.LabelName] = name
 		if !reflect.DeepEqual(labels, tags) {
 			t.Errorf("db.Metrics(__name__=%v).Labels() = %v, want %v", name, labels, tags)
 		}
+
 		point := m.Point
 		vFloat, _ := convertInterface(v)
 		want := types.Point{Time: t0, Value: vFloat}
+
 		if !reflect.DeepEqual(point, want) {
 			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, point, want)
 		}
@@ -145,6 +157,7 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 	if len(db.points) != 0 {
 		t.Errorf("len(db.metrics) == %v, want %v", len(db.points), 0)
 	}
+
 	acc.AddFieldsWithAnnotations(
 		"cpu",
 		fields1,
@@ -183,28 +196,36 @@ func TestStoreAccumulatorWithStatus(t *testing.T) {
 		if len(metrics) != 1 {
 			t.Errorf("len(db.Metrics(__name__=%v)) == %v, want %v", name, len(metrics), 1)
 		}
+
 		m := metrics[0]
 		labels := m.Labels
 		annotations := m.Annotations
+
 		if labels[types.LabelName] != name {
 			t.Errorf("labels[__name__] == %v, want %v", labels[types.LabelName], name)
 		}
+
 		if strings.HasSuffix(name, "_status") {
 			strippedName := strings.TrimSuffix(name, "_status")
 			if annotations.StatusOf != strippedName {
 				t.Errorf("annotations.StatusOf == %v, want %v", annotations.StatusOf, strippedName)
 			}
 		}
+
 		delete(labels, types.LabelName)
+
 		if !reflect.DeepEqual(labels, tags) {
 			t.Errorf("db.Metrics(__name__=%v).Labels() = %v, want %v", name, labels, tags)
 		}
+
 		point := m.Point
 		vFloat, _ := convertInterface(v)
 		want := types.Point{Time: t0, Value: vFloat}
+
 		if !reflect.DeepEqual(point, want) {
 			t.Errorf("db.Metrics(__name__=%v).Points(...)[0] == %v, want %v", name, point, want)
 		}
+
 		if st, ok := wantStatus[name]; ok {
 			if !reflect.DeepEqual(annotations.Status, st) {
 				t.Errorf("db.Metrics(__name__=%v).Status == %v, want %v", name, annotations.Status, st)

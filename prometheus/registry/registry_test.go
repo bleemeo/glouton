@@ -67,11 +67,14 @@ func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 		if err != nil {
 			panic(err)
 		}
+
 		var tmp dto.MetricFamily
+
 		err = proto.Unmarshal(b, &tmp)
 		if err != nil {
 			panic(err)
 		}
+
 		result[i] = &tmp
 	}
 
@@ -102,6 +105,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 
 	_, _ = reg.Gather()
+
 	if gather1.callCount != 1 {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
@@ -111,6 +115,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 
 	_, _ = reg.Gather()
+
 	if gather1.callCount != 1 {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
@@ -118,14 +123,17 @@ func TestRegistry_Register(t *testing.T) {
 	if id1, err = reg.RegisterGatherer(gather1, nil, map[string]string{"name": "value"}); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
+
 	if id2, err = reg.RegisterGatherer(gather2, nil, nil); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
 	_, _ = reg.Gather()
+
 	if gather1.callCount != 2 {
 		t.Errorf("gather1.callCount = %v, want 2", gather1.callCount)
 	}
+
 	if gather2.callCount != 1 {
 		t.Errorf("gather2.callCount = %v, want 1", gather2.callCount)
 	}
@@ -133,14 +141,17 @@ func TestRegistry_Register(t *testing.T) {
 	if !reg.UnregisterGatherer(id1) {
 		t.Errorf("reg.UnregisterGatherer(%d) failed", id1)
 	}
+
 	if !reg.UnregisterGatherer(id2) {
 		t.Errorf("reg.UnregisterGatherer(%d) failed", id2)
 	}
 
 	_, _ = reg.Gather()
+
 	if gather1.callCount != 2 {
 		t.Errorf("gather1.callCount = %v, want 2", gather1.callCount)
 	}
+
 	if gather2.callCount != 1 {
 		t.Errorf("gather2.callCount = %v, want 1", gather2.callCount)
 	}
@@ -154,12 +165,14 @@ func TestRegistry_Register(t *testing.T) {
 	if _, err = reg.RegisterGatherer(gather2, nil, nil); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
+
 	reg.UpdateBleemeoAgentID(context.Background(), "fake-uuid")
 
 	result, err := reg.Gather()
 	if err != nil {
 		t.Error(err)
 	}
+
 	helpText := "fake metric"
 	jobName := "job"
 	jobValue := "glouton"
@@ -209,6 +222,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 
 	reg.UnregisterGatherer(id1)
+
 	if stopCallCount != 1 {
 		t.Errorf("stopCallCount = %v, want 1", stopCallCount)
 	}
@@ -237,6 +251,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	metricName := "point1"
 	helpText := ""
 	jobName := "job"
@@ -276,6 +291,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(got) > 0 {
 		t.Errorf("reg.Gather() len=%v, want 0", len(got))
 	}
@@ -324,13 +340,14 @@ func TestRegistry_pushPoint(t *testing.T) {
 }
 
 func TestRegistry_applyRelabel(t *testing.T) {
-
 	type fields struct {
 		relabelConfigs []*relabel.Config
 	}
+
 	type args struct {
 		input map[string]string
 	}
+
 	tests := []struct {
 		name            string
 		fields          fields

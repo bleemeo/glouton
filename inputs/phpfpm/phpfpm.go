@@ -39,6 +39,7 @@ func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["phpfpm"]
 	if ok {
 		phpfpmInput := input()
+
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -47,9 +48,11 @@ func New(url string) (i telegraf.Input, err error) {
 			}()
 			reflectSet(url, phpfpmInput)
 		}()
+
 		if err != nil {
 			return
 		}
+
 		i = &internal.Input{
 			Input: phpfpmInput,
 			Accumulator: internal.Accumulator{
@@ -59,5 +62,6 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input PHP-FPM is not enabled in Telegraf")
 	}
+
 	return
 }

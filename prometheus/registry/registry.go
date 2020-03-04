@@ -165,6 +165,7 @@ func (r *Registry) init() {
 	r.pushedPointsExpiration = make(map[string]time.Time)
 	r.currentDelay = 10 * time.Second
 	r.updateDelayC = make(chan interface{})
+
 	if r.MetricFormat == types.MetricFormatBleemeo {
 		r.metricLegacyGatherTime = prometheus.NewGauge(prometheus.GaugeOpts{
 			Help:      "Time of last metrics gather in seconds",
@@ -172,6 +173,7 @@ func (r *Registry) init() {
 			Subsystem: "",
 			Name:      "agent_gather_time",
 		})
+
 		r.internalRegistry.MustRegister(r.metricLegacyGatherTime)
 	} else if r.MetricFormat == types.MetricFormatPrometheus {
 		r.metricGatherBackgroundTime = prometheus.NewSummary(prometheus.SummaryOpts{
@@ -247,6 +249,7 @@ func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
 
 	r.blockRunOnce = false
 	r.blockPushPoint = false
+
 	r.condition.Broadcast()
 }
 
@@ -257,12 +260,14 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback f
 	defer r.l.Unlock()
 
 	id := 1
+
 	_, ok := r.registrations[id]
 	for ok {
 		id++
 		if id == 0 {
 			return 0, errors.New("too many gatheres in the registry. Unable to find new slot")
 		}
+
 		_, ok = r.registrations[id]
 	}
 
@@ -273,6 +278,7 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback f
 	r.setupGatherer(&reg, gatherer)
 
 	r.registrations[id] = reg
+
 	return id, nil
 }
 
@@ -290,6 +296,7 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 	// Remove reference to original gatherer first, because some gatherer
 	// stopCallback will rely on runtime.GC() to cleanup resource.
 	delete(r.registrations, id)
+
 	reg.gatherer.source = nil
 
 	if reg.stopCallback != nil {
@@ -305,18 +312,22 @@ func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	r.l.Lock()
 
 	gatherers := make(Gatherers, 0, len(r.registrations)+1)
+
 	for _, reg := range r.registrations {
 		gatherers = append(gatherers, reg.gatherer)
 	}
+
 	gatherers = append(gatherers, r.registyPush)
 
 	r.l.Unlock()
+
 	t0 := time.Now()
 	mfs, err := gatherers.Gather()
 
 	if r.metricGatherExporterTime != nil {
 		r.metricGatherExporterTime.Observe(time.Since(t0).Seconds())
 	}
+
 	return mfs, err
 }
 
@@ -326,6 +337,7 @@ func (l prefixLogger) Println(v ...interface{}) {
 	all := make([]interface{}, 0, len(v)+1)
 	all = append(all, l)
 	all = append(all, v...)
+
 	logger.V(1).Println(all...)
 }
 
@@ -347,12 +359,16 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 	if err != nil {
 		return err
 	}
+
 	reg := prometheus.NewRegistry()
+
 	err = reg.Register(collector)
 	if err != nil {
 		return err
 	}
+
 	_, err = r.RegisterGatherer(reg, nil, nil)
+
 	return err
 }
 
@@ -364,12 +380,14 @@ func (r *Registry) Exporter() http.Handler {
 		ErrorLog:      prefixLogger("/metrics endpoint:"),
 	}))
 	_, _ = r.RegisterGatherer(reg, nil, nil)
+
 	return handler
 }
 
 // WithTTL return a AddMetricPointFunction with TTL on pushed points.
 func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 	r.init()
+
 	return pushFunction(func(points []types.MetricPoint) {
 		r.pushPoint(points, ttl)
 	})
@@ -383,21 +401,26 @@ func (r *Registry) RunCollection(ctx context.Context) error {
 	for ctx.Err() == nil {
 		r.run(ctx)
 	}
+
 	return nil
 }
 
 // UpdateDelay change the delay between metric gather
 func (r *Registry) UpdateDelay(delay time.Duration) {
 	r.init()
-
 	r.l.Lock()
+
 	if r.currentDelay == delay {
 		r.l.Unlock()
 		return
 	}
+
 	r.currentDelay = delay
+
 	r.l.Unlock()
+
 	logger.V(2).Printf("Change metric collector delay to %v", delay)
+
 	r.updateDelayC <- nil
 }
 
@@ -407,10 +430,13 @@ func (r *Registry) run(ctx context.Context) {
 	r.l.Unlock()
 
 	sleepToAlign(currentDelay)
+
 	ticker := time.NewTicker(currentDelay)
 	defer ticker.Stop()
+
 	for {
 		r.runOnce()
+
 		select {
 		case <-r.updateDelayC:
 			return
@@ -429,7 +455,9 @@ func (r *Registry) runOnce() {
 	}
 
 	r.countRunOnce++
+
 	gatherers := make([]labeledGatherer, 0, len(r.registrations))
+
 	for _, reg := range r.registrations {
 		gatherers = append(gatherers, reg.gatherer)
 	}
@@ -453,6 +481,7 @@ func (r *Registry) runOnce() {
 		}
 	} else if r.MetricFormat == types.MetricFormatBleemeo {
 		var metric dto.Metric
+
 		err := r.metricLegacyGatherTime.Write(&metric)
 		if err != nil {
 			logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
@@ -491,9 +520,12 @@ func familiesToMetricPoints(families []*dto.MetricFamily) []types.MetricPoint {
 	if err != nil {
 		logger.Printf("Conversion of metrics failed, some metrics may be missing: %v", err)
 	}
+
 	result := make([]types.MetricPoint, len(samples))
+
 	for i, sample := range samples {
 		labels := make(map[string]string, len(sample.Metric))
+
 		for k, v := range sample.Metric {
 			labels[string(k)] = string(v)
 		}
@@ -506,6 +538,7 @@ func familiesToMetricPoints(families []*dto.MetricFamily) []types.MetricPoint {
 			},
 		}
 	}
+
 	return result
 }
 
@@ -513,10 +546,13 @@ func familiesToMetricPoints(families []*dto.MetricFamily) []types.MetricPoint {
 func sleepToAlign(interval time.Duration) {
 	now := time.Now()
 	previousMultiple := now.Truncate(interval)
+
 	if previousMultiple == now {
 		return
 	}
+
 	nextMultiple := previousMultiple.Add(interval)
+
 	time.Sleep(nextMultiple.Sub(now))
 }
 
@@ -574,6 +610,7 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 
 	result[types.LabelGloutonFQDN] = r.FQDN
 	result[types.LabelGloutonPort] = r.GloutonPort
+
 	if r.BleemeoAgentID != "" {
 		result[types.LabelBleemeoUUID] = r.BleemeoAgentID
 	}
@@ -582,13 +619,13 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 	if servicePort == "" {
 		servicePort = r.GloutonPort
 	}
+
 	result[types.LabelPort] = servicePort
 
 	return result
 }
 
 func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.MetricAnnotations) {
-
 	promLabels := labels.FromMap(input)
 
 	annotations := types.MetricAnnotations{
@@ -602,15 +639,19 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	)
 
 	result := make(labels.Labels, 0, len(promLabels))
+
 	for _, l := range promLabels {
 		if l.Name != types.LabelName && strings.HasPrefix(l.Name, model.ReservedLabelPrefix) {
 			continue
 		}
+
 		if l.Value == "" {
 			continue
 		}
+
 		result = append(result, l)
 	}
+
 	sort.Sort(result)
 
 	return result, annotations
@@ -641,16 +682,20 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 		if now.After(expiration) {
 			delete(c.pushedPoints, key)
 			delete(c.pushedPointsExpiration, key)
+
 			continue
 		}
+
 		labelKeys := make([]string, 0)
 		labelValues := make([]string, 0)
+
 		for l, v := range p.Labels {
 			if l != "__name__" {
 				labelKeys = append(labelKeys, l)
 				labelValues = append(labelValues, v)
 			}
 		}
+
 		ch <- prometheus.NewMetricWithTimestamp(p.Time, prometheus.MustNewConstMetric(
 			prometheus.NewDesc(p.Labels["__name__"], "", labelKeys, nil),
 			prometheus.UntypedValue,

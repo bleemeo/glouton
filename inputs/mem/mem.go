@@ -39,6 +39,7 @@ func New() (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input mem not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -63,5 +64,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			delete(fields, metricName)
 		}
 	}
+
 	return fields
 }

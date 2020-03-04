@@ -40,7 +40,9 @@ type diskIOTransformer struct {
 // If blacklist is provided (not empty) it's used and whitelist is ignored
 func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
+
 	whitelistRE := make([]*regexp.Regexp, len(whitelist))
+
 	for index, v := range whitelist {
 		whitelistRE[index], err = regexp.Compile(v)
 		if err != nil {
@@ -48,7 +50,9 @@ func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
 			return
 		}
 	}
+
 	blacklistRE := make([]*regexp.Regexp, len(blacklist))
+
 	for index, v := range blacklist {
 		blacklistRE[index], err = regexp.Compile(v)
 		if err != nil {
@@ -56,6 +60,7 @@ func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
 			return
 		}
 	}
+
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
 		dt := diskIOTransformer{
@@ -73,6 +78,7 @@ func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input diskio not enabled in Telegraf")
 	}
+
 	return i, err
 }
 
@@ -80,12 +86,16 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 	newContext.Measurement = "io"
 	newContext.Tags = make(map[string]string)
 	item, ok := originalContext.Tags["name"]
+
 	if !ok {
 		return newContext, true
 	}
+
 	match := false
+
 	if len(dt.blacklist) > 0 {
 		match = true
+
 		for _, r := range dt.blacklist {
 			if r.MatchString(item) {
 				match = false
@@ -100,11 +110,14 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 			}
 		}
 	}
+
 	if !match {
 		return newContext, true
 	}
+
 	newContext.Annotations.BleemeoItem = item
 	newContext.Tags["device"] = item
+
 	return newContext, false
 }
 
@@ -115,7 +128,9 @@ func (dt diskIOTransformer) transformMetrics(originalContext internal.GatherCont
 		// io_time is millisecond per second.
 		fields["utilization"] = ioTime / 1000. * 100.
 	}
+
 	delete(fields, "weighted_io_time")
 	delete(fields, "iops_in_progress")
+
 	return fields
 }

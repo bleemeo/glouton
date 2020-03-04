@@ -168,7 +168,6 @@ func TestLabelsMatchExact(t *testing.T) {
 }
 
 func TestMetricsSimple(t *testing.T) {
-
 	labels := map[string]string{
 		types.LabelName: "measurement_fieldFloat",
 	}
@@ -183,16 +182,17 @@ func TestMetricsSimple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(metrics) != 1 {
 		t.Errorf("len(metrics) == %v, want %v", len(metrics), 1)
 	}
+
 	if !reflect.DeepEqual(metrics[0].Labels(), labels) {
 		t.Errorf("metrics[0].Labels() == %v, want %v", metrics[0].Labels(), labels)
 	}
 }
 
 func TestMetricsMultiple(t *testing.T) {
-
 	labels1 := map[string]string{
 		types.LabelName: "cpu_used",
 	}
@@ -214,9 +214,11 @@ func TestMetricsMultiple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(metrics) != 1 {
 		t.Errorf("len(metrics) == %v, want %v", len(metrics), 1)
 	}
+
 	if !reflect.DeepEqual(metrics[0].Labels(), labels1) {
 		t.Errorf("metrics[0].Labels() == %v, want %v", metrics[0].Labels(), labels1)
 	}
@@ -225,9 +227,11 @@ func TestMetricsMultiple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(metrics) != 2 {
 		t.Errorf("len(metrics) == %v, want %v", len(metrics), 2)
 	}
+
 	for _, m := range metrics {
 		if m.Labels()["mountpoint"] != "/home" && m.Labels()["mountpoint"] != "/srv" {
 			t.Errorf("m.Labels()[mountpoint] == %v, want %v or %v", m.Labels()["mountpoint"], "/home", "/srv")
@@ -238,9 +242,11 @@ func TestMetricsMultiple(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(metrics) != 1 {
 		t.Errorf("len(metrics) == %v, want %v", len(metrics), 1)
 	}
+
 	if !reflect.DeepEqual(metrics[0].Labels(), labels3) {
 		t.Errorf("metrics[0].Labels() == %v, want %v", metrics[0].Labels(), labels3)
 	}
@@ -259,6 +265,7 @@ func TestPoints(t *testing.T) {
 	p0 := types.Point{Time: t0, Value: 42.0}
 	p1 := types.Point{Time: t1, Value: -88}
 	p2 := types.Point{Time: t2, Value: 13.37}
+
 	db.PushPoints([]types.MetricPoint{
 		{Point: p0, Labels: labels},
 	})
@@ -266,9 +273,11 @@ func TestPoints(t *testing.T) {
 	if len(db.points) != 1 {
 		t.Errorf("len(db.points) == %v, want %v", len(db.points), 1)
 	}
+
 	if len(db.points[m.metricID]) != 1 {
 		t.Errorf("len(db.points[%v]) == %v, want %v", m.metricID, len(db.points[m.metricID]), 1)
 	}
+
 	if !reflect.DeepEqual(db.points[m.metricID][0], p0) {
 		t.Errorf("db.points[%v][0] == %v, want %v", m.metricID, db.points[m.metricID][0], p0)
 	}
@@ -283,6 +292,7 @@ func TestPoints(t *testing.T) {
 	if len(db.points) != 1 {
 		t.Errorf("len(db.points) == %v, want %v", len(db.points), 1)
 	}
+
 	if len(db.points[m.metricID]) != 3 {
 		t.Errorf("len(db.points[%v]) == %v, want %v", m.metricID, len(db.points[m.metricID]), 3)
 	}
@@ -291,6 +301,7 @@ func TestPoints(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(points) != 3 {
 		t.Errorf("len(points) == %v, want %v", len(points), 3)
 	}
@@ -299,9 +310,11 @@ func TestPoints(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+
 	if len(points) != 1 {
 		t.Errorf("len(points) == %v, want %v", len(points), 1)
 	}
+
 	if !reflect.DeepEqual(points[0], p1) {
 		t.Errorf("points[0] == %v, want %v", points[0], p1)
 	}

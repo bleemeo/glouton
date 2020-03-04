@@ -40,6 +40,7 @@ func LabelsToText(labels map[string]string, annotations types.MetricAnnotations,
 			types.LabelName:  labels[types.LabelName],
 			LabelBleemeoItem: TruncateItem(annotations.BleemeoItem, annotations.ServiceName != ""),
 		}
+
 		return types.LabelsToText(labelsCopy)
 	}
 
@@ -67,11 +68,13 @@ func TruncateItem(item string, isService bool) string {
 // MetricLookupFromList return a map[MetricLabelItem]Metric
 func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bleemeoTypes.Metric {
 	registeredMetricsByKey := make(map[string]bleemeoTypes.Metric, len(registeredMetrics))
+
 	for _, v := range registeredMetrics {
 		key := v.LabelsText
 		if existing, ok := registeredMetricsByKey[key]; !ok || !existing.DeactivatedAt.IsZero() {
 			registeredMetricsByKey[key] = v
 		}
 	}
+
 	return registeredMetricsByKey
 }

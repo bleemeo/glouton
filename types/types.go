@@ -216,8 +216,8 @@ func LabelsToText(labels map[string]string) string {
 		if value == "" {
 			continue
 		}
-		str := name + "=\"" + quoter.Replace(value) + "\""
 
+		str := name + "=\"" + quoter.Replace(value) + "\""
 		strLabels = append(strLabels, str)
 	}
 

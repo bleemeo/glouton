@@ -39,15 +39,22 @@ func (o oldServiceKeyValue) toService() (srv Service, err error) {
 	if len(o) != 2 {
 		return srv, fmt.Errorf("old service has %d part, want 2", len(o))
 	}
-	var key [2]string
-	var oldSrv oldService
+
+	var (
+		key    [2]string
+		oldSrv oldService
+	)
+
 	if err = json.Unmarshal(o[0], &key); err != nil {
 		return
 	}
+
 	if err = json.Unmarshal(o[1], &oldSrv); err != nil {
 		return
 	}
+
 	srv, err = oldSrv.toService(key[1])
+
 	return
 }
 
@@ -63,6 +70,7 @@ type oldService struct {
 
 func (o oldService) toService(instance string) (srv Service, err error) {
 	listenAddresses := make([]facts.ListenAddress, 0, len(o.NetStatPorts))
+
 	for k, v := range o.NetStatPorts {
 		if k == "unix" {
 			listenAddresses = append(listenAddresses, facts.ListenAddress{
@@ -74,10 +82,12 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 			if len(part) != 2 {
 				return srv, fmt.Errorf("unexpected format for old netstat key: %#v", k)
 			}
+
 			port, err := strconv.ParseInt(part[0], 10, 0)
 			if err != nil {
 				return srv, err
 			}
+
 			listenAddresses = append(listenAddresses, facts.ListenAddress{
 				NetworkFamily: part[1],
 				Address:       v,
@@ -85,6 +95,7 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 			})
 		}
 	}
+
 	return Service{
 		ServiceType:     ServiceName(o.Service),
 		Name:            o.Service,
@@ -100,31 +111,40 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 
 func servicesFromState(state State) []Service {
 	var result []Service
+
 	if err := state.Get(stateKey, &result); err != nil || result == nil {
 		// Try to load old format
 		logger.V(1).Printf("Unable to load new discovered service, try using old format: %v", err)
+
 		var oldServices []oldServiceKeyValue
+
 		if err := state.Get("discovered_services", &oldServices); err != nil {
 			return make([]Service, 0)
 		}
+
 		result = make([]Service, len(oldServices))
+
 		for i, o := range oldServices {
 			srv, err := o.toService()
 			if err != nil {
 				logger.V(1).Printf("Unable to load old discovered_services: %v", err)
 				return make([]Service, 0)
 			}
+
 			result[i] = srv
 		}
 	}
+
 	return result
 }
 
 func saveState(state State, servicesMap map[NameContainer]Service) {
 	services := make([]Service, 0, len(servicesMap))
+
 	for _, srv := range servicesMap {
 		services = append(services, srv)
 	}
+
 	err := state.Set(stateKey, services)
 	if err != nil {
 		logger.V(1).Printf("Unable to persist discovered services: %v", err)

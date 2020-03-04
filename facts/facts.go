@@ -87,6 +87,7 @@ func NewFacter(factPath, hostRootPath, ipIndicatorURL string) *FactProvider {
 func (f *FactProvider) AddCallback(cb FactCallback) {
 	f.l.Lock()
 	defer f.l.Unlock()
+
 	f.callbacks = append(f.callbacks, cb)
 }
 
@@ -112,6 +113,7 @@ func (f *FactProvider) SetFact(key string, value string) {
 	if f.manualFact == nil {
 		f.manualFact = make(map[string]string)
 	}
+
 	if f.facts == nil {
 		f.facts = make(map[string]string)
 	}
@@ -132,6 +134,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 			logger.V(1).Printf("unable to read fact file: %v", err)
 		} else {
 			var fileFacts map[string]string
+
 			if err := yaml.Unmarshal(data, &fileFacts); err != nil {
 				logger.V(1).Printf("fact file is invalid: %v", err)
 			} else {
@@ -149,9 +152,11 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	primaryAddress, primaryMacAddress := f.primaryAddress(ctx)
 	newFacts["primary_address"] = primaryAddress
 	newFacts["primary_mac_address"] = primaryMacAddress
+
 	if f.ipIndicatorURL != "" {
 		newFacts["public_ip"] = urlContent(ctx, f.ipIndicatorURL)
 	}
+
 	newFacts["architecture"] = runtime.GOARCH
 
 	hostname, fqdn := getFQDN(ctx)
@@ -168,6 +173,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		if vType == "vbox" {
 			vType = "virtualbox"
 		}
+
 		newFacts["virtual"] = vType
 	} else {
 		newFacts["virtual"] = guessVirtual(newFacts)
@@ -186,11 +192,13 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 			newFacts["swap_present"] = "false"
 		}
 	}
+
 	if f.hostRootPath != "" {
 		if v, err := ioutil.ReadFile(filepath.Join(f.hostRootPath, "etc/timezone")); err == nil {
 			newFacts["timezone"] = strings.TrimSpace(string(v))
 		}
 	}
+
 	newFacts["glouton_version"] = version.Version
 	// TODO: drop agent_version. It's deprecated and is replaced by glouton_version
 	newFacts["agent_version"] = version.Version
@@ -218,10 +226,12 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 
 func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 	hostname, _ = os.Hostname()
+
 	fqdn, err := net.DefaultResolver.LookupCNAME(ctx, hostname)
 	if err != nil {
 		fqdn = hostname
 	}
+
 	if fqdn == "" {
 		// With pure-Go resolver, it may happen. Perform what C-resolver seems to do
 		if addrs, err := net.DefaultResolver.LookupHost(ctx, hostname); err == nil && len(addrs) > 0 {
@@ -230,6 +240,7 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 			}
 		}
 	}
+
 	if len(fqdn) > 0 && fqdn[len(fqdn)-1] == '.' {
 		fqdn = fqdn[:len(fqdn)-1]
 	}
@@ -240,17 +251,20 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 			fqdn = hostname
 		}
 	}
+
 	return
 }
 
 func awsFacts(ctx context.Context) map[string]string {
 	facts := make(map[string]string)
 	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id")
+
 	if facts["aws_ami_id"] == "" {
 		// If first request fail, don't try other one, it's probably not an
 		// AWS EC2.
 		return facts
 	}
+
 	facts["aws_instance_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-id")
 	facts["aws_instance_type"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-type")
 	facts["aws_local_hostname"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/local-hostname")
@@ -259,53 +273,66 @@ func awsFacts(ctx context.Context) map[string]string {
 	facts["aws_placement"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/placement/availability-zone")
 
 	baseURL := "http://169.254.169.254/latest/meta-data/network/interfaces/macs/"
+
 	macs := urlContent(ctx, baseURL)
 	if macs == "" {
 		return facts
 	}
+
 	resultVPC := make([]string, 0)
 	resultIPv4 := make([]string, 0)
+
 	for _, line := range strings.Split(macs, "\n") {
 		t := urlContent(ctx, baseURL+line+"vpc-id")
 		if t != "" {
 			resultVPC = append(resultVPC, t)
 		}
+
 		t = urlContent(ctx, baseURL+line+"vpc-ipv4-cidr-block")
 		if t != "" {
 			resultIPv4 = append(resultIPv4, t)
 		}
 	}
+
 	if len(resultVPC) > 0 {
 		facts["aws_vpc_id"] = strings.Join(resultVPC, ",")
 	}
+
 	if len(resultIPv4) > 0 {
 		facts["aws_vpc_ipv4_cidr_block"] = strings.Join(resultIPv4, ",")
 	}
+
 	return facts
 }
 
 func decodeOsRelease(data string) (map[string]string, error) {
 	result := make(map[string]string)
+
 	lines := strings.Split(data, "\n")
 	for _, line := range lines {
 		if line == "" || !strings.Contains(line, "=") {
 			continue
 		}
+
 		t := strings.SplitN(line, "=", 2)
 		key := t[0]
+
 		if t[1] == "" {
 			continue
 		}
+
 		if t[1][0] == '"' {
 			value, err := strconv.Unquote(t[1])
 			if err != nil {
 				return nil, err
 			}
+
 			result[key] = value
 		} else {
 			result[key] = t[1]
 		}
 	}
+
 	return result, nil
 }
 
@@ -313,6 +340,7 @@ func guessVirtual(facts map[string]string) string {
 	vendorName := strings.ToLower(facts["system_vendor"])
 	biosVendor := strings.ToLower(facts["bios_vendor"])
 	biosVersion := strings.ToLower(facts["bios_version"])
+
 	switch {
 	case strings.Contains(vendorName, "qemu"), strings.Contains(vendorName, "bochs"), strings.Contains(vendorName, "digitalocean"):
 		return "kvm"
@@ -320,6 +348,7 @@ func guessVirtual(facts map[string]string) string {
 		if strings.Contains(biosVersion, "amazon") {
 			return "aws"
 		}
+
 		return "xen"
 	case strings.Contains(vendorName, "amazon ec2"):
 		return "aws"
@@ -350,6 +379,7 @@ func macAddressByAddress(ctx context.Context, ipAddress string) string {
 	if err != nil {
 		return ""
 	}
+
 	for _, i := range ifs {
 		for _, a := range i.Addrs {
 			if a.Addr == ipAddress {
@@ -357,6 +387,7 @@ func macAddressByAddress(ctx context.Context, ipAddress string) string {
 			}
 		}
 	}
+
 	return ""
 }
 
@@ -365,14 +396,18 @@ func urlContent(ctx context.Context, url string) string {
 	if err != nil {
 		return ""
 	}
+
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return ""
 	}
+
 	defer resp.Body.Close()
+
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		return ""
 	}
+
 	return string(body)
 }

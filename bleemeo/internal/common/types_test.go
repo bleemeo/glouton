@@ -73,6 +73,7 @@ func TestMetricLookupFromList(t *testing.T) {
 	for i, v := range input {
 		input[i].LabelsText = types.LabelsToText(v.Labels)
 	}
+
 	want := map[string]bleemeoTypes.Metric{
 		input[0].LabelsText: input[0],
 		input[3].LabelsText: input[3],
@@ -80,6 +81,7 @@ func TestMetricLookupFromList(t *testing.T) {
 		input[5].LabelsText: input[5],
 	}
 	got := MetricLookupFromList(input)
+
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("MetricLookupFromList(...) == %v, want %v", got, want)
 	}

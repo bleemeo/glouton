@@ -15,7 +15,6 @@ import (
 //
 // This method re-generate the same metric from argument instead of global variable
 func AddBuildInfo(collector prometheus.Collector, program string, version string, revision string, branch string) prometheus.Collector {
-
 	info := prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{
 			Namespace: program,

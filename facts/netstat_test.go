@@ -27,9 +27,11 @@ func cmpAddresses(t *testing.T, msgPrefix string, got []ListenAddress, want []Li
 	if len(got) != len(want) {
 		t.Errorf("%s == %v, want %v", msgPrefix, got, want)
 	}
+
 	sort.Slice(got, func(i, j int) bool {
 		return strings.Compare(got[i].Network(), got[j].Network()) < 0 || strings.Compare(got[i].String(), got[j].String()) < 0
 	})
+
 	for i, x := range got {
 		y := want[i]
 		if x.Network() != y.Network() || x.String() != y.String() {
@@ -55,9 +57,11 @@ func TestAddAddress(t *testing.T) {
 
 	for i, c := range cases {
 		var got []ListenAddress
+
 		for _, newAddr := range c.adds {
 			got = addAddress(got, newAddr)
 		}
+
 		cmpAddresses(t, fmt.Sprintf("addAddresses(<case #%d>)", i), got, c.want)
 	}
 }

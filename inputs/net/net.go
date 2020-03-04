@@ -52,6 +52,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input net is not enabled in Telegraf")
 	}
+
 	return
 }
 
@@ -59,18 +60,22 @@ func (nt netTransformer) renameGlobal(originalContext internal.GatherContext) (n
 	newContext.Measurement = originalContext.Measurement
 	item, ok := originalContext.Tags["interface"]
 	newContext.Tags = make(map[string]string)
+
 	if !ok {
 		drop = true
 		return
 	}
+
 	for _, b := range nt.blacklist {
 		if strings.HasPrefix(item, b) {
 			drop = true
 			return
 		}
 	}
+
 	newContext.Annotations.BleemeoItem = item
 	newContext.Tags["device"] = item
+
 	return
 }
 
@@ -84,5 +89,6 @@ func (nt netTransformer) transformMetrics(originalContext internal.GatherContext
 			fields["bits_recv"] = value * 8
 		}
 	}
+
 	return fields
 }

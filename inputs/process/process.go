@@ -40,18 +40,21 @@ func New() (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input processes is not enabled in Telegraf")
 	}
+
 	return
 }
 
 func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext = originalContext
 	newContext.Measurement = "process"
+
 	return newContext, false
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	for metricName, value := range fields {
 		newName := ""
+
 		switch metricName {
 		case "blocked":
 			newName = "status_blocked"
@@ -72,10 +75,12 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		case "total_threads":
 			newName = "total_threads"
 		}
+
 		if newName != "" {
 			delete(fields, metricName)
 			fields[newName] = value
 		}
 	}
+
 	return fields
 }

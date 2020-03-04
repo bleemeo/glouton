@@ -10,6 +10,7 @@ func TestReFromREs(t *testing.T) {
 	type args struct {
 		input []string
 	}
+
 	tests := []struct {
 		name       string
 		args       args
@@ -74,16 +75,19 @@ func TestReFromREs(t *testing.T) {
 				t.Errorf("ReFromREs failed: %v", err)
 				return
 			}
+
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
 				t.Errorf("failed to compile %#v: %v", got, err)
 				return
 			}
+
 			for _, v := range tt.matches {
 				if !gotRE.MatchString(v) {
 					t.Errorf("MatchString(%s) == false, want true", v)
 				}
 			}
+
 			for _, v := range tt.noMatchers {
 				if gotRE.MatchString(v) {
 					t.Errorf("MatchString(%s) == true, want false", v)
@@ -97,6 +101,7 @@ func TestReFromPrefixes(t *testing.T) {
 	type args struct {
 		prefix string
 	}
+
 	tests := []struct {
 		name       string
 		args       args
@@ -149,16 +154,19 @@ func TestReFromPrefixes(t *testing.T) {
 				t.Errorf("ReFromREs failed: %v", err)
 				return
 			}
+
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
 				t.Errorf("failed to compile %#v: %v", got, err)
 				return
 			}
+
 			for _, v := range tt.matches {
 				if !gotRE.MatchString(v) {
 					t.Errorf("MatchString(%s) == false, want true", v)
 				}
 			}
+
 			for _, v := range tt.noMatchers {
 				if gotRE.MatchString(v) {
 					t.Errorf("MatchString(%s) == true, want false", v)
@@ -172,6 +180,7 @@ func TestReFromPathPrefix(t *testing.T) {
 	type args struct {
 		prefix string
 	}
+
 	tests := []struct {
 		name       string
 		args       args
@@ -210,16 +219,19 @@ func TestReFromPathPrefix(t *testing.T) {
 				t.Errorf("ReFromREs failed: %v", err)
 				return
 			}
+
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
 				t.Errorf("failed to compile %#v: %v", got, err)
 				return
 			}
+
 			for _, v := range tt.matches {
 				if !gotRE.MatchString(v) {
 					t.Errorf("MatchString(%s) == false, want true", v)
 				}
 			}
+
 			for _, v := range tt.noMatchers {
 				if gotRE.MatchString(v) {
 					t.Errorf("MatchString(%s) == true, want false", v)

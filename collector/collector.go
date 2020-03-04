@@ -48,6 +48,7 @@ func New(acc telegraf.Accumulator) *Collector {
 		currentDelay: 10 * time.Second,
 		updateDelayC: make(chan interface{}),
 	}
+
 	return c
 }
 
@@ -57,14 +58,17 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	defer c.l.Unlock()
 
 	id := 1
+
 	_, ok := c.inputs[id]
 	for ok {
 		id++
 		if id == 0 {
 			return 0, errors.New("too many inputs in the collectors. Unable to find new slot")
 		}
+
 		_, ok = c.inputs[id]
 	}
+
 	c.inputs[id] = input
 	c.inputNames[id] = shortName
 
@@ -105,28 +109,35 @@ func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
 
 	inputsCopy := make([]telegraf.Input, 0)
 	inputsNameCopy := make([]string, 0)
+
 	for id, v := range c.inputs {
 		inputsCopy = append(inputsCopy, v)
 		inputsNameCopy = append(inputsNameCopy, c.inputNames[id])
 	}
+
 	return inputsCopy, inputsNameCopy
 }
 
 func (c *Collector) runOnce() {
 	inputsCopy, inputsNameCopy := c.inputsForCollection()
+
 	var wg sync.WaitGroup
 
 	for i, input := range inputsCopy {
 		i := i
 		input := input
+
 		wg.Add(1)
+
 		go func() {
 			defer wg.Done()
+
 			err := input.Gather(c.acc)
 			if err != nil {
 				logger.Printf("Input %s failed: %v", inputsNameCopy[i], err)
 			}
 		}()
 	}
+
 	wg.Wait()
 }

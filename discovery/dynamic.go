@@ -95,6 +95,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 func (dd *DynamicDiscovery) LastUpdate() time.Time {
 	dd.l.Lock()
 	defer dd.l.Unlock()
+
 	return dd.lastDiscoveryUpdate
 }
 
@@ -207,6 +208,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	if err != nil {
 		return err
 	}
+
 	netstat, err := dd.netstat.Netstat(ctx)
 	if err != nil {
 		return err
@@ -216,23 +218,28 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	// two processes may listen on same port (e.g. multiple Apache process)
 	// but netstat only see one of them.
 	allPids := make([]int, 0, len(processes)+len(netstat))
+
 	for p := range netstat {
 		allPids = append(allPids, p)
 	}
+
 	for p := range processes {
 		allPids = append(allPids, p)
 	}
 
 	servicesMap := make(map[NameContainer]Service)
+
 	for _, pid := range allPids {
 		process, ok := processes[pid]
 		if !ok {
 			continue
 		}
+
 		serviceType, ok := serviceByCommand(process.CmdLineList)
 		if !ok {
 			continue
 		}
+
 		service := Service{
 			ServiceType:   serviceType,
 			Name:          string(serviceType),
@@ -256,12 +263,15 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			if !ok {
 				continue
 			}
+
 			if service.container.Ignored() {
 				continue
 			}
+
 			if stack, ok := service.container.Labels()["bleemeo.stack"]; ok {
 				service.Stack = stack
 			}
+
 			if stack, ok := service.container.Labels()["glouton.stack"]; ok {
 				service.Stack = stack
 			}
@@ -272,6 +282,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		} else {
 			service.ListenAddresses = service.container.ListenAddresses()
 		}
+
 		if len(service.ListenAddresses) > 0 {
 			service.HasNetstatInfo = true
 		}
@@ -284,50 +295,66 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		// TODO: jmx ?
 
 		logger.V(2).Printf("Discovered service %v", service)
+
 		servicesMap[key] = service
 	}
 
 	dd.lastDiscoveryUpdate = time.Now()
 	services := make([]Service, 0, len(servicesMap))
+
 	for _, v := range servicesMap {
 		services = append(services, v)
 	}
+
 	dd.services = services
+
 	return nil
 }
 
 func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discoveryInfo) {
 	defaultAddress := "127.0.0.1"
+
 	if service.container != nil {
 		defaultAddress = service.container.PrimaryAddress()
 	}
+
 	newListenAddresses := service.ListenAddresses[:0]
+
 	for _, a := range service.ListenAddresses {
 		if a.Network() == "unix" {
 			newListenAddresses = append(newListenAddresses, a)
 			continue
 		}
+
 		address, portStr, err := net.SplitHostPort(a.String())
 		if err != nil {
 			logger.V(1).Printf("unable to split host/port for %#v: %v", a.String(), err)
 			newListenAddresses = append(newListenAddresses, a)
+
 			continue
 		}
+
 		port, err := strconv.ParseInt(portStr, 10, 0)
 		if err != nil {
 			logger.V(1).Printf("unable to parse port %#v: %v", portStr, err)
+
 			newListenAddresses = append(newListenAddresses, a)
+
 			continue
 		}
+
 		if int(port) == di.ServicePort && a.Network() == di.ServiceProtocol && address != net.IPv4zero.String() {
 			defaultAddress = address
 		}
+
 		if !di.IgnoreHighPort || port <= 32000 {
 			newListenAddresses = append(newListenAddresses, a)
 		}
 	}
+
 	service.ListenAddresses = newListenAddresses
 	service.IPAddress = defaultAddress
+
 	if len(service.ListenAddresses) == 0 && di.ServicePort != 0 {
 		// If netstat seems to have failed, always add the main service port
 		service.ListenAddresses = append(service.ListenAddresses, facts.ListenAddress{NetworkFamily: di.ServiceProtocol, Address: service.IPAddress, Port: di.ServicePort})
@@ -338,6 +365,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 	if service.ExtraAttributes == nil {
 		service.ExtraAttributes = make(map[string]string)
 	}
+
 	if service.ServiceType == MySQLService {
 		if service.container != nil {
 			for _, e := range service.container.Env() {
@@ -355,12 +383,14 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 			}
 		}
 	}
+
 	if service.ServiceType == PostgreSQLService {
 		if service.container != nil {
 			for _, e := range service.container.Env() {
 				if strings.HasPrefix(e, "POSTGRES_PASSWORD=") {
 					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "POSTGRES_PASSWORD=")
 				}
+
 				if strings.HasPrefix(e, "POSTGRES_USER=") {
 					service.ExtraAttributes["username"] = strings.TrimPrefix(e, "POSTGRES_USER=")
 				}
@@ -371,6 +401,7 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 
 func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	name := filepath.Base(cmdLine[0])
+
 	if runtime.GOOS == "windows" {
 		name = strings.ToLower(name)
 		name = strings.TrimSuffix(name, ".exe")
@@ -405,17 +436,21 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 			if candidate.Interpreter == "erlang" && name != "erl" && !strings.HasPrefix(name, "beam") {
 				continue
 			}
+
 			if candidate.Interpreter != "erlang" && name != candidate.Interpreter {
 				continue
 			}
+
 			match := true
 			flatCmdLine := strings.Join(cmdLine, " ")
+
 			for _, m := range candidate.CmdLineMustContains {
 				if !strings.Contains(flatCmdLine, m) {
 					match = false
 					break
 				}
 			}
+
 			if match {
 				return candidate.ServiceName, true
 			}
@@ -423,5 +458,6 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	}
 
 	serviceName, ok := knownProcesses[name]
+
 	return serviceName, ok
 }

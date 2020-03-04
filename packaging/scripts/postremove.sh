@@ -23,7 +23,7 @@ case "$1" in
         ;;
     1)
         # Upgrade on rpm-distribution
-        systemctl try-restart glouton.service
+        test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl try-restart glouton.service
 esac
 
 exit 0

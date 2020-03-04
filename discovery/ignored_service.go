@@ -41,6 +41,7 @@ func (ic IgnoredService) IsServiceIgnored(nameContainer NameContainer) bool {
 			if len(instances) == 1 && instances[0] == "" {
 				return true
 			}
+
 			for _, instance := range instances {
 				hasMatched := matchInstance(instance, nameContainer.ContainerName)
 				if hasMatched {
@@ -49,6 +50,7 @@ func (ic IgnoredService) IsServiceIgnored(nameContainer NameContainer) bool {
 			}
 		}
 	}
+
 	return false
 }
 
@@ -57,6 +59,7 @@ func matchInstance(instance, containerName string) bool {
 	if len(instanceDetails) != 2 {
 		return false
 	}
+
 	instanceName := instanceDetails[0]
 	instancePatern := instanceDetails[1]
 
@@ -70,5 +73,6 @@ func matchInstance(instance, containerName string) bool {
 			return matched
 		}
 	}
+
 	return false
 }

@@ -38,11 +38,13 @@ func setCollector(collectorName []string) {
 	}
 
 	collector.DisableDefaultCollectors()
+
 	for _, name := range collectorName {
 		if collectorState[name] == nil {
 			unknown = append(unknown, name)
 			continue
 		}
+
 		*collectorState[name] = true
 	}
 
@@ -58,13 +60,16 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 	if option.RootFS != "" {
 		args = append(args, fmt.Sprintf("--path.rootfs=%s", option.RootFS))
 	}
+
 	if option.FilesystemIgnoredMountPoints != "" {
 		args = append(args, fmt.Sprintf("--collector.filesystem.ignored-mount-points=%s", option.FilesystemIgnoredMountPoints))
 	}
+
 	if option.NetworkIgnoredDevices != "" {
 		args = append(args, fmt.Sprintf("--collector.netclass.ignored-devices=%s", option.NetworkIgnoredDevices))
 		args = append(args, fmt.Sprintf("--collector.netdev.device-blacklist=%s", option.NetworkIgnoredDevices))
 	}
+
 	if option.DiskStatsIgnoredDevices != "" {
 		args = append(args, fmt.Sprintf("--collector.diskstats.ignored-devices=%s", option.DiskStatsIgnoredDevices))
 	}
@@ -76,8 +81,8 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 	setCollector(option.EnabledCollectors)
 
 	l := log.NewNopLogger()
-	c, err := collector.NewNodeCollector(l)
 
+	c, err := collector.NewNodeCollector(l)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +108,9 @@ func (o *Option) WithPathIgnore(prefixes []string) *Option {
 	if err != nil {
 		return o
 	}
+
 	o.FilesystemIgnoredMountPoints = re
+
 	return o
 }
 
@@ -124,7 +131,9 @@ func (o *Option) WithNetworkIgnore(prefixes []string) *Option {
 	if err != nil {
 		return o
 	}
+
 	o.NetworkIgnoredDevices = re
+
 	return o
 }
 
@@ -161,5 +170,6 @@ func reFromREs(input []string) (string, error) {
 		Flags: syntax.Perl,
 		Sub:   res,
 	}
+
 	return re.String(), nil
 }

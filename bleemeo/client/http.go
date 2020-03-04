@@ -58,6 +58,7 @@ func IsAuthError(err error) bool {
 	if apiError, ok := err.(APIError); ok {
 		return apiError.IsAuthError
 	}
+
 	return false
 }
 
@@ -66,6 +67,7 @@ func IsNotFound(err error) bool {
 	if apiError, ok := err.(APIError); ok {
 		return apiError.StatusCode == 404
 	}
+
 	return false
 }
 
@@ -74,6 +76,7 @@ func IsServerError(err error) bool {
 	if apiError, ok := err.(APIError); ok {
 		return apiError.StatusCode >= 500
 	}
+
 	return false
 }
 
@@ -81,6 +84,7 @@ func (ae APIError) Error() string {
 	if ae.Content == "" && ae.UnmarshalErr != nil {
 		return fmt.Sprintf("unable to decode JSON: %v", ae.UnmarshalErr)
 	}
+
 	return fmt.Sprintf("response code %d: %s", ae.StatusCode, ae.Content)
 }
 
@@ -93,6 +97,7 @@ func NewClient(ctx context.Context, baseURL string, username string, password st
 	if err != nil {
 		return nil, err
 	}
+
 	cl := &http.Client{
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -124,6 +129,7 @@ func (c *HTTPClient) Do(method string, path string, params map[string]string, da
 	if err != nil {
 		return 0, err
 	}
+
 	return c.do(req, result, true)
 }
 
@@ -132,25 +138,33 @@ func (c *HTTPClient) prepareRequest(method string, path string, params map[strin
 	if err != nil {
 		return nil, err
 	}
+
 	var bodyReader io.Reader
+
 	if data != nil {
 		body, _ := json.Marshal(data)
 		bodyReader = bytes.NewReader(body)
 	}
+
 	req, err := http.NewRequest(method, u.String(), bodyReader)
-	if bodyReader != nil {
-		req.Header.Add("Content-type", "application/json")
-	}
 	if err != nil {
 		return nil, err
 	}
+
+	if bodyReader != nil {
+		req.Header.Add("Content-type", "application/json")
+	}
+
 	if len(params) > 0 {
 		q := req.URL.Query()
+
 		for k, v := range params {
 			q.Set(k, v)
 		}
+
 		req.URL.RawQuery = q.Encode()
 	}
+
 	return req, nil
 }
 
@@ -163,7 +177,9 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 	if err != nil {
 		return 0, err
 	}
+
 	req.SetBasicAuth(username, password)
+
 	return c.sendRequest(req, result)
 }
 
@@ -174,20 +190,25 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 	if params == nil {
 		params = make(map[string]string)
 	}
+
 	if _, ok := params["page_size"]; !ok {
 		params["page_size"] = "100"
 	}
+
 	result := make([]json.RawMessage, 0)
 	next := fmt.Sprintf("v1/%s/", resource)
+
 	for {
 		var page struct {
 			Next    string
 			Results []json.RawMessage
 		}
+
 		_, err := c.Do("GET", next, params, nil, &page)
 		if err != nil && IsNotFound(err) {
 			break
 		}
+
 		if err != nil {
 			return result, err
 		}
@@ -195,10 +216,12 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 		result = append(result, page.Results...)
 		next = page.Next
 		params = nil // params are now included in next url.
+
 		if next == "" {
 			break
 		}
 	}
+
 	return result, nil
 }
 
@@ -208,11 +231,14 @@ func (c *HTTPClient) do(req *http.Request, result interface{}, firstCall bool) (
 		if err != nil {
 			return 0, err
 		}
+
 		c.jwtToken = newToken
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("JWT %s", c.jwtToken))
+
 	statusCode, err := c.sendRequest(req, result)
+
 	if firstCall && err != nil {
 		if apiError, ok := err.(APIError); ok {
 			if apiError.StatusCode == 401 {
@@ -221,6 +247,7 @@ func (c *HTTPClient) do(req *http.Request, result interface{}, firstCall bool) (
 			}
 		}
 	}
+
 	return statusCode, err
 }
 
@@ -232,15 +259,18 @@ func (c *HTTPClient) GetJWT() (string, error) {
 		"username": c.username,
 		"password": c.password,
 	})
+
 	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(body))
 	if err != nil {
 		return "", err
 	}
+
 	req.Header.Add("Content-type", "application/json")
 
 	var token struct {
 		Token string
 	}
+
 	statusCode, err := c.sendRequest(req, &token)
 	if err != nil {
 		if apiError, ok := err.(APIError); ok {
@@ -249,8 +279,10 @@ func (c *HTTPClient) GetJWT() (string, error) {
 				return "", apiError
 			}
 		}
+
 		return "", err
 	}
+
 	if statusCode != 200 {
 		if statusCode < 500 {
 			return "", APIError{
@@ -259,11 +291,13 @@ func (c *HTTPClient) GetJWT() (string, error) {
 				IsAuthError: true,
 			}
 		}
+
 		return "", APIError{
 			StatusCode: statusCode,
 			Content:    fmt.Sprintf("jwt-auth returned status code == %v, want 200", statusCode),
 		}
 	}
+
 	return token.Token, nil
 }
 
@@ -273,16 +307,21 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 
 	ctx, cancel := context.WithTimeout(c.ctx, 10*time.Second)
 	defer cancel()
+
 	req = req.WithContext(ctx)
 	resp, err := c.cl.Do(req)
+
 	if err != nil {
 		return 0, err
 	}
+
 	defer resp.Body.Close()
+
 	if resp.StatusCode >= 400 {
 		if resp.Header.Get("Content-Type") != "application/json" {
 			partialBody := make([]byte, 250)
 			n, _ := resp.Body.Read(partialBody)
+
 			return 0, APIError{
 				StatusCode:   resp.StatusCode,
 				Content:      string(partialBody[:n]),
@@ -290,12 +329,16 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
-		var jsonMessage json.RawMessage
-		var jsonError struct {
-			Error          string
-			Detail         string
-			NonFieldErrors []string `json:"non_field_errors"`
-		}
+
+		var (
+			jsonMessage json.RawMessage
+			jsonError   struct {
+				Error          string
+				Detail         string
+				NonFieldErrors []string `json:"non_field_errors"`
+			}
+		)
+
 		err = json.NewDecoder(resp.Body).Decode(&jsonMessage)
 		if err != nil {
 			return 0, APIError{
@@ -305,6 +348,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
+
 		err = json.Unmarshal(jsonMessage, &jsonError)
 		if err != nil {
 			return 0, APIError{
@@ -314,14 +358,17 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
+
 		if jsonError.Error != "" || jsonError.Detail != "" || len(jsonError.NonFieldErrors) > 0 {
 			errorMessage := jsonError.Error
 			if errorMessage == "" {
 				errorMessage = jsonError.Detail
 			}
+
 			if errorMessage == "" && len(jsonError.NonFieldErrors) > 0 {
 				errorMessage = strings.Join(jsonError.NonFieldErrors, ", ")
 			}
+
 			return 0, APIError{
 				StatusCode:   resp.StatusCode,
 				Content:      errorMessage,
@@ -329,14 +376,15 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 				IsAuthError:  resp.StatusCode == 401,
 			}
 		}
+
 		return 0, APIError{
 			StatusCode:   resp.StatusCode,
 			Content:      string(jsonMessage),
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
 		}
-
 	}
+
 	if result != nil {
 		err = json.NewDecoder(resp.Body).Decode(result)
 		if err != nil {
@@ -347,5 +395,6 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 			}
 		}
 	}
+
 	return resp.StatusCode, nil
 }

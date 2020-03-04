@@ -12,26 +12,41 @@ Bleemeo Cloud platform.
 
 If you want to use the Bleemeo Cloud solution see https://docs.bleemeo.com/agent/install-agent/.
 
-## Test and Develop
+## Build a release
 
-If you want to install from source and or develop on Glouton, here are the step to run from a git checkout:
+Our release version will be set by goreleaser from the current date.
 
-Those step of made for Ubuntu 19.04 or more, but appart the installation of Golang 1.12 the same step should apply on any systems.
-
-- Install Golang 1.12, activate it and install golangci-lint (this is needed only once):
-
-```
-sudo apt install golang-1.12 git
-export PATH=/usr/lib/go-1.12/bin:$PATH
-
-(cd /tmp; GO111MODULE=on go get github.com/golangci/golangci-lint/cmd/golangci-lint@v1.17.1)
-```
-
-- If not yet done, activate Golang 1.12:
+- Glouton have a local UI written in ReactJS. The JS files need to be built before
+  the Go binary by running:
 
 ```
-export PATH=/usr/lib/go-1.12/bin:$PATH
+docker run --rm -u $UID -e HOME=/tmp/home \
+   -v $(pwd):/src -w /src/webui \
+   node:12.13.0 \
+   sh -c 'rm -fr node_modules && npm install && npm run deploy'
 ```
+
+- Then build the release binaries and Docker image using Goreleaser:
+
+```
+docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
+   -v $(pwd):/src -w /src \
+   -v /var/run/docker.sock:/var/run/docker.sock \
+   --entrypoint '' \
+   goreleaser/goreleaser sh -c 'go test ./... && goreleaser --rm-dist --snapshot'
+```
+
+Release files are present in dist/ folder and a Docker image is build (glouton:latest).
+
+## Run Glouton
+
+On Linux amd64, after building the release you may run it with:
+
+```
+./dist/glouton_linux_amd64/glouton
+```
+
+Before running the binary, you may want to configure it with:
 
 - (optional) Configure your credentials for Bleemeo Cloud platform:
 
@@ -41,6 +56,7 @@ export GLOUTON_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
 ```
 
 - (optional) If the Bleemeo Cloud platform is running locally:
+
 ```
 export GLOUTON_BLEEMEO_API_BASE=http://localhost:8000
 export GLOUTON_BLEEMEO_MQTT_HOST=localhost
@@ -48,53 +64,47 @@ export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
 
-- To build the UI (http://localhost:8015), run
+
+## Test and Develop
+
+Glouton require Golang 1.13. If your system does not provide it, you may run all Go command using Docker.
+For example to run test:
 
 ```
-(cd ./webui && npm i && npm run deploy)
+GOCMD="docker run --net host --rm -ti -v $(pwd):/srv/workspace -w /srv/workspace -u $UID -e HOME=/tmp/home golang go"
+
+$GOCMD test ./...
+```
+
+The following will assume "go" is golang 1.13 or more, if not replace it with $GOCMD or use an alias:
+```
+alias go=$GOCMD
+```
+
+Glouton use golangci-lint as linter. You may run it with:
+```
+mkdir -p /tmp/golangci-lint-cache; docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -w /app golangci/golangci-lint:v1.23.7 golangci-lint run
+```
+
+Glouton use Go tests, you may run them with:
+
+```
+go test ./... || echo "TEST FAILED"
+```
+
+If you updated GraphQL schema or JS files, rebuild JS files (see build a release) and run:
+
+```
 go generate glouton/...
 ```
 
-- Run development version of the agent:
+Then run Glouton from source:
 
 ```
-export GLOUTON_LOGGING_LEVEL=0  # 0: is the default. Increase to get more logs
 go run glouton
 ```
 
-- Prepare a release (or just run some test and linter during development):
-   - Optionally, try to update dependencies: `go get -u` then `go mod tidy`
-   - For Telegraf, the update must specify the version: e.g. `go get github.com/influxdata/telegraf@1.12.1`
-   - Run Go generate to update generated files (static JS files & GraphQL schema): `go generate glouton/...`
-   - Run GoLang linter: `~/go/bin/golangci-lint run ./...`
-   - Run Go tests: `go test glouton/... || echo test FAILED`
-
-# Build a release
-
-Our release version will be set by goreleaser from the current date.
-
-- Build the UI files
-
-```
-docker run --rm -u $UID -e HOME=/tmp/home \
-   -v $(pwd):/src -w /src/webui \
-   node:12.13.0 \
-   sh -c 'rm -fr node_modules && npm install && npm run deploy'
-```
-
-- Run test and build the release binaries and Docker image:
-
-```
-docker run --rm -u $UID:999 -e HOME=/tmp/home -e CGO_ENABLED=0 \
-   -v $(pwd):/src -w /src \
-   -v /var/run/docker.sock:/var/run/docker.sock \
-   --entrypoint '' \
-   goreleaser/goreleaser:v0.120.4 sh -c 'go test glouton/... && goreleaser --rm-dist --snapshot'
-```
-
-Release files are present in dist/ folder and a Docker image is build (glouton:latest).
-
-# Developping the local UI JavaScript
+### Developping the local UI JavaScript
 
 When working on the JavaScript rebuilding the Javascript bundle and running go generate could be slow
 and will use minified JavaScript file which are harded to debug.
@@ -117,22 +127,24 @@ export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
 go run glouton
 ```
 
-### Note on building a binary with race detector
+### Updating dependencies
 
-Go has a great tools to detect race-condition: the race-detector. It's enabled
-by adding "-race" flag to go build or go run command.
-
-Sadly, Go package from Ubuntu does not has the race-detector built-in. In this case, we could use
-Docker image to build a binary with race-detector enabled:
+To update dependencies, you can run:
 
 ```
-docker run -v $(pwd):/src -e HOME=/tmp/home -u $UID -w /src golang:1.13.3 go build -race glouton
+go get -u
 ```
 
-You can then run the resulting binary:
+For some dependencies, you will need to specify the version or commit hash to update to. For example:
 
 ```
-./glouton
+go get github.com/influxdata/telegraf@1.12.1
+```
+
+Running go mod tidy & test before commiting the updated go.mod is recommended:
+```
+go mod tidy
+go test ./...
 ```
 
 ### Note on VS code

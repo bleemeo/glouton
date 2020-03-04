@@ -49,9 +49,11 @@ func New(url string) (i telegraf.Input, err error) {
 			}()
 			reflectSet(url, haproxyInput)
 		}()
+
 		if err != nil {
 			return
 		}
+
 		i = &internal.Input{
 			Input: haproxyInput,
 			Accumulator: internal.Accumulator{
@@ -63,20 +65,25 @@ func New(url string) (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input HAProxy not enabled in Telegraf")
 	}
-	return
+
+	return i, err
 }
 
 func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext = originalContext
+
 	if originalContext.Tags["sv"] != "BACKEND" && originalContext.Tags["sv"] != "FRONTEND" {
 		drop = true
 	}
+
 	newContext.Annotations.BleemeoItem = newContext.Tags["proxy"]
+
 	return
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	for name, value := range fields {
 		switch name {
 		case "stot", "bin", "bout", "dreq", "dresp", "ereq", "econ", "eresp", "req_tot":
@@ -87,5 +94,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			newFields["act"] = value
 		}
 	}
+
 	return newFields
 }

@@ -49,21 +49,25 @@ func New() (i telegraf.Input, err error) {
 	} else {
 		err = errors.New("input Docker not enabled in Telegraf")
 	}
+
 	return
 }
 
 func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext.Measurement = originalContext.Measurement
 	newContext.Tags = make(map[string]string)
+
 	if name, ok := originalContext.Tags["container_name"]; ok {
 		newContext.Annotations.BleemeoItem = name
 		newContext.Tags[types.LabelContainerName] = name
 	}
+
 	if id, ok := originalContext.OriginalFields["container_id"]; ok {
 		if containerID, ok := id.(string); ok {
 			newContext.Annotations.ContainerID = containerID
 		}
 	}
+
 	if enable, ok := originalContext.Tags["glouton.enable"]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
@@ -79,6 +83,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 			return
 		}
 	}
+
 	switch originalContext.Measurement {
 	case "docker_container_cpu":
 		if originalContext.Tags["cpu"] != "cpu-total" {
@@ -92,13 +97,16 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		if originalContext.Tags["device"] != "total" {
 			drop = true
 		}
+
 		newContext.Measurement = "docker_container_io"
 	}
+
 	return newContext, drop
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	switch currentContext.Measurement {
 	case "docker":
 		if value, ok := fields["n_containers"]; ok {
@@ -114,6 +122,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		if value, ok := fields["usage_percent"]; ok {
 			newFields["used_perc"] = value
 		}
+
 		if value, ok := fields["usage"]; ok {
 			newFields["used"] = value
 		}
@@ -121,6 +130,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		if value, ok := fields["rx_bytes"]; ok {
 			newFields["bits_recv"] = value * 8
 		}
+
 		if value, ok := fields["tx_bytes"]; ok {
 			newFields["bits_sent"] = value * 8
 		}
@@ -128,9 +138,11 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		if value, ok := fields["io_service_bytes_recursive_read"]; ok {
 			newFields["read_bytes"] = value
 		}
+
 		if value, ok := fields["io_service_bytes_recursive_write"]; ok {
 			newFields["write_bytes"] = value
 		}
 	}
+
 	return newFields
 }

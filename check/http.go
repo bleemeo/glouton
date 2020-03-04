@@ -54,6 +54,7 @@ func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode in
 		},
 	}
 	mainTCPAddress := ""
+
 	if u, err := url.Parse(urlValue); err != nil {
 		port := u.Port()
 		if port == "" && u.Scheme == "http" {
@@ -61,8 +62,10 @@ func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode in
 		} else if port == "" && u.Scheme == "https" {
 			port = "443"
 		}
+
 		mainTCPAddress = fmt.Sprintf("%s:%s", u.Hostname(), port)
 	}
+
 	hc := &HTTPCheck{
 		url:                urlValue,
 		expectedStatusCode: expectedStatusCode,
@@ -73,22 +76,28 @@ func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode in
 			Transport: myTransport,
 		},
 	}
+
 	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, true, hc.doCheck, labels, annotations, acc)
+
 	return hc
 }
 
 func (hc *HTTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	req, err := http.NewRequest("GET", hc.url, nil)
 	req.Header.Add("User-Agent", version.UserAgent())
+
 	if err != nil {
 		logger.V(2).Printf("Unable to create HTTP Request: %v", err)
+
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusOk,
 			StatusDescription: "Checker error. Unable to create Request",
 		}
 	}
+
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
 	resp, err := hc.client.Do(req.WithContext(ctx2))
 	if urlErr, ok := err.(*url.Error); ok && urlErr.Timeout() {
 		return types.StatusDescription{
@@ -96,31 +105,37 @@ func (hc *HTTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 			StatusDescription: "Connection timed out after 10 seconds",
 		}
 	}
+
 	if err != nil {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: "Connection refused",
 		}
 	}
+
 	defer resp.Body.Close()
+
 	if hc.expectedStatusCode != 0 && resp.StatusCode != hc.expectedStatusCode {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: fmt.Sprintf("HTTP CRITICAL - http_code=%d (expected %d)", resp.StatusCode, hc.expectedStatusCode),
 		}
 	}
+
 	if hc.expectedStatusCode == 0 && resp.StatusCode >= 500 {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
 			StatusDescription: fmt.Sprintf("HTTP CRITICAL - http_code=%d", resp.StatusCode),
 		}
 	}
+
 	if hc.expectedStatusCode == 0 && resp.StatusCode >= 400 {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusWarning,
 			StatusDescription: fmt.Sprintf("HTTP WARN - http_code=%d", resp.StatusCode),
 		}
 	}
+
 	return types.StatusDescription{
 		CurrentStatus:     types.StatusOk,
 		StatusDescription: fmt.Sprintf("HTTP OK - http_code=%d", resp.StatusCode),

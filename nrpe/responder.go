@@ -46,6 +46,7 @@ type Responder struct {
 // NewResponse returns a Response
 func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
 	customChecks := make(map[string]discovery.NameContainer)
+
 	for _, fragment := range servicesOverride {
 		nagiosNRPEName, ok := fragment["nagios_nrpe_name"]
 		if ok {
@@ -55,7 +56,9 @@ func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegist
 			}
 		}
 	}
+
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
+
 	return Responder{
 		discovery:      checkRegistry,
 		customCheck:    customChecks,
@@ -67,15 +70,19 @@ func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegist
 // Response return the response of an NRPE request
 func (r Responder) Response(ctx context.Context, request string) (string, int16, error) {
 	requestArgs := strings.Split(request, "!")
+
 	logger.V(2).Printf("Received request for NRPE command %s", requestArgs[0])
+
 	_, ok := r.customCheck[requestArgs[0]]
 	if ok {
 		return r.responseCustomCheck(ctx, requestArgs[0])
 	}
+
 	_, ok = r.nrpeCommands[requestArgs[0]]
 	if ok {
 		return r.responseNRPEConf(ctx, requestArgs)
 	}
+
 	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0])
 }
 
@@ -88,6 +95,7 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 	}
 
 	statusDescription := checkNow(ctx)
+
 	return statusDescription.StatusDescription, int16(statusDescription.CurrentStatus.NagiosCode()), nil
 }
 
@@ -104,9 +112,11 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
+
 	cmd := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...)
 	out, err := cmd.CombinedOutput()
 	nagiosCode := 0
+
 	if exitError, ok := err.(*exec.ExitError); ok {
 		nagiosCode = exitError.ExitCode()
 	} else if err != nil {
@@ -116,6 +126,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 
 	output := string(out)
 	output = strings.TrimSuffix(output, "\n")
+
 	return output, int16(nagiosCode), nil
 }
 
@@ -137,6 +148,7 @@ func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 			nrpeCommand = strings.Replace(nrpeCommand, arg, "", 1)
 		}
 	}
+
 	return shlex.Split(nrpeCommand)
 }
 
@@ -144,23 +156,27 @@ func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 // and a boolean to allow or not the arguments in NRPE requests
 func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 	nrpeConfMap := make(map[string]string)
+
 	if nrpeConfPath == nil {
 		return nrpeConfMap, false
 	}
 
 	allowArguments := false
+
 	for _, nrpeConfFile := range nrpeConfPath {
 		confBytes, err := ioutil.ReadFile(nrpeConfFile)
 		if err != nil {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
 			continue
 		}
+
 		nrpeConfMap, allowArguments = readNRPEConfFile(confBytes, nrpeConfMap)
 	}
 
 	if allowArguments {
 		return nrpeConfMap, true
 	}
+
 	return nrpeConfMap, false
 }
 
@@ -175,6 +191,7 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[stri
 	confCommandArguments := false
 	confString := string(confBytes)
 	confLines := strings.Split(confString, "\n")
+
 	for _, line := range confLines {
 		matched := commandLineRegex.MatchString(line)
 		if matched {
@@ -183,11 +200,14 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[stri
 			command = strings.TrimRight(command, " ")
 			commandName := strings.Split(strings.Split(splitLine[0], "[")[1], "]")[0]
 			nrpeConfMap[commandName] = command
+
 			if command == "" {
 				logger.V(0).Printf("WARNING: NRPE configuration file contains an empty command for %s", commandName)
 			}
+
 			continue
 		}
+
 		matched = allowArgumentRegex.MatchString(line)
 		if matched {
 			splitLine := strings.TrimLeft(strings.Split(line, "=")[1], " ")
@@ -199,5 +219,6 @@ func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[stri
 			}
 		}
 	}
+
 	return nrpeConfMap, confCommandArguments
 }

@@ -20,7 +20,6 @@ type labeledGatherer struct {
 }
 
 func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annotations types.MetricAnnotations) labeledGatherer {
-
 	labels := make([]*dto.LabelPair, 0, len(extraLabels))
 
 	for _, l := range extraLabels {
@@ -53,6 +52,7 @@ func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 			mf.Metric[i] = m
 		}
 	}
+
 	return mfs, err
 }
 
@@ -60,31 +60,38 @@ func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 	result := make([]*dto.LabelPair, 0, len(a)+len(b))
 	aIndex := 0
+
 	for _, bLabel := range b {
 		for aIndex < len(a) && a[aIndex].GetName() < bLabel.GetName() {
 			result = append(result, a[aIndex])
 			aIndex++
 		}
+
 		if aIndex < len(a) && a[aIndex].GetName() == bLabel.GetName() {
 			aIndex++
 		}
+
 		result = append(result, bLabel)
 	}
+
 	for aIndex < len(a) {
 		result = append(result, a[aIndex])
 		aIndex++
 	}
+
 	return result
 }
 
 func (g labeledGatherer) GatherPoints() ([]types.MetricPoint, error) {
 	mfs, err := g.Gather()
 	points := familiesToMetricPoints(mfs)
+
 	if (g.annotations != types.MetricAnnotations{}) {
 		for i := range points {
 			points[i].Annotations = g.annotations
 		}
 	}
+
 	return points, err
 }
 
@@ -116,6 +123,7 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 		if err != nil {
 			errs = append(errs, err)
 		}
+
 		for _, mf := range mfs {
 			existingMF, exists := metricFamiliesByName[mf.GetName()]
 			if exists {
@@ -124,6 +132,7 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 						"gathered metric family %s has type %s but should have %s",
 						mf.GetName(), mf.GetType(), existingMF.GetType(),
 					))
+
 					continue
 				}
 			} else {
@@ -133,6 +142,7 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 				existingMF.Type = mf.Type
 				metricFamiliesByName[mf.GetName()] = existingMF
 			}
+
 			existingMF.Metric = append(existingMF.Metric, mf.Metric...)
 		}
 	}
@@ -151,6 +161,7 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	promGatherers := prometheus.Gatherers{
 		sliceGatherer(result),
 	}
+
 	sortedResult, err := promGatherers.Gather()
 	if err != nil {
 		if multiErr, ok := err.(prometheus.MultiError); ok {
@@ -176,6 +187,7 @@ func (gs labeledGatherers) GatherPoints() ([]types.MetricPoint, error) {
 		if err != nil {
 			errs = append(errs, err)
 		}
+
 		result = append(result, points...)
 	}
 

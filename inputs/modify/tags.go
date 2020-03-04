@@ -39,5 +39,6 @@ func AddRenameCallback(input telegraf.Input, f RenameCallback) telegraf.Input {
 			},
 		}
 	}
+
 	return input
 }

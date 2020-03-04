@@ -48,17 +48,20 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 	} else {
 		err = errors.New("input RabbitMQ is not enabled in Telegraf")
 	}
+
 	return
 }
 
 func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext = originalContext
 	newContext.Measurement = "rabbitmq"
+
 	return
 }
 
 func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
+
 	for metricName, value := range fields {
 		switch metricName {
 		case "messages":
@@ -69,5 +72,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			newFields[metricName] = value
 		}
 	}
+
 	return newFields
 }

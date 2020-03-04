@@ -68,6 +68,7 @@ func (p metricRegisterPass) String() string {
 	case metricPassRetry:
 		return "retry"
 	}
+
 	return "unknown"
 }
 
@@ -106,11 +107,13 @@ func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 	} else {
 		mp.Labels = types.TextToLabels(mp.LabelsText)
 	}
+
 	return mp.Metric
 }
 
 func prioritizeMetrics(metrics []types.Metric) {
 	swapIdx := 0
+
 	for i, m := range metrics {
 		switch m.Labels()[types.LabelName] {
 		case "cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal",
@@ -128,41 +131,44 @@ func prioritizeMetrics(metrics []types.Metric) {
 
 func filterMetrics(input []types.Metric, metricWhitelist map[string]bool) []types.Metric {
 	result := make([]types.Metric, 0)
+
 	for _, m := range input {
 		if common.AllowMetric(m.Labels(), m.Annotations(), metricWhitelist) {
 			result = append(result, m)
 		}
 	}
+
 	return result
 }
 
 func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []string {
-
 	registeredMetrics := s.option.Cache.Metrics()
 	registeredMetricsByKey := common.MetricLookupFromList(registeredMetrics)
 
 	result := make([]string, 0)
+
 	for _, v := range metrics {
 		key := common.LabelsToText(v.Labels(), v.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
 
 		if _, ok := registeredMetricsByKey[key]; ok {
 			continue
 		}
+
 		result = append(result, key)
 	}
+
 	return result
 }
 
 func (s *Synchronizer) syncMetrics(fullSync bool) error {
-
 	metricWhitelist := s.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
 
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return err
 	}
-	filteredMetrics := filterMetrics(localMetrics, metricWhitelist)
 
+	filteredMetrics := filterMetrics(localMetrics, metricWhitelist)
 	unregisteredMetrics := s.findUnregisteredMetrics(filteredMetrics)
 
 	if s.successiveErrors == 3 {
@@ -173,13 +179,14 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	fullForInactive := false
 	previousMetrics := s.option.Cache.MetricsByUUID()
 	activeMetricsCount := 0
+
 	for _, m := range previousMetrics {
 		if m.DeactivatedAt.IsZero() {
 			activeMetricsCount++
 		}
 	}
-	pendingMetricsUpdate := s.popPendingMetricsUpdate()
 
+	pendingMetricsUpdate := s.popPendingMetricsUpdate()
 	if len(pendingMetricsUpdate) > activeMetricsCount*3/100 {
 		// If more than 3% of known active metrics needs update, do a full
 		// update. 3% is arbitrary choose, based on assumption request for
@@ -187,6 +194,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		// one metric.
 		fullSync = true
 	}
+
 	if len(unregisteredMetrics) > 3*len(previousMetrics)/100 {
 		fullForInactive = true
 		fullSync = true
@@ -200,13 +208,16 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		}
 	} else if len(pendingMetricsUpdate) > 0 {
 		logger.V(2).Printf("Update %d metrics by UUID", len(pendingMetricsUpdate))
+
 		if err := s.metricUpdateListUUID(pendingMetricsUpdate); err != nil {
 			s.UpdateMetrics(pendingMetricsUpdate...)
 			return err
 		}
 	}
+
 	if !fullForInactive {
 		logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
+
 		err := s.metricUpdateListSearch(unregisteredMetrics)
 		if err != nil {
 			return err
@@ -225,6 +236,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	if err != nil {
 		return err
 	}
+
 	filteredMetrics = filterMetrics(localMetrics, metricWhitelist)
 
 	// If one metric fail to register, it may block other metric that would register correctly.
@@ -238,15 +250,19 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	if err := s.metricRegisterAndUpdate(filteredMetrics, fullForInactive); err != nil {
 		return err
 	}
+
 	if err := s.metricDeleteFromLocal(); err != nil {
 		return err
 	}
+
 	if time.Since(s.startedAt) > 5*time.Minute {
 		if err := s.metricDeactivate(filteredMetrics); err != nil {
 			return err
 		}
 	}
+
 	s.lastMetricCount = len(localMetrics)
+
 	return nil
 }
 
@@ -254,14 +270,17 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
+
 	for _, m := range s.option.Cache.Metrics() {
 		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Item}
 		thresholds[key] = m.Threshold.ToInternalThreshold()
 		units[key] = m.Unit
 	}
+
 	if s.option.UpdateThresholds != nil {
 		s.option.UpdateThresholds(thresholds, firstUpdate)
 	}
+
 	if s.option.UpdateUnits != nil {
 		s.option.UpdateUnits(units)
 	}
@@ -272,15 +291,18 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 		"agent":  s.agentID,
 		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
 	}
+
 	if !includeInactive {
 		params["active"] = "True"
 	}
+
 	result, err := s.client.Iter("metric", params)
 	if err != nil {
 		return err
 	}
 
 	metricsByUUID := make(map[string]bleemeoTypes.Metric, len(result))
+
 	if !includeInactive {
 		for _, m := range s.option.Cache.Metrics() {
 			if !m.DeactivatedAt.IsZero() {
@@ -291,21 +313,26 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 
 	for _, jsonMessage := range result {
 		var metric metricPayload
+
 		if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 			continue
 		}
+
 		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
+
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
+
 	for _, m := range metricsByUUID {
 		metrics = append(metrics, m)
 	}
+
 	s.option.Cache.SetMetrics(metrics)
+
 	return nil
 }
 
 func (s *Synchronizer) metricUpdateListSearch(requests []string) error {
-
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
 	for _, key := range requests {
@@ -314,6 +341,7 @@ func (s *Synchronizer) metricUpdateListSearch(requests []string) error {
 			"labels_text": key,
 			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
+
 		if s.option.MetricFormat == types.MetricFormatBleemeo {
 			labels := types.TextToLabels(key)
 			params["label"] = labels[types.LabelName]
@@ -328,17 +356,23 @@ func (s *Synchronizer) metricUpdateListSearch(requests []string) error {
 
 		for _, jsonMessage := range result {
 			var metric metricPayload
+
 			if err := json.Unmarshal(jsonMessage, &metric); err != nil {
 				continue
 			}
+
 			metricsByUUID[metric.ID] = metric.metricFromAPI()
 		}
 	}
+
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
+
 	for _, m := range metricsByUUID {
 		metrics = append(metrics, m)
 	}
+
 	s.option.Cache.SetMetrics(metrics)
+
 	return nil
 }
 
@@ -347,9 +381,11 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 
 	for _, key := range requests {
 		var metric metricPayload
+
 		params := map[string]string{
 			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
+
 		_, err := s.client.Do(
 			"GET",
 			fmt.Sprintf("v1/metric/%s/", key),
@@ -363,21 +399,26 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		} else if err != nil {
 			return err
 		}
+
 		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
+
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
+
 	for _, m := range metricsByUUID {
 		metrics = append(metrics, m)
 	}
+
 	s.option.Cache.SetMetrics(metrics)
+
 	return nil
 }
 
 func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previousMetrics map[string]bleemeoTypes.Metric) error {
-
 	newMetrics := s.option.Cache.MetricsByUUID()
 
 	deletedMetricLabelItem := make(map[string]bool)
+
 	for _, m := range previousMetrics {
 		if _, ok := newMetrics[m.ID]; !ok {
 			key := m.LabelsText
@@ -386,6 +427,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	}
 
 	localMetricToDelete := make([]map[string]string, 0)
+
 	for _, m := range localMetrics {
 		labels := m.Labels()
 		key := common.LabelsToText(labels, m.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
@@ -394,18 +436,20 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 			localMetricToDelete = append(localMetricToDelete, labels)
 		}
 	}
+
 	s.option.Store.DropMetrics(localMetricToDelete)
+
 	return nil
 }
 
 func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, fullForInactive bool) error {
-
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	services := s.option.Cache.Services()
 	servicesByKey := make(map[serviceNameInstance]bleemeoTypes.Service, len(services))
+
 	for _, v := range services {
 		k := serviceNameInstance{name: v.Label, instance: v.Instance}
 		servicesByKey[k] = v
@@ -416,11 +460,15 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 	}
 	regCountBeforeUpdate := 30
 	errorCount := 0
+
 	var lastErr error
+
 	retryMetrics := make([]types.Metric, 0)
 	registerMetrics := make([]types.Metric, 0)
+
 	for state := metricPassAgentStatus; state <= metricPassRetry; state++ {
 		var currentList []types.Metric
+
 		switch state {
 		case metricPassAgentStatus:
 			currentList = []types.Metric{
@@ -430,72 +478,97 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 			currentList = localMetrics
 		case metricPassRecreate:
 			currentList = registerMetrics
+
 			if len(registerMetrics) > 0 && !fullForInactive {
 				metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
+
 				for _, v := range registeredMetricsByUUID {
 					metrics = append(metrics, v)
 				}
+
 				s.option.Cache.SetMetrics(metrics)
+
 				requests := make([]string, len(registerMetrics))
+
 				for i, m := range registerMetrics {
 					labels := m.Labels()
 					requests[i] = common.LabelsToText(labels, m.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
 				}
+
 				if err := s.metricUpdateListSearch(requests); err != nil {
 					return err
 				}
+
 				registeredMetricsByUUID = s.option.Cache.MetricsByUUID()
 				registeredMetricsByKey = common.MetricLookupFromList(s.option.Cache.Metrics())
 			}
 		case metricPassRetry:
 			currentList = retryMetrics
 		}
+
 		logger.V(3).Printf("Metric registration phase %v start with %d metrics to process", state, len(currentList))
+
 	metricLoop:
 		for _, metric := range currentList {
 			if s.ctx.Err() != nil {
 				break
 			}
+
 			err := s.metricRegisterAndUpdateOne(metric, registeredMetricsByUUID, registeredMetricsByKey, containersByContainerID, servicesByKey, params)
 			if err != nil && err == errRetryLater && state < metricPassRetry {
 				retryMetrics = append(retryMetrics, metric)
 				continue metricLoop
 			}
+
 			if errReReg, ok := err.(errNeedRegister); ok && err != nil && state < metricPassRecreate {
 				registerMetrics = append(registerMetrics, metric)
+
 				delete(registeredMetricsByUUID, errReReg.remoteMetric.ID)
 				delete(registeredMetricsByKey, errReReg.key)
+
 				continue metricLoop
 			}
+
 			if err != nil {
 				if client.IsServerError(err) {
 					return err
 				}
+
 				lastErr = err
+
 				errorCount++
 				if errorCount > 10 {
 					return err
 				}
+
 				time.Sleep(time.Duration(errorCount/2) * time.Second)
+
 				continue metricLoop
 			}
+
 			regCountBeforeUpdate--
 			if regCountBeforeUpdate == 0 {
 				regCountBeforeUpdate = 60
+
 				metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
+
 				for _, v := range registeredMetricsByUUID {
 					metrics = append(metrics, v)
 				}
+
 				s.option.Cache.SetMetrics(metrics)
 			}
 		}
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
+
 	for _, v := range registeredMetricsByUUID {
 		metrics = append(metrics, v)
 	}
+
 	s.option.Cache.SetMetrics(metrics)
+
 	return lastErr
 }
 
@@ -504,13 +577,16 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	annotations := metric.Annotations()
 	key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
 	remoteMetric, remoteFound := registeredMetricsByKey[key]
+
 	if remoteFound {
 		result, err := s.metricUpdateOne(key, metric, remoteMetric)
 		if err != nil {
 			return err
 		}
+
 		registeredMetricsByKey[key] = result
 		registeredMetricsByUUID[result.ID] = result
+
 		return nil
 	}
 
@@ -527,52 +603,66 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		payload.LabelsText = ""
 	}
 
-	var containerName string
-	var result metricPayload
+	var (
+		containerName string
+		result        metricPayload
+	)
+
 	if annotations.StatusOf != "" {
 		subLabels := make(map[string]string, len(labels))
 
 		for k, v := range labels {
 			subLabels[k] = v
 		}
+
 		subLabels[types.LabelName] = annotations.StatusOf
 
 		subKey := common.LabelsToText(subLabels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
 		metricStatusOf, ok := registeredMetricsByKey[subKey]
+
 		if !ok {
 			return errRetryLater
 		}
+
 		payload.StatusOf = metricStatusOf.ID
 	}
+
 	if annotations.ContainerID != "" {
 		container, ok := containersByContainerID[annotations.ContainerID]
 		if !ok {
 			// No error. When container get registered we trigger a metric synchronization
 			return nil
 		}
+
 		containerName = container.Name
 		payload.ContainerID = container.ID
 		// TODO: For now all metrics are created no-associated with a container.
 		// PRODUCT-970 track the progress on this point
 		payload.ContainerID = ""
 	}
+
 	if annotations.ServiceName != "" {
 		srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
 		srvKey.truncateInstance()
+
 		service, ok := servicesByKey[srvKey]
 		if !ok {
 			// No error. When service get registered we trigger a metric synchronization
 			return nil
 		}
+
 		payload.ServiceID = service.ID
 	}
+
 	_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
 	if err != nil {
 		return err
 	}
+
 	logger.V(2).Printf("Metric %v registrered with UUID %s", key, result.ID)
 	registeredMetricsByKey[key] = result.metricFromAPI()
 	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
+
 	return nil
 }
 
@@ -582,17 +672,22 @@ func (s *Synchronizer) metricUpdateOne(key string, metric types.Metric, remoteMe
 		if err != nil {
 			return remoteMetric, nil // assume not seen, we don't re-activate this metric
 		}
+
 		if len(points) == 0 {
 			return remoteMetric, nil
 		}
+
 		maxTime := points[0].Time
+
 		for _, p := range points {
 			if p.Time.After(maxTime) {
 				maxTime = p.Time
 			}
 		}
+
 		if maxTime.After(remoteMetric.DeactivatedAt.Add(10 * time.Second)) {
 			logger.V(2).Printf("Mark active the metric %v (uuid %s)", key, remoteMetric.ID)
+
 			_, err := s.client.Do(
 				"PATCH",
 				fmt.Sprintf("v1/metric/%s/", remoteMetric.ID),
@@ -605,6 +700,7 @@ func (s *Synchronizer) metricUpdateOne(key string, metric types.Metric, remoteMe
 			} else if err != nil {
 				return remoteMetric, err
 			}
+
 			remoteMetric.DeactivatedAt = time.Time{}
 		}
 	}
@@ -613,12 +709,12 @@ func (s *Synchronizer) metricUpdateOne(key string, metric types.Metric, remoteMe
 }
 
 func (s *Synchronizer) metricDeleteFromLocal() error {
-
 	// We only delete metric $SERVICE_NAME_status from service with ignore_check=True
 	localServices, err := s.option.Discovery.Discovery(s.ctx, 24*time.Hour)
 	if err != nil {
 		return err
 	}
+
 	longToShortKeyLookup := longToShortKey(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
@@ -628,35 +724,43 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 		if !srv.CheckIgnored {
 			continue
 		}
+
 		key := serviceNameInstance{name: srv.Name, instance: srv.ContainerName}
+
 		_, ok := longToShortKeyLookup[key]
 		if !ok {
 			continue
 		}
+
 		labels := srv.LabelsOfStatus()
 		metricKey := common.LabelsToText(labels, srv.AnnotationsOfStatus(), s.option.MetricFormat == types.MetricFormatBleemeo)
+
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
 			_, err := s.client.Do("DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
 			if err != nil {
 				return err
 			}
+
 			delete(registeredMetrics, metric.ID)
 			logger.V(2).Printf("Metric %v deleted", metricKey)
 		}
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetrics))
+
 	for _, v := range registeredMetrics {
 		metrics = append(metrics, v)
 	}
+
 	s.option.Cache.SetMetrics(metrics)
+
 	return nil
 }
 
 func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
-
 	duplicatedKey := make(map[string]bool)
 	localByMetricKey := make(map[string]types.Metric, len(localMetrics))
+
 	for _, v := range localMetrics {
 		labels := v.Labels()
 		key := common.LabelsToText(labels, v.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
@@ -669,21 +773,28 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			if time.Since(v.DeactivatedAt) > 200*24*time.Hour {
 				delete(registeredMetrics, k)
 			}
+
 			continue
 		}
+
 		if v.Labels[types.LabelName] == "agent_sent_message" || v.Labels[types.LabelName] == "agent_status" {
 			continue
 		}
+
 		key := v.LabelsText
 		metric, ok := localByMetricKey[key]
+
 		if ok && !duplicatedKey[key] {
 			duplicatedKey[key] = true
+
 			points, _ := metric.Points(time.Now().Add(-70*time.Minute), time.Now())
 			if len(points) > 0 {
 				continue
 			}
 		}
+
 		logger.V(2).Printf("Mark inactive the metric %v", key)
+
 		_, err := s.client.Do(
 			"PATCH",
 			fmt.Sprintf("v1/metric/%s/", v.ID),
@@ -694,13 +805,18 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		if err != nil {
 			return err
 		}
+
 		v.DeactivatedAt = time.Now()
 		registeredMetrics[k] = v
 	}
+
 	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetrics))
+
 	for _, v := range registeredMetrics {
 		metrics = append(metrics, v)
 	}
+
 	s.option.Cache.SetMetrics(metrics)
+
 	return nil
 }

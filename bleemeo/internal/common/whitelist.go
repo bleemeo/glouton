@@ -26,8 +26,10 @@ func AllowMetric(labels map[string]string, annotations types.MetricAnnotations, 
 	if len(whitelist) == 0 {
 		return true
 	}
+
 	if annotations.ServiceName != "" && strings.HasSuffix(labels[types.LabelName], "_status") {
 		return true
 	}
+
 	return whitelist[labels[types.LabelName]]
 }

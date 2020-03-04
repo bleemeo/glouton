@@ -116,17 +116,19 @@ func TestConvertMetricPoint(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
+
 		if !reflect.DeepEqual(got, c.InfluxPoint) {
 			t.Errorf("convertMetricPoint([case %v]) = %v, want %v", i, got, c.InfluxPoint)
 		}
 	}
-
 }
 
 func TestAddPoints(t *testing.T) {
 	var client Client
+
 	client.maxPendingPoints = 3
 	metricPoints := make([]types.MetricPoint, 6)
+
 	for i := range metricPoints {
 		metricPoints[i] = types.MetricPoint{
 			Point: types.Point{
@@ -210,6 +212,7 @@ func TestAddPoints(t *testing.T) {
 
 func TestConvertPendingPoints(t *testing.T) {
 	var client Client
+
 	client.maxPendingPoints = 50
 	client.maxBatchSize = 5
 	bp, _ := influxDBClient.NewBatchPoints(influxDBClient.BatchPointsConfig{
@@ -218,6 +221,7 @@ func TestConvertPendingPoints(t *testing.T) {
 	})
 	client.influxDBBatchPoints = bp
 	metricPoints := make([]types.MetricPoint, 50)
+
 	for i := range metricPoints {
 		metricPoints[i] = types.MetricPoint{
 			Point: types.Point{
@@ -231,29 +235,38 @@ func TestConvertPendingPoints(t *testing.T) {
 	}
 
 	client.addPoints(metricPoints)
+
 	if len(client.gloutonPendingPoints) != 50 {
 		t.Errorf("len(client.gloutonPendingPoints) = %v want 50", len(client.gloutonPendingPoints))
 	}
+
 	if client.gloutonPendingPoints[0].Labels[types.LabelName] != metricName0 {
 		t.Errorf("client.gloutonPendingPoints[0].Labels[%s] = %s want MetricPoint0", types.LabelName, client.gloutonPendingPoints[1].Labels[types.LabelName])
 	}
+
 	if client.gloutonPendingPoints[49].Labels[types.LabelName] != metricName49 {
 		t.Errorf("client.gloutonPendingPoints[49].Labels[%s] = %s want MetricPoint49", types.LabelName, client.gloutonPendingPoints[1].Labels[types.LabelName])
 	}
+
 	client.convertPendingPoints()
+
 	if len(client.gloutonPendingPoints) != 45 {
 		t.Errorf("len(client.gloutonPendingPoints) = %v want 45", len(client.gloutonPendingPoints))
 	}
+
 	if client.gloutonPendingPoints[0].Labels[types.LabelName] != metricName5 {
 		t.Errorf("client.gloutonPendingPoints[0].Labels[%s] = %s want MetricPoint5", types.LabelName, client.gloutonPendingPoints[1].Labels[types.LabelName])
 	}
+
 	if client.gloutonPendingPoints[44].Labels[types.LabelName] != metricName49 {
 		t.Errorf("client.gloutonPendingPoints[44].Labels[%s] = %s want MetricPoint49", types.LabelName, client.gloutonPendingPoints[1].Labels[types.LabelName])
 	}
+
 	points := client.influxDBBatchPoints.Points()
 	if len(points) != 5 {
 		t.Errorf("len(points) = %v want 5", len(points))
 	}
+
 	for i, pt := range points {
 		if pt.Name() != fmt.Sprintf("MetricPoint%v", i) {
 			t.Errorf("points[%v].Name() = %v want MetricPoint%v", i, pt.Name(), i)

@@ -43,14 +43,17 @@ type Configuration struct {
 // If one file fail, error will be raised at the end after trying to load all other files.
 func (c *Configuration) LoadDirectory(dirPath string) error {
 	var firstError error
+
 	files, err := ioutil.ReadDir(dirPath)
 	if err != nil {
 		return err
 	}
+
 	for _, f := range files {
 		if !strings.HasSuffix(f.Name(), ".conf") {
 			continue
 		}
+
 		data, err := ioutil.ReadFile(filepath.Join(dirPath, f.Name()))
 		if err != nil && firstError == nil {
 			firstError = fmt.Errorf("%#v: %v", f, err)
@@ -61,32 +64,39 @@ func (c *Configuration) LoadDirectory(dirPath string) error {
 			}
 		}
 	}
+
 	return firstError
 }
 
 // LoadByte will load given YAML data
 func (c *Configuration) LoadByte(data []byte) error {
 	var newValue map[string]interface{}
+
 	err := yaml.Unmarshal(data, &newValue)
 
 	if c.rawValues == nil {
 		c.rawValues = make(map[string]interface{})
 	}
+
 	merge(c.rawValues, newValue)
+
 	return err
 }
 
 // LoadEnv will load given key from specified environment variable name.
 func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (found bool, err error) {
 	var value string
+
 	if c.lookupEnv == nil {
 		value, found = os.LookupEnv(envName)
 	} else {
 		value, found = c.lookupEnv(envName)
 	}
+
 	if !found {
 		return
 	}
+
 	switch varType {
 	case TypeString:
 		c.Set(key, value)
@@ -97,22 +107,26 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 		if err != nil {
 			return false, err
 		}
+
 		c.Set(key, value)
 	case TypeInteger:
 		value, err := strconv.ParseInt(value, 10, 0)
 		if err != nil {
 			return false, err
 		}
+
 		c.Set(key, int(value))
 	case TypeMap:
 		mapValue, err := convertMap(value)
 		if err != nil {
 			return false, err
 		}
+
 		c.Set(key, mapValue)
 	default:
 		return false, fmt.Errorf("unknown variable type %v", varType)
 	}
+
 	return found, err
 }
 
@@ -121,7 +135,9 @@ func (c *Configuration) Set(key string, value interface{}) {
 	if c.rawValues == nil {
 		c.rawValues = make(map[string]interface{})
 	}
+
 	keyPart := strings.Split(key, ".")
+
 	setValue(c.rawValues, keyPart, value)
 }
 
@@ -133,6 +149,7 @@ func (c Configuration) String(key string) string {
 	if !ok {
 		return ""
 	}
+
 	switch value := rawValue.(type) {
 	case string:
 		return value
@@ -153,20 +170,25 @@ func (c Configuration) StringList(key string) []string {
 	if !ok {
 		return nil
 	}
+
 	switch value := rawValue.(type) {
 	case []string:
 		return value
 	case []int:
 		result := make([]string, len(value))
+
 		for i, v := range value {
 			result[i] = strconv.FormatInt(int64(v), 10)
 		}
+
 		return result
 	case []interface{}:
 		result := make([]string, len(value))
+
 		for i, v := range value {
 			result[i] = fmt.Sprintf("%v", v)
 		}
+
 		return result
 	default:
 		return nil
@@ -181,14 +203,17 @@ func (c Configuration) StringMap(key string) map[string]string {
 	if !ok {
 		return make(map[string]string)
 	}
+
 	switch value := rawValue.(type) {
 	case map[string]string:
 		return value
 	case map[string]interface{}:
 		finalMap := make(map[string]string)
+
 		for k, v := range value {
 			finalMap[k] = fmt.Sprintf("%v", v)
 		}
+
 		return finalMap
 	default:
 		return make(map[string]string)
@@ -204,6 +229,7 @@ func (c Configuration) Int(key string) int {
 	if !ok {
 		return 0
 	}
+
 	switch value := rawValue.(type) {
 	case int:
 		return value
@@ -212,6 +238,7 @@ func (c Configuration) Int(key string) int {
 		if err != nil {
 			return 0
 		}
+
 		return int(v)
 	default:
 		return 0
@@ -227,6 +254,7 @@ func (c Configuration) Bool(key string) bool {
 	if !ok {
 		return false
 	}
+
 	switch value := rawValue.(type) {
 	case bool:
 		return value
@@ -237,6 +265,7 @@ func (c Configuration) Bool(key string) bool {
 		if err != nil {
 			return false
 		}
+
 		return v
 	default:
 		return false
@@ -246,18 +275,20 @@ func (c Configuration) Bool(key string) bool {
 // Get return the given key as interface{}
 func (c Configuration) Get(key string) (result interface{}, found bool) {
 	keyPart := strings.Split(key, ".")
-	return get(c.rawValues, keyPart, key)
+	return get(c.rawValues, keyPart)
 }
 
-func get(root interface{}, keyPart []string, key string) (result interface{}, found bool) {
+func get(root interface{}, keyPart []string) (result interface{}, found bool) {
 	if len(keyPart) == 0 {
 		return root, true
 	}
+
 	if m, ok := root.(map[string]interface{}); ok {
 		if subRoot, ok := m[keyPart[0]]; ok {
-			return get(subRoot, keyPart[1:], key)
+			return get(subRoot, keyPart[1:])
 		}
 	}
+
 	return nil, false
 }
 
@@ -274,48 +305,60 @@ func merge(root map[string]interface{}, newValue map[string]interface{}) {
 					continue
 				}
 			}
+
 			oldMap := make(map[string]interface{})
 			root[k] = oldMap
+
 			merge(oldMap, newMap)
+
 			continue
 		}
+
 		if oldV, ok := root[k]; ok {
 			if newList, ok := v.([]interface{}); ok {
 				if oldList, ok := oldV.([]interface{}); ok {
 					oldList = append(oldList, newList...)
 					root[k] = oldList
+
 					continue
 				}
 			}
 		}
+
 		root[k] = v
 	}
 }
 
 func convertToStringMap(in map[interface{}]interface{}) map[string]interface{} {
 	result := make(map[string]interface{})
+
 	for k, v := range in {
 		keyString := fmt.Sprintf("%v", k)
 		result[keyString] = v
 	}
+
 	return result
 }
 
 func setValue(root map[string]interface{}, keyPart []string, value interface{}) {
 	key := keyPart[0]
+
 	if len(keyPart) == 1 {
 		root[key] = value
 		return
 	}
+
 	newRoot, ok := root[key]
 	if !ok {
 		newRoot = make(map[string]interface{})
 		root[key] = newRoot
 	}
+
 	newMap, ok := newRoot.(map[string]interface{})
 	if !ok {
 		newMap = make(map[string]interface{})
 		root[key] = newMap
 	}
+
 	setValue(newMap, keyPart[1:], value)
 }

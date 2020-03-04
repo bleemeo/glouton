@@ -76,16 +76,20 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
+
 	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent, threshold: threshold}
 
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
 	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
+
 	indexBody, err := boxHTML.Find("index.html")
 	if err != nil {
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
+
 		indexBody = fallbackIndex
 	}
+
 	indexTmpl, err := template.New("index").Parse(string(indexBody))
 	if err != nil {
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
@@ -108,7 +112,9 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 			logger.V(2).Printf("fail to serve index.html: %v", err)
 		}
 	})
+
 	api.router = router
+
 	return api
 }
 
@@ -120,19 +126,26 @@ func (api API) Run(ctx context.Context) error {
 	}
 
 	idleConnsClosed := make(chan struct{})
+
 	go func() {
 		<-ctx.Done()
+
 		subCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
+
 		if err := srv.Shutdown(subCtx); err != nil {
 			logger.V(2).Printf("HTTP server Shutdown: %v", err)
 		}
+
 		close(idleConnsClosed)
 	}()
+
 	logger.Printf("Starting API on %s ✔️", api.bindAddress)
 	logger.Printf("To access the local panel connect to http://%s 🌐", api.bindAddress)
+
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
 	}
+
 	return nil
 }

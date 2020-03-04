@@ -135,10 +135,12 @@ func configLoadFile(filePath string, cfg *config.Configuration) error {
 	if err != nil {
 		return err
 	}
+
 	err = cfg.LoadByte(buffer)
 	if err != nil {
 		logger.Printf("Unable to load %#v: %v", filePath, err)
 	}
+
 	return err
 }
 
@@ -163,24 +165,29 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 	}
 	for oldEnv, key := range deprecatedEnvNames {
 		value := defaultConfig[key]
+
 		found, err := loadEnvironmentVariable(cfg, key, oldEnv, value)
 		if err != nil {
 			return nil, err
 		}
+
 		if found {
 			warnings = append(warnings, fmt.Errorf("environement variable %#v is deprecated, use %#v instead", oldEnv, keyToEnvironemntName(key)))
 		}
 	}
+
 	for key, value := range defaultConfig {
 		if found, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
 			return nil, err
 		} else if found {
 			warnings = append(warnings, fmt.Errorf("environement variable %#v is deprecated, use %#v instead", keyToBleemeoEnvironemntName(key), keyToEnvironemntName(key)))
 		}
+
 		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironemntName(key), value); err != nil {
 			return nil, err
 		}
 	}
+
 	return warnings, nil
 }
 
@@ -194,6 +201,7 @@ func keyToEnvironemntName(key string) string {
 
 func loadEnvironmentVariable(cfg *config.Configuration, key string, envName string, valueSample interface{}) (found bool, err error) {
 	varType := config.TypeUnknown
+
 	switch valueSample.(type) {
 	case string:
 		varType = config.TypeString
@@ -206,13 +214,16 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	case map[string]string:
 		varType = config.TypeMap
 	}
+
 	found, err = cfg.LoadEnv(key, varType, envName)
 	if varType == config.TypeUnknown && found {
 		return false, fmt.Errorf("update %#v from environment variable %#v is not supported", key, envName)
 	}
+
 	if err != nil && varType != config.TypeUnknown {
 		return false, fmt.Errorf("bad environ variable %v: %v", envName, err)
 	}
+
 	return found, nil
 }
 
@@ -222,26 +233,32 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironemntName("config_files"), defaultConfig["config_files"]); err != nil {
 		return cfg, nil, err
 	}
+
 	if len(configFiles) > 0 && len(configFiles[0]) > 0 {
 		cfg.Set("config_files", configFiles)
 	}
+
 	if _, ok := cfg.Get("config_files"); !ok {
 		cfg.Set("config_files", defaultConfig["config_files"])
 	}
+
 	for _, filename := range cfg.StringList("config_files") {
 		stat, err := os.Stat(filename)
 		if err != nil && os.IsNotExist(err) {
 			continue
 		}
+
 		if err != nil {
 			finalError = err
 			continue
 		}
+
 		if stat.IsDir() {
 			err = cfg.LoadDirectory(filename)
 		} else {
 			err = configLoadFile(filename, cfg)
 		}
+
 		if err != nil {
 			finalError = err
 		}
@@ -251,7 +268,9 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 	if err != nil {
 		finalError = err
 	}
+
 	loadDefault(cfg)
+
 	return cfg, append(warnings, moreMarnings...), finalError
 }
 
@@ -260,14 +279,18 @@ func convertToMap(input interface{}) (result map[string]interface{}, ok bool) {
 	if ok {
 		return
 	}
+
 	tmp, ok := input.(map[interface{}]interface{})
 	if !ok {
 		return nil, false
 	}
+
 	result = make(map[string]interface{}, len(tmp))
+
 	for k, v := range tmp {
 		result[convertToString(k)] = v
 	}
+
 	return result, true
 }
 
@@ -294,6 +317,7 @@ func confFieldToSliceMap(input interface{}, confType string) []map[string]string
 		logger.Printf("%s in configuration file is not a list", confType)
 		return nil
 	}
+
 	result := make([]map[string]string, 0, len(inputMap))
 
 	for i, v := range inputMap {
@@ -302,12 +326,16 @@ func confFieldToSliceMap(input interface{}, confType string) []map[string]string
 			logger.Printf("%s entry #%d is not a map, ignoring, %#v", confType, i, v)
 			continue
 		}
+
 		override := make(map[string]string, len(vMap))
+
 		for k, v := range vMap {
 			override[k] = convertToString(v)
 		}
+
 		result = append(result, override)
 	}
+
 	return result
 }
 
@@ -321,6 +349,7 @@ func softPeriodsFromInterface(input interface{}) map[string]time.Duration {
 		logger.Printf("softstatus period in configuration file is not a map")
 		return nil
 	}
+
 	result := make(map[string]time.Duration, len(inputMap))
 
 	for k, rawValue := range inputMap {
@@ -332,6 +361,7 @@ func softPeriodsFromInterface(input interface{}) map[string]time.Duration {
 			duration = time.Duration(int(value/1000)) * time.Millisecond
 		case string:
 			var err error
+
 			duration, err = time.ParseDuration(value)
 			if err != nil {
 				continue
@@ -339,7 +369,9 @@ func softPeriodsFromInterface(input interface{}) map[string]time.Duration {
 		default:
 			continue
 		}
+
 		result[k] = duration
 	}
+
 	return result
 }

@@ -40,32 +40,38 @@ func (t *Target) HostPort() string {
 	u := (*url.URL)(t)
 	hostname := u.Hostname()
 	port := u.Port()
+
 	return hostname + ":" + port
 }
 
 // Gather implement prometheus.Gatherer
 func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	u := (*url.URL)(t)
+
 	logger.V(2).Printf("Scrapping Prometheus exporter %s", u.String())
 
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("prepare request to Prometheus expoter %s: %v", u.String(), err)
 	}
+
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
+
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
 		return nil, err
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		// Ensure response body is read to allow HTTP keep-alive to works
 		_, _ = io.Copy(ioutil.Discard, resp.Body)
+
 		return nil, fmt.Errorf("expoter %s HTTP status is %s", u.String(), resp.Status)
 	}
 
@@ -75,7 +81,9 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	}
 
 	reader := bytes.NewReader(body)
+
 	var parser expfmt.TextParser
+
 	resultMap, err := parser.TextToMetricFamilies(reader)
 	if err != nil {
 		return nil, fmt.Errorf("parse metrics from %s: %v", u.String(), err)

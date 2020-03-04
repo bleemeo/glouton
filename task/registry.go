@@ -48,6 +48,7 @@ type taskInfo struct {
 // NewRegistry create a new registry. All task running in this registry will terminate when ctx is cancelled
 func NewRegistry(ctx context.Context) *Registry {
 	subCtx, cancel := context.WithCancel(ctx)
+
 	return &Registry{
 		ctx:    subCtx,
 		cancel: cancel,
@@ -59,17 +60,21 @@ func NewRegistry(ctx context.Context) *Registry {
 func (r *Registry) Close() {
 	r.close()
 	r.cancel()
+
 	for k := range r.tasks {
 		r.removeTask(k, true)
 	}
+
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	r.tasks = make(map[int]*taskInfo)
 }
 
 func (r *Registry) close() {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	r.closed = true
 }
 
@@ -84,11 +89,13 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 
 	id := 1
 	_, ok := r.tasks[id]
+
 	for ok {
 		id++
 		if id == 0 {
 			panic("too many tasks in the registry. Unable to find new slot")
 		}
+
 		_, ok = r.tasks[id]
 	}
 
@@ -104,14 +111,18 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 		Name:       shortName,
 		Running:    true,
 	}
+
 	go func() {
 		defer close(waitC)
+
 		err := task(ctx)
 		if err != nil {
 			logger.Printf("Task %#v failed: %v", shortName, err)
 		}
+
 		ti.l.Lock()
 		defer ti.l.Unlock()
+
 		ti.Running = false
 		ti.ExitError = err
 	}()
@@ -125,9 +136,11 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 func (r *Registry) RemoveTask(taskID int) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	if r.closed {
 		return
 	}
+
 	r.removeTask(taskID, false)
 }
 
@@ -136,12 +149,15 @@ func (r *Registry) RemoveTask(taskID int) {
 func (r *Registry) IsRunning(taskID int) (bool, error) {
 	r.l.Lock()
 	defer r.l.Unlock()
+
 	task, ok := r.tasks[taskID]
 	if !ok {
 		return false, nil
 	}
+
 	task.l.Lock()
 	defer task.l.Unlock()
+
 	return task.Running, task.ExitError
 }
 

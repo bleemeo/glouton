@@ -12,7 +12,6 @@ import (
 )
 
 func Test_mergeLabels(t *testing.T) {
-
 	var (
 		strName       = "name"
 		strValue      = "value"
@@ -27,6 +26,7 @@ func Test_mergeLabels(t *testing.T) {
 		a []*dto.LabelPair
 		b []*dto.LabelPair
 	}
+
 	tests := []struct {
 		name string
 		args args
@@ -101,7 +101,6 @@ func Test_mergeLabels(t *testing.T) {
 }
 
 func Test_labeledGatherer_GatherPoints(t *testing.T) {
-
 	var (
 		strMetric     = "up"
 		strMountpoint = "mountpoint"
@@ -142,6 +141,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 		labels      []*dto.LabelPair
 		annotations types.MetricAnnotations
 	}
+
 	tests := []struct {
 		name    string
 		fields  fields
@@ -250,11 +250,13 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				labels:      tt.fields.labels,
 				annotations: tt.fields.annotations,
 			}
+
 			got, err := g.GatherPoints()
 			if (err != nil) != tt.wantErr {
 				t.Errorf("labeledGatherer.GatherPoints() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("labeledGatherer.GatherPoints() = %v, want %v", got, tt.want)
 			}

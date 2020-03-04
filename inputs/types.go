@@ -117,9 +117,11 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 
 	for name, valueRaw := range fields {
 		labels := make(map[string]string)
+
 		for k, v := range tags {
 			labels[k] = v
 		}
+
 		if measurement == "" {
 			labels[types.LabelName] = name
 		} else {
@@ -138,5 +140,6 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 			Annotations: annotations,
 		})
 	}
+
 	a.Pusher.PushPoints(points)
 }

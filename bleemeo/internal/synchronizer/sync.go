@@ -86,6 +86,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	s.startedAt = time.Now()
 	accountID := s.option.Config.String("bleemeo.account_id")
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
+
 	for accountID == "" || registrationKey == "" {
 		logger.Printf("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
 		select {
@@ -98,9 +99,12 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
 		return err
 	}
+
 	firstSync := true
+
 	if s.agentID != "" {
 		logger.V(1).Printf("This agent is registered on Bleemeo Cloud platform with UUID %v", s.agentID)
+
 		firstSync = false
 	}
 
@@ -109,30 +113,39 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	s.successiveErrors = 0
+
 	var minimalDelay time.Duration
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
 		logger.V(2).Printf("Waiting few second before first synchroization as this agent has a valid cache")
+
 		minimalDelay = common.JitterDelay(20, 0.5, 20)
 	}
+
 	for s.ctx.Err() == nil {
 		// TODO: allow WaitDeadline to be interrupted when new metrics arrive
 		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronize with Bleemeo Cloud platform")
+
 		if s.ctx.Err() != nil {
 			break
 		}
+
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
 			delay := common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+
 			s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors, false)
+
 			switch {
 			case client.IsAuthError(err) && s.agentID != "":
-				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
 				fqdnMessage := ""
+
+				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
 				if fqdn != "" {
 					fqdnMessage = fmt.Sprintf(" with fqdn %s", fqdn)
 				}
+
 				logger.Printf(
 					"Unable to synchronize with Bleemeo: Unable to login with credentials from state.json. Using agent ID %s%s. Was this server deleted on Bleemeo Cloud platform ?",
 					s.agentID,
@@ -145,6 +158,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 						registrationKey[i] = '*'
 					}
 				}
+
 				logger.Printf(
 					"Wrong credential for registration. Configuration contains account_id %s and registration_key %s",
 					s.option.Config.String("bleemeo.account_id"),
@@ -160,9 +174,12 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		} else {
 			s.successiveErrors = 0
 			minimalDelay = common.JitterDelay(15, 0.05, 15)
+
 			if firstSync {
 				minimalDelay = common.JitterDelay(1, 0.05, 1)
+
 				s.waitCPUMetric()
+
 				firstSync = false
 			}
 		}
@@ -176,10 +193,13 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	s.forceSync["agent"] = true
+
 	if !immediate {
 		return
 	}
+
 	s.forceSync["metrics"] = true
 	s.forceSync["containers"] = true
 }
@@ -193,9 +213,12 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 		// We don't known the metric to update. Update all
 		s.forceSync["metrics"] = true
 		s.pendingMetricsUpdate = nil
+
 		return
 	}
+
 	s.pendingMetricsUpdate = append(s.pendingMetricsUpdate, metricUUID...)
+
 	s.forceSync["metrics"] = false
 }
 
@@ -203,6 +226,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 func (s *Synchronizer) UpdateContainers() {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	s.forceSync["containers"] = false
 }
 
@@ -211,14 +235,18 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 	defer s.l.Unlock()
 
 	set := make(map[string]bool, len(s.pendingMetricsUpdate))
+
 	for _, m := range s.pendingMetricsUpdate {
 		set[m] = true
 	}
+
 	s.pendingMetricsUpdate = nil
 	result := make([]string, 0, len(set))
+
 	for m := range set {
 		result = append(result, m)
 	}
+
 	return result
 }
 
@@ -229,19 +257,24 @@ func (s *Synchronizer) waitCPUMetric() {
 			return
 		}
 	}
+
 	filter := map[string]string{types.LabelName: "cpu_used"}
 	filter2 := map[string]string{types.LabelName: "node_cpu_seconds_total"}
 	count := 0
+
 	for s.ctx.Err() == nil && count < 20 {
 		count++
+
 		m, _ := s.option.Store.Metrics(filter)
 		if len(m) > 0 {
 			return
 		}
+
 		m, _ = s.option.Store.Metrics(filter2)
 		if len(m) > 0 {
 			return
 		}
+
 		select {
 		case <-s.ctx.Done():
 		case <-time.After(1 * time.Second):
@@ -252,6 +285,7 @@ func (s *Synchronizer) waitCPUMetric() {
 func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	return s.disabledUntil, s.disableReason
 }
 
@@ -264,6 +298,7 @@ func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReaso
 func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReason, force bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	if force || s.disabledUntil.Before(until) {
 		s.disabledUntil = until
 		s.disableReason = reason
@@ -272,15 +307,20 @@ func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReaso
 
 func (s *Synchronizer) setClient() error {
 	username := fmt.Sprintf("%s@bleemeo.com", s.agentID)
+
 	var password string
+
 	if err := s.option.State.Get("password", &password); err != nil {
 		return err
 	}
+
 	client, err := client.NewClient(s.ctx, s.option.Config.String("bleemeo.api_base"), username, password, s.option.Config.Bool("bleemeo.api_ssl_insecure"))
 	if err != nil {
 		return err
 	}
+
 	s.client = client
+
 	return nil
 }
 
@@ -289,6 +329,7 @@ func (s *Synchronizer) runOnce() error {
 		if err := s.register(); err != nil {
 			return err
 		}
+
 		s.option.NotifyFirstRegistration(s.ctx)
 	}
 
@@ -313,18 +354,23 @@ func (s *Synchronizer) runOnce() error {
 		{name: "metrics", method: s.syncMetrics},
 	}
 	startAt := time.Now()
+
 	var lastErr error
+
 	for _, step := range syncStep {
 		if s.ctx.Err() != nil {
 			break
 		}
+
 		until, _ := s.getDisabledUntil()
 		if time.Now().Before(until) {
 			if lastErr == nil {
 				lastErr = errors.New("bleemeo connector is temporary disabled")
 			}
+
 			break
 		}
+
 		if full, ok := syncMethods[step.name]; ok {
 			err := step.method(full)
 			if err != nil {
@@ -333,21 +379,26 @@ func (s *Synchronizer) runOnce() error {
 			}
 		}
 	}
+
 	logger.V(2).Printf("Synchronization took %v for %v", time.Since(startAt), syncMethods)
+
 	if len(syncMethods) == len(syncStep) && lastErr == nil {
 		s.option.Cache.Save()
 		s.nextFullSync = time.Now().Add(common.JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
+
 	if lastErr == nil {
 		s.lastSync = startAt
 	}
+
 	return lastErr
 }
 
 func (s *Synchronizer) syncToPerform() map[string]bool {
 	s.l.Lock()
 	defer s.l.Unlock()
+
 	syncMethods := make(map[string]bool)
 
 	fullSync := false
@@ -365,12 +416,15 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	if fullSync {
 		syncMethods["agent"] = fullSync
 	}
+
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods["facts"] = fullSync
 	}
+
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["services"] = fullSync
 	}
+
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["containers"] = fullSync
 	}
@@ -379,10 +433,12 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		// Metrics registration may need services to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = false
 	}
+
 	if _, ok := syncMethods["containers"]; ok {
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = false
 	}
+
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = fullSync
 	}
@@ -391,14 +447,17 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		syncMethods[k] = full || syncMethods[k]
 		delete(s.forceSync, k)
 	}
+
 	return syncMethods
 }
 
 func (s *Synchronizer) checkDuplicated() error {
 	oldFacts := s.option.Cache.FactsByKey()
+
 	if err := s.factsUpdateList(); err != nil {
 		return err
 	}
+
 	newFacts := s.option.Cache.FactsByKey()
 
 	factNames := []string{"fqdn", "primary_address", "primary_mac_address"}
@@ -407,18 +466,23 @@ func (s *Synchronizer) checkDuplicated() error {
 		if !ok {
 			continue
 		}
+
 		new, ok := newFacts[name]
 		if !ok {
 			continue
 		}
+
 		if old == new {
 			continue
 		}
+
 		until := time.Now().Add(common.JitterDelay(900, 0.05, 900))
 		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
+
 		if s.option.DisableCallback != nil {
 			s.option.DisableCallback(bleemeoTypes.DisableDuplicatedAgent, until)
 		}
+
 		logger.Printf(
 			"Detected duplicated state.json. Another agent changed %#v from %#v to %#v",
 			name,
@@ -429,8 +493,10 @@ func (s *Synchronizer) checkDuplicated() error {
 			"The following links may be relevant to solve the issue: https://docs.bleemeo.com/agent/migrate-agent-new-server/ " +
 				"and https://docs.bleemeo.com/agent/install-cloudimage-creation/",
 		)
+
 		return errors.New("bleemeo connector temporary disabled")
 	}
+
 	return nil
 }
 
@@ -439,11 +505,13 @@ func (s *Synchronizer) register() error {
 	if err != nil {
 		return err
 	}
+
 	fqdn := facts["fqdn"]
-	name := s.option.Config.String("bleemeo.initial_agent_name")
 	if fqdn == "" {
 		return errors.New("unable to register, fqdn is not set")
 	}
+
+	name := s.option.Config.String("bleemeo.initial_agent_name")
 	if name == "" {
 		name = fqdn
 	}
@@ -451,6 +519,7 @@ func (s *Synchronizer) register() error {
 	accountID := s.option.Config.String("bleemeo.account_id")
 
 	password := generatePassword(10)
+
 	var objectID struct {
 		ID string
 	}
@@ -459,6 +528,7 @@ func (s *Synchronizer) register() error {
 	if err := s.option.State.Set("agent_uuid", ""); err != nil {
 		return err
 	}
+
 	statusCode, err := s.client.PostAuth(
 		"v1/agent/",
 		map[string]string{
@@ -474,31 +544,42 @@ func (s *Synchronizer) register() error {
 	if err != nil {
 		return err
 	}
+
 	if statusCode != 201 {
 		return fmt.Errorf("registration status code is %v, want 201", statusCode)
 	}
+
 	s.agentID = objectID.ID
+
 	if err := s.option.State.Set("agent_uuid", objectID.ID); err != nil {
 		return err
 	}
+
 	if err := s.option.State.Set("password", password); err != nil {
 		return err
 	}
+
 	logger.V(1).Printf("regisration successful with UUID %v", objectID.ID)
+
 	_ = s.setClient()
+
 	return nil
 }
 
 func generatePassword(length int) string {
 	letters := []rune("abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
 	b := make([]rune, length)
+
 	for i := range b {
 		bigN, err := cryptoRand.Int(cryptoRand.Reader, big.NewInt(int64(len(letters))))
 		n := int(bigN.Int64())
+
 		if err != nil {
 			n = rand.Intn(len(letters))
 		}
+
 		b[i] = letters[n]
 	}
+
 	return string(b)
 }

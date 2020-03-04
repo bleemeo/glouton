@@ -34,6 +34,7 @@ const dmiDir = "/sys/devices/virtual/dmi/id/"
 
 func (f *FactProvider) platformFacts() map[string]string {
 	facts := make(map[string]string)
+
 	if f.hostRootPath != "" {
 		osReleasePath := filepath.Join(f.hostRootPath, "etc/os-release")
 		if osReleaseData, err := ioutil.ReadFile(osReleasePath); err != nil {
@@ -43,6 +44,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 			if err != nil {
 				logger.V(1).Printf("os-release file is invalid: %v", err)
 			}
+
 			facts["os_family"] = osRelease["ID_LIKE"]
 			facts["os_name"] = osRelease["NAME"]
 			facts["os_pretty_name"] = osRelease["PRETTY_NAME"]
@@ -51,6 +53,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 			facts["os_codename"] = osRelease["VERSION_CODENAME"]
 		}
 	}
+
 	if f.hostRootPath == "/" {
 		out, err := exec.Command("lsb_release", "--codename", "--short").Output()
 		if err != nil {
@@ -61,6 +64,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 	}
 
 	var utsName unix.Utsname
+
 	err := unix.Uname(&utsName)
 	if err == nil {
 		facts["kernel"] = bytesToString(utsName.Sysname[:])
@@ -75,18 +79,22 @@ func (f *FactProvider) platformFacts() map[string]string {
 	if err == nil {
 		facts["bios_released_at"] = strings.TrimSpace(string(v))
 	}
+
 	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "bios_vendor"))
 	if err == nil {
 		facts["bios_vendor"] = strings.TrimSpace(string(v))
 	}
+
 	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "bios_version"))
 	if err == nil {
 		facts["bios_version"] = strings.TrimSpace(string(v))
 	}
+
 	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "product_name"))
 	if err == nil {
 		facts["product_name"] = strings.TrimSpace(string(v))
 	}
+
 	v, err = ioutil.ReadFile(filepath.Join(dmiDir, "sys_vendor"))
 	if err == nil {
 		facts["system_vendor"] = strings.TrimSpace(string(v))
