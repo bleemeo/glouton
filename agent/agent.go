@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -166,6 +167,8 @@ func (a *agent) setupLogger() {
 
 // Run runs Glouton
 func Run(configFiles []string) {
+	rand.Seed(time.Now().UnixNano())
+
 	agent := &agent{
 		taskRegistry: task.NewRegistry(context.Background()),
 		taskIDs:      make(map[string]int),
