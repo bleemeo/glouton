@@ -31,6 +31,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -296,6 +297,8 @@ func (c *Client) run(ctx context.Context) error {
 	storeNotifieeID := c.option.Store.AddNotifiee(c.addPoints)
 
 	var topinfoSendAt time.Time
+
+	time.Sleep(time.Duration(rand.Intn(10000)) * time.Millisecond)
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
