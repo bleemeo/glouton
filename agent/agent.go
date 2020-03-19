@@ -458,6 +458,11 @@ func (a *agent) run() { //nolint:gocyclo
 		targets = prometheusConfigToURLs(promCfg)
 	}
 
+	if _, found := a.config.Get("metric.pull"); found {
+		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
+		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
+	}
+
 	scrap := scrapper.New(targets)
 	promExporter := exporter.New(a.store, scrap)
 

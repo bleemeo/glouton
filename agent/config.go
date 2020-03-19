@@ -82,7 +82,7 @@ var defaultConfig = map[string]interface{}{
 		"^rsxx[0-9]$",
 		"^[A-Z]:$",
 	},
-	"influxdb.db_name":                 "glouton", // TODO: influxdb connector
+	"influxdb.db_name":                 "glouton",
 	"influxdb.enabled":                 false,
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
@@ -94,8 +94,7 @@ var defaultConfig = map[string]interface{}{
 	"logging.level":                    "INFO",
 	"logging.output":                   "console",
 	"logging.package_levels":           "",
-	"metric.prometheus":                map[string]interface{}{}, // TODO: gather prometheus exporters
-	"metric.pull":                      map[string]interface{}{}, // TODO: pull metrics
+	"metric.prometheus":                map[string]interface{}{},
 	"metric.softstatus_period_default": 5 * 60,
 	"metric.softstatus_period": map[string]interface{}{
 		"system_pending_updates":          86400,
@@ -108,10 +107,10 @@ var defaultConfig = map[string]interface{}{
 	"nrpe.port":                       5666,
 	"nrpe.ssl":                        true,
 	"nrpe.conf_paths":                 []interface{}{"/etc/nagios/nrpe.cfg"},
-	"service_ignore_check":            []interface{}{}, // TODO
-	"service_ignore_metrics":          []interface{}{}, // TODO
-	"service":                         []interface{}{}, // TODO: custom checks
-	"stack":                           "",              // TODO: default stack
+	"service_ignore_check":            []interface{}{},
+	"service_ignore_metrics":          []interface{}{},
+	"service":                         []interface{}{},
+	"stack":                           "",
 	"tags":                            []string{},
 	"telegraf.docker_metrics_enabled": true,
 	"telegraf.statsd.address":         "127.0.0.1",
