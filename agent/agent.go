@@ -76,7 +76,8 @@ type agent struct {
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
-	triggerDisc               bool
+	triggerDiscImmediate      bool
+	triggerDiscAt             time.Time
 	triggerFact               bool
 	triggerSystemUpdateMetric bool
 
@@ -322,7 +323,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		newThreshold := a.accumulator.GetThreshold(key)
 
 		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
-			a.FireTrigger(false, false, true)
+			a.FireTrigger(false, false, true, false)
 		}
 	}
 }
@@ -362,7 +363,7 @@ func (a *agent) run() { //nolint:gocyclo
 			}
 
 			if s == syscall.SIGHUP {
-				a.FireTrigger(true, true, false)
+				a.FireTrigger(true, true, false, true)
 			}
 		}
 	}()
@@ -468,7 +469,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.accumulator)
 
-	a.FireTrigger(true, false, false)
+	a.FireTrigger(true, false, false, false)
 
 	tasks := []taskInfo{
 		{a.store.Run, "Metric store"},
@@ -482,6 +483,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.dockerWatcher, "Docker event watcher"},
 		{a.netstatWatcher, "Netstat file watcher"},
 		{scrap.Run, "Prometheus Scrapper"},
+		{a.miscTasks, "Miscelanous tasks"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -591,6 +593,24 @@ func (a *agent) run() { //nolint:gocyclo
 	logger.V(2).Printf("Agent stopped")
 }
 
+func (a *agent) miscTasks(ctx context.Context) error {
+	for {
+		select {
+		case <-time.After(30 * time.Second):
+		case <-ctx.Done():
+			return nil
+		}
+
+		a.triggerLock.Lock()
+		if !a.triggerDiscAt.IsZero() && time.Now().After(a.triggerDiscAt) {
+			a.triggerDiscAt = time.Time{}
+			a.triggerDiscImmediate = true
+			a.triggerHandler.Trigger()
+		}
+		a.triggerLock.Unlock()
+	}
+}
+
 func (a *agent) startTasks(tasks []taskInfo) {
 	a.l.Lock()
 	defer a.l.Unlock()
@@ -660,7 +680,7 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 	case <-time.After(15 * time.Second):
 	}
 
-	a.FireTrigger(false, false, true)
+	a.FireTrigger(false, false, true, false)
 
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
@@ -670,7 +690,7 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			a.FireTrigger(true, false, true)
+			a.FireTrigger(true, false, true, false)
 		}
 	}
 }
@@ -684,7 +704,7 @@ func (a *agent) dailyFact(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-ticker.C:
-			a.FireTrigger(false, true, false)
+			a.FireTrigger(false, true, false, false)
 		}
 	}
 }
@@ -704,8 +724,11 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 	for {
 		select {
 		case ev := <-a.dockerFact.Events():
-			if ev.Action == "start" || ev.Action == "die" || ev.Action == "destroy" {
-				a.FireTrigger(true, false, false)
+			if ev.Action == "start" {
+				a.FireTrigger(true, false, false, true)
+
+			} else if ev.Action == "die" || ev.Action == "destroy" {
+				a.FireTrigger(true, false, false, false)
 			}
 
 			if strings.HasPrefix(ev.Action, "health_status:") && ev.Container != nil {
@@ -817,19 +840,19 @@ func (a *agent) netstatWatcher(ctx context.Context) error {
 
 		newStat, _ := os.Stat(filePath)
 		if newStat != nil && (stat == nil || !newStat.ModTime().Equal(stat.ModTime())) {
-			a.FireTrigger(true, false, false)
+			a.FireTrigger(true, false, false, false)
 		}
 
 		stat = newStat
 	}
 }
 
-func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric bool) {
+func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric bool, secondDiscovery bool) {
 	a.triggerLock.Lock()
 	defer a.triggerLock.Unlock()
 
 	if discovery {
-		a.triggerDisc = true
+		a.triggerDiscImmediate = true
 	}
 
 	if sendFacts {
@@ -840,6 +863,13 @@ func (a *agent) FireTrigger(discovery bool, sendFacts bool, systemUpdateMetric b
 		a.triggerSystemUpdateMetric = true
 	}
 
+	// Some discovery request ask for a second discovery in 1 minutes.
+	// The second discovery allow to discovery service that are slow to start
+	if secondDiscovery {
+		deadline := time.Now().Add(time.Minute)
+		a.triggerDiscAt = deadline
+	}
+
 	a.triggerHandler.Trigger()
 }
 
@@ -847,11 +877,11 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	a.triggerLock.Lock()
 	defer a.triggerLock.Unlock()
 
-	discovery = a.triggerDisc
+	discovery = a.triggerDiscImmediate
 	sendFacts = a.triggerFact
 	systemUpdateMetric = a.triggerSystemUpdateMetric
 	a.triggerSystemUpdateMetric = false
-	a.triggerDisc = false
+	a.triggerDiscImmediate = false
 	a.triggerFact = false
 
 	return
