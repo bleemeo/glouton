@@ -690,7 +690,7 @@ func (d *dockerProcessImpl) findContainerOfProcess(ctx context.Context, newProce
 	if parent, ok := newProcessesMap[p.PPID]; ok && parent.ContainerID != "" && !containerDone[parent.ContainerID] {
 		containerDone[parent.ContainerID] = true
 
-		logger.V(2).Printf("findContainerOfProcess: try parent container ID for PID %v", p.PID)
+		logger.V(2).Printf("findContainerOfProcess: try parent container ID for PID %v (%s)", p.PID, p.Name)
 
 		if tmp, err := d.processesContainer(ctx, parent.ContainerID, parent.ContainerName); err == nil {
 			allProcesses = append(allProcesses, tmp...)
@@ -713,7 +713,7 @@ func (d *dockerProcessImpl) findContainerOfProcess(ctx context.Context, newProce
 				continue
 			}
 
-			logger.V(2).Printf("findContainerOfProcess: try container %v for PID %v", c.Name(), p.PID)
+			logger.V(2).Printf("findContainerOfProcess: try container %v for PID %v (%s)", c.Name(), p.PID, p.Name)
 
 			containerDone[c.ID()] = true
 
