@@ -33,11 +33,13 @@ import (
 	"github.com/docker/docker/api/types/container"
 	docker "github.com/docker/docker/client"
 	"github.com/shirou/gopsutil/process"
+	corev1 "k8s.io/api/core/v1"
 )
 
 // DockerProvider provider information about Docker & Docker containers
 type DockerProvider struct {
 	deletedContainersCallback func(containerIDs []string)
+	kubernetesProvider        *KubernetesProvider
 	l                         sync.Mutex
 
 	client           *docker.Client
@@ -49,9 +51,11 @@ type DockerProvider struct {
 	lastEventAt time.Time
 
 	containers                     map[string]Container
+	containerID2Pods               map[string]corev1.Pod
 	lastKill                       map[string]time.Time
 	ignoredID                      map[string]interface{}
 	lastUpdate                     time.Time
+	kubernetesUpdated              bool
 	bridgeNetworks                 map[string]interface{}
 	containerAddressOnDockerBridge map[string]string
 }
@@ -71,12 +75,13 @@ type Container struct {
 }
 
 // NewDocker creates a new Docker provider which must be started with Run() method
-func NewDocker(deletedContainersCallback func(containerIDs []string)) *DockerProvider {
+func NewDocker(deletedContainersCallback func(containerIDs []string), kubernetesProvider *KubernetesProvider) *DockerProvider {
 	return &DockerProvider{
 		notifyC:                   make(chan DockerEvent),
 		lastEventAt:               time.Now(),
 		lastKill:                  make(map[string]time.Time),
 		deletedContainersCallback: deletedContainersCallback,
+		kubernetesProvider:        kubernetesProvider,
 	}
 }
 
@@ -463,7 +468,7 @@ func notifyError(err error, lastErrorNotify time.Time, reconnectAttempt int) tim
 	return time.Now()
 }
 
-func primaryAddress(inspect types.ContainerJSON, bridgeNetworks map[string]interface{}, containerAddressOnDockerBridge map[string]string) string {
+func (d *DockerProvider) primaryAddress(ctx context.Context, inspect types.ContainerJSON, bridgeNetworks map[string]interface{}, containerAddressOnDockerBridge map[string]string) string {
 	if inspect.NetworkSettings != nil && inspect.NetworkSettings.IPAddress != "" {
 		return inspect.NetworkSettings.IPAddress
 	}
@@ -498,7 +503,16 @@ func primaryAddress(inspect types.ContainerJSON, bridgeNetworks map[string]inter
 		return strings.Split(ipMask, "/")[0]
 	}
 
-	// TODO try k8s
+	if pod, ok := d.containerID2Pods[inspect.ID]; ok {
+		return pod.Status.PodIP
+	}
+
+	d.updatePods(ctx)
+
+	if pod, ok := d.containerID2Pods[inspect.ID]; ok {
+		return pod.Status.PodIP
+	}
+
 	return ""
 }
 
@@ -533,6 +547,37 @@ func (d *DockerProvider) getClient(ctx context.Context) (cl *docker.Client, err 
 	d.reconnectAttempt = 0
 
 	return cl, err
+}
+
+func (d *DockerProvider) updatePods(ctx context.Context) {
+	if d.kubernetesProvider == nil {
+		return
+	}
+
+	if d.kubernetesUpdated {
+		return
+	}
+
+	d.kubernetesUpdated = true
+
+	pods, err := d.kubernetesProvider.PODs(ctx, 0)
+	if err != nil {
+		logger.V(1).Printf("Unable to list Kubernetes POD: %v", err)
+		return
+	}
+
+	d.containerID2Pods = make(map[string]corev1.Pod, len(pods))
+
+	for _, pod := range pods {
+		for _, container := range pod.Status.ContainerStatuses {
+			containerID := container.ContainerID
+			if strings.HasPrefix(containerID, "docker://") {
+				containerID = strings.TrimPrefix(containerID, "docker://")
+			}
+
+			d.containerID2Pods[containerID] = pod
+		}
+	}
 }
 
 func (d *DockerProvider) top(ctx context.Context, containerID string) (top container.ContainerTopOKBody, topWaux container.ContainerTopOKBody, err error) {
@@ -577,7 +622,7 @@ func (d *DockerProvider) updateContainer(ctx context.Context, cl *docker.Client,
 	sortInspect(inspect)
 
 	d.containers[containerID] = Container{
-		primaryAddress: primaryAddress(inspect, d.bridgeNetworks, d.containerAddressOnDockerBridge),
+		primaryAddress: d.primaryAddress(ctx, inspect, d.bridgeNetworks, d.containerAddressOnDockerBridge),
 		inspect:        inspect,
 	}
 
@@ -590,6 +635,7 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		return err
 	}
 
+	d.kubernetesUpdated = false
 	bridgeNetworks := make(map[string]interface{})
 	containerAddressOnDockerBridge := make(map[string]string)
 
@@ -638,7 +684,7 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		sortInspect(inspect)
 
 		containers[c.ID] = Container{
-			primaryAddress: primaryAddress(inspect, bridgeNetworks, containerAddressOnDockerBridge),
+			primaryAddress: d.primaryAddress(ctx, inspect, bridgeNetworks, containerAddressOnDockerBridge),
 			inspect:        inspect,
 		}
 	}
