@@ -513,7 +513,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 				if id2name == nil {
 					var err error
 
-					if id2name, err = pp.dp.containerID2Name(ctx, 10*time.Second); err != nil {
+					if id2name, err = pp.dp.containerID2Name(ctx, 3*time.Second); err != nil {
 						id2name = make(map[string]string)
 					}
 				}
@@ -551,6 +551,17 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 						}
 
 						newProcessesMap[newP.PID] = newP
+					}
+					p = newProcessesMap[p.PID]
+				}
+
+				// Check another time because the process may have terminated while findContainerOfProcess is running
+				if p.ContainerID == "" {
+					if exists, _ := pp.pidExists(int32(p.PID)); !exists {
+						logger.V(2).Printf("Skipping process %d (%s) terminated very recently", p.PID, p.Name)
+						delete(newProcessesMap, pid)
+
+						continue
 					}
 				}
 			}
@@ -703,7 +714,7 @@ func (d *dockerProcessImpl) findContainerOfProcess(ctx context.Context, newProce
 		}
 	}
 
-	if containers, err := d.dockerProvider.Containers(ctx, 10*time.Second, true); err == nil {
+	if containers, err := d.dockerProvider.Containers(ctx, 2*time.Second, true); err == nil {
 		for _, c := range containers {
 			if containerDone[c.ID()] {
 				continue

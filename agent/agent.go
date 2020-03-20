@@ -76,8 +76,8 @@ type agent struct {
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
-	triggerDiscImmediate      bool
 	triggerDiscAt             time.Time
+	triggerDiscImmediate      bool
 	triggerFact               bool
 	triggerSystemUpdateMetric bool
 
@@ -726,7 +726,6 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 		case ev := <-a.dockerFact.Events():
 			if ev.Action == "start" {
 				a.FireTrigger(true, false, false, true)
-
 			} else if ev.Action == "die" || ev.Action == "destroy" {
 				a.FireTrigger(true, false, false, false)
 			}
