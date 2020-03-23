@@ -175,6 +175,8 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 }
 
 // Test dynamic Discovery with single process present
+// To extract cmdLine array from a running process, one can read /proc/PID/cmdline using "less".
+// Less will show the NUL character used to split args.
 func TestDynamicDiscoverySingle(t *testing.T) {
 	cases := []struct {
 		testName           string
@@ -614,6 +616,26 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		{
 			testName: "uwsgi",
 			cmdLine:  []string{"uwsgi", "--ini", "/srv/app/deploy/uwsgi.ini"},
+			want: Service{
+				Name:            "uwsgi",
+				ServiceType:     UWSGIService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "uwsgi-with-auto-procname-1",
+			cmdLine:  []string{"uWSGI master"},
+			want: Service{
+				Name:            "uwsgi",
+				ServiceType:     UWSGIService,
+				ListenAddresses: nil,
+				IPAddress:       "127.0.0.1",
+			},
+		},
+		{
+			testName: "uwsgi-with-auto-procname-2",
+			cmdLine:  []string{"uWSGI worker 1"},
 			want: Service{
 				Name:            "uwsgi",
 				ServiceType:     UWSGIService,

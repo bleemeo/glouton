@@ -129,6 +129,7 @@ var (
 		"squid":        SquidService,
 		"varnishd":     VarnishService,
 		"uwsgi":        UWSGIService,
+		"uWSGI":        UWSGIService,
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string
