@@ -1,22 +1,22 @@
-# You will need to configure bleemeo-agent-credentials with account and
+# You will need to configure glouton-credentials with account and
 # registration key.
 ---
 apiVersion: v1
 kind: Secret
 metadata:
-  name: bleemeo-agent-credentials
+  name: glouton-credentials
 type:
 stringData:
-  BLEEMEO_AGENT_BLEEMEO_ACCOUNT_ID: YOUR_ACCOUNT_ID
-  BLEEMEO_AGENT_BLEEMEO_REGISTRATION_KEY: YOUR_REGISTRATION_KEY
+  GLOUTON_BLEEMEO_ACCOUNT_ID: YOUR_ACCOUNT_ID
+  GLOUTON_BLEEMEO_REGISTRATION_KEY: YOUR_REGISTRATION_KEY
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: bleemeo-agent-config
+  name: glouton-config
 data:
   99-local.conf: |
-    # Add bleemeo-agent customization here
+    # Add Glouton customization here
     df:
       path_ignore:
       # some ignore usefull for minikube. Anyway on minikube data are stored
@@ -29,13 +29,13 @@ data:
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: bleemeo-agent
+  name: glouton
   namespace: default
 ---
 kind: ClusterRole
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: bleemeo-agent
+  name: glouton
 rules:
   - apiGroups:
       - ""
@@ -48,79 +48,42 @@ rules:
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1beta1
 metadata:
-  name: bleemeo-agent
+  name: glouton
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: bleemeo-agent
+  name: glouton
 subjects:
 - kind: ServiceAccount
-  name: bleemeo-agent
+  name: glouton
   namespace: default
----
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: bleemeo-telegraf-config
-data:
-  telegraf.conf: |
-    [agent]
-      interval = "10s"
-      round_interval = true
-      metric_batch_size = 1000
-      metric_buffer_limit = 10000
-      collection_jitter = "0s"
-      flush_interval = "10s"
-      flush_jitter = "0s"
-      precision = ""
-      debug = false
-      quiet = false
-      logfile = ""
-      hostname = ""
-      omit_hostname = false
-    [[outputs.graphite]]
-      servers = ["localhost:2003"]
-      prefix = "telegraf"
-      graphite_tag_support = true
-    [[inputs.cpu]]
-      percpu = true
-      totalcpu = true
-      collect_cpu_time = false
-    [[inputs.disk]]
-      ignore_fs = ["tmpfs", "devtmpfs"]
-    [[inputs.diskio]]
-    [[inputs.kernel]]
-    [[inputs.mem]]
-    [[inputs.processes]]
-    [[inputs.swap]]
-    [[inputs.system]]
-    [[inputs.net]]
 ---
 kind: DaemonSet
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 metadata:
-  name: bleemeo-agent
+  name: glouton
   namespace: default
   labels:
-    app: bleemeo
-    component: agent
+    app: glouton
 spec:
+  selector:
+    matchLabels:
+      app: glouton
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: bleemeo
-        component: agent
+        app: glouton
     spec:
-      serviceAccountName: bleemeo-agent
+      serviceAccountName: glouton
       terminationGracePeriodSeconds: 60
       hostNetwork: true
       hostPID: true
       containers:
-      - image: bleemeo/bleemeo-agent
+      - image: bleemeo/glouton
         imagePullPolicy: IfNotPresent
-        name: bleemeo-agent
+        name: glouton
         ports:
         - name: http
           containerPort: 8015
@@ -129,80 +92,34 @@ spec:
         volumeMounts:
         - name: docker-socket
           mountPath: /var/run/docker.sock
-        - name: lib-bleemeo
-          mountPath: /var/lib/bleemeo
+        - name: lib-glouton
+          mountPath: /var/lib/glouton
         - name: hostroot
           mountPath: /hostroot
           readOnly: true
-        - name: telegraf-d
-          mountPath: /etc/telegraf/telegraf.d
-        - name: bleemeo-agent-config
-          mountPath: /etc/bleemeo/agent.conf.d/99-local.conf
+        - name: glouton-config
+          mountPath: /etc/glouton/conf.d/99-local.conf
           subPath: 99-local.conf
         env:
-        - name: BLEEMEO_AGENT_TELEGRAF_DOCKER_NAME
-          value: ""  # Do not restart telegraf using Docker. It auto-reload itself under k8s
-        - name: BLEEMEO_AGENT_KUBERNETES_ENABLED
+        - name: GLOUTON_KUBERNETES_ENABLED
           value: "True"
-        - name: BLEEMEO_AGENT_KUBERNETES_NODENAME
+        - name: GLOUTON_KUBERNETES_NODENAME
           valueFrom:
             fieldRef:
               fieldPath: spec.nodeName
         envFrom:
         - secretRef:
-            name: bleemeo-agent-credentials
-      - image: telegraf:1.10.1
-        name: telegraf
-        args:
-        - sh
-        - -ec
-        - |
-            # Cheap config file watcher
-            last_stat=`ls -l /etc/telegraf/telegraf.conf /etc/telegraf/telegraf.d/`
-            telegraf --config-directory /etc/telegraf/telegraf.d &
-            telegraf_pid=$!
-            cleanup() {
-                echo "Stopping..."
-                trap '' EXIT
-                kill $telegraf_pid
-                wait
-                exit $?
-            }
-            trap cleanup INT QUIT KILL EXIT
-            while true; do
-                sleep 5
-                current_stat=`ls -l /etc/telegraf/telegraf.conf /etc/telegraf/telegraf.d/`
-                if [ "$last_stat" != "$current_stat" ]; then
-                    kill -HUP $telegraf_pid
-                    last_stat=$current_stat
-                fi
-            done
-        volumeMounts:
-        - name: docker-socket
-          mountPath: /var/run/docker.sock
-        - name: hostroot
-          mountPath: /hostroot
-          readOnly: true
-        - name: telegraf-d
-          mountPath: /etc/telegraf/telegraf.d
-        - name: bleemeo-telegraf-config
-          mountPath: /etc/telegraf/telegraf.conf
-          subPath: telegraf.conf
+            name: glouton-credentials
       volumes:
       - name: docker-socket
         hostPath:
           path: /var/run/docker.sock
-      - name: lib-bleemeo
+      - name: lib-glouton
         hostPath:
-          path: /var/lib/bleemeo
+          path: /var/lib/glouton
       - name: hostroot
         hostPath:
           path: /
-      - name: telegraf-d
-        emptyDir: {}
-      - name: bleemeo-agent-config
+      - name: glouton-config
         configMap:
-          name: bleemeo-agent-config
-      - name: bleemeo-telegraf-config
-        configMap:
-          name: bleemeo-telegraf-config
+          name: glouton-config

@@ -89,8 +89,9 @@ var defaultConfig = map[string]interface{}{
 	"influxdb.tags":                    map[string]string{},
 	"jmx.enabled":                      true, // TODO: JMX metric gathering
 	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
-	"kubernetes.enabled":               false, // TODO: add support for k8s
+	"kubernetes.enabled":               false,
 	"kubernetes.nodename":              "",
+	"kubernetes.kubeconfig":            "",
 	"logging.level":                    "INFO",
 	"logging.output":                   "console",
 	"logging.package_levels":           "",

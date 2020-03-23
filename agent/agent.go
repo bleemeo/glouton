@@ -414,7 +414,22 @@ func (a *agent) run() { //nolint:gocyclo
 		a.store.Accumulator(),
 		a.state,
 	)
-	a.dockerFact = facts.NewDocker(a.deletedContainersCallback)
+
+	var kubernetesProvider *facts.KubernetesProvider
+
+	if a.config.Bool("kubernetes.enabled") {
+		kubernetesProvider = &facts.KubernetesProvider{
+			NodeName:   a.config.String("kubernetes.nodename"),
+			KubeConfig: a.config.String("kubernetes.kubeconfig"),
+		}
+
+		_, err := kubernetesProvider.PODs(ctx, 0)
+		if err != nil {
+			logger.Printf("Kubernetes API unreachable, service detection may misbehave: %v", err)
+		}
+	}
+
+	a.dockerFact = facts.NewDocker(a.deletedContainersCallback, kubernetesProvider)
 
 	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
 	if !useProc {
