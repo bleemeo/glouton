@@ -17,6 +17,7 @@
 package facts
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,6 +33,7 @@ import (
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	docker "github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/shirou/gopsutil/process"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -169,6 +171,42 @@ func (d *DockerProvider) DockerFact(ctx context.Context, currentFact map[string]
 // Events returns the channel on which Docker events are sent
 func (d *DockerProvider) Events() <-chan DockerEvent {
 	return d.notifyC
+}
+
+// Exec run a command inside a container and return output
+func (d *DockerProvider) Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error) {
+	d.l.Lock()
+	cl, err := d.getClient(ctx)
+	d.l.Unlock()
+
+	if err != nil {
+		return nil, err
+	}
+
+	id, err := cl.ContainerExecCreate(ctx, containerID, types.ExecConfig{
+		Cmd:          cmd,
+		AttachStdout: true,
+		AttachStderr: true,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := cl.ContainerExecAttach(ctx, id.ID, types.ExecStartCheck{})
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Close()
+
+	var output bytes.Buffer
+
+	_, err = stdcopy.StdCopy(&output, &output, resp.Reader)
+	if err != nil {
+		return nil, err
+	}
+
+	return output.Bytes(), nil
 }
 
 // HasConnection returns whether or not a connection is currently established with Docker.

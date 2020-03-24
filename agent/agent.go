@@ -65,6 +65,7 @@ type agent struct {
 	state        *state.State
 	cancel       context.CancelFunc
 
+	hostRootPath      string
 	discovery         *discovery.Discovery
 	dockerFact        *facts.DockerProvider
 	collector         *collector.Collector
@@ -335,11 +336,11 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.cancel = cancel
 
-	rootPath := "/"
+	a.hostRootPath = "/"
 
 	if a.config.String("container.type") != "" {
-		rootPath = a.config.String("df.host_mount_point")
-		setupContainer(rootPath)
+		a.hostRootPath = a.config.String("df.host_mount_point")
+		setupContainer(a.hostRootPath)
 	}
 
 	a.triggerHandler = debouncer.New(
@@ -348,7 +349,7 @@ func (a *agent) run() { //nolint:gocyclo
 	)
 	a.factProvider = facts.NewFacter(
 		a.config.String("agent.facts_file"),
-		rootPath,
+		a.hostRootPath,
 		a.config.String("agent.public_ip_indicator"),
 	)
 
@@ -438,7 +439,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	psFact := facts.NewProcess(
 		useProc,
-		rootPath,
+		a.hostRootPath,
 		a.dockerFact,
 	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
@@ -457,7 +458,7 @@ func (a *agent) run() { //nolint:gocyclo
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
 	a.discovery = discovery.New(
-		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: rootPath}, a.config.String("stack")),
+		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack")),
 		a.collector,
 		a.taskRegistry,
 		a.state,
@@ -499,6 +500,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.netstatWatcher, "Netstat file watcher"},
 		{scrap.Run, "Prometheus Scrapper"},
 		{a.miscTasks, "Miscelanous tasks"},
+		{a.minuteMetric, "Metrics every minute"},
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
@@ -566,7 +568,7 @@ func (a *agent) run() { //nolint:gocyclo
 	err = discovery.AddDefaultInputs(
 		a.collector,
 		discovery.InputOption{
-			DFRootPath:      rootPath,
+			DFRootPath:      a.hostRootPath,
 			NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
 			IODiskWhitelist: a.config.StringList("disk_monitor"),
 			DFPathBlacklist: a.config.StringList("df.path_ignore"),
@@ -606,6 +608,79 @@ func (a *agent) run() { //nolint:gocyclo
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	logger.V(2).Printf("Agent stopped")
+}
+
+func (a *agent) minuteMetric(ctx context.Context) error {
+	for {
+		select {
+		case <-time.After(time.Minute):
+		case <-ctx.Done():
+			return nil
+		}
+
+		service, err := a.discovery.Discovery(ctx, 2*time.Hour)
+		if err != nil {
+			logger.V(1).Printf("get service failed to every-minute metrics: %v", err)
+			continue
+		}
+
+		for _, srv := range service {
+			if !srv.Active {
+				continue
+			}
+
+			switch srv.ServiceType {
+			case discovery.PostfixService:
+				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.dockerFact)
+				if err != nil {
+					logger.V(1).Printf("Unabled to gather postfix queue size on %s: %v", srv, err)
+					continue
+				}
+
+				tags := map[string]string{
+					"service_name": srv.Name,
+				}
+
+				if srv.ContainerName != "" {
+					tags["item"] = srv.ContainerName
+					tags["container_id"] = srv.ContainerID
+					tags["container_name"] = srv.ContainerName
+				}
+
+				a.accumulator.AddFields(
+					"postfix",
+					map[string]interface{}{
+						"queue_size": n,
+					},
+					tags,
+				)
+			case discovery.EximService:
+				n, err := eximQueueSize(ctx, srv, a.hostRootPath, a.dockerFact)
+				if err != nil {
+					logger.V(1).Printf("Unabled to gather exim queue size on %s: %v", srv, err)
+					continue
+				}
+
+				tags := map[string]string{
+					"service_name": srv.Name,
+				}
+
+				if srv.ContainerName != "" {
+					tags["item"] = srv.ContainerName
+					tags["container_id"] = srv.ContainerID
+					tags["container_name"] = srv.ContainerName
+				}
+
+				a.accumulator.AddFields(
+					"exim",
+					map[string]interface{}{
+						"queue_size": n,
+					},
+					tags,
+				)
+			}
+		}
+	}
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {
@@ -933,16 +1008,10 @@ func (a *agent) handleTrigger(ctx context.Context) {
 	}
 
 	if runSystemUpdateMetric {
-		rootPath := "/"
-
-		if a.config.String("container.type") != "" {
-			rootPath = a.config.String("df.host_mount_point")
-		}
-
 		pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
 			ctx,
 			a.config.String("container.type") != "",
-			rootPath,
+			a.hostRootPath,
 		)
 
 		fields := make(map[string]interface{})

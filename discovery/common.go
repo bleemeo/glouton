@@ -18,6 +18,7 @@ package discovery
 
 import (
 	"context"
+	"fmt"
 	"glouton/facts"
 	"glouton/logger"
 	"net"
@@ -107,6 +108,14 @@ type Service struct {
 
 	HasNetstatInfo bool
 	container      container
+}
+
+func (s Service) String() string {
+	if s.ContainerName != "" {
+		return fmt.Sprintf("%s (on %s)", s.Name, s.ContainerName)
+	}
+
+	return s.Name
 }
 
 // AddressForPort return the IP address for given port & network (tcp, udp)
