@@ -48,6 +48,7 @@ import (
 	"glouton/logger"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter"
+	"glouton/prometheus/process"
 	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
@@ -457,8 +458,9 @@ func (a *agent) run() { //nolint:gocyclo
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack"))
 	a.discovery = discovery.New(
-		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack")),
+		dynamicDiscovery,
 		a.collector,
 		a.taskRegistry,
 		a.state,
@@ -482,6 +484,15 @@ func (a *agent) run() { //nolint:gocyclo
 
 	scrap := scrapper.New(targets)
 	promExporter := exporter.New(a.store, scrap)
+	err = promExporter.Register(&process.Exporter{
+		ProcPath:       filepath.Join(a.hostRootPath, "proc"),
+		ProcessQuerier: dynamicDiscovery,
+	})
+
+	if err != nil {
+		logger.Printf("Failed to register process-exporter: %v", err)
+		logger.Printf("Processes metrics won't be available on /metrics endpoints")
+	}
 
 	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.accumulator)
 

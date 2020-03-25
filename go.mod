@@ -44,6 +44,7 @@ require (
 	github.com/mdlayher/netlink v0.0.0-20191009155606-de872b0d824b // indirect
 	github.com/mdlayher/wifi v0.0.0-20190303161829-b1436901ddee // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/ncabatoff/process-exporter v0.6.0
 	github.com/onsi/ginkgo v1.10.2 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect

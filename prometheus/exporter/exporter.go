@@ -68,6 +68,11 @@ func New(db storeInterface, gatherer prometheus.Gatherer) *Exporter {
 	return e
 }
 
+// Register add a collector to exported collector
+func (e Exporter) Register(c prometheus.Collector) error {
+	return e.registry.Register(c)
+}
+
 func (e Exporter) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	e.handler.ServeHTTP(w, req)
 }

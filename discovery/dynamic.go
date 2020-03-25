@@ -99,6 +99,41 @@ func (dd *DynamicDiscovery) LastUpdate() time.Time {
 	return dd.lastDiscoveryUpdate
 }
 
+// ProcessServiceInfo return the service & container a process belong based on its command line + pid & start time
+func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, createTime time.Time) (serviceName ServiceName, containerName string) {
+	serviceType, ok := serviceByCommand(cmdLine)
+	if !ok {
+		return "", ""
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	processes, err := dd.ps.Processes(ctx, time.Since(createTime))
+	if err != nil {
+		logger.V(1).Printf("unable to list processes: %v", err)
+		return "", ""
+	}
+
+	// gopsutil round create time to second.
+	createTime = createTime.Truncate(time.Second)
+
+	for _, p := range processes {
+		if p.PID == pid && p.CreateTime.Equal(createTime) {
+			if p.ContainerID != "" {
+				container, ok := dd.containerInfo.Container(p.ContainerID)
+				if ok && container.Ignored() {
+					return "", ""
+				}
+			}
+
+			return serviceType, p.ContainerName
+		}
+	}
+
+	return "", ""
+}
+
 // nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]ServiceName{
@@ -205,6 +240,10 @@ func (dw *dockerWrapper) Container(containerID string) (c container, found bool)
 }
 
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
+	if maxAge < 500*time.Millisecond {
+		maxAge = 500 * time.Millisecond
+	}
+
 	processes, err := dd.ps.Processes(ctx, maxAge)
 	if err != nil {
 		return err
@@ -401,6 +440,10 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 }
 
 func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
+	if len(cmdLine) == 0 {
+		return "", false
+	}
+
 	name := filepath.Base(cmdLine[0])
 
 	if runtime.GOOS == "windows" {
