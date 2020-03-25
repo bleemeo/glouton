@@ -22,6 +22,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/influxdata/telegraf"
 	common "github.com/ncabatoff/process-exporter"
 	"github.com/ncabatoff/process-exporter/proc"
 	"github.com/prometheus/client_golang/prometheus"
@@ -64,6 +65,13 @@ type Exporter struct {
 	scrapeProcReadErrorsDesc *prometheus.Desc
 	scrapePartialErrorsDesc  *prometheus.Desc
 	threadWchanDesc          *prometheus.Desc
+}
+
+// Input return a telegraf.Input that send metric using Telegraf Accumulator
+func (e *Exporter) Input() telegraf.Input {
+	return &input{
+		exporter: e,
+	}
 }
 
 func (e *Exporter) init() {

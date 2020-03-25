@@ -484,14 +484,21 @@ func (a *agent) run() { //nolint:gocyclo
 
 	scrap := scrapper.New(targets)
 	promExporter := exporter.New(a.store, scrap)
-	err = promExporter.Register(&process.Exporter{
+	processExporter := &process.Exporter{
 		ProcPath:       filepath.Join(a.hostRootPath, "proc"),
 		ProcessQuerier: dynamicDiscovery,
-	})
+	}
 
+	err = promExporter.Register(processExporter)
 	if err != nil {
 		logger.Printf("Failed to register process-exporter: %v", err)
 		logger.Printf("Processes metrics won't be available on /metrics endpoints")
+	}
+
+	_, err = a.collector.AddInput(processExporter.Input(), "processes")
+	if err != nil {
+		logger.Printf("Failed to add process-exporter input: %v", err)
+		logger.Printf("Processes metrics won't be available")
 	}
 
 	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.accumulator)
