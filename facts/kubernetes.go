@@ -36,7 +36,7 @@ func (k *KubernetesProvider) PODs(ctx context.Context, maxAge time.Duration) ([]
 	}
 
 	if time.Since(k.lastUpdate) > maxAge {
-		err := k.updatePODs()
+		err := k.updatePODs(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -71,14 +71,14 @@ func (k *KubernetesProvider) init() error {
 	return nil
 }
 
-func (k *KubernetesProvider) updatePODs() error {
+func (k *KubernetesProvider) updatePODs(ctx context.Context) error {
 	opts := metav1.ListOptions{}
 
 	if k.NodeName != "" {
 		opts.FieldSelector = "spec.nodeName=" + k.NodeName
 	}
 
-	list, err := k.client.CoreV1().Pods("").List(metav1.ListOptions{})
+	list, err := k.client.CoreV1().Pods("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return err
 	}

@@ -109,14 +109,18 @@ go run glouton
 To update dependencies, you can run:
 
 ```
-go get -u
+go get -u ./...
 ```
 
-For some dependencies, you will need to specify the version or commit hash to update to. For example:
+This should only update to latest minor or patch version. For major version, you need to specify the dependency explicitly,
+possible with the version or commit hash. For example:
 
 ```
 go get github.com/influxdata/telegraf@1.12.1
 ```
+
+Finally, it may worse removing all "// indirect" and running go mod tidy, to ensure
+only needed indirect dependencies are present.
 
 Running go mod tidy & test before commiting the updated go.mod is recommended:
 ```
