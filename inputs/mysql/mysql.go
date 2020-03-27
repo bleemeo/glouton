@@ -35,6 +35,7 @@ func New(server string) (i telegraf.Input, err error) {
 			slice := append(make([]string, 0), server)
 			mysqlInput.Servers = slice
 			mysqlInput.GatherInnoDBMetrics = true
+			mysqlInput.Log = internal.Logger{}
 			i = &internal.Input{
 				Input: mysqlInput,
 				Accumulator: internal.Accumulator{

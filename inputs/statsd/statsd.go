@@ -51,6 +51,7 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 			statsdInput.MetricSeparator = "_"
 			statsdInput.AllowedPendingMessages = 10000
 			statsdInput.PercentileLimit = 1000
+			statsdInput.Log = internal.Logger{}
 
 			func() {
 				defer func() {
