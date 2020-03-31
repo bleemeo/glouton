@@ -441,7 +441,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				Timestamp:   p.Time.Unix(),
 				TimestampMS: p.Time.UnixNano() / 1e6,
 				Value:       forceDecimalFloat(p.Value),
-				Item:        p.Labels["item"],
+				Item:        key.Item,
 			}
 
 			if p.CurrentStatus.IsSet() {
