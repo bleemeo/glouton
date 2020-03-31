@@ -29,7 +29,8 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 
-	"github.com/99designs/gqlgen/handler"
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
 	"github.com/gobuffalo/packr/v2"
 	"github.com/rs/cors"
@@ -78,8 +79,9 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	boxHTML := packr.New("html", "./static")
 
 	router.Handle("/metrics", promExporter) // promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
-	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
-	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
+	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		html, _ := boxHTML.Find("index.html")
