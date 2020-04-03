@@ -88,7 +88,7 @@ var defaultConfig = map[string]interface{}{
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
 	"influxdb.tags":                    map[string]string{},
-	"jmx.enabled":                      false,
+	"jmx.enabled":                      true,
 	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
 	"jmxtrans.graphite_port":           2004,
 	"kubernetes.enabled":               false,
