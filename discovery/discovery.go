@@ -32,6 +32,8 @@ import (
 
 const ignoredConfField string = "nagios_nrpe_name"
 
+const localhostIP = "127.0.0.1"
+
 // Accumulator will gather metrics point for added checks
 type Accumulator interface {
 	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
@@ -319,7 +321,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 		if service.ServiceType == CustomService {
 			if service.ExtraAttributes["port"] != "" {
 				if service.ExtraAttributes["address"] == "" {
-					service.ExtraAttributes["address"] = "127.0.0.1"
+					service.ExtraAttributes["address"] = localhostIP
 				}
 
 				if _, port := service.AddressPort(); port == 0 {

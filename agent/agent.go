@@ -45,6 +45,7 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs/docker"
 	"glouton/inputs/statsd"
+	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter"
@@ -64,6 +65,7 @@ type agent struct {
 	config       *config.Configuration
 	state        *state.State
 	cancel       context.CancelFunc
+	context      context.Context
 
 	hostRootPath      string
 	discovery         *discovery.Discovery
@@ -72,6 +74,7 @@ type agent struct {
 	factProvider      *facts.FactProvider
 	bleemeoConnector  *bleemeo.Connector
 	influxdbConnector *influxdb.Client
+	jmx               *jmxtrans.JMX
 	accumulator       *threshold.Accumulator
 	store             *store.Store
 
@@ -85,8 +88,9 @@ type agent struct {
 	dockerInputPresent bool
 	dockerInputID      int
 
-	l       sync.Mutex
-	taskIDs map[string]int
+	l                sync.Mutex
+	taskIDs          map[string]int
+	metricResolution time.Duration
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -262,6 +266,21 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 	a.updateThresholds(thresholds, firstUpdate)
 }
 
+func (a *agent) updateMetricResolution(resolution time.Duration) {
+	a.l.Lock()
+	a.metricResolution = resolution
+	a.l.Unlock()
+
+	a.collector.UpdateDelay(resolution)
+
+	services, err := a.discovery.Discovery(a.context, time.Hour)
+	if err != nil {
+		logger.V(1).Printf("error during discovery: %v", err)
+	} else if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+		logger.V(1).Printf("failed to update JMX configuration: %v", err)
+	}
+}
+
 func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	rawValue, ok := a.config.Get("thresholds")
 	if !ok {
@@ -335,8 +354,9 @@ func (a *agent) run() { //nolint:gocyclo
 	defer cancel()
 
 	a.cancel = cancel
-
+	a.metricResolution = 10 * time.Second
 	a.hostRootPath = "/"
+	a.context = ctx
 
 	if a.config.String("container.type") != "" {
 		a.hostRootPath = a.config.String("df.host_mount_point")
@@ -503,6 +523,16 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.minuteMetric, "Metrics every minute"},
 	}
 
+	if a.config.Bool("jmx.enabled") {
+		a.jmx = &jmxtrans.JMX{
+			OutputConfigurationFile: a.config.String("jmxtrans.config_file"),
+			ContactPort:             a.config.Int("jmxtrans.graphite_port"),
+			Accumulator:             a.accumulator,
+		}
+
+		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
+	}
+
 	if a.config.Bool("bleemeo.enabled") {
 		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                 a.config,
@@ -513,7 +543,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Store:                  a.store,
 			Acc:                    a.accumulator,
 			Discovery:              a.discovery,
-			UpdateMetricResolution: a.collector.UpdateDelay,
+			UpdateMetricResolution: a.updateMetricResolution,
 			UpdateThresholds:       a.UpdateThresholds,
 			UpdateUnits:            a.accumulator.SetUnits,
 		})
@@ -979,9 +1009,17 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
-		_, err := a.discovery.Discovery(ctx, 0)
+		services, err := a.discovery.Discovery(ctx, 0)
 		if err != nil {
 			logger.V(1).Printf("error during discovery: %v", err)
+		} else if a.jmx != nil {
+			a.l.Lock()
+			resolution := a.metricResolution
+			a.l.Unlock()
+
+			if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+				logger.V(1).Printf("failed to update JMX configuration: %v", err)
+			}
 		}
 
 		hasConnection := a.dockerFact.HasConnection(ctx)

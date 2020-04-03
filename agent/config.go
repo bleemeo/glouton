@@ -17,6 +17,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"glouton/config"
 	"glouton/logger"
@@ -87,8 +88,9 @@ var defaultConfig = map[string]interface{}{
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
 	"influxdb.tags":                    map[string]string{},
-	"jmx.enabled":                      true, // TODO: JMX metric gathering
+	"jmx.enabled":                      false,
 	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
+	"jmxtrans.graphite_port":           2004,
 	"kubernetes.enabled":               false,
 	"kubernetes.nodename":              "",
 	"kubernetes.kubeconfig":            "",
@@ -298,6 +300,9 @@ func convertToString(rawValue interface{}) string {
 		return value.String()
 	case int:
 		return strconv.FormatInt(int64(value), 10)
+	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
+		b, _ := json.Marshal(rawValue)
+		return string(b)
 	default:
 		return fmt.Sprintf("%v", rawValue)
 	}

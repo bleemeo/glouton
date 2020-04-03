@@ -190,7 +190,7 @@ var (
 			ServicePort:         7990,
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
-			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
 		BindService: {
 			ServicePort:         53,
@@ -201,13 +201,13 @@ var (
 			ServicePort:         9042,
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
-			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics", "cassandra_detailed_tables"},
 		},
 		ConfluenceService: {
 			ServicePort:         8090,
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
-			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
 		DovecoteService: {
 			ServicePort:         143,
@@ -244,7 +244,7 @@ var (
 			ServicePort:         8080,
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
-			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
 		MemcachedService: {
 			ServicePort:         11211,
@@ -328,7 +328,7 @@ var (
 			ServicePort:         2181,
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
-			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password"},
+			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
 		},
 
 		CustomService: {
