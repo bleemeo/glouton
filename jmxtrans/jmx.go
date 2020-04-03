@@ -54,7 +54,8 @@ type JMX struct {
 	// ContactPortForced spefify the behavior if preferred port is already used.
 	// If forced, it's an error to have preferred port already used and JMX connector will stop
 	// If not forced, a dynamic port will be used if preferred port is already used.
-	ContactPortForced bool
+	ContactPortForced             bool
+	OutputConfigurationPermission os.FileMode
 
 	jmxConfig jmxtransConfig
 }
@@ -181,7 +182,12 @@ func (j *JMX) writeConfig() {
 		return
 	}
 
-	err = ioutil.WriteFile(j.OutputConfigurationFile, content, 0600)
+	perm := j.OutputConfigurationPermission
+	if perm == 0 {
+		perm = 0640
+	}
+
+	err = ioutil.WriteFile(j.OutputConfigurationFile, content, perm)
 	if err != nil {
 		if fileExists {
 			logger.V(1).Printf("unable to write jmxtrans configuration, keeping current config: %v", err)

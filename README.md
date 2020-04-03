@@ -64,6 +64,26 @@ export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
 
+## Run on Docker (with JMX)
+
+Glouton could be run using Docker, optionally with JMX metrics using jmxtrans (a JMX proxy which
+query JVM over JMX and send metrics over the graphite protocol to Glouton).
+
+To use jmxtrans, two containers will be run, one with Glouton and one with jmxtrans and a shared volume between
+them will allow Glouton to write jmxtrans configuration file.
+
+Like when running Glouton without docker, you may optionally configure your Bleemeo credentials:
+
+```
+export GLOUTON_BLEEMEO_ACCOUNT_ID=YOUR_ACCOUNT_ID
+export GLOUTON_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
+```
+
+Then using docker-compose, start Glouton and jmxtrans:
+
+```
+docker-compose up -d
+```
 
 ## Test and Develop
 

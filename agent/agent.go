@@ -28,6 +28,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -524,10 +525,19 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	if a.config.Bool("jmx.enabled") {
+		perm, err := strconv.ParseInt(a.config.String("jmxtrans.file_permission"), 8, 0)
+		if err != nil {
+			logger.Printf("invalid permission %#v: %v", a.config.String("jmxtrans.file_permission"), err)
+			logger.Printf("using the default 0640")
+
+			perm = 0640
+		}
+
 		a.jmx = &jmxtrans.JMX{
-			OutputConfigurationFile: a.config.String("jmxtrans.config_file"),
-			ContactPort:             a.config.Int("jmxtrans.graphite_port"),
-			Accumulator:             a.accumulator,
+			OutputConfigurationFile:       a.config.String("jmxtrans.config_file"),
+			OutputConfigurationPermission: os.FileMode(perm),
+			ContactPort:                   a.config.Int("jmxtrans.graphite_port"),
+			Accumulator:                   a.accumulator,
 		}
 
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})

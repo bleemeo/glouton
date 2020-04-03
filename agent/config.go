@@ -90,6 +90,7 @@ var defaultConfig = map[string]interface{}{
 	"influxdb.tags":                    map[string]string{},
 	"jmx.enabled":                      true,
 	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
+	"jmxtrans.file_permission":         "0640",
 	"jmxtrans.graphite_port":           2004,
 	"kubernetes.enabled":               false,
 	"kubernetes.nodename":              "",
