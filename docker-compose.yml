@@ -1,0 +1,32 @@
+version: '3'
+
+services:
+  glouton:
+    image: glouton
+    environment:
+    # use environment variable from shell running docker-compose. Allow
+    # to easily overide them.
+    - GLOUTON_BLEEMEO_ACCOUNT_ID
+    - GLOUTON_BLEEMEO_REGISTRATION_KEY
+    - GLOUTON_BLEEMEO_API_BASE
+    - GLOUTON_BLEEMEO_MQTT_HOST
+    - GLOUTON_BLEEMEO_MQTT_PORT
+    - GLOUTON_BLEEMEO_MQTT_SSL
+    - GLOUTON_WEB_LISTENER_PORT
+    - GLOUTON_JMXTRANS_FILE_PERMISSION=644 # this file may contains password but it written in a Docker volume only accessible to jmxtrans and Glouton
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - /:/hostroot:ro
+    - glouton-data:/var/lib/glouton
+    - jmxtrans-config:/var/lib/jmxtrans
+    network_mode: "host"
+    pid: "host"
+  jmxtrans:
+    image: jmxtrans/jmxtrans
+    volumes:
+    - jmxtrans-config:/var/lib/jmxtrans
+    network_mode: "host"
+
+volumes:
+  glouton-data: {}
+  jmxtrans-config: {}

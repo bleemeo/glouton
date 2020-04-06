@@ -293,7 +293,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		dd.updateListenAddresses(&service, di)
 
 		dd.fillExtraAttributes(&service)
-		// TODO: jmx ?
+		dd.guessJMX(&service, process.CmdLineList)
 
 		logger.V(2).Printf("Discovered service %v", service)
 
@@ -313,7 +313,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 }
 
 func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discoveryInfo) {
-	defaultAddress := "127.0.0.1"
+	defaultAddress := localhostIP
 
 	if service.container != nil {
 		defaultAddress = service.container.PrimaryAddress()
@@ -395,6 +395,39 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 				if strings.HasPrefix(e, "POSTGRES_USER=") {
 					service.ExtraAttributes["username"] = strings.TrimPrefix(e, "POSTGRES_USER=")
 				}
+			}
+		}
+	}
+}
+
+func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
+	jmxOptions := []string{
+		"-Dcom.sun.management.jmxremote.port=",
+		"-Dcassandra.jmx.remote.port=",
+	}
+	if service.IPAddress == localhostIP {
+		jmxOptions = append(jmxOptions, "-Dcassandra.jmx.local.port=")
+	}
+
+	switch service.ServiceType {
+	case CassandraService, ElasticSearchService, ZookeeperService, BitBucketService,
+		JIRAService, ConfluenceService:
+		for _, arg := range cmdLine {
+			for _, opt := range jmxOptions {
+				if !strings.HasPrefix(arg, opt) {
+					continue
+				}
+
+				portStr := strings.TrimPrefix(arg, opt)
+
+				_, err := strconv.ParseInt(portStr, 10, 0)
+				if err != nil {
+					continue
+				}
+
+				service.ExtraAttributes["jmx_port"] = portStr
+
+				return
 			}
 		}
 	}
