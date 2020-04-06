@@ -85,6 +85,9 @@ func (i *input) Gather(acc telegraf.Accumulator) error {
 				"worst_fd_ratio": gcounts.WorstFDratio,
 				"num_threads":    gcounts.NumThreads,
 			}
+			if gcounts.ProportionalBytes > 0 {
+				fields["mem_bytes"] = gcounts.ProportionalBytes
+			}
 			if !previousTime.IsZero() {
 				deltaT := now.Sub(previousTime).Seconds()
 				if deltaT > 0 {

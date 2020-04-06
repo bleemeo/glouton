@@ -196,12 +196,14 @@ func (e *Exporter) init() {
 		procPath = "/proc"
 	}
 
-	e.source, err = proc.NewFS(procPath, false)
+	fs, err := proc.NewFS(procPath, false)
 	if err != nil {
 		logger.V(1).Printf("Unable to read processes information from %s: %v", procPath, err)
 		return
 	}
 
+	fs.GatherSMaps = true
+	e.source = fs
 	e.grouper = proc.NewGrouper(
 		matchNamer{querier: e.ProcessQuerier},
 		true,
@@ -318,6 +320,11 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				ch <- prometheus.MustNewConstMetric(e.threadWchanDesc,
 					prometheus.GaugeValue, float64(count), gname, wchan)
 			}
+
+			ch <- prometheus.MustNewConstMetric(e.membytesDesc,
+				prometheus.GaugeValue, float64(gcounts.Memory.ProportionalBytes), gname, "proportionalResident")
+			ch <- prometheus.MustNewConstMetric(e.membytesDesc,
+				prometheus.GaugeValue, float64(gcounts.Memory.ProportionalSwapBytes), gname, "proportionalSwapped")
 		}
 	}
 
