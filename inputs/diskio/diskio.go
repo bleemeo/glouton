@@ -49,6 +49,7 @@ func New(whitelist []string) (i telegraf.Input, err error) {
 
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
+		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
 			whitelist: whitelistRE,
 		}

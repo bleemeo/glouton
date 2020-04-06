@@ -10,12 +10,7 @@ const innerRadius = radius - radius / 2
 const strokeWidth = radius / 3
 const outerRadius = radius - strokeWidth
 
-const backgroundArc = d3.svg
-  .arc()
-  .innerRadius(innerRadius)
-  .outerRadius(outerRadius)
-  .startAngle(0)
-  .endAngle(tau)
+const backgroundArc = d3.svg.arc().innerRadius(innerRadius).outerRadius(outerRadius).startAngle(0).endAngle(tau)
 
 const createArcPath = (x, total) => {
   return d3.svg

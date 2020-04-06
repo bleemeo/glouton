@@ -35,6 +35,7 @@ func New(server string) (i telegraf.Input, err error) {
 			slice := append(make([]string, 0), server)
 			mysqlInput.Servers = slice
 			mysqlInput.GatherInnoDBMetrics = true
+			mysqlInput.Log = internal.Logger{}
 			i = &internal.Input{
 				Input: mysqlInput,
 				Accumulator: internal.Accumulator{
@@ -139,7 +140,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		case "queries", "slow_queries":
 			newFields[metricName] = value
 		case "innodb_row_lock_current_waits":
-			newFields["innobdb_locked_transaction"] = value
+			newFields["innodb_locked_transaction"] = value
 		case "trx_rseg_history_len":
 			newFields["history_list_len"] = value
 		}

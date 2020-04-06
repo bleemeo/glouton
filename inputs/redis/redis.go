@@ -33,6 +33,7 @@ func New(url string) (i telegraf.Input, err error) {
 		if ok {
 			slice := append(make([]string, 0), url)
 			redisInput.Servers = slice
+			redisInput.Log = internal.Logger{}
 			i = &internal.Input{
 				Input: redisInput,
 				Accumulator: internal.Accumulator{

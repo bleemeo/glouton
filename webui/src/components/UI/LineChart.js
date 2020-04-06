@@ -272,7 +272,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       boundaryGap: false,
       splitNumber: 10,
       axisLabel: {
-        formatter: function(value, index) {
+        formatter: function (value, index) {
           // Formatted to be month/day; display year only in the first label
           var date = new Date(value)
           return tickFormatDate(date)
@@ -298,7 +298,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       min: 0,
       max: unit === UNIT_PERCENTAGE ? 100 : null,
       axisLabel: {
-        formatter: function(value) {
+        formatter: function (value) {
           // Formatted to be month/day; display year only in the first label
           return funcConverter(value)
         },
@@ -329,7 +329,7 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
     axisPointer: {
       type: 'line'
     },
-    formatter: function(params, ticket) {
+    formatter: function (params, ticket) {
       let total = -1
       if (stacked) {
         total = 0
@@ -374,23 +374,23 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
 const selectUnitConverter = unit => {
   switch (unit) {
     case 1:
-      return function(value) {
+      return function (value) {
         return percentToString(value)
       }
     case 2:
-      return function(value) {
+      return function (value) {
         return bytesToString(value)
       }
     case 3:
-      return function(value) {
+      return function (value) {
         return bitsToString(value)
       }
     case 4:
-      return function(value) {
+      return function (value) {
         return iopsToString(value)
       }
     default:
-      return function(value) {
+      return function (value) {
         return value.toFixed(2)
       }
   }

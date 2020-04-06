@@ -19,7 +19,7 @@ var at, // The index of the current character
     t: '\t'
   },
   text,
-  error = function(m) {
+  error = function (m) {
     throw {
       name: 'SyntaxError',
       message: m,
@@ -27,16 +27,16 @@ var at, // The index of the current character
       text: text
     }
   },
-  next = function(c) {
+  next = function (c) {
     return (ch = text.charAt(at++))
   },
-  check = function(c) {
+  check = function (c) {
     if (c !== ch) {
       error("Expected '" + c + "' instead of '" + ch + "'")
     }
     ch = text.charAt(at++)
   },
-  number = function() {
+  number = function () {
     var string = ''
     if (ch === '-') {
       string = '-'
@@ -77,7 +77,7 @@ var at, // The index of the current character
     }
     return +string
   },
-  string = function() {
+  string = function () {
     var hex,
       i,
       string = '',
@@ -112,13 +112,13 @@ var at, // The index of the current character
     }
     error('Bad string')
   },
-  white = function() {
+  white = function () {
     // Skip whitespace.
     while (ch && ch <= ' ') {
       next()
     }
   },
-  word = function() {
+  word = function () {
     switch (ch) {
       case 't':
         check('t')
@@ -157,7 +157,7 @@ var at, // The index of the current character
     }
     error("Unexpected '" + ch + "'")
   },
-  array = function() {
+  array = function () {
     var array = []
     if (ch === '[') {
       check('[')
@@ -179,7 +179,7 @@ var at, // The index of the current character
     }
     error('Bad array')
   },
-  object = function() {
+  object = function () {
     var key,
       object = {}
     if (ch === '{') {
@@ -208,7 +208,7 @@ var at, // The index of the current character
     }
     error('Bad object')
   }
-var value = function() {
+var value = function () {
   white()
   switch (ch) {
     case '{':
@@ -225,7 +225,7 @@ var value = function() {
 }
 
 //JSON.parseMore = function(source, reviver){
-export default function(source, reviver) {
+export default function (source, reviver) {
   var result
   text = source
   at = 0

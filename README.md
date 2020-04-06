@@ -64,6 +64,26 @@ export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
 
+## Run on Docker (with JMX)
+
+Glouton could be run using Docker, optionally with JMX metrics using jmxtrans (a JMX proxy which
+query JVM over JMX and send metrics over the graphite protocol to Glouton).
+
+To use jmxtrans, two containers will be run, one with Glouton and one with jmxtrans and a shared volume between
+them will allow Glouton to write jmxtrans configuration file.
+
+Like when running Glouton without docker, you may optionally configure your Bleemeo credentials:
+
+```
+export GLOUTON_BLEEMEO_ACCOUNT_ID=YOUR_ACCOUNT_ID
+export GLOUTON_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
+```
+
+Then using docker-compose, start Glouton and jmxtrans:
+
+```
+docker-compose up -d
+```
 
 ## Test and Develop
 
@@ -109,14 +129,18 @@ go run glouton
 To update dependencies, you can run:
 
 ```
-go get -u
+go get -u ./...
 ```
 
-For some dependencies, you will need to specify the version or commit hash to update to. For example:
+This should only update to latest minor or patch version. For major version, you need to specify the dependency explicitly,
+possible with the version or commit hash. For example:
 
 ```
 go get github.com/influxdata/telegraf@1.12.1
 ```
+
+Finally, it may worse removing all "// indirect" and running go mod tidy, to ensure
+only needed indirect dependencies are present.
 
 Running go mod tidy & test before commiting the updated go.mod is recommended:
 ```

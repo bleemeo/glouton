@@ -34,6 +34,7 @@ func New() (i telegraf.Input, err error) {
 		if ok {
 			dockerInput.PerDevice = false
 			dockerInput.Total = true
+			dockerInput.Log = internal.Logger{}
 			i = &internal.Input{
 				Input: dockerInput,
 				Accumulator: internal.Accumulator{

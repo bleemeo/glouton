@@ -20,10 +20,12 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/prometheus/common/model"
 	"github.com/prometheus/node_exporter/collector"
 	"gopkg.in/alecthomas/kingpin.v2"
 )
@@ -127,19 +129,39 @@ func (e Exporter) Collect(ch chan<- prometheus.Metric) {
 			labels := make([]string, 0)
 			labelValues := make([]string, 0)
 
+			replacer := strings.NewReplacer(
+				".", "_",
+			)
+
 			for l, v := range m.Labels() {
 				if l != "__name__" {
+					if !model.IsValidMetricName(model.LabelValue(l)) {
+						l = replacer.Replace(l)
+					}
+
+					if !model.IsValidMetricName(model.LabelValue(l)) {
+						logger.V(2).Printf("label %#v is ignored since invalid for Prometheus", l)
+						continue
+					}
+
 					labels = append(labels, l)
 					labelValues = append(labelValues, v)
 				}
 			}
 
-			ch <- prometheus.NewMetricWithTimestamp(p.Time, prometheus.MustNewConstMetric(
+			promMetric, err := prometheus.NewConstMetric(
 				prometheus.NewDesc(m.Labels()["__name__"], "", labels, nil),
 				prometheus.UntypedValue,
 				p.Value,
 				labelValues...,
-			))
+			)
+
+			if err != nil {
+				logger.V(2).Printf("Ignoring metric %s due to %v", m.Labels()["__name__"], err)
+				continue
+			}
+
+			ch <- prometheus.NewMetricWithTimestamp(p.Time, promMetric)
 		}
 	}
 }
