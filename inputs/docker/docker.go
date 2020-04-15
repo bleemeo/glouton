@@ -18,6 +18,7 @@ package docker
 
 import (
 	"errors"
+	"glouton/facts"
 	"glouton/inputs/internal"
 	"strings"
 
@@ -67,14 +68,14 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		}
 	}
 
-	if enable, ok := originalContext.Tags["glouton.enable"]; ok {
+	if enable, ok := originalContext.Tags[facts.EnableLabel]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
 		case "0", "off", "false", "no":
 			drop = true
 			return
 		}
-	} else if enable, ok := originalContext.Tags["bleemeo.enable"]; ok {
+	} else if enable, ok := originalContext.Tags[facts.EnableLegacyLabel]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
 		case "0", "off", "false", "no":

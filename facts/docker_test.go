@@ -155,6 +155,16 @@ func TestContainer_ListenAddresses(t *testing.T) {
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 25672},
 			},
 		},
+		{
+			jsonFileName: "testdata_rabbitLabels_1.json",
+			fields: fields{
+				primaryAddress: "10.0.0.42",
+			},
+			want: []ListenAddress{
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5671},
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5672},
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.jsonFileName, func(t *testing.T) {

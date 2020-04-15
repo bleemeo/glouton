@@ -25,6 +25,7 @@ import (
 	"glouton/logger"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -35,6 +36,13 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/shirou/gopsutil/process"
 	corev1 "k8s.io/api/core/v1"
+)
+
+// Containers labels used by Glouton
+const (
+	ignoredPortLabel  = "glouton.check.ignore.port."
+	EnableLabel       = "glouton.enable"
+	EnableLegacyLabel = "bleemeo.enable"
 )
 
 // DockerProvider provider information about Docker & Docker containers
@@ -361,6 +369,38 @@ func (c Container) ListenAddresses() []ListenAddress {
 		return nil
 	}
 
+	ignoredPort := make(map[int]bool)
+
+	if c.inspect.Config != nil {
+		for k, v := range c.inspect.Config.Labels {
+			if !strings.HasPrefix(k, ignoredPortLabel) {
+				continue
+			}
+
+			ignore := false
+
+			switch strings.ToLower(v) {
+			case "1", "on", "true", "yes":
+				ignore = true
+			}
+
+			if !ignore {
+				continue
+			}
+
+			portStr := strings.TrimPrefix(k, ignoredPortLabel)
+			port, err := strconv.ParseInt(portStr, 10, 0)
+
+			if err != nil {
+				logger.V(1).Printf("Label %#v of container %s containt invalid port: %v", k, c.Name(), err)
+
+				continue
+			}
+
+			ignoredPort[int(port)] = true
+		}
+	}
+
 	exposedPorts := make([]ListenAddress, 0)
 
 	if c.inspect.NetworkSettings != nil && len(c.inspect.NetworkSettings.Ports) > 0 {
@@ -382,6 +422,17 @@ func (c Container) ListenAddresses() []ListenAddress {
 			exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: v.Proto(), Address: c.PrimaryAddress(), Port: v.Int()})
 		}
 	}
+
+	n := 0
+
+	for _, x := range exposedPorts {
+		if !ignoredPort[x.Port] {
+			exposedPorts[n] = x
+			n++
+		}
+	}
+
+	exposedPorts = exposedPorts[:n]
 
 	sort.Slice(exposedPorts, func(i, j int) bool {
 		return exposedPorts[i].Port < exposedPorts[j].Port
@@ -453,9 +504,9 @@ func ignoreContainer(inspect types.ContainerJSON) bool {
 		return false
 	}
 
-	label, ok := inspect.Config.Labels["glouton.enable"]
+	label, ok := inspect.Config.Labels[EnableLabel]
 	if !ok {
-		label = inspect.Config.Labels["bleemeo.enable"]
+		label = inspect.Config.Labels[EnableLegacyLabel]
 	}
 
 	label = strings.ToLower(label)
