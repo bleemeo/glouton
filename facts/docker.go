@@ -386,6 +386,10 @@ func (c Container) ListenAddresses() []ListenAddress {
 		exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: protocol, Address: c.PrimaryAddress(), Port: int(port)})
 	}
 
+	sort.Slice(exposedPorts, func(i, j int) bool {
+		return exposedPorts[i].Port < exposedPorts[j].Port
+	})
+
 	return exposedPorts
 }
 
