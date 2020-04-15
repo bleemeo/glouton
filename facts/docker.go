@@ -25,7 +25,6 @@ import (
 	"glouton/logger"
 	"math"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -358,32 +357,30 @@ func (c Container) Labels() map[string]string {
 
 // ListenAddresses returns the addresseses this container listen on
 func (c Container) ListenAddresses() []ListenAddress {
-	if c.inspect.Config == nil {
-		return nil
-	}
-
 	if c.PrimaryAddress() == "" {
 		return nil
 	}
 
 	exposedPorts := make([]ListenAddress, 0)
 
-	for v := range c.inspect.Config.ExposedPorts {
-		tmp := strings.Split(string(v), "/")
-		if len(tmp) != 2 {
-			continue
+	if c.inspect.NetworkSettings != nil && len(c.inspect.NetworkSettings.Ports) > 0 {
+		for k, v := range c.inspect.NetworkSettings.Ports {
+			if len(v) == 0 {
+				continue
+			}
+
+			exposedPorts = append(exposedPorts, ListenAddress{
+				NetworkFamily: k.Proto(),
+				Address:       c.PrimaryAddress(),
+				Port:          k.Int(),
+			})
 		}
+	}
 
-		portStr := tmp[0]
-		protocol := tmp[1]
-
-		port, err := strconv.ParseInt(portStr, 10, 0)
-		if err != nil {
-			logger.V(1).Printf("unable to parse port %#v: %v", portStr, err)
-			continue
+	if len(exposedPorts) == 0 && c.inspect.Config != nil {
+		for v := range c.inspect.Config.ExposedPorts {
+			exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: v.Proto(), Address: c.PrimaryAddress(), Port: v.Int()})
 		}
-
-		exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: protocol, Address: c.PrimaryAddress(), Port: int(port)})
 	}
 
 	sort.Slice(exposedPorts, func(i, j int) bool {

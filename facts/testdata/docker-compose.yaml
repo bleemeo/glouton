@@ -1,0 +1,12 @@
+version: '3'
+
+# The to generate json:
+# for name in rabbitmqInternal rabbitmqExposed; do docker inspect testdata_${name}_1 > testdata_${name}_1.json; done
+
+services:
+    rabbitmqInternal:
+        image: rabbitmq
+    rabbitmqExposed:
+        image: rabbitmq
+        ports:
+        - 127.0.0.1:5671:5671

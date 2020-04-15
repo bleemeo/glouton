@@ -36,6 +36,10 @@ import (
 // docker run -d --name my_nginx -p 8080:80 nginx
 // docker run -d --name my_redis redis
 // docker run -d --name multiple-port -p 5672:5672 rabbitmq
+// docker run -d --name multiple-port2 rabbitmq
+// docker run -d --name non-standard-port -p 4242:4343 -p 1234:1234 rabbitmq
+//
+// Other container using docker-compose are used (see docker-compose.yaml in testdata folder)
 
 func TestContainer_ListenAddresses(t *testing.T) {
 	type fields struct {
@@ -78,10 +82,29 @@ func TestContainer_ListenAddresses(t *testing.T) {
 				primaryAddress: "10.0.0.42",
 			},
 			want: []ListenAddress{
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5672},
+			},
+		},
+		{
+			jsonFileName: "rabbitmq2-v19.03.5.json",
+			fields: fields{
+				primaryAddress: "10.0.0.42",
+			},
+			want: []ListenAddress{
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 4369},
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5671},
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5672},
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 25672},
+			},
+		},
+		{
+			jsonFileName: "rabbitmq-non-standard-ports-v19.03.5.json",
+			fields: fields{
+				primaryAddress: "10.0.0.42",
+			},
+			want: []ListenAddress{
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 1234},
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 4343},
 			},
 		},
 		{
@@ -104,6 +127,24 @@ func TestContainer_ListenAddresses(t *testing.T) {
 		},
 		{
 			jsonFileName: "rabbitmq-v1.13.1.json",
+			fields: fields{
+				primaryAddress: "10.0.0.42",
+			},
+			want: []ListenAddress{
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5672},
+			},
+		},
+		{
+			jsonFileName: "testdata_rabbitmqExposed_1.json",
+			fields: fields{
+				primaryAddress: "10.0.0.42",
+			},
+			want: []ListenAddress{
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5671},
+			},
+		},
+		{
+			jsonFileName: "testdata_rabbitmqInternal_1.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
