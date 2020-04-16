@@ -52,14 +52,14 @@ func TestContainer_ListenAddresses(t *testing.T) {
 		want         []ListenAddress
 	}{
 		{
-			jsonFileName: "busybox-v19.03.5.json",
+			jsonFileName: "docker-v19.03.5/noport.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
 			want: []ListenAddress{},
 		},
 		{
-			jsonFileName: "redis-v19.03.5.json",
+			jsonFileName: "docker-v19.03.5/my_redis.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -68,7 +68,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "nginx-v19.03.5.json",
+			jsonFileName: "docker-v19.03.5/my_nginx.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -77,7 +77,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "rabbitmq-v19.03.5.json",
+			jsonFileName: "docker-v19.03.5/multiple-port.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -86,7 +86,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "rabbitmq2-v19.03.5.json",
+			jsonFileName: "docker-v19.03.5/multiple-port2.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -98,7 +98,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "rabbitmq-non-standard-ports-v19.03.5.json",
+			jsonFileName: "docker-v19.03.5/non-standard-port.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -108,7 +108,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "redis-v18.09.4.json",
+			jsonFileName: "docker-v18.09.4/my_redis.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -117,7 +117,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "nginx-17.06.0-ce.json",
+			jsonFileName: "docker-v17.06.0-ce/my_nginx.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -126,7 +126,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "rabbitmq-v1.13.1.json",
+			jsonFileName: "docker-v1.13.1/multiple-port.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -135,7 +135,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "testdata_rabbitmqExposed_1.json",
+			jsonFileName: "docker-v19.03.5/testdata_rabbitmqExposed_1.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -144,7 +144,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "testdata_rabbitmqInternal_1.json",
+			jsonFileName: "docker-v19.03.5/testdata_rabbitmqInternal_1.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -156,7 +156,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			},
 		},
 		{
-			jsonFileName: "testdata_rabbitLabels_1.json",
+			jsonFileName: "docker-v19.03.5/testdata_rabbitLabels_1.json",
 			fields: fields{
 				primaryAddress: "10.0.0.42",
 			},
@@ -170,14 +170,14 @@ func TestContainer_ListenAddresses(t *testing.T) {
 		t.Run(tt.jsonFileName, func(t *testing.T) {
 			data, err := ioutil.ReadFile(filepath.Join("testdata", tt.jsonFileName))
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			var result []types.ContainerJSON
 
 			err = json.Unmarshal(data, &result)
 			if err != nil {
-				t.Error(err)
+				t.Fatal(err)
 			}
 
 			c := Container{
