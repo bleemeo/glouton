@@ -341,7 +341,19 @@ func (c Container) ID() string {
 
 // Ignored returns true if this container should be ignored by Glouton
 func (c Container) Ignored() bool {
-	return ignoreContainer(c.inspect)
+	ignore := ignoreContainer(c.inspect)
+
+	if !ignore {
+		label := strings.ToLower(c.pod.Annotations[EnableLabel])
+		switch label {
+		case "0", "off", "false", "no":
+			ignore = true
+		case "1", "on", "true", "yes":
+			ignore = false
+		}
+	}
+
+	return ignore
 }
 
 // IsRunning returns true if this container is running
@@ -727,11 +739,6 @@ func (d *DockerProvider) updateContainer(ctx context.Context, cl dockerClient, c
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	if ignoreContainer(inspect) {
-		d.ignoredID[containerID] = nil
-	}
-
-	delete(d.ignoredID, containerID)
 	sortInspect(inspect)
 
 	container := Container{
@@ -750,6 +757,12 @@ func (d *DockerProvider) updateContainer(ctx context.Context, cl dockerClient, c
 	}
 
 	d.containers[containerID] = container
+
+	if container.Ignored() {
+		d.ignoredID[containerID] = nil
+	} else {
+		delete(d.ignoredID, containerID)
+	}
 
 	return d.containers[containerID], nil
 }
@@ -802,10 +815,6 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 			return err
 		}
 
-		if ignoreContainer(inspect) {
-			ignoredID[c.ID] = nil
-		}
-
 		sortInspect(inspect)
 
 		container := Container{
@@ -822,6 +831,10 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		}
 
 		containers[c.ID] = container
+
+		if container.Ignored() {
+			ignoredID[c.ID] = nil
+		}
 	}
 
 	var deletedContainerID []string

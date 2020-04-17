@@ -454,7 +454,7 @@ func Test_updateContainers(t *testing.T) {
 		},
 		{
 			containerNameContains: "the-redis_redis-memcached",
-			ignored:               false, // TODO: is ignored
+			ignored:               true,
 			primaryAddress:        "172.18.0.5",
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.5", NetworkFamily: "tcp", Port: 6363},
@@ -462,7 +462,7 @@ func Test_updateContainers(t *testing.T) {
 		},
 		{
 			containerNameContains: "a-memcached_redis-memcached",
-			ignored:               false, // TODO: is ignored
+			ignored:               true,
 			primaryAddress:        "172.18.0.5",
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.5", NetworkFamily: "tcp", Port: 11211},
