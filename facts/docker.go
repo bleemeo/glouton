@@ -32,19 +32,44 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/events"
 	docker "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/shirou/gopsutil/process"
 	corev1 "k8s.io/api/core/v1"
 )
 
+// Containers labels used by Glouton
+const (
+	ignoredPortLabel  = "glouton.check.ignore.port."
+	EnableLabel       = "glouton.enable"
+	EnableLegacyLabel = "bleemeo.enable"
+)
+
+type dockerClient interface {
+	ContainerExecAttach(ctx context.Context, execID string, config types.ExecStartCheck) (types.HijackedResponse, error)
+	ContainerExecCreate(ctx context.Context, container string, config types.ExecConfig) (types.IDResponse, error)
+	ContainerInspect(ctx context.Context, container string) (types.ContainerJSON, error)
+	ContainerList(ctx context.Context, options types.ContainerListOptions) ([]types.Container, error)
+	ContainerTop(ctx context.Context, container string, arguments []string) (container.ContainerTopOKBody, error)
+	Events(ctx context.Context, options types.EventsOptions) (<-chan events.Message, <-chan error)
+	NetworkInspect(ctx context.Context, network string, options types.NetworkInspectOptions) (types.NetworkResource, error)
+	NetworkList(ctx context.Context, options types.NetworkListOptions) ([]types.NetworkResource, error)
+	Ping(ctx context.Context) (types.Ping, error)
+	ServerVersion(ctx context.Context) (types.Version, error)
+}
+
+type kubernetesProvider interface {
+	PODs(ctx context.Context, maxAge time.Duration) ([]corev1.Pod, error)
+}
+
 // DockerProvider provider information about Docker & Docker containers
 type DockerProvider struct {
 	deletedContainersCallback func(containerIDs []string)
-	kubernetesProvider        *KubernetesProvider
+	kubernetesProvider        kubernetesProvider
 	l                         sync.Mutex
 
-	client           *docker.Client
+	client           dockerClient
 	reconnectAttempt int
 	dockerVersion    string
 	dockerAPIVersion string
@@ -74,6 +99,7 @@ type DockerEvent struct {
 type Container struct {
 	primaryAddress string
 	inspect        types.ContainerJSON
+	pod            corev1.Pod
 }
 
 // NewDocker creates a new Docker provider which must be started with Run() method
@@ -315,7 +341,19 @@ func (c Container) ID() string {
 
 // Ignored returns true if this container should be ignored by Glouton
 func (c Container) Ignored() bool {
-	return ignoreContainer(c.inspect)
+	ignore := ignoreContainer(c.inspect)
+
+	if !ignore {
+		label := strings.ToLower(c.pod.Annotations[EnableLabel])
+		switch label {
+		case "0", "off", "false", "no":
+			ignore = true
+		case "1", "on", "true", "yes":
+			ignore = false
+		}
+	}
+
+	return ignore
 }
 
 // IsRunning returns true if this container is running
@@ -358,33 +396,66 @@ func (c Container) Labels() map[string]string {
 
 // ListenAddresses returns the addresseses this container listen on
 func (c Container) ListenAddresses() []ListenAddress {
-	if c.inspect.Config == nil {
-		return nil
-	}
-
 	if c.PrimaryAddress() == "" {
 		return nil
 	}
 
+	ignoredPort := make(map[int]bool)
+
+	if c.inspect.Config != nil {
+		ignoredPort = ignoredPortsFromLabels(c.inspect.Config.Labels, "container "+c.Name())
+	}
+
+	for port, v := range ignoredPortsFromLabels(c.pod.Annotations, "pod"+c.pod.Name) {
+		ignoredPort[port] = v
+	}
+
 	exposedPorts := make([]ListenAddress, 0)
 
-	for v := range c.inspect.Config.ExposedPorts {
-		tmp := strings.Split(string(v), "/")
-		if len(tmp) != 2 {
-			continue
+	if container, found := c.kubernetesContainer(); found && len(container.Ports) > 0 {
+		for _, port := range container.Ports {
+			exposedPorts = append(exposedPorts, ListenAddress{
+				Port:          int(port.ContainerPort),
+				NetworkFamily: strings.ToLower(string(port.Protocol)),
+				Address:       c.PrimaryAddress(),
+			})
 		}
-
-		portStr := tmp[0]
-		protocol := tmp[1]
-
-		port, err := strconv.ParseInt(portStr, 10, 0)
-		if err != nil {
-			logger.V(1).Printf("unable to parse port %#v: %v", portStr, err)
-			continue
-		}
-
-		exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: protocol, Address: c.PrimaryAddress(), Port: int(port)})
 	}
+
+	if len(exposedPorts) == 0 && c.inspect.NetworkSettings != nil && len(c.inspect.NetworkSettings.Ports) > 0 {
+		for k, v := range c.inspect.NetworkSettings.Ports {
+			if len(v) == 0 {
+				continue
+			}
+
+			exposedPorts = append(exposedPorts, ListenAddress{
+				NetworkFamily: k.Proto(),
+				Address:       c.PrimaryAddress(),
+				Port:          k.Int(),
+			})
+		}
+	}
+
+	if len(exposedPorts) == 0 && c.inspect.Config != nil {
+		for v := range c.inspect.Config.ExposedPorts {
+			exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: v.Proto(), Address: c.PrimaryAddress(), Port: v.Int()})
+		}
+	}
+
+	n := 0
+
+	for _, x := range exposedPorts {
+		if !ignoredPort[x.Port] {
+			exposedPorts[n] = x
+			n++
+		}
+	}
+
+	exposedPorts = exposedPorts[:n]
+
+	sort.Slice(exposedPorts, func(i, j int) bool {
+		return exposedPorts[i].Port < exposedPorts[j].Port
+	})
 
 	return exposedPorts
 }
@@ -447,14 +518,30 @@ func (c Container) FinishedAt() time.Time {
 	return result
 }
 
+func (c Container) kubernetesContainer() (corev1.Container, bool) {
+	if c.inspect.Config == nil {
+		return corev1.Container{}, false
+	}
+
+	name := c.inspect.Config.Labels["io.kubernetes.container.name"]
+
+	for _, c := range c.pod.Spec.Containers {
+		if c.Name == name {
+			return c, true
+		}
+	}
+
+	return corev1.Container{}, false
+}
+
 func ignoreContainer(inspect types.ContainerJSON) bool {
 	if inspect.Config == nil {
 		return false
 	}
 
-	label, ok := inspect.Config.Labels["glouton.enable"]
+	label, ok := inspect.Config.Labels[EnableLabel]
 	if !ok {
-		label = inspect.Config.Labels["bleemeo.enable"]
+		label = inspect.Config.Labels[EnableLegacyLabel]
 	}
 
 	label = strings.ToLower(label)
@@ -554,7 +641,7 @@ func (d *DockerProvider) primaryAddress(ctx context.Context, inspect types.Conta
 	return ""
 }
 
-func (d *DockerProvider) getClient(ctx context.Context) (cl *docker.Client, err error) {
+func (d *DockerProvider) getClient(ctx context.Context) (cl dockerClient, err error) {
 	if d.client == nil {
 		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
 		if err != nil {
@@ -637,7 +724,7 @@ func (d *DockerProvider) top(ctx context.Context, containerID string) (top conta
 	return
 }
 
-func (d *DockerProvider) updateContainer(ctx context.Context, cl *docker.Client, containerID string) (Container, error) {
+func (d *DockerProvider) updateContainer(ctx context.Context, cl dockerClient, containerID string) (Container, error) {
 	var result Container
 
 	inspect, err := cl.ContainerInspect(ctx, containerID)
@@ -652,16 +739,29 @@ func (d *DockerProvider) updateContainer(ctx context.Context, cl *docker.Client,
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	if ignoreContainer(inspect) {
-		d.ignoredID[containerID] = nil
-	}
-
-	delete(d.ignoredID, containerID)
 	sortInspect(inspect)
 
-	d.containers[containerID] = Container{
+	container := Container{
 		primaryAddress: d.primaryAddress(ctx, inspect, d.bridgeNetworks, d.containerAddressOnDockerBridge),
 		inspect:        inspect,
+	}
+
+	if pod, ok := d.containerID2Pods[containerID]; ok {
+		container.pod = pod
+	} else if container.Labels()["io.kubernetes.pod.name"] != "" {
+		d.kubernetesUpdated = false
+
+		d.updatePods(ctx)
+
+		container.pod = d.containerID2Pods[containerID]
+	}
+
+	d.containers[containerID] = container
+
+	if container.Ignored() {
+		d.ignoredID[containerID] = nil
+	} else {
+		delete(d.ignoredID, containerID)
 	}
 
 	return d.containers[containerID], nil
@@ -715,15 +815,25 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 			return err
 		}
 
-		if ignoreContainer(inspect) {
-			ignoredID[c.ID] = nil
-		}
-
 		sortInspect(inspect)
 
-		containers[c.ID] = Container{
+		container := Container{
 			primaryAddress: d.primaryAddress(ctx, inspect, bridgeNetworks, containerAddressOnDockerBridge),
 			inspect:        inspect,
+		}
+
+		if pod, ok := d.containerID2Pods[c.ID]; ok {
+			container.pod = pod
+		} else if container.Labels()["io.kubernetes.pod.name"] != "" {
+			d.updatePods(ctx)
+
+			container.pod = d.containerID2Pods[c.ID]
+		}
+
+		containers[c.ID] = container
+
+		if container.Ignored() {
+			ignoredID[c.ID] = nil
 		}
 	}
 
@@ -856,4 +966,38 @@ func sortInspect(inspect types.ContainerJSON) {
 			return false
 		})
 	}
+}
+
+func ignoredPortsFromLabels(labels map[string]string, name string) map[int]bool {
+	ignoredPort := make(map[int]bool)
+
+	for k, v := range labels {
+		if !strings.HasPrefix(k, ignoredPortLabel) {
+			continue
+		}
+
+		ignore := false
+
+		switch strings.ToLower(v) {
+		case "1", "on", "true", "yes":
+			ignore = true
+		}
+
+		if !ignore {
+			continue
+		}
+
+		portStr := strings.TrimPrefix(k, ignoredPortLabel)
+		port, err := strconv.ParseInt(portStr, 10, 0)
+
+		if err != nil {
+			logger.V(1).Printf("Label %#v of %s containt invalid port: %v", k, name, err)
+
+			continue
+		}
+
+		ignoredPort[int(port)] = true
+	}
+
+	return ignoredPort
 }
