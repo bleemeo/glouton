@@ -1,0 +1,617 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    creationTimestamp: "2020-04-16T11:52:39Z"
+    generateName: rabbitmq-container-port-68c84fdd9-
+    labels:
+      app: rabbitmq-container-port
+      pod-template-hash: 68c84fdd9
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"4aeb1fd2-8f04-41f9-bc8b-ef181335a875"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"rabbitmq"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:ports:
+                .: {}
+                k:{"containerPort":5672,"protocol":"TCP"}:
+                  .: {}
+                  f:containerPort: {}
+                  f:protocol: {}
+              f:readinessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:tcpSocket:
+                  .: {}
+                  f:port: {}
+                f:timeoutSeconds: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2020-04-16T11:52:39Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"172.18.0.7"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2020-04-16T11:53:45Z"
+    name: rabbitmq-container-port-68c84fdd9-frpv9
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: rabbitmq-container-port-68c84fdd9
+      uid: 4aeb1fd2-8f04-41f9-bc8b-ef181335a875
+    resourceVersion: "24433"
+    selfLink: /api/v1/namespaces/default/pods/rabbitmq-container-port-68c84fdd9-frpv9
+    uid: 9fbf9275-bb4f-429b-b6a4-49b4db061206
+  spec:
+    containers:
+    - image: rabbitmq:latest
+      imagePullPolicy: Always
+      name: rabbitmq
+      ports:
+      - containerPort: 5672
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 5672
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-cxf52
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-cxf52
+      secret:
+        defaultMode: 420
+        secretName: default-token-cxf52
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:52:39Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:53:45Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:53:45Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:52:39Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: docker://39759515886a57074f438b9fd4e88981397c914784cdf58b4ee77b7809619eaa
+      image: rabbitmq:latest
+      imageID: docker-pullable://rabbitmq@sha256:3436c45657cc5111cee9fafc68ee836eeb048aeae85ad60c108d9765a0bfe0ea
+      lastState: {}
+      name: rabbitmq
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2020-04-16T11:52:46Z"
+    hostIP: 172.17.0.11
+    phase: Running
+    podIP: 172.18.0.7
+    podIPs:
+    - ip: 172.18.0.7
+    qosClass: BestEffort
+    startTime: "2020-04-16T11:52:39Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      glouton.check.ignore.port.4369: TruE
+      glouton.check.ignore.port.5671: "on"
+    creationTimestamp: "2020-04-16T11:52:39Z"
+    generateName: rabbitmq-labels-7fbb75dcd7-
+    labels:
+      app: rabbitmq-labels
+      pod-template-hash: 7fbb75dcd7
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:glouton.check.ignore.port.4369: {}
+            f:glouton.check.ignore.port.5671: {}
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"17d1e5ba-8aa9-437d-a681-51f6545bcca4"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"rabbitmq"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2020-04-16T11:52:39Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"172.18.0.6"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2020-04-16T11:52:45Z"
+    name: rabbitmq-labels-7fbb75dcd7-8p255
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: rabbitmq-labels-7fbb75dcd7
+      uid: 17d1e5ba-8aa9-437d-a681-51f6545bcca4
+    resourceVersion: "24270"
+    selfLink: /api/v1/namespaces/default/pods/rabbitmq-labels-7fbb75dcd7-8p255
+    uid: bded5e34-0eae-41c7-95b6-61b9974f0493
+  spec:
+    containers:
+    - image: rabbitmq:latest
+      imagePullPolicy: Always
+      name: rabbitmq
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-cxf52
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-cxf52
+      secret:
+        defaultMode: 420
+        secretName: default-token-cxf52
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:52:39Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:52:45Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:52:45Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T11:52:39Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: docker://1f7f4d96cca4606e9f28774da8875f0bdfda12037d907bde181ed4e8212e05d2
+      image: rabbitmq:latest
+      imageID: docker-pullable://rabbitmq@sha256:3436c45657cc5111cee9fafc68ee836eeb048aeae85ad60c108d9765a0bfe0ea
+      lastState: {}
+      name: rabbitmq
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2020-04-16T11:52:44Z"
+    hostIP: 172.17.0.11
+    phase: Running
+    podIP: 172.18.0.6
+    podIPs:
+    - ip: 172.18.0.6
+    qosClass: BestEffort
+    startTime: "2020-04-16T11:52:39Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      glouton.enable: "off"
+    creationTimestamp: "2020-04-16T15:33:41Z"
+    generateName: redis-memcached-78f799c9c8-
+    labels:
+      app: redis-memcached
+      pod-template-hash: 78f799c9c8
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:glouton.enable: {}
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"c40ac26c-b8c2-40d2-a39b-fc73ab9d595c"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"a-memcached"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:readinessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:tcpSocket:
+                  .: {}
+                  f:port: {}
+                f:timeoutSeconds: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+            k:{"name":"the-redis"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:ports:
+                .: {}
+                k:{"containerPort":6363,"protocol":"TCP"}:
+                  .: {}
+                  f:containerPort: {}
+                  f:protocol: {}
+              f:readinessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:tcpSocket:
+                  .: {}
+                  f:port: {}
+                f:timeoutSeconds: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2020-04-16T15:33:41Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"172.18.0.5"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2020-04-16T15:33:55Z"
+    name: redis-memcached-78f799c9c8-q6p55
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: redis-memcached-78f799c9c8
+      uid: c40ac26c-b8c2-40d2-a39b-fc73ab9d595c
+    resourceVersion: "53527"
+    selfLink: /api/v1/namespaces/default/pods/redis-memcached-78f799c9c8-q6p55
+    uid: 41a8d621-5511-4e54-8c9a-2a660bfb5681
+  spec:
+    containers:
+    - image: redis:latest
+      imagePullPolicy: Always
+      name: the-redis
+      ports:
+      - containerPort: 6363
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 6379
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-cxf52
+        readOnly: true
+    - image: memcached:latest
+      imagePullPolicy: Always
+      name: a-memcached
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 11211
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-cxf52
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-cxf52
+      secret:
+        defaultMode: 420
+        secretName: default-token-cxf52
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T15:33:41Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T15:33:55Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T15:33:55Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2020-04-16T15:33:41Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: docker://bd12622b19204e396c51ac6be603f127c680b6c347dc5a13e04c5ef0a34ba588
+      image: memcached:latest
+      imageID: docker-pullable://memcached@sha256:6df2f148599be997ef7184ad972786847f6f88c31961367f3bbad0525333caab
+      lastState: {}
+      name: a-memcached
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2020-04-16T15:33:47Z"
+    - containerID: docker://9c1d5079d3d26440b4ceffe037b47333184b5a9c1145cb8c8b4962fd3c46999f
+      image: redis:latest
+      imageID: docker-pullable://redis@sha256:b7d787b0813a615f469d008e099d061e5f22ffd6db697a7f431fc713eaac5a83
+      lastState: {}
+      name: the-redis
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2020-04-16T15:33:45Z"
+    hostIP: 172.17.0.11
+    phase: Running
+    podIP: 172.18.0.5
+    podIPs:
+    - ip: 172.18.0.5
+    qosClass: BestEffort
+    startTime: "2020-04-16T15:33:41Z"
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""
