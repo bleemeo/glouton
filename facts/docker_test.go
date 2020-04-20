@@ -408,6 +408,32 @@ func TestContainer_ListenAddresses(t *testing.T) {
 	}
 }
 
+// TestRegress_withoutKubernetes verify that Docker provider can work without Kubernetes
+func TestRegress_withoutKubernetes(t *testing.T) {
+	dockerClient, err := newDockerMock("testdata/minikube-v1.18.0/docker.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dockerProvider := NewDocker(nil, nil)
+	dockerProvider.client = dockerClient
+
+	_, err = dockerProvider.Containers(context.Background(), 0, true)
+	if err != nil {
+		t.Error(err)
+	}
+
+	var kubeProvider *KubernetesProvider
+
+	dockerProvider = NewDocker(nil, kubeProvider)
+	dockerProvider.client = dockerClient
+
+	_, err = dockerProvider.Containers(context.Background(), 0, true)
+	if err != nil {
+		t.Error(err)
+	}
+}
+
 func Test_updateContainers(t *testing.T) {
 	dockerClient, err := newDockerMock("testdata/minikube-v1.18.0/docker.json")
 	if err != nil {

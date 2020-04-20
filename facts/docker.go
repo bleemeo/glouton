@@ -103,13 +103,24 @@ type Container struct {
 }
 
 // NewDocker creates a new Docker provider which must be started with Run() method
-func NewDocker(deletedContainersCallback func(containerIDs []string), kubernetesProvider *KubernetesProvider) *DockerProvider {
+func NewDocker(deletedContainersCallback func(containerIDs []string), kubeImpl *KubernetesProvider) *DockerProvider {
+	var kube kubernetesProvider
+
+	// an interface type (kubernetesProvider here) store both the real type and real value.
+	// Which means it could have two "nil" values:
+	// * actual nil (for which == nil works), which is both real type & real value unset
+	// * real type set (to *KubernetesProvider) and real value set to nil (to be pedentic, (*T)(nil))
+	// The following ensure we never store the second "nil", because == nil don't works on them.
+	if kubeImpl != nil {
+		kube = kubeImpl
+	}
+
 	return &DockerProvider{
 		notifyC:                   make(chan DockerEvent),
 		lastEventAt:               time.Now(),
 		lastKill:                  make(map[string]time.Time),
 		deletedContainersCallback: deletedContainersCallback,
-		kubernetesProvider:        kubernetesProvider,
+		kubernetesProvider:        kube,
 	}
 }
 
