@@ -344,13 +344,7 @@ func (c Container) Ignored() bool {
 	ignore := ignoreContainer(c.inspect)
 
 	if !ignore {
-		label := strings.ToLower(c.pod.Annotations[EnableLabel])
-		switch label {
-		case "0", "off", "false", "no":
-			ignore = true
-		case "1", "on", "true", "yes":
-			ignore = false
-		}
+		ignore = !string2Boolean(c.pod.Annotations[EnableLabel], true)
 	}
 
 	return ignore
@@ -544,13 +538,17 @@ func ignoreContainer(inspect types.ContainerJSON) bool {
 		label = inspect.Config.Labels[EnableLegacyLabel]
 	}
 
-	label = strings.ToLower(label)
+	return !string2Boolean(label, true)
+}
 
-	switch label {
+func string2Boolean(input string, defaultValue bool) bool {
+	switch strings.ToLower(input) {
 	case "0", "off", "false", "no":
+		return false
+	case "1", "on", "true", "yes":
 		return true
 	default:
-		return false
+		return defaultValue
 	}
 }
 
@@ -976,12 +974,7 @@ func ignoredPortsFromLabels(labels map[string]string, name string) map[int]bool 
 			continue
 		}
 
-		ignore := false
-
-		switch strings.ToLower(v) {
-		case "1", "on", "true", "yes":
-			ignore = true
-		}
+		ignore := string2Boolean(v, false)
 
 		if !ignore {
 			continue
