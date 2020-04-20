@@ -399,6 +399,11 @@ func (c Container) Labels() map[string]string {
 	return c.inspect.Config.Labels
 }
 
+// Annotations returns labels associated with the container
+func (c Container) Annotations() map[string]string {
+	return c.pod.Annotations
+}
+
 // ListenAddresses returns the addresseses this container listen on
 func (c Container) ListenAddresses() []ListenAddress {
 	if c.PrimaryAddress() == "" {
@@ -472,6 +477,18 @@ func (c Container) Name() string {
 	}
 
 	return c.inspect.Name
+}
+
+// PodNamespaceName return the namespace and pod name if available
+func (c Container) PodNamespaceName() (string, string) {
+	if c.pod.Name != "" {
+		return c.pod.Namespace, c.pod.Name
+	}
+
+	// Get the  from Docker labels if k8s API not available
+	labels := c.Labels()
+
+	return labels["io.kubernetes.pod.namespace"], labels["io.kuberntes.pod.name"]
 }
 
 // PrimaryAddress returns the address where the container may be reachable from host
