@@ -42,6 +42,7 @@ import (
 	"glouton/config"
 	"glouton/debouncer"
 	"glouton/discovery"
+	"glouton/discovery/promexporter"
 	"glouton/facts"
 	"glouton/influxdb"
 	"glouton/inputs/docker"
@@ -78,6 +79,7 @@ type agent struct {
 	jmx               *jmxtrans.JMX
 	accumulator       *threshold.Accumulator
 	store             *store.Store
+	promScrapper      *promexporter.DynamicSrapper
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -501,8 +503,11 @@ func (a *agent) run() { //nolint:gocyclo
 		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
 	}
 
-	scrap := scrapper.New(targets)
-	promExporter := exporter.New(a.store, scrap)
+	a.promScrapper = &promexporter.DynamicSrapper{
+		StaticTargets:  targets,
+		DynamicJobName: "discovered-exporters",
+	}
+	promExporter := exporter.New(a.store, a.promScrapper)
 
 	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.accumulator)
 
@@ -519,7 +524,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.dailyFact, "Facts gatherer"},
 		{a.dockerWatcher, "Docker event watcher"},
 		{a.netstatWatcher, "Netstat file watcher"},
-		{scrap.Run, "Prometheus Scrapper"},
+		{a.promScrapper.Run, "Prometheus Scrapper"},
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
 	}
@@ -1022,13 +1027,26 @@ func (a *agent) handleTrigger(ctx context.Context) {
 		services, err := a.discovery.Discovery(ctx, 0)
 		if err != nil {
 			logger.V(1).Printf("error during discovery: %v", err)
-		} else if a.jmx != nil {
-			a.l.Lock()
-			resolution := a.metricResolution
-			a.l.Unlock()
+		} else {
+			if a.jmx != nil {
+				a.l.Lock()
+				resolution := a.metricResolution
+				a.l.Unlock()
 
-			if err := a.jmx.UpdateConfig(services, resolution); err != nil {
-				logger.V(1).Printf("failed to update JMX configuration: %v", err)
+				if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+					logger.V(1).Printf("failed to update JMX configuration: %v", err)
+				}
+			}
+			if a.promScrapper != nil {
+				if containers, err := a.dockerFact.Containers(ctx, time.Hour, false); err == nil {
+					containers2 := make([]promexporter.Container, len(containers))
+
+					for i, c := range containers {
+						containers2[i] = c
+					}
+
+					a.promScrapper.Update(containers2)
+				}
 			}
 		}
 

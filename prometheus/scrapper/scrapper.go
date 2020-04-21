@@ -40,9 +40,10 @@ type Scrapper struct {
 
 // Target describe a scraping target
 type Target struct {
-	URL    string
-	Name   string
-	Prefix string
+	URL         string
+	Name        string
+	Prefix      string
+	ExtraLabels map[string]string
 }
 
 // New initialise Prometheus scrapper
@@ -50,6 +51,14 @@ func New(targets []Target) *Scrapper {
 	return &Scrapper{
 		targets: targets,
 	}
+}
+
+// UpdateTargets define the new list of targets
+func (s *Scrapper) UpdateTargets(new []Target) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.targets = new
 }
 
 // Run start the scrapper
@@ -87,11 +96,18 @@ func (s *Scrapper) run(ctx context.Context) {
 		l  sync.Mutex
 	)
 
-	wg.Add(len(s.targets))
+	s.l.Lock()
+
+	targets := make([]Target, len(s.targets))
+	copy(targets, s.targets)
+
+	s.l.Unlock()
+
+	wg.Add(len(targets))
 
 	result := make(map[string]*dto.MetricFamily)
 
-	for _, target := range s.targets {
+	for _, target := range targets {
 		target := target
 
 		go func() {
@@ -195,6 +211,13 @@ func fetchURL(ctx context.Context, target Target) map[string]*dto.MetricFamily {
 			key := "glouton_job"
 			x := dto.LabelPair{Name: &key, Value: &target.Name}
 			m.Label = append(m.Label, &x)
+
+			for k, v := range target.ExtraLabels {
+				k := k
+				v := v
+				x := dto.LabelPair{Name: &k, Value: &v}
+				m.Label = append(m.Label, &x)
+			}
 		}
 	}
 
