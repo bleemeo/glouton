@@ -17,6 +17,7 @@
 package jmxtrans
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -94,6 +95,10 @@ func (cfg *jmxtransConfig) UpdateTarget(targetAddress string, targetPort int) {
 
 	cfg.targetAddress = targetAddress
 	cfg.targetPort = targetPort
+}
+
+func (cfg *jmxtransConfig) IsEmpty(config []byte) bool {
+	return len(config) == 0 || bytes.Equal(config, []byte("{\"servers\":[]}"))
 }
 
 func (cfg *jmxtransConfig) CurrentConfig() []byte {

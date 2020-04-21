@@ -191,7 +191,7 @@ func (c *jmxtransClient) processLine(line string) {
 
 	metrics, usedInRatio := c.Config.GetMetrics(md5Service, md5Bean, attr)
 	if len(metrics) == 0 {
-		logger.V(3).Printf("metric not found for %s, %s, %s", md5Service, md5Bean, attr)
+		logger.V(5).Printf("metric not found for %s, %s, %s", md5Service, md5Bean, attr)
 		return
 	}
 
