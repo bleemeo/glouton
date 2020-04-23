@@ -73,7 +73,8 @@ type Client struct {
 
 	l                 sync.Mutex
 	setupDone         bool
-	pendingToken      []paho.Token
+	publishBlocked    bool
+	pendingMessage    []message
 	pendingPoints     []types.MetricPoint
 	lastReport        time.Time
 	failedPointsCount int
@@ -81,6 +82,13 @@ type Client struct {
 	disableReason     bleemeoTypes.DisableReason
 	connectionLost    chan interface{}
 	disableNotify     chan interface{}
+}
+
+type message struct {
+	token   paho.Token
+	retry   bool
+	topic   string
+	payload []byte
 }
 
 type metricPayload struct {
@@ -293,10 +301,10 @@ func (c *Client) shutdown() error {
 			return err
 		}
 
-		c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID), payload)
+		c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID), payload, true)
 	}
 
-	stillPending := c.waitPublish(deadline)
+	stillPending := c.waitPublishAndResend(deadline, true)
 	if stillPending > 0 {
 		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
 	}
@@ -340,7 +348,7 @@ func (c *Client) run(ctx context.Context) error {
 			c.sendTopinfo(ctx, cfg)
 		}
 
-		c.waitPublish(time.Now().Add(5 * time.Second))
+		c.waitPublishAndResend(time.Now().Add(5*time.Second), false)
 
 		select {
 		case <-ticker.C:
@@ -443,7 +451,7 @@ func (c *Client) sendPoints() {
 			return
 		}
 
-		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.AgentID), buffer)
+		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.AgentID), buffer, true)
 	}
 
 	c.l.Lock()
@@ -510,7 +518,7 @@ func (c *Client) onConnect(_ paho.Client) {
 		return
 	}
 
-	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload)
+	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload, true)
 	c.mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
 		0,
@@ -553,11 +561,28 @@ func (c *Client) onConnectionLost(_ paho.Client, err error) {
 	c.connectionLost <- nil
 }
 
-func (c *Client) publish(topic string, payload []byte) {
-	token := c.mqttClient.Publish(topic, 1, false, payload)
+func (c *Client) publish(topic string, payload []byte, retry bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
-	c.pendingToken = append(c.pendingToken, token)
+
+	msg := message{
+		retry:   retry,
+		payload: payload,
+		topic:   topic,
+	}
+
+	// publish could be blocked to ensure that after reconnection,
+	// pendingMessage that must be retryed are done before new publish (to kept
+	// messages order). publishBlocked is set when connection is down.
+	if c.publishBlocked && !retry {
+		return
+	}
+
+	if !c.publishBlocked {
+		msg.token = c.mqttClient.Publish(topic, 1, false, payload)
+	}
+
+	c.pendingMessage = append(c.pendingMessage, msg)
 }
 
 func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig) {
@@ -587,30 +612,43 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 		return
 	}
 
-	c.publish(topic, buffer.Bytes())
+	c.publish(topic, buffer.Bytes(), false)
 }
 
-func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
-	stillPending := make([]paho.Token, 0)
+func (c *Client) waitPublishAndResend(deadline time.Time, resend bool) (stillPendingCount int) {
+	stillPending := make([]message, 0)
 
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	for _, t := range c.pendingToken {
-		if t.WaitTimeout(time.Until(deadline)) {
-			if t.Error() != nil {
-				logger.V(2).Printf("MQTT publish failed: %v", t.Error())
+	for _, m := range c.pendingMessage {
+		if m.token != nil && m.token.WaitTimeout(time.Until(deadline)) {
+			if m.token.Error() != nil {
+				logger.V(2).Printf("MQTT publish on %s failed: %v", m.topic, m.token.Error())
+			} else {
+				c.lastReport = time.Now()
+				continue
 			}
 
-			c.lastReport = time.Now()
-		} else {
-			stillPending = append(stillPending, t)
+			m.token = nil
 		}
+
+		if m.token == nil && !m.retry {
+			continue
+		}
+
+		if m.token == nil && resend {
+			m.token = c.mqttClient.Publish(m.topic, 1, false, m.payload)
+		}
+
+		stillPending = append(stillPending, m)
 	}
 
-	c.pendingToken = stillPending
+	c.pendingMessage = stillPending
 
-	return len(c.pendingToken)
+	logger.V(3).Printf("%d messages are still pending", len(c.pendingMessage))
+
+	return len(c.pendingMessage)
 }
 
 func loadRootCAs(caFile string) (*x509.CertPool, error) {
@@ -665,18 +703,21 @@ func (c *Client) connectionManager(ctx context.Context) {
 
 	var (
 		lastConnectionTimes []time.Time
+		lastResend          time.Time
 	)
 
 	currentConnectDelay := minimalDelayBetweenConnect
 
+mainLoop:
 	for ctx.Err() == nil {
 		disableUntil, disableReason := c.getDisableUntil()
-		if time.Now().Before(disableUntil) {
+		switch {
+		case time.Now().Before(disableUntil):
 			if c.mqttClient.IsConnectionOpen() {
 				logger.V(2).Printf("Disconnection from MQTT due to %v", disableReason)
 				c.mqttClient.Disconnect(0)
 			}
-		} else if !c.mqttClient.IsConnectionOpen() {
+		case !c.mqttClient.IsConnectionOpen():
 			length := len(lastConnectionTimes)
 
 			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
@@ -709,20 +750,33 @@ func (c *Client) connectionManager(ctx context.Context) {
 				token := c.mqttClient.Connect()
 				for !token.WaitTimeout(1 * time.Second) {
 					if ctx.Err() != nil {
-						break
+						break mainLoop
 					}
 				}
 
 				if token.Error() != nil {
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
+				} else {
+					c.waitPublishAndResend(time.Now().Add(10*time.Second), true)
+
+					c.l.Lock()
+					c.publishBlocked = false
+					c.l.Unlock()
 				}
 			}
+		case c.mqttClient.IsConnectionOpen() && time.Since(lastResend) > 10*time.Minute:
+			lastResend = time.Now()
+			c.waitPublishAndResend(time.Now().Add(10*time.Second), true)
 		}
 
 		select {
 		case <-ctx.Done():
 		case <-c.connectionLost:
+			c.l.Lock()
+			c.publishBlocked = true
+			c.l.Unlock()
+
 			length := len(lastConnectionTimes)
 			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
 				logger.V(2).Printf("MQTT connection was stable, reset delay to %v", minimalDelayBetweenConnect)
@@ -735,5 +789,14 @@ func (c *Client) connectionManager(ctx context.Context) {
 
 	if err := c.shutdown(); err != nil {
 		logger.V(1).Printf("Unable to perform clean shutdown: %v", err)
+	}
+
+	// make sure all connectionLost are read
+	for {
+		select {
+		case <-c.connectionLost:
+		default:
+			return
+		}
 	}
 }
