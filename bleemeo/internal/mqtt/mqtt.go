@@ -757,6 +757,10 @@ mainLoop:
 				if token.Error() != nil {
 					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
+
+					// we must disconnect to stop paho gorouting that otherwise will be
+					// started multiple time for each Connect()
+					c.mqttClient.Disconnect(0)
 				} else {
 					c.waitPublishAndResend(time.Now().Add(10*time.Second), true)
 
