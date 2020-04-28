@@ -426,7 +426,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	if a.config.Bool("agent.http_debug.enabled") {
 		go func() {
-			debugAddress := a.config.String("agent.http_debug.binf_address")
+			debugAddress := a.config.String("agent.http_debug.bind_address")
 
 			logger.Printf("Starting debug server on http://%s/debug/pprof/", debugAddress)
 			log.Println(http.ListenAndServe(debugAddress, nil))
