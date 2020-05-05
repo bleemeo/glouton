@@ -107,7 +107,7 @@ func (hc *HTTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	if err != nil {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Connection refused",
+			StatusDescription: "HTTP connection failed: " + err.Error(),
 		}
 	}
 
