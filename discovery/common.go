@@ -191,6 +191,9 @@ var (
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
 			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
+			DefaultIgnoredPorts: map[int]bool{
+				5701: true,
+			},
 		},
 		BindService: {
 			ServicePort:         53,
@@ -343,4 +346,5 @@ type discoveryInfo struct {
 	IgnoreHighPort              bool
 	DisablePersistentConnection bool
 	ExtraAttributeNames         []string
+	DefaultIgnoredPorts         map[int]bool
 }

@@ -292,6 +292,20 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 
 		di := servicesDiscoveryInfo[service.ServiceType]
 
+		for port, ignore := range di.DefaultIgnoredPorts {
+			if !ignore {
+				continue
+			}
+
+			if _, ok := service.IgnoredPorts[port]; !ok {
+				if service.IgnoredPorts == nil {
+					service.IgnoredPorts = make(map[int]bool)
+				}
+
+				service.IgnoredPorts[port] = ignore
+			}
+		}
+
 		dd.updateListenAddresses(&service, di)
 
 		dd.fillExtraAttributes(&service)

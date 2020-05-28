@@ -603,6 +603,7 @@ func TestContainer_IgnoredPorts(t *testing.T) {
 			dockerContainer: docker19_03.getContainer("testdata_rabbitLabels_1"),
 			want: map[int]bool{
 				4369:  true,
+				5672:  false,
 				25672: true,
 			},
 		},

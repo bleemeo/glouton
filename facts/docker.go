@@ -998,10 +998,6 @@ func ignoredPortsFromLabels(labels map[string]string, name string) map[int]bool 
 
 		ignore := string2Boolean(v, false)
 
-		if !ignore {
-			continue
-		}
-
 		portStr := strings.TrimPrefix(k, ignoredPortLabel)
 		port, err := strconv.ParseInt(portStr, 10, 0)
 
@@ -1011,7 +1007,7 @@ func ignoredPortsFromLabels(labels map[string]string, name string) map[int]bool 
 			continue
 		}
 
-		ignoredPort[int(port)] = true
+		ignoredPort[int(port)] = ignore
 	}
 
 	return ignoredPort

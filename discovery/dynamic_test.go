@@ -62,6 +62,7 @@ type mockContainer struct {
 	listenAddresses []facts.ListenAddress
 	env             []string
 	labels          map[string]string
+	ignoredPorts    map[int]bool
 }
 
 func (mci mockContainerInfo) Container(containerID string) (container container, found bool) {
@@ -90,7 +91,7 @@ func (mc mockContainer) Ignored() bool {
 }
 
 func (mc mockContainer) IgnoredPorts() map[int]bool {
-	return nil
+	return mc.ignoredPorts
 }
 
 type mockFileReader struct {
@@ -183,16 +184,17 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 // Less will show the NUL character used to split args.
 func TestDynamicDiscoverySingle(t *testing.T) {
 	cases := []struct {
-		testName           string
-		cmdLine            []string
-		filesContent       map[string]string
-		containerID        string
-		netstatAddresses   []facts.ListenAddress
-		containerAddresses []facts.ListenAddress
-		containerIP        string
-		containerEnv       []string
-		want               Service
-		noMatch            bool
+		testName              string
+		cmdLine               []string
+		filesContent          map[string]string
+		containerID           string
+		netstatAddresses      []facts.ListenAddress
+		containerAddresses    []facts.ListenAddress
+		containerIP           string
+		containerEnv          []string
+		containerIgnoredPorts map[int]bool
+		want                  Service
+		noMatch               bool
 	}{
 		{
 			testName:         "simple-bind-all",
@@ -715,6 +717,53 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
 			},
 		},
+		{
+			testName: "bitbucket",
+			cmdLine: []string{
+				"/usr/lib/jvm/java-11-openjdk-amd64//bin/java", "-classpath /srv/bitbucket/dist/current/app", "-Datlassian.plugins.enable.wait=300", "-Datlassian.standalone=BITBUCKET",
+				"-Dbitbucket.home=/srv/bitbucket/home", "-Dbitbucket.install=/srv/bitbucket/dist/current", "-Xms512m", "-Xmx1g", "-XX:+UseG1GC", "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8",
+				"-Djava.io.tmpdir=/srv/bitbucket/home/tmp", "-Djava.library.path=/srv/bitbucket/dist/current/lib/native;/srv/bitbucket/home/lib/native",
+				"com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher", "start",
+			},
+			containerID:      "",
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 7990}},
+			want: Service{
+				Name:            "bitbucket",
+				ServiceType:     BitBucketService,
+				ContainerID:     "",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 7990}},
+				IPAddress:       "127.0.0.1",
+				IgnoredPorts: map[int]bool{
+					5701: true,
+				},
+			},
+		},
+		{
+			testName: "bitbucket-extra-ignore-port",
+			cmdLine: []string{
+				"/usr/lib/jvm/java-11-openjdk-amd64//bin/java", "-classpath /srv/bitbucket/dist/current/app", "-Datlassian.plugins.enable.wait=300", "-Datlassian.standalone=BITBUCKET",
+				"-Dbitbucket.home=/srv/bitbucket/home", "-Dbitbucket.install=/srv/bitbucket/dist/current", "-Xms512m", "-Xmx1g", "-XX:+UseG1GC", "-Dfile.encoding=UTF-8", "-Dsun.jnu.encoding=UTF-8",
+				"-Djava.io.tmpdir=/srv/bitbucket/home/tmp", "-Djava.library.path=/srv/bitbucket/dist/current/lib/native;/srv/bitbucket/home/lib/native",
+				"com.atlassian.bitbucket.internal.launcher.BitbucketServerLauncher", "start",
+			},
+			containerID: "1234",
+			containerIP: "127.0.0.1",
+			containerIgnoredPorts: map[int]bool{
+				8080: true,
+			},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 7990}},
+			want: Service{
+				Name:            "bitbucket",
+				ServiceType:     BitBucketService,
+				ContainerID:     "1234",
+				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 7990}},
+				IPAddress:       "127.0.0.1",
+				IgnoredPorts: map[int]bool{
+					5701: true,
+					8080: true,
+				},
+			},
+		},
 	}
 
 	ctx := context.Background()
@@ -739,6 +788,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 						ipAddress:       c.containerIP,
 						listenAddresses: c.containerAddresses,
 						env:             c.containerEnv,
+						ignoredPorts:    c.containerIgnoredPorts,
 					},
 				},
 			},
@@ -783,6 +833,10 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 
 		if !reflect.DeepEqual(srv[0].ListenAddresses, c.want.ListenAddresses) {
 			t.Errorf("Case %s: ListenAddresses == %v, want %v", c.testName, srv[0].ListenAddresses, c.want.ListenAddresses)
+		}
+
+		if !reflect.DeepEqual(srv[0].IgnoredPorts, c.want.IgnoredPorts) {
+			t.Errorf("Case %s: IgnoredPorts == %v, want %v", c.testName, srv[0].IgnoredPorts, c.want.IgnoredPorts)
 		}
 
 		if c.want.ExtraAttributes == nil {
