@@ -361,6 +361,21 @@ func (c Container) Ignored() bool {
 	return ignore
 }
 
+// IgnoredPorts returns ports ignored based on label ignoredPortLabel.
+func (c Container) IgnoredPorts() map[int]bool {
+	ignoredPort := make(map[int]bool)
+
+	if c.inspect.Config != nil {
+		ignoredPort = ignoredPortsFromLabels(c.inspect.Config.Labels, "container "+c.Name())
+	}
+
+	for port, v := range ignoredPortsFromLabels(c.pod.Annotations, "pod"+c.pod.Name) {
+		ignoredPort[port] = v
+	}
+
+	return ignoredPort
+}
+
 // IsRunning returns true if this container is running
 func (c Container) IsRunning() bool {
 	return c.inspect.State != nil && c.inspect.State.Running
@@ -410,16 +425,6 @@ func (c Container) ListenAddresses() []ListenAddress {
 		return nil
 	}
 
-	ignoredPort := make(map[int]bool)
-
-	if c.inspect.Config != nil {
-		ignoredPort = ignoredPortsFromLabels(c.inspect.Config.Labels, "container "+c.Name())
-	}
-
-	for port, v := range ignoredPortsFromLabels(c.pod.Annotations, "pod"+c.pod.Name) {
-		ignoredPort[port] = v
-	}
-
 	exposedPorts := make([]ListenAddress, 0)
 
 	if container, found := c.kubernetesContainer(); found && len(container.Ports) > 0 {
@@ -451,17 +456,6 @@ func (c Container) ListenAddresses() []ListenAddress {
 			exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: v.Proto(), Address: c.PrimaryAddress(), Port: v.Int()})
 		}
 	}
-
-	n := 0
-
-	for _, x := range exposedPorts {
-		if !ignoredPort[x.Port] {
-			exposedPorts[n] = x
-			n++
-		}
-	}
-
-	exposedPorts = exposedPorts[:n]
 
 	sort.Slice(exposedPorts, func(i, j int) bool {
 		return exposedPorts[i].Port < exposedPorts[j].Port

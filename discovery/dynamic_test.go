@@ -89,6 +89,10 @@ func (mc mockContainer) Ignored() bool {
 	return false
 }
 
+func (mc mockContainer) IgnoredPorts() map[int]bool {
+	return nil
+}
+
 type mockFileReader struct {
 	contents map[string]string
 }

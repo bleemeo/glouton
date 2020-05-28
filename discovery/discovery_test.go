@@ -411,12 +411,77 @@ func Test_applyOveride(t *testing.T) {
 			},
 			want: map[NameContainer]Service{},
 		},
+		{
+			name: "ignore ports",
+			args: args{
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+						IPAddress:   "127.0.0.1",
+						ListenAddresses: []facts.ListenAddress{
+							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 443},
+						},
+					},
+				},
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "apache"}: {
+						"ignore_ports": "443,22",
+					},
+				},
+			},
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					IPAddress:   "127.0.0.1",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+						// It's not applyOveride which remove ignored ports
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 443},
+					},
+					IgnoredPorts: map[int]bool{
+						22:  true,
+						443: true,
+					},
+					ExtraAttributes: map[string]string{},
+				},
+			},
+		},
+		{
+			name: "ignore ports with space",
+			args: args{
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+					},
+				},
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "apache"}: {
+						"ignore_ports": "   443  , 22   ",
+					},
+				},
+			},
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					IgnoredPorts: map[int]bool{
+						22:  true,
+						443: true,
+					},
+					ExtraAttributes: map[string]string{},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if got := applyOveride(tt.args.discoveredServicesMap, tt.args.servicesOverride); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("applyOveride() = %v, want %v", got, tt.want)
+				t.Errorf("applyOveride() = %#v, want %#v", got, tt.want)
 			}
 		})
 	}

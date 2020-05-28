@@ -54,6 +54,7 @@ type container interface {
 	ListenAddresses() []facts.ListenAddress
 	Labels() map[string]string
 	Ignored() bool
+	IgnoredPorts() map[int]bool
 }
 
 type containerInfoProvider interface {
@@ -282,6 +283,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			service.ListenAddresses = netstat[pid]
 		} else {
 			service.ListenAddresses = service.container.ListenAddresses()
+			service.IgnoredPorts = service.container.IgnoredPorts()
 		}
 
 		if len(service.ListenAddresses) > 0 {

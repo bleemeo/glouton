@@ -24,15 +24,22 @@ import (
 	"glouton/task"
 	"glouton/types"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
 )
 
-const ignoredConfField string = "nagios_nrpe_name"
-
 const localhostIP = "127.0.0.1"
+
+// List of common ExtraAttributes supported by all services.
+// This list + ExtraAttributes from discoveryInfo list all overidable settings
+const (
+	nrpeExposedName = "nagios_nrpe_name"
+	ignoredPorts    = "ignore_ports"
+)
 
 // Accumulator will gather metrics point for added checks
 type Accumulator interface {
@@ -255,7 +262,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
 
-	d.ignoreServices()
+	d.ignoreServicesAndPorts()
 
 	return nil
 }
@@ -295,6 +302,29 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			service.ExtraAttributes = make(map[string]string)
 		}
 
+		if value, ok := overrideCopy[ignoredPorts]; ok {
+			values := strings.Split(value, ",")
+
+			if service.IgnoredPorts == nil {
+				service.IgnoredPorts = make(map[int]bool)
+			}
+
+			for _, s := range values {
+				port, err := strconv.ParseInt(strings.TrimSpace(s), 10, 0)
+				if err != nil {
+					logger.V(1).Printf(
+						"In %s for service %s: %s", ignoredPorts, serviceKey, err,
+					)
+
+					continue
+				}
+
+				service.IgnoredPorts[int(port)] = true
+			}
+
+			delete(overrideCopy, ignoredPorts)
+		}
+
 		di := servicesDiscoveryInfo[service.ServiceType]
 		for _, name := range di.ExtraAttributeNames {
 			if value, ok := overrideCopy[name]; ok {
@@ -308,7 +338,8 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			ignoredNames := make([]string, 0, len(overrideCopy))
 
 			for k := range overrideCopy {
-				if k != ignoredConfField {
+				// nrpeExposedName is not managed by us. See nrpe/responder.go
+				if k != nrpeExposedName {
 					ignoredNames = append(ignoredNames, k)
 				}
 			}
@@ -351,7 +382,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 	return servicesMap
 }
 
-func (d *Discovery) ignoreServices() {
+func (d *Discovery) ignoreServicesAndPorts() {
 	servicesMap := d.servicesMap
 	for nameContainer, service := range servicesMap {
 		if d.isCheckIgnored != nil {
@@ -360,6 +391,19 @@ func (d *Discovery) ignoreServices() {
 
 		if d.isInputIgnored != nil {
 			service.MetricsIgnored = d.isInputIgnored(nameContainer)
+		}
+
+		if len(service.IgnoredPorts) > 0 {
+			n := 0
+
+			for _, x := range service.ListenAddresses {
+				if !service.IgnoredPorts[x.Port] {
+					service.ListenAddresses[n] = x
+					n++
+				}
+			}
+
+			service.ListenAddresses = service.ListenAddresses[:n]
 		}
 
 		d.servicesMap[nameContainer] = service

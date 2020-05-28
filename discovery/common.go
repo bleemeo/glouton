@@ -101,10 +101,10 @@ type Service struct {
 	// ExtraAttributes contains additional service-dependant attribute. It may be password for MySQL, URL for HAProxy, ...
 	// Both configuration and dynamic discovery may set value here.
 	ExtraAttributes map[string]string
+	IgnoredPorts    map[int]bool
 	Active          bool
-
-	CheckIgnored   bool
-	MetricsIgnored bool
+	CheckIgnored    bool
+	MetricsIgnored  bool
 
 	HasNetstatInfo bool
 	container      container

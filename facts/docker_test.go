@@ -352,8 +352,10 @@ func TestContainer_ListenAddresses(t *testing.T) {
 				primaryAddress: "10.0.0.42",
 			},
 			want: []ListenAddress{
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 4369},
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5671},
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5672},
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 25672},
 			},
 		},
 		{
@@ -388,6 +390,8 @@ func TestContainer_ListenAddresses(t *testing.T) {
 				primaryAddress: "10.0.0.42",
 			},
 			want: []ListenAddress{
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 4369},
+				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5671},
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 5672},
 				{Address: "10.0.0.42", NetworkFamily: "tcp", Port: 25672},
 			},
@@ -460,6 +464,7 @@ func Test_updateContainers(t *testing.T) {
 		ignored               bool
 		primaryAddress        string
 		listenAddress         []ListenAddress
+		ignoredPorts          map[int]bool
 	}{
 		{
 			containerNameContains: "rabbitmq_rabbitmq-container-port",
@@ -468,14 +473,21 @@ func Test_updateContainers(t *testing.T) {
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.7", NetworkFamily: "tcp", Port: 5672},
 			},
+			ignoredPorts: map[int]bool{},
 		},
 		{
 			containerNameContains: "rabbitmq_rabbitmq-labels",
 			ignored:               false,
 			primaryAddress:        "172.18.0.6",
 			listenAddress: []ListenAddress{
+				{Address: "172.18.0.6", NetworkFamily: "tcp", Port: 4369},
+				{Address: "172.18.0.6", NetworkFamily: "tcp", Port: 5671},
 				{Address: "172.18.0.6", NetworkFamily: "tcp", Port: 5672},
 				{Address: "172.18.0.6", NetworkFamily: "tcp", Port: 25672},
+			},
+			ignoredPorts: map[int]bool{
+				4369: true,
+				5671: true,
 			},
 		},
 		{
@@ -485,6 +497,7 @@ func Test_updateContainers(t *testing.T) {
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.5", NetworkFamily: "tcp", Port: 6363},
 			},
+			ignoredPorts: map[int]bool{},
 		},
 		{
 			containerNameContains: "a-memcached_redis-memcached",
@@ -493,6 +506,7 @@ func Test_updateContainers(t *testing.T) {
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.5", NetworkFamily: "tcp", Port: 11211},
 			},
+			ignoredPorts: map[int]bool{},
 		},
 	}
 
@@ -525,10 +539,104 @@ func Test_updateContainers(t *testing.T) {
 			if w.listenAddress != nil && !reflect.DeepEqual(c.ListenAddresses(), w.listenAddress) {
 				t.Errorf("c.ListenAddresses() = %v, want %v", c.ListenAddresses(), w.listenAddress)
 			}
+
+			if w.ignoredPorts != nil && !reflect.DeepEqual(c.IgnoredPorts(), w.ignoredPorts) {
+				t.Errorf("c.IgnoredPorts() = %v, want %v", c.IgnoredPorts(), w.ignoredPorts)
+			}
 		}
 
 		if !found {
 			t.Errorf("no contains has the name %#v", w.containerNameContains)
 		}
+	}
+}
+
+func TestContainer_IgnoredPorts(t *testing.T) {
+	docker1_13_1, err := newDockerMock("testdata/docker-v1.13.1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	docker19_03, err := newDockerMock("testdata/docker-v19.03.5.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dockerMinikube1_18, err := newDockerMock("testdata/minikube-v1.18.0/docker.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	kubernetes1_18, err := newKubernetesMock("testdata/minikube-v1.18.0/pods.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name            string
+		dockerContainer types.ContainerJSON
+		k8sPod          corev1.Pod
+		want            map[int]bool
+	}{
+		{
+			name:            "docker-noport",
+			dockerContainer: docker19_03.getContainer("noport"),
+			want:            map[int]bool{},
+		},
+		{
+			name:            "docker-oneport",
+			dockerContainer: docker19_03.getContainer("my_redis"),
+			want:            map[int]bool{},
+		},
+		{
+			name:            "docker-v1.13.1",
+			dockerContainer: docker1_13_1.getContainer("multiple-port"),
+			want:            map[int]bool{},
+		},
+		{
+			name:            "docker-compose-none-exposed",
+			dockerContainer: docker19_03.getContainer("testdata_rabbitmqInternal_1"),
+			want:            map[int]bool{},
+		},
+		{
+			name:            "docker-compose-labels",
+			dockerContainer: docker19_03.getContainer("testdata_rabbitLabels_1"),
+			want: map[int]bool{
+				4369:  true,
+				25672: true,
+			},
+		},
+		{
+			name:            "minikube-no-k8s-api",
+			dockerContainer: dockerMinikube1_18.getContainer("rabbitmq_rabbitmq-container-port"),
+			want:            map[int]bool{},
+		},
+		{
+			name:            "minikube-container-port",
+			dockerContainer: dockerMinikube1_18.getContainer("rabbitmq_rabbitmq-container-port"),
+			k8sPod:          kubernetes1_18.getPOD("rabbitmq-container-port"),
+			want:            map[int]bool{},
+		},
+		{
+			name:            "minikube-labels",
+			dockerContainer: dockerMinikube1_18.getContainer("rabbitmq_rabbitmq-labels"),
+			k8sPod:          kubernetes1_18.getPOD("rabbitmq-labels"),
+			want: map[int]bool{
+				5671: true,
+				4369: true,
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := Container{
+				inspect: tt.dockerContainer,
+				pod:     tt.k8sPod,
+			}
+
+			if got := c.IgnoredPorts(); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Container.IgnoredPorts() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
