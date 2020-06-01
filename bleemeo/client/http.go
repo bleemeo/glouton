@@ -318,71 +318,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		if resp.Header.Get("Content-Type") != "application/json" {
-			partialBody := make([]byte, 250)
-			n, _ := resp.Body.Read(partialBody)
-
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      string(partialBody[:n]),
-				UnmarshalErr: nil,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		var (
-			jsonMessage json.RawMessage
-			jsonError   struct {
-				Error          string
-				Detail         string
-				NonFieldErrors []string `json:"non_field_errors"`
-			}
-		)
-
-		err = json.NewDecoder(resp.Body).Decode(&jsonMessage)
-		if err != nil {
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      "",
-				UnmarshalErr: err,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		err = json.Unmarshal(jsonMessage, &jsonError)
-		if err != nil {
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      "",
-				UnmarshalErr: err,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		if jsonError.Error != "" || jsonError.Detail != "" || len(jsonError.NonFieldErrors) > 0 {
-			errorMessage := jsonError.Error
-			if errorMessage == "" {
-				errorMessage = jsonError.Detail
-			}
-
-			if errorMessage == "" && len(jsonError.NonFieldErrors) > 0 {
-				errorMessage = strings.Join(jsonError.NonFieldErrors, ", ")
-			}
-
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      errorMessage,
-				UnmarshalErr: nil,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		return 0, APIError{
-			StatusCode:   resp.StatusCode,
-			Content:      string(jsonMessage),
-			UnmarshalErr: nil,
-			IsAuthError:  resp.StatusCode == 401,
-		}
+		return 0, decodeError(resp)
 	}
 
 	if result != nil {
@@ -397,4 +333,86 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 	}
 
 	return resp.StatusCode, nil
+}
+
+func decodeError(resp *http.Response) APIError {
+	if resp.Header.Get("Content-Type") != "application/json" {
+		partialBody := make([]byte, 250)
+		n, _ := resp.Body.Read(partialBody)
+
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      string(partialBody[:n]),
+			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	var (
+		jsonMessage json.RawMessage
+		jsonError   struct {
+			Error          string
+			Detail         string
+			NonFieldErrors []string `json:"non_field_errors"`
+		}
+		errorList []string
+	)
+
+	err := json.NewDecoder(resp.Body).Decode(&jsonMessage)
+	if err != nil {
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      "",
+			UnmarshalErr: err,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	err = json.Unmarshal(jsonMessage, &jsonError)
+	if err != nil {
+		err = json.Unmarshal(jsonMessage, &errorList)
+	}
+
+	if err != nil {
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      "",
+			UnmarshalErr: err,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	if errorList != nil {
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      strings.Join(errorList, ", "),
+			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	if jsonError.Error != "" || jsonError.Detail != "" || len(jsonError.NonFieldErrors) > 0 {
+		errorMessage := jsonError.Error
+		if errorMessage == "" {
+			errorMessage = jsonError.Detail
+		}
+
+		if errorMessage == "" && len(jsonError.NonFieldErrors) > 0 {
+			errorMessage = strings.Join(jsonError.NonFieldErrors, ", ")
+		}
+
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      errorMessage,
+			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	return APIError{
+		StatusCode:   resp.StatusCode,
+		Content:      string(jsonMessage),
+		UnmarshalErr: nil,
+		IsAuthError:  resp.StatusCode == 401,
+	}
 }
