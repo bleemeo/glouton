@@ -509,7 +509,7 @@ func (s *Synchronizer) register() error {
 
 	accountID := s.option.Config.String("bleemeo.account_id")
 
-	password := generatePassword(10)
+	password := generatePassword(20)
 
 	var objectID struct {
 		ID string
@@ -558,7 +558,7 @@ func (s *Synchronizer) register() error {
 }
 
 func generatePassword(length int) string {
-	letters := []rune("abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#-_@%*:;$")
 	b := make([]rune, length)
 
 	for i := range b {
