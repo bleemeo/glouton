@@ -22,7 +22,7 @@ Our release version will be set by goreleaser from the current date.
 ```
 docker run --rm -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
-   node:12.13.0 \
+   node:lts \
    sh -c 'rm -fr node_modules && npm install && npm run deploy'
 ```
 
@@ -33,7 +33,7 @@ docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CG
    -v $(pwd):/src -w /src \
    -v /var/run/docker.sock:/var/run/docker.sock \
    --entrypoint '' \
-   goreleaser/goreleaser sh -c 'go test ./... && goreleaser --rm-dist --snapshot'
+   goreleaser/goreleaser:v0.137 sh -c 'go test ./... && goreleaser --rm-dist --snapshot'
 ```
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
