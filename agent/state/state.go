@@ -110,6 +110,25 @@ func (s *State) Set(key string, object interface{}) error {
 	return nil
 }
 
+// Delete an key from state.
+func (s *State) Delete(key string) error {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if _, ok := s.data[key]; !ok {
+		return nil
+	}
+
+	delete(s.data, key)
+
+	err := s.save()
+	if err != nil {
+		logger.Printf("Unable to save state.json: %v", err)
+	}
+
+	return nil
+}
+
 // Get return an object.
 func (s *State) Get(key string, result interface{}) error {
 	s.l.Lock()

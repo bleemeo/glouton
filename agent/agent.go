@@ -135,6 +135,8 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		return false
 	}
 
+	a.migrateState()
+
 	if err := a.state.Save(); err != nil {
 		logger.Printf("State file is not writable, stopping agent: %v", err)
 		return false
@@ -1121,6 +1123,12 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 	if len(metricToDelete) > 0 {
 		a.store.DropMetrics(metricToDelete)
 	}
+}
+
+// migrateState update older state to latest version.
+func (a *agent) migrateState() {
+	// This "secret" was only present in Bleemeo agent and not really used.
+	_ = a.state.Delete("web_secret_key")
 }
 
 func parseIPOutput(content []byte) string {
