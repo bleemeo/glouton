@@ -23,6 +23,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/model"
@@ -79,7 +80,9 @@ func addNodeExporter(reg prometheus.Registerer) {
 		logger.Printf("Failed to initialize kingpin (used by Prometheus node_exporter): %v", err)
 	}
 
-	collector, err := collector.NewNodeCollector()
+	l := log.NewNopLogger()
+
+	collector, err := collector.NewNodeCollector(l)
 	if err != nil {
 		logger.Printf("Failed to create node_exporter: %v", err)
 	}
