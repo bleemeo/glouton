@@ -31,14 +31,14 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
-// Scrapper is a scrapper to Prometheus exporters
+// Scrapper is a scrapper to Prometheus exporters.
 type Scrapper struct {
 	l       sync.Mutex
 	targets []Target
 	metrics map[string]*dto.MetricFamily
 }
 
-// Target describe a scraping target
+// Target describe a scraping target.
 type Target struct {
 	URL         string
 	Name        string
@@ -46,14 +46,14 @@ type Target struct {
 	ExtraLabels map[string]string
 }
 
-// New initialise Prometheus scrapper
+// New initialise Prometheus scrapper.
 func New(targets []Target) *Scrapper {
 	return &Scrapper{
 		targets: targets,
 	}
 }
 
-// UpdateTargets define the new list of targets
+// UpdateTargets define the new list of targets.
 func (s *Scrapper) UpdateTargets(new []Target) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -61,7 +61,7 @@ func (s *Scrapper) UpdateTargets(new []Target) {
 	s.targets = new
 }
 
-// Run start the scrapper
+// Run start the scrapper.
 func (s *Scrapper) Run(ctx context.Context) error {
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -76,7 +76,7 @@ func (s *Scrapper) Run(ctx context.Context) error {
 	}
 }
 
-// Gather implement prometheus.Gatherer
+// Gather implement prometheus.Gatherer.
 func (s *Scrapper) Gather() ([]*dto.MetricFamily, error) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -133,7 +133,7 @@ func (s *Scrapper) run(ctx context.Context) {
 	l.Unlock()
 }
 
-// Merge entries from right into left. Left is modified. Pointer to right may be copied into left
+// Merge entries from right into left. Left is modified. Pointer to right may be copied into left.
 func merge(left map[string]*dto.MetricFamily, right map[string]*dto.MetricFamily) map[string]*dto.MetricFamily {
 	for metricName, rightValue := range right {
 		leftValue, ok := left[metricName]

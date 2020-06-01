@@ -27,7 +27,7 @@ import (
 	"sync"
 )
 
-// Container is the type used by exporter discovery
+// Container is the type used by exporter discovery.
 type Container interface {
 	// Labels return the Docker labels (or nil)
 	Labels() map[string]string
@@ -38,7 +38,7 @@ type Container interface {
 	Name() string
 }
 
-// listExporters return list of exporters based on containers labels/annotations
+// listExporters return list of exporters based on containers labels/annotations.
 func (d *DynamicSrapper) listExporters(containers []Container) []scrapper.Target {
 	result := make([]scrapper.Target, 0)
 
@@ -97,7 +97,7 @@ func urlFromLabels(labels map[string]string, address string) string {
 	return fmt.Sprintf("http://%s:%d%s", address, port, path)
 }
 
-// DynamicSrapper is a Prometheus scrapper that will update its target based on ListExporters
+// DynamicSrapper is a Prometheus scrapper that will update its target based on ListExporters.
 type DynamicSrapper struct {
 	scrapper.Scrapper
 
@@ -107,7 +107,7 @@ type DynamicSrapper struct {
 	StaticTargets  []scrapper.Target
 }
 
-// Run start the scrapper
+// Run start the scrapper.
 func (d *DynamicSrapper) Run(ctx context.Context) error {
 	d.l.Lock()
 
@@ -120,7 +120,7 @@ func (d *DynamicSrapper) Run(ctx context.Context) error {
 	return d.Scrapper.Run(ctx)
 }
 
-// Update updates the scrappers targets using new containers informations
+// Update updates the scrappers targets using new containers informations.
 func (d *DynamicSrapper) Update(containers []Container) {
 	d.l.Lock()
 	defer d.l.Unlock()

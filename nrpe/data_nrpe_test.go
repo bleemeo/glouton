@@ -37,7 +37,7 @@ var allPackets = []packetCapture{
 	checkDoesNotExists,
 }
 
-// Capture for /usr/lib/nagios/plugins/check_nrpe --no-ssl -H 127.0.0.1 -c check_load
+// Capture for /usr/lib/nagios/plugins/check_nrpe --no-ssl -H 127.0.0.1 -c check_load.
 var checkLoad = packetCapture{
 	Description: "check_load",
 	Version:     3,
@@ -198,7 +198,7 @@ var checkLoad = packetCapture{
 	ReplyCode:   1,
 }
 
-// Capture for /usr/lib/nagios/plugins/check_nrpe --no-ssl -H 127.0.0.1 -c check_load --v2-packets-only
+// Capture for /usr/lib/nagios/plugins/check_nrpe --no-ssl -H 127.0.0.1 -c check_load --v2-packets-only.
 var checkLoadV2 = packetCapture{
 	Description: "check_load v2",
 	Version:     2,

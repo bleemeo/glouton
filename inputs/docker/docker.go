@@ -27,7 +27,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/docker"
 )
 
-// New initialise docker.Input
+// New initialise docker.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["docker"]
 	if ok {

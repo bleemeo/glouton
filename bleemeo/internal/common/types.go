@@ -22,19 +22,19 @@ import (
 	"glouton/types"
 )
 
-// Maximal length of fields on Bleemeo API
+// Maximal length of fields on Bleemeo API.
 const (
 	APIMetricItemLength          int = 100
 	APIMetricItemLengthIfService int = 50
 )
 
-// MetricLabelItem is the couple (Label, Item) which uniquely identify a metric
+// MetricLabelItem is the couple (Label, Item) which uniquely identify a metric.
 type MetricLabelItem struct {
 	Label string
 	Item  string
 }
 
-// TruncateItem truncate the item to match maximal length allowed by Bleemeo API
+// TruncateItem truncate the item to match maximal length allowed by Bleemeo API.
 func (key *MetricLabelItem) TruncateItem(isService bool) {
 	if len(key.Item) > APIMetricItemLength {
 		key.Item = key.Item[:APIMetricItemLength]
@@ -53,7 +53,7 @@ func (key MetricLabelItem) String() string {
 	return key.Label
 }
 
-// MetricLabelItemFromMetric create a MetricLabelItem from a local or remote metric (or labels of local one)
+// MetricLabelItemFromMetric create a MetricLabelItem from a local or remote metric (or labels of local one).
 func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
 	if metric, ok := input.(bleemeoTypes.Metric); ok {
 		key := MetricLabelItem{Label: metric.Label, Item: metric.Labels["item"]}
@@ -82,7 +82,7 @@ func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
 	return key
 }
 
-// MetricLookupFromList return a map[MetricLabelItem]Metric
+// MetricLookupFromList return a map[MetricLabelItem]Metric.
 func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[MetricLabelItem]bleemeoTypes.Metric {
 	registeredMetricsByKey := make(map[MetricLabelItem]bleemeoTypes.Metric, len(registeredMetrics))
 

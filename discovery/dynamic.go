@@ -66,7 +66,7 @@ type fileReader interface {
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
-// processess and netstat to discovery services
+// processess and netstat to discovery services.
 func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	return &DynamicDiscovery{
 		ps:            ps,
@@ -92,7 +92,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 	return dd.services, nil
 }
 
-// LastUpdate return when the last update occurred
+// LastUpdate return when the last update occurred.
 func (dd *DynamicDiscovery) LastUpdate() time.Time {
 	dd.l.Lock()
 	defer dd.l.Unlock()

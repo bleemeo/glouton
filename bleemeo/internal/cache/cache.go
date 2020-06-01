@@ -25,7 +25,7 @@ import (
 const cacheVersion = 1
 const cacheKey = "CacheBleemeoConnector"
 
-// Cache store information about object registered in Bleemeo API
+// Cache store information about object registered in Bleemeo API.
 type Cache struct {
 	data  data
 	l     sync.Mutex
@@ -44,7 +44,7 @@ type data struct {
 	Services      []types.Service
 }
 
-// SetAccountID update the AccountID
+// SetAccountID update the AccountID.
 func (c *Cache) SetAccountID(accountID string) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -53,7 +53,7 @@ func (c *Cache) SetAccountID(accountID string) {
 	c.dirty = true
 }
 
-// AccountID returns the AccountID
+// AccountID returns the AccountID.
 func (c *Cache) AccountID() string {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -61,7 +61,7 @@ func (c *Cache) AccountID() string {
 	return c.data.AccountID
 }
 
-// SetFacts update the AgentFact list
+// SetFacts update the AgentFact list.
 func (c *Cache) SetFacts(facts []types.AgentFact) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -70,7 +70,7 @@ func (c *Cache) SetFacts(facts []types.AgentFact) {
 	c.dirty = true
 }
 
-// SetServices update the Services list
+// SetServices update the Services list.
 func (c *Cache) SetServices(services []types.Service) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -79,7 +79,7 @@ func (c *Cache) SetServices(services []types.Service) {
 	c.dirty = true
 }
 
-// SetContainers update the Container list
+// SetContainers update the Container list.
 func (c *Cache) SetContainers(containers []types.Container) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -88,7 +88,7 @@ func (c *Cache) SetContainers(containers []types.Container) {
 	c.dirty = true
 }
 
-// Agent returns the Agent object
+// Agent returns the Agent object.
 func (c *Cache) Agent() (agent types.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -96,7 +96,7 @@ func (c *Cache) Agent() (agent types.Agent) {
 	return c.data.Agent
 }
 
-// SetAgent update the Agent object
+// SetAgent update the Agent object.
 func (c *Cache) SetAgent(agent types.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -105,7 +105,7 @@ func (c *Cache) SetAgent(agent types.Agent) {
 	c.dirty = true
 }
 
-// SetAccountConfig update the AccountConfig object
+// SetAccountConfig update the AccountConfig object.
 func (c *Cache) SetAccountConfig(accountConfig types.AccountConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -114,7 +114,7 @@ func (c *Cache) SetAccountConfig(accountConfig types.AccountConfig) {
 	c.dirty = true
 }
 
-// AccountConfig returns AccountConfig
+// AccountConfig returns AccountConfig.
 func (c *Cache) AccountConfig() types.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -122,7 +122,7 @@ func (c *Cache) AccountConfig() types.AccountConfig {
 	return c.data.AccountConfig
 }
 
-// FactsByKey returns a map fact.key => facts
+// FactsByKey returns a map fact.key => facts.
 func (c *Cache) FactsByKey() map[string]types.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -135,7 +135,7 @@ func (c *Cache) FactsByKey() map[string]types.AgentFact {
 	return result
 }
 
-// FactsByUUID returns a map fact.id => facts
+// FactsByUUID returns a map fact.id => facts.
 func (c *Cache) FactsByUUID() map[string]types.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -149,7 +149,7 @@ func (c *Cache) FactsByUUID() map[string]types.AgentFact {
 	return result
 }
 
-// Facts returns a (copy) of the Facts
+// Facts returns a (copy) of the Facts.
 func (c *Cache) Facts() []types.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -160,7 +160,7 @@ func (c *Cache) Facts() []types.AgentFact {
 	return result
 }
 
-// Services returns a (copy) of the Services
+// Services returns a (copy) of the Services.
 func (c *Cache) Services() []types.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -171,7 +171,7 @@ func (c *Cache) Services() []types.Service {
 	return result
 }
 
-// ServicesByUUID returns a map service.id => service
+// ServicesByUUID returns a map service.id => service.
 func (c *Cache) ServicesByUUID() map[string]types.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -185,7 +185,7 @@ func (c *Cache) ServicesByUUID() map[string]types.Service {
 	return result
 }
 
-// Containers returns a (copy) of the Containers
+// Containers returns a (copy) of the Containers.
 func (c *Cache) Containers() (containers []types.Container) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -196,7 +196,7 @@ func (c *Cache) Containers() (containers []types.Container) {
 	return result
 }
 
-// ContainersByContainerID returns a map container.ContainerId => container
+// ContainersByContainerID returns a map container.ContainerId => container.
 func (c *Cache) ContainersByContainerID() map[string]types.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -210,7 +210,7 @@ func (c *Cache) ContainersByContainerID() map[string]types.Container {
 	return result
 }
 
-// ContainersByUUID returns a map container.id => container
+// ContainersByUUID returns a map container.id => container.
 func (c *Cache) ContainersByUUID() map[string]types.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -224,7 +224,7 @@ func (c *Cache) ContainersByUUID() map[string]types.Container {
 	return result
 }
 
-// SetMetrics update the Metric list
+// SetMetrics update the Metric list.
 func (c *Cache) SetMetrics(metrics []types.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -233,7 +233,7 @@ func (c *Cache) SetMetrics(metrics []types.Metric) {
 	c.dirty = true
 }
 
-// Metrics returns a (copy) of the Metrics
+// Metrics returns a (copy) of the Metrics.
 func (c *Cache) Metrics() (metrics []types.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -244,7 +244,7 @@ func (c *Cache) Metrics() (metrics []types.Metric) {
 	return result
 }
 
-// MetricsByUUID returns a map metric.id => metric
+// MetricsByUUID returns a map metric.id => metric.
 func (c *Cache) MetricsByUUID() map[string]types.Metric {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -258,7 +258,7 @@ func (c *Cache) MetricsByUUID() map[string]types.Metric {
 	return result
 }
 
-// Save saves the cache into State
+// Save saves the cache into State.
 func (c *Cache) Save() {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -279,7 +279,7 @@ func (c *Cache) Save() {
 	c.dirty = false
 }
 
-// Load loads the cache from State
+// Load loads the cache from State.
 func Load(state types.State) *Cache {
 	cache := &Cache{
 		state: state,

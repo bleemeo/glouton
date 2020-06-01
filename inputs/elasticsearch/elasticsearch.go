@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/elasticsearch"
 )
 
-// New initialise elasticsearch.Input
+// New initialise elasticsearch.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["elasticsearch"]
 	if ok {

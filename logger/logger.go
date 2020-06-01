@@ -29,7 +29,7 @@ import (
 	"time"
 )
 
-// Logger allow to print message
+// Logger allow to print message.
 type Logger bool
 
 // V return a Level which will only log (Printf do something) if logger is configured to log this level.
@@ -60,14 +60,14 @@ func V(level int) Logger {
 	return Logger(false)
 }
 
-// Printf behave like fmt.Printf
+// Printf behave like fmt.Printf.
 func (l Logger) Printf(fmtArg string, a ...interface{}) {
 	if l {
 		printf(fmtArg, a...)
 	}
 }
 
-// Println behave like fmt.Println
+// Println behave like fmt.Println.
 func (l Logger) Println(v ...interface{}) {
 	if l {
 		println(v...)
@@ -96,7 +96,7 @@ func println(v ...interface{}) {
 	_, _ = fmt.Fprintln(cfg.writer, v...)
 }
 
-// Printf behave like fmt.Printf
+// Printf behave like fmt.Printf.
 func Printf(fmt string, a ...interface{}) {
 	printf(fmt, a...)
 }
@@ -114,7 +114,7 @@ type config struct {
 var cfg = config{writer: os.Stderr}
 
 // UseSyslog enable or disable logging to syslog. If syslog is not used, message
-// are sent to StdErr
+// are sent to StdErr.
 func UseSyslog(useSyslog bool) error {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
@@ -145,7 +145,7 @@ func UseSyslog(useSyslog bool) error {
 	return err
 }
 
-// SetLevel configure the log level
+// SetLevel configure the log level.
 func SetLevel(level int) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
@@ -154,7 +154,7 @@ func SetLevel(level int) {
 }
 
 // SetPkgLevels configure the log level per package.
-// The format is "package=level,package2=level2"
+// The format is "package=level,package2=level2".
 func SetPkgLevels(levels string) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()

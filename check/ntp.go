@@ -29,7 +29,7 @@ import (
 	"glouton/types"
 )
 
-// NTPCheck perform a NTP check
+// NTPCheck perform a NTP check.
 type NTPCheck struct {
 	*baseCheck
 	mainAddress string

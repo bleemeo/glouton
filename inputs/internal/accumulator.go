@@ -33,7 +33,7 @@ type metricPoint struct {
 	Time  time.Time
 }
 
-// GatherContext is the couple Measurement and tags
+// GatherContext is the couple Measurement and tags.
 type GatherContext struct {
 	Measurement    string
 	Tags           map[string]string
@@ -51,7 +51,7 @@ type GatherContext struct {
 //   a batch of metrics
 // * Any metrics matching DerivatedMetrics are derivated. Metric seen for the first time are dropped.
 //   Derivation is only applied to Counter values, that is something that only go upward. If value does downward, it's skipped.
-// * Then TransformMetrics is called on a float64 version of fields. It may apply per-metric transformation
+// * Then TransformMetrics is called on a float64 version of fields. It may apply per-metric transformation.
 type Accumulator struct {
 	Accumulator telegraf.Accumulator
 
@@ -91,7 +91,7 @@ func (a *Accumulator) PrepareGather() {
 	a.currentValues = make(map[string]map[string]metricPoint)
 }
 
-// convertToFloat convert the interface type in float64
+// convertToFloat convert the interface type in float64.
 func convertToFloat(value interface{}) (valueFloat float64, err error) {
 	switch value := value.(type) {
 	case uint64:
@@ -116,7 +116,7 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 	return
 }
 
-// rateAsFloat compute the delta/duration between two points
+// rateAsFloat compute the delta/duration between two points.
 func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error) {
 	switch pastValue := pastPoint.Value.(type) {
 	case uint64:
@@ -162,7 +162,7 @@ func flattenTag(tags map[string]string) string {
 	return strings.Join(tagsList, ",")
 }
 
-// applyDerivate compute the derivated value for metrics in DerivatedMetrics
+// applyDerivate compute the derivated value for metrics in DerivatedMetrics.
 func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContext GatherContext, fields map[string]interface{}, metricTime time.Time) map[string]float64 {
 	a.l.Lock()
 	defer a.l.Unlock()
@@ -305,27 +305,27 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 
 // AddFields adds a metric to the accumulator with the given measurement
 // name, fields, and tags (and timestamp). If a timestamp is not provided,
-// then the accumulator sets it to "now".//
+// then the accumulator sets it to "now".
 func (a *Accumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.Accumulator.AddFields, measurement, fields, tags, t...)
 }
 
-// AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
+// AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
 func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.Accumulator.AddGauge, measurement, fields, tags, t...)
 }
 
-// AddCounter is the same as AddFields, but will add the metric as a "Counter" type
+// AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
 func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.Accumulator.AddCounter, measurement, fields, tags, t...)
 }
 
-// AddSummary is the same as AddFields, but will add the metric as a "Summary" type
+// AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
 func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.Accumulator.AddSummary, measurement, fields, tags, t...)
 }
 
-// AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
+// AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
 func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.processMetrics(a.Accumulator.AddHistogram, measurement, fields, tags, t...)
 }

@@ -51,7 +51,7 @@ type agentInterface interface {
 	Tags() []string
 }
 
-// API : Structure that contains API's port
+// API contains API's port.
 type API struct {
 	bindAddress  string
 	router       http.Handler
@@ -64,7 +64,7 @@ type API struct {
 	accumulator  *threshold.Accumulator
 }
 
-// New : Function that instantiate a new API's port from environment variable or from a default port
+// New instantiate a new API's port from environment variable or from a default port.
 func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, accumulator *threshold.Accumulator) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
@@ -96,7 +96,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	return api
 }
 
-// Run : Starts our API
+// Run starts our API.
 func (api API) Run(ctx context.Context) error {
 	srv := http.Server{
 		Addr:    api.bindAddress,

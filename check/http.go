@@ -29,7 +29,7 @@ import (
 	"glouton/version"
 )
 
-// HTTPCheck perform a HTTP check
+// HTTPCheck perform a HTTP check.
 type HTTPCheck struct {
 	*baseCheck
 
@@ -44,7 +44,7 @@ type HTTPCheck struct {
 // the check will be immediately run.
 //
 // If expectedStatusCode is 0, StatusCode below 400 will generate Ok, between 400 and 499 => warning and above 500 => critical
-// If expectedStatusCode is not 0, StatusCode must match the value or result will be critical
+// If expectedStatusCode is not 0, StatusCode must match the value or result will be critical.
 func NewHTTP(urlValue string, persitentAddresses []string, expectedStatusCode int, metricName string, labels map[string]string, acc accumulator) *HTTPCheck {
 	myTransport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,

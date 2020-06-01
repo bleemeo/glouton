@@ -35,13 +35,13 @@ import (
 const localhostIP = "127.0.0.1"
 
 // List of common ExtraAttributes supported by all services.
-// This list + ExtraAttributes from discoveryInfo list all overidable settings
+// This list + ExtraAttributes from discoveryInfo list all overidable settings.
 const (
 	nrpeExposedName = "nagios_nrpe_name"
 	ignoredPorts    = "ignore_ports"
 )
 
-// Accumulator will gather metrics point for added checks
+// Accumulator will gather metrics point for added checks.
 type Accumulator interface {
 	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
 }
@@ -49,7 +49,7 @@ type Accumulator interface {
 // Discovery implement the full discovery mecanisme. It will take informations
 // from both the dynamic discovery (service currently running) and previously
 // detected services.
-// It will configure metrics input and add them to a Collector
+// It will configure metrics input and add them to a Collector.
 type Discovery struct {
 	l sync.Mutex
 
@@ -72,19 +72,19 @@ type Discovery struct {
 	isInputIgnored        func(NameContainer) bool
 }
 
-// Collector will gather metrics for added inputs
+// Collector will gather metrics for added inputs.
 type Collector interface {
 	AddInput(input telegraf.Input, shortName string) (int, error)
 	RemoveInput(int)
 }
 
-// Registry will contains checks
+// Registry will contains checks.
 type Registry interface {
 	AddTask(task task.Runner, shortName string) (int, error)
 	RemoveTask(int)
 }
 
-// New returns a new Discovery
+// New returns a new Discovery.
 func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
@@ -133,7 +133,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 	}
 }
 
-// Close stop & cleanup inputs & check created by the discovery
+// Close stop & cleanup inputs & check created by the discovery.
 func (d *Discovery) Close() {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -145,7 +145,7 @@ func (d *Discovery) Close() {
 
 // Discovery detect service on the system and return a list of Service object.
 //
-// It may trigger an update of metric inputs present in the Collector
+// It may trigger an update of metric inputs present in the Collector.
 func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -153,7 +153,7 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 	return d.discovery(ctx, maxAge)
 }
 
-// LastUpdate return when the last update occurred
+// LastUpdate return when the last update occurred.
 func (d *Discovery) LastUpdate() time.Time {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -410,10 +410,10 @@ func (d *Discovery) ignoreServicesAndPorts() {
 	}
 }
 
-// CheckNow is type of check function
+// CheckNow is type of check function.
 type CheckNow func(ctx context.Context) types.StatusDescription
 
-// GetCheckNow returns the GetCheckNow function associated to a NameContainer
+// GetCheckNow returns the GetCheckNow function associated to a NameContainer.
 func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
 	CheckDetails, ok := d.activeCheck[nameContainer]
 	if !ok {

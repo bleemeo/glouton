@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
-// New initialise redis.Input
+// New initialise redis.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["redis"]
 	if ok {

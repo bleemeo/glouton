@@ -28,28 +28,28 @@ import (
 
 const tcpPortocol = "tcp"
 
-// Discoverer allow to discover services. See DynamicDiscovery and Discovery
+// Discoverer allow to discover services. See DynamicDiscovery and Discovery.
 type Discoverer interface {
 	Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error)
 	LastUpdate() time.Time
 }
 
-// PersistentDiscoverer also allow to remove a non-running service
+// PersistentDiscoverer also allow to remove a non-running service.
 type PersistentDiscoverer interface {
 	Discoverer
 	RemoveIfNonRunning(ctx context.Context, services []Service)
 }
 
-// NameContainer contains the service and container names
+// NameContainer contains the service and container names.
 type NameContainer struct {
 	Name          string
 	ContainerName string
 }
 
-// ServiceName is the name of a supported service
+// ServiceName is the name of a supported service.
 type ServiceName string
 
-// List of known service names
+// List of known service names.
 const (
 	ApacheService        ServiceName = "apache"
 	AsteriskService      ServiceName = "asterisk"
@@ -88,7 +88,7 @@ const (
 	CustomService ServiceName = "__custom__"
 )
 
-// Service is the information found about a given service
+// Service is the information found about a given service.
 type Service struct {
 	Name            string
 	ServiceType     ServiceName
@@ -118,7 +118,7 @@ func (s Service) String() string {
 	return s.Name
 }
 
-// AddressForPort return the IP address for given port & network (tcp, udp)
+// AddressForPort return the IP address for given port & network (tcp, udp).
 func (s Service) AddressForPort(port int, network string, force bool) string {
 	if s.ExtraAttributes["address"] != "" {
 		return s.ExtraAttributes["address"]
@@ -155,7 +155,7 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 	return ""
 }
 
-// AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port)
+// AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port).
 func (s Service) AddressPort() (string, int) {
 	di := servicesDiscoveryInfo[s.ServiceType]
 	port := di.ServicePort

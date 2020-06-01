@@ -27,7 +27,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-// Collector implement running Gather on inputs every fixed time interval
+// Collector implement running Gather on inputs every fixed time interval.
 type Collector struct {
 	acc          telegraf.Accumulator
 	inputs       map[int]telegraf.Input
@@ -53,7 +53,7 @@ func New(acc telegraf.Accumulator) *Collector {
 	return c
 }
 
-// AddInput add an input to this collector and return an ID
+// AddInput add an input to this collector and return an ID.
 func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -99,7 +99,7 @@ func (c *Collector) RemoveInput(id int) {
 	delete(c.inputNames, id)
 }
 
-// UpdateDelay change the delay between metric gather
+// UpdateDelay change the delay between metric gather.
 func (c *Collector) UpdateDelay(delay time.Duration) {
 	if c.setCurrentDelay(delay) {
 		logger.V(2).Printf("Change metric collector delay to %v", delay)
@@ -107,7 +107,7 @@ func (c *Collector) UpdateDelay(delay time.Duration) {
 	}
 }
 
-// Run will run the collections until context is cancelled
+// Run will run the collections until context is cancelled.
 func (c *Collector) Run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		c.run(ctx)
@@ -136,7 +136,7 @@ func (c *Collector) setCurrentDelay(delay time.Duration) (changed bool) {
 	return true
 }
 
-// sleep such are time.Now() is aligned on a multiple of interval
+// sleep such are time.Now() is aligned on a multiple of interval.
 func (c *Collector) sleepToAlign(interval time.Duration) {
 	now := time.Now()
 

@@ -18,7 +18,7 @@ package common
 
 import "strings"
 
-// AllowMetric return True if current configuration allow this metrics
+// AllowMetric return True if current configuration allow this metrics.
 func AllowMetric(labels map[string]string, whitelist map[string]bool) bool {
 	if len(whitelist) == 0 {
 		return true

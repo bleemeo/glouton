@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/swap"
 )
 
-// New initialise swap.Input
+// New initialise swap.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["swap"]
 	if ok {

@@ -30,7 +30,7 @@ import (
 	"gopkg.in/alecthomas/kingpin.v2"
 )
 
-// Exporter is a Promtheus export that export metrics from Glouton
+// Exporter is a Promtheus export that export metrics from Glouton.
 type Exporter struct {
 	db storeInterface
 
@@ -43,7 +43,7 @@ type storeInterface interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 }
 
-// New return a new exporter
+// New return a new exporter.
 func New(db storeInterface, gatherer prometheus.Gatherer) *Exporter {
 	e := &Exporter{
 		db: db,
@@ -90,7 +90,7 @@ func addNodeExporter(reg prometheus.Registerer) {
 	}
 }
 
-// Return the most recent point. ok is false if no point are found
+// Return the most recent point. ok is false if no point are found.
 func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 	points, err := m.Points(time.Now().Add(-5*time.Minute), time.Now())
 	if err != nil {
@@ -108,11 +108,11 @@ func getLastPoint(m types.Metric) (point types.Point, ok bool) {
 	return
 }
 
-// Describe implment Describe of a Prometheus collector
+// Describe implment Describe of a Prometheus collector.
 func (e Exporter) Describe(chan<- *prometheus.Desc) {
 }
 
-// Collect implment Collect of a Prometheus collector
+// Collect implment Collect of a Prometheus collector.
 func (e Exporter) Collect(ch chan<- prometheus.Metric) {
 	metrics, err := e.db.Metrics(nil)
 	if err != nil {

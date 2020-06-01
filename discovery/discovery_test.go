@@ -100,7 +100,7 @@ func (m *mockCollector) ExpectationFullified() error {
 	return nil
 }
 
-// Test dynamic Discovery with single service present
+// Test dynamic Discovery with single service present.
 func TestDiscoverySingle(t *testing.T) {
 	cases := []struct {
 		dynamicResult   Service

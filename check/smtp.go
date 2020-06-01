@@ -27,7 +27,7 @@ import (
 	"glouton/types"
 )
 
-// SMTPCheck perform a SMTP check
+// SMTPCheck perform a SMTP check.
 type SMTPCheck struct {
 	*baseCheck
 	mainAddress string
@@ -74,12 +74,12 @@ func (sc *SMTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: fmt.Sprintf("Connection timed out after 10 seconds"),
+			StatusDescription: "Connection timed out after 10 seconds",
 		}
 	} else if err != nil {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: fmt.Sprintf("Unable to connect to SMTP server: connection refused"),
+			StatusDescription: "Unable to connect to SMTP server: connection refused",
 		}
 	}
 

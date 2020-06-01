@@ -45,7 +45,7 @@ const minimalDelayBetweenConnect = 10 * time.Second
 const maximalDelayBetweenConnect = 2 * time.Minute
 const stableConnection = 5 * time.Minute
 
-// Option are parameter for the MQTT client
+// Option are parameter for the MQTT client.
 type Option struct {
 	bleemeoTypes.GlobalOption
 	Cache         *cache.Cache
@@ -60,7 +60,7 @@ type Option struct {
 	UpdateMetrics func(metricUUID ...string)
 }
 
-// Client is an MQTT client for Bleemeo Cloud platform
+// Client is an MQTT client for Bleemeo Cloud platform.
 type Client struct {
 	option Option
 
@@ -106,10 +106,10 @@ type metricPayload struct {
 // This type is only used because the Bleemeo consumer require Value to be a float,
 // and assume that the JSON "5" is not a float but an int.
 // So this this guarantee that the Go float value 5.0 is encoded as "5.0" and not "5".
-// This should disapear when Bleemeo consumer is upgraded to support int as float
+// This should disapear when Bleemeo consumer is upgraded to support int as float.
 type forceDecimalFloat float64
 
-// MarshalJSON do what comment on forceDecimalFloat say
+// MarshalJSON do what comment on forceDecimalFloat say.
 func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 	buffer, err := json.Marshal(float64(f))
 	if err != nil {
@@ -127,14 +127,14 @@ func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 	return buffer, err
 }
 
-// New create a new client
+// New create a new client.
 func New(option Option) *Client {
 	return &Client{
 		option: option,
 	}
 }
 
-// Connected returns true if MQTT connection is established
+// Connected returns true if MQTT connection is established.
 func (c *Client) Connected() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -147,7 +147,7 @@ func (c *Client) Connected() bool {
 }
 
 // Disable will disable the MQTT connection until given time.
-// To re-enable use the (not yet implemented) Enable()
+// To re-enable use the (not yet implemented) Enable().
 func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -170,7 +170,7 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	}
 }
 
-// Run connect and transmit information to Bleemeo Cloud platform
+// Run connect and transmit information to Bleemeo Cloud platform.
 func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
 	paho.ERROR = logger.V(2)
@@ -195,7 +195,7 @@ func (c *Client) Run(ctx context.Context) error {
 	return err
 }
 
-// LastReport returns the date of last report with Bleemeo API
+// LastReport returns the date of last report with Bleemeo API.
 func (c *Client) LastReport() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -203,7 +203,7 @@ func (c *Client) LastReport() time.Time {
 	return c.lastReport
 }
 
-// HealthCheck perform some health check and logger any issue found
+// HealthCheck perform some health check and logger any issue found.
 func (c *Client) HealthCheck() bool {
 	ok := true
 

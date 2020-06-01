@@ -39,7 +39,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-// Containers labels used by Glouton
+// Containers labels used by Glouton.
 const (
 	ignoredPortLabel  = "glouton.check.ignore.port."
 	EnableLabel       = "glouton.enable"
@@ -63,7 +63,7 @@ type kubernetesProvider interface {
 	PODs(ctx context.Context, maxAge time.Duration) ([]corev1.Pod, error)
 }
 
-// DockerProvider provider information about Docker & Docker containers
+// DockerProvider provider information about Docker & Docker containers.
 type DockerProvider struct {
 	deletedContainersCallback func(containerIDs []string)
 	kubernetesProvider        kubernetesProvider
@@ -95,14 +95,14 @@ type DockerEvent struct {
 	Container *Container
 }
 
-// Container wraps the Docker inspect values and provide few accessor to useful fields
+// Container wraps the Docker inspect values and provide few accessor to useful fields.
 type Container struct {
 	primaryAddress string
 	inspect        types.ContainerJSON
 	pod            corev1.Pod
 }
 
-// NewDocker creates a new Docker provider which must be started with Run() method
+// NewDocker creates a new Docker provider which must be started with Run() method.
 func NewDocker(deletedContainersCallback func(containerIDs []string), kubeImpl *KubernetesProvider) *DockerProvider {
 	var kube kubernetesProvider
 
@@ -182,7 +182,7 @@ func (d *DockerProvider) ContainerEnv(containerID string) (env []string) {
 	return c.Env()
 }
 
-// DockerFact returns few facts from Docker. It should be usable as FactCallback
+// DockerFact returns few facts from Docker. It should be usable as FactCallback.
 func (d *DockerProvider) DockerFact(ctx context.Context, currentFact map[string]string) map[string]string {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -205,12 +205,12 @@ func (d *DockerProvider) DockerFact(ctx context.Context, currentFact map[string]
 	return facts
 }
 
-// Events returns the channel on which Docker events are sent
+// Events returns the channel on which Docker events are sent.
 func (d *DockerProvider) Events() <-chan DockerEvent {
 	return d.notifyC
 }
 
-// Exec run a command inside a container and return output
+// Exec run a command inside a container and return output.
 func (d *DockerProvider) Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error) {
 	d.l.Lock()
 	cl, err := d.getClient(ctx)
@@ -272,7 +272,7 @@ func (d *DockerProvider) HasConnection(ctx context.Context) bool {
 // Run will run connect and listen to Docker event until context is cancelled
 //
 // Any error (unable to connect due to permission issue or Docker down) are not returned
-// by Run but could be retrieved with LastError
+// by Run but could be retrieved with LastError.
 func (d *DockerProvider) Run(ctx context.Context) error {
 	var (
 		lastErrorNotify time.Time
@@ -307,7 +307,7 @@ func (d *DockerProvider) Run(ctx context.Context) error {
 	}
 }
 
-// ContainerLastKill return the last time a kill event was seen for given container ID
+// ContainerLastKill return the last time a kill event was seen for given container ID.
 func (d *DockerProvider) ContainerLastKill(containerID string) time.Time {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -315,7 +315,7 @@ func (d *DockerProvider) ContainerLastKill(containerID string) time.Time {
 	return d.lastKill[containerID]
 }
 
-// Command returns the command run in the container
+// Command returns the command run in the container.
 func (c Container) Command() string {
 	if c.inspect.Config == nil {
 		return ""
@@ -324,7 +324,7 @@ func (c Container) Command() string {
 	return strings.Join(c.inspect.Config.Cmd, " ")
 }
 
-// CreatedAt returns the date of container creation
+// CreatedAt returns the date of container creation.
 func (c Container) CreatedAt() time.Time {
 	var result time.Time
 
@@ -336,7 +336,7 @@ func (c Container) CreatedAt() time.Time {
 	return result
 }
 
-// Env returns the Container environment
+// Env returns the Container environment.
 func (c Container) Env() []string {
 	if c.inspect.Config == nil {
 		return make([]string, 0)
@@ -345,12 +345,12 @@ func (c Container) Env() []string {
 	return c.inspect.Config.Env
 }
 
-// ID returns the Container ID
+// ID returns the Container ID.
 func (c Container) ID() string {
 	return c.inspect.ID
 }
 
-// Ignored returns true if this container should be ignored by Glouton
+// Ignored returns true if this container should be ignored by Glouton.
 func (c Container) Ignored() bool {
 	ignore := ignoreContainer(c.inspect)
 
@@ -376,12 +376,12 @@ func (c Container) IgnoredPorts() map[int]bool {
 	return ignoredPort
 }
 
-// IsRunning returns true if this container is running
+// IsRunning returns true if this container is running.
 func (c Container) IsRunning() bool {
 	return c.inspect.State != nil && c.inspect.State.Running
 }
 
-// Image returns the Docker container image
+// Image returns the Docker container image.
 func (c Container) Image() string {
 	if c.inspect.Config == nil {
 		return c.inspect.Image
@@ -390,12 +390,12 @@ func (c Container) Image() string {
 	return c.inspect.Config.Image
 }
 
-// Inspect returns the Docker ContainerJSON object
+// Inspect returns the Docker ContainerJSON object.
 func (c Container) Inspect() types.ContainerJSON {
 	return c.inspect
 }
 
-// InspectJSON returns the JSON of Docker inspect
+// InspectJSON returns the JSON of Docker inspect.
 func (c Container) InspectJSON() string {
 	result, err := json.Marshal(c.inspect)
 	if err != nil {
@@ -405,7 +405,7 @@ func (c Container) InspectJSON() string {
 	return string(result)
 }
 
-// Labels returns labels associated with the container
+// Labels returns labels associated with the container.
 func (c Container) Labels() map[string]string {
 	if c.inspect.Config == nil {
 		return nil
@@ -414,12 +414,12 @@ func (c Container) Labels() map[string]string {
 	return c.inspect.Config.Labels
 }
 
-// Annotations returns labels associated with the container
+// Annotations returns labels associated with the container.
 func (c Container) Annotations() map[string]string {
 	return c.pod.Annotations
 }
 
-// ListenAddresses returns the addresseses this container listen on
+// ListenAddresses returns the addresseses this container listen on.
 func (c Container) ListenAddresses() []ListenAddress {
 	if c.PrimaryAddress() == "" {
 		return nil
@@ -464,7 +464,7 @@ func (c Container) ListenAddresses() []ListenAddress {
 	return exposedPorts
 }
 
-// Name returns the Container name
+// Name returns the Container name.
 func (c Container) Name() string {
 	if c.inspect.Name[0] == '/' {
 		return c.inspect.Name[1:]
@@ -473,7 +473,7 @@ func (c Container) Name() string {
 	return c.inspect.Name
 }
 
-// PodNamespaceName return the namespace and pod name if available
+// PodNamespaceName return the namespace and pod name if available.
 func (c Container) PodNamespaceName() (string, string) {
 	if c.pod.Name != "" {
 		return c.pod.Namespace, c.pod.Name
@@ -493,7 +493,7 @@ func (c Container) PrimaryAddress() string {
 	return c.primaryAddress
 }
 
-// StartedAt returns the date of last container start
+// StartedAt returns the date of last container start.
 func (c Container) StartedAt() time.Time {
 	var result time.Time
 
@@ -518,7 +518,7 @@ func (c Container) State() string {
 	return c.inspect.State.Status
 }
 
-// FinishedAt returns the date of last container stop
+// FinishedAt returns the date of last container stop.
 func (c Container) FinishedAt() time.Time {
 	var result time.Time
 

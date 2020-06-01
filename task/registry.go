@@ -23,10 +23,10 @@ import (
 	"sync"
 )
 
-// Runner is something that can be Run
+// Runner is something that can be Run.
 type Runner func(context.Context) error
 
-// Registry contains running tasks. It allow to add/remove tasks
+// Registry contains running tasks. It allow to add/remove tasks.
 type Registry struct {
 	ctx    context.Context
 	cancel func()
@@ -45,7 +45,7 @@ type taskInfo struct {
 	ExitError error
 }
 
-// NewRegistry create a new registry. All task running in this registry will terminate when ctx is cancelled
+// NewRegistry create a new registry. All task running in this registry will terminate when ctx is cancelled.
 func NewRegistry(ctx context.Context) *Registry {
 	subCtx, cancel := context.WithCancel(ctx)
 
@@ -56,7 +56,7 @@ func NewRegistry(ctx context.Context) *Registry {
 	}
 }
 
-// Close stops and wait for all currently running tasks
+// Close stops and wait for all currently running tasks.
 func (r *Registry) Close() {
 	r.close()
 	r.cancel()
@@ -78,7 +78,7 @@ func (r *Registry) close() {
 	r.closed = true
 }
 
-// AddTask add and start a new task. It return an taskID that could be used in RemoveTask
+// AddTask add and start a new task. It return an taskID that could be used in RemoveTask.
 func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -132,7 +132,7 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	return id, nil
 }
 
-// RemoveTask stop (and potentially close) and remove given task
+// RemoveTask stop (and potentially close) and remove given task.
 func (r *Registry) RemoveTask(taskID int) {
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -145,7 +145,7 @@ func (r *Registry) RemoveTask(taskID int) {
 }
 
 // IsRunning return true if the taskID is still running.
-// If tasks stopped, also return the error the task returned
+// If tasks stopped, also return the error the task returned.
 func (r *Registry) IsRunning(taskID int) (bool, error) {
 	r.l.Lock()
 	defer r.l.Unlock()

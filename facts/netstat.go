@@ -98,14 +98,14 @@ var (
 	)
 )
 
-// ListenAddress is net.Addr implmentation
+// ListenAddress is net.Addr implmentation.
 type ListenAddress struct {
 	NetworkFamily string
 	Address       string
 	Port          int
 }
 
-// Network is the method from net.Addr
+// Network is the method from net.Addr.
 func (l ListenAddress) Network() string {
 	return l.NetworkFamily
 }

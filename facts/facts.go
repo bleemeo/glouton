@@ -44,7 +44,7 @@ import (
 //
 // There is also the possibility to add callback that are called on each update.
 //
-// There is one special fact named "fact_updated_at" which contains the last update of the facts
+// There is one special fact named "fact_updated_at" which contains the last update of the facts.
 type FactProvider struct {
 	l sync.Mutex
 
@@ -61,7 +61,7 @@ type FactProvider struct {
 
 // FactCallback is a function called on each update of facts that may return additional facts.
 //
-// It returns the list of new or updated facts
+// It returns the list of new or updated facts.
 type FactCallback func(ctx context.Context, currentFact map[string]string) map[string]string
 
 // NewFacter creates a new Fact provider
@@ -73,7 +73,7 @@ type FactCallback func(ctx context.Context, currentFact map[string]string) map[s
 // any container, it should be "/". When running inside a container it should be the path
 // where host root is mounted.
 //
-// ipIndicatorURL is and URL which return the public IP
+// ipIndicatorURL is and URL which return the public IP.
 func NewFacter(factPath, hostRootPath, ipIndicatorURL string) *FactProvider {
 	return &FactProvider{
 		factPath:       factPath,
@@ -83,7 +83,7 @@ func NewFacter(factPath, hostRootPath, ipIndicatorURL string) *FactProvider {
 }
 
 // AddCallback adds a FactCallback to provide additional facts.
-// It currently not possible to remove a callback
+// It currently not possible to remove a callback.
 func (f *FactProvider) AddCallback(cb FactCallback) {
 	f.l.Lock()
 	defer f.l.Unlock()
@@ -91,7 +91,7 @@ func (f *FactProvider) AddCallback(cb FactCallback) {
 	f.callbacks = append(f.callbacks, cb)
 }
 
-// Facts returns the list of facts for this system
+// Facts returns the list of facts for this system.
 func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
 	f.l.Lock()
 	defer f.l.Unlock()

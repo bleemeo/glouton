@@ -28,7 +28,7 @@ import (
 	"glouton/logger"
 )
 
-// Connector manager the connection between the Agent and Bleemeo
+// Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
 	option types.GlobalOption
 
@@ -42,7 +42,7 @@ type Connector struct {
 	disableReason types.DisableReason
 }
 
-// New create a new Connector
+// New create a new Connector.
 func New(option types.GlobalOption) *Connector {
 	c := &Connector{
 		option: option,
@@ -58,7 +58,7 @@ func New(option types.GlobalOption) *Connector {
 	return c
 }
 
-// UpdateUnitsAndThresholds update metrics units & threshold (from cache)
+// UpdateUnitsAndThresholds update metrics units & threshold (from cache).
 func (c *Connector) UpdateUnitsAndThresholds(firstUpdate bool) {
 	c.sync.UpdateUnitsAndThresholds(firstUpdate)
 }
@@ -87,7 +87,7 @@ func (c *Connector) initMQTT() error {
 	return nil
 }
 
-// Run run the Connector
+// Run run the Connector.
 func (c *Connector) Run(ctx context.Context) error {
 	defer c.cache.Save()
 
@@ -167,12 +167,12 @@ func (c *Connector) Run(ctx context.Context) error {
 	return mqttErr
 }
 
-// UpdateContainers request to update a containers
+// UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
 	c.sync.UpdateContainers()
 }
 
-// Tags returns the Tags set on Bleemeo Cloud platform
+// Tags returns the Tags set on Bleemeo Cloud platform.
 func (c *Connector) Tags() []string {
 	agent := c.cache.Agent()
 	tags := make([]string, len(agent.Tags))
@@ -185,7 +185,7 @@ func (c *Connector) Tags() []string {
 }
 
 // AccountID returns the Account UUID of Bleemeo
-// It return the empty string if the Account UUID is not available
+// It return the empty string if the Account UUID is not available.
 func (c *Connector) AccountID() string {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -199,7 +199,7 @@ func (c *Connector) AccountID() string {
 }
 
 // AgentID returns the Agent UUID of Bleemeo
-// It return the empty string if the Account UUID is not available
+// It return the empty string if the Account UUID is not available.
 func (c *Connector) AgentID() string {
 	var agentID string
 
@@ -211,7 +211,7 @@ func (c *Connector) AgentID() string {
 	return agentID
 }
 
-// RegistrationAt returns the date of registration with Bleemeo API
+// RegistrationAt returns the date of registration with Bleemeo API.
 func (c *Connector) RegistrationAt() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -221,7 +221,7 @@ func (c *Connector) RegistrationAt() time.Time {
 	return agent.CreatedAt
 }
 
-// Connected returns the date of registration with Bleemeo API
+// Connected returns the date of registration with Bleemeo API.
 func (c *Connector) Connected() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -233,7 +233,7 @@ func (c *Connector) Connected() bool {
 	return c.mqtt.Connected()
 }
 
-// LastReport returns the date of last report with Bleemeo API over MQTT
+// LastReport returns the date of last report with Bleemeo API over MQTT.
 func (c *Connector) LastReport() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -245,7 +245,7 @@ func (c *Connector) LastReport() time.Time {
 	return c.mqtt.LastReport()
 }
 
-// HealthCheck perform some health check and logger any issue found
+// HealthCheck perform some health check and logger any issue found.
 func (c *Connector) HealthCheck() bool {
 	ok := true
 

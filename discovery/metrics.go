@@ -46,7 +46,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-// InputOption are option used by system inputs
+// InputOption are option used by system inputs.
 type InputOption struct {
 	DFRootPath      string
 	DFPathBlacklist []string
@@ -54,7 +54,7 @@ type InputOption struct {
 	IODiskWhitelist []string
 }
 
-// AddDefaultInputs adds system inputs to a collector
+// AddDefaultInputs adds system inputs to a collector.
 func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 	var (
 		input telegraf.Input

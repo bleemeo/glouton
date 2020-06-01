@@ -27,7 +27,7 @@ var (
 	Version = "0.1"
 )
 
-// UserAgent returns the User-Agent for request performed by the agent
+// UserAgent returns the User-Agent for request performed by the agent.
 func UserAgent() string {
 	return fmt.Sprintf("Glouton %s", Version)
 }

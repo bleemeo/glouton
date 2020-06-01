@@ -32,7 +32,7 @@ const (
 	StatusUnknown
 )
 
-// IsSet return true if the status is set
+// IsSet return true if the status is set.
 func (s Status) IsSet() bool {
 	return s != StatusUnset
 }
@@ -52,7 +52,7 @@ func (s Status) String() string {
 	}
 }
 
-// NagiosCode return the Nagios value for a Status
+// NagiosCode return the Nagios value for a Status.
 func (s Status) NagiosCode() int {
 	switch s {
 	case StatusOk:
@@ -66,7 +66,7 @@ func (s Status) NagiosCode() int {
 	}
 }
 
-// FromNagios return a Status from a Nagios status code
+// FromNagios return a Status from a Nagios status code.
 func FromNagios(value int) Status {
 	switch value {
 	case 0:
@@ -80,7 +80,7 @@ func FromNagios(value int) Status {
 	}
 }
 
-// Metric represent a metric object
+// Metric represent a metric object.
 type Metric interface {
 	// Labels returns labels of the metric
 	Labels() map[string]string
@@ -89,25 +89,25 @@ type Metric interface {
 	Points(start, end time.Time) ([]PointStatus, error)
 }
 
-// Point is the value of one metric at a given time
+// Point is the value of one metric at a given time.
 type Point struct {
 	Time  time.Time
 	Value float64
 }
 
-// MetricPoint is one point for one metrics (identified by labels)
+// MetricPoint is one point for one metrics (identified by labels).
 type MetricPoint struct {
 	PointStatus
 	Labels map[string]string
 }
 
-// PointStatus is a point (value) and a status
+// PointStatus is a point (value) and a status.
 type PointStatus struct {
 	Point
 	StatusDescription
 }
 
-// StatusDescription store a service/metric status with an optional description
+// StatusDescription store a service/metric status with an optional description.
 type StatusDescription struct {
 	CurrentStatus     Status
 	StatusDescription string

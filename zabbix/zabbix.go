@@ -30,7 +30,7 @@ import (
 	"time"
 )
 
-// Server is a Zabbix server than use Callback for reply to queries
+// Server is a Zabbix server than use Callback for reply to queries.
 type Server struct {
 	callback    callback
 	bindAddress string
@@ -279,7 +279,7 @@ func encodeReply(message string, inputError error) ([]byte, error) {
 	return encodedPacket, nil
 }
 
-//Run starts a connection with a zabbix server
+//Run starts a connection with a zabbix server.
 func (s Server) Run(ctx context.Context) error {
 	tcpAdress, err := net.ResolveTCPAddr("tcp", s.bindAddress)
 	if err != nil {

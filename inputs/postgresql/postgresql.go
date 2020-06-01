@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/postgresql"
 )
 
-// New initialise postgresql.Input
+// New initialise postgresql.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["postgresql"]
 	if ok {

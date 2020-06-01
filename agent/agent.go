@@ -174,7 +174,7 @@ func (a *agent) setupLogger() {
 	logger.SetPkgLevels(a.config.String("logging.package_levels"))
 }
 
-// Run runs Glouton
+// Run runs Glouton.
 func Run(configFiles []string) {
 	rand.Seed(time.Now().UnixNano())
 
@@ -192,7 +192,7 @@ func Run(configFiles []string) {
 }
 
 // BleemeoAccountID returns the Account UUID of Bleemeo
-// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or mis-configured)
+// It return the empty string if the Account UUID is not available (e.g. because Bleemeo is disabled or mis-configured).
 func (a *agent) BleemeoAccountID() string {
 	if a.bleemeoConnector == nil {
 		return ""
@@ -202,7 +202,7 @@ func (a *agent) BleemeoAccountID() string {
 }
 
 // BleemeoAgentID returns the Agent UUID of Bleemeo
-// It return the empty string if the Agent UUID is not available (e.g. because Bleemeo is disabled or registration didn't happen yet)
+// It return the empty string if the Agent UUID is not available (e.g. because Bleemeo is disabled or registration didn't happen yet).
 func (a *agent) BleemeoAgentID() string {
 	if a.bleemeoConnector == nil {
 		return ""
@@ -212,7 +212,7 @@ func (a *agent) BleemeoAgentID() string {
 }
 
 // BleemeoRegistrationAt returns the date of Agent registration with Bleemeo API
-// It return the zero time if registration didn't occurred yet
+// It return the zero time if registration didn't occurred yet.
 func (a *agent) BleemeoRegistrationAt() time.Time {
 	if a.bleemeoConnector == nil {
 		return time.Time{}
@@ -222,7 +222,7 @@ func (a *agent) BleemeoRegistrationAt() time.Time {
 }
 
 // BleemeoLastReport returns the date of last report with Bleemeo API
-// It return the zero time if registration didn't occurred yet or no data send to Bleemeo API
+// It return the zero time if registration didn't occurred yet or no data send to Bleemeo API.
 func (a *agent) BleemeoLastReport() time.Time {
 	if a.bleemeoConnector == nil {
 		return time.Time{}
@@ -231,7 +231,7 @@ func (a *agent) BleemeoLastReport() time.Time {
 	return a.bleemeoConnector.LastReport()
 }
 
-// BleemeoConnected returns true if Bleemeo is currently connected (to MQTT)
+// BleemeoConnected returns true if Bleemeo is currently connected (to MQTT).
 func (a *agent) BleemeoConnected() bool {
 	if a.bleemeoConnector == nil {
 		return false
@@ -264,7 +264,7 @@ func (a *agent) Tags() []string {
 }
 
 // UpdateThresholds update the thresholds definition.
-// This method will merge with threshold definition present in configuration file
+// This method will merge with threshold definition present in configuration file.
 func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
 	a.updateThresholds(thresholds, firstUpdate)
 }
@@ -351,7 +351,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 	}
 }
 
-// Run will start the agent. It will terminate when sigquit/sigterm/sigint is received
+// Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
 func (a *agent) run() { //nolint:gocyclo
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -1169,7 +1169,7 @@ func parseIPOutput(content []byte) string {
 }
 
 // setupContainer will tune container to improve information gathered.
-// Mostly it make that access to file pass though hostroot
+// Mostly it make that access to file pass though hostroot.
 func setupContainer(hostRootPath string) {
 	if hostRootPath == "" {
 		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")

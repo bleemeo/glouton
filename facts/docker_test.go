@@ -412,7 +412,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 	}
 }
 
-// TestRegress_withoutKubernetes verify that Docker provider can work without Kubernetes
+// TestRegress_withoutKubernetes verify that Docker provider can work without Kubernetes.
 func TestRegress_withoutKubernetes(t *testing.T) {
 	dockerClient, err := newDockerMock("testdata/minikube-v1.18.0/docker.json")
 	if err != nil {

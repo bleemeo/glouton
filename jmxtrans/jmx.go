@@ -37,7 +37,7 @@ const (
 )
 
 // JMX allow to gather metrics from JVM using JMX
-// It use jmxtrans to achieve this goal
+// It use jmxtrans to achieve this goal.
 type JMX struct {
 	Accumulator             telegraf.Accumulator
 	OutputConfigurationFile string
@@ -63,7 +63,7 @@ type updateRequest struct {
 	reply chan<- error
 }
 
-// UpdateConfig update the jmxtrans configuration
+// UpdateConfig update the jmxtrans configuration.
 func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.Duration) error {
 	j.l.Lock()
 	j.services = services
@@ -86,7 +86,7 @@ func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.D
 	return <-replyChan
 }
 
-// Run configure jmxtrans to send metrics to a local graphite server
+// Run configure jmxtrans to send metrics to a local graphite server.
 func (j *JMX) Run(ctx context.Context) error {
 	j.l.Lock()
 

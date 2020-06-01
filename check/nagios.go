@@ -26,7 +26,7 @@ import (
 	"github.com/google/shlex"
 )
 
-// NagiosCheck perform a Nagios check
+// NagiosCheck perform a Nagios check.
 type NagiosCheck struct {
 	*baseCheck
 

@@ -23,7 +23,7 @@ import (
 	"sync"
 )
 
-// State is state.json
+// State is state.json.
 type State struct {
 	data map[string]json.RawMessage
 
@@ -31,7 +31,7 @@ type State struct {
 	path string
 }
 
-// Load load state.json file
+// Load load state.json file.
 func Load(path string) (*State, error) {
 	state := State{
 		path: path,
@@ -51,7 +51,7 @@ func Load(path string) (*State, error) {
 	return &state, err
 }
 
-// Save will write back the State to state.json
+// Save will write back the State to state.json.
 func (s *State) Save() error {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -90,7 +90,7 @@ func (s *State) saveTo(path string) error {
 	return nil
 }
 
-// Set save an object
+// Set save an object.
 func (s *State) Set(key string, object interface{}) error {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -110,7 +110,7 @@ func (s *State) Set(key string, object interface{}) error {
 	return nil
 }
 
-// Get return an object
+// Get return an object.
 func (s *State) Get(key string, result interface{}) error {
 	s.l.Lock()
 	defer s.l.Unlock()
