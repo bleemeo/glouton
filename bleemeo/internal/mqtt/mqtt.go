@@ -58,6 +58,8 @@ type Option struct {
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
+
+	InitialPoints []types.MetricPoint
 }
 
 // Client is an MQTT client for Bleemeo Cloud platform.
@@ -128,7 +130,13 @@ func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 }
 
 // New create a new client.
-func New(option Option) *Client {
+func New(option Option, first bool) *Client {
+	if first {
+		paho.ERROR = logger.V(2)
+		paho.CRITICAL = logger.V(2)
+		paho.DEBUG = logger.V(3)
+	}
+
 	return &Client{
 		option: option,
 	}
@@ -173,13 +181,12 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 // Run connect and transmit information to Bleemeo Cloud platform.
 func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
-	paho.ERROR = logger.V(2)
-	paho.CRITICAL = logger.V(2)
-	paho.DEBUG = logger.V(3)
 
 	c.l.Lock()
 	c.disableNotify = make(chan interface{})
 	c.connectionLost = make(chan interface{})
+	c.pendingPoints = c.option.InitialPoints
+	c.option.InitialPoints = nil
 	c.l.Unlock()
 
 	for !c.ready() {
@@ -373,7 +380,7 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
-func (c *Client) popPendingPoints() []types.MetricPoint {
+func (c *Client) popNewPendingPoints() []types.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -383,11 +390,26 @@ func (c *Client) popPendingPoints() []types.MetricPoint {
 	return points
 }
 
+// PopPendingPoints get and remove all pending points from this MQTT connector.
+func (c *Client) PopPendingPoints() []types.MetricPoint {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	points := append(c.failedPoints, c.pendingPoints...)
+	c.failedPoints = nil
+	c.failedPointsCount = 0
+	c.pendingPoints = nil
+
+	return points
+}
+
 func (c *Client) sendPoints() {
 	metricWhitelist := c.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
-	points := filterPoints(c.popPendingPoints(), metricWhitelist)
+	points := filterPoints(c.popNewPendingPoints(), metricWhitelist)
 
 	if !c.Connected() {
+		c.l.Lock()
+
 		c.failedPoints = append(c.failedPoints, points...)
 		if len(c.failedPoints) > maxPendingPoints {
 			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
@@ -396,7 +418,6 @@ func (c *Client) sendPoints() {
 		// Make sure that when connection is back we retry failed point as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
 
-		c.l.Lock()
 		defer c.l.Unlock()
 
 		c.failedPointsCount = len(c.failedPoints)

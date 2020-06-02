@@ -28,9 +28,11 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -80,6 +82,7 @@ type agent struct {
 	accumulator       *threshold.Accumulator
 	store             *store.Store
 	promScrapper      *promexporter.DynamicSrapper
+	lastHealCheck     int64
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -114,6 +117,8 @@ type taskInfo struct {
 }
 
 func (a *agent) init(configFiles []string) (ok bool) {
+	atomic.StoreInt64(&a.lastHealCheck, time.Now().Unix())
+
 	a.taskRegistry = task.NewRegistry(context.Background())
 	cfg, warnings, err := a.loadConfiguration(configFiles)
 	a.config = cfg
@@ -516,6 +521,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.FireTrigger(true, false, false, false)
 
 	tasks := []taskInfo{
+		{a.watchdog, "Agent Watchdog"},
 		{a.store.Run, "Metric store"},
 		{a.triggerHandler.Run, "Internal trigger handler"},
 		{a.dockerFact.Run, "Docker connector"},
@@ -762,6 +768,35 @@ func (a *agent) startTasks(tasks []taskInfo) {
 	}
 }
 
+func (a *agent) watchdog(ctx context.Context) error {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return nil
+		}
+
+		timestamp := atomic.LoadInt64(&a.lastHealCheck)
+		lastHealCheck := time.Unix(timestamp, 0)
+
+		if time.Since(lastHealCheck) > 15*time.Minute {
+			logger.Printf("Healcheck are no longer running. Last run was at %s", lastHealCheck.Format(time.RFC3339))
+
+			// We don't know how big the buffer needs to be to collect
+			// all the goroutines. Use 2MB buffer which hopefully is enough
+			buffer := make([]byte, 1<<21)
+
+			runtime.Stack(buffer, true)
+			logger.Printf("%s", string(buffer))
+			logger.Printf("Glouton seems unhealthy, killing myself")
+			panic("Glouton seems unhealthy, killing myself")
+		}
+	}
+}
+
 func (a *agent) healthCheck(ctx context.Context) error {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
@@ -790,6 +825,8 @@ func (a *agent) healthCheck(ctx context.Context) error {
 		if a.influxdbConnector != nil {
 			a.influxdbConnector.HealthCheck()
 		}
+
+		atomic.StoreInt64(&a.lastHealCheck, time.Now().Unix())
 	}
 }
 

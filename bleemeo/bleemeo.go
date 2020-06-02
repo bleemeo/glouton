@@ -18,6 +18,7 @@ package bleemeo
 
 import (
 	"context"
+	"runtime"
 	"sync"
 	"time"
 
@@ -26,27 +27,32 @@ import (
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	gloutonTypes "glouton/types"
 )
 
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
 	option types.GlobalOption
 
-	cache *cache.Cache
-	sync  *synchronizer.Synchronizer
-	mqtt  *mqtt.Client
+	cache       *cache.Cache
+	sync        *synchronizer.Synchronizer
+	mqtt        *mqtt.Client
+	mqttRestart chan interface{}
 
 	l sync.Mutex
 	// initDone      bool
-	disabledUntil time.Time
-	disableReason types.DisableReason
+	lastKnownReport time.Time
+	lastMQTTRestart time.Time
+	disabledUntil   time.Time
+	disableReason   types.DisableReason
 }
 
 // New create a new Connector.
 func New(option types.GlobalOption) *Connector {
 	c := &Connector{
-		option: option,
-		cache:  cache.Load(option.State),
+		option:      option,
+		cache:       cache.Load(option.State),
+		mqttRestart: make(chan interface{}, 1),
 	}
 	c.sync = synchronizer.New(synchronizer.Option{
 		GlobalOption:         c.option,
@@ -63,7 +69,7 @@ func (c *Connector) UpdateUnitsAndThresholds(firstUpdate bool) {
 	c.sync.UpdateUnitsAndThresholds(firstUpdate)
 }
 
-func (c *Connector) initMQTT() error {
+func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -74,17 +80,108 @@ func (c *Connector) initMQTT() error {
 		return err
 	}
 
-	c.mqtt = mqtt.New(mqtt.Option{
-		GlobalOption:         c.option,
-		Cache:                c.cache,
-		DisableCallback:      c.disableCallback,
-		AgentID:              c.AgentID(),
-		AgentPassword:        password,
-		UpdateConfigCallback: c.sync.NotifyConfigUpdate,
-		UpdateMetrics:        c.sync.UpdateMetrics,
-	})
+	c.mqtt = mqtt.New(
+		mqtt.Option{
+			GlobalOption:         c.option,
+			Cache:                c.cache,
+			DisableCallback:      c.disableCallback,
+			AgentID:              c.AgentID(),
+			AgentPassword:        password,
+			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
+			UpdateMetrics:        c.sync.UpdateMetrics,
+			InitialPoints:        previousPoint,
+		},
+		first,
+	)
 
 	return nil
+}
+func (c *Connector) mqttRestarter(ctx context.Context) error {
+	var (
+		wg             sync.WaitGroup
+		mqttErr        error
+		l              sync.Mutex
+		previousPoints []gloutonTypes.MetricPoint
+		alreadyInit    bool
+	)
+
+	subCtx, cancel := context.WithCancel(ctx)
+
+	c.l.Lock()
+	mqttRestart := c.mqttRestart
+	c.l.Unlock()
+
+	if mqttRestart == nil {
+		return nil
+	}
+
+	select {
+	case mqttRestart <- nil:
+	default:
+	}
+
+	for range mqttRestart {
+		cancel()
+
+		subCtx, cancel = context.WithCancel(ctx)
+
+		c.l.Lock()
+
+		if c.mqtt != nil {
+			// Try to retrieve pending points
+			resultChan := make(chan []gloutonTypes.MetricPoint, 1)
+
+			go func() {
+				resultChan <- c.mqtt.PopPendingPoints()
+			}()
+
+			select {
+			case previousPoints = <-resultChan:
+			case <-time.After(10 * time.Second):
+			}
+		}
+
+		c.mqtt = nil
+
+		c.l.Unlock()
+
+		err := c.initMQTT(previousPoints, !alreadyInit)
+		previousPoints = nil
+		alreadyInit = true
+
+		if err != nil {
+			l.Lock()
+
+			if mqttErr == nil {
+				mqttErr = err
+			}
+
+			l.Unlock()
+
+			break
+		}
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			err := c.mqtt.Run(subCtx)
+
+			l.Lock()
+
+			if mqttErr == nil {
+				mqttErr = err
+			}
+
+			l.Unlock()
+		}()
+	}
+
+	cancel()
+	wg.Wait()
+
+	return mqttErr
 }
 
 // Run run the Connector.
@@ -126,26 +223,23 @@ func (c *Connector) Run(ctx context.Context) error {
 			}
 		}
 
+		c.l.Lock()
+		close(c.mqttRestart)
+		c.mqttRestart = nil
+		c.l.Unlock()
+
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
 	for subCtx.Err() == nil {
 		if c.AgentID() != "" {
-			if err := c.initMQTT(); err != nil {
-				cancel()
-
-				mqttErr = err
-
-				break
-			}
-
 			wg.Add(1)
 
 			go func() {
 				defer wg.Done()
 				defer cancel()
 
-				mqttErr = c.mqtt.Run(subCtx)
+				mqttErr = c.mqttRestarter(subCtx)
 			}()
 
 			break
@@ -238,11 +332,14 @@ func (c *Connector) LastReport() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if c.mqtt == nil {
-		return time.Time{}
+	if c.mqtt != nil {
+		tmp := c.mqtt.LastReport()
+		if tmp.After(c.lastKnownReport) {
+			c.lastKnownReport = tmp
+		}
 	}
 
-	return c.mqtt.LastReport()
+	return c.lastKnownReport
 }
 
 // HealthCheck perform some health check and logger any issue found.
@@ -254,6 +351,8 @@ func (c *Connector) HealthCheck() bool {
 
 		ok = false
 	}
+
+	lastReport := c.LastReport()
 
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -268,6 +367,30 @@ func (c *Connector) HealthCheck() bool {
 
 	if c.mqtt != nil {
 		ok = c.mqtt.HealthCheck() && ok
+
+		if !lastReport.IsZero() && time.Since(lastReport) > time.Hour && (c.lastMQTTRestart.IsZero() || time.Since(c.lastMQTTRestart) > 4*time.Hour) {
+			c.lastMQTTRestart = time.Now()
+
+			logger.Printf("MQTT connection fail to re-establish since %s. This may be a long network issue or a Glouton bug", lastReport.Format(time.RFC3339))
+
+			if time.Since(lastReport) > 36*time.Hour {
+				logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing mysel")
+
+				// We don't know how big the buffer needs to be to collect
+				// all the goroutines. Use 2MB buffer which hopefully is enough
+				buffer := make([]byte, 1<<21)
+
+				runtime.Stack(buffer, true)
+				logger.Printf("%s", string(buffer))
+				panic("Glouton seems unhealthy, killing myself")
+			}
+
+			logger.Printf("Trying to restart the MQTT connection from scratch")
+
+			if c.mqttRestart != nil {
+				c.mqttRestart <- nil
+			}
+		}
 	}
 
 	return ok
