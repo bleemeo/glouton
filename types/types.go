@@ -37,21 +37,21 @@ const (
 	StatusUnknown
 )
 
-// MetricFormat specify the metric format used
+// MetricFormat specify the metric format used.
 type MetricFormat int
 
 // List of known metrics format.
 // Currently only Bleemeo and Prometheus are supported.
 // The Bleemeo format is the initial format supported. It provide fewer metrics
 // which are usually directly queriable (e.g. disk_used_perc instead of a free bytes and total bytes)
-// The Prometheus format use same format as node_exporter and try to be as close as Prometheus way
+// The Prometheus format use same format as node_exporter and try to be as close as Prometheus way.
 const (
 	MetricFormatUnknown MetricFormat = iota
 	MetricFormatBleemeo
 	MetricFormatPrometheus
 )
 
-// StringToMetricFormat convert a string to a MetricFormat. Return MetricFormatUnknown if input is invalid
+// StringToMetricFormat convert a string to a MetricFormat. Return MetricFormatUnknown if input is invalid.
 func StringToMetricFormat(input string) MetricFormat {
 	switch strings.ToLower(input) {
 	case "bleemeo":
@@ -77,7 +77,7 @@ func (f MetricFormat) String() string {
 // List of label names that some part of Glouton will assume to be named
 // as such.
 // Using constant here allow to change their name only here.
-// LabelName constants is duplicated in JavaScript file
+// LabelName constants is duplicated in JavaScript file.
 const (
 	LabelName = "__name__"
 
@@ -95,7 +95,7 @@ const (
 	LabelBleemeoUUID    = "__meta_bleemeo_uuid"
 )
 
-// IsSet return true if the status is set
+// IsSet return true if the status is set.
 func (s Status) IsSet() bool {
 	return s != StatusUnset
 }
@@ -115,7 +115,7 @@ func (s Status) String() string {
 	}
 }
 
-// NagiosCode return the Nagios value for a Status
+// NagiosCode return the Nagios value for a Status.
 func (s Status) NagiosCode() int {
 	switch s {
 	case StatusOk:
@@ -129,7 +129,7 @@ func (s Status) NagiosCode() int {
 	}
 }
 
-// FromNagios return a Status from a Nagios status code
+// FromNagios return a Status from a Nagios status code.
 func FromNagios(value int) Status {
 	switch value {
 	case 0:
@@ -143,7 +143,7 @@ func FromNagios(value int) Status {
 	}
 }
 
-// Metric represent a metric object
+// Metric represent a metric object.
 type Metric interface {
 	// Labels returns labels of the metric. A metric is identified by its labels
 	Labels() map[string]string
@@ -156,7 +156,7 @@ type Metric interface {
 	Points(start, end time.Time) ([]Point, error)
 }
 
-// MetricAnnotations contains additional information about a metrics
+// MetricAnnotations contains additional information about a metrics.
 type MetricAnnotations struct {
 	BleemeoItem string
 	ContainerID string
@@ -165,25 +165,25 @@ type MetricAnnotations struct {
 	Status      StatusDescription
 }
 
-// Point is the value of one metric at a given time
+// Point is the value of one metric at a given time.
 type Point struct {
 	Time  time.Time
 	Value float64
 }
 
-// MetricPoint is one point for one metrics (identified by labels) with its annotation at the time of emission
+// MetricPoint is one point for one metrics (identified by labels) with its annotation at the time of emission.
 type MetricPoint struct {
 	Point
 	Labels      map[string]string
 	Annotations MetricAnnotations
 }
 
-// PointPusher push new points. Points must not be mutated after call
+// PointPusher push new points. Points must not be mutated after call.
 type PointPusher interface {
 	PushPoints(points []MetricPoint)
 }
 
-// StatusDescription store a service/metric status with an optional description
+// StatusDescription store a service/metric status with an optional description.
 type StatusDescription struct {
 	CurrentStatus     Status
 	StatusDescription string
@@ -195,7 +195,7 @@ type StatusDescription struct {
 // * labels are sorted by label name
 // * labels values are quoted
 //
-// Result looks like __name__="node_cpu_seconds_total",cpu="0",mode="idle"
+// Result looks like __name__="node_cpu_seconds_total",cpu="0",mode="idle".
 func LabelsToText(labels map[string]string) string {
 	if len(labels) == 0 {
 		return ""
@@ -226,7 +226,7 @@ func LabelsToText(labels map[string]string) string {
 	return str
 }
 
-// TextToLabels is the reverse of LabelsToText
+// TextToLabels is the reverse of LabelsToText.
 func TextToLabels(text string) map[string]string {
 	labels, err := promql.ParseMetricSelector("{" + text + "}")
 	if err != nil {

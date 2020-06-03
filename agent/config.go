@@ -17,6 +17,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"glouton/config"
 	"glouton/logger"
@@ -85,20 +86,22 @@ var defaultConfig = map[string]interface{}{
 		"^rsxx[0-9]$",
 		"^[A-Z]:$",
 	},
-	"influxdb.db_name":                 "glouton", // TODO: influxdb connector
+	"influxdb.db_name":                 "glouton",
 	"influxdb.enabled":                 false,
 	"influxdb.host":                    "localhost",
 	"influxdb.port":                    8086,
 	"influxdb.tags":                    map[string]string{},
-	"jmx.enabled":                      true, // TODO: JMX metric gathering
+	"jmx.enabled":                      true,
 	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
-	"kubernetes.enabled":               false, // TODO: add support for k8s
+	"jmxtrans.file_permission":         "0640",
+	"jmxtrans.graphite_port":           2004,
+	"kubernetes.enabled":               false,
 	"kubernetes.nodename":              "",
+	"kubernetes.kubeconfig":            "",
 	"logging.level":                    "INFO",
 	"logging.output":                   "console",
 	"logging.package_levels":           "",
-	"metric.prometheus":                map[string]interface{}{}, // TODO: gather prometheus exporters
-	"metric.pull":                      map[string]interface{}{}, // TODO: pull metrics
+	"metric.prometheus":                map[string]interface{}{},
 	"metric.softstatus_period_default": 5 * 60,
 	"metric.softstatus_period": map[string]interface{}{
 		"system_pending_updates":          86400,
@@ -111,10 +114,10 @@ var defaultConfig = map[string]interface{}{
 	"nrpe.port":                       5666,
 	"nrpe.ssl":                        true,
 	"nrpe.conf_paths":                 []interface{}{"/etc/nagios/nrpe.cfg"},
-	"service_ignore_check":            []interface{}{}, // TODO
-	"service_ignore_metrics":          []interface{}{}, // TODO
-	"service":                         []interface{}{}, // TODO: custom checks
-	"stack":                           "",              // TODO: default stack
+	"service_ignore_check":            []interface{}{},
+	"service_ignore_metrics":          []interface{}{},
+	"service":                         []interface{}{},
+	"stack":                           "",
 	"tags":                            []string{},
 	"telegraf.docker_metrics_enabled": true,
 	"telegraf.statsd.address":         "127.0.0.1",
@@ -302,6 +305,9 @@ func convertToString(rawValue interface{}) string {
 		return value.String()
 	case int:
 		return strconv.FormatInt(int64(value), 10)
+	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
+		b, _ := json.Marshal(rawValue)
+		return string(b)
 	default:
 		return fmt.Sprintf("%v", rawValue)
 	}

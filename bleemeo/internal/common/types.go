@@ -21,19 +21,19 @@ import (
 	"glouton/types"
 )
 
-// Maximal length of fields on Bleemeo API
+// Maximal length of fields on Bleemeo API.
 const (
 	APIMetricItemLength          int = 100
 	APIMetricItemLengthIfService int = 50
 )
 
 const (
-	// LabelBleemeoItem is the label used for item when using Bleemeo mode
+	// LabelBleemeoItem is the label used for item when using Bleemeo mode.
 	LabelBleemeoItem = "_item"
 )
 
 // LabelsToText convert labels & annotation to a string version.
-// When using the Bleemeo Mode, result is the name + the item annotation
+// When using the Bleemeo Mode, result is the name + the item annotation.
 func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
 	if bleemeoMode {
 		labelsCopy := map[string]string{
@@ -52,7 +52,7 @@ func LabelsToText(labels map[string]string, annotations types.MetricAnnotations,
 	return types.LabelsToText(labelsCopy)
 }
 
-// TruncateItem truncate the item to match maximal length allowed by Bleemeo API
+// TruncateItem truncate the item to match maximal length allowed by Bleemeo API.
 func TruncateItem(item string, isService bool) string {
 	if len(item) > APIMetricItemLength {
 		item = item[:APIMetricItemLength]
@@ -65,7 +65,7 @@ func TruncateItem(item string, isService bool) string {
 	return item
 }
 
-// MetricLookupFromList return a map[MetricLabelItem]Metric
+// MetricLookupFromList return a map[MetricLabelItem]Metric.
 func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bleemeoTypes.Metric {
 	registeredMetricsByKey := make(map[string]bleemeoTypes.Metric, len(registeredMetrics))
 

@@ -28,7 +28,7 @@ import (
 
 const statusCacheKey = "CacheStatusState"
 
-// State store information about current firing threshold
+// State store information about current firing threshold.
 type State interface {
 	Get(key string, result interface{}) error
 	Set(key string, object interface{}) error
@@ -48,7 +48,7 @@ type Registry struct {
 	softPeriods       map[string]time.Duration
 }
 
-// New returns a new ThresholdState
+// New returns a new ThresholdState.
 func New(state State) *Registry {
 	self := &Registry{
 		state:             state,
@@ -93,7 +93,7 @@ func (r *Registry) SetSoftPeriod(defaultPeriod time.Duration, periodPerMetrics m
 	logger.V(2).Printf("SoftPeriod contains %d definitions", len(periodPerMetrics))
 }
 
-// SetUnits configure the units
+// SetUnits configure the units.
 func (r *Registry) SetUnits(units map[MetricNameItem]Unit) {
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -103,7 +103,7 @@ func (r *Registry) SetUnits(units map[MetricNameItem]Unit) {
 	logger.V(2).Printf("Units contains %d definitions", len(units))
 }
 
-// MetricNameItem is the couple Name and Item
+// MetricNameItem is the couple Name and Item.
 type MetricNameItem struct {
 	Name string
 	Item string
@@ -183,8 +183,8 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 	return s
 }
 
-// Threshold define a min/max thresholds
-// Use NaN to mark the limit as unset
+// Threshold define a min/max thresholds.
+// Use NaN to mark the limit as unset.
 type Threshold struct {
 	LowCritical  float64
 	LowWarning   float64
@@ -192,7 +192,7 @@ type Threshold struct {
 	HighCritical float64
 }
 
-// Equal test equality of threhold object
+// Equal test equality of threhold object.
 func (t Threshold) Equal(other Threshold) bool {
 	if t == other {
 		return true
@@ -217,13 +217,13 @@ func (t Threshold) Equal(other Threshold) bool {
 	return true
 }
 
-// Unit represent the unit of a metric
+// Unit represent the unit of a metric.
 type Unit struct {
 	UnitType int    `json:"unit,omitempty"`
 	UnitText string `json:"unit_text,omitempty"`
 }
 
-// Possible value for UnitType
+// Possible value for UnitType.
 const (
 	UnitTypeUnit = 0
 	UnitTypeByte = 2
@@ -231,7 +231,7 @@ const (
 )
 
 // FromInterfaceMap convert a map[string]interface{} to Threshold.
-// It expect the key "low_critical", "low_warning", "high_critical" and "high_warning"
+// It expect the key "low_critical", "low_warning", "high_critical" and "high_warning".
 func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 	result := Threshold{
 		LowCritical:  math.NaN(),
@@ -269,9 +269,9 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 	return result, nil
 }
 
-// IsZero returns true is all threshold limit are unset (NaN)
+// IsZero returns true is all threshold limit are unset (NaN).
 // Is also returns true is all threshold are equal and 0 (which is the zero-value of Threshold structure
-// and is an invalid threshold configuration)
+// and is an invalid threshold configuration).
 func (t Threshold) IsZero() bool {
 	if math.IsNaN(t.LowCritical) && math.IsNaN(t.LowWarning) && math.IsNaN(t.HighWarning) && math.IsNaN(t.HighCritical) {
 		return true
@@ -280,7 +280,7 @@ func (t Threshold) IsZero() bool {
 	return t.LowCritical == 0.0 && t.LowWarning == 0.0 && t.HighWarning == 0.0 && t.HighCritical == 0.0
 }
 
-// CurrentStatus returns the current status regarding the threshold and (if not ok) return the exceeded limit
+// CurrentStatus returns the current status regarding the threshold and (if not ok) return the exceeded limit.
 func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 	if !math.IsNaN(t.LowCritical) && value < t.LowCritical {
 		return types.StatusCritical, t.LowCritical
@@ -301,7 +301,7 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 	return types.StatusOk, math.NaN()
 }
 
-// GetThreshold return the current threshold for given Metric
+// GetThreshold return the current threshold for given Metric.
 func (r *Registry) GetThreshold(key MetricNameItem) Threshold {
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -436,7 +436,7 @@ type pusher struct {
 	pusher   types.PointPusher
 }
 
-// WithPusher return the same threshold instance with specified point pusher
+// WithPusher return the same threshold instance with specified point pusher.
 func (r *Registry) WithPusher(p types.PointPusher) types.PointPusher {
 	return pusher{
 		registry: r,

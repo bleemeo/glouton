@@ -27,7 +27,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/cpu"
 )
 
-// New initialise cpu.Input
+// New initialise cpu.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["cpu"]
 	if ok {

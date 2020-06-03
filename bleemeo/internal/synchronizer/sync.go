@@ -34,7 +34,7 @@ import (
 	"time"
 )
 
-// Synchronizer synchronize object with Bleemeo
+// Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
 	ctx    context.Context
 	option Option
@@ -57,7 +57,7 @@ type Synchronizer struct {
 	pendingMetricsUpdate []string
 }
 
-// Option are parameter for the syncrhonizer
+// Option are parameter for the syncrhonizer.
 type Option struct {
 	bleemeoTypes.GlobalOption
 	Cache *cache.Cache
@@ -70,7 +70,7 @@ type Option struct {
 	UpdateConfigCallback func()
 }
 
-// New return a new Synchronizer
+// New return a new Synchronizer.
 func New(option Option) *Synchronizer {
 	return &Synchronizer{
 		option: option,
@@ -80,7 +80,7 @@ func New(option Option) *Synchronizer {
 	}
 }
 
-// Run run the Connector
+// Run run the Connector.
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = time.Now()
@@ -204,7 +204,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.forceSync["containers"] = true
 }
 
-// UpdateMetrics request to update a specific metrics
+// UpdateMetrics request to update a specific metrics.
 func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -222,7 +222,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 	s.forceSync["metrics"] = false
 }
 
-// UpdateContainers request to update a containers
+// UpdateContainers request to update a containers.
 func (s *Synchronizer) UpdateContainers() {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -518,7 +518,7 @@ func (s *Synchronizer) register() error {
 
 	accountID := s.option.Config.String("bleemeo.account_id")
 
-	password := generatePassword(10)
+	password := generatePassword(20)
 
 	var objectID struct {
 		ID string
@@ -567,7 +567,7 @@ func (s *Synchronizer) register() error {
 }
 
 func generatePassword(length int) string {
-	letters := []rune("abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#-_@%*:;$")
 	b := make([]rune, length)
 
 	for i := range b {

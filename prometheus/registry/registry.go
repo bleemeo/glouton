@@ -47,7 +47,7 @@ const (
 
 type pushFunction func(points []types.MetricPoint)
 
-// AddMetricPoints implement PointAdder
+// AddMetricPoints implement PointAdder.
 func (f pushFunction) PushPoints(points []types.MetricPoint) {
 	f(points)
 }
@@ -93,7 +93,7 @@ type registration struct {
 	gatherer            labeledGatherer
 }
 
-// This type is used to have another Collecto() method private which only return pushed points
+// This type is used to have another Collecto() method private which only return pushed points.
 type pushCollector Registry
 
 func getDefaultRelabelConfig() []*relabel.Config {
@@ -210,7 +210,7 @@ func (r *Registry) init() {
 }
 
 // UpdateBleemeoAgentID change the BleemeoAgentID and wait for all pending metrics emission.
-// When this function return, it's guaratee that all call to r.PushPoint will use new labels
+// When this function return, it's guaratee that all call to r.PushPoint will use new labels.
 func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
 	r.init()
 
@@ -306,7 +306,7 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 	return true
 }
 
-// Gather implement prometheus Gatherer
+// Gather implement prometheus Gatherer.
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	r.init()
 	r.l.Lock()
@@ -343,7 +343,7 @@ func (l prefixLogger) Println(v ...interface{}) {
 
 // AddDefaultCollector adds the following collectors:
 // GoCollector and ProcessCollector like the prometheus.DefaultRegisterer
-// Internal registry which contains all glouton metrics
+// Internal registry which contains all glouton metrics.
 func (r *Registry) AddDefaultCollector() {
 	r.init()
 
@@ -353,7 +353,7 @@ func (r *Registry) AddDefaultCollector() {
 	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil)
 }
 
-// AddNodeExporter add a node_exporter to collector
+// AddNodeExporter add a node_exporter to collector.
 func (r *Registry) AddNodeExporter(option node.Option) error {
 	collector, err := node.NewCollector(option)
 	if err != nil {
@@ -372,7 +372,7 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 	return err
 }
 
-// Exporter return an HTTP exporter
+// Exporter return an HTTP exporter.
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(r, promhttp.HandlerOpts{
@@ -394,7 +394,7 @@ func (r *Registry) WithTTL(ttl time.Duration) types.PointPusher {
 }
 
 // RunCollection runs collection of all collector & gatherer at regular interval.
-// The interval could be updated by call to UpdateDelay
+// The interval could be updated by call to UpdateDelay.
 func (r *Registry) RunCollection(ctx context.Context) error {
 	r.init()
 
@@ -405,7 +405,7 @@ func (r *Registry) RunCollection(ctx context.Context) error {
 	return nil
 }
 
-// UpdateDelay change the delay between metric gather
+// UpdateDelay change the delay between metric gather.
 func (r *Registry) UpdateDelay(delay time.Duration) {
 	r.init()
 	r.l.Lock()
@@ -542,7 +542,7 @@ func familiesToMetricPoints(families []*dto.MetricFamily) []types.MetricPoint {
 	return result
 }
 
-// sleep such are time.Now() is aligned on a multiple of interval
+// sleep such are time.Now() is aligned on a multiple of interval.
 func sleepToAlign(interval time.Duration) {
 	now := time.Now()
 	previousMultiple := now.Truncate(interval)
@@ -557,7 +557,7 @@ func sleepToAlign(interval time.Duration) {
 }
 
 // pushPoint add a new point to the list of pushed point with a specified TTL.
-// As for AddMetricPointFunction, points should not be mutated after the call
+// As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	r.l.Lock()
 
@@ -664,11 +664,11 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 	reg.gatherer = g
 }
 
-// Describe implement prometheus.Collector
+// Describe implement prometheus.Collector.
 func (c *pushCollector) Describe(chan<- *prometheus.Desc) {
 }
 
-// Collect collect non-pushed points from all registered collectors
+// Collect collect non-pushed points from all registered collectors.
 func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()

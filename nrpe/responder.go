@@ -35,7 +35,7 @@ type checkRegistry interface {
 	GetCheckNow(discovery.NameContainer) (discovery.CheckNow, error)
 }
 
-// Responder is used to build the NRPE answer
+// Responder is used to build the NRPE answer.
 type Responder struct {
 	discovery      checkRegistry
 	customCheck    map[string]discovery.NameContainer
@@ -43,7 +43,7 @@ type Responder struct {
 	allowArguments bool
 }
 
-// NewResponse returns a Response
+// NewResponse returns a Response.
 func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
 	customChecks := make(map[string]discovery.NameContainer)
 
@@ -67,7 +67,7 @@ func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegist
 	}
 }
 
-// Response return the response of an NRPE request
+// Response return the response of an NRPE request.
 func (r Responder) Response(ctx context.Context, request string) (string, int16, error) {
 	requestArgs := strings.Split(request, "!")
 
@@ -113,7 +113,8 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...)
+	// nrpeCommand[0] is not remote controlled. It come from local configuration files.
+	cmd := exec.CommandContext(ctx, nrpeCommand[0], nrpeCommand[1:]...) // nolint: gosec
 	out, err := cmd.CombinedOutput()
 	nagiosCode := 0
 
@@ -153,7 +154,7 @@ func (r Responder) returnCommand(requestArgs []string) ([]string, error) {
 }
 
 // readNRPEConf reads all the conf files of nrpeConfPath and returns a map which contains all the commands
-// and a boolean to allow or not the arguments in NRPE requests
+// and a boolean to allow or not the arguments in NRPE requests.
 func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 	nrpeConfMap := make(map[string]string)
 
@@ -180,7 +181,7 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 	return nrpeConfMap, false
 }
 
-// readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument
+// readNRPEConfFile read confBytes and returns an updated version of nrpeConfMap and allowArgument.
 func readNRPEConfFile(confBytes []byte, nrpeConfMap map[string]string) (map[string]string, bool) {
 	commandLinePatern := "^command\\[(.+)\\]( *)=.*$"
 	commandLineRegex := regexp.MustCompile(commandLinePatern)

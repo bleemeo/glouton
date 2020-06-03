@@ -26,7 +26,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-// Collector implement running Gather on inputs every fixed time interval
+// Collector implement running Gather on inputs every fixed time interval.
 type Collector struct {
 	acc          telegraf.Accumulator
 	inputs       map[int]telegraf.Input
@@ -52,7 +52,7 @@ func New(acc telegraf.Accumulator) *Collector {
 	return c
 }
 
-// AddInput add an input to this collector and return an ID
+// AddInput add an input to this collector and return an ID.
 func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -98,7 +98,7 @@ func (c *Collector) RemoveInput(id int) {
 	delete(c.inputNames, id)
 }
 
-// RunGather run one gather and send metric through the accumulator
+// RunGather run one gather and send metric through the accumulator.
 func (c *Collector) RunGather() {
 	c.runOnce()
 }

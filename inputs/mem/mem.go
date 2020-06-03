@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/mem"
 )
 
-// New initialise mem.Input
+// New initialise mem.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mem"]
 	if ok {

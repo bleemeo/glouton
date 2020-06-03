@@ -18,14 +18,14 @@ package internal
 
 import "github.com/influxdata/telegraf"
 
-// Input is a generic input that use the modifying Accumulator defined in this package
+// Input is a generic input that use the modifying Accumulator defined in this package.
 type Input struct {
 	telegraf.Input
 	Accumulator Accumulator
 }
 
 // Gather takes in an accumulator and adds the metrics that the Input
-// gathers. This is called every "interval"
+// gathers. This is called every "interval".
 func (i *Input) Gather(acc telegraf.Accumulator) error {
 	i.Accumulator.Accumulator = acc
 	i.Accumulator.PrepareGather()
@@ -45,7 +45,7 @@ func (i *Input) Start(acc telegraf.Accumulator) error {
 	return nil
 }
 
-// Stop stops the services and closes any necessary channels and connections
+// Stop stops the services and closes any necessary channels and connections.
 func (i *Input) Stop() {
 	if si, ok := i.Input.(telegraf.ServiceInput); ok {
 		si.Stop()

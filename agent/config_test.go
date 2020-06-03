@@ -52,6 +52,24 @@ func Test_confFieldToSliceMap(t *testing.T) {
 		42,
 	}
 
+	var confInterfaceWithNested interface{} = []interface{}{
+		map[interface{}]interface{}{
+			"id":       "cassandra",
+			"instance": "squirreldb-cassandra",
+			"jmx_port": 7999,
+			"cassandra_detailed_tables": []string{
+				"squirreldb.data",
+			},
+			"jmx_metrics": []map[string]interface{}{
+				{
+					"name":  "heap_size_mb",
+					"mbean": "java.lang:type=Memory",
+					"scale": 42,
+				},
+			},
+		},
+	}
+
 	type args struct {
 		input    interface{}
 		confType string
@@ -99,6 +117,22 @@ func Test_confFieldToSliceMap(t *testing.T) {
 				{
 					"name":     "postgres",
 					"instance": "host:* container:*",
+				},
+			},
+		},
+		{
+			name: "test-nested",
+			args: args{
+				input:    confInterfaceWithNested,
+				confType: "service",
+			},
+			want: []map[string]string{
+				{
+					"id":                        "cassandra",
+					"instance":                  "squirreldb-cassandra",
+					"jmx_port":                  "7999",
+					"cassandra_detailed_tables": "[\"squirreldb.data\"]",
+					"jmx_metrics":               `[{"mbean":"java.lang:type=Memory","name":"heap_size_mb","scale":42}]`,
 				},
 			},
 		},

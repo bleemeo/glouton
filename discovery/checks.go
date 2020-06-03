@@ -32,20 +32,20 @@ const (
 	customCheckNagios = "nagios"
 )
 
-// Check is an interface which specify a check
+// Check is an interface which specify a check.
 type Check interface {
 	CheckNow(ctx context.Context) types.StatusDescription
 	Run(ctx context.Context) error
 }
 
-// CheckDetails is used to save a check and his id
+// CheckDetails is used to save a check and his id.
 type CheckDetails struct {
 	id    int
 	check Check
 }
 
 // collectorDetails contains information about a collector.
-// It could be a Telegraf input of a Prometheus collector
+// It could be a Telegraf input of a Prometheus collector.
 type collectorDetails struct {
 	inputID    int
 	gathererID int

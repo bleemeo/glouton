@@ -54,6 +54,7 @@ type container interface {
 	ListenAddresses() []facts.ListenAddress
 	Labels() map[string]string
 	Ignored() bool
+	IgnoredPorts() map[int]bool
 }
 
 type containerInfoProvider interface {
@@ -65,7 +66,7 @@ type fileReader interface {
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
-// processess and netstat to discovery services
+// processess and netstat to discovery services.
 func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	return &DynamicDiscovery{
 		ps:            ps,
@@ -91,7 +92,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 	return dd.services, nil
 }
 
-// LastUpdate return when the last update occurred
+// LastUpdate return when the last update occurred.
 func (dd *DynamicDiscovery) LastUpdate() time.Time {
 	dd.l.Lock()
 	defer dd.l.Unlock()
@@ -129,6 +130,7 @@ var (
 		"squid":        SquidService,
 		"varnishd":     VarnishService,
 		"uwsgi":        UWSGIService,
+		"uWSGI":        UWSGIService,
 	}
 	knownIntepretedProcess = []struct {
 		CmdLineMustContains []string
@@ -281,6 +283,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			service.ListenAddresses = netstat[pid]
 		} else {
 			service.ListenAddresses = service.container.ListenAddresses()
+			service.IgnoredPorts = service.container.IgnoredPorts()
 		}
 
 		if len(service.ListenAddresses) > 0 {
@@ -289,10 +292,24 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 
 		di := servicesDiscoveryInfo[service.ServiceType]
 
+		for port, ignore := range di.DefaultIgnoredPorts {
+			if !ignore {
+				continue
+			}
+
+			if _, ok := service.IgnoredPorts[port]; !ok {
+				if service.IgnoredPorts == nil {
+					service.IgnoredPorts = make(map[int]bool)
+				}
+
+				service.IgnoredPorts[port] = ignore
+			}
+		}
+
 		dd.updateListenAddresses(&service, di)
 
 		dd.fillExtraAttributes(&service)
-		// TODO: jmx ?
+		dd.guessJMX(&service, process.CmdLineList)
 
 		logger.V(2).Printf("Discovered service %v", service)
 
@@ -312,7 +329,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 }
 
 func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discoveryInfo) {
-	defaultAddress := "127.0.0.1"
+	defaultAddress := localhostIP
 
 	if service.container != nil {
 		defaultAddress = service.container.PrimaryAddress()
@@ -394,6 +411,39 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 				if strings.HasPrefix(e, "POSTGRES_USER=") {
 					service.ExtraAttributes["username"] = strings.TrimPrefix(e, "POSTGRES_USER=")
 				}
+			}
+		}
+	}
+}
+
+func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
+	jmxOptions := []string{
+		"-Dcom.sun.management.jmxremote.port=",
+		"-Dcassandra.jmx.remote.port=",
+	}
+	if service.IPAddress == localhostIP {
+		jmxOptions = append(jmxOptions, "-Dcassandra.jmx.local.port=")
+	}
+
+	switch service.ServiceType {
+	case CassandraService, ElasticSearchService, ZookeeperService, BitBucketService,
+		JIRAService, ConfluenceService:
+		for _, arg := range cmdLine {
+			for _, opt := range jmxOptions {
+				if !strings.HasPrefix(arg, opt) {
+					continue
+				}
+
+				portStr := strings.TrimPrefix(arg, opt)
+
+				_, err := strconv.ParseInt(portStr, 10, 0)
+				if err != nil {
+					continue
+				}
+
+				service.ExtraAttributes["jmx_port"] = portStr
+
+				return
 			}
 		}
 	}

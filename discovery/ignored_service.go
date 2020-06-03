@@ -21,19 +21,19 @@ import (
 	"strings"
 )
 
-// IgnoredService saves the ignored checks or metrics imported from the configuration file
+// IgnoredService saves the ignored checks or metrics imported from the configuration file.
 type IgnoredService struct {
 	ignoredChecks []map[string]string
 }
 
-// NewIgnoredService initializes IgnoredCheckOrMetrics struct
+// NewIgnoredService initializes IgnoredCheckOrMetrics struct.
 func NewIgnoredService(ignoredChecks []map[string]string) IgnoredService {
 	return IgnoredService{
 		ignoredChecks: ignoredChecks,
 	}
 }
 
-// IsServiceIgnored returns if the check or the metrics are ignored or not
+// IsServiceIgnored returns if the check or the metrics are ignored or not.
 func (ic IgnoredService) IsServiceIgnored(nameContainer NameContainer) bool {
 	for _, ignoredCheck := range ic.ignoredChecks {
 		if ignoredCheck["name"] == nameContainer.Name {

@@ -32,7 +32,7 @@ type netTransformer struct {
 
 // New initialise net.Input
 //
-// blacklist contains a list of interface name prefix to ignore
+// blacklist contains a list of interface name prefix to ignore.
 func New(blacklist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["net"]
 	if ok {

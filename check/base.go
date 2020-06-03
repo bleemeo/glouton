@@ -39,7 +39,7 @@ import (
 // The check is run at the first of:
 // * One minute after last check
 // * 30 seconds after checks change to not Ok (to quickly recover from a service restart)
-// * (if persistentConnection is active) after a TCP connection is broken
+// * (if persistentConnection is active) after a TCP connection is broken.
 type baseCheck struct {
 	metricName     string
 	labels         map[string]string
@@ -103,7 +103,7 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 	}
 }
 
-// Run execute the TCP check
+// Run execute the TCP check.
 func (bc *baseCheck) Run(ctx context.Context) error {
 	// Open connectionS to address
 	// when openned, keep checking that port stay open
@@ -140,7 +140,7 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 // check does the check and add the metric depends of addMetric
 // if successful, ensure sockets are openned
 // if fail, ensure sockets are closed
-// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed
+// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed.
 func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.StatusDescription {
 	bc.l.Lock()
 	defer bc.l.Unlock()
@@ -195,7 +195,7 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 	return result
 }
 
-// ChechNow runs the check now without waiting the timer
+// ChechNow runs the check now without waiting the timer.
 func (bc *baseCheck) CheckNow(ctx context.Context) types.StatusDescription {
 	replyChan := make(chan types.StatusDescription)
 	bc.triggerC <- replyChan

@@ -12,7 +12,7 @@ import (
 )
 
 // gathlabeledGatherererer provide a gatherer that will add provided labels to all metrics.
-// It also allow to gather to MetricPoints
+// It also allow to gather to MetricPoints.
 type labeledGatherer struct {
 	source      prometheus.Gatherer
 	labels      []*dto.LabelPair
@@ -56,7 +56,7 @@ func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return mfs, err
 }
 
-// mergeLabels merge two sorted list of labels. In case of name conflict, value from b wins
+// mergeLabels merge two sorted list of labels. In case of name conflict, value from b wins.
 func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 	result := make([]*dto.LabelPair, 0, len(a)+len(b))
 	aIndex := 0
@@ -176,7 +176,7 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 
 type labeledGatherers []labeledGatherer
 
-// GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily
+// GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily.
 func (gs labeledGatherers) GatherPoints() ([]types.MetricPoint, error) {
 	result := []types.MetricPoint{}
 

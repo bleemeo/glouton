@@ -32,12 +32,12 @@ type diskIOTransformer struct {
 	blacklist []*regexp.Regexp
 }
 
-// New initialise diskio.Input
+// New initialise diskio.Input.
 //
 // whitelist is a list of regular expretion for device to include
 // blacklist is a list of regular expretion for device to include
 //
-// If blacklist is provided (not empty) it's used and whitelist is ignored
+// If blacklist is provided (not empty) it's used and whitelist is ignored.
 func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
 
@@ -63,6 +63,7 @@ func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
 
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
+		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
 			whitelist: whitelistRE,
 			blacklist: blacklistRE,

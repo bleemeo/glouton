@@ -19,11 +19,14 @@ package discovery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/facts"
 	"glouton/types"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/influxdata/telegraf"
 )
 
 type mockDiscoverer struct {
@@ -55,7 +58,50 @@ func (ms mockState) Get(key string, object interface{}) error {
 	return errors.New("not implemented")
 }
 
-// Test dynamic Discovery with single service present
+type mockCollector struct {
+	ExpectedAddedName string
+	NewID             int
+	ExpectedRemoveID  int
+	err               error
+}
+
+func (m *mockCollector) AddInput(_ telegraf.Input, name string) (int, error) {
+	if name != m.ExpectedAddedName {
+		m.err = fmt.Errorf("AddInput(_, %s), want name=%s", name, m.ExpectedAddedName)
+		return 0, m.err
+	}
+
+	m.ExpectedAddedName = ""
+
+	return m.NewID, nil
+}
+
+func (m *mockCollector) RemoveInput(id int) {
+	if id != m.ExpectedRemoveID {
+		m.err = fmt.Errorf("RemoveInput(%d), want name=%d", id, m.ExpectedRemoveID)
+		return
+	}
+
+	m.ExpectedRemoveID = 0
+}
+
+func (m *mockCollector) ExpectationFullified() error {
+	if m.err != nil {
+		return m.err
+	}
+
+	if m.ExpectedAddedName != "" {
+		return fmt.Errorf("AddInput() not called, want call with name=%s", m.ExpectedAddedName)
+	}
+
+	if m.ExpectedRemoveID != 0 {
+		return fmt.Errorf("RemoveInput() not called, want call with id=%d", m.ExpectedRemoveID)
+	}
+
+	return nil
+}
+
+// Test dynamic Discovery with single service present.
 func TestDiscoverySingle(t *testing.T) {
 	cases := []struct {
 		dynamicResult   Service
@@ -366,13 +412,176 @@ func Test_applyOveride(t *testing.T) {
 			},
 			want: map[NameContainer]Service{},
 		},
+		{
+			name: "ignore ports",
+			args: args{
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+						IPAddress:   "127.0.0.1",
+						ListenAddresses: []facts.ListenAddress{
+							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+							{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 443},
+						},
+					},
+				},
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "apache"}: {
+						"ignore_ports": "443,22",
+					},
+				},
+			},
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					IPAddress:   "127.0.0.1",
+					ListenAddresses: []facts.ListenAddress{
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80},
+						// It's not applyOveride which remove ignored ports
+						{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 443},
+					},
+					IgnoredPorts: map[int]bool{
+						22:  true,
+						443: true,
+					},
+					ExtraAttributes: map[string]string{},
+				},
+			},
+		},
+		{
+			name: "ignore ports with space",
+			args: args{
+				discoveredServicesMap: map[NameContainer]Service{
+					{Name: "apache"}: {
+						Name:        "apache",
+						ServiceType: ApacheService,
+					},
+				},
+				servicesOverride: map[NameContainer]map[string]string{
+					{Name: "apache"}: {
+						"ignore_ports": "   443  , 22   ",
+					},
+				},
+			},
+			want: map[NameContainer]Service{
+				{Name: "apache"}: {
+					Name:        "apache",
+					ServiceType: ApacheService,
+					IgnoredPorts: map[int]bool{
+						22:  true,
+						443: true,
+					},
+					ExtraAttributes: map[string]string{},
+				},
+			},
+		},
 	}
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if got := applyOveride(tt.args.discoveredServicesMap, tt.args.servicesOverride); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("applyOveride() = %v, want %v", got, tt.want)
+				t.Errorf("applyOveride() = %#v, want %#v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestUpdateMetricsAndCheck(t *testing.T) {
+	fakeCollector := &mockCollector{
+		ExpectedAddedName: "nginx",
+		NewID:             42,
+	}
+	mockDynamic := &mockDiscoverer{result: []Service{}}
+	docker := mockContainerInfo{
+		containers: map[string]mockContainer{
+			"1234": {},
+		},
+	}
+	state := mockState{}
+	disc := New(mockDynamic, fakeCollector, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
+	disc.containerInfo = docker
+
+	mockDynamic.result = []Service{
+		{
+			Name:            "nginx",
+			ServiceType:     NginxService,
+			Active:          true,
+			ContainerID:     "1234",
+			ContainerName:   "nginx1",
+			IPAddress:       "172.16.0.2",
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+		},
+	}
+
+	if _, err := disc.Discovery(context.Background(), 0); err != nil {
+		t.Error(err)
+	}
+
+	if err := fakeCollector.ExpectationFullified(); err != nil {
+		t.Error(err)
+	}
+
+	mockDynamic.result = []Service{
+		{
+			Name:            "nginx",
+			ServiceType:     NginxService,
+			Active:          true,
+			ContainerID:     "1234",
+			ContainerName:   "nginx1",
+			IPAddress:       "172.16.0.2",
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+		},
+		{
+			Name:            "memcached",
+			ServiceType:     MemcachedService,
+			Active:          true,
+			IPAddress:       "127.0.0.1",
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
+		},
+	}
+	fakeCollector.ExpectedAddedName = "memcached"
+	fakeCollector.NewID = 1337
+
+	if _, err := disc.Discovery(context.Background(), 0); err != nil {
+		t.Error(err)
+	}
+
+	if err := fakeCollector.ExpectationFullified(); err != nil {
+		t.Error(err)
+	}
+
+	docker.containers = map[string]mockContainer{
+		"1239": {},
+	}
+	mockDynamic.result = []Service{
+		{
+			Name:            "nginx",
+			ServiceType:     NginxService,
+			Active:          true,
+			ContainerID:     "1239",
+			ContainerName:   "nginx1",
+			IPAddress:       "172.16.0.2",
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.16.0.2", Port: 80}},
+		},
+		{
+			Name:            "memcached",
+			ServiceType:     MemcachedService,
+			Active:          true,
+			IPAddress:       "127.0.0.1",
+			ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 11211}},
+		},
+	}
+	fakeCollector.ExpectedAddedName = "nginx"
+	fakeCollector.NewID = 9999
+	fakeCollector.ExpectedRemoveID = 42
+
+	if _, err := disc.Discovery(context.Background(), 0); err != nil {
+		t.Error(err)
+	}
+
+	if err := fakeCollector.ExpectationFullified(); err != nil {
+		t.Error(err)
 	}
 }

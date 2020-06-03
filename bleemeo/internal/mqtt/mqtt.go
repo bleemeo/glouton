@@ -31,6 +31,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"sync"
 	"time"
@@ -40,8 +41,11 @@ import (
 
 const maxPendingPoints = 100000
 const pointsBatchSize = 1000
+const minimalDelayBetweenConnect = 10 * time.Second
+const maximalDelayBetweenConnect = 2 * time.Minute
+const stableConnection = 5 * time.Minute
 
-// Option are parameter for the MQTT client
+// Option are parameter for the MQTT client.
 type Option struct {
 	bleemeoTypes.GlobalOption
 	Cache         *cache.Cache
@@ -54,9 +58,11 @@ type Option struct {
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
+
+	InitialPoints []types.MetricPoint
 }
 
-// Client is an MQTT client for Bleemeo Cloud platform
+// Client is an MQTT client for Bleemeo Cloud platform.
 type Client struct {
 	option Option
 
@@ -67,15 +73,24 @@ type Client struct {
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 
-	l                     sync.Mutex
-	setupDone             bool
-	pendingToken          []paho.Token
-	pendingPoints         []types.MetricPoint
-	lastReport            time.Time
-	failedPointsCount     int
-	lastDisconnectionTime []time.Time
-	disabledUntil         time.Time
-	disableReason         bleemeoTypes.DisableReason
+	l                 sync.Mutex
+	setupDone         bool
+	publishBlocked    bool
+	pendingMessage    []message
+	pendingPoints     []types.MetricPoint
+	lastReport        time.Time
+	failedPointsCount int
+	disabledUntil     time.Time
+	disableReason     bleemeoTypes.DisableReason
+	connectionLost    chan interface{}
+	disableNotify     chan interface{}
+}
+
+type message struct {
+	token   paho.Token
+	retry   bool
+	topic   string
+	payload []byte
 }
 
 type metricPayload struct {
@@ -91,10 +106,10 @@ type metricPayload struct {
 // This type is only used because the Bleemeo consumer require Value to be a float,
 // and assume that the JSON "5" is not a float but an int.
 // So this this guarantee that the Go float value 5.0 is encoded as "5.0" and not "5".
-// This should disapear when Bleemeo consumer is upgraded to support int as float
+// This should disapear when Bleemeo consumer is upgraded to support int as float.
 type forceDecimalFloat float64
 
-// MarshalJSON do what comment on forceDecimalFloat say
+// MarshalJSON do what comment on forceDecimalFloat say.
 func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 	buffer, err := json.Marshal(float64(f))
 	if err != nil {
@@ -112,14 +127,20 @@ func (f forceDecimalFloat) MarshalJSON() ([]byte, error) {
 	return buffer, err
 }
 
-// New create a new client
-func New(option Option) *Client {
+// New create a new client.
+func New(option Option, first bool) *Client {
+	if first {
+		paho.ERROR = logger.V(2)
+		paho.CRITICAL = logger.V(2)
+		paho.DEBUG = logger.V(3)
+	}
+
 	return &Client{
 		option: option,
 	}
 }
 
-// Connected returns true if MQTT connection is established
+// Connected returns true if MQTT connection is established.
 func (c *Client) Connected() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -131,22 +152,40 @@ func (c *Client) Connected() bool {
 	return c.mqttClient.IsConnectionOpen()
 }
 
-// Disable will disable (or re-enable) the MQTT connection until given time.
-// To re-enable, set a time in the past.
+// Disable will disable the MQTT connection until given time.
+// To re-enable use the (not yet implemented) Enable().
 func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	c.disabledUntil = until
-	c.disableReason = reason
+	if c.disabledUntil.Before(until) {
+		c.disabledUntil = until
+		c.disableReason = reason
+
+		if reason == bleemeoTypes.DisableTooManyErrors {
+			// Trigger facts synchronization to check for duplicate agent
+			_, _ = c.option.Facts.Facts(c.ctx, 0)
+		}
+	}
+
+	if c.disableNotify != nil {
+		select {
+		case c.disableNotify <- nil:
+		default:
+		}
+	}
 }
 
-// Run connect and transmit information to Bleemeo Cloud platform
+// Run connect and transmit information to Bleemeo Cloud platform.
 func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
-	paho.ERROR = logger.V(2)
-	paho.CRITICAL = logger.V(2)
-	paho.DEBUG = logger.V(3)
+
+	c.l.Lock()
+	c.disableNotify = make(chan interface{})
+	c.connectionLost = make(chan interface{})
+	c.pendingPoints = c.option.InitialPoints
+	c.option.InitialPoints = nil
+	c.l.Unlock()
 
 	for !c.ready() {
 		select {
@@ -157,16 +196,11 @@ func (c *Client) Run(ctx context.Context) error {
 	}
 
 	err := c.run(ctx)
-	shutdownErr := c.shutdown()
 
-	if err != nil {
-		return err
-	}
-
-	return shutdownErr
+	return err
 }
 
-// LastReport returns the date of last report with Bleemeo API
+// LastReport returns the date of last report with Bleemeo API.
 func (c *Client) LastReport() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -174,7 +208,7 @@ func (c *Client) LastReport() time.Time {
 	return c.lastReport
 }
 
-// HealthCheck perform some health check and logger any issue found
+// HealthCheck perform some health check and logger any issue found.
 func (c *Client) HealthCheck() bool {
 	ok := true
 
@@ -239,6 +273,7 @@ func (c *Client) setupMQTT() error {
 	pahoOptions.SetUsername(fmt.Sprintf("%s@bleemeo.com", c.option.AgentID))
 	pahoOptions.SetPassword(c.option.AgentPassword)
 	pahoOptions.AddBroker(brokerURL)
+	pahoOptions.SetAutoReconnect(false)
 	pahoOptions.SetConnectionLostHandler(c.onConnectionLost)
 	pahoOptions.SetOnConnectHandler(c.onConnect)
 
@@ -271,10 +306,10 @@ func (c *Client) shutdown() error {
 			return err
 		}
 
-		c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID), payload)
+		c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID), payload, true)
 	}
 
-	stillPending := c.waitPublish(deadline)
+	stillPending := c.waitPublishAndResend(deadline, true)
 	if stillPending > 0 {
 		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
 	}
@@ -289,22 +324,25 @@ func (c *Client) run(ctx context.Context) error {
 		return err
 	}
 
-	c.connect(ctx)
+	var wg sync.WaitGroup
+
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+		c.connectionManager(ctx)
+	}()
 
 	storeNotifieeID := c.option.Store.AddNotifiee(c.addPoints)
 
 	var topinfoSendAt time.Time
 
+	time.Sleep(time.Duration(rand.Intn(10000)) * time.Millisecond)
+
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		disableUntil, _ := c.getDisableUntil()
-		if time.Now().Before(disableUntil) {
-			c.mqttClient.Disconnect(0)
-			c.connect(ctx) // connect wait for disableUntil to be passed
-		}
-
 		cfg := c.option.Cache.AccountConfig()
 
 		c.sendPoints()
@@ -315,7 +353,7 @@ func (c *Client) run(ctx context.Context) error {
 			c.sendTopinfo(ctx, cfg)
 		}
 
-		c.waitPublish(time.Now().Add(5 * time.Second))
+		c.waitPublishAndResend(time.Now().Add(5*time.Second), false)
 
 		select {
 		case <-ticker.C:
@@ -324,6 +362,7 @@ func (c *Client) run(ctx context.Context) error {
 	}
 
 	c.option.Store.RemoveNotifiee(storeNotifieeID)
+	wg.Wait()
 
 	return nil
 }
@@ -339,7 +378,7 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
-func (c *Client) popPendingPoints() []types.MetricPoint {
+func (c *Client) popNewPendingPoints() []types.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -349,11 +388,26 @@ func (c *Client) popPendingPoints() []types.MetricPoint {
 	return points
 }
 
+// PopPendingPoints get and remove all pending points from this MQTT connector.
+func (c *Client) PopPendingPoints() []types.MetricPoint {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	points := append(c.failedPoints, c.pendingPoints...)
+	c.failedPoints = nil
+	c.failedPointsCount = 0
+	c.pendingPoints = nil
+
+	return points
+}
+
 func (c *Client) sendPoints() {
 	metricWhitelist := c.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
-	points := filterPoints(c.popPendingPoints(), metricWhitelist)
+	points := filterPoints(c.popNewPendingPoints(), metricWhitelist)
 
 	if !c.Connected() {
+		c.l.Lock()
+
 		c.failedPoints = append(c.failedPoints, points...)
 		if len(c.failedPoints) > maxPendingPoints {
 			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
@@ -362,7 +416,6 @@ func (c *Client) sendPoints() {
 		// Make sure that when connection is back we retry failed point as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
 
-		c.l.Lock()
 		defer c.l.Unlock()
 
 		c.failedPointsCount = len(c.failedPoints)
@@ -417,7 +470,7 @@ func (c *Client) sendPoints() {
 			return
 		}
 
-		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.AgentID), buffer)
+		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.AgentID), buffer, true)
 	}
 
 	c.l.Lock()
@@ -471,42 +524,6 @@ func (c *Client) getDisableUntil() (time.Time, bleemeoTypes.DisableReason) {
 	return c.disabledUntil, c.disableReason
 }
 
-func (c *Client) connect(ctx context.Context) {
-	optionReader := c.mqttClient.OptionsReader()
-	delay := 0 * time.Second
-	firstConnect := true
-
-	for ctx.Err() == nil {
-		delay *= 2
-		if delay > optionReader.MaxReconnectInterval() {
-			delay = optionReader.MaxReconnectInterval()
-		}
-
-		common.WaitDeadline(c.ctx, delay, c.getDisableUntil, "Bleemeo MQTT connection")
-
-		if firstConnect {
-			logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
-
-			firstConnect = false
-			delay = 5 * time.Second
-		}
-
-		token := c.mqttClient.Connect()
-
-		for !token.WaitTimeout(1 * time.Second) {
-			if ctx.Err() != nil {
-				return
-			}
-		}
-
-		if token.Error() == nil {
-			break
-		}
-
-		logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
-	}
-}
-
 func (c *Client) onConnect(_ paho.Client) {
 	logger.Printf("MQTT connection established")
 	// Use short max-age to force a refresh facts since a reconnection to MQTT may
@@ -522,7 +539,7 @@ func (c *Client) onConnect(_ paho.Client) {
 		return
 	}
 
-	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload)
+	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload, true)
 	c.mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
 		0,
@@ -562,45 +579,31 @@ func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
 
 func (c *Client) onConnectionLost(_ paho.Client, err error) {
 	logger.Printf("MQTT connection lost: %v", err)
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.lastDisconnectionTime = append(c.lastDisconnectionTime, time.Now())
-	if len(c.lastDisconnectionTime) > 15 {
-		c.lastDisconnectionTime = c.lastDisconnectionTime[len(c.lastDisconnectionTime)-15:]
-	}
-
-	length := len(c.lastDisconnectionTime)
-	until := time.Time{}
-
-	if length >= 6 && time.Since(c.lastDisconnectionTime[length-6]) < time.Minute {
-		delay := common.JitterDelay(60, 0.25, 60).Round(time.Second)
-		until = time.Now().Add(delay)
-
-		logger.Printf("Too many attempt to connect to MQTT on last minute. Disable MQTT for %v", delay)
-	}
-
-	if length >= 15 && time.Since(c.lastDisconnectionTime[length-15]) < 10*time.Minute {
-		delay := common.JitterDelay(300, 0.25, 300).Round(time.Second)
-		until = time.Now().Add(delay)
-
-		logger.Printf("Too many attempt to connect to MQTT on last 10 minutes. Disable MQTT for %v", delay)
-	}
-
-	if c.disabledUntil.Before(until) {
-		c.disabledUntil = until
-		c.disableReason = bleemeoTypes.DisableTooManyErrors
-		c.mqttClient.Disconnect(0)
-		// Trigger facts synchronization to check for duplicate agent
-		_, _ = c.option.Facts.Facts(c.ctx, 0)
-	}
+	c.connectionLost <- nil
 }
 
-func (c *Client) publish(topic string, payload []byte) {
-	token := c.mqttClient.Publish(topic, 1, false, payload)
+func (c *Client) publish(topic string, payload []byte, retry bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
-	c.pendingToken = append(c.pendingToken, token)
+
+	msg := message{
+		retry:   retry,
+		payload: payload,
+		topic:   topic,
+	}
+
+	// publish could be blocked to ensure that after reconnection,
+	// pendingMessage that must be retryed are done before new publish (to kept
+	// messages order). publishBlocked is set when connection is down.
+	if c.publishBlocked && !retry {
+		return
+	}
+
+	if !c.publishBlocked {
+		msg.token = c.mqttClient.Publish(topic, 1, false, payload)
+	}
+
+	c.pendingMessage = append(c.pendingMessage, msg)
 }
 
 func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig) {
@@ -630,30 +633,43 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 		return
 	}
 
-	c.publish(topic, buffer.Bytes())
+	c.publish(topic, buffer.Bytes(), false)
 }
 
-func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
-	stillPending := make([]paho.Token, 0)
+func (c *Client) waitPublishAndResend(deadline time.Time, resend bool) (stillPendingCount int) {
+	stillPending := make([]message, 0)
 
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	for _, t := range c.pendingToken {
-		if t.WaitTimeout(time.Until(deadline)) {
-			if t.Error() != nil {
-				logger.V(2).Printf("MQTT publish failed: %v", t.Error())
+	for _, m := range c.pendingMessage {
+		if m.token != nil && m.token.WaitTimeout(time.Until(deadline)) {
+			if m.token.Error() != nil {
+				logger.V(2).Printf("MQTT publish on %s failed: %v", m.topic, m.token.Error())
+			} else {
+				c.lastReport = time.Now()
+				continue
 			}
 
-			c.lastReport = time.Now()
-		} else {
-			stillPending = append(stillPending, t)
+			m.token = nil
 		}
+
+		if m.token == nil && !m.retry {
+			continue
+		}
+
+		if m.token == nil && resend {
+			m.token = c.mqttClient.Publish(m.topic, 1, false, m.payload)
+		}
+
+		stillPending = append(stillPending, m)
 	}
 
-	c.pendingToken = stillPending
+	c.pendingMessage = stillPending
 
-	return len(c.pendingToken)
+	logger.V(3).Printf("%d messages are still pending", len(c.pendingMessage))
+
+	return len(c.pendingMessage)
 }
 
 func loadRootCAs(caFile string) (*x509.CertPool, error) {
@@ -700,4 +716,112 @@ func (c *Client) ready() bool {
 	logger.V(2).Printf("MQTT not ready, metric \"agent_status\" is not yet registered")
 
 	return false
+}
+
+func (c *Client) connectionManager(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+
+	var (
+		lastConnectionTimes []time.Time
+		lastResend          time.Time
+	)
+
+	currentConnectDelay := minimalDelayBetweenConnect
+
+mainLoop:
+	for ctx.Err() == nil {
+		disableUntil, disableReason := c.getDisableUntil()
+		switch {
+		case time.Now().Before(disableUntil):
+			if c.mqttClient.IsConnectionOpen() {
+				logger.V(2).Printf("Disconnection from MQTT due to %v", disableReason)
+				c.mqttClient.Disconnect(0)
+			}
+		case !c.mqttClient.IsConnectionOpen():
+			length := len(lastConnectionTimes)
+
+			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
+				delay := common.JitterDelay(300, 0.25, 300).Round(time.Second)
+
+				c.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+				logger.Printf("Too many attempt to connect to MQTT on last 10 minutes. Disable MQTT for %v", delay)
+				continue
+			}
+
+			if length == 0 || time.Since(lastConnectionTimes[length-1]) > currentConnectDelay {
+				lastConnectionTimes = append(lastConnectionTimes, time.Now())
+
+				if len(lastConnectionTimes) > 20 {
+					lastConnectionTimes = lastConnectionTimes[len(lastConnectionTimes)-20:]
+				}
+
+				if currentConnectDelay < maximalDelayBetweenConnect {
+					currentConnectDelay *= 2
+					if currentConnectDelay > maximalDelayBetweenConnect {
+						currentConnectDelay = maximalDelayBetweenConnect
+
+						// Trigger facts synchronization to check for duplicate agent
+						_, _ = c.option.Facts.Facts(c.ctx, time.Minute)
+					}
+				}
+				optionReader := c.mqttClient.OptionsReader()
+				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
+
+				token := c.mqttClient.Connect()
+				for !token.WaitTimeout(1 * time.Second) {
+					if ctx.Err() != nil {
+						break mainLoop
+					}
+				}
+
+				if token.Error() != nil {
+					delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
+					logger.V(1).Printf("Unable to connect to Bleemeo MQTT (retry in %v): %v", delay, token.Error())
+
+					// we must disconnect to stop paho gorouting that otherwise will be
+					// started multiple time for each Connect()
+					c.mqttClient.Disconnect(0)
+				} else {
+					c.waitPublishAndResend(time.Now().Add(10*time.Second), true)
+
+					c.l.Lock()
+					c.publishBlocked = false
+					c.l.Unlock()
+				}
+			}
+		case c.mqttClient.IsConnectionOpen() && time.Since(lastResend) > 10*time.Minute:
+			lastResend = time.Now()
+			c.waitPublishAndResend(time.Now().Add(10*time.Second), true)
+		}
+
+		select {
+		case <-ctx.Done():
+		case <-c.connectionLost:
+			c.l.Lock()
+			c.publishBlocked = true
+			c.l.Unlock()
+
+			length := len(lastConnectionTimes)
+			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
+				logger.V(2).Printf("MQTT connection was stable, reset delay to %v", minimalDelayBetweenConnect)
+				currentConnectDelay = minimalDelayBetweenConnect
+			}
+		case <-c.disableNotify:
+		case <-ticker.C:
+		}
+	}
+
+	if err := c.shutdown(); err != nil {
+		logger.V(1).Printf("Unable to perform clean shutdown: %v", err)
+	}
+
+	// make sure all connectionLost are read
+	for {
+		select {
+		case <-c.connectionLost:
+		default:
+			return
+		}
+	}
 }

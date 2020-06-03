@@ -25,11 +25,12 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/system"
 )
 
-// New initialise system.Input
+// New initialise system.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["system"]
 	if ok {
 		systemInput := input().(*system.SystemStats)
+		systemInput.Log = internal.Logger{}
 		i = &internal.Input{
 			Input: systemInput,
 			Accumulator: internal.Accumulator{

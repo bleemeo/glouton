@@ -30,7 +30,8 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 
-	"github.com/99designs/gqlgen/handler"
+	"github.com/99designs/gqlgen/graphql/handler"
+	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
 	"github.com/gobuffalo/packr/v2"
 	"github.com/rs/cors"
@@ -51,7 +52,7 @@ type agentInterface interface {
 	Tags() []string
 }
 
-// API : Structure that contains API's port
+// API contains API's port.
 type API struct {
 	bindAddress  string
 	router       http.Handler
@@ -68,7 +69,7 @@ type gloutonUIConfig struct {
 	StaticCDNURL string
 }
 
-// New : Function that instantiate a new API's port from environment variable or from a default port
+// New instantiate a new API's port from environment variable or from a default port.
 func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, threshold *threshold.Registry, staticCDNURL string) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
@@ -96,8 +97,9 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	}
 
 	router.Handle("/metrics", promExporter) // promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
-	router.Handle("/playground", handler.Playground("GraphQL playground", "/graphql"))
-	router.Handle("/graphql", handler.GraphQL(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
+	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var err error
@@ -118,7 +120,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	return api
 }
 
-// Run : Starts our API
+// Run starts our API.
 func (api API) Run(ctx context.Context) error {
 	srv := http.Server{
 		Addr:    api.bindAddress,

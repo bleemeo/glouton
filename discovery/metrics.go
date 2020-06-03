@@ -52,7 +52,7 @@ var (
 	errNotSupported = errors.New("service not supported by Prometheus collector")
 )
 
-// InputOption are option used by system inputs
+// InputOption are option used by system inputs.
 type InputOption struct {
 	DFRootPath      string
 	DFPathBlacklist []string
@@ -61,7 +61,7 @@ type InputOption struct {
 	IODiskBlacklist []string
 }
 
-// AddDefaultInputs adds system inputs to a collector
+// AddDefaultInputs adds system inputs to a collector.
 func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 	var (
 		input telegraf.Input
@@ -168,11 +168,21 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 }
 
 func serviceNeedUpdate(oldService, service Service) bool {
-	if oldService.IPAddress != service.IPAddress || oldService.Active != service.Active {
+	switch {
+	case oldService.Name != service.Name,
+		oldService.ServiceType != service.ServiceType,
+		oldService.ContainerID != service.ContainerID,
+		oldService.ContainerName != service.ContainerName,
+		oldService.IPAddress != service.IPAddress,
+		oldService.ExePath != service.ExePath,
+		oldService.Stack != service.Stack,
+		oldService.Active != service.Active,
+		oldService.CheckIgnored != service.CheckIgnored,
+		oldService.MetricsIgnored != service.MetricsIgnored:
 		return true
-	}
-
-	if len(oldService.ListenAddresses) != len(service.ListenAddresses) {
+	case len(oldService.ListenAddresses) != len(service.ListenAddresses):
+		return true
+	case len(oldService.ExtraAttributes) != len(service.ExtraAttributes):
 		return true
 	}
 
@@ -181,6 +191,12 @@ func serviceNeedUpdate(oldService, service Service) bool {
 	for i, old := range oldService.ListenAddresses {
 		new := service.ListenAddresses[i]
 		if old.Network() != new.Network() || old.String() != new.String() {
+			return true
+		}
+	}
+
+	for k, v := range oldService.ExtraAttributes {
+		if v != service.ExtraAttributes[k] {
 			return true
 		}
 	}
@@ -206,7 +222,7 @@ func (d *Discovery) removeInput(key NameContainer) {
 }
 
 // createPrometheusCollector create a Prometheus collector for given service
-// Return errNotSupported if no Prometheus collector exists for this service
+// Return errNotSupported if no Prometheus collector exists for this service.
 func (d *Discovery) createPrometheusCollector(service Service) error {
 	if service.ServiceType == MemcachedService {
 		return d.createPrometheusMemcached(service)

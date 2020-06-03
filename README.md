@@ -22,7 +22,7 @@ Our release version will be set by goreleaser from the current date.
 ```
 docker run --rm -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
-   node:12.13.0 \
+   node:lts \
    sh -c 'rm -fr node_modules && npm install && npm run deploy'
 ```
 
@@ -33,7 +33,7 @@ docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CG
    -v $(pwd):/src -w /src \
    -v /var/run/docker.sock:/var/run/docker.sock \
    --entrypoint '' \
-   goreleaser/goreleaser sh -c 'go test ./... && goreleaser --rm-dist --snapshot'
+   goreleaser/goreleaser:v0.137 sh -c 'go test ./... && goreleaser --rm-dist --snapshot'
 ```
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
@@ -64,6 +64,26 @@ export GLOUTON_BLEEMEO_MQTT_PORT=1883
 export GLOUTON_BLEEMEO_MQTT_SSL=False
 ```
 
+## Run on Docker (with JMX)
+
+Glouton could be run using Docker, optionally with JMX metrics using jmxtrans (a JMX proxy which
+query JVM over JMX and send metrics over the graphite protocol to Glouton).
+
+To use jmxtrans, two containers will be run, one with Glouton and one with jmxtrans and a shared volume between
+them will allow Glouton to write jmxtrans configuration file.
+
+Like when running Glouton without docker, you may optionally configure your Bleemeo credentials:
+
+```
+export GLOUTON_BLEEMEO_ACCOUNT_ID=YOUR_ACCOUNT_ID
+export GLOUTON_BLEEMEO_REGISTRATION_KEY=YOUR_REGISTRATION_KEY
+```
+
+Then using docker-compose, start Glouton and jmxtrans:
+
+```
+docker-compose up -d
+```
 
 ## Test and Develop
 
@@ -83,7 +103,7 @@ alias go=$GOCMD
 
 Glouton use golangci-lint as linter. You may run it with:
 ```
-mkdir -p /tmp/golangci-lint-cache; docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -w /app golangci/golangci-lint:v1.23.7 golangci-lint run
+mkdir -p /tmp/golangci-lint-cache; docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -w /app golangci/golangci-lint:v1.27 golangci-lint run
 ```
 
 Glouton use Go tests, you may run them with:
@@ -132,14 +152,18 @@ go run glouton
 To update dependencies, you can run:
 
 ```
-go get -u
+go get -u ./...
 ```
 
-For some dependencies, you will need to specify the version or commit hash to update to. For example:
+This should only update to latest minor or patch version. For major version, you need to specify the dependency explicitly,
+possible with the version or commit hash. For example:
 
 ```
 go get github.com/influxdata/telegraf@1.12.1
 ```
+
+Finally, it may worse removing all "// indirect" and running go mod tidy, to ensure
+only needed indirect dependencies are present.
 
 Running go mod tidy & test before commiting the updated go.mod is recommended:
 ```

@@ -25,14 +25,14 @@ import (
 	"time"
 )
 
-// AgentFact is an agent facts
+// AgentFact is an agent facts.
 type AgentFact struct {
 	ID    string
 	Key   string
 	Value string
 }
 
-// Agent is an Agent object on Bleemeo API
+// Agent is an Agent object on Bleemeo API.
 type Agent struct {
 	ID              string    `json:"id"`
 	CreatedAt       time.Time `json:"created_at"`
@@ -42,7 +42,7 @@ type Agent struct {
 	Tags            []Tag     `json:"tags"`
 }
 
-// Tag is an Tag object on Bleemeo API
+// Tag is an Tag object on Bleemeo API.
 type Tag struct {
 	ID           string `json:"id,omitempty"`
 	Name         string `json:"name"`
@@ -50,7 +50,7 @@ type Tag struct {
 	IsServiceTag bool   `json:"is_service_tag,omitempty"`
 }
 
-// AccountConfig is the configuration used by this agent
+// AccountConfig is the configuration used by this agent.
 type AccountConfig struct {
 	ID                    string `json:"id"`
 	Name                  string `json:"name"`
@@ -60,7 +60,7 @@ type AccountConfig struct {
 	DockerIntegration     bool   `json:"docker_integration"`
 }
 
-// Service is a Service object on Bleemeo API
+// Service is a Service object on Bleemeo API.
 type Service struct {
 	ID              string `json:"id"`
 	Label           string `json:"label"`
@@ -71,7 +71,7 @@ type Service struct {
 	Active          bool   `json:"active"`
 }
 
-// Container is a Contaier object on Bleemeo API
+// Container is a Contaier object on Bleemeo API.
 type Container struct {
 	ID                string `json:"id"`
 	Name              string `json:"name"`
@@ -81,7 +81,7 @@ type Container struct {
 }
 
 // Threshold is the threshold of a metrics. We use pointer to float to support
-// null value in JSON
+// null value in JSON.
 type Threshold struct {
 	LowWarning    *float64 `json:"threshold_low_warning"`
 	LowCrictical  *float64 `json:"threshold_low_critical"`
@@ -89,7 +89,7 @@ type Threshold struct {
 	HighCrictical *float64 `json:"threshold_high_critical"`
 }
 
-// Metric is a Metric object on Bleemeo API
+// Metric is a Metric object on Bleemeo API.
 type Metric struct {
 	ID          string            `json:"id"`
 	LabelsText  string            `json:"labels_text,omitempty"`
@@ -103,13 +103,13 @@ type Metric struct {
 	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
 }
 
-// FillInspectHash fill the DockerInspectHash
+// FillInspectHash fill the DockerInspectHash.
 func (c *Container) FillInspectHash() {
 	bin := sha256.Sum256([]byte(c.DockerInspect))
 	c.DockerInspectHash = fmt.Sprintf("%x", bin)
 }
 
-// MetricsAgentWhitelistMap return a map with all whitelisted agent metrics
+// MetricsAgentWhitelistMap return a map with all whitelisted agent metrics.
 func (ac AccountConfig) MetricsAgentWhitelistMap() map[string]bool {
 	result := make(map[string]bool)
 
@@ -124,7 +124,7 @@ func (ac AccountConfig) MetricsAgentWhitelistMap() map[string]bool {
 	return result
 }
 
-// ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset threshold)
+// ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset threshold).
 func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 	if t.LowWarning != nil {
 		result.LowWarning = *t.LowWarning

@@ -13,7 +13,7 @@ import (
 // We can't reusing github.com/prometheus/common/version because it rely on global
 // variable set at build-time.
 //
-// This method re-generate the same metric from argument instead of global variable
+// This method re-generate the same metric from argument instead of global variable.
 func AddBuildInfo(collector prometheus.Collector, program string, version string, revision string, branch string) prometheus.Collector {
 	info := prometheus.NewGaugeFunc(
 		prometheus.GaugeOpts{

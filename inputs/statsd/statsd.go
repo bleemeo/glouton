@@ -38,7 +38,7 @@ func reflectSetPercentile(input *statsd.Statsd) {
 	percentilesValue.Set(slice)
 }
 
-// New initialise statsd.Input
+// New initialise statsd.Input.
 func New(bindAddress string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["statsd"]
 	if ok {
@@ -51,6 +51,7 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 			statsdInput.MetricSeparator = "_"
 			statsdInput.AllowedPendingMessages = 10000
 			statsdInput.PercentileLimit = 1000
+			statsdInput.Log = internal.Logger{}
 
 			func() {
 				defer func() {

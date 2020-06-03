@@ -32,10 +32,10 @@ import (
 	"github.com/prometheus/common/expfmt"
 )
 
-// Target is an URL to scrape
+// Target is an URL to scrape.
 type Target url.URL
 
-// HostPort return host:port
+// HostPort return host:port.
 func (t *Target) HostPort() string {
 	u := (*url.URL)(t)
 	hostname := u.Hostname()
@@ -44,7 +44,7 @@ func (t *Target) HostPort() string {
 	return hostname + ":" + port
 }
 
-// Gather implement prometheus.Gatherer
+// Gather implement prometheus.Gatherer.
 func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	u := (*url.URL)(t)
 

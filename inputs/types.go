@@ -10,13 +10,13 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-// AnnotationAccumulator is a similar to an telegraf.Accumulator but allow to send metric with annocations
+// AnnotationAccumulator is a similar to an telegraf.Accumulator but allow to send metric with annocations.
 type AnnotationAccumulator interface {
 	AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
 	AddError(err error)
 }
 
-// Accumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and emit the metric points
+// Accumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and emit the metric points.
 type Accumulator struct {
 	Pusher types.PointPusher
 }
@@ -31,43 +31,43 @@ func (a *Accumulator) AddFields(measurement string, fields map[string]interface{
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
-// AddGauge is the same as AddFields, but will add the metric as a "Gauge" type
+// AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
 func (a *Accumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
-// AddCounter is the same as AddFields, but will add the metric as a "Counter" type
+// AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
 func (a *Accumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
-// AddSummary is the same as AddFields, but will add the metric as a "Summary" type
+// AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
 func (a *Accumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
-// AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type
+// AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
 func (a *Accumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, types.MetricAnnotations{}, t...)
 }
 
-// SetPrecision do nothing right now
+// SetPrecision do nothing right now.
 func (a *Accumulator) SetPrecision(precision time.Duration) {
 	a.AddError(fmt.Errorf("SetPrecision not implemented"))
 }
 
-// AddMetric is not yet implemented
+// AddMetric is not yet implemented.
 func (a *Accumulator) AddMetric(telegraf.Metric) {
 	a.AddError(fmt.Errorf("AddMetric not implemented"))
 }
 
-// WithTracking is not yet implemented
+// WithTracking is not yet implemented.
 func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
 	a.AddError(fmt.Errorf("WithTracking not implemented"))
 	return nil
 }
 
-// AddError add an error to the Accumulator
+// AddError add an error to the Accumulator.
 func (a *Accumulator) AddError(err error) {
 	if err != nil {
 		logger.V(1).Printf("Add error called with: %v", err)
@@ -82,12 +82,12 @@ func (a *Accumulator) AddError(err error) {
 // This also means that if the same measurement (e.g. "cpu") need different annotations (e.g. a status for field "used" but none for field "system"),
 // you must to multiple call to AddFieldsWithAnnotations
 //
-// If a status is set in the annotation, not threshold will be applied on the metrics
+// If a status is set in the annotation, not threshold will be applied on the metrics.
 func (a *Accumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
 	a.addMetrics(measurement, fields, tags, annotations, t...)
 }
 
-// convertInterface convert the interface type in float64
+// convertInterface convert the interface type in float64.
 func convertInterface(value interface{}) (float64, error) {
 	switch value := value.(type) {
 	case uint64:

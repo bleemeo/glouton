@@ -156,13 +156,13 @@ export const formatDateWithSecond = date => {
 export const tickFormatDate = d3.time.format.multi([
   [
     '%H:%M',
-    function(d) {
+    function (d) {
       return d.getMinutes() || d.getHours()
     }
   ],
   [
     '%a %d %b',
-    function(d) {
+    function (d) {
       return true
     }
   ] // %a - abbreviated weekday name
@@ -175,13 +175,13 @@ export const tickFormatDate = d3.time.format.multi([
 export const tooltipFormatDate = d3.time.format.multi([
   [
     '%H:%M:%S',
-    function(d) {
+    function (d) {
       return d.getSeconds() || d.getMinutes() || d.getHours()
     }
   ],
   [
     '%a %d',
-    function(d) {
+    function (d) {
       return true
     }
   ]
@@ -192,7 +192,7 @@ const d3FormaterHandlingNull = (formatter, suffix = '') => {
   return value => (isNullOrUndefined(value) ? 'N/A' : fmt(value) + suffix)
 }
 
-export const bytesToString = function(bytes) {
+export const bytesToString = function (bytes) {
   const fmt = d3FormaterHandlingNull('.3r')
   const units = ['B', 'kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
 
@@ -203,7 +203,7 @@ export const bytesToString = function(bytes) {
   }
 }
 
-export const formatToBytes = function(bytes) {
+export const formatToBytes = function (bytes) {
   const fmt = d3FormaterHandlingNull('.3r')
   const units = ['B', 'kB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
 
@@ -236,7 +236,7 @@ export const formatToBits = bits => {
   }
 }
 
-export const percentToString = function(percent) {
+export const percentToString = function (percent) {
   const formatter = Math.trunc(percent) > 0 ? d3FormaterHandlingNull('.3r') : d3FormaterHandlingNull('.2g')
   return formatter(percent) + ' %'
 }
@@ -246,11 +246,11 @@ export const percentToString2Digits = percent => {
   return formatter(percent) + ' %'
 }
 
-export const iopsToString = function(iops) {
+export const iopsToString = function (iops) {
   return d3FormaterHandlingNull('.3r')(iops) + ' IOps'
 }
 
-export const defaultToString = function(value) {
+export const defaultToString = function (value) {
   return value === null ? 'N/A' : d3.round(value, 3).toString()
 }
 
@@ -267,7 +267,7 @@ export const twoDigitsWithMetricPrefix = value => {
 
 export const secondToString = value => d3FormaterHandlingNull('.3s', 's')(value)
 
-export const unitFormatCallback = function(unit) {
+export const unitFormatCallback = function (unit) {
   // UNIT_UNIT = 0
   // UNIT_PERCENTAGE = 1
   // UNIT_BYTE = 2

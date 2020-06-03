@@ -44,10 +44,10 @@ func (e errNeedRegister) Error() string {
 }
 
 // The metric registration function is done in 4 pass
-// * first will only ensure agent_status is registered (this metric is required before connecting to MQTT and is produced once connected to MQTT...)
-// * main pass will do the bulk of the jobs. But some metric may fail and will be done in Recreate and Retry pass
-// * The Recreate pass is for metric that failed (to update) because they were deleted from API
-// * The Retry pass is for metric that failed to create due to dependency with other metric (e.g. status_of)
+// * first will only ensure agent_status is registered (this metric is required before connecting to MQTT and is produced once connected to MQTT...).
+// * main pass will do the bulk of the jobs. But some metric may fail and will be done in Recreate and Retry pass.
+// * The Recreate pass is for metric that failed (to update) because they were deleted from API.
+// * The Retry pass is for metric that failed to create due to dependency with other metric (e.g. status_of).
 type metricRegisterPass int
 
 const (
@@ -94,7 +94,7 @@ type metricPayload struct {
 	Agent string `json:"agent"`
 }
 
-// metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric
+// metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
 func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 	if mp.Item != "" || mp.LabelsText == "" {
 		mp.Labels = map[string]string{
@@ -266,7 +266,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	return nil
 }
 
-// UpdateUnitsAndThresholds update metrics units & threshold (from cache)
+// UpdateUnitsAndThresholds update metrics units & threshold (from cache).
 func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	thresholds := make(map[threshold.MetricNameItem]threshold.Threshold)
 	units := make(map[threshold.MetricNameItem]threshold.Unit)

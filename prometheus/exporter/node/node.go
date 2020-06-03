@@ -16,7 +16,7 @@ import (
 )
 
 // Option are options for node_exporter. If absent, the default of node_exporter will be used.
-// All Ingored string are a regular expression
+// All Ingored string are a regular expression.
 type Option struct {
 	RootFS                       string
 	FilesystemIgnoredMountPoints string
@@ -53,7 +53,7 @@ func setCollector(collectorName []string) {
 	}
 }
 
-// NewCollector return a node_exporter
+// NewCollector return a node_exporter.
 func NewCollector(option Option) (prometheus.Collector, error) {
 	var args []string
 
@@ -92,7 +92,7 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 
 // WithPathIgnore set the of mount points to ignore.
 // It use path-prefix, which means that if "/mnt" is to ignore, "/mnt" and "/mnt/disk" are ignored, but not "/mnt-disk"
-// If any error occur, the ignored paths is not updated
+// If any error occur, the ignored paths is not updated.
 func (o *Option) WithPathIgnore(prefixes []string) *Option {
 	var err error
 
@@ -115,7 +115,7 @@ func (o *Option) WithPathIgnore(prefixes []string) *Option {
 }
 
 // WithNetworkIgnore set the of device prefixes to ignore.
-// If any error occur, the list is not updated
+// If any error occur, the list is not updated.
 func (o *Option) WithNetworkIgnore(prefixes []string) *Option {
 	var err error
 
@@ -146,13 +146,13 @@ func reFromPrefix(prefix string) (string, error) {
 
 // reFromPathPrefix return a regular expression matching any path prefix in the input
 // By path-prefix, we means that the path-prefix "/mnt" will match "/mnt", "/mnt/disk" but not "/mnt-disk"
-// Only "/" is supported (e.g. only unix)
+// Only "/" is supported (e.g. only unix).
 func reFromPathPrefix(prefix string) (string, error) {
 	re, err := syntax.Parse(prefix, syntax.Literal)
 	return "^" + re.String() + "($|/)", err
 }
 
-// reFromREs return an RE matching any of the input REs
+// reFromREs return an RE matching any of the input REs.
 func reFromREs(input []string) (string, error) {
 	var err error
 

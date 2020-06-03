@@ -26,7 +26,7 @@ import (
 const cacheVersion = 1
 const cacheKey = "CacheBleemeoConnector"
 
-// Cache store information about object registered in Bleemeo API
+// Cache store information about object registered in Bleemeo API.
 type Cache struct {
 	data  data
 	l     sync.Mutex
@@ -45,7 +45,7 @@ type data struct {
 	Services      []bleemeoTypes.Service
 }
 
-// SetAccountID update the AccountID
+// SetAccountID update the AccountID.
 func (c *Cache) SetAccountID(accountID string) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -54,7 +54,7 @@ func (c *Cache) SetAccountID(accountID string) {
 	c.dirty = true
 }
 
-// AccountID returns the AccountID
+// AccountID returns the AccountID.
 func (c *Cache) AccountID() string {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -62,7 +62,7 @@ func (c *Cache) AccountID() string {
 	return c.data.AccountID
 }
 
-// SetFacts update the AgentFact list
+// SetFacts update the AgentFact list.
 func (c *Cache) SetFacts(facts []bleemeoTypes.AgentFact) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -71,7 +71,7 @@ func (c *Cache) SetFacts(facts []bleemeoTypes.AgentFact) {
 	c.dirty = true
 }
 
-// SetServices update the Services list
+// SetServices update the Services list.
 func (c *Cache) SetServices(services []bleemeoTypes.Service) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -80,7 +80,7 @@ func (c *Cache) SetServices(services []bleemeoTypes.Service) {
 	c.dirty = true
 }
 
-// SetContainers update the Container list
+// SetContainers update the Container list.
 func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -89,7 +89,7 @@ func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	c.dirty = true
 }
 
-// Agent returns the Agent object
+// Agent returns the Agent object.
 func (c *Cache) Agent() (agent bleemeoTypes.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -97,7 +97,7 @@ func (c *Cache) Agent() (agent bleemeoTypes.Agent) {
 	return c.data.Agent
 }
 
-// SetAgent update the Agent object
+// SetAgent update the Agent object.
 func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -106,7 +106,7 @@ func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.dirty = true
 }
 
-// SetAccountConfig update the AccountConfig object
+// SetAccountConfig update the AccountConfig object.
 func (c *Cache) SetAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -115,7 +115,7 @@ func (c *Cache) SetAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
 	c.dirty = true
 }
 
-// AccountConfig returns AccountConfig
+// AccountConfig returns AccountConfig.
 func (c *Cache) AccountConfig() bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -123,7 +123,7 @@ func (c *Cache) AccountConfig() bleemeoTypes.AccountConfig {
 	return c.data.AccountConfig
 }
 
-// FactsByKey returns a map fact.key => facts
+// FactsByKey returns a map fact.key => facts.
 func (c *Cache) FactsByKey() map[string]bleemeoTypes.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -136,7 +136,7 @@ func (c *Cache) FactsByKey() map[string]bleemeoTypes.AgentFact {
 	return result
 }
 
-// FactsByUUID returns a map fact.id => facts
+// FactsByUUID returns a map fact.id => facts.
 func (c *Cache) FactsByUUID() map[string]bleemeoTypes.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -150,7 +150,7 @@ func (c *Cache) FactsByUUID() map[string]bleemeoTypes.AgentFact {
 	return result
 }
 
-// Facts returns a (copy) of the Facts
+// Facts returns a (copy) of the Facts.
 func (c *Cache) Facts() []bleemeoTypes.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -162,7 +162,7 @@ func (c *Cache) Facts() []bleemeoTypes.AgentFact {
 	return result
 }
 
-// Services returns a (copy) of the Services
+// Services returns a (copy) of the Services.
 func (c *Cache) Services() []bleemeoTypes.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -174,7 +174,7 @@ func (c *Cache) Services() []bleemeoTypes.Service {
 	return result
 }
 
-// ServicesByUUID returns a map service.id => service
+// ServicesByUUID returns a map service.id => service.
 func (c *Cache) ServicesByUUID() map[string]bleemeoTypes.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -188,7 +188,7 @@ func (c *Cache) ServicesByUUID() map[string]bleemeoTypes.Service {
 	return result
 }
 
-// Containers returns a (copy) of the Containers
+// Containers returns a (copy) of the Containers.
 func (c *Cache) Containers() (containers []bleemeoTypes.Container) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -199,7 +199,7 @@ func (c *Cache) Containers() (containers []bleemeoTypes.Container) {
 	return result
 }
 
-// ContainersByContainerID returns a map container.ContainerId => container
+// ContainersByContainerID returns a map container.ContainerId => container.
 func (c *Cache) ContainersByContainerID() map[string]bleemeoTypes.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -213,7 +213,7 @@ func (c *Cache) ContainersByContainerID() map[string]bleemeoTypes.Container {
 	return result
 }
 
-// ContainersByUUID returns a map container.id => container
+// ContainersByUUID returns a map container.id => container.
 func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -227,7 +227,7 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 	return result
 }
 
-// SetMetrics update the Metric list
+// SetMetrics update the Metric list.
 func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -236,7 +236,7 @@ func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {
 	c.dirty = true
 }
 
-// Metrics returns a (copy) of the Metrics
+// Metrics returns a (copy) of the Metrics.
 func (c *Cache) Metrics() (metrics []bleemeoTypes.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -247,7 +247,7 @@ func (c *Cache) Metrics() (metrics []bleemeoTypes.Metric) {
 	return result
 }
 
-// MetricsByUUID returns a map metric.id => metric
+// MetricsByUUID returns a map metric.id => metric.
 func (c *Cache) MetricsByUUID() map[string]bleemeoTypes.Metric {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -261,7 +261,7 @@ func (c *Cache) MetricsByUUID() map[string]bleemeoTypes.Metric {
 	return result
 }
 
-// Save saves the cache into State
+// Save saves the cache into State.
 func (c *Cache) Save() {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -282,7 +282,7 @@ func (c *Cache) Save() {
 	c.dirty = false
 }
 
-// Load loads the cache from State
+// Load loads the cache from State.
 func Load(state bleemeoTypes.State) *Cache {
 	cache := &Cache{
 		state: state,

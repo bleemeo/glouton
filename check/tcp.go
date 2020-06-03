@@ -30,7 +30,7 @@ import (
 	"glouton/types"
 )
 
-// TCPCheck perform a TCP check
+// TCPCheck perform a TCP check.
 type TCPCheck struct {
 	*baseCheck
 	mainAddress string

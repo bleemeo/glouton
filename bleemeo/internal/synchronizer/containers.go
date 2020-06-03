@@ -48,7 +48,8 @@ func (s *Synchronizer) syncContainers(fullSync bool) error {
 
 		localContainers, err = s.option.Docker.Containers(s.ctx, 24*time.Second, false)
 		if err != nil {
-			return err
+			logger.V(1).Printf("Unable to list containers: %v", err)
+			return nil
 		}
 	}
 

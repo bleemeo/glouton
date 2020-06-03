@@ -16,6 +16,15 @@ if ! getent group docker >/dev/null; then
     fi
 fi
 
+# If jmxtrans is installed, Glouton need to be able to write a jmxtrans configuration
+if [ -e /var/lib/jmxtrans -a ! -e /var/lib/jmxtrans/glouton-generated.json ]; then
+    if getent group jmxtrans >/dev/null; then
+        echo '{"servers":[]}' > /var/lib/jmxtrans/glouton-generated.json
+        chown glouton:jmxtrans /var/lib/jmxtrans/glouton-generated.json
+        chmod 0640 /var/lib/jmxtrans/glouton-generated.json
+    fi
+fi
+
 usermod -aG docker glouton 2> /dev/null || true
 
 if [ -e /var/lib/bleemeo/state.json -a ! -e /var/lib/glouton/state.json ]; then

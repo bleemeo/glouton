@@ -27,7 +27,7 @@ import (
 
 const stateKey = "DiscoveredServices"
 
-// State allow to persite object
+// State allow to persite object.
 type State interface {
 	Get(key string, result interface{}) error
 	Set(key string, object interface{}) error

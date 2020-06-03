@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/mongodb"
 )
 
-// New initialise mongodb.Input
+// New initialise mongodb.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mongodb"]
 	if ok {
@@ -33,6 +33,7 @@ func New(url string) (i telegraf.Input, err error) {
 		if ok {
 			slice := append(make([]string, 0), url)
 			mongodbInput.Servers = slice
+			mongodbInput.Log = internal.Logger{}
 			i = &internal.Input{
 				Input: mongodbInput,
 				Accumulator: internal.Accumulator{

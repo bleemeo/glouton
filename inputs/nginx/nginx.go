@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/nginx"
 )
 
-// New initialise nginx.Input
+// New initialise nginx.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["nginx"]
 	if ok {

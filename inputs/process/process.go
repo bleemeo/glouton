@@ -25,11 +25,12 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/processes"
 )
 
-// New initialise process.Input
+// New initialise process.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["processes"]
 	if ok {
 		processInput := input().(*processes.Processes)
+		processInput.Log = internal.Logger{}
 		i = &internal.Input{
 			Input: processInput,
 			Accumulator: internal.Accumulator{

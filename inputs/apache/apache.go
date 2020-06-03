@@ -26,7 +26,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/apache"
 )
 
-// New initialise apache.Input
+// New initialise apache.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["apache"]
 	if ok {

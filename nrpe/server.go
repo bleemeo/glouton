@@ -45,7 +45,7 @@ type reducedPacket struct {
 	buffer        string
 }
 
-// Server is an NRPE server than use Callback for reply to queries
+// Server is an NRPE server than use Callback for reply to queries.
 type Server struct {
 	bindAddress string
 	enableTLS   bool
@@ -323,7 +323,7 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 	return encodedPacket, nil
 }
 
-// helper function to create a cert template with a serial number and other required fields
+// helper function to create a cert template with a serial number and other required fields.
 func certTemplate() (*x509.Certificate, error) {
 	// generate a random serial number (a real cert authority would have some logic behind this)
 	serialNumberLimit := new(big.Int).Lsh(big.NewInt(1), 128)
@@ -397,7 +397,7 @@ func generateCert() (*tls.Config, error) {
 	}, nil
 }
 
-// Run start a connection with a nrpe server
+// Run start a connection with a nrpe server.
 func (s Server) Run(ctx context.Context) error {
 	tcpAdress, err := net.ResolveTCPAddr("tcp", s.bindAddress)
 	if err != nil {
