@@ -19,7 +19,7 @@ require (
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-redis/redis v6.15.8+incompatible // indirect
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
-	github.com/gobuffalo/packr/v2 v2.8.0
+	github.com/gobuffalo/packr/v2 v2.7.1 // Keep v2.7.1 because build is broken with v2.8.0
 	github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.1
