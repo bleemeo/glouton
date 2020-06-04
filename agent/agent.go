@@ -613,7 +613,7 @@ func (a *agent) run() { //nolint:gocyclo
 			OutputConfigurationFile:       a.config.String("jmxtrans.config_file"),
 			OutputConfigurationPermission: os.FileMode(perm),
 			ContactPort:                   a.config.Int("jmxtrans.graphite_port"),
-			Accumulator:                   acc,
+			Pusher:                        a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute)),
 		}
 
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})

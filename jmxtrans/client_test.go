@@ -38,7 +38,7 @@ func (s *fakeStore) EmitPoint(point types.MetricPoint) {
 	}
 
 	s.Points = append(s.Points, point)
-	s.ByName[fmt.Sprintf("%s:%s", point.Labels["__name__"], point.Labels["item"])] = point.Point
+	s.ByName[fmt.Sprintf("%s:%s", point.Labels["__name__"], point.Annotations.BleemeoItem)] = point.Point
 }
 
 type fakeConfig struct {

@@ -55,6 +55,7 @@ type metricInfo struct {
 	Service     discovery.Service
 	Metric      jmxMetric
 	Labels      map[string]string
+	Annotations types.MetricAnnotations
 	Timestamp   time.Time
 	Value       float64
 	UsedInRatio bool
@@ -209,13 +210,17 @@ func (c *jmxtransClient) processLine(line string) {
 		}
 
 		labels := map[string]string{
-			"__name__":     name,
-			"item":         item,
-			"service_name": service.Name,
+			types.LabelName:        name,
+			types.LabelServiceName: service.Name,
 		}
 		if service.ContainerID != "" {
-			labels["container_id"] = service.ContainerID
-			labels["container_name"] = service.ContainerName
+			labels[types.LabelContainerName] = service.ContainerName
+		}
+
+		annotations := types.MetricAnnotations{
+			BleemeoItem: item,
+			ServiceName: service.Name,
+			ContainerID: service.ContainerID,
 		}
 
 		if metric.Derive {
@@ -233,7 +238,7 @@ func (c *jmxtransClient) processLine(line string) {
 		case metric.Sum:
 			// we are summing over typesName, drop them from item
 			item = service.ContainerName
-			labels["item"] = item
+			annotations.BleemeoItem = item
 			key := nameItem{
 				Name: name,
 				Item: item,
@@ -243,6 +248,7 @@ func (c *jmxtransClient) processLine(line string) {
 				Service:     service,
 				Metric:      metric,
 				Labels:      labels,
+				Annotations: annotations,
 				Timestamp:   lineTime,
 				Value:       value,
 				UsedInRatio: usedInRatio,
@@ -254,15 +260,17 @@ func (c *jmxtransClient) processLine(line string) {
 			}
 
 			c.pendingRatio[key] = metricInfo{
-				Service:   service,
-				Metric:    metric,
-				Labels:    labels,
-				Timestamp: lineTime,
-				Value:     value,
+				Service:     service,
+				Metric:      metric,
+				Labels:      labels,
+				Annotations: annotations,
+				Timestamp:   lineTime,
+				Value:       value,
 			}
 		default:
 			c.EmitPoint(types.MetricPoint{
-				Labels: labels,
+				Labels:      labels,
+				Annotations: annotations,
 				Point: types.Point{
 					Time:  lineTime,
 					Value: value,
@@ -276,11 +284,12 @@ func (c *jmxtransClient) processLine(line string) {
 				Item: item,
 			}
 			c.valuesForRatio[key] = metricInfo{
-				Service:   service,
-				Metric:    metric,
-				Labels:    labels,
-				Timestamp: lineTime,
-				Value:     value,
+				Service:     service,
+				Metric:      metric,
+				Annotations: annotations,
+				Labels:      labels,
+				Timestamp:   lineTime,
+				Value:       value,
 			}
 		}
 	}
@@ -332,7 +341,8 @@ func (c *jmxtransClient) flush() {
 		}
 
 		c.EmitPoint(types.MetricPoint{
-			Labels: points[0].Labels,
+			Labels:      points[0].Labels,
+			Annotations: points[0].Annotations,
 			Point: types.Point{
 				Time:  points[0].Timestamp,
 				Value: sum,
@@ -371,7 +381,8 @@ func (c *jmxtransClient) flush() {
 		}
 
 		c.EmitPoint(types.MetricPoint{
-			Labels: point.Labels,
+			Labels:      point.Labels,
+			Annotations: point.Annotations,
 			Point: types.Point{
 				Time:  point.Timestamp,
 				Value: value,
