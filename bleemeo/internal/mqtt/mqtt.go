@@ -497,7 +497,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				value.UUID = m.ID
 				value.LabelsText = ""
 				value.Measurement = p.Labels["__name__"]
-				value.BleemeoItem = p.Annotations.BleemeoItem
+				value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
 			}
 
 			if p.Annotations.Status.CurrentStatus.IsSet() {
