@@ -95,7 +95,8 @@ type message struct {
 
 type metricPayload struct {
 	UUID              string            `json:"uuid,omitempty"`
-	Measurement       string            `json:"measurement"` // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
+	Measurement       string            `json:"measurement"`    // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
+	BleemeoItem       string            `json:"item,omitempty"` // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
 	LabelsText        string            `json:"labels_text"`
 	Timestamp         int64             `json:"time"` // TODO: could drop this field once consumer is updated to support time_ms
 	TimestampMS       int64             `json:"time_ms"`
@@ -496,6 +497,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				value.UUID = m.ID
 				value.LabelsText = ""
 				value.Measurement = p.Labels["__name__"]
+				value.BleemeoItem = p.Annotations.BleemeoItem
 			}
 
 			if p.Annotations.Status.CurrentStatus.IsSet() {
