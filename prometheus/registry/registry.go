@@ -24,6 +24,7 @@ import (
 	"context"
 	"errors"
 	"glouton/logger"
+	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/node"
 	"glouton/types"
 	"net/http"
@@ -265,7 +266,7 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback f
 	for ok {
 		id++
 		if id == 0 {
-			return 0, errors.New("too many gatheres in the registry. Unable to find new slot")
+			return 0, errors.New("too many gatherers in the registry. Unable to find a new slot")
 		}
 
 		_, ok = r.registrations[id]
@@ -364,6 +365,24 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 
 	err = reg.Register(collector)
 	if err != nil {
+		return err
+	}
+
+	_, err = r.RegisterGatherer(reg, nil, nil)
+
+	return err
+}
+
+// AddBlackboxExporter add a blackbox_exporter to collector.
+func (r *Registry) AddBlackboxExporter(options blackbox.Options) error {
+	collector, err := blackbox.NewCollector(options)
+	if err != nil {
+		return err
+	}
+
+	reg := prometheus.NewRegistry()
+
+	if err := reg.Register(collector); err != nil {
 		return err
 	}
 

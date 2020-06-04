@@ -38,6 +38,7 @@ require (
 	github.com/mitchellh/mapstructure v1.3.1 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/prometheus/blackbox_exporter v0.16.0
 	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.10.0
@@ -63,6 +64,7 @@ require (
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/ini.v1 v1.57.0
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
+	gopkg.in/yaml.v2 v2.3.0
 	gopkg.in/yaml.v3 v3.0.0-20200506231410-2ff61e1afc86
 	gotest.tools/v3 v3.0.2 // indirect
 	k8s.io/api v0.18.3

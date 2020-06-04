@@ -54,6 +54,7 @@ import (
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/nrpe"
+	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/node"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -579,6 +580,14 @@ func (a *agent) run() { //nolint:gocyclo
 
 	if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
+	}
+
+	blackboxConf, blackboxEnabled := blackbox.GenConfig(a.config)
+	if blackboxEnabled {
+		logger.V(1).Println("Starting blackbox_exporter...")
+		if err := a.gathererRegistry.AddBlackboxExporter(*blackboxConf); err != nil {
+			logger.Printf("Unable to start blackbox_exporter, will not collect probes: %v", err)
+		}
 	}
 
 	promExporter := a.gathererRegistry.Exporter()
