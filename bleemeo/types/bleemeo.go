@@ -92,8 +92,9 @@ type Threshold struct {
 // Metric is a Metric object on Bleemeo API.
 type Metric struct {
 	ID          string            `json:"id"`
-	Label       string            `json:"label"`
-	Labels      map[string]string `json:"labels"`
+	LabelsText  string            `json:"labels_text,omitempty"`
+	Labels      map[string]string `json:"-"`
+	Item        string            `json:"item,omitempty"`
 	ServiceID   string            `json:"service,omitempty"`
 	ContainerID string            `json:"container,omitempty"`
 	StatusOf    string            `json:"status_of,omitempty"`

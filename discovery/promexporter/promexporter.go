@@ -18,10 +18,13 @@
 package promexporter
 
 import (
-	"context"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
+	"glouton/types"
+	"net/url"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -38,9 +41,14 @@ type Container interface {
 	Name() string
 }
 
+type target struct {
+	URL         string
+	ExtraLabels map[string]string
+}
+
 // listExporters return list of exporters based on containers labels/annotations.
-func (d *DynamicSrapper) listExporters(containers []Container) []scrapper.Target {
-	result := make([]scrapper.Target, 0)
+func (d *DynamicSrapper) listExporters(containers []Container) []target {
+	result := make([]target, 0)
 
 	for _, c := range containers {
 		u := urlFromLabels(c.Labels(), c.PrimaryAddress())
@@ -49,7 +57,9 @@ func (d *DynamicSrapper) listExporters(containers []Container) []scrapper.Target
 			u = urlFromLabels(c.Annotations(), c.PrimaryAddress())
 		}
 
-		labels := make(map[string]string, 1)
+		labels := map[string]string{
+			types.LabelScrapeJob: d.DynamicJobName,
+		}
 
 		if ns, podName := c.PodNamespaceName(); podName != "" {
 			labels["kubernetes.pod.namespace"] = ns
@@ -59,8 +69,7 @@ func (d *DynamicSrapper) listExporters(containers []Container) []scrapper.Target
 		}
 
 		if u != "" {
-			result = append(result, scrapper.Target{
-				Name:        d.DynamicJobName,
+			result = append(result, target{
 				URL:         u,
 				ExtraLabels: labels,
 			})
@@ -99,25 +108,11 @@ func urlFromLabels(labels map[string]string, address string) string {
 
 // DynamicSrapper is a Prometheus scrapper that will update its target based on ListExporters.
 type DynamicSrapper struct {
-	scrapper.Scrapper
-
-	l              sync.Mutex
-	init           bool
-	DynamicJobName string
-	StaticTargets  []scrapper.Target
-}
-
-// Run start the scrapper.
-func (d *DynamicSrapper) Run(ctx context.Context) error {
-	d.l.Lock()
-
-	if !d.init {
-		d.update(nil)
-	}
-
-	d.l.Unlock()
-
-	return d.Scrapper.Run(ctx)
+	l                sync.Mutex
+	registeredID     map[string]int
+	registeredLabels map[string]map[string]string
+	DynamicJobName   string
+	Registry         *registry.Registry
 }
 
 // Update updates the scrappers targets using new containers informations.
@@ -129,11 +124,55 @@ func (d *DynamicSrapper) Update(containers []Container) {
 }
 
 func (d *DynamicSrapper) update(containers []Container) {
-	d.init = true
 	dynamicTargets := d.listExporters(containers)
 
 	logger.V(3).Printf("Found the following dynamic Prometheus exporter: %v", dynamicTargets)
 
-	dynamicTargets = append(dynamicTargets, d.StaticTargets...)
-	d.UpdateTargets(dynamicTargets)
+	currentURLs := make(map[string]bool, len(dynamicTargets))
+
+	for _, t := range dynamicTargets {
+		currentURLs[t.URL] = true
+
+		if labels, ok := d.registeredLabels[t.URL]; ok && reflect.DeepEqual(labels, t.ExtraLabels) {
+			continue
+		}
+
+		if id, ok := d.registeredID[t.URL]; ok {
+			d.Registry.UnregisterGatherer(id)
+			delete(d.registeredID, t.URL)
+			delete(d.registeredLabels, t.URL)
+		}
+
+		u, err := url.Parse(t.URL)
+		if err != nil {
+			logger.Printf("ignoring invalid URL %v: %v", t.URL, err)
+			continue
+		}
+
+		target := (*scrapper.Target)(u)
+
+		id, err := d.Registry.RegisterGatherer(target, nil, t.ExtraLabels)
+		if err != nil {
+			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)
+			continue
+		}
+
+		if d.registeredID == nil {
+			d.registeredID = make(map[string]int)
+			d.registeredLabels = make(map[string]map[string]string)
+		}
+
+		d.registeredID[t.URL] = id
+		d.registeredLabels[t.URL] = t.ExtraLabels
+	}
+
+	for u, id := range d.registeredID {
+		if currentURLs[u] {
+			continue
+		}
+
+		d.Registry.UnregisterGatherer(id)
+		delete(d.registeredID, u)
+		delete(d.registeredLabels, u)
+	}
 }

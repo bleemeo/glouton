@@ -20,6 +20,7 @@ package api
 
 import (
 	"context"
+	"html/template"
 	"net/http"
 	"time"
 
@@ -61,11 +62,15 @@ type API struct {
 	factProvider *facts.FactProvider
 	disc         *discovery.Discovery
 	agent        agentInterface
-	accumulator  *threshold.Accumulator
+	threshold    *threshold.Registry
+}
+
+type gloutonUIConfig struct {
+	StaticCDNURL string
 }
 
 // New instantiate a new API's port from environment variable or from a default port.
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, accumulator *threshold.Accumulator) *API {
+func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, threshold *threshold.Registry, staticCDNURL string) *API {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
@@ -73,10 +78,23 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 		Debug:            false,
 	}).Handler)
 
-	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent, accumulator: accumulator}
+	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent, threshold: threshold}
 
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
+	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
+
+	indexBody, err := boxHTML.Find("index.html")
+	if err != nil {
+		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
+
+		indexBody = fallbackIndex
+	}
+
+	indexTmpl, err := template.New("index").Parse(string(indexBody))
+	if err != nil {
+		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
+	}
 
 	router.Handle("/metrics", promExporter) // promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
 	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
@@ -84,8 +102,14 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
-		html, _ := boxHTML.Find("index.html")
-		_, err := w.Write(html)
+		var err error
+		if indexTmpl == nil {
+			_, err = w.Write(fallbackIndex)
+		} else {
+			err = indexTmpl.Execute(w, gloutonUIConfig{
+				StaticCDNURL: staticCDNURL,
+			})
+		}
 		if err != nil {
 			logger.V(2).Printf("fail to serve index.html: %v", err)
 		}

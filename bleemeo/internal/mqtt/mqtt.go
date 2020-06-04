@@ -94,15 +94,16 @@ type message struct {
 }
 
 type metricPayload struct {
-	UUID             string            `json:"uuid"`
-	Measurement      string            `json:"measurement"`
-	Timestamp        int64             `json:"time"` // TODO: could drop this field once consumer is updated to support time_ms
-	TimestampMS      int64             `json:"time_ms"`
-	Value            forceDecimalFloat `json:"value"`
-	Item             string            `json:"item,omitempty"`
-	Status           string            `json:"status,omitempty"`
-	EventGracePeriod int               `json:"event_grace_period,omitempty"`
-	ProblemOrigin    string            `json:"check_output,omitempty"`
+	UUID              string            `json:"uuid,omitempty"`
+	Measurement       string            `json:"measurement"`    // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
+	BleemeoItem       string            `json:"item,omitempty"` // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
+	LabelsText        string            `json:"labels_text"`
+	Timestamp         int64             `json:"time"` // TODO: could drop this field once consumer is updated to support time_ms
+	TimestampMS       int64             `json:"time_ms"`
+	Value             forceDecimalFloat `json:"value"`
+	Status            string            `json:"status,omitempty"`
+	StatusDescription string            `json:"status_description,omitempty"`
+	EventGracePeriod  int               `json:"event_grace_period,omitempty"`
 }
 
 // This type is only used because the Bleemeo consumer require Value to be a float,
@@ -434,10 +435,10 @@ func (c *Client) sendPoints() {
 			return
 		}
 
-		localExistsByKey := make(map[common.MetricLabelItem]bool, len(localMetrics))
+		localExistsByKey := make(map[string]bool, len(localMetrics))
 
 		for _, m := range localMetrics {
-			key := common.MetricLabelItemFromMetric(m)
+			key := common.LabelsToText(m.Labels(), m.Annotations(), c.option.MetricFormat == types.MetricFormatBleemeo)
 			localExistsByKey[key] = true
 		}
 
@@ -446,7 +447,7 @@ func (c *Client) sendPoints() {
 		newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 
 		for _, p := range c.failedPoints {
-			key := common.MetricLabelItemFromMetric(p.Labels)
+			key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
 			if localExistsByKey[key] {
 				newPoints = append(newPoints, p)
 			}
@@ -481,25 +482,30 @@ func (c *Client) sendPoints() {
 	c.failedPointsCount = len(c.failedPoints)
 }
 
-func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[common.MetricLabelItem]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
+func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
 	for _, p := range points {
-		key := common.MetricLabelItemFromMetric(p.Labels)
+		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
 		if m, ok := registreredMetricByKey[key]; ok {
 			value := metricPayload{
-				UUID:        m.ID,
-				Measurement: p.Labels["__name__"],
+				LabelsText:  m.LabelsText,
 				Timestamp:   p.Time.Unix(),
 				TimestampMS: p.Time.UnixNano() / 1e6,
 				Value:       forceDecimalFloat(p.Value),
-				Item:        key.Item,
 			}
 
-			if p.CurrentStatus.IsSet() {
-				value.Status = p.CurrentStatus.String()
-				value.ProblemOrigin = p.StatusDescription.StatusDescription
+			if c.option.MetricFormat == types.MetricFormatBleemeo {
+				value.UUID = m.ID
+				value.LabelsText = ""
+				value.Measurement = p.Labels["__name__"]
+				value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
+			}
 
-				if p.Labels["container_id"] != "" {
-					lastKilledAt := c.option.Docker.ContainerLastKill(p.Labels["container_id"])
+			if p.Annotations.Status.CurrentStatus.IsSet() {
+				value.Status = p.Annotations.Status.CurrentStatus.String()
+				value.StatusDescription = p.Annotations.Status.StatusDescription
+
+				if p.Annotations.ContainerID != "" {
+					lastKilledAt := c.option.Docker.ContainerLastKill(p.Annotations.ContainerID)
 					gracePeriod := time.Since(lastKilledAt) + 300*time.Second
 
 					if gracePeriod > 60*time.Second {
@@ -692,7 +698,7 @@ func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []
 	result := make([]types.MetricPoint, 0)
 
 	for _, m := range input {
-		if common.AllowMetric(m.Labels, metricWhitelist) {
+		if common.AllowMetric(m.Labels, m.Annotations, metricWhitelist) {
 			result = append(result, m)
 		}
 	}
@@ -708,7 +714,7 @@ func (c *Client) ready() bool {
 	}
 
 	for _, m := range c.option.Cache.Metrics() {
-		if m.Label == "agent_status" && m.Labels["item"] == "" {
+		if m.Labels[types.LabelName] == "agent_status" {
 			return true
 		}
 	}

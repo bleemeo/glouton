@@ -22,13 +22,10 @@ import (
 	"sync"
 	"time"
 
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 )
-
-type accumulator interface {
-	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
-}
 
 // baseCheck perform a service.
 //
@@ -46,10 +43,11 @@ type accumulator interface {
 type baseCheck struct {
 	metricName     string
 	labels         map[string]string
+	annotations    types.MetricAnnotations
 	mainTCPAddress string
 	tcpAddresses   []string
 	mainCheck      func(ctx context.Context) types.StatusDescription
-	acc            accumulator
+	acc            inputs.AnnotationAccumulator
 
 	timer    *time.Timer
 	dialer   *net.Dialer
@@ -63,7 +61,7 @@ type baseCheck struct {
 	previousStatus types.StatusDescription
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, labels map[string]string, acc accumulator) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *baseCheck {
 	if mainTCPAddress != "" {
 		found := false
 
@@ -82,9 +80,13 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		}
 	}
 
+	metricName := labels[types.LabelName]
+	delete(labels, types.LabelName)
+
 	return &baseCheck{
 		metricName:           metricName,
 		labels:               labels,
+		annotations:          annotations,
 		mainTCPAddress:       mainTCPAddress,
 		tcpAddresses:         tcpAddresses,
 		persistentConnection: persistentConnection,
@@ -173,18 +175,20 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 	}
 
 	if callFromSchedule || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
-		bc.acc.AddFieldsWithStatus(
+		annotations := bc.annotations
+		annotations.Status = result
+
+		bc.acc.AddFieldsWithAnnotations(
 			"",
 			map[string]interface{}{
 				bc.metricName: result.CurrentStatus.NagiosCode(),
 			},
 			bc.labels,
-			map[string]types.StatusDescription{bc.metricName: result},
-			false,
+			annotations,
 		)
 	}
 
-	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels["item"], result)
+	logger.V(2).Printf("check for %#v %#v: %v", bc.metricName, bc.labels, result)
 
 	bc.previousStatus = result
 

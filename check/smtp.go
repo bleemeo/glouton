@@ -23,6 +23,7 @@ import (
 	"net/smtp"
 	"time"
 
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 )
@@ -39,11 +40,12 @@ type SMTPCheck struct {
 //
 // For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
-func NewSMTP(address string, persitentAddresses []string, metricName string, labels map[string]string, acc accumulator) *SMTPCheck {
+func NewSMTP(address string, persitentAddresses []string, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *SMTPCheck {
 	sc := &SMTPCheck{
 		mainAddress: address,
 	}
-	sc.baseCheck = newBase("", persitentAddresses, true, sc.doCheck, metricName, labels, acc)
+
+	sc.baseCheck = newBase("", persitentAddresses, true, sc.doCheck, labels, annotations, acc)
 
 	return sc
 }

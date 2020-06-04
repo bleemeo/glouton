@@ -17,7 +17,6 @@
 package common
 
 import (
-	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/types"
 )
@@ -28,66 +27,50 @@ const (
 	APIMetricItemLengthIfService int = 50
 )
 
-// MetricLabelItem is the couple (Label, Item) which uniquely identify a metric.
-type MetricLabelItem struct {
-	Label string
-	Item  string
+const (
+	// LabelBleemeoItem is the label used for item when using Bleemeo mode.
+	LabelBleemeoItem = "_item"
+)
+
+// LabelsToText convert labels & annotation to a string version.
+// When using the Bleemeo Mode, result is the name + the item annotation.
+func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
+	if bleemeoMode {
+		labelsCopy := map[string]string{
+			types.LabelName:  labels[types.LabelName],
+			LabelBleemeoItem: TruncateItem(annotations.BleemeoItem, annotations.ServiceName != ""),
+		}
+
+		return types.LabelsToText(labelsCopy)
+	}
+
+	labelsCopy := make(map[string]string, len(labels)+1)
+	for k, v := range labels {
+		labelsCopy[k] = v
+	}
+
+	return types.LabelsToText(labelsCopy)
 }
 
 // TruncateItem truncate the item to match maximal length allowed by Bleemeo API.
-func (key *MetricLabelItem) TruncateItem(isService bool) {
-	if len(key.Item) > APIMetricItemLength {
-		key.Item = key.Item[:APIMetricItemLength]
+func TruncateItem(item string, isService bool) string {
+	if len(item) > APIMetricItemLength {
+		item = item[:APIMetricItemLength]
 	}
 
-	if isService && len(key.Item) > APIMetricItemLengthIfService {
-		key.Item = key.Item[:APIMetricItemLengthIfService]
-	}
-}
-
-func (key MetricLabelItem) String() string {
-	if key.Item != "" {
-		return fmt.Sprintf("%s (item %s)", key.Label, key.Item)
+	if isService && len(item) > APIMetricItemLengthIfService {
+		item = item[:APIMetricItemLengthIfService]
 	}
 
-	return key.Label
-}
-
-// MetricLabelItemFromMetric create a MetricLabelItem from a local or remote metric (or labels of local one).
-func MetricLabelItemFromMetric(input interface{}) MetricLabelItem {
-	if metric, ok := input.(bleemeoTypes.Metric); ok {
-		key := MetricLabelItem{Label: metric.Label, Item: metric.Labels["item"]}
-		key.TruncateItem(metric.ServiceID != "")
-
-		return key
-	}
-
-	if metric, ok := input.(types.Metric); ok {
-		labels := metric.Labels()
-		key := MetricLabelItem{Label: labels["__name__"], Item: labels["item"]}
-		key.TruncateItem(labels["service_name"] != "")
-
-		return key
-	}
-
-	if labels, ok := input.(map[string]string); ok {
-		key := MetricLabelItem{Label: labels["__name__"], Item: labels["item"]}
-		key.TruncateItem(labels["service_name"] != "")
-
-		return key
-	}
-
-	key := MetricLabelItem{}
-
-	return key
+	return item
 }
 
 // MetricLookupFromList return a map[MetricLabelItem]Metric.
-func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[MetricLabelItem]bleemeoTypes.Metric {
-	registeredMetricsByKey := make(map[MetricLabelItem]bleemeoTypes.Metric, len(registeredMetrics))
+func MetricLookupFromList(registeredMetrics []bleemeoTypes.Metric) map[string]bleemeoTypes.Metric {
+	registeredMetricsByKey := make(map[string]bleemeoTypes.Metric, len(registeredMetrics))
 
 	for _, v := range registeredMetrics {
-		key := MetricLabelItem{Label: v.Label, Item: v.Labels["item"]}
+		key := v.LabelsText
 		if existing, ok := registeredMetricsByKey[key]; !ok || !existing.DeactivatedAt.IsZero() {
 			registeredMetricsByKey[key] = v
 		}

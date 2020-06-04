@@ -18,7 +18,6 @@
 package collector
 
 import (
-	"context"
 	"errors"
 	"glouton/logger"
 	"sync"
@@ -99,55 +98,9 @@ func (c *Collector) RemoveInput(id int) {
 	delete(c.inputNames, id)
 }
 
-// UpdateDelay change the delay between metric gather.
-func (c *Collector) UpdateDelay(delay time.Duration) {
-	if c.setCurrentDelay(delay) {
-		logger.V(2).Printf("Change metric collector delay to %v", delay)
-		c.updateDelayC <- nil
-	}
-}
-
-// Run will run the collections until context is cancelled.
-func (c *Collector) Run(ctx context.Context) error {
-	for ctx.Err() == nil {
-		c.run(ctx)
-	}
-
-	return nil
-}
-
-func (c *Collector) getCurrentDelay() time.Duration {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	return c.currentDelay
-}
-
-func (c *Collector) setCurrentDelay(delay time.Duration) (changed bool) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	if c.currentDelay == delay {
-		return false
-	}
-
-	c.currentDelay = delay
-
-	return true
-}
-
-// sleep such are time.Now() is aligned on a multiple of interval.
-func (c *Collector) sleepToAlign(interval time.Duration) {
-	now := time.Now()
-
-	previousMultiple := now.Truncate(interval)
-	if previousMultiple == now {
-		return
-	}
-
-	nextMultiple := previousMultiple.Add(interval)
-
-	time.Sleep(nextMultiple.Sub(now))
+// RunGather run one gather and send metric through the accumulator.
+func (c *Collector) RunGather() {
+	c.runOnce()
 }
 
 func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
@@ -165,32 +118,10 @@ func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
 	return inputsCopy, inputsNameCopy
 }
 
-func (c *Collector) run(ctx context.Context) {
-	currentDelay := c.getCurrentDelay()
-	c.sleepToAlign(currentDelay)
-
-	ticker := time.NewTicker(currentDelay)
-	defer ticker.Stop()
-
-	for {
-		c.runOnce()
-
-		select {
-		case <-c.updateDelayC:
-			return
-		case <-ticker.C:
-		case <-ctx.Done():
-			return
-		}
-	}
-}
-
 func (c *Collector) runOnce() {
 	inputsCopy, inputsNameCopy := c.inputsForCollection()
 
 	var wg sync.WaitGroup
-
-	t0 := time.Now()
 
 	for i, input := range inputsCopy {
 		i := i
@@ -209,10 +140,4 @@ func (c *Collector) runOnce() {
 	}
 
 	wg.Wait()
-
-	delta := time.Since(t0)
-
-	if c.acc != nil {
-		c.acc.AddFields("agent", map[string]interface{}{"gather_time": delta.Seconds()}, nil)
-	}
 }

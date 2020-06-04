@@ -19,9 +19,27 @@ package threshold
 import (
 	"glouton/types"
 	"math"
+	"reflect"
 	"testing"
 	"time"
 )
+
+type mockState struct{}
+
+func (m mockState) Get(key string, result interface{}) error {
+	return nil
+}
+func (m mockState) Set(key string, object interface{}) error {
+	return nil
+}
+
+type mockStore struct {
+	points []types.MetricPoint
+}
+
+func (s *mockStore) PushPoints(points []types.MetricPoint) {
+	s.points = append(s.points, points...)
+}
 
 func TestStateUpdate(t *testing.T) {
 	cases := [][]struct {
@@ -267,6 +285,94 @@ func TestThresholdEqual(t *testing.T) {
 		got = c.right.Equal(c.left)
 		if got != c.want {
 			t.Errorf("case %d: right.Equal(left) == %v, want %v", i, got, c.want)
+		}
+	}
+}
+
+func TestAccumulatorThreshold(t *testing.T) {
+	db := &mockStore{}
+	threshold := New(mockState{})
+	threshold.SetThresholds(
+		nil,
+		map[string]Threshold{"cpu_used": {
+			HighWarning:  80,
+			HighCritical: 90,
+		}},
+	)
+
+	t0 := time.Date(2020, 2, 24, 15, 1, 0, 0, time.UTC)
+	wantPoints := map[string]types.MetricPoint{
+		`__name__="cpu_idle"`: {
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "some-item",
+			},
+			Labels: map[string]string{types.LabelName: "cpu_idle"},
+			Point: types.Point{
+				Time:  t0,
+				Value: 20.0,
+			},
+		},
+		`__name__="cpu_used"`: {
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "some-item",
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusWarning,
+					StatusDescription: "Current value: 88.00 threshold (80.00) exceeded over last 5 minutes",
+				},
+			},
+			Labels: map[string]string{types.LabelName: "cpu_used"},
+			Point: types.Point{
+				Time:  t0,
+				Value: 88.0,
+			},
+		},
+		`__name__="cpu_used_status"`: {
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "some-item",
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusWarning,
+					StatusDescription: "Current value: 88.00 threshold (80.00) exceeded over last 5 minutes",
+				},
+				StatusOf: "cpu_used",
+			},
+			Labels: map[string]string{types.LabelName: "cpu_used_status"},
+			Point: types.Point{
+				Time:  t0,
+				Value: 1.0,
+			},
+		},
+	}
+
+	pusher := threshold.WithPusher(db)
+	pusher.PushPoints([]types.MetricPoint{
+		{
+			Labels: map[string]string{
+				"__name__": "cpu_used",
+			},
+			Annotations: types.MetricAnnotations{BleemeoItem: "some-item"},
+			Point:       types.Point{Time: t0, Value: 88.0},
+		},
+		{
+			Labels: map[string]string{
+				"__name__": "cpu_idle",
+			},
+			Annotations: types.MetricAnnotations{BleemeoItem: "some-item"},
+			Point:       types.Point{Time: t0, Value: 20.0},
+		},
+	})
+
+	if len(db.points) != 3 {
+		t.Errorf("len(points) == %d, want 3", len(db.points))
+	}
+
+	for i, got := range db.points {
+		labelsText := types.LabelsToText(got.Labels)
+		want := wantPoints[labelsText]
+
+		delete(wantPoints, labelsText)
+
+		if !reflect.DeepEqual(got, want) {
+			t.Errorf("points[%d] = %v, want %v", i, got, want)
 		}
 	}
 }

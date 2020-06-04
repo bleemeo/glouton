@@ -59,7 +59,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		return originalContext, true
 	}
 
-	originalContext.Tags["item"] = originalContext.Tags["db"]
+	originalContext.Annotations.BleemeoItem = originalContext.Tags["db"]
 
 	return originalContext, false
 }

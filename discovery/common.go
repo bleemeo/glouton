@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/types"
 	"net"
 	"strconv"
 	"time"
@@ -176,6 +177,33 @@ func (s Service) AddressPort() (string, int) {
 	}
 
 	return s.AddressForPort(port, di.ServiceProtocol, force), port
+}
+
+// LabelsOfStatus returns the labels for the status metrics of this service.
+func (s Service) LabelsOfStatus() map[string]string {
+	labels := map[string]string{
+		types.LabelName: fmt.Sprintf("%s_status", s.Name),
+	}
+
+	if s.ContainerName != "" {
+		labels[types.LabelContainerName] = s.ContainerName
+	}
+
+	return labels
+}
+
+// AnnotationsOfStatus returns the annotations for the status metrics of this service.
+func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
+	annotations := types.MetricAnnotations{
+		ServiceName: s.Name,
+	}
+
+	if s.ContainerName != "" {
+		annotations.BleemeoItem = s.ContainerName
+		annotations.ContainerID = s.ContainerID
+	}
+
+	return annotations
 }
 
 // nolint:gochecknoglobals

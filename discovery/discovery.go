@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"glouton/facts"
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/task"
 	"glouton/types"
@@ -30,6 +31,7 @@ import (
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 const localhostIP = "127.0.0.1"
@@ -40,11 +42,6 @@ const (
 	nrpeExposedName = "nagios_nrpe_name"
 	ignoredPorts    = "ignore_ports"
 )
-
-// Accumulator will gather metrics point for added checks.
-type Accumulator interface {
-	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
-}
 
 // Discovery implement the full discovery mecanisme. It will take informations
 // from both the dynamic discovery (service currently running) and previously
@@ -59,17 +56,19 @@ type Discovery struct {
 	servicesMap           map[NameContainer]Service
 	lastDiscoveryUpdate   time.Time
 
-	acc                   Accumulator
+	acc                   inputs.AnnotationAccumulator
 	lastConfigservicesMap map[NameContainer]Service
-	activeInput           map[NameContainer]int
+	activeCollector       map[NameContainer]collectorDetails
 	activeCheck           map[NameContainer]CheckDetails
 	coll                  Collector
 	taskRegistry          Registry
+	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
 	servicesOverride      map[NameContainer]map[string]string
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
+	metricFormat          types.MetricFormat
 }
 
 // Collector will gather metrics for added inputs.
@@ -84,8 +83,14 @@ type Registry interface {
 	RemoveTask(int)
 }
 
+// GathererRegistry allow to register/unregister prometheus Gatherer.
+type GathererRegistry interface {
+	RegisterGatherer(gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string) (int, error)
+	UnregisterGatherer(id int) bool
+}
+
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -121,15 +126,17 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
 		coll:                  coll,
+		metricRegistry:        metricRegistry,
 		taskRegistry:          taskRegistry,
 		containerInfo:         (*dockerWrapper)(containerInfo),
 		acc:                   acc,
-		activeInput:           make(map[NameContainer]int),
+		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverrideMap,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
+		metricFormat:          metricFormat,
 	}
 }
 

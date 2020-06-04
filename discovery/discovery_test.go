@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
+	"glouton/types"
 	"reflect"
 	"testing"
 	"time"
@@ -218,7 +219,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc := New(mockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, state, nil, nil, nil, nil, nil)
+		disc := New(mockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -499,7 +500,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		},
 	}
 	state := mockState{}
-	disc := New(mockDynamic, fakeCollector, nil, state, nil, nil, nil, nil, nil)
+	disc := New(mockDynamic, fakeCollector, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
 	disc.containerInfo = docker
 
 	mockDynamic.result = []Service{

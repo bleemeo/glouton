@@ -18,7 +18,7 @@
 package promexporter
 
 import (
-	"glouton/prometheus/scrapper"
+	"glouton/types"
 	"reflect"
 	"testing"
 )
@@ -62,12 +62,12 @@ func TestListExporters(t *testing.T) {
 	tests := []struct {
 		name       string
 		containers []Container
-		want       []scrapper.Target
+		want       []target
 	}{
 		{
 			name:       "empty",
 			containers: []Container{},
-			want:       []scrapper.Target{},
+			want:       []target{},
 		},
 		{
 			name: "docker",
@@ -80,12 +80,12 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []target{
 				{
-					URL:  "http://sample:9102/metrics",
-					Name: fakeJobName,
+					URL: "http://sample:9102/metrics",
 					ExtraLabels: map[string]string{
-						"container_name": "my_container",
+						"container_name":     "my_container",
+						types.LabelScrapeJob: fakeJobName,
 					},
 				},
 			},
@@ -102,13 +102,13 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []target{
 				{
-					Name: fakeJobName,
-					URL:  "http://sample:9102/metrics",
+					URL: "http://sample:9102/metrics",
 					ExtraLabels: map[string]string{
 						"kubernetes.pod.namespace": fakePodNamespace,
 						"kubernetes.pod.name":      "my_pod-1234",
+						types.LabelScrapeJob:       fakeJobName,
 					},
 				},
 			},
@@ -128,7 +128,7 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{},
+			want: []target{},
 		},
 		{
 			name: "two-with-alternate-port",
@@ -150,20 +150,20 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []target{
 				{
-					Name: fakeJobName,
-					URL:  "http://sample1:9102/metrics",
+					URL: "http://sample1:9102/metrics",
 					ExtraLabels: map[string]string{
-						"container_name": "sample1_1",
+						"container_name":     "sample1_1",
+						types.LabelScrapeJob: fakeJobName,
 					},
 				},
 				{
-					Name: fakeJobName,
-					URL:  "http://sample2:8080/metrics",
+					URL: "http://sample2:8080/metrics",
 					ExtraLabels: map[string]string{
 						"kubernetes.pod.namespace": fakePodNamespace,
 						"kubernetes.pod.name":      "sample2-1234",
+						types.LabelScrapeJob:       fakeJobName,
 					},
 				},
 			},
@@ -181,12 +181,12 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []target{
 				{
-					Name: fakeJobName,
-					URL:  "http://sample:8080/metrics.txt",
+					URL: "http://sample:8080/metrics.txt",
 					ExtraLabels: map[string]string{
-						"container_name": "testname",
+						"container_name":     "testname",
+						types.LabelScrapeJob: fakeJobName,
 					},
 				},
 			},
@@ -203,12 +203,12 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []target{
 				{
-					Name: fakeJobName,
-					URL:  "http://sample:9102/metrics.txt",
+					URL: "http://sample:9102/metrics.txt",
 					ExtraLabels: map[string]string{
-						"container_name": "testname",
+						"container_name":     "testname",
+						types.LabelScrapeJob: fakeJobName,
 					},
 				},
 			},

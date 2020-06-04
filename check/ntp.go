@@ -25,6 +25,7 @@ import (
 	"net"
 	"time"
 
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 )
@@ -41,11 +42,12 @@ type NTPCheck struct {
 //
 // For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
-func NewNTP(address string, persitentAddresses []string, metricName string, labels map[string]string, acc accumulator) *NTPCheck {
+func NewNTP(address string, persitentAddresses []string, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *NTPCheck {
 	nc := &NTPCheck{
 		mainAddress: address,
 	}
-	nc.baseCheck = newBase("", persitentAddresses, true, nc.doCheck, metricName, labels, acc)
+
+	nc.baseCheck = newBase("", persitentAddresses, true, nc.doCheck, labels, annotations, acc)
 
 	return nc
 }

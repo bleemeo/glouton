@@ -44,6 +44,13 @@ type CheckDetails struct {
 	check Check
 }
 
+// collectorDetails contains information about a collector.
+// It could be a Telegraf input of a Prometheus collector.
+type collectorDetails struct {
+	inputID    int
+	gathererID int
+}
+
 func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Service) {
 	for key := range oldServices {
 		if _, ok := services[key]; !ok {
@@ -107,51 +114,44 @@ func (d *Discovery) createCheck(service Service) {
 		tcpAddresses = append(tcpAddresses, a.String())
 	}
 
-	labels := map[string]string{
-		"service_name": service.Name,
-	}
-
-	if service.ContainerName != "" {
-		labels["item"] = service.ContainerName
-		labels["container_id"] = service.ContainerID
-		labels["container_name"] = service.ContainerName
-	}
+	labels := service.LabelsOfStatus()
+	annotations := service.AnnotationsOfStatus()
 
 	switch service.ServiceType {
 	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
-		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
+		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
-		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels)
+		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case NTPService:
 		if primaryAddress != "" {
 			check := check.NewNTP(
 				primaryAddress,
 				tcpAddresses,
-				fmt.Sprintf("%s_status", service.Name),
 				labels,
+				annotations,
 				d.acc,
 			)
 			d.addCheck(check, service)
 		} else {
-			d.createTCPCheck(service, di, "", tcpAddresses, labels)
+			d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
 		}
 	case CustomService:
 		switch service.ExtraAttributes["check_type"] {
 		case customCheckTCP:
-			d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
+			d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 		case customCheckHTTP:
-			d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels)
+			d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 		case customCheckNagios:
-			d.createNagiosCheck(service, primaryAddress, labels)
+			d.createNagiosCheck(service, primaryAddress, labels, annotations)
 		default:
 			logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.ExtraAttributes["check_type"], service.Name)
 		}
 	default:
-		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
+		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	}
 }
 
-func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
+func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
 	var tcpSend, tcpExpect, tcpClose []byte
 
 	switch service.ServiceType {
@@ -180,17 +180,17 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 		tcpSend,
 		tcpExpect,
 		tcpClose,
-		fmt.Sprintf("%s_status", service.Name),
 		labels,
+		annotations,
 		d.acc,
 	)
 
 	d.addCheck(tcpCheck, service)
 }
 
-func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string) {
+func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
 	if primaryAddress == "" {
-		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels)
+		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 		return
 	}
 
@@ -224,15 +224,15 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		url,
 		tcpAddresses,
 		expectedStatusCode,
-		fmt.Sprintf("%s_status", service.Name),
 		labels,
+		annotations,
 		d.acc,
 	)
 
 	d.addCheck(httpCheck, service)
 }
 
-func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string) {
+func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string, annotations types.MetricAnnotations) {
 	var tcpAddress []string
 
 	if primaryAddress != "" {
@@ -242,8 +242,8 @@ func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, la
 	httpCheck := check.NewNagios(
 		service.ExtraAttributes["check_command"],
 		tcpAddress,
-		fmt.Sprintf("%s_status", service.Name),
 		labels,
+		annotations,
 		d.acc,
 	)
 

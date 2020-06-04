@@ -76,7 +76,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		drop = true
 	}
 
-	newContext.Tags["item"] = newContext.Tags["proxy"]
+	newContext.Annotations.BleemeoItem = newContext.Tags["proxy"]
 
 	return
 }

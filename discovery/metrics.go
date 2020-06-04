@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"errors"
 	"fmt"
 	"glouton/collector"
 	"glouton/inputs/apache"
@@ -41,9 +42,14 @@ import (
 	"glouton/inputs/system"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
+	"glouton/types"
 	"strconv"
 
 	"github.com/influxdata/telegraf"
+)
+
+var (
+	errNotSupported = errors.New("service not supported by Prometheus collector")
 )
 
 // InputOption are option used by system inputs.
@@ -52,6 +58,7 @@ type InputOption struct {
 	DFPathBlacklist []string
 	NetIfBlacklist  []string
 	IODiskWhitelist []string
+	IODiskBlacklist []string
 }
 
 // AddDefaultInputs adds system inputs to a collector.
@@ -126,7 +133,7 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		}
 	}
 
-	input, err = diskio.New(option.IODiskWhitelist)
+	input, err = diskio.New(option.IODiskWhitelist, option.IODiskBlacklist)
 	if err != nil {
 		return err
 	}
@@ -202,11 +209,26 @@ func (d *Discovery) removeInput(key NameContainer) {
 		return
 	}
 
-	if inputID, ok := d.activeInput[key]; ok {
+	if collector, ok := d.activeCollector[key]; ok {
 		logger.V(2).Printf("Remove input for service %v on container %s", key.Name, key.ContainerName)
-		delete(d.activeInput, key)
-		d.coll.RemoveInput(inputID)
+		delete(d.activeCollector, key)
+
+		if collector.gathererID == 0 {
+			d.coll.RemoveInput(collector.inputID)
+		} else if !d.metricRegistry.UnregisterGatherer(collector.gathererID) {
+			logger.V(2).Printf("The gatherer wasn't present")
+		}
 	}
+}
+
+// createPrometheusCollector create a Prometheus collector for given service
+// Return errNotSupported if no Prometheus collector exists for this service.
+func (d *Discovery) createPrometheusCollector(service Service) error {
+	if service.ServiceType == MemcachedService {
+		return d.createPrometheusMemcached(service)
+	}
+
+	return errNotSupported
 }
 
 //nolint: gocyclo
@@ -220,11 +242,17 @@ func (d *Discovery) createInput(service Service) error {
 		return nil
 	}
 
-	logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
+	if d.metricFormat == types.MetricFormatPrometheus {
+		err := d.createPrometheusCollector(service)
+		if err != errNotSupported {
+			logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
+			return err
+		}
+	}
 
 	var (
-		input telegraf.Input
 		err   error
+		input telegraf.Input
 	)
 
 	switch service.ServiceType {
@@ -329,17 +357,33 @@ func (d *Discovery) createInput(service Service) error {
 	}
 
 	if input != nil {
-		extraLabels := map[string]string{
-			"service_name": service.Name,
-		}
+		logger.V(2).Printf("Add input for service %v on container %s", service.Name, service.ContainerID)
 
-		if service.ContainerName != "" {
-			extraLabels["item"] = service.ContainerName
-			extraLabels["container_id"] = service.ContainerID
-			extraLabels["container_name"] = service.ContainerName
-		}
+		input = modify.AddRenameCallback(input, func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
+			annotations.ServiceName = service.Name
+			annotations.ContainerID = service.ContainerID
 
-		input = modify.AddLabels(input, extraLabels)
+			if d.metricFormat == types.MetricFormatPrometheus {
+				labels[types.LabelContainerName] = service.ContainerName
+				labels[types.LabelServiceName] = service.ContainerName
+				labels[types.LabelContainerID] = service.ContainerName
+
+				_, port := service.AddressPort()
+				if port != 0 {
+					labels[types.LabelServicePort] = strconv.FormatInt(int64(port), 10)
+				}
+			}
+
+			if service.ContainerName != "" {
+				if annotations.BleemeoItem != "" {
+					annotations.BleemeoItem = service.ContainerName + "_" + annotations.BleemeoItem
+				} else {
+					annotations.BleemeoItem = service.ContainerName
+				}
+			}
+
+			return labels, annotations
+		})
 
 		return d.addInput(input, service)
 	}
@@ -361,7 +405,9 @@ func (d *Discovery) addInput(input telegraf.Input, service Service) error {
 		Name:          service.Name,
 		ContainerName: service.ContainerName,
 	}
-	d.activeInput[key] = inputID
+	d.activeCollector[key] = collectorDetails{
+		inputID: inputID,
+	}
 
 	return nil
 }

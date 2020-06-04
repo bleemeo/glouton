@@ -100,7 +100,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 // This interval could be between a start and end dates or X minutes from now
 // Metrics can also be filtered.
 func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
-	if r.api.db == nil || r.api.accumulator == nil {
+	if r.api.db == nil || r.api.threshold == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 
@@ -147,6 +147,8 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 		metricRes := &Metric{}
 
 		labels := metric.Labels()
+		annotations := metric.Annotations()
+
 		for key, value := range labels {
 			label := &Label{Key: key, Value: value}
 			metricRes.Labels = append(metricRes.Labels, label)
@@ -163,7 +165,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
 
-		thresholds := r.api.accumulator.GetThreshold(threshold.MetricNameItem{Item: labels["item"], Name: labels["__name__"]})
+		thresholds := r.api.threshold.GetThreshold(threshold.MetricNameItem{Item: annotations.BleemeoItem, Name: labels[types.LabelName]})
 		threshold := &Threshold{
 			LowCritical:  &thresholds.LowCritical,
 			LowWarning:   &thresholds.LowWarning,
@@ -250,8 +252,8 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 
 			for _, m := range containerMetrics {
 				metricFilters := map[string]string{
-					"item":     container.Name(),
-					"__name__": m,
+					types.LabelContainerName: container.Name(),
+					types.LabelName:          m,
 				}
 
 				metrics, err := r.api.db.Metrics(metricFilters)
@@ -397,40 +399,29 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				netAddrs = append(netAddrs, addr.String())
 			}
 
-			metrics, err := r.api.db.Metrics(map[string]string{"__name__": service.Name + "_status"})
+			s := &Service{
+				Name:            service.Name,
+				ContainerID:     service.ContainerID,
+				IPAddress:       service.IPAddress,
+				ListenAddresses: netAddrs,
+				ExePath:         service.ExePath,
+				Active:          service.Active,
+			}
 
-			var point types.PointStatus
+			metrics, err := r.api.db.Metrics(map[string]string{types.LabelName: service.Name + "_status"})
+			if err != nil {
+				logger.V(2).Printf("Can not retrieve services: %v", err)
+				return nil, gqlerror.Errorf("Can not retrieve services")
+			}
 
 			if len(metrics) > 0 {
-				if err != nil {
-					logger.V(2).Printf("Can not retrieve services: %v", err)
-					return nil, gqlerror.Errorf("Can not retrieve services")
+				annotations := metrics[0].Annotations()
+				if annotations.Status.CurrentStatus.IsSet() {
+					s.Status = float64(annotations.Status.CurrentStatus.NagiosCode())
+					s.StatusDescription = &annotations.Status.StatusDescription
 				}
-
-				finalEnd := time.Now().UTC().Format(time.RFC3339)
-				finalStart := time.Now().UTC().Add(time.Duration(-1) * time.Minute).Format(time.RFC3339)
-				timeStart, _ := time.Parse(time.RFC3339, finalStart)
-				timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
-
-				points, err := metrics[0].Points(timeStart, timeEnd)
-				if err != nil {
-					logger.V(2).Printf("Can not retrieve services: %v", err)
-					return nil, gqlerror.Errorf("Can not retrieve services")
-				}
-
-				point = points[len(points)-1]
 			}
 
-			s := &Service{
-				Name:              service.Name,
-				ContainerID:       service.ContainerID,
-				IPAddress:         service.IPAddress,
-				ListenAddresses:   netAddrs,
-				ExePath:           service.ExePath,
-				Active:            service.Active,
-				Status:            point.Value,
-				StatusDescription: &point.StatusDescription.StatusDescription,
-			}
 			servicesRes = append(servicesRes, s)
 		}
 	}
@@ -487,29 +478,19 @@ func (r *queryResolver) AgentStatus(ctx context.Context) (*AgentStatus, error) {
 		return nil, gqlerror.Errorf("Can not retrieve metrics from agent status")
 	}
 
-	finalEnd := time.Now().UTC().Format(time.RFC3339)
-	finalStart := time.Now().UTC().Add(time.Duration(-1) * time.Minute).Format(time.RFC3339)
-	timeStart, _ := time.Parse(time.RFC3339, finalStart)
-	timeEnd, _ := time.Parse(time.RFC3339, finalEnd)
-	statuses := map[string]float64{}
+	statuses := []float64{}
 	statusDescription := []string{}
 
 	for _, metric := range metrics {
-		labels := metric.Labels()
-
-		points, err := metric.Points(timeStart, timeEnd)
-		if err != nil {
-			logger.V(2).Printf("Can not retrieve points: %v", err)
-			return nil, gqlerror.Errorf("Can not retrieve points from agent status")
+		status := metric.Annotations().Status
+		if !status.CurrentStatus.IsSet() {
+			continue
 		}
 
-		if len(points) > 0 && points[0].CurrentStatus.IsSet() {
-			status := points[0].CurrentStatus.NagiosCode()
-			statuses[labels["__name__"]] = float64(status)
+		statuses = append(statuses, float64(status.CurrentStatus.NagiosCode()))
 
-			if status > 0 {
-				statusDescription = append(statusDescription, labels["__name__"]+": "+points[0].StatusDescription.StatusDescription)
-			}
+		if status.CurrentStatus != types.StatusOk {
+			statusDescription = append(statusDescription, status.StatusDescription)
 		}
 	}
 

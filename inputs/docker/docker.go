@@ -20,6 +20,7 @@ import (
 	"errors"
 	"glouton/facts"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -59,12 +60,13 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	newContext.Tags = make(map[string]string)
 
 	if name, ok := originalContext.Tags["container_name"]; ok {
-		newContext.Tags["item"] = name
+		newContext.Annotations.BleemeoItem = name
+		newContext.Tags[types.LabelContainerName] = name
 	}
 
 	if id, ok := originalContext.OriginalFields["container_id"]; ok {
 		if containerID, ok := id.(string); ok {
-			newContext.Tags["container_id"] = containerID
+			newContext.Annotations.ContainerID = containerID
 		}
 	}
 

@@ -73,7 +73,8 @@ func (nt netTransformer) renameGlobal(originalContext internal.GatherContext) (n
 		}
 	}
 
-	newContext.Tags["item"] = item
+	newContext.Annotations.BleemeoItem = item
+	newContext.Tags["device"] = item
 
 	return
 }

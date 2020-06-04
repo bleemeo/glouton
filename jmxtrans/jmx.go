@@ -28,8 +28,6 @@ import (
 	"os"
 	"sync"
 	"time"
-
-	"github.com/influxdata/telegraf"
 )
 
 const (
@@ -39,7 +37,7 @@ const (
 // JMX allow to gather metrics from JVM using JMX
 // It use jmxtrans to achieve this goal.
 type JMX struct {
-	Accumulator             telegraf.Accumulator
+	Pusher                  types.PointPusher
 	OutputConfigurationFile string
 	// ContactAddress is the address where jmxtrans can reach Glouton.
 	// If this is an IP address, Glouton will only listen on this address.
@@ -296,24 +294,9 @@ func (j *JMX) writeConfig(content []byte) error {
 }
 
 func (j *JMX) emitPoint(point types.MetricPoint) {
-	if j.Accumulator == nil {
+	if j.Pusher == nil {
 		return
 	}
 
-	labels := make(map[string]string, len(point.Labels))
-
-	for k, v := range point.Labels {
-		if k == "__name__" {
-			continue
-		}
-
-		labels[k] = v
-	}
-
-	j.Accumulator.AddFields(
-		"",
-		map[string]interface{}{point.Labels["__name__"]: point.Value},
-		point.Labels,
-		point.Time,
-	)
+	j.Pusher.PushPoints([]types.MetricPoint{point})
 }
