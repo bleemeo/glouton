@@ -674,6 +674,7 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 	defer c.l.Unlock()
 
 	now := time.Now()
+	replacer := strings.NewReplacer(".", "_")
 
 	c.lastPushedPointsCleanup = now
 
@@ -691,16 +692,30 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 
 		for l, v := range p.Labels {
 			if l != "__name__" {
+				if !model.IsValidMetricName(model.LabelValue(l)) {
+					l = replacer.Replace(l)
+					if !model.IsValidMetricName(model.LabelValue(l)) {
+						logger.V(2).Printf("label %#v is ignored since invalid for Prometheus", l)
+						continue
+					}
+				}
+
 				labelKeys = append(labelKeys, l)
 				labelValues = append(labelValues, v)
 			}
 		}
 
-		ch <- prometheus.NewMetricWithTimestamp(p.Time, prometheus.MustNewConstMetric(
+		promMetric, err := prometheus.NewConstMetric(
 			prometheus.NewDesc(p.Labels["__name__"], "", labelKeys, nil),
 			prometheus.UntypedValue,
 			p.Value,
 			labelValues...,
-		))
+		)
+		if err != nil {
+			logger.V(2).Printf("Ignoring metric %s due to %v", p.Labels["__name__"], err)
+			continue
+		}
+
+		ch <- prometheus.NewMetricWithTimestamp(p.Time, promMetric)
 	}
 }
