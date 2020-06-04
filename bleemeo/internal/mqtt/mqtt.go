@@ -94,13 +94,15 @@ type message struct {
 }
 
 type metricPayload struct {
-	UUID              string  `json:"uuid,omitempty"`
-	LabelsText        string  `json:"labels_text"`
-	TimestampMS       int64   `json:"time_ms"`
-	Value             float64 `json:"value"`
-	Status            string  `json:"status,omitempty"`
-	StatusDescription string  `json:"status_description,omitempty"`
-	EventGracePeriod  int     `json:"event_grace_period,omitempty"`
+	UUID              string            `json:"uuid,omitempty"`
+	Measurement       string            `json:"measurement"` // TODO: this could be dropped once consumer is updated to only use UUID or LabelsText
+	LabelsText        string            `json:"labels_text"`
+	Timestamp         int64             `json:"time"` // TODO: could drop this field once consumer is updated to support time_ms
+	TimestampMS       int64             `json:"time_ms"`
+	Value             forceDecimalFloat `json:"value"`
+	Status            string            `json:"status,omitempty"`
+	StatusDescription string            `json:"status_description,omitempty"`
+	EventGracePeriod  int               `json:"event_grace_period,omitempty"`
 }
 
 // This type is only used because the Bleemeo consumer require Value to be a float,
@@ -485,13 +487,15 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 		if m, ok := registreredMetricByKey[key]; ok {
 			value := metricPayload{
 				LabelsText:  m.LabelsText,
+				Timestamp:   p.Time.Unix(),
 				TimestampMS: p.Time.UnixNano() / 1e6,
-				Value:       p.Value,
+				Value:       forceDecimalFloat(p.Value),
 			}
 
 			if c.option.MetricFormat == types.MetricFormatBleemeo {
 				value.UUID = m.ID
 				value.LabelsText = ""
+				value.Measurement = p.Labels["__name__"]
 			}
 
 			if p.Annotations.Status.CurrentStatus.IsSet() {
