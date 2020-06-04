@@ -157,6 +157,11 @@ func (d *DynamicSrapper) update(containers []Container) {
 			continue
 		}
 
+		if d.registeredID == nil {
+			d.registeredID = make(map[string]int)
+			d.registeredLabels = make(map[string]map[string]string)
+		}
+
 		d.registeredID[t.URL] = id
 		d.registeredLabels[t.URL] = t.ExtraLabels
 	}
