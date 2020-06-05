@@ -1,30 +1,36 @@
 package blackbox
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"glouton/logger"
 	"os"
 	"sync"
+	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
 	"gopkg.in/yaml.v3"
 )
 
-const namespace = "Blackbox"
+const namespace = "blackbox"
+
+// TODO: differenciate between the same URL scrapped by different modules.
+// The best way to do this would probabky be to expose the module name to the prometheus exporter.
 
 var (
 	probeSuccessDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "scrape", "probe_success"),
+		prometheus.BuildFQName(namespace, "", "probe_success"),
 		"Displays whether or not the probe was a success",
 		[]string{"target"},
 		nil,
 	)
 	probeDurationDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "scrape", "probe_duration_seconds"),
-		"Returns how long the probe took to complete in seconds",
+		prometheus.BuildFQName(namespace, "", "probe_duration_milliseconds"),
+		"Returns how long the probe took to complete in milliseconds",
 		[]string{"target"},
 		nil,
 	)
@@ -43,9 +49,38 @@ type blackboxCollector struct {
 }
 
 // Describe implements the prometheus.Collector interface.
+// We build the list of all the descriptions provided by at least one internal collector (or put
+// more clearly: the union of the description set of each internal collector).
+// We can perform it sequentially (we do not spawn one goroutine per internal collector, unlike
+// Collect()) as:
+// 1) To my current understanding, this is only called once at startup (or at config reloading)
+// 2) Describe() should only push values on the channel, not do any computations
 func (coll *blackboxCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- probeSuccessDesc
-	ch <- probeDurationDesc
+	main := make(chan *prometheus.Desc)
+	go func() {
+		for _, c := range coll.collectors {
+			c.Describe(main)
+		}
+		close(main)
+	}()
+
+	var descs []*prometheus.Desc
+	// read all values posted on the main channel, and build the list of unique metrics descriptions
+	for v := range main {
+		// albeit this is linear, thus leading to quadratic times for the whole operation, in pratice we expect
+		// the number of Desc to be fairly small, with many duplicates, so it should be pretty much O(n)
+		for _, el := range descs {
+			if v == el {
+				continue
+			}
+		}
+		descs = append(descs, v)
+	}
+
+	// submit the descriptions to the caller
+	for _, v := range descs {
+		ch <- v
+	}
 }
 
 // Collect implements the prometheus.Collector interface.
@@ -55,34 +90,153 @@ func (coll *blackboxCollector) Collect(ch chan<- prometheus.Metric) {
 	for _, c := range coll.collectors {
 		go func(c prometheus.Collector) {
 			c.Collect(ch)
+			wg.Done()
 		}(c)
 	}
 	wg.Wait()
 }
 
 type target struct {
-	url     string
-	module  config.Module
-	timeout int
+	url      string
+	module   config.Module
+	timeout  int
+	registry *prometheus.Registry
 }
 
 // Describe implements the prometheus.Collector interface.
 func (target *target) Describe(ch chan<- *prometheus.Desc) {
-	panic(errors.New("The method 'Describe(ch chan<- *prometheus.Desc)' should never be called" +
-		" on glouton.prometheus.exporter.blackbox.Target objects."))
+	ch <- probeSuccessDesc
+	ch <- probeDurationDesc
+}
+
+type metricCollector interface {
+	prometheus.Metric
+	prometheus.Collector
 }
 
 // Collect implements the prometheus.Collector interface.
+// It is where we do the actual "probing".
 func (target *target) Collect(ch chan<- prometheus.Metric) {
-	// do the actual "probing"
+	// set a timeout
+	ctx, cancel := context.WithTimeout(context.Background(), target.module.Timeout)
+	// Let's ensure we don't end up with stray queries running somewhere
+	defer cancel()
 
+	probeFn, present := probers[target.module.Prober]
+	if !present {
+		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
+			target.module.Prober, target.url)
+		// notify the "client" that scraping this target resulted in an error
+		ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.url)
+		return
+	}
+
+	// The current state (sad) of affairs in blackbox_exporter in June 2020 is the following:
+	// - First, the probber functions defined in prometheus/blackbox_exporter/prober are registering Collectors
+	//   internally, instead of having those metrics defined first (and critically, once) and then collected
+	//   over the lifetime of the program. This is the result of the design of blackbox_exporter: the idea is
+	//   that targets are supplied on the fly via the /probe HTTP endpoint, and a new register is then created
+	//   for the specific probe operation, with his lifetime tied to the HTTP request's. One may wonder why I
+	//   said "critically" earlier on when speaking about unicity of Collectors' registration, and the reason
+	//   is simple: if you declare more than once the same collector on a registry, you get a nice "panic: duplicate
+	//   metrics collector registration attempted" at runtime ;). That behavior is actually forbidden by the
+	//   prometheus/client_golang library. One could think of a custom registry that fakes registration when
+	//   a collector is already declared. Except that's not possible :/
+	// - Which brings us to the second point: the interface for prober functions is "func(ctx context.Context,
+	//       target string, config config.Module, registry *prometheus.Registry, logger log.Logger) bool".
+	//   As we see, the probers expect a 'prometheus.Registry', and that is a struct and not an interface, so we
+	//   cannot redefine our own to abstract away all those nitty-gritty details.
+	// And those are the reasons that made us choose to build a prometheus registry per query, so in effect we will
+	// build nb_targets/scrape_duration registry creations per second, for the whole lifetime of the program. Let's hope this
+	// won't have too much of a negative performance impact !
+
+	registry := prometheus.NewRegistry()
+
+	// TODO: logging should integrate itself with our own logger module
+	extLogger := log.NewNopLogger()
+	// do all the actual work
+	start := time.Now()
+	success := probeFn(ctx, target.url, target.module, registry, extLogger)
+	duration := time.Since(start).Milliseconds()
+
+	mfs, err := registry.Gather()
+	if err != nil {
+		logger.V(1).Println("blackbox_exporter: error while gathering metrics: %v", err)
+		// notify the "client" that scraping this target resulted in an error
+		ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.url)
+		return
+	}
+
+	for _, mf := range mfs {
+		labels := []string{"target"}
+
+		metrics := mf.GetMetric()
+		if len(metrics) == 0 {
+			continue
+		}
+
+		// update the list of labels (yes, this is yet another O(n²) algorithm)
+		for _, metric := range metrics {
+			metricLabelsPairs := metric.GetLabel()
+			// add a label, if it isn't already registered
+		OuterBreak:
+			for _, labelPair := range metricLabelsPairs {
+				for _, v := range labels {
+					if v == *labelPair.Name {
+						continue OuterBreak
+					}
+				}
+				labels = append(labels, *labelPair.Name)
+			}
+		}
+
+		desc := prometheus.NewDesc(
+			prometheus.BuildFQName(namespace, "", mf.GetName()),
+			mf.GetHelp(),
+			labels,
+			nil,
+		)
+
+		for _, metric := range metrics {
+			// let's take great care to preserve the order of the labels, or weird things are gonna happen
+			// TODO: check that every metric in the family has the same labels
+			labelsValues := []string{target.url}
+			for _, label := range labels[1:] {
+				var labelValue string
+				for _, v := range metric.GetLabel() {
+					if *v.Name == label {
+						labelValue = *v.Value
+						break
+					}
+				}
+				labelsValues = append(labelsValues, labelValue)
+			}
+
+			// in theory, this should only be a counter or a gauge, given the fact that we only do this probing operation once (and then we start again from scratch)
+			switch {
+			case metric.GetCounter() != nil:
+				ch <- prometheus.MustNewConstMetric(desc, prometheus.CounterValue, metric.GetCounter().GetValue(), labelsValues...)
+			case metric.GetGauge() != nil:
+				ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, metric.GetGauge().GetValue(), labelsValues...)
+			default:
+				panic(fmt.Errorf("blackbox_exporter: invalid type supplied to a probe"))
+			}
+		}
+	}
+
+	successVal := 0.
+	if success {
+		successVal = 1
+	}
+	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, float64(duration), target.url)
+	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.url)
 }
 
-// we do not reuse config.ReloadConfig as we do not need the mutex introduce by config.SafeConfig:
+// We do not reuse config.ReloadConfig as we do not need the mutex introduce by config.SafeConfig:
 // we assume hot reloads will replace the current collector with a fresh one, thus obviating the
 // need for synchronisation, as the configuration is immutable for the lifetime of the collector.
-// However, this code is highly inspired from it, so if this breaks, chances are config.ReloadConfig
-// was altered, and the fix is there.
+// However, this code is highly inspired from it, so if this breaks, chances are
+// prometheus/blackbox_exporter/config.ReloadConfig was altered, and the fix is there.
 func loadConfig(configFile string) (*config.Config, error) {
 	conf := &config.Config{}
 
@@ -102,9 +256,8 @@ func loadConfig(configFile string) (*config.Config, error) {
 	return conf, nil
 }
 
-// NewCollector creates a new collector for Blackbox_exporter
-func NewCollector(options Options) (prometheus.Collector, error) {
-	// read blackbox_exporter config
+// NewCollector creates a new collector for blackbox_exporter
+func NewCollector(options Options, registry *prometheus.Registry) (prometheus.Collector, error) {
 	conf, err := loadConfig(options.BlackboxConfigFile)
 	if err != nil {
 		return nil, err
@@ -113,6 +266,8 @@ func NewCollector(options Options) (prometheus.Collector, error) {
 	unknownModules := []string{}
 	collectors := make(map[string]prometheus.Collector)
 
+	// Extract the list of unknown modules specified by the users in glouton's configuration file
+	// and build a list of prometheus Collectors (one per target)
 	for _, curTarget := range options.Targets {
 		module, present := conf.Modules[curTarget.ModuleName]
 		if !present {
@@ -120,13 +275,17 @@ func NewCollector(options Options) (prometheus.Collector, error) {
 			continue
 		}
 
-		timeout := curTarget.Timeout
-		if timeout == 0 {
-			// set a default timeout of 10s, as we do not have acces to the scrape time, AFAIK ?
-			timeout = 10
+		// the user overrided the timeout value, let's respect his choice
+		if curTarget.Timeout != 0 {
+			module.Timeout = time.Duration(curTarget.Timeout) * time.Second
+		}
+		// neither blackbox's nor gloutons's config files specify a timeout, let's default to 10s,
+		// as we do not have access to the scrape time to derive more precise timeouts, right ?
+		if module.Timeout == 0 {
+			module.Timeout = 10 * time.Second
 		}
 
-		collectors[curTarget.URL] = &target{url: curTarget.URL, module: module, timeout: timeout}
+		collectors[curTarget.URL] = &target{url: curTarget.URL, module: module, registry: registry}
 	}
 
 	if len(unknownModules) > 0 {

@@ -6,13 +6,13 @@ import (
 	"reflect"
 )
 
-// blackbox_exporter options, see https://github.com/prometheus/blackbox_exporter/blob/master/config/config.go
+// Options is the subset of glouton config that deals with probes.
 type Options struct {
-	Targets            []ConfigTarget
+	Targets            []configTarget
 	BlackboxConfigFile string
 }
 
-type ConfigTarget struct {
+type configTarget struct {
 	URL        string
 	ModuleName string
 	Timeout    int
@@ -21,8 +21,9 @@ type ConfigTarget struct {
 // castStringMap assigns values from a map to a list of pointers.
 // The user provides a map and a list of intertwined field names and pointers, like ["field1", ptr1, "field2", ptr2].
 // This function returns the list of invalid or missing fields, and a boolean indicating wether this function call is unsound
-// (e.g. an odd number of arguments in the 'fields' variable).
-// A missing field is not considered as an error, as the program may have default values for it, but you can detect it by checking the return value.
+// (e.g. an odd number of arguments was supplied in the 'fields' variable).
+// A missing field is not considered as an error, as the program may have default values for it, but you can detect it by checking
+// the return value.
 // However, it is not possible to distinguish missing values from invalid values with this design.
 func castStringMap(conf map[string]interface{}, fields ...interface{}) (invalidFields []string, ok bool) {
 	if len(fields)%2 == 1 {
@@ -46,14 +47,30 @@ func castStringMap(conf map[string]interface{}, fields ...interface{}) (invalidF
 }
 
 // genConfigTarget read the configuration for a sole target, extracted for glouton's config, and parse it.
-func genConfigTarget(conf map[string]interface{}) (opts ConfigTarget, ok bool) {
-	target := ConfigTarget{}
-	// honestly the easiest (and probably the cleanest too) way would be to use the 'yaml.v3' package
+// Honestly the easiest (and probably the cleanest too) way would be to use the 'yaml.v3' package, but I have yet to look into it.
+func genConfigTarget(conf map[string]interface{}) (opts configTarget, ok bool) {
+	target := configTarget{}
 	invalidFields, ok := castStringMap(conf, "module", &target.ModuleName, "url", &target.URL, "timeout", &target.Timeout)
-	if len(invalidFields) != 0 {
-		logger.Printf("The following fields are missing or invalid on the target probe %v: %v", conf, invalidFields)
+	if !ok {
+		return target, false
 	}
-	return target, ok && len(invalidFields) == 0
+	// list of fields that the user can omit in the configuration
+	acceptableMissingFields := []string{"timeout"}
+	missingFields := []string{}
+OuterLoop:
+	for _, v := range invalidFields {
+		for _, e := range acceptableMissingFields {
+			if e == v {
+				continue OuterLoop
+			}
+		}
+		missingFields = append(missingFields, v)
+	}
+	if len(missingFields) != 0 {
+		logger.Printf("The following fields are missing or invalid on the target probe %v: %v", conf, missingFields)
+		return target, false
+	}
+	return target, true
 }
 
 // GenConfig generates a config we can ingest into glouton.prometheus.exporter.blackbox.
@@ -61,41 +78,41 @@ func GenConfig(conf *config.Configuration) (opts *Options, ok bool) {
 	// the prober feature is enabled if we have configured some targets in the configuration
 	proberTargetsConf, proberEnabled := conf.Get("agent.prober.targets")
 	if !proberEnabled {
-		logger.V(1).Println("'agent.prober.targets' not defined your config, will not start blackbox_exporter.")
+		logger.V(1).Println("blackbox_exporter: 'agent.prober.targets' not defined your config.")
 		return nil, false
 	}
 
 	proberTargets, ok := proberTargetsConf.([]interface{})
 	if !ok {
-		logger.Printf("Invalid configuration for 'agent.prober.targets', will not attempt to start probes.")
+		logger.Printf("blackbox_exporter: Invalid configuration for 'agent.prober.targets'.")
 		return nil, false
 	}
 	// no targets configured -> no probes -> no reason to enable this subsystem
 	if len(proberTargets) == 0 {
-		logger.V(1).Println("Empty probe target list, will not start blackbox_exporter.")
+		logger.V(1).Println("blackbox_exporter: Empty probe target list.")
 		return nil, false
 	}
 
 	// NOTE: consider embedding the blackbox_exporter config file inside glouton.conf ?
-	targets := []ConfigTarget{}
+	targets := []configTarget{}
 	for _, val := range proberTargets {
 		target, ok := val.(map[string]interface{})
 		if !ok {
-			logger.Printf("Invalid configuration for the probe target '%v', will not attempt to start probes.", val)
+			logger.Printf("blackbox_exporter: Invalid configuration for the probe target '%v'.", val)
 			return nil, false
 		}
 		configuredTarget, ok := genConfigTarget(target)
 		if !ok {
-			logger.Printf("Invalid configuration for the probe target '%v', will not attempt to start probes.", target)
+			logger.Printf("blackbox_exporter: Invalid configuration for the probe target '%v'.", target)
 			return nil, false
 		}
 		targets = append(targets, configuredTarget)
 	}
 
 	configFile := conf.String("agent.prober.config_file")
-	// TODO: default conf
+	// TODO: default conf file
 	if configFile == "" {
-		logger.Printf("Probes are configured but you haven't supplied the path to your blackbox_exporter configuration in 'agent.prober.config_file'.")
+		logger.Printf("blackbox_exporter: Probes are configured but you haven't supplied the path to your blackbox_exporter configuration in 'agent.prober.config_file'.")
 		return nil, false
 	}
 
@@ -104,7 +121,7 @@ func GenConfig(conf *config.Configuration) (opts *Options, ok bool) {
 		BlackboxConfigFile: configFile,
 	}
 
-	logger.V(2).Println("Probes configuration successfully parsed.")
+	logger.V(2).Println("blackbox_exporter: Probes configuration successfully parsed.")
 
 	return blackboxOptions, true
 }

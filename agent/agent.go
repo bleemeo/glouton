@@ -88,7 +88,7 @@ type agent struct {
 	store             *store.Store
 	gathererRegistry  *registry.Registry
 	metricFormat      types.MetricFormat
-	dynamicScrapper   *promexporter.DynamicSrapper
+	dynamicScrapper   *promexporter.DynamicScrapper
 	lastHealCheck     int64
 
 	triggerHandler            *debouncer.Debouncer
@@ -565,7 +565,7 @@ func (a *agent) run() { //nolint:gocyclo
 		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
 	}
 
-	a.dynamicScrapper = &promexporter.DynamicSrapper{
+	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
 		DynamicJobName: "discovered-exporters",
 	}
@@ -588,6 +588,8 @@ func (a *agent) run() { //nolint:gocyclo
 		if err := a.gathererRegistry.AddBlackboxExporter(*blackboxConf); err != nil {
 			logger.Printf("Unable to start blackbox_exporter, will not collect probes: %v", err)
 		}
+	} else {
+		logger.V(2).Println("blackbox_exporter not enabled, will not start...")
 	}
 
 	promExporter := a.gathererRegistry.Exporter()

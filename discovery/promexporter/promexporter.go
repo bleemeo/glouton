@@ -34,7 +34,7 @@ import (
 type Container interface {
 	// Labels return the Docker labels (or nil)
 	Labels() map[string]string
-	// Annoations return the Kubernetes POD annotations (or nil)
+	// Annotations return the Kubernetes POD annotations (or nil)
 	Annotations() map[string]string
 	PrimaryAddress() string
 	PodNamespaceName() (string, string)
@@ -47,7 +47,7 @@ type target struct {
 }
 
 // listExporters return list of exporters based on containers labels/annotations.
-func (d *DynamicSrapper) listExporters(containers []Container) []target {
+func (d *DynamicScrapper) listExporters(containers []Container) []target {
 	result := make([]target, 0)
 
 	for _, c := range containers {
@@ -106,8 +106,8 @@ func urlFromLabels(labels map[string]string, address string) string {
 	return fmt.Sprintf("http://%s:%d%s", address, port, path)
 }
 
-// DynamicSrapper is a Prometheus scrapper that will update its target based on ListExporters.
-type DynamicSrapper struct {
+// DynamicScrapper is a Prometheus scrapper that will update its target based on ListExporters.
+type DynamicScrapper struct {
 	l                sync.Mutex
 	registeredID     map[string]int
 	registeredLabels map[string]map[string]string
@@ -116,14 +116,14 @@ type DynamicSrapper struct {
 }
 
 // Update updates the scrappers targets using new containers informations.
-func (d *DynamicSrapper) Update(containers []Container) {
+func (d *DynamicScrapper) Update(containers []Container) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
 	d.update(containers)
 }
 
-func (d *DynamicSrapper) update(containers []Container) {
+func (d *DynamicScrapper) update(containers []Container) {
 	dynamicTargets := d.listExporters(containers)
 
 	logger.V(3).Printf("Found the following dynamic Prometheus exporter: %v", dynamicTargets)
