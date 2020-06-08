@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
-	"glouton/prometheus/exporter/collectors"
+	"glouton/types"
 	"os"
 	"time"
 
@@ -15,19 +15,17 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const namespace = "blackbox"
-
 var (
 	probeSuccessDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "probe_success"),
+		prometheus.BuildFQName("", "", "probe_success"),
 		"Displays whether or not the probe was a success",
-		[]string{"target"},
+		[]string{"instance"},
 		nil,
 	)
 	probeDurationDesc = prometheus.NewDesc(
-		prometheus.BuildFQName(namespace, "", "probe_duration_milliseconds"),
+		prometheus.BuildFQName("", "", "probe_duration_milliseconds"),
 		"Returns how long the probe took to complete in milliseconds",
-		[]string{"target"},
+		[]string{"instance"},
 		nil,
 	)
 	probers = map[string]prober.ProbeFn{
@@ -94,7 +92,7 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 
 	registry := prometheus.NewRegistry()
 
-	extLogger := logger.GoKitLoggerWrapper(logger.V(1))
+	extLogger := logger.GoKitLoggerWrapper(logger.V(2))
 	start := time.Now()
 
 	// do all the actual work
@@ -104,14 +102,14 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 
 	mfs, err := registry.Gather()
 	if err != nil {
-		logger.V(1).Println("blackbox_exporter: error while gathering metrics: %v", err)
+		logger.V(1).Printf("blackbox_exporter: error while gathering metrics: %v", err)
 		// notify the "client" that scraping this target resulted in an error
 		ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.url)
 		return
 	}
 
 	hardcodedLabels := []labelPair{
-		{name: "target", value: target.url},
+		{name: "instance", value: target.url},
 		// Exposing the module name allow us the client to differenciate probes in case the same URL is
 		// scrapped by different modules.
 		{name: "module", value: target.moduleName},
@@ -151,15 +149,20 @@ func loadConfig(configFile string) (*config.Config, error) {
 	return conf, nil
 }
 
+type CollectorWithLabels struct {
+	Collector prometheus.Collector
+	Labels    map[string]string
+}
+
 // NewCollector creates a new collector for blackbox_exporter
-func NewCollector(options Options) (collectors.Collectors, error) {
+func NewCollector(options Options) ([]CollectorWithLabels, error) {
 	conf, err := loadConfig(options.BlackboxConfigFile)
 	if err != nil {
 		return nil, err
 	}
 
 	unknownModules := []string{}
-	collectors := []prometheus.Collector{}
+	collectors := []CollectorWithLabels{}
 
 	// Extract the list of unknown modules specified by the users in glouton's configuration file
 	// and build a list of prometheus Collectors (one per target)
@@ -180,7 +183,13 @@ func NewCollector(options Options) (collectors.Collectors, error) {
 			module.Timeout = 10 * time.Second
 		}
 
-		collectors = append(collectors, &target{url: curTarget.URL, module: module, moduleName: curTarget.ModuleName})
+		collectors = append(collectors,
+			CollectorWithLabels{
+				Collector: &target{url: curTarget.URL, module: module, moduleName: curTarget.ModuleName},
+				Labels: map[string]string{
+					types.LabelProbeTarget: curTarget.URL,
+				},
+			})
 	}
 
 	if len(unknownModules) > 0 {

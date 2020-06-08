@@ -11,7 +11,7 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
-// gathlabeledGatherererer provide a gatherer that will add provided labels to all metrics.
+// labeledGatherer provide a gatherer that will add provided labels to all metrics.
 // It also allow to gather to MetricPoints.
 type labeledGatherer struct {
 	source      prometheus.Gatherer

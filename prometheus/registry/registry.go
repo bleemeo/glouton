@@ -125,6 +125,13 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		},
 		{
 			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelProbeTarget},
+			TargetLabel:  "instance",
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.*)"),
 			SourceLabels: model.LabelNames{types.LabelContainerName},
@@ -380,15 +387,22 @@ func (r *Registry) AddBlackboxExporter(options blackbox.Options) error {
 		return err
 	}
 
-	reg := prometheus.NewRegistry()
+	// this weird "dance" where we create a registry and a registerGatherer par probe is actually the result of
+	// our unability to expose a "meta" label while doing Collect(). We end up adding the meta labels statically
+	// at registration here.
+	for _, c := range collector {
+		reg := prometheus.NewRegistry()
 
-	if err := reg.Register(collector); err != nil {
-		return err
+		if err := reg.Register(c.Collector); err != nil {
+			return err
+		}
+
+		if _, err = r.RegisterGatherer(reg, nil, c.Labels); err != nil {
+			return err
+		}
 	}
 
-	_, err = r.RegisterGatherer(reg, nil, nil)
-
-	return err
+	return nil
 }
 
 // Exporter return an HTTP exporter.

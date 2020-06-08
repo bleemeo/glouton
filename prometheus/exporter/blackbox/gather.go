@@ -47,7 +47,7 @@ func writeMFsToChan(mfs []*dto.MetricFamily, hardcodedLabels []labelPair, ch cha
 		}
 
 		desc := prometheus.NewDesc(
-			prometheus.BuildFQName(namespace, "", mf.GetName()),
+			prometheus.BuildFQName("", "", mf.GetName()),
 			mf.GetHelp(),
 			labels,
 			nil,
@@ -57,7 +57,7 @@ func writeMFsToChan(mfs []*dto.MetricFamily, hardcodedLabels []labelPair, ch cha
 			labelsValues := make([]string, len(hardcodedLabels))
 			copy(labelsValues, labelsValuesInit)
 			// let's take great care to preserve the order of the labels, or weird things are gonna happen
-			// TODO: check that every metric in the family has the same labels
+			// NOTE: we do not check that every metric in the family has the same labels, as we will insert the empty string otherwise
 			for _, label := range labels[len(hardcodedLabels):] {
 				var labelValue string
 				for _, v := range metric.GetLabel() {

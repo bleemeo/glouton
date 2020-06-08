@@ -93,6 +93,7 @@ const (
 	LabelScrapeInstance = "__meta_scrape_instance"
 	LabelScrapeJob      = "__meta_scrape_job"
 	LabelBleemeoUUID    = "__meta_bleemeo_uuid"
+	LabelProbeTarget    = "__meta_probe_target"
 )
 
 // IsSet return true if the status is set.
