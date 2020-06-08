@@ -375,12 +375,12 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 
 // AddBlackboxExporter add a blackbox_exporter to collector.
 func (r *Registry) AddBlackboxExporter(options blackbox.Options) error {
-	reg := prometheus.NewRegistry()
-
-	collector, err := blackbox.NewCollector(options, reg)
+	collector, err := blackbox.NewCollector(options)
 	if err != nil {
 		return err
 	}
+
+	reg := prometheus.NewRegistry()
 
 	if err := reg.Register(collector); err != nil {
 		return err
