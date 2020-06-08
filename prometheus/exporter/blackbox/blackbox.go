@@ -23,8 +23,8 @@ var (
 		nil,
 	)
 	probeDurationDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("", "", "probe_duration_milliseconds"),
-		"Returns how long the probe took to complete in milliseconds",
+		prometheus.BuildFQName("", "", "probe_duration_seconds"),
+		"Returns how long the probe took to complete in seconds",
 		[]string{"instance"},
 		nil,
 	)
@@ -98,7 +98,7 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 	// do all the actual work
 	success := probeFn(ctx, target.url, target.module, registry, extLogger)
 
-	duration := time.Since(start).Milliseconds()
+	duration := time.Since(start).Seconds()
 
 	mfs, err := registry.Gather()
 	if err != nil {
