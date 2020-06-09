@@ -1,15 +1,35 @@
+// Copyright 2015-2019 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package blackbox
 
 import (
 	"glouton/config"
 	"glouton/logger"
 	"reflect"
+
+	bbConf "github.com/prometheus/blackbox_exporter/config"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Options is the subset of glouton config that deals with probes.
 type Options struct {
-	Targets            []configTarget
-	BlackboxConfigFile string
+	Targets        []configTarget
+	BlackboxConfig bbConf.Config
 }
 
 type configTarget struct {
@@ -109,19 +129,36 @@ func GenConfig(conf *config.Configuration) (opts *Options, ok bool) {
 		targets = append(targets, configuredTarget)
 	}
 
-	configFile := conf.String("agent.prober.config_file")
-	// TODO: default conf file
-	if configFile == "" {
-		logger.Printf("blackbox_exporter: Probes are configured but you haven't supplied the path to your blackbox_exporter configuration in 'agent.prober.config_file'.")
+	logger.V(2).Println("blackbox_exporter: Probes configuration successfully parsed.")
+
+	// We do not reuse blackbox_exporter's config.ReloadConfig as we do not need the mutex introduced
+	// by config.SafeConfig. Besides, we are now emebdding blackbox_exporter's configuration inside glouton's.
+
+	blackboxConf := &bbConf.Config{}
+
+	modules, present := conf.Get("agent.prober")
+	if !present {
+		logger.V(1).Printf("blackbox_exporter: Missing configuration for blackbox_exporter in glouton.conf")
 		return nil, false
 	}
 
-	blackboxOptions := &Options{
-		Targets:            targets,
-		BlackboxConfigFile: configFile,
+	marshalled, err := yaml.Marshal(modules)
+	if err != nil {
+		logger.V(1).Printf("blackbox_exporter: Couldn't marshall blackbox_exporter configuration")
+		return nil, false
 	}
 
-	logger.V(2).Println("blackbox_exporter: Probes configuration successfully parsed.")
+	if err = yaml.Unmarshal(marshalled, blackboxConf); err != nil {
+		logger.V(1).Printf("blackbox_exporter: Cannot parse blackbox_exporter config: %v", err)
+		return nil, false
+	}
+
+	logger.V(2).Println("blackbox_exporter: Internal configuration successfully parsed.")
+
+	blackboxOptions := &Options{
+		Targets:        targets,
+		BlackboxConfig: *blackboxConf,
+	}
 
 	return blackboxOptions, true
 }

@@ -1,18 +1,31 @@
+// Copyright 2015-2019 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package blackbox
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
-	"os"
 	"time"
 
 	"github.com/prometheus/blackbox_exporter/config"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
-	"gopkg.in/yaml.v3"
 )
 
 var (
@@ -125,30 +138,6 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.url)
 }
 
-// We do not reuse config.ReloadConfig as we do not need the mutex introduce by config.SafeConfig:
-// we assume hot reloads will replace the current collector with a fresh one, thus obviating the
-// need for synchronisation, as the configuration is immutable for the lifetime of the collector.
-// However, this code is highly inspired from it, so if this breaks, chances are
-// prometheus/blackbox_exporter/config.ReloadConfig was altered, and the fix is there.
-func loadConfig(configFile string) (*config.Config, error) {
-	conf := &config.Config{}
-
-	yamlReader, err := os.Open(configFile)
-	if err != nil {
-		return nil, errors.New(fmt.Sprint("Cannot read blackbox_exporter config file:", configFile))
-	}
-	defer yamlReader.Close()
-
-	decoder := yaml.NewDecoder(yamlReader)
-	decoder.KnownFields(true)
-
-	if err := decoder.Decode(conf); err != nil {
-		return nil, errors.New(fmt.Sprint("Cannot parse Blackbox_exporter config file:", configFile))
-	}
-
-	return conf, nil
-}
-
 type CollectorWithLabels struct {
 	Collector prometheus.Collector
 	Labels    map[string]string
@@ -156,19 +145,22 @@ type CollectorWithLabels struct {
 
 // NewCollector creates a new collector for blackbox_exporter
 func NewCollector(options Options) ([]CollectorWithLabels, error) {
-	conf, err := loadConfig(options.BlackboxConfigFile)
-	if err != nil {
-		return nil, err
-	}
-
 	unknownModules := []string{}
 	collectors := []CollectorWithLabels{}
 
 	// Extract the list of unknown modules specified by the users in glouton's configuration file
 	// and build a list of prometheus Collectors (one per target)
+OuterBreak:
 	for _, curTarget := range options.Targets {
-		module, present := conf.Modules[curTarget.ModuleName]
+		module, present := options.BlackboxConfig.Modules[curTarget.ModuleName]
+		// if the module is unknown, add it to the list
 		if !present {
+			// prevent duplicates
+			for _, v := range unknownModules {
+				if curTarget.ModuleName == v {
+					continue OuterBreak
+				}
+			}
 			unknownModules = append(unknownModules, curTarget.ModuleName)
 			continue
 		}
@@ -193,10 +185,8 @@ func NewCollector(options Options) ([]CollectorWithLabels, error) {
 	}
 
 	if len(unknownModules) > 0 {
-		return nil, fmt.Errorf(`Unknown blackbox modules found in your configuration: %v.\
-				Maybe check that these modules are present in your blackbox config file ('%s') ?`,
-			unknownModules,
-			options.BlackboxConfigFile)
+		return nil, fmt.Errorf("Unknown blackbox modules found in your configuration: %v. "+
+			"Maybe check that these modules are present in your config file ?", unknownModules)
 	}
 
 	return collectors, nil
