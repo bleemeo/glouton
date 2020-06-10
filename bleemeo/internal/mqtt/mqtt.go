@@ -41,7 +41,7 @@ import (
 
 const maxPendingPoints = 100000
 const pointsBatchSize = 1000
-const minimalDelayBetweenConnect = 10 * time.Second
+const minimalDelayBetweenConnect = 5 * time.Second
 const maximalDelayBetweenConnect = 2 * time.Minute
 const stableConnection = 5 * time.Minute
 
@@ -74,8 +74,6 @@ type Client struct {
 	lastFailedPointsRetry      time.Time
 
 	l                 sync.Mutex
-	setupDone         bool
-	publishBlocked    bool
 	pendingMessage    []message
 	pendingPoints     []types.MetricPoint
 	lastReport        time.Time
@@ -148,7 +146,7 @@ func (c *Client) Connected() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if !c.setupDone {
+	if c.mqttClient == nil {
 		return false
 	}
 
@@ -233,13 +231,10 @@ func (c *Client) HealthCheck() bool {
 	return ok
 }
 
-func (c *Client) setupMQTT() error {
+func (c *Client) setupMQTT() paho.Client {
 	pahoOptions := paho.NewClientOptions()
 
-	willPayload, err := json.Marshal(map[string]string{"disconnect-cause": "disconnect-will"})
-	if err != nil {
-		return err
-	}
+	willPayload, _ := json.Marshal(map[string]string{"disconnect-cause": "disconnect-will"})
 
 	pahoOptions.SetBinaryWill(
 		fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID),
@@ -280,14 +275,7 @@ func (c *Client) setupMQTT() error {
 	pahoOptions.SetConnectionLostHandler(c.onConnectionLost)
 	pahoOptions.SetOnConnectHandler(c.onConnect)
 
-	c.mqttClient = paho.NewClient(pahoOptions)
-
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.setupDone = true
-
-	return nil
+	return paho.NewClient(pahoOptions)
 }
 
 func (c *Client) shutdown() error {
@@ -312,21 +300,21 @@ func (c *Client) shutdown() error {
 		c.publish(fmt.Sprintf("v1/agent/%s/disconnect", c.option.AgentID), payload, true)
 	}
 
-	stillPending := c.waitPublishAndResend(deadline, true)
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	stillPending := c.waitPublishAndResend(c.mqttClient, deadline, true)
 	if stillPending > 0 {
 		logger.V(2).Printf("%d MQTT message were still pending", stillPending)
 	}
 
 	c.mqttClient.Disconnect(uint(time.Until(deadline).Seconds() * 1000))
+	c.mqttClient = nil
 
 	return nil
 }
 
 func (c *Client) run(ctx context.Context) error {
-	if err := c.setupMQTT(); err != nil {
-		return err
-	}
-
 	var wg sync.WaitGroup
 
 	wg.Add(1)
@@ -356,7 +344,7 @@ func (c *Client) run(ctx context.Context) error {
 			c.sendTopinfo(ctx, cfg)
 		}
 
-		c.waitPublishAndResend(time.Now().Add(5*time.Second), false)
+		c.waitPublish(time.Now().Add(5 * time.Second))
 
 		select {
 		case <-ticker.C:
@@ -530,7 +518,7 @@ func (c *Client) getDisableUntil() (time.Time, bleemeoTypes.DisableReason) {
 	return c.disabledUntil, c.disableReason
 }
 
-func (c *Client) onConnect(_ paho.Client) {
+func (c *Client) onConnect(mqttClient paho.Client) {
 	logger.Printf("MQTT connection established")
 	// Use short max-age to force a refresh facts since a reconnection to MQTT may
 	// means that public IP change.
@@ -546,7 +534,7 @@ func (c *Client) onConnect(_ paho.Client) {
 	}
 
 	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload, true)
-	c.mqttClient.Subscribe(
+	mqttClient.Subscribe(
 		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
 		0,
 		c.onNotification,
@@ -598,14 +586,11 @@ func (c *Client) publish(topic string, payload []byte, retry bool) {
 		topic:   topic,
 	}
 
-	// publish could be blocked to ensure that after reconnection,
-	// pendingMessage that must be retryed are done before new publish (to kept
-	// messages order). publishBlocked is set when connection is down.
-	if c.publishBlocked && !retry {
+	if c.mqttClient == nil && !retry {
 		return
 	}
 
-	if !c.publishBlocked {
+	if c.mqttClient != nil {
 		msg.token = c.mqttClient.Publish(topic, 1, false, payload)
 	}
 
@@ -642,11 +627,19 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 	c.publish(topic, buffer.Bytes(), false)
 }
 
-func (c *Client) waitPublishAndResend(deadline time.Time, resend bool) (stillPendingCount int) {
-	stillPending := make([]message, 0)
-
+func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
 	c.l.Lock()
 	defer c.l.Unlock()
+
+	if c.mqttClient == nil {
+		return len(c.pendingMessage)
+	}
+
+	return c.waitPublishAndResend(c.mqttClient, deadline, false)
+}
+
+func (c *Client) waitPublishAndResend(mqttClient paho.Client, deadline time.Time, resend bool) (stillPendingCount int) {
+	stillPending := make([]message, 0)
 
 	for _, m := range c.pendingMessage {
 		if m.token != nil && m.token.WaitTimeout(time.Until(deadline)) {
@@ -665,7 +658,7 @@ func (c *Client) waitPublishAndResend(deadline time.Time, resend bool) (stillPen
 		}
 
 		if m.token == nil && resend {
-			m.token = c.mqttClient.Publish(m.topic, 1, false, m.payload)
+			m.token = mqttClient.Publish(m.topic, 1, false, m.payload)
 		}
 
 		stillPending = append(stillPending, m)
@@ -733,18 +726,22 @@ func (c *Client) connectionManager(ctx context.Context) {
 		lastResend          time.Time
 	)
 
-	currentConnectDelay := minimalDelayBetweenConnect
+	currentConnectDelay := minimalDelayBetweenConnect / 2
 
 mainLoop:
 	for ctx.Err() == nil {
 		disableUntil, disableReason := c.getDisableUntil()
 		switch {
 		case time.Now().Before(disableUntil):
-			if c.mqttClient.IsConnectionOpen() {
+			if c.mqttClient != nil {
 				logger.V(2).Printf("Disconnection from MQTT due to %v", disableReason)
 				c.mqttClient.Disconnect(0)
+
+				c.l.Lock()
+				c.mqttClient = nil
+				c.l.Unlock()
 			}
-		case !c.mqttClient.IsConnectionOpen():
+		case c.mqttClient == nil:
 			length := len(lastConnectionTimes)
 
 			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
@@ -771,10 +768,12 @@ mainLoop:
 						_, _ = c.option.Facts.Facts(c.ctx, time.Minute)
 					}
 				}
-				optionReader := c.mqttClient.OptionsReader()
+				mqttClient := c.setupMQTT()
+
+				optionReader := mqttClient.OptionsReader()
 				logger.V(2).Printf("Connecting to MQTT broker %v", optionReader.Servers()[0])
 
-				token := c.mqttClient.Connect()
+				token := mqttClient.Connect()
 				for !token.WaitTimeout(1 * time.Second) {
 					if ctx.Err() != nil {
 						break mainLoop
@@ -787,31 +786,38 @@ mainLoop:
 
 					// we must disconnect to stop paho gorouting that otherwise will be
 					// started multiple time for each Connect()
-					c.mqttClient.Disconnect(0)
+					mqttClient.Disconnect(0)
 				} else {
-					c.waitPublishAndResend(time.Now().Add(10*time.Second), true)
-
 					c.l.Lock()
-					c.publishBlocked = false
+					c.waitPublishAndResend(mqttClient, time.Now().Add(10*time.Second), true)
+					c.mqttClient = mqttClient
 					c.l.Unlock()
 				}
 			}
-		case c.mqttClient.IsConnectionOpen() && time.Since(lastResend) > 10*time.Minute:
+		case c.mqttClient != nil && c.mqttClient.IsConnectionOpen() && time.Since(lastResend) > 10*time.Minute:
 			lastResend = time.Now()
-			c.waitPublishAndResend(time.Now().Add(10*time.Second), true)
+			c.l.Lock()
+			c.waitPublishAndResend(c.mqttClient, time.Now().Add(10*time.Second), true)
+			c.l.Unlock()
 		}
 
 		select {
 		case <-ctx.Done():
 		case <-c.connectionLost:
 			c.l.Lock()
-			c.publishBlocked = true
+			c.mqttClient.Disconnect(0)
+			c.mqttClient = nil
 			c.l.Unlock()
 
 			length := len(lastConnectionTimes)
 			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
 				logger.V(2).Printf("MQTT connection was stable, reset delay to %v", minimalDelayBetweenConnect)
 				currentConnectDelay = minimalDelayBetweenConnect
+			} else if length > 0 {
+				delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
+				if delay > 0 {
+					logger.V(1).Printf("Retry to connection to MQTT in %v", delay)
+				}
 			}
 		case <-c.disableNotify:
 		case <-ticker.C:
