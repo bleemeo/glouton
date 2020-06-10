@@ -583,7 +583,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.threshold, a.config.String("web.static_cdn_url"))
 
-	a.FireTrigger(true, false, false, false)
+	a.FireTrigger(true, true, false, false)
 
 	tasks := []taskInfo{
 		{a.watchdog, "Agent Watchdog"},
