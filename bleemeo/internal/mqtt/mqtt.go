@@ -482,10 +482,10 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				Value:       forceDecimalFloat(p.Value),
 			}
 
+			value.UUID = m.ID
 			if c.option.MetricFormat == types.MetricFormatBleemeo {
-				value.UUID = m.ID
 				value.LabelsText = ""
-				value.Measurement = p.Labels["__name__"]
+				value.Measurement = p.Labels[types.LabelName]
 				value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
 			}
 

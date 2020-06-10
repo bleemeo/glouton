@@ -655,10 +655,10 @@ func (a *agent) run() { //nolint:gocyclo
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
-		if a.metricFormat == types.MetricFormatPrometheus {
+		/*if a.metricFormat == types.MetricFormatPrometheus {
 			logger.Printf("Prometheus format is not yet supported with Bleemeo")
 			return
-		}
+		}*/
 	}
 
 	if a.config.Bool("nrpe.enabled") {

@@ -357,6 +357,7 @@ func (s *Synchronizer) runOnce() error {
 		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
 		{name: "metrics", method: s.syncMetrics},
+		{name: "monitors", method: s.syncMonitors},
 	}
 	startAt := time.Now()
 
@@ -443,6 +444,9 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = false
 	}
+
+	// always check monitors ?
+	syncMethods["monitors"] = true
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = fullSync

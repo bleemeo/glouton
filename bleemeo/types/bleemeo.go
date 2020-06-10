@@ -89,6 +89,13 @@ type Threshold struct {
 	HighCrictical *float64 `json:"threshold_high_critical"`
 }
 
+// Monitor groups all the informations required to write metrics to a monitor.
+type Monitor struct {
+	ID      string `json:"id"`
+	URL     string `json:"monitor_url"`
+	AgentID string `json:"agent"`
+}
+
 // Metric is a Metric object on Bleemeo API.
 type Metric struct {
 	ID          string            `json:"id"`

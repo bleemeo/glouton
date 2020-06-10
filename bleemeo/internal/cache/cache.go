@@ -43,6 +43,7 @@ type data struct {
 	Agent         bleemeoTypes.Agent
 	AccountConfig bleemeoTypes.AccountConfig
 	Services      []bleemeoTypes.Service
+	Monitors      []bleemeoTypes.Monitor
 }
 
 // SetAccountID update the AccountID.
@@ -86,6 +87,15 @@ func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	defer c.l.Unlock()
 
 	c.data.Containers = containers
+	c.dirty = true
+}
+
+// SetMonitors updates the list of monitors.
+func (c *Cache) SetMonitors(monitors []bleemeoTypes.Monitor) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Monitors = monitors
 	c.dirty = true
 }
 
@@ -170,6 +180,18 @@ func (c *Cache) Services() []bleemeoTypes.Service {
 	result := make([]bleemeoTypes.Service, len(c.data.Services))
 
 	copy(result, c.data.Services)
+
+	return result
+}
+
+// Monitors returns a (copy) of the Monitors.
+func (c *Cache) Monitors() []bleemeoTypes.Monitor {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.Monitor, len(c.data.Monitors))
+
+	copy(result, c.data.Monitors)
 
 	return result
 }
