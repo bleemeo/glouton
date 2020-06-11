@@ -119,14 +119,8 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	hardcodedLabels := []labelPair{
-		{name: "instance", value: target.url},
-		// Exposing the module name allow us the client to differentiate probes in case the same URL is
-		// scrapped by different modules.
-		{name: "module", value: target.moduleName},
-	}
 	// write all the gathered metrics to our upper registry
-	writeMFsToChan(mfs, hardcodedLabels, ch)
+	writeMFsToChan(mfs, ch)
 
 	successVal := 0.
 	if success {
@@ -180,6 +174,9 @@ OuterBreak:
 				Collector: &target{url: curTarget.URL, module: module, moduleName: curTarget.ModuleName, timeout: timeout},
 				Labels: map[string]string{
 					types.LabelProbeTarget: curTarget.URL,
+					// Exposing the module name allow the client to differentiate probes in case the same URL is
+					// scrapped by different modules.
+					"module": curTarget.ModuleName,
 				},
 			})
 	}

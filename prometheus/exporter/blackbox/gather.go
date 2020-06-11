@@ -23,25 +23,10 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-type labelPair struct {
-	name  string
-	value string
-}
-
 // writeMFsToChan converts metrics families to new metrics, before writing them on the 'ch' channel.
-// It also accepts a list of hardcoded labels, which can be useful for supplying the target label for example.
-func writeMFsToChan(mfs []*dto.MetricFamily, hardcodedLabels []labelPair, ch chan<- prometheus.Metric) {
-	labelsInit := []string{}
-	labelsValuesInit := []string{}
-
-	for _, label := range hardcodedLabels {
-		labelsInit = append(labelsInit, label.name)
-		labelsValuesInit = append(labelsValuesInit, label.value)
-	}
-
+func writeMFsToChan(mfs []*dto.MetricFamily, ch chan<- prometheus.Metric) {
 	for _, mf := range mfs {
-		labels := make([]string, len(hardcodedLabels))
-		copy(labels, labelsInit)
+		labels := []string{}
 
 		metrics := mf.GetMetric()
 		if len(metrics) == 0 {
@@ -71,11 +56,10 @@ func writeMFsToChan(mfs []*dto.MetricFamily, hardcodedLabels []labelPair, ch cha
 		)
 
 		for _, metric := range metrics {
-			labelsValues := make([]string, len(hardcodedLabels))
-			copy(labelsValues, labelsValuesInit)
+			labelsValues := []string{}
 			// let's take great care to preserve the order of the labels, or weird things are gonna happen
 			// NOTE: we do not check that every metric in the family has the same labels, as we will insert the empty string otherwise
-			for _, label := range labels[len(hardcodedLabels):] {
+			for _, label := range labels {
 				labelValue := ""
 
 				for _, v := range metric.GetLabel() {
