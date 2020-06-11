@@ -18,7 +18,6 @@ package blackbox_test
 
 import (
 	"glouton/config"
-	"glouton/logger"
 	"glouton/prometheus/exporter/blackbox"
 	"reflect"
 	"testing"
@@ -29,8 +28,6 @@ import (
 
 func TestConfigParsing(t *testing.T) {
 	cfg := &config.Configuration{}
-
-	logger.SetLevel(2)
 
 	conf := `
     agent:
@@ -110,6 +107,34 @@ func TestConfigParsing(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(blackboxConf, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %+v, want %+v", expectedValue, blackboxConf)
+		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackboxConf, expectedValue)
+	}
+}
+
+func TestEmptyConfigParsing(t *testing.T) {
+	cfg := &config.Configuration{}
+
+	conf := `
+    logging:
+      level: "verbose"`
+	err := cfg.LoadByte([]byte(conf))
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	blackboxConf, ok := blackbox.ReadConfig(cfg)
+	if !ok {
+		t.Fatalf("Couldn't parse the config")
+	}
+
+	expectedValue := blackbox.Config{
+		Modules: map[string]bbConf.Module{},
+		// we assume parsing preserves the order, which seems to be the case
+		Targets: []blackbox.ConfigTarget{},
+	}
+
+	if !reflect.DeepEqual(blackboxConf, expectedValue) {
+		t.Fatalf("TestConfigParsing() = %#v, want %#v", blackboxConf, expectedValue)
 	}
 }
