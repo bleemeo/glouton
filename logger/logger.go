@@ -194,6 +194,7 @@ func (wrapper GoKitLoggerWrapper) Log(keyvals ...interface{}) error {
 
 	for i := 0; i < len(keyvals)/2; i++ {
 		fmt.Fprintf(&res, "%v=\"%v\"", keyvals[2*i], keyvals[2*i+1])
+
 		if i != len(keyvals)/2-1 {
 			res.WriteByte(' ')
 		}

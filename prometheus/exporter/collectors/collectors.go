@@ -20,11 +20,13 @@ func (cs Collectors) Describe(ch chan<- *prometheus.Desc) {
 func (cs Collectors) Collect(ch chan<- prometheus.Metric) {
 	wg := sync.WaitGroup{}
 	wg.Add(len(cs))
+
 	for _, c := range cs {
 		go func(c prometheus.Collector) {
 			c.Collect(ch)
 			wg.Done()
 		}(c)
 	}
+
 	wg.Wait()
 }

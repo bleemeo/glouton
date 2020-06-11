@@ -585,7 +585,8 @@ func (a *agent) run() { //nolint:gocyclo
 	blackboxConf, blackboxEnabled := blackbox.GenConfig(a.config)
 	if blackboxEnabled {
 		logger.V(1).Println("Starting blackbox_exporter...")
-		if err := a.gathererRegistry.AddBlackboxExporter(*blackboxConf); err != nil {
+
+		if err := blackboxConf.Register(a.gathererRegistry); err != nil {
 			logger.Printf("Unable to start blackbox_exporter, will not collect probes: %v", err)
 		}
 	} else {

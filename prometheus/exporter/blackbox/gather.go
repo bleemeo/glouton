@@ -33,6 +33,7 @@ type labelPair struct {
 func writeMFsToChan(mfs []*dto.MetricFamily, hardcodedLabels []labelPair, ch chan<- prometheus.Metric) {
 	labelsInit := []string{}
 	labelsValuesInit := []string{}
+
 	for _, label := range hardcodedLabels {
 		labelsInit = append(labelsInit, label.name)
 		labelsValuesInit = append(labelsValuesInit, label.value)
@@ -75,13 +76,15 @@ func writeMFsToChan(mfs []*dto.MetricFamily, hardcodedLabels []labelPair, ch cha
 			// let's take great care to preserve the order of the labels, or weird things are gonna happen
 			// NOTE: we do not check that every metric in the family has the same labels, as we will insert the empty string otherwise
 			for _, label := range labels[len(hardcodedLabels):] {
-				var labelValue string
+				labelValue := ""
+
 				for _, v := range metric.GetLabel() {
 					if *v.Name == label {
 						labelValue = *v.Value
 						break
 					}
 				}
+
 				labelsValues = append(labelsValues, labelValue)
 			}
 
@@ -96,5 +99,4 @@ func writeMFsToChan(mfs []*dto.MetricFamily, hardcodedLabels []labelPair, ch cha
 			}
 		}
 	}
-
 }

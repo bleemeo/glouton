@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"glouton/logger"
-	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/node"
 	"glouton/types"
 	"net/http"
@@ -378,31 +377,6 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 	_, err = r.RegisterGatherer(reg, nil, nil)
 
 	return err
-}
-
-// AddBlackboxExporter add a blackbox_exporter to collector.
-func (r *Registry) AddBlackboxExporter(options blackbox.Options) error {
-	collector, err := blackbox.NewCollector(options)
-	if err != nil {
-		return err
-	}
-
-	// this weird "dance" where we create a registry and a registerGatherer par probe is actually the result of
-	// our unability to expose a "meta" label while doing Collect(). We end up adding the meta labels statically
-	// at registration here.
-	for _, c := range collector {
-		reg := prometheus.NewRegistry()
-
-		if err := reg.Register(c.Collector); err != nil {
-			return err
-		}
-
-		if _, err = r.RegisterGatherer(reg, nil, c.Labels); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // Exporter return an HTTP exporter.

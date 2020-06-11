@@ -28,6 +28,7 @@ import (
 
 func TestConfigParsing(t *testing.T) {
 	cfg := &config.Configuration{}
+
 	logger.SetLevel(2)
 
 	conf := `
@@ -68,7 +69,7 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the config")
 	}
 
-	expectedValue := &Options{
+	expectedValue := &Config{
 		BlackboxConfig: bbConf.Config{
 			Modules: map[string]bbConf.Module{
 				"http_2xx": {
@@ -110,6 +111,6 @@ func TestConfigParsing(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(blackboxConf, expectedValue) {
-		t.Fatalf("Invalid config, expected '%+v', got '%+v'", expectedValue, blackboxConf)
+		t.Fatalf("TestConfigParsing() = %+v, want %+v", expectedValue, blackboxConf)
 	}
 }
