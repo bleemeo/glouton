@@ -26,39 +26,39 @@ import (
 // writeMFsToChan converts metrics families to new metrics, before writing them on the 'ch' channel.
 func writeMFsToChan(mfs []*dto.MetricFamily, ch chan<- prometheus.Metric) {
 	for _, mf := range mfs {
-		labels := []string{}
-
 		metrics := mf.GetMetric()
 		if len(metrics) == 0 {
 			continue
 		}
 
-		// update the list of labels (yes, this is yet another O(n²) algorithm)
 		for _, metric := range metrics {
-			metricLabelsPairs := metric.GetLabel()
-			// add a label, if it isn't already registered
-		OuterBreak:
-			for _, labelPair := range metricLabelsPairs {
+			labels := []string{}
+
+			for _, labelPair := range metric.GetLabel() {
+				// add a label, if it isn't already registered
+				found := false
+
 				for _, v := range labels {
 					if v == *labelPair.Name {
-						continue OuterBreak
+						found = true
+						break
 					}
 				}
-				labels = append(labels, *labelPair.Name)
+
+				if !found {
+					labels = append(labels, *labelPair.Name)
+				}
 			}
-		}
 
-		desc := prometheus.NewDesc(
-			prometheus.BuildFQName("", "", mf.GetName()),
-			mf.GetHelp(),
-			labels,
-			nil,
-		)
+			desc := prometheus.NewDesc(
+				prometheus.BuildFQName("", "", mf.GetName()),
+				mf.GetHelp(),
+				labels,
+				nil,
+			)
 
-		for _, metric := range metrics {
 			labelsValues := []string{}
 			// let's take great care to preserve the order of the labels, or weird things are gonna happen
-			// NOTE: we do not check that every metric in the family has the same labels, as we will insert the empty string otherwise
 			for _, label := range labels {
 				labelValue := ""
 

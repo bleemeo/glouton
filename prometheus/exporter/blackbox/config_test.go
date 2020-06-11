@@ -135,6 +135,6 @@ func TestEmptyConfigParsing(t *testing.T) {
 	}
 
 	if !reflect.DeepEqual(blackboxConf, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %#v, want %#v", blackboxConf, expectedValue)
+		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackboxConf, expectedValue)
 	}
 }
