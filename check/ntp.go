@@ -42,12 +42,12 @@ type NTPCheck struct {
 //
 // For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
-func NewNTP(address string, persitentAddresses []string, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *NTPCheck {
+func NewNTP(address string, persitentAddresses []string, persistentConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *NTPCheck {
 	nc := &NTPCheck{
 		mainAddress: address,
 	}
 
-	nc.baseCheck = newBase("", persitentAddresses, true, nc.doCheck, labels, annotations, acc)
+	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.doCheck, labels, annotations, acc)
 
 	return nc
 }

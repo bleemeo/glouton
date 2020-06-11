@@ -127,6 +127,7 @@ func (d *Discovery) createCheck(service Service) {
 			check := check.NewNTP(
 				primaryAddress,
 				tcpAddresses,
+				!di.DisablePersistentConnection,
 				labels,
 				annotations,
 				d.acc,
@@ -223,6 +224,7 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 	httpCheck := check.NewHTTP(
 		url,
 		tcpAddresses,
+		!di.DisablePersistentConnection,
 		expectedStatusCode,
 		labels,
 		annotations,
@@ -242,6 +244,7 @@ func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, la
 	httpCheck := check.NewNagios(
 		service.ExtraAttributes["check_command"],
 		tcpAddress,
+		true,
 		labels,
 		annotations,
 		d.acc,

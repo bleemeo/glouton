@@ -238,6 +238,10 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 		return
 	}
 
+	if !bc.persistentConnection {
+		return
+	}
+
 	ctx2, cancel := context.WithCancel(ctx)
 	bc.cancel = cancel
 

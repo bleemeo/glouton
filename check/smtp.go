@@ -40,12 +40,12 @@ type SMTPCheck struct {
 //
 // For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
-func NewSMTP(address string, persitentAddresses []string, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *SMTPCheck {
+func NewSMTP(address string, persitentAddresses []string, persistentConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *SMTPCheck {
 	sc := &SMTPCheck{
 		mainAddress: address,
 	}
 
-	sc.baseCheck = newBase("", persitentAddresses, true, sc.doCheck, labels, annotations, acc)
+	sc.baseCheck = newBase("", persitentAddresses, persistentConnection, sc.doCheck, labels, annotations, acc)
 
 	return sc
 }
