@@ -64,7 +64,7 @@ require (
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/ini.v1 v1.57.0
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200506231410-2ff61e1afc86
+	gopkg.in/yaml.v3 v3.0.0-20200605160147-a5ece683394c
 	gotest.tools/v3 v3.0.2 // indirect
 	k8s.io/api v0.18.3
 	k8s.io/apimachinery v0.18.3

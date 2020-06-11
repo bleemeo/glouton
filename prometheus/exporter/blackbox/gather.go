@@ -17,7 +17,7 @@
 package blackbox
 
 import (
-	"fmt"
+	"glouton/logger"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -79,7 +79,7 @@ func writeMFsToChan(mfs []*dto.MetricFamily, ch chan<- prometheus.Metric) {
 			case metric.GetGauge() != nil:
 				ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, metric.GetGauge().GetValue(), labelsValues...)
 			default:
-				panic(fmt.Errorf("blackbox_exporter: invalid type supplied to a probe"))
+				logger.V(1).Printf("blackbox_exporter: invalid type supplied to a probe, got %v", metric)
 			}
 		}
 	}

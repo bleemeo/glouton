@@ -14,11 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package blackbox
+package blackbox_test
 
 import (
 	"glouton/config"
 	"glouton/logger"
+	"glouton/prometheus/exporter/blackbox"
 	"reflect"
 	"testing"
 	"time"
@@ -64,46 +65,44 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blackboxConf, ok := GenConfig(cfg)
+	blackboxConf, ok := blackbox.ReadConfig(cfg)
 	if !ok {
 		t.Fatalf("Couldn't parse the config")
 	}
 
-	expectedValue := &Config{
-		BlackboxConfig: bbConf.Config{
-			Modules: map[string]bbConf.Module{
-				"http_2xx": {
-					Prober:  "http",
-					Timeout: 5 * time.Second,
-					HTTP: bbConf.HTTPProbe{
-						ValidHTTPVersions:  []string{"HTTP/1.1", "HTTP/2.0"},
-						ValidStatusCodes:   []int{},
-						Method:             "GET",
-						NoFollowRedirects:  true,
-						IPProtocol:         "ip4",
-						IPProtocolFallback: false,
-					},
-					DNS:  bbConf.DefaultDNSProbe,
-					ICMP: bbConf.DefaultICMPProbe,
-					TCP:  bbConf.DefaultTCPProbe,
+	expectedValue := blackbox.Config{
+		Modules: map[string]bbConf.Module{
+			"http_2xx": {
+				Prober:  "http",
+				Timeout: 5 * time.Second,
+				HTTP: bbConf.HTTPProbe{
+					ValidHTTPVersions:  []string{"HTTP/1.1", "HTTP/2.0"},
+					ValidStatusCodes:   []int{},
+					Method:             "GET",
+					NoFollowRedirects:  true,
+					IPProtocol:         "ip4",
+					IPProtocolFallback: false,
 				},
-				"dns": {
-					Prober: "dns",
-					DNS: bbConf.DNSProbe{
-						IPProtocol: "ip4",
-						QueryName:  "nightmared.fr",
-						QueryType:  "A",
-						// by default, this is set to true
-						IPProtocolFallback: true,
-					},
-					HTTP: bbConf.DefaultHTTPProbe,
-					ICMP: bbConf.DefaultICMPProbe,
-					TCP:  bbConf.DefaultTCPProbe,
+				DNS:  bbConf.DefaultDNSProbe,
+				ICMP: bbConf.DefaultICMPProbe,
+				TCP:  bbConf.DefaultTCPProbe,
+			},
+			"dns": {
+				Prober: "dns",
+				DNS: bbConf.DNSProbe{
+					IPProtocol: "ip4",
+					QueryName:  "nightmared.fr",
+					QueryType:  "A",
+					// by default, this is set to true
+					IPProtocolFallback: true,
 				},
+				HTTP: bbConf.DefaultHTTPProbe,
+				ICMP: bbConf.DefaultICMPProbe,
+				TCP:  bbConf.DefaultTCPProbe,
 			},
 		},
 		// we assume parsing preserves the order, which seems to be the case
-		Targets: []configTarget{
+		Targets: []blackbox.ConfigTarget{
 			{URL: "https://google.com", ModuleName: "http_2xx", Timeout: 0},
 			{URL: "https://inpt.fr", ModuleName: "dns", Timeout: 5},
 			{URL: "http://neverssl.com", ModuleName: "http_2xx", Timeout: 2},

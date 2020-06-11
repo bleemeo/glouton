@@ -582,7 +582,7 @@ func (a *agent) run() { //nolint:gocyclo
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
 	}
 
-	blackboxConf, blackboxEnabled := blackbox.GenConfig(a.config)
+	blackboxConf, blackboxEnabled := blackbox.ReadConfig(a.config)
 	if blackboxEnabled {
 		logger.V(1).Println("Starting blackbox_exporter...")
 

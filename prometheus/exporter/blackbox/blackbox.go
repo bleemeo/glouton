@@ -52,10 +52,9 @@ var (
 )
 
 type target struct {
-	url        string
-	moduleName string
-	module     config.Module
-	timeout    time.Duration
+	url     string
+	module  config.Module
+	timeout time.Duration
 }
 
 // Describe implements the prometheus.Collector interface.
@@ -130,20 +129,22 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.url)
 }
 
-type CollectorWithLabels struct {
+// We define labels to apply on a specific collector at registration, as those labels cannot be exposed
+// while gathering (e.g. labels prefixed by '__').
+type collectorWithLabels struct {
 	Collector prometheus.Collector
 	Labels    map[string]string
 }
 
-func newCollector(conf Config) ([]CollectorWithLabels, error) {
+func newCollector(conf Config) ([]collectorWithLabels, error) {
 	unknownModules := []string{}
-	collectors := []CollectorWithLabels{}
+	collectors := []collectorWithLabels{}
 
 	// Extract the list of unknown modules specified by the users in glouton's configuration file
 	// and build a list of prometheus Collectors (one per target)
 OuterBreak:
 	for _, curTarget := range conf.Targets {
-		module, present := conf.BlackboxConfig.Modules[curTarget.ModuleName]
+		module, present := conf.Modules[curTarget.ModuleName]
 		// if the module is unknown, add it to the list
 		if !present {
 			// prevent duplicates
@@ -170,8 +171,8 @@ OuterBreak:
 		}
 
 		collectors = append(collectors,
-			CollectorWithLabels{
-				Collector: &target{url: curTarget.URL, module: module, moduleName: curTarget.ModuleName, timeout: timeout},
+			collectorWithLabels{
+				Collector: &target{url: curTarget.URL, module: module, timeout: timeout},
 				Labels: map[string]string{
 					types.LabelProbeTarget: curTarget.URL,
 					// Exposing the module name allow the client to differentiate probes in case the same URL is
@@ -191,7 +192,7 @@ OuterBreak:
 
 // Register registers blackbox_exporter in the global prometheus registry.
 func (conf Config) Register(r *registry.Registry) error {
-	collector, err := newCollector(conf)
+	collectors, err := newCollector(conf)
 	if err != nil {
 		return err
 	}
@@ -199,7 +200,7 @@ func (conf Config) Register(r *registry.Registry) error {
 	// this weird "dance" where we create a registry and a registerGatherer par probe is actually the result of
 	// our unability to expose a "meta" label while doing Collect(). We end up adding the meta labels statically
 	// at registration here.
-	for _, c := range collector {
+	for _, c := range collectors {
 		reg := prometheus.NewRegistry()
 
 		if err := reg.Register(c.Collector); err != nil {
