@@ -31,6 +31,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"io/ioutil"
+	"math"
 	"math/rand"
 	"os"
 	"sync"
@@ -42,7 +43,7 @@ import (
 const maxPendingPoints = 100000
 const pointsBatchSize = 1000
 const minimalDelayBetweenConnect = 5 * time.Second
-const maximalDelayBetweenConnect = 2 * time.Minute
+const maximalDelayBetweenConnect = 10 * time.Minute
 const stableConnection = 5 * time.Minute
 
 // Option are parameter for the MQTT client.
@@ -727,6 +728,7 @@ func (c *Client) connectionManager(ctx context.Context) {
 	)
 
 	currentConnectDelay := minimalDelayBetweenConnect / 2
+	consecutiveError := 0
 
 mainLoop:
 	for ctx.Err() == nil {
@@ -760,10 +762,9 @@ mainLoop:
 				}
 
 				if currentConnectDelay < maximalDelayBetweenConnect {
-					currentConnectDelay *= 2
-					if currentConnectDelay > maximalDelayBetweenConnect {
-						currentConnectDelay = maximalDelayBetweenConnect
-
+					consecutiveError++
+					currentConnectDelay = common.JitterDelay(minimalDelayBetweenConnect.Seconds()*math.Pow(1.55, float64(consecutiveError)), 0.1, maximalDelayBetweenConnect.Seconds())
+					if consecutiveError == 5 {
 						// Trigger facts synchronization to check for duplicate agent
 						_, _ = c.option.Facts.Facts(c.ctx, time.Minute)
 					}
@@ -813,6 +814,7 @@ mainLoop:
 			if length > 0 && time.Since(lastConnectionTimes[length-1]) > stableConnection {
 				logger.V(2).Printf("MQTT connection was stable, reset delay to %v", minimalDelayBetweenConnect)
 				currentConnectDelay = minimalDelayBetweenConnect
+				consecutiveError = 0
 			} else if length > 0 {
 				delay := currentConnectDelay - time.Since(lastConnectionTimes[len(lastConnectionTimes)-1])
 				if delay > 0 {

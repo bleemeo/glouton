@@ -133,9 +133,9 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
-			delay := common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+			delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 
-			s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors, false)
+			s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
 			switch {
 			case client.IsAuthError(err) && s.agentID != "":
@@ -151,6 +151,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
+
+				if s.successiveErrors%10 == 1 {
+					// we disable only to trigger a reconnection on MQTT
+					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(10*time.Second))
+				}
 			case client.IsAuthError(err):
 				registrationKey := []rune(s.option.Config.String("bleemeo.registration_key"))
 				for i := range registrationKey {
@@ -290,16 +295,16 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 }
 
 // Disable will disable (or re-enable) the Synchronized until given time.
-// To re-enable, set a time in the past.
+// To re-enable, use the (not yet implmented) Enable().
 func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
-	s.disable(until, reason, true)
+	s.disable(until, reason)
 }
 
-func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReason, force bool) {
+func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	if force || s.disabledUntil.Before(until) {
+	if s.disabledUntil.Before(until) {
 		s.disabledUntil = until
 		s.disableReason = reason
 	}

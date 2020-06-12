@@ -416,15 +416,20 @@ func (c *Connector) uppdateConfig() {
 }
 
 func (c *Connector) disableCallback(reason types.DisableReason, until time.Time) {
+	c.l.Lock()
+
+	if c.disabledUntil.After(until) {
+		return
+	}
+
+	c.disabledUntil = until
+	c.disableReason = reason
+
+	c.l.Unlock()
+
 	delay := time.Until(until)
 
 	logger.Printf("Disabling Bleemeo connector for %v due to %v", delay.Truncate(time.Second), reason)
 	c.sync.Disable(until, reason)
 	c.mqtt.Disable(until, reason)
-
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.disabledUntil = until
-	c.disableReason = reason
 }

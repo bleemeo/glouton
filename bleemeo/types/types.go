@@ -95,6 +95,7 @@ const (
 	DisableTooManyErrors
 	DisableAgentTooOld
 	DisableMaintenance
+	DisableAuthenticationError
 )
 
 func (r DisableReason) String() string {
@@ -107,6 +108,8 @@ func (r DisableReason) String() string {
 		return "this agent being too old"
 	case DisableMaintenance:
 		return "maintenance on Bleemeo API"
+	case DisableAuthenticationError:
+		return "authentication error with Bleemeo API"
 	default:
 		return "unspecified reason"
 	}
