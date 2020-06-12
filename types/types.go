@@ -74,6 +74,10 @@ func (f MetricFormat) String() string {
 	}
 }
 
+// AgentID is an agent/monitor UUID.
+// This type exists for the sole purpose of making type definitions clearer.
+type AgentID string
+
 // List of label names that some part of Glouton will assume to be named
 // as such.
 // Using constant here allow to change their name only here.
@@ -94,6 +98,7 @@ const (
 	LabelScrapeJob      = "__meta_scrape_job"
 	LabelBleemeoUUID    = "__meta_bleemeo_uuid"
 	LabelProbeTarget    = "__meta_probe_target"
+	LabelMetricKind     = "__meta_metric_kind"
 )
 
 // IsSet return true if the status is set.
@@ -157,13 +162,46 @@ type Metric interface {
 	Points(start, end time.Time) ([]Point, error)
 }
 
+// MetricKind defines the scope of the metric: the metric is either local to the agent or exposed for an external agent, like a monitor.
+type MetricKind int
+
+func (mk MetricKind) String() string {
+	switch mk {
+	case MonitorMetricKind:
+		return "probe"
+	default:
+		return "agent"
+	}
+}
+
+// StringToMetricKind returns the MetricKind that match best the argument. Defaults to AgentMetric when the string is invalid.
+func StringToMetricKind(s string) MetricKind {
+	switch s {
+	case "probe":
+		return MonitorMetricKind
+	case "agent":
+		return AgentMetricKind
+	default:
+		return AgentMetricKind
+	}
+}
+
+const (
+	// AgentMetricKind means the metric is exported by the agent for itself.
+	AgentMetricKind MetricKind = iota
+	// MonitorMetricKind means the metric is  exported by the agent for an external monitor.
+	MonitorMetricKind
+)
+
 // MetricAnnotations contains additional information about a metrics.
 type MetricAnnotations struct {
 	BleemeoItem string
 	ContainerID string
 	ServiceName string
 	StatusOf    string
-	Status      StatusDescription
+	// the kind indicates the scope of the metric
+	Kind   MetricKind
+	Status StatusDescription
 }
 
 // Point is the value of one metric at a given time.

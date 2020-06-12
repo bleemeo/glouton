@@ -390,7 +390,7 @@ func (s *Synchronizer) runOnce() error {
 
 	if len(syncMethods) == len(syncStep) && lastErr == nil {
 		s.option.Cache.Save()
-		s.nextFullSync = time.Now().Add(common.JitterDelay(3600, 0.1, 3600))
+		s.nextFullSync = time.Now().Add(common.JitterDelay(30, 0.1, 30))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
@@ -429,24 +429,19 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["services"] = fullSync
-	}
-
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["containers"] = fullSync
+		syncMethods["monitors"] = fullSync
 	}
 
 	if _, ok := syncMethods["services"]; ok {
-		// Metrics registration may need services to be synced, trigger metrics synchronization
+		// Metrics registration may need services to be synced, delay metrics synchronization
 		syncMethods["metrics"] = false
 	}
 
 	if _, ok := syncMethods["containers"]; ok {
-		// Metrics registration may need containers to be synced, trigger metrics synchronization
+		// Metrics registration may need containers to be synced, delay metrics synchronization
 		syncMethods["metrics"] = false
 	}
-
-	// always check monitors ?
-	syncMethods["monitors"] = true
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = fullSync

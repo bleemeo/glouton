@@ -122,12 +122,19 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			TargetLabel:  "instance",
 			Replacement:  "$1-$2:$3",
 		},
+		// when the metric comes from a probe, the 'instance' label is the target URI
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
 			SourceLabels: model.LabelNames{types.LabelProbeTarget},
 			TargetLabel:  "instance",
 			Replacement:  "$1",
+		},
+		// delete the temporary label that indicates the type of the current metric (agent or probe)
+		{
+			Action:       relabel.LabelDrop,
+			Regex:        relabel.MustNewRegexp(""),
+			SourceLabels: model.LabelNames{types.LabelMetricKind},
 		},
 		{
 			Action:       relabel.Replace,
@@ -638,6 +645,8 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	annotations := types.MetricAnnotations{
 		ServiceName: promLabels.Get(types.LabelServiceName),
 		ContainerID: promLabels.Get(types.LabelContainerID),
+		// annotate the metric if it comes from a probe
+		Kind: types.StringToMetricKind(promLabels.Get(types.LabelMetricKind)),
 	}
 
 	promLabels = relabel.Process(

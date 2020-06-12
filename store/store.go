@@ -271,6 +271,7 @@ func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.Me
 		store:       s,
 		metricID:    newID,
 	}
+
 	s.metrics[newID] = m
 
 	return m

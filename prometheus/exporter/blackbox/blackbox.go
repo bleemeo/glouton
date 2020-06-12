@@ -101,7 +101,7 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 
 	registry := prometheus.NewRegistry()
 
-	extLogger := logger.GoKitLoggerWrapper(logger.V(2))
+	extLogger := logger.GoKitLoggerWrapper(logger.V(3))
 	start := time.Now()
 
 	// do all the actual work
@@ -184,7 +184,8 @@ OuterBreak:
 					types.LabelProbeTarget: curTarget.URL,
 					// Exposing the module name allows the client to differentiate probes when
 					// the same URL is scrapped by different modules.
-					"module": curTarget.ModuleName,
+					"module":              curTarget.ModuleName,
+					types.LabelMetricKind: types.MonitorMetricKind.String(),
 				},
 			})
 	}

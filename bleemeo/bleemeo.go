@@ -69,7 +69,7 @@ func (c *Connector) UpdateUnitsAndThresholds(firstUpdate bool) {
 	c.sync.UpdateUnitsAndThresholds(firstUpdate)
 }
 
-func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
+func (c *Connector) initMQTT(previousPoint map[gloutonTypes.AgentID][]gloutonTypes.MetricPoint, first bool) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -85,7 +85,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			GlobalOption:         c.option,
 			Cache:                c.cache,
 			DisableCallback:      c.disableCallback,
-			AgentID:              c.AgentID(),
+			AgentID:              gloutonTypes.AgentID(c.AgentID()),
 			AgentPassword:        password,
 			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
 			UpdateMetrics:        c.sync.UpdateMetrics,
@@ -101,7 +101,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 		wg             sync.WaitGroup
 		mqttErr        error
 		l              sync.Mutex
-		previousPoints []gloutonTypes.MetricPoint
+		previousPoints map[gloutonTypes.AgentID][]gloutonTypes.MetricPoint
 		alreadyInit    bool
 	)
 
@@ -129,7 +129,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 		if c.mqtt != nil {
 			// Try to retrieve pending points
-			resultChan := make(chan []gloutonTypes.MetricPoint, 1)
+			resultChan := make(chan map[gloutonTypes.AgentID][]gloutonTypes.MetricPoint, 1)
 
 			go func() {
 				resultChan <- c.mqtt.PopPendingPoints()
