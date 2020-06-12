@@ -56,9 +56,10 @@ type baseCheck struct {
 
 	persistentConnection bool
 
-	l              sync.Mutex
-	cancel         func()
-	previousStatus types.StatusDescription
+	l                   sync.Mutex
+	cancel              func()
+	previousStatus      types.StatusDescription
+	disabledPerstistent map[string]bool
 }
 
 func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *baseCheck {
@@ -100,6 +101,7 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 			CurrentStatus:     types.StatusOk,
 			StatusDescription: "initial status - description is ignored",
 		},
+		disabledPerstistent: make(map[string]bool),
 	}
 }
 
@@ -248,6 +250,10 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 	for _, addr := range bc.tcpAddresses {
 		addr := addr
 
+		if bc.disabledPerstistent[addr] {
+			continue
+		}
+
 		bc.wg.Add(1)
 
 		go func() {
@@ -258,12 +264,39 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 }
 
 func (bc *baseCheck) openSocket(ctx context.Context, addr string) {
-	for ctx.Err() == nil {
-		longSleep := bc.openSocketOnce(ctx, addr)
-		delay := 10 * time.Second
+	delay := 1 * time.Second / 2
+	consecutiveFailure := 0
 
-		if !longSleep {
-			delay = time.Second
+	for ctx.Err() == nil {
+		lastConnect := time.Now()
+		longSleep := bc.openSocketOnce(ctx, addr)
+
+		if time.Since(lastConnect) < time.Minute {
+			consecutiveFailure++
+		}
+
+		if consecutiveFailure > 12 {
+			logger.V(1).Printf("persitent connection to check %s keep getting closed quickly. Disabled persistent connection for this port", addr)
+			bc.l.Lock()
+			bc.disabledPerstistent[addr] = true
+			bc.l.Unlock()
+
+			return
+		}
+
+		delay *= 2
+
+		if time.Since(lastConnect) > 5*time.Minute {
+			delay = 1 * time.Second
+			consecutiveFailure = 0
+		}
+
+		if delay > 40*time.Second {
+			delay = 40 * time.Second
+		}
+
+		if longSleep && delay < 10*time.Second {
+			delay = 10 * time.Second
 		}
 
 		select {
