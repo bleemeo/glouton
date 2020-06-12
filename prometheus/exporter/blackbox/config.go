@@ -17,7 +17,6 @@
 package blackbox
 
 import (
-	"glouton/config"
 	"glouton/logger"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -39,22 +38,13 @@ type ConfigTarget struct {
 }
 
 // ReadConfig generates a config we can ingest into glouton.prometheus.exporter.blackbox.
-func ReadConfig(conf *config.Configuration) (res Config, ok bool) {
+func ReadConfig(conf interface{}) (res Config, ok bool) {
 	// the default value of slices is not, and not a slice litteral
 	res.Targets = []ConfigTarget{}
 	res.Modules = map[string]bbConf.Module{}
 
-	// the prober feature is enabled if we have configured some targets in the configuration
-	if _, proberEnabled := conf.Get("agent.prober.targets"); !proberEnabled {
-		logger.V(1).Println("blackbox_exporter: 'agent.prober.targets' not defined your config.")
-		return res, true
-	}
-
-	// the conf cannot be issing here as it would have failed earlier on when checking the presence of
-	// 'agent.prober.targets'
-	proberConf, _ := conf.Get("agent.prober")
-
-	marshalled, err := yaml.Marshal(proberConf)
+	// the conf cannot be missing here as it have been checked prior to calling ReadConfig()
+	marshalled, err := yaml.Marshal(conf)
 	if err != nil {
 		logger.V(1).Printf("blackbox_exporter: Couldn't marshall blackbox_exporter configuration")
 		return res, false

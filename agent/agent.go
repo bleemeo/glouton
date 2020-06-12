@@ -582,15 +582,18 @@ func (a *agent) run() { //nolint:gocyclo
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
 	}
 
-	blackboxConf, blackboxEnabled := blackbox.ReadConfig(a.config)
-	if blackboxEnabled {
-		logger.V(1).Println("Starting blackbox_exporter...")
+	blackboxConf, blackboxConfPresent := a.config.Get("blackbox")
+	if blackboxConfPresent {
+		blackboxConf, blackboxEnabled := blackbox.ReadConfig(blackboxConf)
+		if blackboxEnabled {
+			logger.V(1).Println("Starting blackbox_exporter...")
 
-		if err := blackboxConf.Register(a.gathererRegistry); err != nil {
-			logger.Printf("Unable to start blackbox_exporter, will not collect probes: %v", err)
+			if err := blackboxConf.Register(a.gathererRegistry); err != nil {
+				logger.Printf("Unable to start blackbox_exporter, will not collect probes: %v", err)
+			}
+		} else {
+			logger.V(2).Println("blackbox_exporter not enabled, will not start...")
 		}
-	} else {
-		logger.V(2).Println("blackbox_exporter not enabled, will not start...")
 	}
 
 	promExporter := a.gathererRegistry.Exporter()

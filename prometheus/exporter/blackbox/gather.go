@@ -32,22 +32,13 @@ func writeMFsToChan(mfs []*dto.MetricFamily, ch chan<- prometheus.Metric) {
 		}
 
 		for _, metric := range metrics {
-			labels := []string{}
+			labels := make([]string, 0, len(metric.GetLabel()))
+			labelsValues := make([]string, 0, len(metric.GetLabel()))
 
+			// we assume labels to be unique
 			for _, labelPair := range metric.GetLabel() {
-				// add a label, if it isn't already registered
-				found := false
-
-				for _, v := range labels {
-					if v == *labelPair.Name {
-						found = true
-						break
-					}
-				}
-
-				if !found {
-					labels = append(labels, *labelPair.Name)
-				}
+				labels = append(labels, *labelPair.Name)
+				labelsValues = append(labelsValues, *labelPair.Value)
 			}
 
 			desc := prometheus.NewDesc(
@@ -56,21 +47,6 @@ func writeMFsToChan(mfs []*dto.MetricFamily, ch chan<- prometheus.Metric) {
 				labels,
 				nil,
 			)
-
-			labelsValues := []string{}
-			// let's take great care to preserve the order of the labels, or weird things are gonna happen
-			for _, label := range labels {
-				labelValue := ""
-
-				for _, v := range metric.GetLabel() {
-					if *v.Name == label {
-						labelValue = *v.Value
-						break
-					}
-				}
-
-				labelsValues = append(labelsValues, labelValue)
-			}
 
 			// in theory, this should only be a counter or a gauge, given the fact that we only do this probing operation once (and then we start again from scratch)
 			switch {

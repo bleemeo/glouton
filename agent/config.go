@@ -131,6 +131,15 @@ var defaultConfig = map[string]interface{}{
 	"zabbix.enabled":                  false,
 	"zabbix.address":                  "127.0.0.1",
 	"zabbix.port":                     10050,
+	"blackbox.targets":                []interface{}{},
+	"blackbox.modules": map[string]interface{}{
+		"http_2xx": map[string]interface{}{
+			"prober": "http",
+			"http": map[string]interface{}{
+				"valid_http_versions": []string{"HTTP/1.1", "HTTP/2.0"},
+			},
+		},
+	},
 }
 
 func configLoadFile(filePath string, cfg *config.Configuration) error {
