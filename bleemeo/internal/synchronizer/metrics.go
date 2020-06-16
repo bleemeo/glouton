@@ -640,22 +640,6 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		Agent: s.agentID,
 	}
 
-	if metric.Annotations().Kind == types.MonitorMetricKind {
-		url, present := labels["instance"]
-		if !present {
-			logger.V(2).Printf("Invalid probe metric %v, couldn't find the 'instance' label", metric)
-			return nil
-		}
-
-		monitor, present := monitors[url]
-		// no monitor for that url, let's not register this metric
-		if !present {
-			return nil
-		}
-
-		payload.Agent = monitor.AgentID
-	}
-
 	if s.option.MetricFormat == types.MetricFormatBleemeo {
 		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
 		payload.LabelsText = ""
@@ -710,6 +694,24 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		}
 
 		payload.ServiceID = service.ID
+	}
+
+	// override the agent and service UUIDs when the metric is a probe's
+	if metric.Annotations().Kind == types.MonitorMetricKind {
+		url, present := labels["instance"]
+		if !present {
+			logger.V(2).Printf("Invalid probe metric %v, couldn't find the 'instance' label", metric)
+			return nil
+		}
+
+		monitor, present := monitors[url]
+		// no monitor for that url, let's not register this metric
+		if !present {
+			return nil
+		}
+
+		payload.Agent = monitor.AgentID
+		payload.ServiceID = monitor.ID
 	}
 
 	_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
