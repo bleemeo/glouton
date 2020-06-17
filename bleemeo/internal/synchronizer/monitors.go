@@ -20,8 +20,9 @@ import (
 	"encoding/json"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/config"
 	"glouton/logger"
-	"glouton/types"
+	"glouton/prometheus/exporter/blackbox"
 )
 
 // update the list of metrics that must be watched locally (to be sent over MQTT, a metric must be declared
@@ -29,24 +30,28 @@ import (
 // TODO: caching
 // FIXME: we are ignoring the notion of blackbox modules, and we shouldn't.
 func (s *Synchronizer) syncMonitors(fullSync bool) error {
-	// 1. extract the probes from the list of metrics
-	metrics, err := s.option.Store.Metrics(nil)
-	if err != nil {
-		return err
+	// 1. extract the list of targets from the config
+	// Note: I'm moderately happy with this cast, as it isn't check statically by go
+	cfg, present := s.option.Config.(*config.Configuration)
+	if !present {
+		logger.V(2).Println("probes: the configuration is not of the expected type '*config.Configuration'")
+		return nil
+	}
+
+	bbConfRaw, present := cfg.Get("blackbox")
+	if !present {
+		return nil
+	}
+
+	bbConf, bbEnabled := blackbox.ReadConfig(bbConfRaw)
+	if !bbEnabled {
+		return nil
 	}
 
 	monitorsURL := map[string]bool{}
 
-	for _, metric := range metrics {
-		if metric.Annotations().Kind == types.MonitorMetricKind {
-			url, present := metric.Labels()["instance"]
-			if !present {
-				logger.V(2).Printf("Abnormal behavior: Couldn't find label 'instance' on metric %v", metric)
-				continue
-			}
-
-			monitorsURL[url] = true
-		}
+	for _, target := range bbConf.Targets {
+		monitorsURL[target.URL] = true
 	}
 
 	// 2. Obtain the list of user-declared monitors (exposed by bleemeo's API)
