@@ -11,7 +11,6 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/store"
-	otherTypes "glouton/types"
 	"io"
 	"net/http"
 	"reflect"
@@ -249,6 +248,7 @@ func basicTestSetup(t *testing.T) *Synchronizer {
 	cache := cache.Cache{}
 
 	facts := facts.NewMockFacter()
+	// necessary for registration
 	facts.SetFact("fqdn", "test.bleemeo.com")
 
 	state := state.NewMock()
@@ -304,7 +304,7 @@ func TestSyncMetrics(t *testing.T) {
 		}
 	}
 
-	// Did we store the monitor present in the configuration ?
+	// Did we sync and enable the monitor present in the configuration ?
 	syncedMonitors := s.option.Cache.Monitors()
 	syncedMonitor, present := syncedMonitors[activeMonitorURL]
 
@@ -320,47 +320,5 @@ func TestSyncMetrics(t *testing.T) {
 	_, present = syncedMonitors[newInactiveMonitor.URL]
 	if present {
 		t.Fatalf("the monitor for %s should not be available", newInactiveMonitor.URL)
-	}
-
-	annotations := otherTypes.MetricAnnotations{Kind: otherTypes.MonitorMetricKind}
-
-	point1 := otherTypes.Point{Time: time.Now().Add(-5 * time.Second), Value: 0.5}
-	point2 := otherTypes.Point{Time: time.Now(), Value: 0.75}
-
-	// we can push a few points in the store and check that they match the expected metric
-	s.option.Store.(*store.Store).PushPoints([]otherTypes.MetricPoint{{
-		Point:       point1,
-		Labels:      newMetricActiveMonitor.Labels,
-		Annotations: annotations,
-	}, {
-		Point:       point2,
-		Labels:      newMetricActiveMonitor.Labels,
-		Annotations: annotations,
-	}})
-
-	metrics, err := s.option.Store.Metrics(nil)
-	if err != nil {
-		t.Fatalf("couldn't obtain metrics from the store")
-	}
-
-	if len(metrics) != 1 {
-		t.Fatalf("invalid number of metrics found, got %d, want 1", len(metrics))
-	}
-
-	if metrics[0].Annotations() != annotations {
-		t.Fatalf("invalid annotations, got %v, want %v", metrics[0].Annotations(), annotations)
-	}
-
-	if !reflect.DeepEqual(metrics[0].Labels(), newMetricActiveMonitor.Labels) {
-		t.Fatalf("invalid labels on metric, got %v, want %v", metrics[0].Labels(), newMetricActiveMonitor.Labels)
-	}
-
-	metricPoints, err := metrics[0].Points(time.Now().Add(-10*time.Second), time.Now())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !reflect.DeepEqual(metricPoints, []otherTypes.Point{point1, point2}) {
-		t.Fatalf("invalid points, got %v, want %v", metricPoints, []otherTypes.Point{point1, point2})
 	}
 }
