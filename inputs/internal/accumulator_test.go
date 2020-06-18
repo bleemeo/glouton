@@ -548,8 +548,8 @@ func TestRenameCallback(t *testing.T) {
 func TestRenameCallback2(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		"container_name": "postgres_1",
-		"db":             "dbname",
+		types.LabelContainerName: "postgres_1",
+		"db":                     "dbname",
 	}
 	wantAnnotation := types.MetricAnnotations{
 		BleemeoItem: "postgres_1_dbname",
@@ -578,12 +578,12 @@ func TestRenameCallback2(t *testing.T) {
 		},
 		RenameCallbacks: []RenameCallback{
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
-				labels["container_name"] = "postgres_1"
+				labels[types.LabelContainerName] = "postgres_1"
 				annotations.ContainerID = "1234"
 				if annotations.BleemeoItem != "" {
-					annotations.BleemeoItem = labels["container_name"] + "_" + annotations.BleemeoItem
+					annotations.BleemeoItem = labels[types.LabelContainerName] + "_" + annotations.BleemeoItem
 				} else {
-					annotations.BleemeoItem = labels["container_name"]
+					annotations.BleemeoItem = labels[types.LabelContainerName]
 				}
 				return labels, annotations
 			},
@@ -621,9 +621,9 @@ func TestRenameCallback2(t *testing.T) {
 func TestLabelsMutation(t *testing.T) {
 	called := 0
 	want := map[string]string{
-		"service":        "postgresql",
-		"container_name": "name",
-		"db":             "dbname",
+		"service":                "postgresql",
+		types.LabelContainerName: "name",
+		"db":                     "dbname",
 	}
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 		if !reflect.DeepEqual(tags, want) {
@@ -644,7 +644,7 @@ func TestLabelsMutation(t *testing.T) {
 		RenameCallbacks: []RenameCallback{
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 				labels["service"] = "postgresql"
-				labels["container_name"] = "name"
+				labels[types.LabelContainerName] = "name"
 				return labels, annotations
 			},
 		},

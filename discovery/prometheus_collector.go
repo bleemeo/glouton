@@ -22,10 +22,10 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 
 	collector := memcached.NewExporter(address, 5*time.Second)
 	labels := map[string]string{
-		types.LabelServiceName:   service.Name,
-		types.LabelContainerID:   service.ContainerID,
-		types.LabelContainerName: service.ContainerName,
-		types.LabelServicePort:   strconv.FormatInt(int64(port), 10),
+		types.LabelMetaServiceName:   service.Name,
+		types.LabelMetaContainerID:   service.ContainerID,
+		types.LabelMetaContainerName: service.ContainerName,
+		types.LabelMetaServicePort:   strconv.FormatInt(int64(port), 10),
 	}
 
 	if d.metricRegistry == nil {

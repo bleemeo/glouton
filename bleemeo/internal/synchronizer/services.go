@@ -285,7 +285,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			}
 
 			remoteServices = append(remoteServices, result)
-			logger.V(2).Printf("Service %v registrered with UUID %s", key, result.ID)
+			logger.V(2).Printf("Service %v registered with UUID %s", key, result.ID)
 		}
 
 		if remoteFound && remoteSrv.Active != result.Active {

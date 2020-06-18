@@ -58,14 +58,14 @@ func (d *DynamicScrapper) listExporters(containers []Container) []target {
 		}
 
 		labels := map[string]string{
-			types.LabelScrapeJob: d.DynamicJobName,
+			types.LabelMetaScrapeJob: d.DynamicJobName,
 		}
 
 		if ns, podName := c.PodNamespaceName(); podName != "" {
 			labels["kubernetes.pod.namespace"] = ns
 			labels["kubernetes.pod.name"] = podName
 		} else {
-			labels["container_name"] = c.Name()
+			labels[types.LabelContainerName] = c.Name()
 		}
 
 		if u != "" {

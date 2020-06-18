@@ -102,61 +102,61 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelBleemeoUUID},
-			TargetLabel:  "instance_uuid",
+			SourceLabels: model.LabelNames{types.LabelMetaBleemeoUUID},
+			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelGloutonFQDN, types.LabelPort},
-			TargetLabel:  "instance",
+			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaPort},
+			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1:$2",
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+);(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelGloutonFQDN, types.LabelContainerName, types.LabelPort},
-			TargetLabel:  "instance",
+			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaContainerName, types.LabelMetaPort},
+			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1-$2:$3",
 		},
 		// when the metric comes from a probe, the 'instance' label is the target URI
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelProbeTarget},
-			TargetLabel:  "instance",
+			SourceLabels: model.LabelNames{types.LabelMetaProbeTarget},
+			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1",
 		},
 		// delete the temporary label that indicates the type of the current metric (agent or probe)
 		{
 			Action:       relabel.LabelDrop,
 			Regex:        relabel.MustNewRegexp(""),
-			SourceLabels: model.LabelNames{types.LabelMetricKind},
+			SourceLabels: model.LabelNames{types.LabelMetaMetricKind},
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.*)"),
-			SourceLabels: model.LabelNames{types.LabelContainerName},
-			TargetLabel:  "container_name",
+			SourceLabels: model.LabelNames{types.LabelMetaContainerName},
+			TargetLabel:  types.LabelContainerName,
 			Replacement:  "$1",
 		},
 		{
 			Action:      relabel.Replace,
 			Separator:   ";",
 			Regex:       relabel.MustNewRegexp("(.*)"),
-			TargetLabel: "job",
+			TargetLabel: types.LabelJob,
 			Replacement: "glouton",
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.*)"),
-			SourceLabels: model.LabelNames{types.LabelScrapeJob},
-			TargetLabel:  "glouton_job",
+			SourceLabels: model.LabelNames{types.LabelMetaScrapeJob},
+			TargetLabel:  types.LabelGloutonJob,
 			Replacement:  "$1",
 		},
 	}
@@ -622,19 +622,19 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 		result[k] = v
 	}
 
-	result[types.LabelGloutonFQDN] = r.FQDN
-	result[types.LabelGloutonPort] = r.GloutonPort
+	result[types.LabelMetaGloutonFQDN] = r.FQDN
+	result[types.LabelMetaGloutonPort] = r.GloutonPort
 
 	if r.BleemeoAgentID != "" {
-		result[types.LabelBleemeoUUID] = r.BleemeoAgentID
+		result[types.LabelMetaBleemeoUUID] = r.BleemeoAgentID
 	}
 
-	servicePort := result[types.LabelServicePort]
+	servicePort := result[types.LabelMetaServicePort]
 	if servicePort == "" {
 		servicePort = r.GloutonPort
 	}
 
-	result[types.LabelPort] = servicePort
+	result[types.LabelMetaPort] = servicePort
 
 	return result
 }
@@ -643,10 +643,10 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	promLabels := labels.FromMap(input)
 
 	annotations := types.MetricAnnotations{
-		ServiceName: promLabels.Get(types.LabelServiceName),
-		ContainerID: promLabels.Get(types.LabelContainerID),
+		ServiceName: promLabels.Get(types.LabelMetaServiceName),
+		ContainerID: promLabels.Get(types.LabelMetaContainerID),
 		// annotate the metric if it comes from a probe
-		Kind: types.StringToMetricKind(promLabels.Get(types.LabelMetricKind)),
+		Kind: types.StringToMetricKind(promLabels.Get(types.LabelMetaMetricKind)),
 	}
 
 	promLabels = relabel.Process(

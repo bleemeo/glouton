@@ -405,7 +405,7 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 				// no such monitor, let's drop this point
 				continue
 			}
-			// Hurray, it's a monitor ! The agent ID is thus the ID of the "owner" of that monitor.
+			// Hurrah, it's a monitor ! The agent ID is thus the ID of the "owner" of that monitor.
 			idx = types.AgentID(monitor.AgentID)
 		}
 
@@ -413,9 +413,9 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	}
 }
 
-// popPoints returns the mapping between the agent/monitor UUID and a list of corresponding metrics.
-// When 'includeFailedPoints' is set to true, the returned data will no only include all pending points,
-// but also all the points whose submission failed previously.
+// popPoints returns the mapping between agent IDs and lists of corresponding metrics to be sent for
+// that agent. When 'includeFailedPoints' is set to true, the returned data will no only include all
+// pending points, but also all the points whose submission failed previously.
 func (c *Client) popPoints(includeFailedPoints bool) map[types.AgentID][]types.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -441,7 +441,8 @@ func (c *Client) popNewPendingPoints() map[types.AgentID][]types.MetricPoint {
 	return c.popPoints(false)
 }
 
-// PopPendingPoints get and remove all pending points from this MQTT connector, including points that previously failed.
+// PopPendingPoints gets and removes all pending points from this MQTT connector, including points that
+// previously failed.
 func (c *Client) PopPendingPoints() map[types.AgentID][]types.MetricPoint {
 	return c.popPoints(true)
 }
@@ -544,6 +545,7 @@ func (c *Client) sendPoints() {
 	c.failedPointsCount = len(c.failedPoints)
 }
 
+// preparePoints updates the MQTT payload by processing some points and appending the result to `payload`.
 func (c *Client) preparePoints(payload map[types.AgentID][]metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric,
 	points map[types.AgentID][]types.MetricPoint) map[types.AgentID][]metricPayload {
 	for agentID, agentPoints := range points {

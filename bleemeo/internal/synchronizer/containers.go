@@ -180,7 +180,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 				return err
 			}
 
-			logger.V(2).Printf("Container %v registrered with UUID %s", result.Name, result.ID)
+			logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
 			remoteContainers = append(remoteContainers, result)
 		}
 	}

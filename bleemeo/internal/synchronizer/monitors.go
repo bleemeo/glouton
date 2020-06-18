@@ -25,13 +25,12 @@ import (
 	"glouton/prometheus/exporter/blackbox"
 )
 
-// update the list of metrics that must be watched locally (to be sent over MQTT, a metric must be declared
-// both on the bleemeo API AND in the config file for now).
-// TODO: caching
+// syncMonitors updates the list of metrics that must be watched locally (to be sent over MQTT, a metric must
+// be declared both on the bleemeo API AND in the config file for now).
 // FIXME: we are ignoring the notion of blackbox modules, and we shouldn't.
 func (s *Synchronizer) syncMonitors(fullSync bool) error {
 	// 1. extract the list of targets from the config
-	// Note: I'm moderately happy with this cast, as it isn't check statically by go
+	// Note: I'm moderately happy with this cast, as it isn't checked statically by go
 	cfg, present := s.option.Config.(*config.Configuration)
 	if !present {
 		logger.V(2).Println("probes: the configuration is not of the expected type '*config.Configuration'")
@@ -54,7 +53,7 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 		monitorsURL[target.URL] = true
 	}
 
-	// 2. Obtain the list of user-declared monitors (exposed by bleemeo's API)
+	// 2. obtain the list of user-declared monitors (exposed by bleemeo's API)
 	apiMonitors, err := s.getMonitorsFromAPI()
 	if err != nil {
 		return err
@@ -74,7 +73,7 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 
 	oldMonitors := s.option.Cache.Monitors()
 
-	// TODO: I hope there is some elegant way (like Rust's 'symmetric_difference' on HashSets)
+	// TODO: I kind of hope there is some more elegant way (like Rust's 'symmetric_difference' on HashSets)
 	// to compute that difference ?
 	for _, newMonitor := range newMonitors {
 		found := false
@@ -115,10 +114,8 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 	monitors := []bleemeoTypes.Monitor{}
 
 	params := map[string]string{
-		// the whole point of this query is to get the agent uuid of other agents, to be able to submit queries as the
-		// monitors themselves
-		// "agent":  s.agentID,
 		"monitor": "true",
+		"active":  "true",
 		"fields":  "id,agent,monitor_url",
 	}
 

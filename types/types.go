@@ -87,18 +87,23 @@ const (
 
 	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
 	// They are actually dropped by the metric registry and/or the
-	LabelContainerName  = "__meta_container_name"
-	LabelContainerID    = "__meta_container_id"
-	LabelServiceName    = "__meta_service_name"
-	LabelGloutonFQDN    = "__meta__fqdn"
-	LabelGloutonPort    = "__meta_glouton_port"
-	LabelServicePort    = "__meta_service_port"
-	LabelPort           = "__meta_port"
-	LabelScrapeInstance = "__meta_scrape_instance"
-	LabelScrapeJob      = "__meta_scrape_job"
-	LabelBleemeoUUID    = "__meta_bleemeo_uuid"
-	LabelProbeTarget    = "__meta_probe_target"
-	LabelMetricKind     = "__meta_metric_kind"
+	LabelMetaContainerName  = "__meta_container_name"
+	LabelMetaContainerID    = "__meta_container_id"
+	LabelMetaServiceName    = "__meta_service_name"
+	LabelMetaGloutonFQDN    = "__meta__fqdn"
+	LabelMetaGloutonPort    = "__meta_glouton_port"
+	LabelMetaServicePort    = "__meta_service_port"
+	LabelMetaPort           = "__meta_port"
+	LabelMetaScrapeInstance = "__meta_scrape_instance"
+	LabelMetaScrapeJob      = "__meta_scrape_job"
+	LabelMetaBleemeoUUID    = "__meta_bleemeo_uuid"
+	LabelMetaProbeTarget    = "__meta_probe_target"
+	LabelMetaMetricKind     = "__meta_metric_kind"
+	LabelInstanceUUID       = "instance_uuid"
+	LabelInstance           = "instance"
+	LabelJob                = "job"
+	LabelContainerName      = "container_name"
+	LabelGloutonJob         = "glouton_job"
 )
 
 // IsSet return true if the status is set.

@@ -287,7 +287,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 }
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
-func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bool) (map[string]bleemeoTypes.Metric, error) {
+func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bool, isMonitor bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
 		"agent":  agentID,
 		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
@@ -319,6 +319,15 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bo
 			continue
 		}
 
+		// Do not modify metrics declared by other agents when the target agent is a monitor
+		if isMonitor {
+			agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelInstanceUUID]
+
+			if !present || agentUUID != s.agentID {
+				continue
+			}
+		}
+
 		metricsByUUID[metric.ID] = metric.metricFromAPI()
 	}
 
@@ -326,22 +335,25 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bo
 }
 
 func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
-	// iterate over every our agent AND every monitor for metrics
+	// iterate over our agent AND every monitor for metrics
 	metrics := []bleemeoTypes.Metric{}
 
-	agentsToCheck := []string{s.agentID}
-
-	for _, v := range s.option.Cache.Monitors() {
-		agentsToCheck = append(agentsToCheck, v.AgentID)
+	agentMetrics, err := s.metricsListWithAgentID(s.agentID, includeInactive, false)
+	if err != nil {
+		return err
 	}
 
-	for _, agentToCheck := range agentsToCheck {
-		listMetrics, err := s.metricsListWithAgentID(agentToCheck, includeInactive)
+	for _, metric := range agentMetrics {
+		metrics = append(metrics, metric)
+	}
+
+	for _, monitor := range s.option.Cache.Monitors() {
+		monitorMetrics, err := s.metricsListWithAgentID(monitor.AgentID, includeInactive, true)
 		if err != nil {
 			return err
 		}
 
-		for _, metric := range listMetrics {
+		for _, metric := range monitorMetrics {
 			metrics = append(metrics, metric)
 		}
 	}
@@ -352,7 +364,7 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 }
 
 // metricsSearchWithAgentID fetches the list of all metrics for a given agent, matching a set of given labels, and returns a UUID:metric mapping.
-func (s *Synchronizer) metricsSearchWithAgentID(metricsByUUID map[string]bleemeoTypes.Metric, agentID string, requests []string) error {
+func (s *Synchronizer) metricsSearchWithAgentID(metricsByUUID map[string]bleemeoTypes.Metric, agentID string, requests []string, isMonitor bool) error {
 	for _, key := range requests {
 		params := map[string]string{
 			"labels_text": key,
@@ -379,6 +391,15 @@ func (s *Synchronizer) metricsSearchWithAgentID(metricsByUUID map[string]bleemeo
 				continue
 			}
 
+			// Do not modify metrics declared by other agents when the target agent is a monitor
+			if isMonitor {
+				agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelInstanceUUID]
+
+				if !present || agentUUID != s.agentID {
+					continue
+				}
+			}
+
 			metricsByUUID[metric.ID] = metric.metricFromAPI()
 		}
 	}
@@ -390,15 +411,12 @@ func (s *Synchronizer) metricsSearchWithAgentID(metricsByUUID map[string]bleemeo
 func (s *Synchronizer) metricUpdateListSearch(requests []string) error {
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
-	// list of the agents we care about (our own agent + monitors)
-	correctAgents := []string{s.agentID}
-
-	for _, v := range s.option.Cache.Monitors() {
-		correctAgents = append(correctAgents, v.AgentID)
+	if err := s.metricsSearchWithAgentID(metricsByUUID, s.agentID, requests, false); err != nil {
+		return err
 	}
 
-	for _, agentID := range correctAgents {
-		if err := s.metricsSearchWithAgentID(metricsByUUID, agentID, requests); err != nil {
+	for _, monitor := range s.option.Cache.Monitors() {
+		if err := s.metricsSearchWithAgentID(metricsByUUID, monitor.AgentID, requests, true); err != nil {
 			return err
 		}
 	}
@@ -698,9 +716,9 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 
 	// override the agent and service UUIDs when the metric is a probe's
 	if metric.Annotations().Kind == types.MonitorMetricKind {
-		url, present := labels["instance"]
+		url, present := labels[types.LabelInstance]
 		if !present {
-			logger.V(2).Printf("Invalid probe metric %v, couldn't find the 'instance' label", metric)
+			logger.V(2).Printf("Invalid probe metric %v, couldn't find the label '%s'", metric, types.LabelInstance)
 			return nil
 		}
 
@@ -719,7 +737,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		return err
 	}
 
-	logger.V(2).Printf("Metric %v registrered with UUID %s", key, result.ID)
+	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
 	registeredMetricsByKey[key] = result.metricFromAPI()
 	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
 

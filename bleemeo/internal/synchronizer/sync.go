@@ -356,8 +356,8 @@ func (s *Synchronizer) runOnce() error {
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
-		{name: "metrics", method: s.syncMetrics},
 		{name: "monitors", method: s.syncMonitors},
+		{name: "metrics", method: s.syncMetrics},
 	}
 	startAt := time.Now()
 

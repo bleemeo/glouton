@@ -181,11 +181,11 @@ OuterBreak:
 			collectorWithLabels{
 				Collector: &target{url: curTarget.URL, module: module, timeout: timeout},
 				Labels: map[string]string{
-					types.LabelProbeTarget: curTarget.URL,
+					types.LabelMetaProbeTarget: curTarget.URL,
+					types.LabelMetaMetricKind:  types.MonitorMetricKind.String(),
 					// Exposing the module name allows the client to differentiate probes when
 					// the same URL is scrapped by different modules.
-					"module":              curTarget.ModuleName,
-					types.LabelMetricKind: types.MonitorMetricKind.String(),
+					"module": curTarget.ModuleName,
 				},
 			})
 	}

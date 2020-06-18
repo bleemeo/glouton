@@ -178,7 +178,7 @@ func TestRegistry_Register(t *testing.T) {
 	jobValue := "glouton"
 	dummyName := "dummy"
 	dummyValue := "value"
-	instanceIDName := "instance_uuid"
+	instanceIDName := types.LabelInstanceUUID
 	instanceIDValue := "fake-uuid"
 	value := 1.0
 	want := []*dto.MetricFamily{
@@ -258,7 +258,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	jobValue := "glouton"
 	dummyName := "dummy"
 	dummyValue := "value"
-	instanceIDName := "instance_uuid"
+	instanceIDName := types.LabelInstanceUUID
 	instanceIDValue := "fake-uuid"
 	value := 1.0
 	want := []*dto.MetricFamily{
@@ -359,13 +359,13 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			name:   "node_exporter",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
-				types.LabelGloutonFQDN: "hostname",
-				types.LabelGloutonPort: "8015",
-				types.LabelPort:        "8015",
+				types.LabelMetaGloutonFQDN: "hostname",
+				types.LabelMetaGloutonPort: "8015",
+				types.LabelMetaPort:        "8015",
 			}},
 			want: labels.FromMap(map[string]string{
-				"instance": "hostname:8015",
-				"job":      "glouton",
+				types.LabelInstance: "hostname:8015",
+				types.LabelJob:      "glouton",
 			}),
 			wantAnnotations: types.MetricAnnotations{},
 		},
@@ -373,18 +373,18 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			name:   "mysql container",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
-				types.LabelServiceName:   "mysql",
-				types.LabelContainerName: "mysql_1",
-				types.LabelContainerID:   "1234",
-				types.LabelGloutonFQDN:   "hostname",
-				types.LabelGloutonPort:   "8015",
-				types.LabelServicePort:   "3306",
-				types.LabelPort:          "3306",
+				types.LabelMetaServiceName:   "mysql",
+				types.LabelMetaContainerName: "mysql_1",
+				types.LabelMetaContainerID:   "1234",
+				types.LabelMetaGloutonFQDN:   "hostname",
+				types.LabelMetaGloutonPort:   "8015",
+				types.LabelMetaServicePort:   "3306",
+				types.LabelMetaPort:          "3306",
 			}},
 			want: labels.FromMap(map[string]string{
-				"container_name": "mysql_1",
-				"instance":       "hostname-mysql_1:3306",
-				"job":            "glouton",
+				types.LabelContainerName: "mysql_1",
+				types.LabelInstance:      "hostname-mysql_1:3306",
+				types.LabelJob:           "glouton",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				ServiceName: "mysql",

@@ -549,8 +549,8 @@ func (a *agent) run() { //nolint:gocyclo
 
 		target := (*scrapper.Target)(u)
 		extraLabels := map[string]string{
-			types.LabelScrapeJob:      name,
-			types.LabelScrapeInstance: target.HostPort(),
+			types.LabelMetaScrapeJob:      name,
+			types.LabelMetaScrapeInstance: target.HostPort(),
 		}
 
 		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, extraLabels); err != nil {
@@ -655,10 +655,10 @@ func (a *agent) run() { //nolint:gocyclo
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
-		/*if a.metricFormat == types.MetricFormatPrometheus {
+		if a.metricFormat == types.MetricFormatPrometheus {
 			logger.Printf("Prometheus format is not yet supported with Bleemeo")
 			return
-		}*/
+		}
 	}
 
 	if a.config.Bool("nrpe.enabled") {
@@ -795,10 +795,10 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				}
 
 				labels := map[string]string{
-					types.LabelName:          "postfix_queue_size",
-					types.LabelContainerName: srv.ContainerName,
-					types.LabelContainerID:   srv.ContainerID,
-					types.LabelServiceName:   srv.ContainerName,
+					types.LabelName:              "postfix_queue_size",
+					types.LabelMetaContainerName: srv.ContainerName,
+					types.LabelMetaContainerID:   srv.ContainerID,
+					types.LabelMetaServiceName:   srv.ContainerName,
 				}
 
 				annotations := types.MetricAnnotations{
@@ -825,10 +825,10 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				}
 
 				labels := map[string]string{
-					types.LabelName:          "exim_queue_size",
-					types.LabelContainerName: srv.ContainerName,
-					types.LabelContainerID:   srv.ContainerID,
-					types.LabelServiceName:   srv.ContainerName,
+					types.LabelName:              "exim_queue_size",
+					types.LabelMetaContainerName: srv.ContainerName,
+					types.LabelMetaContainerID:   srv.ContainerID,
+					types.LabelMetaServiceName:   srv.ContainerName,
 				}
 
 				annotations := types.MetricAnnotations{
@@ -1108,8 +1108,8 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
-				types.LabelName:          "docker_container_health_status",
-				types.LabelContainerName: container.Name(),
+				types.LabelName:              "docker_container_health_status",
+				types.LabelMetaContainerName: container.Name(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,

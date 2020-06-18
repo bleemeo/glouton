@@ -210,11 +210,11 @@ func (c *jmxtransClient) processLine(line string) {
 		}
 
 		labels := map[string]string{
-			types.LabelName:        name,
-			types.LabelServiceName: service.Name,
+			types.LabelName:            name,
+			types.LabelMetaServiceName: service.Name,
 		}
 		if service.ContainerID != "" {
-			labels[types.LabelContainerName] = service.ContainerName
+			labels[types.LabelMetaContainerName] = service.ContainerName
 		}
 
 		annotations := types.MetricAnnotations{
