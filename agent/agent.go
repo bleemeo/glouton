@@ -871,6 +871,8 @@ func (a *agent) watchdog(ctx context.Context) error {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
+	failing := false
+
 	for {
 		select {
 		case <-ticker.C:
@@ -881,9 +883,13 @@ func (a *agent) watchdog(ctx context.Context) error {
 		timestamp := atomic.LoadInt64(&a.lastHealCheck)
 		lastHealCheck := time.Unix(timestamp, 0)
 
-		if time.Since(lastHealCheck) > 15*time.Minute {
-			logger.Printf("Healcheck are no longer running. Last run was at %s", lastHealCheck.Format(time.RFC3339))
+		switch {
+		case time.Since(lastHealCheck) > 15*time.Minute && !failing:
+			logger.V(2).Printf("Healcheck are no longer running. Last run was at %s", lastHealCheck.Format(time.RFC3339))
 
+			failing = true
+		case time.Since(lastHealCheck) > 15*time.Minute && failing:
+			logger.Printf("Healcheck are no longer running. Last run was at %s", lastHealCheck.Format(time.RFC3339))
 			// We don't know how big the buffer needs to be to collect
 			// all the goroutines. Use 2MB buffer which hopefully is enough
 			buffer := make([]byte, 1<<21)
@@ -892,6 +898,8 @@ func (a *agent) watchdog(ctx context.Context) error {
 			logger.Printf("%s", string(buffer))
 			logger.Printf("Glouton seems unhealthy, killing myself")
 			panic("Glouton seems unhealthy, killing myself")
+		default:
+			failing = false
 		}
 	}
 }
