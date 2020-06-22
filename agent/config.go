@@ -41,18 +41,30 @@ var defaultConfig = map[string]interface{}{
 	"agent.upgrade_file":             "upgrade",
 	"agent.metrics_format":           "Bleemeo",
 	"agent.node_exporter.collectors": []string{},
-	"bleemeo.account_id":             "",
-	"bleemeo.api_base":               "https://api.bleemeo.com/",
-	"bleemeo.api_ssl_insecure":       false,
-	"bleemeo.enabled":                true,
-	"bleemeo.initial_agent_name":     "",
-	"bleemeo.mqtt.cafile":            "",
-	"bleemeo.mqtt.host":              "mqtt.bleemeo.com",
-	"bleemeo.mqtt.port":              8883,
-	"bleemeo.mqtt.ssl_insecure":      false,
-	"bleemeo.mqtt.ssl":               true,
-	"bleemeo.registration_key":       "",
-	"bleemeo.sentry.dsn":             "",
+	"blackbox.targets":               []interface{}{},
+	"blackbox.modules": map[string]interface{}{
+		"http": map[string]interface{}{
+			"prober": "http",
+			"http": map[string]interface{}{
+				// we default to IPv4 as the ip_protocol_fallback option does not
+				// retry a request with a different IP version, but only has an
+				// effect when resolving the target
+				"preferred_ip_protocol": "ip4",
+			},
+		},
+	},
+	"bleemeo.account_id":         "",
+	"bleemeo.api_base":           "https://api.bleemeo.com/",
+	"bleemeo.api_ssl_insecure":   false,
+	"bleemeo.enabled":            true,
+	"bleemeo.initial_agent_name": "",
+	"bleemeo.mqtt.cafile":        "",
+	"bleemeo.mqtt.host":          "mqtt.bleemeo.com",
+	"bleemeo.mqtt.port":          8883,
+	"bleemeo.mqtt.ssl_insecure":  false,
+	"bleemeo.mqtt.ssl":           true,
+	"bleemeo.registration_key":   "",
+	"bleemeo.sentry.dsn":         "",
 	"config_files": []string{ // This settings could not be overridden by configuration files
 		"/etc/glouton/glouton.conf",
 		"/etc/glouton/conf.d",
@@ -131,15 +143,6 @@ var defaultConfig = map[string]interface{}{
 	"zabbix.enabled":                  false,
 	"zabbix.address":                  "127.0.0.1",
 	"zabbix.port":                     10050,
-	"blackbox.targets":                []interface{}{},
-	"blackbox.modules": map[string]interface{}{
-		"http_2xx": map[string]interface{}{
-			"prober": "http",
-			"http": map[string]interface{}{
-				"valid_http_versions": []string{"HTTP/1.1", "HTTP/2.0"},
-			},
-		},
-	},
 }
 
 func configLoadFile(filePath string, cfg *config.Configuration) error {

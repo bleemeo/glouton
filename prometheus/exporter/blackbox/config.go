@@ -18,11 +18,15 @@ package blackbox
 
 import (
 	"glouton/logger"
+	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 
 	"gopkg.in/yaml.v3"
 )
+
+//nolint:gochecknoglobals
+var maxTimeout time.Duration = 9500 * time.Millisecond
 
 // Config is the subset of glouton config that deals with probes.
 type Config struct {

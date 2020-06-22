@@ -157,7 +157,7 @@ OuterBreak:
 			continue
 		}
 
-		// neither blackbox's nor gloutons's config files specify a timeout, let's default to 10s,
+		// Neither blackbox's nor gloutons's config files specify a timeout, let's default to 10s,
 		// as we do not have access to the scrape time to derive more precise timeouts, right ?
 		timeout := time.Duration(10) * time.Second
 
@@ -165,9 +165,16 @@ OuterBreak:
 			timeout = module.Timeout * time.Second
 		}
 
-		// the user overrided the timeout value, let's respect his choice
+		// The user overrided the timeout value, let's respect his choice.
 		if curTarget.Timeout != 0 {
 			timeout = time.Duration(curTarget.Timeout) * time.Second
+		}
+
+		// Force the timeout to be 9.5s at most. This "escape hatch" should prevent timeouts from
+		// exceeding the total scrape time, which would otherwise prevent the collection of ANY
+		// metric from blackbox, as the outer context would be cancelled en route.
+		if timeout >= time.Duration(10)*time.Second {
+			timeout = maxTimeout
 		}
 
 		collectors = append(collectors,
@@ -175,8 +182,8 @@ OuterBreak:
 				Collector: &target{url: curTarget.URL, module: module, timeout: timeout},
 				Labels: map[string]string{
 					types.LabelProbeTarget: curTarget.URL,
-					// Exposing the module name allow the client to differentiate probes in case the same URL is
-					// scrapped by different modules.
+					// Exposing the module name allows the client to differentiate probes when
+					// the same URL is scrapped by different modules.
 					"module": curTarget.ModuleName,
 				},
 			})
@@ -197,9 +204,9 @@ func (conf Config) Register(r *registry.Registry) error {
 		return err
 	}
 
-	// this weird "dance" where we create a registry and a registerGatherer par probe is actually the result of
-	// our unability to expose a "meta" label while doing Collect(). We end up adding the meta labels statically
-	// at registration here.
+	// this weird "dance" where we create a registry and aad it to the registererGatherer for each probe
+	// is the product of our unability to expose a "__meta_something" label while doing Collect(). We end
+	// up adding the meta labels statically at registration here.
 	for _, c := range collectors {
 		reg := prometheus.NewRegistry()
 
