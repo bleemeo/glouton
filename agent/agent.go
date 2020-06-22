@@ -562,16 +562,18 @@ func (a *agent) run() { //nolint:gocyclo
 		DynamicJobName: "discovered-exporters",
 	}
 
-	nodeOption := node.Option{
-		RootFS:            a.hostRootPath,
-		EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
-	}
+	if a.config.Bool("agent.node_exporter.enabled") {
+		nodeOption := node.Option{
+			RootFS:            a.hostRootPath,
+			EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
+		}
 
-	nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
-	nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
+		nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
+		nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
 
-	if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
-		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
+		if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
+			logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
+		}
 	}
 
 	var monitorManager *blackbox.RegisterManager

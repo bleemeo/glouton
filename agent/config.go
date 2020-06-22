@@ -41,6 +41,7 @@ var defaultConfig = map[string]interface{}{
 	"agent.upgrade_file":             "upgrade",
 	"agent.metrics_format":           "Bleemeo",
 	"agent.node_exporter.collectors": []string{},
+	"agent.node_exporter.enabled":    true,
 	"blackbox.enabled":               true,
 	"blackbox.scraper_name":          "",
 	"blackbox.targets":               []interface{}{},
