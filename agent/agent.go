@@ -299,8 +299,10 @@ func (a *agent) updateMetricResolution(resolution time.Duration) {
 	services, err := a.discovery.Discovery(a.context, time.Hour)
 	if err != nil {
 		logger.V(1).Printf("error during discovery: %v", err)
-	} else if err := a.jmx.UpdateConfig(services, resolution); err != nil {
-		logger.V(1).Printf("failed to update JMX configuration: %v", err)
+	} else if a.jmx != nil {
+		if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+			logger.V(1).Printf("failed to update JMX configuration: %v", err)
+		}
 	}
 }
 
