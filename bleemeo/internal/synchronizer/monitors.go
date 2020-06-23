@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
-	"glouton/config"
 	"glouton/logger"
 	"glouton/prometheus/exporter/blackbox"
 )
@@ -29,99 +28,40 @@ import (
 // be declared both on the bleemeo API AND in the config file for now).
 // FIXME: we are ignoring the notion of blackbox modules, and we shouldn't.
 func (s *Synchronizer) syncMonitors(fullSync bool) error {
-	// 1. extract the list of targets from the config
-	// Note: I'm moderately happy with this cast, as it isn't checked statically by go
-	cfg, present := s.option.Config.(*config.Configuration)
-	if !present {
-		logger.V(2).Println("probes: the configuration is not of the expected type '*config.Configuration'")
-		return nil
-	}
-
-	bbConfRaw, present := cfg.Get("blackbox")
-	if !present {
-		return nil
-	}
-
-	bbConf, bbEnabled := blackbox.ReadConfig(bbConfRaw)
+	bbEnabled := s.option.Config.Bool("blackbox.enabled")
 	if !bbEnabled {
 		return nil
 	}
 
-	monitorsURL := map[string]bool{}
-
-	for _, target := range bbConf.Targets {
-		monitorsURL[target.URL] = true
-	}
-
-	// 2. obtain the list of user-declared monitors (exposed by bleemeo's API)
 	apiMonitors, err := s.getMonitorsFromAPI()
 	if err != nil {
 		return err
 	}
 
-	// 3. filter probes to keep only those that are also present in the metrics
-	newMonitors := map[string]bleemeoTypes.Monitor{}
+	s.option.Cache.SetMonitors(apiMonitors)
 
-	for _, apiMonitor := range apiMonitors {
-		for url := range monitorsURL {
-			if url == apiMonitor.URL {
-				newMonitors[url] = apiMonitor
-				break
-			}
-		}
+	// refresh blackbox collectors to meet the new configuration
+	blackbox.UpdateConfig(apiMonitors)
+	if err := blackbox.UpdateManager(); err != nil {
+		logger.V(1).Printf("Could not update blackbox_exporter")
+		return err
 	}
-
-	oldMonitors := s.option.Cache.Monitors()
-
-	// TODO: I kind of hope there is some more elegant way (like Rust's 'symmetric_difference' on HashSets)
-	// to compute that difference ?
-	for _, newMonitor := range newMonitors {
-		found := false
-
-		for _, oldMonitor := range oldMonitors {
-			if oldMonitor.ID == newMonitor.ID {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			logger.V(2).Printf("New probe registered for '%s'", newMonitor.URL)
-		}
-	}
-
-	for _, oldMonitor := range oldMonitors {
-		found := false
-
-		for _, newMonitor := range newMonitors {
-			if oldMonitor.ID == newMonitor.ID {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			logger.V(2).Printf("The probe for '%s' is now deactivated", oldMonitor.URL)
-		}
-	}
-
-	s.option.Cache.SetMonitors(newMonitors)
 
 	return nil
 }
 
-func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
+func (s *Synchronizer) getMonitorsFromAPI() (map[string]bleemeoTypes.Monitor, error) {
 	monitors := []bleemeoTypes.Monitor{}
 
 	params := map[string]string{
 		"monitor": "true",
 		"active":  "true",
-		"fields":  "id,agent,monitor_url",
+		"fields":  "id,agent,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content",
 	}
 
 	result, err := s.client.Iter("service", params)
 	if err != nil {
-		return monitors, err
+		return nil, err
 	}
 
 	monitors = make([]bleemeoTypes.Monitor, 0, len(result))
@@ -130,11 +70,17 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 		var monitor bleemeoTypes.Monitor
 
 		if err := json.Unmarshal(jsonMessage, &monitor); err != nil {
-			return monitors, fmt.Errorf("couldn't parse monitor %v", jsonMessage)
+			return nil, fmt.Errorf("couldn't parse monitor %v", jsonMessage)
 		}
 
 		monitors = append(monitors, monitor)
 	}
 
-	return monitors, nil
+	res := make(map[string]bleemeoTypes.Monitor, len(monitors))
+
+	for _, m := range monitors {
+		res[m.URL] = m
+	}
+
+	return res, nil
 }

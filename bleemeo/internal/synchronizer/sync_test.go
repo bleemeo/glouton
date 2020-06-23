@@ -10,6 +10,8 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/prometheus/exporter/blackbox"
+	"glouton/prometheus/registry"
 	"glouton/store"
 	"io"
 	"net/http"
@@ -63,25 +65,18 @@ var (
 		ID:         "52b9c46e-00b9-4e80-a852-781426a3a193",
 		LabelsText: "__name__=\"probe_whatever\",instance=\"http://bleemeo.com\"",
 		Labels:     map[string]string{"__name__": "probe_whatever", "instance": "http://bleemeo.com"},
-		ServiceID:  newActiveMonitor.ID,
+		ServiceID:  newMonitor.ID,
 	}
 	newMetrics []types.Metric = []types.Metric{newMetric1, newMetric2, newMetricActiveMonitor}
 
-	newActiveMonitor types.Monitor = types.Monitor{
+	newMonitor types.Monitor = types.Monitor{
 		Service: types.Service{
 			ID: "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
 		},
 		URL:     activeMonitorURL,
 		AgentID: newAgent.ID,
 	}
-	newInactiveMonitor types.Monitor = types.Monitor{
-		Service: types.Service{
-			ID: "d29662a8-a505-4978-9dfc-c18a28dab665",
-		},
-		URL:     "http://perdu.com",
-		AgentID: newAgent.ID,
-	}
-	newMonitors []types.Monitor = []types.Monitor{newActiveMonitor, newInactiveMonitor}
+	newMonitors []types.Monitor = []types.Monitor{newMonitor}
 
 	uuidRegexp *regexp.Regexp = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
 )
@@ -229,21 +224,7 @@ func basicTestSetup(t *testing.T) *Synchronizer {
 	cfg.Set("bleemeo.api_base", "http://"+apiBase)
 	cfg.Set("bleemeo.account_id", accountID)
 	cfg.Set("bleemeo.registration_key", registrationKey)
-	cfg.Set("blackbox.targets", []interface{}{
-		map[string]interface{}{
-			"url":    activeMonitorURL,
-			"module": "http_2xx",
-		},
-	})
-	// excerpt from the default config
-	cfg.Set("blackbox.modules", map[string]interface{}{
-		"http_2xx": map[string]interface{}{
-			"prober": "http",
-			"http": map[string]interface{}{
-				"valid_http_versions": []string{"HTTP/1.1", "HTTP/2.0"},
-			},
-		},
-	})
+	cfg.Set("blackbox.enabled", true)
 
 	cache := cache.Cache{}
 
@@ -279,6 +260,9 @@ func basicTestSetup(t *testing.T) *Synchronizer {
 		t.Fatal(err)
 	}
 
+	registry := &registry.Registry{}
+	blackbox.Register(registry)
+
 	return s
 }
 
@@ -312,13 +296,7 @@ func TestSyncMetrics(t *testing.T) {
 		t.Fatalf("missing monitor for %s", activeMonitorURL)
 	}
 
-	if !reflect.DeepEqual(newActiveMonitor, syncedMonitor) {
-		t.Fatalf("got invalid metrics %v, want %v", syncedMonitor, newActiveMonitor)
-	}
-
-	// assert that we did not sync the inactive monitor
-	_, present = syncedMonitors[newInactiveMonitor.URL]
-	if present {
-		t.Fatalf("the monitor for %s should not be available", newInactiveMonitor.URL)
+	if !reflect.DeepEqual(newMonitor, syncedMonitor) {
+		t.Fatalf("got invalid metrics %v, want %v", syncedMonitor, newMonitor)
 	}
 }

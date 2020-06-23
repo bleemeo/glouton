@@ -49,12 +49,18 @@ var (
 		"icmp": prober.ProbeICMP,
 		"dns":  prober.ProbeDNS,
 	}
+	Conf Config = Config{
+		Targets: []ConfigTarget{},
+		Modules: map[string]config.Module{},
+	}
+	Manager = registerManager{
+		registrations: map[int]collectorWithLabels{},
+	}
 )
 
 type target struct {
-	url     string
-	module  config.Module
-	timeout time.Duration
+	url    string
+	module config.Module
 }
 
 // Describe implements the prometheus.Collector interface.
@@ -66,7 +72,7 @@ func (target *target) Describe(ch chan<- *prometheus.Desc) {
 // Collect implements the prometheus.Collector interface.
 // It is where we do the actual "probing".
 func (target *target) Collect(ch chan<- prometheus.Metric) {
-	ctx, cancel := context.WithTimeout(context.Background(), target.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), target.module.Timeout)
 	// Let's ensure we don't end up with stray queries running somewhere
 	defer cancel()
 
@@ -132,91 +138,108 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 // We define labels to apply on a specific collector at registration, as those labels cannot be exposed
 // while gathering (e.g. labels prefixed by '__').
 type collectorWithLabels struct {
-	Collector prometheus.Collector
-	Labels    map[string]string
+	collector prometheus.Collector
+	labels    map[string]string
+	target    ConfigTarget
 }
 
-func newCollector(conf Config) ([]collectorWithLabels, error) {
-	unknownModules := []string{}
-	collectors := []collectorWithLabels{}
+// registerManager is an abstraction that allows us to reload blackbox at runtime, enabling and disabling
+// probes at will.
+type registerManager struct {
+	registrations map[int]collectorWithLabels
+	registry      *registry.Registry
+}
 
-	// Extract the list of unknown modules specified by the users in glouton's configuration file
-	// and build a list of prometheus Collectors (one per target)
-OuterBreak:
-	for _, curTarget := range conf.Targets {
-		module, present := conf.Modules[curTarget.ModuleName]
-		// if the module is unknown, add it to the list
-		if !present {
-			// prevent duplicates
-			for _, v := range unknownModules {
-				if curTarget.ModuleName == v {
-					continue OuterBreak
-				}
+func newCollector(ctarget ConfigTarget, conf Config) (*collectorWithLabels, error) {
+	module, present := conf.Modules[ctarget.ModuleName]
+	// if the module is unknown, add it to the list
+	if !present {
+		return nil, fmt.Errorf("unknown blackbox module found in your configuration for %s ('%v'). "+
+			"This is a bug, please contact us.", ctarget.URL, ctarget.ModuleName)
+	}
+
+	return &collectorWithLabels{
+		collector: &target{url: ctarget.URL, module: module},
+		labels: map[string]string{
+			types.LabelMetaProbeTarget: ctarget.URL,
+			types.LabelMetaMetricKind:  types.MonitorMetricKind.String(),
+			// Exposing the module name allows the client to differentiate probes when
+			// the same URL is scrapped by different modules.
+			"module": ctarget.ModuleName,
+		},
+		target: ctarget,
+	}, nil
+}
+
+// Register registers blackbox_exporter in our internal registry.
+func Register(r *registry.Registry) {
+	Manager.registry = r
+}
+
+func inMap(value collectorWithLabels, iterable map[int]collectorWithLabels) bool {
+	for _, arrayValue := range iterable {
+		if value.target == arrayValue.target {
+			return true
+		}
+	}
+	return false
+}
+
+func inArray(value collectorWithLabels, iterable []collectorWithLabels) bool {
+	for _, arrayValue := range iterable {
+		if value.target == arrayValue.target {
+			return true
+		}
+	}
+	return false
+}
+
+// UpdateManager registers and deregisters collectors to sync the internal state with the configuration.
+func UpdateManager() error {
+	if Manager.registry == nil {
+		return fmt.Errorf("the registry is not defined for blackbox yet")
+	}
+
+	collectorsFromConfig := make([]collectorWithLabels, 0, len(Conf.Targets))
+
+	for _, configCollector := range Conf.Targets {
+		collectorFromConfig, err := newCollector(configCollector, Conf)
+		if err != nil {
+			return err
+		}
+
+		collectorsFromConfig = append(collectorsFromConfig, *collectorFromConfig)
+	}
+
+	// register new probes
+	for _, collectorFromConfig := range collectorsFromConfig {
+		if !inMap(collectorFromConfig, Manager.registrations) {
+			// this weird "dance" where we create a registry and add it to the registererGatherer
+			// for each probe is the product of our unability to expose a "__meta_something"
+			// label while doing Collect(). We end up adding the meta labels statically at
+			// registration.
+			reg := prometheus.NewRegistry()
+
+			if err := reg.Register(collectorFromConfig.collector); err != nil {
+				return err
 			}
-			unknownModules = append(unknownModules, curTarget.ModuleName)
-			continue
+
+			id, err := Manager.registry.RegisterGatherer(reg, nil, collectorFromConfig.labels)
+			if err != nil {
+				return err
+			}
+
+			Manager.registrations[id] = collectorFromConfig
+			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.target.URL)
 		}
-
-		// Neither blackbox's nor gloutons's config files specify a timeout, let's default to 10s,
-		// as we do not have access to the scrape time to derive more precise timeouts, right ?
-		timeout := time.Duration(10) * time.Second
-
-		if module.Timeout != 0 {
-			timeout = module.Timeout * time.Second
-		}
-
-		// The user overrided the timeout value, let's respect his choice.
-		if curTarget.Timeout != 0 {
-			timeout = time.Duration(curTarget.Timeout) * time.Second
-		}
-
-		// Force the timeout to be 9.5s at most. This "escape hatch" should prevent timeouts from
-		// exceeding the total scrape time, which would otherwise prevent the collection of ANY
-		// metric from blackbox, as the outer context would be cancelled en route.
-		if timeout > maxTimeout {
-			timeout = maxTimeout
-		}
-
-		collectors = append(collectors,
-			collectorWithLabels{
-				Collector: &target{url: curTarget.URL, module: module, timeout: timeout},
-				Labels: map[string]string{
-					types.LabelMetaProbeTarget: curTarget.URL,
-					types.LabelMetaMetricKind:  types.MonitorMetricKind.String(),
-					// Exposing the module name allows the client to differentiate probes when
-					// the same URL is scrapped by different modules.
-					"module": curTarget.ModuleName,
-				},
-			})
 	}
 
-	if len(unknownModules) > 0 {
-		return nil, fmt.Errorf("unknown blackbox modules found in your configuration: %v. "+
-			"Maybe check that these modules are present in your config file ?", unknownModules)
-	}
-
-	return collectors, nil
-}
-
-// Register registers blackbox_exporter in the global prometheus registry.
-func (conf Config) Register(r *registry.Registry) error {
-	collectors, err := newCollector(conf)
-	if err != nil {
-		return err
-	}
-
-	// this weird "dance" where we create a registry and aad it to the registererGatherer for each probe
-	// is the product of our unability to expose a "__meta_something" label while doing Collect(). We end
-	// up adding the meta labels statically at registration here.
-	for _, c := range collectors {
-		reg := prometheus.NewRegistry()
-
-		if err := reg.Register(c.Collector); err != nil {
-			return err
-		}
-
-		if _, err = r.RegisterGatherer(reg, nil, c.Labels); err != nil {
-			return err
+	// unregister any obsolete probe
+	for idx, managerCollector := range Manager.registrations {
+		if !managerCollector.target.FromStaticConfig && !inArray(managerCollector, collectorsFromConfig) {
+			logger.V(2).Printf("The probe for '%s' is now deactivated", managerCollector.target.URL)
+			Manager.registry.UnregisterGatherer(idx)
+			delete(Manager.registrations, idx)
 		}
 	}
 

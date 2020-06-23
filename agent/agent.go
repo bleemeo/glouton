@@ -582,18 +582,16 @@ func (a *agent) run() { //nolint:gocyclo
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
 	}
 
-	blackboxConf, blackboxConfPresent := a.config.Get("blackbox")
-	if blackboxConfPresent {
-		blackboxConf, blackboxEnabled := blackbox.ReadConfig(blackboxConf)
-		if blackboxEnabled {
-			logger.V(1).Println("Starting blackbox_exporter...")
-
-			if err := blackboxConf.Register(a.gathererRegistry); err != nil {
-				logger.Printf("Unable to start blackbox_exporter, will not collect probes: %v", err)
-			}
-		} else {
-			logger.V(2).Println("blackbox_exporter not enabled, will not start...")
+	if a.config.Bool("blackbox.enabled") {
+		logger.V(1).Println("Starting blackbox_exporter...")
+		// the config is present, otherwise we would not be in this block
+		blackboxConf, _ := a.config.Get("blackbox")
+		if err := blackbox.InitConfig(blackboxConf); err != nil {
+			logger.V(1).Printf("Couldn't parse blackbox local configuration: %v", err)
 		}
+		blackbox.Register(a.gathererRegistry)
+	} else {
+		logger.V(2).Println("blackbox_exporter not enabled, will not start...")
 	}
 
 	promExporter := a.gathererRegistry.Exporter()
@@ -657,7 +655,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 		if a.metricFormat == types.MetricFormatPrometheus {
 			logger.Printf("Prometheus format is not yet supported with Bleemeo")
-			return
+			//return
 		}
 	}
 

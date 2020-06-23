@@ -389,7 +389,7 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 
 	// Determine the appropriate agent ID and add the point to the matching list
 	for _, newPoint := range points {
-		idx := c.option.AgentID
+		id := c.option.AgentID
 
 		if newPoint.Annotations.Kind == types.MonitorMetricKind {
 			// search the monitor in the active monitors, if it isn't there just drop the point
@@ -405,11 +405,11 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 				// no such monitor, let's drop this point
 				continue
 			}
-			// Hurrah, it's a monitor ! The agent ID is thus the ID of the "owner" of that monitor.
-			idx = types.AgentID(monitor.AgentID)
+			// Hurrah, it's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
+			id = types.AgentID(monitor.AgentID)
 		}
 
-		c.pendingPoints[idx] = append(c.pendingPoints[idx], newPoint)
+		c.pendingPoints[id] = append(c.pendingPoints[id], newPoint)
 	}
 }
 

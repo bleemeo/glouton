@@ -20,11 +20,15 @@ import (
 	"glouton/config"
 	"glouton/prometheus/exporter/blackbox"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
+
+//nolint:gochecknoglobals
+var mutex sync.Mutex = sync.Mutex{}
 
 func TestConfigParsing(t *testing.T) {
 	cfg := &config.Configuration{}
@@ -64,9 +68,11 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the yaml configuration")
 	}
 
-	blackboxConf, ok := blackbox.ReadConfig(blackboxConf)
-	if !ok {
-		t.Fatalf("Couldn't parse the config")
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if err := blackbox.InitConfig(blackboxConf); err != nil {
+		t.Fatal(err)
 	}
 
 	expectedValue := blackbox.Config{
@@ -87,7 +93,8 @@ func TestConfigParsing(t *testing.T) {
 				TCP:  bbConf.DefaultTCPProbe,
 			},
 			"dns": {
-				Prober: "dns",
+				Prober:  "dns",
+				Timeout: 9500 * time.Millisecond,
 				DNS: bbConf.DNSProbe{
 					IPProtocol: "ip4",
 					QueryName:  "nightmared.fr",
@@ -102,14 +109,14 @@ func TestConfigParsing(t *testing.T) {
 		},
 		// we assume parsing preserves the order, which seems to be the case
 		Targets: []blackbox.ConfigTarget{
-			{URL: "https://google.com", ModuleName: "http_2xx", Timeout: 0},
-			{URL: "https://inpt.fr", ModuleName: "dns", Timeout: 5},
-			{URL: "http://neverssl.com", ModuleName: "http_2xx", Timeout: 2},
+			{URL: "https://google.com", ModuleName: "http_2xx", FromStaticConfig: true},
+			{URL: "https://inpt.fr", ModuleName: "dns", FromStaticConfig: true},
+			{URL: "http://neverssl.com", ModuleName: "http_2xx", FromStaticConfig: true},
 		},
 	}
 
-	if !reflect.DeepEqual(blackboxConf, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackboxConf, expectedValue)
+	if !reflect.DeepEqual(blackbox.Conf, expectedValue) {
+		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackbox.Conf, expectedValue)
 	}
 }
 
@@ -133,15 +140,18 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the yaml configuration")
 	}
 
-	blackboxConf, ok := blackbox.ReadConfig(blackboxConf)
-	if !ok {
-		t.Fatalf("Couldn't parse the config")
+	mutex.Lock()
+	defer mutex.Unlock()
+
+	if err := blackbox.InitConfig(blackboxConf); err != nil {
+		t.Fatal(err)
 	}
 
 	expectedValue := blackbox.Config{
 		Modules: map[string]bbConf.Module{
 			"http_2xx": {
-				Prober: "http",
+				Prober:  "http",
+				Timeout: 9500 * time.Millisecond,
 				HTTP: bbConf.HTTPProbe{
 					ValidHTTPVersions:  []string{"HTTP/1.1", "HTTP/2.0"},
 					IPProtocolFallback: true,
@@ -155,7 +165,7 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		Targets: []blackbox.ConfigTarget{},
 	}
 
-	if !reflect.DeepEqual(blackboxConf, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackboxConf, expectedValue)
+	if !reflect.DeepEqual(blackbox.Conf, expectedValue) {
+		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackbox.Conf, expectedValue)
 	}
 }
