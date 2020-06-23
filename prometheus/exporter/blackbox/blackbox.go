@@ -173,7 +173,7 @@ OuterBreak:
 		// Force the timeout to be 9.5s at most. This "escape hatch" should prevent timeouts from
 		// exceeding the total scrape time, which would otherwise prevent the collection of ANY
 		// metric from blackbox, as the outer context would be cancelled en route.
-		if timeout >= time.Duration(10)*time.Second {
+		if timeout > maxTimeout {
 			timeout = maxTimeout
 		}
 

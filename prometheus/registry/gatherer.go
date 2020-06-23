@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"glouton/types"
 	"strings"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -118,34 +119,50 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 
 	var errs prometheus.MultiError
 
+	wg := sync.WaitGroup{}
+	wg.Add(len(gs))
+
+	mutex := sync.RWMutex{}
+
 	for _, g := range gs {
-		mfs, err := g.Gather()
-		if err != nil {
-			errs = append(errs, err)
-		}
-
-		for _, mf := range mfs {
-			existingMF, exists := metricFamiliesByName[mf.GetName()]
-			if exists {
-				if existingMF.GetType() != mf.GetType() {
-					errs = append(errs, fmt.Errorf(
-						"gathered metric family %s has type %s but should have %s",
-						mf.GetName(), mf.GetType(), existingMF.GetType(),
-					))
-
-					continue
-				}
-			} else {
-				existingMF = &dto.MetricFamily{}
-				existingMF.Name = mf.Name
-				existingMF.Help = mf.Help
-				existingMF.Type = mf.Type
-				metricFamiliesByName[mf.GetName()] = existingMF
+		go func(g prometheus.Gatherer) {
+			mfs, err := g.Gather()
+			if err != nil {
+				errs = append(errs, err)
 			}
 
-			existingMF.Metric = append(existingMF.Metric, mf.Metric...)
-		}
+			for _, mf := range mfs {
+				mutex.RLock()
+				existingMF, exists := metricFamiliesByName[mf.GetName()]
+				mutex.RUnlock()
+
+				if exists {
+					if existingMF.GetType() != mf.GetType() {
+						errs = append(errs, fmt.Errorf(
+							"gathered metric family %s has type %s but should have %s",
+							mf.GetName(), mf.GetType(), existingMF.GetType(),
+						))
+
+						continue
+					}
+				} else {
+					existingMF = &dto.MetricFamily{}
+					existingMF.Name = mf.Name
+					existingMF.Help = mf.Help
+					existingMF.Type = mf.Type
+					mutex.Lock()
+					metricFamiliesByName[mf.GetName()] = existingMF
+					mutex.Unlock()
+				}
+
+				existingMF.Metric = append(existingMF.Metric, mf.Metric...)
+			}
+
+			wg.Done()
+		}(g)
 	}
+
+	wg.Wait()
 
 	result := make([]*dto.MetricFamily, 0, len(metricFamiliesByName))
 
