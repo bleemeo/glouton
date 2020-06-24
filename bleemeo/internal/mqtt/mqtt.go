@@ -34,6 +34,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -202,6 +203,18 @@ func (c *Client) Run(ctx context.Context) error {
 	return err
 }
 
+// DiagnosticPage return useful information to troubleshoot issue.
+func (c *Client) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	host := c.option.Config.String("bleemeo.mqtt.host")
+	port := c.option.Config.Int("bleemeo.mqtt.port")
+
+	builder.WriteString(common.DiagnosticTCP(host, port, c.tlsConfig()))
+
+	return builder.String()
+}
+
 // LastReport returns the date of last report with Bleemeo API.
 func (c *Client) LastReport() time.Time {
 	c.l.Lock()
@@ -247,20 +260,7 @@ func (c *Client) setupMQTT() paho.Client {
 	brokerURL := fmt.Sprintf("%s:%d", c.option.Config.String("bleemeo.mqtt.host"), c.option.Config.Int("bleemeo.mqtt.port"))
 
 	if c.option.Config.Bool("bleemeo.mqtt.ssl") {
-		tlsConfig := &tls.Config{}
-
-		caFile := c.option.Config.String("bleemeo.mqtt.cafile")
-		if caFile != "" {
-			if rootCAs, err := loadRootCAs(caFile); err != nil {
-				logger.Printf("Unable to load CAs from %#v", caFile)
-			} else {
-				tlsConfig.RootCAs = rootCAs
-			}
-		}
-
-		if c.option.Config.Bool("bleemeo.mqtt.ssl_insecure") {
-			tlsConfig.InsecureSkipVerify = true
-		}
+		tlsConfig := c.tlsConfig()
 
 		pahoOptions.SetTLSConfig(tlsConfig)
 
@@ -277,6 +277,29 @@ func (c *Client) setupMQTT() paho.Client {
 	pahoOptions.SetOnConnectHandler(c.onConnect)
 
 	return paho.NewClient(pahoOptions)
+}
+
+func (c *Client) tlsConfig() *tls.Config {
+	if !c.option.Config.Bool("bleemeo.mqtt.ssl") {
+		return nil
+	}
+
+	tlsConfig := &tls.Config{}
+
+	caFile := c.option.Config.String("bleemeo.mqtt.cafile")
+	if caFile != "" {
+		if rootCAs, err := loadRootCAs(caFile); err != nil {
+			logger.Printf("Unable to load CAs from %#v", caFile)
+		} else {
+			tlsConfig.RootCAs = rootCAs
+		}
+	}
+
+	if c.option.Config.Bool("bleemeo.mqtt.ssl_insecure") {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
+	return tlsConfig
 }
 
 func (c *Client) shutdown() error {

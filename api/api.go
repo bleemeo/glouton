@@ -20,7 +20,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"time"
 
@@ -64,6 +66,8 @@ type API struct {
 	AgentInfo          agentInterface
 	PrometheurExporter http.Handler
 	Threshold          *threshold.Registry
+	DiagnosticPage     func() string
+	DiagnosticZip      func(w io.Writer) error
 
 	router http.Handler
 }
@@ -96,9 +100,51 @@ func (api *API) init() {
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
 	}
 
-	router.Handle("/metrics", promExporter) // promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
+	var diagnosticTmpl *template.Template
+
+	diagnosticBody, err := boxHTML.Find("diagnostic.html")
+	if err != nil {
+		logger.Printf("Error while loading diagnostic.html: %v", err)
+	} else {
+		diagnosticTmpl, err = template.New("diagnostic").Parse(string(diagnosticBody))
+		if err != nil {
+			diagnosticTmpl = nil
+			logger.Printf("Error while loading diagnostic.html. Local UI will be broken: %v", err)
+		}
+	}
+
+	router.Handle("/metrics", api.PrometheurExporter)
 	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
+		content := api.DiagnosticPage()
+
+		var err error
+
+		if diagnosticTmpl == nil {
+			fmt.Fprintln(w, "diagnostic.html load failed. Fallback to simple text")
+			_, err = w.Write([]byte(content))
+		} else {
+			err = diagnosticTmpl.Execute(w, content)
+		}
+
+		if err != nil {
+			logger.V(2).Printf("fail to serve index.html: %v", err)
+		}
+	})
+
+	router.HandleFunc("/diagnostic.zip", func(w http.ResponseWriter, r *http.Request) {
+		hdr := w.Header()
+		hdr.Add("Content-Type", "application/zip")
+		if err := hdr.Write(w); err != nil {
+			logger.V(1).Printf("failed to server diagnostic.zip: %v", err)
+			return
+		}
+
+		if err := api.DiagnosticZip(w); err != nil {
+			logger.V(1).Printf("failed to server diagnostic.zip: %v", err)
+		}
+	})
 
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {

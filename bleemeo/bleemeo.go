@@ -18,7 +18,9 @@ package bleemeo
 
 import (
 	"context"
+	"fmt"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -264,6 +266,71 @@ func (c *Connector) Run(ctx context.Context) error {
 // UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
 	c.sync.UpdateContainers()
+}
+
+// DiagnosticPage return useful information to troubleshoot issue.
+func (c *Connector) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	registrationKey := []rune(c.option.Config.String("bleemeo.registration_key"))
+	for i := range registrationKey {
+		if i >= 6 && i < len(registrationKey)-4 {
+			registrationKey[i] = '*'
+		}
+	}
+
+	fmt.Fprintf(
+		builder,
+		"Bleemeo account ID is %#v and registration key = %#v\n",
+		c.AccountID(), string(registrationKey),
+	)
+
+	if c.AgentID() == "" {
+		fmt.Fprintln(builder, "Glouton is no registered with Bleemeo")
+	} else {
+		fmt.Fprintf(builder, "Glouton is registered with Bleemeo with ID %v\n", c.AgentID())
+	}
+
+	lastReport := c.LastReport().Format(time.RFC3339)
+
+	if c.Connected() {
+		fmt.Fprintf(builder, "Glouton is currently connected. Last report to Bleemeo at %s\n", lastReport)
+	} else {
+		fmt.Fprintf(builder, "Glouton is currently NOT connected. Last report to Bleemeo at %s\n", lastReport)
+	}
+
+	c.l.Lock()
+	if time.Now().Before(c.disabledUntil) {
+		fmt.Fprintf(
+			builder,
+			"Glouton connection to Bleemeo is disabled until %s due to %v\n",
+			c.disabledUntil,
+			c.disableReason,
+		)
+	}
+
+	mqtt := c.mqtt
+	c.l.Unlock()
+
+	syncPage := make(chan string)
+	mqttPage := make(chan string)
+
+	go func() {
+		syncPage <- c.sync.DiagnosticPage()
+	}()
+
+	go func() {
+		if mqtt == nil {
+			mqttPage <- "MQTT connector is not (yet) initialized\n"
+		} else {
+			mqttPage <- c.mqtt.DiagnosticPage()
+		}
+	}()
+
+	builder.WriteString(<-syncPage)
+	builder.WriteString(<-mqttPage)
+
+	return builder.String()
 }
 
 // Tags returns the Tags set on Bleemeo Cloud platform.
