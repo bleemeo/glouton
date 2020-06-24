@@ -113,6 +113,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	s.successiveErrors = 0
+	successiveAuthErrors := 0
 
 	var minimalDelay time.Duration
 
@@ -133,9 +134,24 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
-			delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 
-			s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+			if client.IsAuthError(err) {
+				successiveAuthErrors++
+			}
+
+			switch {
+			case client.IsAuthError(err) && successiveAuthErrors >= 3:
+				delay := common.JitterDelay(60*math.Pow(1.55, float64(successiveAuthErrors)), 0.1, 21600)
+				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(delay))
+			default:
+				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+				s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+
+				if client.IsAuthError(err) && successiveAuthErrors == 1 {
+					// we disable only to trigger a reconnection on MQTT
+					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(10*time.Second))
+				}
+			}
 
 			switch {
 			case client.IsAuthError(err) && s.agentID != "":
@@ -151,11 +167,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-
-				if s.successiveErrors%10 == 1 {
-					// we disable only to trigger a reconnection on MQTT
-					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(10*time.Second))
-				}
 			case client.IsAuthError(err):
 				registrationKey := []rune(s.option.Config.String("bleemeo.registration_key"))
 				for i := range registrationKey {
@@ -178,6 +189,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			}
 		} else {
 			s.successiveErrors = 0
+			successiveAuthErrors = 0
 			minimalDelay = common.JitterDelay(15, 0.05, 15)
 
 			if firstSync {

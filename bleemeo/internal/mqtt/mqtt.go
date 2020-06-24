@@ -160,6 +160,13 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	if reason == bleemeoTypes.DisableAuthenticationError {
+		// Kept MQTT disabled a bit longer, this will allow synchronizer to
+		// test if the authentication error is resolved and don't check this
+		// twice (one in MQTT and one in synchronized)
+		until = until.Add(80 * time.Second)
+	}
+
 	if c.disabledUntil.Before(until) {
 		c.disabledUntil = until
 		c.disableReason = reason
