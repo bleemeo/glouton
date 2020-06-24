@@ -393,20 +393,27 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 
 		if newPoint.Annotations.Kind == types.MonitorMetricKind {
 			// search the monitor in the active monitors, if it isn't there just drop the point
-			url, present := newPoint.Labels["instance"]
+			serviceID, present := newPoint.Labels[types.LabelInstanceUUID]
 			if !present {
-				logger.V(2).Printf("Couldn't find the URL on point %v originating from a probe (missing 'instance' label)", newPoint)
+				logger.V(2).Printf("Couldn't find the URL on point %v originating from a probe (missing '%s' label)", newPoint, types.LabelInstanceUUID)
 				continue
 			}
 
-			monitor, present := monitors[url]
+			found := false
 
-			if !present {
-				// no such monitor, let's drop this point
+			for _, monitor := range monitors {
+				if monitor.ID == serviceID {
+					// Hurrah, it's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
+					id = types.AgentID(monitor.AgentID)
+					found = true
+
+					break
+				}
+			}
+
+			if !found {
 				continue
 			}
-			// Hurrah, it's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-			id = types.AgentID(monitor.AgentID)
 		}
 
 		c.pendingPoints[id] = append(c.pendingPoints[id], newPoint)

@@ -26,7 +26,6 @@ import (
 
 // syncMonitors updates the list of metrics that must be watched locally (to be sent over MQTT, a metric must
 // be declared both on the bleemeo API AND in the config file for now).
-// FIXME: we are ignoring the notion of blackbox modules, and we shouldn't.
 func (s *Synchronizer) syncMonitors(fullSync bool) error {
 	bbEnabled := s.option.Config.Bool("blackbox.enabled")
 	if !bbEnabled {
@@ -50,10 +49,12 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 		return err
 	}
 
+	s.forceSync["metrics"] = false
+
 	return nil
 }
 
-func (s *Synchronizer) getMonitorsFromAPI() (map[string]bleemeoTypes.Monitor, error) {
+func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 	params := map[string]string{
 		"monitor": "true",
 		"active":  "true",
@@ -77,11 +78,5 @@ func (s *Synchronizer) getMonitorsFromAPI() (map[string]bleemeoTypes.Monitor, er
 		monitors = append(monitors, monitor)
 	}
 
-	res := make(map[string]bleemeoTypes.Monitor, len(monitors))
-
-	for _, m := range monitors {
-		res[m.URL] = m
-	}
-
-	return res, nil
+	return monitors, nil
 }

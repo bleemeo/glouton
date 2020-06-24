@@ -74,7 +74,7 @@ func (f MetricFormat) String() string {
 	}
 }
 
-// AgentID is an agent/monitor UUID.
+// AgentID is an agent UUID.
 // This type exists for the sole purpose of making type definitions clearer.
 type AgentID string
 
@@ -98,8 +98,10 @@ const (
 	LabelMetaScrapeJob      = "__meta_scrape_job"
 	LabelMetaBleemeoUUID    = "__meta_bleemeo_uuid"
 	LabelMetaProbeTarget    = "__meta_probe_target"
+	LabelMetaProbeService   = "__meta_probe_service"
 	LabelMetaMetricKind     = "__meta_metric_kind"
 	LabelInstanceUUID       = "instance_uuid"
+	LabelScraperUUID        = "scraper_uuid"
 	LabelInstance           = "instance"
 	LabelJob                = "job"
 	LabelContainerName      = "container_name"

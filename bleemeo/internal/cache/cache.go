@@ -43,8 +43,7 @@ type data struct {
 	Agent         bleemeoTypes.Agent
 	AccountConfig bleemeoTypes.AccountConfig
 	Services      []bleemeoTypes.Service
-	// mapping between the URL of the probe and its informations
-	Monitors map[string]bleemeoTypes.Monitor
+	Monitors      []bleemeoTypes.Monitor
 }
 
 // SetAccountID update the AccountID.
@@ -92,7 +91,7 @@ func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 }
 
 // SetMonitors updates the list of monitors.
-func (c *Cache) SetMonitors(monitors map[string]bleemeoTypes.Monitor) {
+func (c *Cache) SetMonitors(monitors []bleemeoTypes.Monitor) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -186,14 +185,13 @@ func (c *Cache) Services() []bleemeoTypes.Service {
 }
 
 // Monitors returns a (copy) of the Monitors.
-func (c *Cache) Monitors() map[string]bleemeoTypes.Monitor {
+func (c *Cache) Monitors() []bleemeoTypes.Monitor {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]bleemeoTypes.Monitor, len(c.data.Monitors))
-	for k, v := range c.data.Monitors {
-		result[k] = v
-	}
+	result := make([]bleemeoTypes.Monitor, len(c.data.Monitors))
+
+	copy(result, c.data.Monitors)
 
 	return result
 }

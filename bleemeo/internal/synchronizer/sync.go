@@ -207,6 +207,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 
 	s.forceSync["metrics"] = true
 	s.forceSync["containers"] = true
+	s.forceSync["monitor"] = true
 }
 
 // UpdateMetrics request to update a specific metrics.

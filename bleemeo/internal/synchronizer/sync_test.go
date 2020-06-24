@@ -290,11 +290,7 @@ func TestSyncMetrics(t *testing.T) {
 
 	// Did we sync and enable the monitor present in the configuration ?
 	syncedMonitors := s.option.Cache.Monitors()
-	syncedMonitor, present := syncedMonitors[activeMonitorURL]
-
-	if !present {
-		t.Fatalf("missing monitor for %s", activeMonitorURL)
-	}
+	syncedMonitor := syncedMonitors[0]
 
 	if !reflect.DeepEqual(newMonitor, syncedMonitor) {
 		t.Fatalf("got invalid metrics %v, want %v", syncedMonitor, newMonitor)

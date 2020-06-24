@@ -109,9 +109,9 @@ func TestConfigParsing(t *testing.T) {
 		},
 		// we assume parsing preserves the order, which seems to be the case
 		Targets: []blackbox.ConfigTarget{
-			{URL: "https://google.com", ModuleName: "http_2xx", FromStaticConfig: true},
-			{URL: "https://inpt.fr", ModuleName: "dns", FromStaticConfig: true},
-			{URL: "http://neverssl.com", ModuleName: "http_2xx", FromStaticConfig: true},
+			{URL: "https://google.com", ModuleName: "http_2xx", Name: "https://google.com", FromStaticConfig: true},
+			{URL: "https://inpt.fr", ModuleName: "dns", Name: "https://inpt.fr", FromStaticConfig: true},
+			{URL: "http://neverssl.com", ModuleName: "http_2xx", Name: "http://neverssl.com", FromStaticConfig: true},
 		},
 	}
 

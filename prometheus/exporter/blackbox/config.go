@@ -40,7 +40,8 @@ type ConfigTarget struct {
 	URL        string `yaml:"url"`
 	ModuleName string `yaml:"module"`
 	// we keep track of the origin of probes, in order to keep static configuration alive across synchronisations
-	FromStaticConfig bool `yaml:"-"`
+	FromStaticConfig bool   `yaml:"-"`
+	ServiceID        string `yaml:"-"`
 }
 
 func defaultModule() bbConf.Module {
@@ -148,21 +149,35 @@ func InitConfig(conf interface{}) error {
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
-func UpdateDynamicTargets(monitors map[string]types.Monitor) error {
-	for sourceURL, monitor := range monitors {
-		url, module, err := genModule(sourceURL, monitor)
+func UpdateDynamicTargets(monitors []types.Monitor) error {
+	for _, monitor := range monitors {
+		url, module, err := genModule(monitor.URL, monitor)
 		if err != nil {
 			return err
 		}
 
-		Conf.Modules[sourceURL] = module
-		Conf.Targets = append(Conf.Targets, ConfigTarget{
-			// We do not allow different modules to act on the same URL, as this would lead to
-			// exporting different metrics with the same labels, and this is *bad*.
-			ModuleName: sourceURL,
-			Name:       sourceURL,
+		Conf.Modules[monitor.ID] = module
+		confTarget := ConfigTarget{
+			// We allow different modules to act on the same URL, and this is why we use a unique
+			// value (the ID of the service) as the module name
+			ModuleName: monitor.ID,
+			Name:       monitor.URL,
+			ServiceID:  monitor.ID,
 			URL:        url,
-		})
+		}
+
+		found := false
+
+		for _, v := range Conf.Targets {
+			if v == confTarget {
+				found = true
+				break
+			}
+		}
+
+		if !found {
+			Conf.Targets = append(Conf.Targets, confTarget)
+		}
 	}
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")

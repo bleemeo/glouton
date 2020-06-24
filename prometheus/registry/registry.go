@@ -130,11 +130,22 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1",
 		},
-		// delete the temporary label that indicates the type of the current metric (agent or probe)
+		// when the metric comes from a probe, the 'scraper_uuid' label is the uuid of the agent
 		{
-			Action:       relabel.LabelDrop,
-			Regex:        relabel.MustNewRegexp(""),
-			SourceLabels: model.LabelNames{types.LabelMetaMetricKind},
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeService, types.LabelMetaBleemeoUUID},
+			TargetLabel:  types.LabelScraperUUID,
+			Replacement:  "$2",
+		},
+		// when the metric comes from a probe, the 'instancer_uuid' label is the uuid of the service watched
+		{
+			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeService},
+			TargetLabel:  types.LabelInstanceUUID,
+			Replacement:  "$1",
 		},
 		{
 			Action:       relabel.Replace,

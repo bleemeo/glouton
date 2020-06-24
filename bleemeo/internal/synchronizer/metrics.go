@@ -321,7 +321,7 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bo
 
 		// Do not modify metrics declared by other agents when the target agent is a monitor
 		if isMonitor {
-			agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelInstanceUUID]
+			agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
 
 			if !present || agentUUID != s.agentID {
 				continue
@@ -393,7 +393,7 @@ func (s *Synchronizer) metricsSearchWithAgentID(metricsByUUID map[string]bleemeo
 
 			// Do not modify metrics declared by other agents when the target agent is a monitor
 			if isMonitor {
-				agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelInstanceUUID]
+				agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
 
 				if !present || agentUUID != s.agentID {
 					continue
@@ -632,7 +632,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 
 func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registeredMetricsByUUID map[string]bleemeoTypes.Metric,
 	registeredMetricsByKey map[string]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container,
-	servicesByKey map[serviceNameInstance]bleemeoTypes.Service, params map[string]string, monitors map[string]bleemeoTypes.Monitor) error {
+	servicesByKey map[serviceNameInstance]bleemeoTypes.Service, params map[string]string, monitors []bleemeoTypes.Monitor) error {
 	labels := metric.Labels()
 	annotations := metric.Annotations()
 	key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
@@ -716,20 +716,27 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 
 	// override the agent and service UUIDs when the metric is a probe's
 	if metric.Annotations().Kind == types.MonitorMetricKind {
-		url, present := labels[types.LabelInstance]
+		serviceID, present := labels[types.LabelInstanceUUID]
 		if !present {
-			logger.V(2).Printf("Invalid probe metric %v, couldn't find the label '%s'", metric, types.LabelInstance)
+			logger.V(2).Printf("Invalid probe metric %v, couldn't find the label '%s'", metric, types.LabelInstanceUUID)
 			return nil
 		}
 
-		monitor, present := monitors[url]
-		// no monitor for that url, let's not register this metric
-		if !present {
-			return nil
+		found := false
+
+		for _, monitor := range monitors {
+			if monitor.ID == serviceID {
+				payload.Agent = monitor.AgentID
+				payload.ServiceID = monitor.ID
+				found = true
+
+				break
+			}
 		}
 
-		payload.Agent = monitor.AgentID
-		payload.ServiceID = monitor.ID
+		if !found {
+			return nil
+		}
 	}
 
 	_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
