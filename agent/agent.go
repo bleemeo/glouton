@@ -583,7 +583,18 @@ func (a *agent) run() { //nolint:gocyclo
 
 	promExporter := a.gathererRegistry.Exporter()
 
-	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.threshold, a.config.String("web.static_cdn_url"))
+	api := &api.API{
+		DB:                 a.store,
+		DockerFact:         a.dockerFact,
+		PsFact:             psFact,
+		FactProvider:       a.factProvider,
+		BindAddress:        apiBindAddress,
+		Disccovery:         a.discovery,
+		AgentInfo:          a,
+		PrometheurExporter: promExporter,
+		Threshold:          a.threshold,
+		StaticCDNURL:       a.config.String("web.static_cdn_url"),
+	}
 
 	a.FireTrigger(true, true, false, false)
 

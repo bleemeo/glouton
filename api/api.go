@@ -54,31 +54,31 @@ type agentInterface interface {
 
 // API contains API's port.
 type API struct {
-	bindAddress  string
-	router       http.Handler
-	db           storeInterface
-	dockerFact   dockerInterface
-	psFact       *facts.ProcessProvider
-	factProvider *facts.FactProvider
-	disc         *discovery.Discovery
-	agent        agentInterface
-	threshold    *threshold.Registry
+	BindAddress        string
+	StaticCDNURL       string
+	DB                 storeInterface
+	DockerFact         dockerInterface
+	PsFact             *facts.ProcessProvider
+	FactProvider       *facts.FactProvider
+	Disccovery         *discovery.Discovery
+	AgentInfo          agentInterface
+	PrometheurExporter http.Handler
+	Threshold          *threshold.Registry
+
+	router http.Handler
 }
 
 type gloutonUIConfig struct {
 	StaticCDNURL string
 }
 
-// New instantiate a new API's port from environment variable or from a default port.
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, threshold *threshold.Registry, staticCDNURL string) *API {
+func (api *API) init() {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-
-	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent, threshold: threshold}
 
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
@@ -107,7 +107,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 			_, err = w.Write(fallbackIndex)
 		} else {
 			err = indexTmpl.Execute(w, gloutonUIConfig{
-				StaticCDNURL: staticCDNURL,
+				StaticCDNURL: api.StaticCDNURL,
 			})
 		}
 		if err != nil {
@@ -116,14 +116,14 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	})
 
 	api.router = router
-
-	return api
 }
 
 // Run starts our API.
-func (api API) Run(ctx context.Context) error {
+func (api *API) Run(ctx context.Context) error {
+	api.init()
+
 	srv := http.Server{
-		Addr:    api.bindAddress,
+		Addr:    api.BindAddress,
 		Handler: api.router,
 	}
 
@@ -142,8 +142,8 @@ func (api API) Run(ctx context.Context) error {
 		close(idleConnsClosed)
 	}()
 
-	logger.Printf("Starting API on %s ✔️", api.bindAddress)
-	logger.Printf("To access the local panel connect to http://%s 🌐", api.bindAddress)
+	logger.Printf("Starting API on %s ✔️", api.BindAddress)
+	logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err
