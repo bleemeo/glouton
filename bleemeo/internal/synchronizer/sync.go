@@ -84,17 +84,6 @@ func New(option Option) *Synchronizer {
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = time.Now()
-	accountID := s.option.Config.String("bleemeo.account_id")
-	registrationKey := s.option.Config.String("bleemeo.registration_key")
-
-	for accountID == "" || registrationKey == "" {
-		logger.Printf("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Minute):
-		}
-	}
 
 	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
 		return err
@@ -181,7 +170,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					string(registrationKey),
 				)
 			default:
-				if s.successiveErrors%5 == 0 {
+				if s.successiveErrors%5 == 1 {
 					logger.Printf("Unable to synchronize with Bleemeo: %v", err)
 				} else {
 					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", err)
@@ -534,6 +523,11 @@ func (s *Synchronizer) register() error {
 	}
 
 	accountID := s.option.Config.String("bleemeo.account_id")
+	registrationKey := s.option.Config.String("bleemeo.registration_key")
+
+	for accountID == "" || registrationKey == "" {
+		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
+	}
 
 	password := generatePassword(20)
 
@@ -555,7 +549,7 @@ func (s *Synchronizer) register() error {
 			"fqdn":             fqdn,
 		},
 		fmt.Sprintf("%s@bleemeo.com", accountID),
-		s.option.Config.String("bleemeo.registration_key"),
+		registrationKey,
 		&objectID,
 	)
 	if err != nil {

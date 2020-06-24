@@ -425,11 +425,16 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 	c.disabledUntil = until
 	c.disableReason = reason
 
+	mqtt := c.mqtt
+
 	c.l.Unlock()
 
 	delay := time.Until(until)
 
 	logger.Printf("Disabling Bleemeo connector for %v due to %v", delay.Truncate(time.Second), reason)
 	c.sync.Disable(until, reason)
-	c.mqtt.Disable(until, reason)
+
+	if mqtt != nil {
+		mqtt.Disable(until, reason)
+	}
 }
