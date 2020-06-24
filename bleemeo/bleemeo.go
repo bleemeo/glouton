@@ -281,12 +281,12 @@ func (c *Connector) DiagnosticPage() string {
 
 	fmt.Fprintf(
 		builder,
-		"Bleemeo account ID is %#v and registration key = %#v\n",
+		"Bleemeo account ID is %#v and registration key is %#v\n",
 		c.AccountID(), string(registrationKey),
 	)
 
 	if c.AgentID() == "" {
-		fmt.Fprintln(builder, "Glouton is no registered with Bleemeo")
+		fmt.Fprintln(builder, "Glouton is not registered with Bleemeo")
 	} else {
 		fmt.Fprintf(builder, "Glouton is registered with Bleemeo with ID %v\n", c.AgentID())
 	}

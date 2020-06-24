@@ -90,7 +90,7 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 			builder,
 			"Glouton is able to establish TLS connection to %s (%s)\n",
 			hostPort,
-			rawConn.LocalAddr().String(),
+			rawConn.RemoteAddr().String(),
 		)
 		tlsConn.Close()
 	}
