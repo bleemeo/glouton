@@ -92,8 +92,13 @@ type Threshold struct {
 // Monitor groups all the informations required to write metrics to a monitor.
 type Monitor struct {
 	Service
-	URL                  string `json:"monitor_url"`
-	AgentID              string `json:"agent"`
+	URL     string `json:"monitor_url"`
+	AgentID string `json:"agent"`
+	MonitorHTTPOptions
+}
+
+// MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.
+type MonitorHTTPOptions struct {
 	ExpectedContent      string `json:"monitor_expected_content,omitempty"`
 	ExpectedResponseCode int    `json:"monitor_expected_response_code,omitempty"`
 	ForbiddenContent     string `json:"monitor_unexpected_content,omitempty"`

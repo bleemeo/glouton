@@ -589,6 +589,7 @@ func (a *agent) run() { //nolint:gocyclo
 		if err := blackbox.InitConfig(blackboxConf); err != nil {
 			logger.V(1).Printf("Couldn't parse blackbox local configuration: %v", err)
 		}
+
 		blackbox.Register(a.gathererRegistry)
 	} else {
 		logger.V(2).Println("blackbox_exporter not enabled, will not start...")

@@ -41,8 +41,11 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 	s.option.Cache.SetMonitors(apiMonitors)
 
 	// refresh blackbox collectors to meet the new configuration
-	blackbox.UpdateConfig(apiMonitors)
-	if err := blackbox.UpdateManager(); err != nil {
+	if err := blackbox.UpdateDynamicTargets(apiMonitors); err != nil {
+		return err
+	}
+
+	if err := blackbox.UpdateRegistrations(); err != nil {
 		logger.V(1).Printf("Could not update blackbox_exporter")
 		return err
 	}
@@ -51,8 +54,6 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 }
 
 func (s *Synchronizer) getMonitorsFromAPI() (map[string]bleemeoTypes.Monitor, error) {
-	monitors := []bleemeoTypes.Monitor{}
-
 	params := map[string]string{
 		"monitor": "true",
 		"active":  "true",
@@ -64,7 +65,7 @@ func (s *Synchronizer) getMonitorsFromAPI() (map[string]bleemeoTypes.Monitor, er
 		return nil, err
 	}
 
-	monitors = make([]bleemeoTypes.Monitor, 0, len(result))
+	monitors := make([]bleemeoTypes.Monitor, 0, len(result))
 
 	for _, jsonMessage := range result {
 		var monitor bleemeoTypes.Monitor

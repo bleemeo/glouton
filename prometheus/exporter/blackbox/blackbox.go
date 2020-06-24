@@ -29,6 +29,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+const (
+	proberNameHTTP string = "http"
+	proberNameTCP  string = "tcp"
+	proberNameICMP string = "icmp"
+	proberNameDNS  string = "dns"
+)
+
 // nolint: gochecknoglobals
 var (
 	probeSuccessDesc = prometheus.NewDesc(
@@ -44,10 +51,10 @@ var (
 		nil,
 	)
 	probers = map[string]prober.ProbeFn{
-		"http": prober.ProbeHTTP,
-		"tcp":  prober.ProbeTCP,
-		"icmp": prober.ProbeICMP,
-		"dns":  prober.ProbeDNS,
+		proberNameHTTP: prober.ProbeHTTP,
+		proberNameTCP:  prober.ProbeTCP,
+		proberNameICMP: prober.ProbeICMP,
+		proberNameDNS:  prober.ProbeDNS,
 	}
 	Conf Config = Config{
 		Targets: []ConfigTarget{},
@@ -59,6 +66,7 @@ var (
 )
 
 type target struct {
+	name   string
 	url    string
 	module config.Module
 }
@@ -78,10 +86,10 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 
 	probeFn, present := probers[target.module.Prober]
 	if !present {
-		logger.V(1).Printf("blackbox_exporter: no prober registered under the name '%s', cannot check '%s'.",
-			target.module.Prober, target.url)
+		logger.V(1).Printf("blackbox_exporter: no module registered under the name '%s', cannot check '%s'.",
+			target.module.Prober, target.name)
 		// notify the "client" that scraping this target resulted in an error
-		ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.url)
+		ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.name)
 
 		return
 	}
@@ -119,7 +127,7 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 	if err != nil {
 		logger.V(1).Printf("blackbox_exporter: error while gathering metrics: %v", err)
 		// notify the "client" that scraping this target resulted in an error
-		ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.url)
+		ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, 0., target.name)
 
 		return
 	}
@@ -131,8 +139,8 @@ func (target *target) Collect(ch chan<- prometheus.Metric) {
 	if success {
 		successVal = 1
 	}
-	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration, target.url)
-	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.url)
+	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration, target.name)
+	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.name)
 }
 
 // We define labels to apply on a specific collector at registration, as those labels cannot be exposed
@@ -154,14 +162,14 @@ func newCollector(ctarget ConfigTarget, conf Config) (*collectorWithLabels, erro
 	module, present := conf.Modules[ctarget.ModuleName]
 	// if the module is unknown, add it to the list
 	if !present {
-		return nil, fmt.Errorf("unknown blackbox module found in your configuration for %s ('%v'). "+
-			"This is a bug, please contact us.", ctarget.URL, ctarget.ModuleName)
+		return nil, fmt.Errorf("unknown blackbox module found in your configuration for %s (module '%v'). "+
+			"This is a bug, please contact us", ctarget.Name, ctarget.ModuleName)
 	}
 
 	return &collectorWithLabels{
-		collector: &target{url: ctarget.URL, module: module},
+		collector: &target{url: ctarget.URL, module: module, name: ctarget.Name},
 		labels: map[string]string{
-			types.LabelMetaProbeTarget: ctarget.URL,
+			types.LabelMetaProbeTarget: ctarget.Name,
 			types.LabelMetaMetricKind:  types.MonitorMetricKind.String(),
 			// Exposing the module name allows the client to differentiate probes when
 			// the same URL is scrapped by different modules.
@@ -182,6 +190,7 @@ func inMap(value collectorWithLabels, iterable map[int]collectorWithLabels) bool
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -191,11 +200,12 @@ func inArray(value collectorWithLabels, iterable []collectorWithLabels) bool {
 			return true
 		}
 	}
+
 	return false
 }
 
-// UpdateManager registers and deregisters collectors to sync the internal state with the configuration.
-func UpdateManager() error {
+// UpdateRegistrations registers and deregisters collectors to sync the internal state with the configuration.
+func UpdateRegistrations() error {
 	if Manager.registry == nil {
 		return fmt.Errorf("the registry is not defined for blackbox yet")
 	}
@@ -230,14 +240,14 @@ func UpdateManager() error {
 			}
 
 			Manager.registrations[id] = collectorFromConfig
-			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.target.URL)
+			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.target.Name)
 		}
 	}
 
 	// unregister any obsolete probe
 	for idx, managerCollector := range Manager.registrations {
 		if !managerCollector.target.FromStaticConfig && !inArray(managerCollector, collectorsFromConfig) {
-			logger.V(2).Printf("The probe for '%s' is now deactivated", managerCollector.target.URL)
+			logger.V(2).Printf("The probe for '%s' is now deactivated", managerCollector.target.Name)
 			Manager.registry.UnregisterGatherer(idx)
 			delete(Manager.registrations, idx)
 		}

@@ -19,6 +19,7 @@ package blackbox
 import (
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	"net/url"
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -35,46 +36,88 @@ type Config struct {
 
 // ConfigTarget is the information we will supply to the probe() function.
 type ConfigTarget struct {
+	Name       string `yaml:"name,omitempty"`
 	URL        string `yaml:"url"`
 	ModuleName string `yaml:"module"`
 	// we keep track of the origin of probes, in order to keep static configuration alive across synchronisations
 	FromStaticConfig bool `yaml:"-"`
 }
 
-func genModule(url string, monitor types.Monitor) bbConf.Module {
-	// TODO: detect probe kind (http/tcp/dns/...)
-	mod := bbConf.Module{
+func defaultModule() bbConf.Module {
+	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
-			IPProtocol: "ip4",
+			IPProtocol:         "ip4",
+			IPProtocolFallback: true,
 		},
-		Prober: "http",
+		DNS: bbConf.DNSProbe{
+			IPProtocol:         "ip4",
+			IPProtocolFallback: true,
+		},
+		TCP: bbConf.TCPProbe{
+			IPProtocol:         "ip4",
+			IPProtocolFallback: true,
+		},
+		ICMP: bbConf.ICMPProbe{
+			IPProtocol:         "ip4",
+			IPProtocolFallback: true,
+		},
 		// Sadly, the API does allow to specify the timeout AFAIK.
 		// This value is deliberately lower than our scrape time of 10s, so as to prevent timeouts
 		// from exceeding the total scrape time. Otherwise, the outer context could be cancelled
 		// en route, thus preventing the collection of ANY metric from blackbox !
 		Timeout: maxTimeout,
 	}
-	if monitor.ExpectedContent != "" {
-		mod.HTTP.FailIfBodyNotMatchesRegexp = []string{monitor.ExpectedContent}
-	}
-	if monitor.ForbiddenContent != "" {
-		mod.HTTP.FailIfBodyMatchesRegexp = []string{monitor.ForbiddenContent}
-	}
-	if monitor.ExpectedResponseCode != 0 {
-		mod.HTTP.ValidStatusCodes = []int{monitor.ExpectedResponseCode}
-	}
-
-	return mod
 }
 
-// InitConfig sets the static part of blackbox configuration (aka. targets that muste be scraped no matter what).
-// This resets completely the configuration.
+func genModule(uri string, monitor types.Monitor) (string, bbConf.Module, error) {
+	mod := defaultModule()
+
+	url, err := url.Parse(uri)
+	if err != nil {
+		logger.V(2).Printf("Invalid URL: '%s'", uri)
+		return uri, mod, err
+	}
+
+	switch url.Scheme {
+	case proberNameHTTP, "https":
+		// we default to ipv4, due to blackbox limitations with the protocol fallback
+		mod.Prober = proberNameHTTP
+		if monitor.ExpectedContent != "" {
+			mod.HTTP.FailIfBodyNotMatchesRegexp = []string{monitor.ExpectedContent}
+		}
+
+		if monitor.ForbiddenContent != "" {
+			mod.HTTP.FailIfBodyMatchesRegexp = []string{monitor.ForbiddenContent}
+		}
+
+		if monitor.ExpectedResponseCode != 0 {
+			mod.HTTP.ValidStatusCodes = []int{monitor.ExpectedResponseCode}
+		}
+	case proberNameDNS:
+		mod.Prober = proberNameDNS
+		// TODO: user some better defaults, or even better, and use the local resolver
+		mod.DNS.QueryName = url.Host
+		// TODO: quid of ipv6
+		mod.DNS.QueryType = "A"
+		uri = "1.1.1.1"
+	case proberNameTCP:
+		mod.Prober = proberNameTCP
+		uri = url.Host
+	case proberNameICMP:
+		mod.Prober = proberNameICMP
+	}
+
+	return uri, mod, nil
+}
+
+// InitConfig sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
+// This completely resets the configuration.
 func InitConfig(conf interface{}) error {
 	Conf.Targets = []ConfigTarget{}
 	Conf.Modules = map[string]bbConf.Module{}
 
 	// read static config
-	// the conf cannot be missing here as it have been checked prior to calling ReadConfig()
+	// the conf cannot be missing here as it have been checked prior to calling InitConfig()
 	marshalled, err := yaml.Marshal(conf)
 	if err != nil {
 		logger.V(1).Printf("blackbox_exporter: Couldn't marshall blackbox_exporter configuration")
@@ -88,6 +131,9 @@ func InitConfig(conf interface{}) error {
 
 	for idx := range Conf.Targets {
 		Conf.Targets[idx].FromStaticConfig = true
+		if Conf.Targets[idx].Name == "" {
+			Conf.Targets[idx].Name = Conf.Targets[idx].URL
+		}
 	}
 
 	for idx, v := range Conf.Modules {
@@ -101,19 +147,25 @@ func InitConfig(conf interface{}) error {
 	return nil
 }
 
-// UpdateConfig generates a config we can ingest into blackbox (from the dynamic probes).
-func UpdateConfig(monitors map[string]types.Monitor) {
-	for url, monitor := range monitors {
-		Conf.Modules[url] = genModule(url, monitor)
+// UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
+func UpdateDynamicTargets(monitors map[string]types.Monitor) error {
+	for sourceURL, monitor := range monitors {
+		url, module, err := genModule(sourceURL, monitor)
+		if err != nil {
+			return err
+		}
 
+		Conf.Modules[sourceURL] = module
 		Conf.Targets = append(Conf.Targets, ConfigTarget{
-			URL: url,
-			// TODO: allow different modules to act on the same URL
-			ModuleName: url,
+			// We do not allow different modules to act on the same URL, as this would lead to
+			// exporting different metrics with the same labels, and this is *bad*.
+			ModuleName: sourceURL,
+			Name:       sourceURL,
+			URL:        url,
 		})
 	}
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")
 
-	return
+	return nil
 }
