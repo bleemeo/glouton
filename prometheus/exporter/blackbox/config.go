@@ -116,6 +116,12 @@ func genCollectorFromDynamicTarget(uri string, monitor types.Monitor) (*collecto
 		URL:            uri,
 	}
 
+	if monitor.RefreshRateSeconds != 0 {
+		confTarget.RefreshRateSeconds = monitor.RefreshRateSeconds
+	} else {
+		confTarget.RefreshRateSeconds = 10
+	}
+
 	return &collectorWithLabels{
 		collector: confTarget,
 		labels: map[string]string{

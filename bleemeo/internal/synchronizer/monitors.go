@@ -59,7 +59,7 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 	params := map[string]string{
 		"monitor": "true",
 		"active":  "true",
-		"fields":  "id,agent,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content",
+		"fields":  "id,agent,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_metric_resolution_seconds",
 	}
 
 	result, err := s.client.Iter("service", params)

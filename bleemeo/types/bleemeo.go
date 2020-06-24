@@ -92,8 +92,9 @@ type Threshold struct {
 // Monitor groups all the informations required to write metrics to a monitor.
 type Monitor struct {
 	Service
-	URL     string `json:"monitor_url"`
-	AgentID string `json:"agent"`
+	URL                string `json:"monitor_url"`
+	AgentID            string `json:"agent"`
+	RefreshRateSeconds int    `json:"monitor_metric_resolution_seconds"`
 	MonitorHTTPOptions
 }
 

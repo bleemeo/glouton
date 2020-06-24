@@ -19,6 +19,7 @@ package blackbox
 import (
 	"context"
 	"glouton/logger"
+	"glouton/prometheus/exporter/collectors"
 	"time"
 
 	"github.com/prometheus/blackbox_exporter/prober"
@@ -162,7 +163,15 @@ func (m *RegisterManager) updateRegistrations() error {
 			// registration.
 			reg := prometheus.NewRegistry()
 
-			if err := reg.Register(collectorFromConfig.collector); err != nil {
+			var collector prometheus.Collector
+
+			// static targets are always probed, while dynamic targets are probed according to their refresh rates
+			collector = collectorFromConfig.collector
+			if collectorFromConfig.collector.AgentID != "" {
+				collector = collectors.NewTickingCollector(collectorFromConfig.collector, collectorFromConfig.collector.RefreshRateSeconds)
+			}
+
+			if err := reg.Register(collector); err != nil {
 				return err
 			}
 

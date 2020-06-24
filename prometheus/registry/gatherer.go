@@ -199,14 +199,29 @@ func (gs labeledGatherers) GatherPoints() ([]types.MetricPoint, error) {
 
 	var errs prometheus.MultiError
 
-	for _, g := range gs {
-		points, err := g.GatherPoints()
-		if err != nil {
-			errs = append(errs, err)
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(len(gs))
 
-		result = append(result, points...)
+	mutex := sync.Mutex{}
+
+	for _, g := range gs {
+		go func(g labeledGatherer) {
+			points, err := g.GatherPoints()
+
+			mutex.Lock()
+
+			if err != nil {
+				errs = append(errs, err)
+			}
+
+			result = append(result, points...)
+
+			mutex.Unlock()
+			wg.Done()
+		}(g)
 	}
+
+	wg.Wait()
 
 	return result, errs.MaybeUnwrap()
 }
