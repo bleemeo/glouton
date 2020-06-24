@@ -31,7 +31,7 @@ require (
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
 	github.com/lib/pq v1.3.0 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
-	github.com/ncabatoff/process-exporter v0.6.0
+	github.com/ncabatoff/process-exporter v0.7.1
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/opencontainers/image-spec v1.0.1 // indirect
 	github.com/prometheus/client_golang v1.4.1
@@ -56,6 +56,4 @@ require (
 	k8s.io/client-go v0.18.0
 )
 
-replace github.com/ncabatoff/process-exporter => github.com/PierreF/process-exporter v0.6.1-0.20200408081929-b5a3a32568ae
-
-replace github.com/prometheus/procfs => github.com/PierreF/procfs v0.0.12-0.20200408075604-52118802aeee
+replace github.com/ncabatoff/process-exporter => github.com/PierreF/process-exporter v0.6.1-0.20200610182819-0fb770c071f3
