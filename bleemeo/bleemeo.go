@@ -303,8 +303,9 @@ func (c *Connector) DiagnosticPage() string {
 	if time.Now().Before(c.disabledUntil) {
 		fmt.Fprintf(
 			builder,
-			"Glouton connection to Bleemeo is disabled until %s due to %v\n",
-			c.disabledUntil,
+			"Glouton connection to Bleemeo is disabled until %s (%v remain) due to %v\n",
+			c.disabledUntil.Format(time.RFC3339),
+			time.Until(c.disabledUntil).Truncate(time.Second),
 			c.disableReason,
 		)
 	}
