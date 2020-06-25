@@ -21,14 +21,16 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
-	"glouton/prometheus/exporter/blackbox"
 )
 
-// syncMonitors updates the list of metrics that must be watched locally (to be sent over MQTT, a metric must
-// be declared both on the bleemeo API AND in the config file for now).
+// syncMonitors updates the list of monitors accessible to the agent.
 func (s *Synchronizer) syncMonitors(fullSync bool) error {
 	bbEnabled := s.option.Config.Bool("blackbox.enabled")
 	if !bbEnabled {
+		return nil
+	}
+
+	if !fullSync {
 		return nil
 	}
 
@@ -39,17 +41,16 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 
 	s.option.Cache.SetMonitors(apiMonitors)
 
-	// refresh blackbox collectors to meet the new configuration
-	if err := blackbox.UpdateDynamicTargets(apiMonitors); err != nil {
-		return err
+	if s.option.MonitorManager == nil {
+		logger.V(2).Println("blackbox_exporter is not configured in the synchronizer")
+		return nil
 	}
 
-	if err := blackbox.UpdateRegistrations(); err != nil {
+	// refresh blackbox collectors to meet the new configuration
+	if err := s.option.MonitorManager.UpdateDynamicTargets(apiMonitors); err != nil {
 		logger.V(1).Printf("Could not update blackbox_exporter")
 		return err
 	}
-
-	s.forceSync["metrics"] = false
 
 	return nil
 }

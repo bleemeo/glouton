@@ -50,7 +50,7 @@ const stableConnection = 5 * time.Minute
 type Option struct {
 	bleemeoTypes.GlobalOption
 	Cache         *cache.Cache
-	AgentID       types.AgentID
+	AgentID       bleemeoTypes.AgentID
 	AgentPassword string
 
 	// DisableCallback is a function called when MQTT got too much connect/disconnection.
@@ -60,7 +60,7 @@ type Option struct {
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
 
-	InitialPoints map[types.AgentID][]types.MetricPoint
+	InitialPoints map[bleemeoTypes.AgentID][]types.MetricPoint
 }
 
 // Client is an MQTT client for Bleemeo Cloud platform.
@@ -70,13 +70,13 @@ type Client struct {
 	// Those variable are write once or only read/write from Run() gorouting. No lock needed
 	ctx                        context.Context
 	mqttClient                 paho.Client
-	failedPoints               map[types.AgentID][]types.MetricPoint
+	failedPoints               map[bleemeoTypes.AgentID][]types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 
 	l                 sync.Mutex
 	pendingMessage    []message
-	pendingPoints     map[types.AgentID][]types.MetricPoint
+	pendingPoints     map[bleemeoTypes.AgentID][]types.MetricPoint
 	lastReport        time.Time
 	failedPointsCount int
 	disabledUntil     time.Time
@@ -141,10 +141,10 @@ func New(option Option, first bool) *Client {
 		option: option,
 	}
 
+	res.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 	// assignments on nil maps are a great recipes for panics, let's try to not allow such behavior
-	res.failedPoints = map[types.AgentID][]types.MetricPoint{}
 	if res.option.InitialPoints == nil {
-		res.option.InitialPoints = map[types.AgentID][]types.MetricPoint{}
+		res.option.InitialPoints = map[bleemeoTypes.AgentID][]types.MetricPoint{}
 	}
 
 	return res
@@ -190,14 +190,12 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
 
-	c.failedPoints = map[types.AgentID][]types.MetricPoint{}
-	c.pendingPoints = map[types.AgentID][]types.MetricPoint{}
-
 	c.l.Lock()
 	c.disableNotify = make(chan interface{})
 	c.connectionLost = make(chan interface{})
+	c.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 	c.pendingPoints = c.option.InitialPoints
-	c.option.InitialPoints = map[types.AgentID][]types.MetricPoint{}
+	c.option.InitialPoints = nil
 	c.l.Unlock()
 
 	for !c.ready() {
@@ -379,8 +377,6 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 		return
 	}
 
-	monitors := c.option.Cache.Monitors()
-
 	// If we wanted to limit allocations, the best strategy would probably be a two-pass approach where we
 	// first get the number of MetricPoints for each agent/monitor, so that we can allocate them only once
 	// (chances are such an approach would increase performances too, as linear iteration ought to be faster
@@ -391,29 +387,9 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	for _, newPoint := range points {
 		id := c.option.AgentID
 
-		if newPoint.Annotations.Kind == types.MonitorMetricKind {
-			// search the monitor in the active monitors, if it isn't there just drop the point
-			serviceID, present := newPoint.Labels[types.LabelInstanceUUID]
-			if !present {
-				logger.V(2).Printf("Couldn't find the URL on point %v originating from a probe (missing '%s' label)", newPoint, types.LabelInstanceUUID)
-				continue
-			}
-
-			found := false
-
-			for _, monitor := range monitors {
-				if monitor.ID == serviceID {
-					// Hurrah, it's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-					id = types.AgentID(monitor.AgentID)
-					found = true
-
-					break
-				}
-			}
-
-			if !found {
-				continue
-			}
+		if newPoint.Annotations.AgentID != "" {
+			// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
+			id = bleemeoTypes.AgentID(newPoint.Annotations.AgentID)
 		}
 
 		c.pendingPoints[id] = append(c.pendingPoints[id], newPoint)
@@ -423,15 +399,15 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 // popPoints returns the mapping between agent IDs and lists of corresponding metrics to be sent for
 // that agent. When 'includeFailedPoints' is set to true, the returned data will no only include all
 // pending points, but also all the points whose submission failed previously.
-func (c *Client) popPoints(includeFailedPoints bool) map[types.AgentID][]types.MetricPoint {
+func (c *Client) popPoints(includeFailedPoints bool) map[bleemeoTypes.AgentID][]types.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	points := map[types.AgentID][]types.MetricPoint{}
+	points := map[bleemeoTypes.AgentID][]types.MetricPoint{}
 
 	if includeFailedPoints {
 		points = c.failedPoints
-		c.failedPoints = map[types.AgentID][]types.MetricPoint{}
+		c.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 		c.failedPointsCount = 0
 	}
 
@@ -439,18 +415,18 @@ func (c *Client) popPoints(includeFailedPoints bool) map[types.AgentID][]types.M
 		points[agentID] = append(points[agentID], pendingPoints...)
 	}
 
-	c.pendingPoints = map[types.AgentID][]types.MetricPoint{}
+	c.pendingPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 
 	return points
 }
 
-func (c *Client) popNewPendingPoints() map[types.AgentID][]types.MetricPoint {
+func (c *Client) popNewPendingPoints() map[bleemeoTypes.AgentID][]types.MetricPoint {
 	return c.popPoints(false)
 }
 
 // PopPendingPoints gets and removes all pending points from this MQTT connector, including points that
 // previously failed.
-func (c *Client) PopPendingPoints() map[types.AgentID][]types.MetricPoint {
+func (c *Client) PopPendingPoints() map[bleemeoTypes.AgentID][]types.MetricPoint {
 	return c.popPoints(true)
 }
 
@@ -501,7 +477,7 @@ func (c *Client) sendPoints() {
 
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
-		newPoints := map[types.AgentID][]types.MetricPoint{}
+		newPoints := make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 
 		for agentID, agentFailedPoints := range c.failedPoints {
 			for _, p := range agentFailedPoints {
@@ -516,10 +492,10 @@ func (c *Client) sendPoints() {
 			points[idx] = append(v, points[idx]...)
 		}
 
-		c.failedPoints = map[types.AgentID][]types.MetricPoint{}
+		c.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 	}
 
-	payload := make(map[types.AgentID][]metricPayload, len(points))
+	payload := make(map[bleemeoTypes.AgentID][]metricPayload, len(points))
 	payload = c.preparePoints(payload, registreredMetricByKey, points)
 	nbPoints := 0
 
@@ -553,8 +529,8 @@ func (c *Client) sendPoints() {
 }
 
 // preparePoints updates the MQTT payload by processing some points and appending the result to `payload`.
-func (c *Client) preparePoints(payload map[types.AgentID][]metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric,
-	points map[types.AgentID][]types.MetricPoint) map[types.AgentID][]metricPayload {
+func (c *Client) preparePoints(payload map[bleemeoTypes.AgentID][]metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric,
+	points map[bleemeoTypes.AgentID][]types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
 	for agentID, agentPoints := range points {
 		for _, p := range agentPoints {
 			key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
@@ -773,8 +749,8 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func filterPoints(input map[types.AgentID][]types.MetricPoint, metricWhitelist map[string]bool) map[types.AgentID][]types.MetricPoint {
-	result := map[types.AgentID][]types.MetricPoint{}
+func filterPoints(input map[bleemeoTypes.AgentID][]types.MetricPoint, metricWhitelist map[string]bool) map[bleemeoTypes.AgentID][]types.MetricPoint {
+	result := map[bleemeoTypes.AgentID][]types.MetricPoint{}
 
 	for k, mps := range input {
 		for _, mp := range mps {

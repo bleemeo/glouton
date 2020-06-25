@@ -74,10 +74,6 @@ func (f MetricFormat) String() string {
 	}
 }
 
-// AgentID is an agent UUID.
-// This type exists for the sole purpose of making type definitions clearer.
-type AgentID string
-
 // List of label names that some part of Glouton will assume to be named
 // as such.
 // Using constant here allow to change their name only here.
@@ -87,25 +83,27 @@ const (
 
 	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
 	// They are actually dropped by the metric registry and/or the
-	LabelMetaContainerName  = "__meta_container_name"
-	LabelMetaContainerID    = "__meta_container_id"
-	LabelMetaServiceName    = "__meta_service_name"
-	LabelMetaGloutonFQDN    = "__meta__fqdn"
-	LabelMetaGloutonPort    = "__meta_glouton_port"
-	LabelMetaServicePort    = "__meta_service_port"
-	LabelMetaPort           = "__meta_port"
-	LabelMetaScrapeInstance = "__meta_scrape_instance"
-	LabelMetaScrapeJob      = "__meta_scrape_job"
-	LabelMetaBleemeoUUID    = "__meta_bleemeo_uuid"
-	LabelMetaProbeTarget    = "__meta_probe_target"
-	LabelMetaProbeService   = "__meta_probe_service"
-	LabelMetaMetricKind     = "__meta_metric_kind"
-	LabelInstanceUUID       = "instance_uuid"
-	LabelScraperUUID        = "scraper_uuid"
-	LabelInstance           = "instance"
-	LabelJob                = "job"
-	LabelContainerName      = "container_name"
-	LabelGloutonJob         = "glouton_job"
+	LabelMetaContainerName    = "__meta_container_name"
+	LabelMetaContainerID      = "__meta_container_id"
+	LabelMetaServiceName      = "__meta_service_name"
+	LabelMetaGloutonFQDN      = "__meta__fqdn"
+	LabelMetaGloutonPort      = "__meta_glouton_port"
+	LabelMetaServicePort      = "__meta_service_port"
+	LabelMetaPort             = "__meta_port"
+	LabelMetaScrapeInstance   = "__meta_scrape_instance"
+	LabelMetaScrapeJob        = "__meta_scrape_job"
+	LabelMetaBleemeoUUID      = "__meta_bleemeo_uuid"
+	LabelMetaProbeTarget      = "__meta_probe_target"
+	LabelMetaProbeServiceUUID = "__meta_probe_service_uuid"
+	LabelMetaProbeAgentUUID   = "__meta_probe_agent_uuid"
+	LabelMetaProbeScraperName = "__meta_probe_scraper_name"
+	LabelInstanceUUID         = "instance_uuid"
+	LabelScraperUUID          = "scraper_uuid"
+	LabelScraper              = "scraper"
+	LabelInstance             = "instance"
+	LabelJob                  = "job"
+	LabelContainerName        = "container_name"
+	LabelGloutonJob           = "glouton_job"
 )
 
 // IsSet return true if the status is set.
@@ -169,46 +167,15 @@ type Metric interface {
 	Points(start, end time.Time) ([]Point, error)
 }
 
-// MetricKind defines the scope of the metric: the metric is either local to the agent or exposed for an external agent, like a monitor.
-type MetricKind int
-
-func (mk MetricKind) String() string {
-	switch mk {
-	case MonitorMetricKind:
-		return "probe"
-	default:
-		return "agent"
-	}
-}
-
-// StringToMetricKind returns the MetricKind that match best the argument. Defaults to AgentMetric when the string is invalid.
-func StringToMetricKind(s string) MetricKind {
-	switch s {
-	case "probe":
-		return MonitorMetricKind
-	case "agent":
-		return AgentMetricKind
-	default:
-		return AgentMetricKind
-	}
-}
-
-const (
-	// AgentMetricKind means the metric is exported by the agent for itself.
-	AgentMetricKind MetricKind = iota
-	// MonitorMetricKind means the metric is  exported by the agent for an external monitor.
-	MonitorMetricKind
-)
-
 // MetricAnnotations contains additional information about a metrics.
 type MetricAnnotations struct {
 	BleemeoItem string
 	ContainerID string
 	ServiceName string
 	StatusOf    string
-	// the kind indicates the scope of the metric
-	Kind   MetricKind
-	Status StatusDescription
+	// store the agent for which we want to emit the metric
+	AgentID string
+	Status  StatusDescription
 }
 
 // Point is the value of one metric at a given time.

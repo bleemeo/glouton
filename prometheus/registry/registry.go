@@ -122,29 +122,46 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1-$2:$3",
 		},
+		// when the metric comes from a probe, the 'scraper_uuid' label is the uuid of the agent
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID},
+			TargetLabel:  types.LabelScraperUUID,
+			Replacement:  "$2",
+		},
+		// when the metric comes from a probe, the 'scraper' label is the value we traditionnaly put in the 'instance' label
+		{
+			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeScraperName},
+			TargetLabel:  types.LabelScraper,
+			Replacement:  "$1",
+		},
+		// when the metric comes from a probe and the user specified it in the config file, the 'scraper' label is the user-provided string
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID},
+			TargetLabel:  types.LabelScraperUUID,
+			Replacement:  "$2",
+		},
+		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the service watched
+		{
+			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID},
+			TargetLabel:  types.LabelInstanceUUID,
+			Replacement:  "$1",
+		},
 		// when the metric comes from a probe, the 'instance' label is the target URI
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
 			SourceLabels: model.LabelNames{types.LabelMetaProbeTarget},
 			TargetLabel:  types.LabelInstance,
-			Replacement:  "$1",
-		},
-		// when the metric comes from a probe, the 'scraper_uuid' label is the uuid of the agent
-		{
-			Action:       relabel.Replace,
-			Separator:    ";",
-			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeService, types.LabelMetaBleemeoUUID},
-			TargetLabel:  types.LabelScraperUUID,
-			Replacement:  "$2",
-		},
-		// when the metric comes from a probe, the 'instancer_uuid' label is the uuid of the service watched
-		{
-			Action:       relabel.Replace,
-			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeService},
-			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
 		},
 		{
@@ -656,8 +673,12 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	annotations := types.MetricAnnotations{
 		ServiceName: promLabels.Get(types.LabelMetaServiceName),
 		ContainerID: promLabels.Get(types.LabelMetaContainerID),
-		// annotate the metric if it comes from a probe
-		Kind: types.StringToMetricKind(promLabels.Get(types.LabelMetaMetricKind)),
+	}
+
+	// annotate the metric if it comes from a probe
+	agentID := promLabels.Get(types.LabelMetaProbeAgentUUID)
+	if agentID != "" {
+		annotations.AgentID = agentID
 	}
 
 	promLabels = relabel.Process(

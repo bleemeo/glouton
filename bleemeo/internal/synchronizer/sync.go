@@ -57,7 +57,7 @@ type Synchronizer struct {
 	pendingMetricsUpdate []string
 }
 
-// Option are parameter for the syncrhonizer.
+// Option are parameters for the synchronizer.
 type Option struct {
 	bleemeoTypes.GlobalOption
 	Cache *cache.Cache
@@ -117,7 +117,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	var minimalDelay time.Duration
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
-		logger.V(2).Printf("Waiting few second before first synchroization as this agent has a valid cache")
+		logger.V(2).Printf("Waiting a few seconds before the first synchronization as this agent has a valid cache")
 
 		minimalDelay = common.JitterDelay(20, 0.5, 20)
 	}
@@ -207,7 +207,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 
 	s.forceSync["metrics"] = true
 	s.forceSync["containers"] = true
-	s.forceSync["monitor"] = true
+	s.forceSync["monitors"] = true
 }
 
 // UpdateMetrics request to update a specific metrics.
@@ -234,6 +234,14 @@ func (s *Synchronizer) UpdateContainers() {
 	defer s.l.Unlock()
 
 	s.forceSync["containers"] = false
+}
+
+// UpdateContainers updates the monitors.
+func (s *Synchronizer) UpdateMonitors() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.forceSync["monitors"] = true
 }
 
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
@@ -391,7 +399,7 @@ func (s *Synchronizer) runOnce() error {
 
 	if len(syncMethods) == len(syncStep) && lastErr == nil {
 		s.option.Cache.Save()
-		s.nextFullSync = time.Now().Add(common.JitterDelay(30, 0.1, 30))
+		s.nextFullSync = time.Now().Add(common.JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
@@ -435,12 +443,12 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	}
 
 	if _, ok := syncMethods["services"]; ok {
-		// Metrics registration may need services to be synced, delay metrics synchronization
+		// Metrics registration may need services to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = false
 	}
 
 	if _, ok := syncMethods["containers"]; ok {
-		// Metrics registration may need containers to be synced, delay metrics synchronization
+		// Metrics registration may need containers to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = false
 	}
 

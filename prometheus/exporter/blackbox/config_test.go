@@ -14,30 +14,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package blackbox_test
+package blackbox
 
 import (
-	"glouton/config"
-	"glouton/prometheus/exporter/blackbox"
+	gloutonConfig "glouton/config"
 	"reflect"
-	"sync"
 	"testing"
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
-//nolint:gochecknoglobals
-var mutex sync.Mutex = sync.Mutex{}
-
 func TestConfigParsing(t *testing.T) {
-	cfg := &config.Configuration{}
+	cfg := &gloutonConfig.Configuration{}
 
 	conf := `
     blackbox:
       targets:
         - {url: "https://google.com", module: "http_2xx"}
-        - {url: "https://inpt.fr", module: "dns", timeout: 5}
+        - {url: "inpt.fr", module: "dns", timeout: 5}
         - url: "http://neverssl.com"
           module: "http_2xx"
           timeout: 2
@@ -68,16 +63,16 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the yaml configuration")
 	}
 
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	if err := blackbox.InitConfig(blackboxConf); err != nil {
+	bbManager, err := New(nil, blackboxConf)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectedValue := blackbox.Config{
-		Modules: map[string]bbConf.Module{
-			"http_2xx": {
+	// we assume parsing preserves the order, which seems to be the case
+	expectedValue := []collectorWithLabels{
+		genCollectorFromStaticTarget(configTarget{
+			URL: "https://google.com",
+			Module: bbConf.Module{
 				Prober:  "http",
 				Timeout: 5 * time.Second,
 				HTTP: bbConf.HTTPProbe{
@@ -92,7 +87,12 @@ func TestConfigParsing(t *testing.T) {
 				ICMP: bbConf.DefaultICMPProbe,
 				TCP:  bbConf.DefaultTCPProbe,
 			},
-			"dns": {
+			ModuleName: "http_2xx",
+			Name:       "https://google.com",
+		}),
+		genCollectorFromStaticTarget(configTarget{
+			URL: "inpt.fr",
+			Module: bbConf.Module{
 				Prober:  "dns",
 				Timeout: 9500 * time.Millisecond,
 				DNS: bbConf.DNSProbe{
@@ -106,22 +106,38 @@ func TestConfigParsing(t *testing.T) {
 				ICMP: bbConf.DefaultICMPProbe,
 				TCP:  bbConf.DefaultTCPProbe,
 			},
-		},
-		// we assume parsing preserves the order, which seems to be the case
-		Targets: []blackbox.ConfigTarget{
-			{URL: "https://google.com", ModuleName: "http_2xx", Name: "https://google.com", FromStaticConfig: true},
-			{URL: "https://inpt.fr", ModuleName: "dns", Name: "https://inpt.fr", FromStaticConfig: true},
-			{URL: "http://neverssl.com", ModuleName: "http_2xx", Name: "http://neverssl.com", FromStaticConfig: true},
-		},
+			ModuleName: "dns",
+			Name:       "inpt.fr",
+		}),
+		genCollectorFromStaticTarget(configTarget{
+			URL: "http://neverssl.com",
+			Module: bbConf.Module{
+				Prober:  "http",
+				Timeout: 5 * time.Second,
+				HTTP: bbConf.HTTPProbe{
+					ValidHTTPVersions:  []string{"HTTP/1.1", "HTTP/2.0"},
+					ValidStatusCodes:   []int{},
+					Method:             "GET",
+					NoFollowRedirects:  true,
+					IPProtocol:         "ip4",
+					IPProtocolFallback: false,
+				},
+				DNS:  bbConf.DefaultDNSProbe,
+				ICMP: bbConf.DefaultICMPProbe,
+				TCP:  bbConf.DefaultTCPProbe,
+			},
+			ModuleName: "http_2xx",
+			Name:       "http://neverssl.com",
+		}),
 	}
 
-	if !reflect.DeepEqual(blackbox.Conf, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackbox.Conf, expectedValue)
+	if !reflect.DeepEqual(bbManager.targets, expectedValue) {
+		t.Fatalf("TestConfigParsing() = %#v, want %#v", bbManager.targets, expectedValue)
 	}
 }
 
 func TestNoTargetsConfigParsing(t *testing.T) {
-	cfg := &config.Configuration{}
+	cfg := &gloutonConfig.Configuration{}
 
 	conf := `
     blackbox:
@@ -140,32 +156,12 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the yaml configuration")
 	}
 
-	mutex.Lock()
-	defer mutex.Unlock()
-
-	if err := blackbox.InitConfig(blackboxConf); err != nil {
+	bbManager, err := New(nil, blackboxConf)
+	if err != nil {
 		t.Fatal(err)
 	}
 
-	expectedValue := blackbox.Config{
-		Modules: map[string]bbConf.Module{
-			"http_2xx": {
-				Prober:  "http",
-				Timeout: 9500 * time.Millisecond,
-				HTTP: bbConf.HTTPProbe{
-					ValidHTTPVersions:  []string{"HTTP/1.1", "HTTP/2.0"},
-					IPProtocolFallback: true,
-				},
-				DNS:  bbConf.DefaultDNSProbe,
-				ICMP: bbConf.DefaultICMPProbe,
-				TCP:  bbConf.DefaultTCPProbe,
-			},
-		},
-		// we assume parsing preserves the order, which seems to be the case
-		Targets: []blackbox.ConfigTarget{},
-	}
-
-	if !reflect.DeepEqual(blackbox.Conf, expectedValue) {
-		t.Fatalf("TestConfigParsing() = %+v, want %+v", blackbox.Conf, expectedValue)
+	if !reflect.DeepEqual(bbManager.targets, []collectorWithLabels{}) {
+		t.Fatalf("TestConfigParsing() = %+v, want %+v", bbManager.targets, []collectorWithLabels{})
 	}
 }

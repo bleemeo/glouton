@@ -10,8 +10,6 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
-	"glouton/prometheus/exporter/blackbox"
-	"glouton/prometheus/registry"
 	"glouton/store"
 	"io"
 	"net/http"
@@ -259,9 +257,6 @@ func basicTestSetup(t *testing.T) *Synchronizer {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	registry := &registry.Registry{}
-	blackbox.Register(registry)
 
 	return s
 }

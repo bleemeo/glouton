@@ -410,6 +410,7 @@ func (a *agent) run() { //nolint:gocyclo
 			}
 
 			if s == syscall.SIGHUP {
+				a.bleemeoConnector.UpdateMonitors()
 				a.FireTrigger(true, true, false, true)
 			}
 		}
@@ -582,15 +583,18 @@ func (a *agent) run() { //nolint:gocyclo
 		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
 	}
 
+	var monitorManager *blackbox.RegisterManager
+
 	if a.config.Bool("blackbox.enabled") {
 		logger.V(1).Println("Starting blackbox_exporter...")
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
-		if err := blackbox.InitConfig(blackboxConf); err != nil {
-			logger.V(1).Printf("Couldn't parse blackbox local configuration: %v", err)
-		}
 
-		blackbox.Register(a.gathererRegistry)
+		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf)
+		if err != nil {
+			logger.V(1).Printf("Couldn't start blackbox_exporter: %v", err)
+			return
+		}
 	} else {
 		logger.V(2).Println("blackbox_exporter not enabled, will not start...")
 	}
@@ -645,6 +649,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Store:                   a.store,
 			Acc:                     acc,
 			Discovery:               a.discovery,
+			MonitorManager:          monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
 			UpdateThresholds:        a.UpdateThresholds,
 			UpdateUnits:             a.threshold.SetUnits,

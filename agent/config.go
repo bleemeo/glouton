@@ -42,6 +42,8 @@ var defaultConfig = map[string]interface{}{
 	"agent.metrics_format":           "Bleemeo",
 	"agent.node_exporter.collectors": []string{},
 	"blackbox.enabled":               true,
+	"blackbox.bleemeo_mode":          false,
+	"blackbox.scraper_name":          "",
 	"blackbox.targets":               []interface{}{},
 	"blackbox.modules": map[string]interface{}{
 		"http": map[string]interface{}{

@@ -17,8 +17,11 @@
 package blackbox
 
 import (
+	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/registry"
+	gloutonTypes "glouton/types"
 	"net/url"
 	"time"
 
@@ -28,20 +31,19 @@ import (
 
 const maxTimeout time.Duration = 9500 * time.Millisecond
 
-// Config is the subset of glouton config that deals with probes.
-type Config struct {
-	Targets []ConfigTarget           `yaml:"targets"`
-	Modules map[string]bbConf.Module `yaml:"modules"`
+// yamlConfig is the subset of glouton config that deals with probes.
+type yamlConfig struct {
+	Targets     []yamlConfigTarget       `yaml:"targets"`
+	Modules     map[string]bbConf.Module `yaml:"modules"`
+	ScraperName string                   `yaml:"scraper_name,omitempty"`
+	BleemeoMode bool                     `yaml:"bleemeo_mode,omitempty"`
 }
 
 // ConfigTarget is the information we will supply to the probe() function.
-type ConfigTarget struct {
+type yamlConfigTarget struct {
 	Name       string `yaml:"name,omitempty"`
 	URL        string `yaml:"url"`
 	ModuleName string `yaml:"module"`
-	// we keep track of the origin of probes, in order to keep static configuration alive across synchronisations
-	FromStaticConfig bool   `yaml:"-"`
-	ServiceID        string `yaml:"-"`
 }
 
 func defaultModule() bbConf.Module {
@@ -70,13 +72,13 @@ func defaultModule() bbConf.Module {
 	}
 }
 
-func genModule(uri string, monitor types.Monitor) (string, bbConf.Module, error) {
+func genCollectorFromDynamicTarget(uri string, monitor types.Monitor) (*collectorWithLabels, error) {
 	mod := defaultModule()
 
 	url, err := url.Parse(uri)
 	if err != nil {
 		logger.V(2).Printf("Invalid URL: '%s'", uri)
-		return uri, mod, err
+		return nil, err
 	}
 
 	switch url.Scheme {
@@ -96,9 +98,9 @@ func genModule(uri string, monitor types.Monitor) (string, bbConf.Module, error)
 		}
 	case proberNameDNS:
 		mod.Prober = proberNameDNS
-		// TODO: user some better defaults, or even better, and use the local resolver
+		// TODO: user some better defaults - or even better: use the local resolver
 		mod.DNS.QueryName = url.Host
-		// TODO: quid of ipv6
+		// TODO: quid of ipv6 ?
 		mod.DNS.QueryType = "A"
 		uri = "1.1.1.1"
 	case proberNameTCP:
@@ -108,79 +110,132 @@ func genModule(uri string, monitor types.Monitor) (string, bbConf.Module, error)
 		mod.Prober = proberNameICMP
 	}
 
-	return uri, mod, nil
+	confTarget := configTarget{
+		Module:  mod,
+		Name:    monitor.URL,
+		AgentID: monitor.AgentID,
+		URL:     uri,
+	}
+
+	return &collectorWithLabels{
+		collector: confTarget,
+		labels: map[string]string{
+			gloutonTypes.LabelMetaProbeTarget:      confTarget.Name,
+			gloutonTypes.LabelMetaProbeServiceUUID: monitor.ID,
+			gloutonTypes.LabelMetaProbeAgentUUID:   monitor.AgentID,
+		},
+	}, nil
 }
 
-// InitConfig sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
+func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
+	// Exposing the module name allows the client to differentiate local probes when
+	// the same URL is scrapped by different modules.
+	// Note that this doesn't matter when "remote probes" (aka. probes supplied by the API
+	// instead of the local config file) are involved, as those metrics have the 'instance_uuid'
+	// label to distinguish monitors.
+	return collectorWithLabels{
+		collector: ct,
+		labels: map[string]string{
+			gloutonTypes.LabelMetaProbeTarget: ct.Name,
+			"module":                          ct.ModuleName,
+		},
+	}
+}
+
+// New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func InitConfig(conf interface{}) error {
-	Conf.Targets = []ConfigTarget{}
-	Conf.Modules = map[string]bbConf.Module{}
+func New(registry *registry.Registry, externalConf interface{}) (*RegisterManager, error) {
+	conf := yamlConfig{}
 
 	// read static config
 	// the conf cannot be missing here as it have been checked prior to calling InitConfig()
-	marshalled, err := yaml.Marshal(conf)
+	marshalled, err := yaml.Marshal(externalConf)
 	if err != nil {
-		logger.V(1).Printf("blackbox_exporter: Couldn't marshall blackbox_exporter configuration")
-		return err
+		logger.V(1).Printf("blackbox_exporter: Couldn't marshal blackbox_exporter configuration")
+		return nil, err
 	}
 
-	if err = yaml.Unmarshal(marshalled, &Conf); err != nil {
+	if err = yaml.Unmarshal(marshalled, &conf); err != nil {
 		logger.V(1).Printf("blackbox_exporter: Cannot parse blackbox_exporter config: %v", err)
-		return err
+		return nil, err
 	}
 
-	for idx := range Conf.Targets {
-		Conf.Targets[idx].FromStaticConfig = true
-		if Conf.Targets[idx].Name == "" {
-			Conf.Targets[idx].Name = Conf.Targets[idx].URL
-		}
-	}
-
-	for idx, v := range Conf.Modules {
+	for idx, v := range conf.Modules {
 		// override user timeouts when too high or undefined. This is important !
 		if v.Timeout > maxTimeout || v.Timeout == 0 {
 			v.Timeout = maxTimeout
-			Conf.Modules[idx] = v
+			conf.Modules[idx] = v
 		}
 	}
 
-	return nil
+	targets := make([]collectorWithLabels, 0, len(conf.Targets))
+
+	for idx := range conf.Targets {
+		if conf.Targets[idx].Name == "" {
+			conf.Targets[idx].Name = conf.Targets[idx].URL
+		}
+
+		module, present := conf.Modules[conf.Targets[idx].ModuleName]
+		// if the module is unknown, add it to the list
+		if !present {
+			return nil, fmt.Errorf("blackbox_exporter: unknown blackbox module found in your configuration for %s (module '%v'). "+
+				"This is a probably bug, please contact us", conf.Targets[idx].Name, conf.Targets[idx].ModuleName)
+		}
+
+		targets = append(targets, genCollectorFromStaticTarget(configTarget{
+			Name:       conf.Targets[idx].Name,
+			URL:        conf.Targets[idx].URL,
+			Module:     module,
+			ModuleName: conf.Targets[idx].ModuleName,
+		}))
+	}
+
+	manager := &RegisterManager{
+		targets:       targets,
+		registrations: make(map[int]collectorWithLabels, len(conf.Targets)),
+		registry:      registry,
+		scraperName:   conf.ScraperName,
+		dynamicMode:   conf.BleemeoMode,
+	}
+
+	return manager, nil
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
-func UpdateDynamicTargets(monitors []types.Monitor) error {
-	for _, monitor := range monitors {
-		url, module, err := genModule(monitor.URL, monitor)
-		if err != nil {
-			return err
-		}
+func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
+	// it is easier to keep only the static monitors and rebuild the dynamic config
+	// than to compute the difference between the new and the old configuration.
+	// This is simple because calling UpdateDynamicTargets with the same argument should be idempotent.
+	newTargets := make([]collectorWithLabels, 0, len(monitors)+len(m.targets))
 
-		Conf.Modules[monitor.ID] = module
-		confTarget := ConfigTarget{
-			// We allow different modules to act on the same URL, and this is why we use a unique
-			// value (the ID of the service) as the module name
-			ModuleName: monitor.ID,
-			Name:       monitor.URL,
-			ServiceID:  monitor.ID,
-			URL:        url,
-		}
-
-		found := false
-
-		for _, v := range Conf.Targets {
-			if v == confTarget {
-				found = true
-				break
-			}
-		}
-
-		if !found {
-			Conf.Targets = append(Conf.Targets, confTarget)
+	// get a list of static monitors
+	for _, currentTarget := range m.targets {
+		if currentTarget.collector.AgentID == "" {
+			newTargets = append(newTargets, currentTarget)
 		}
 	}
 
+	// append all dynamic target to the list, when the bleemeo mode is enabled
+	if m.dynamicMode {
+		for _, monitor := range monitors {
+			collector, err := genCollectorFromDynamicTarget(monitor.URL, monitor)
+			if err != nil {
+				return err
+			}
+
+			newTargets = append(newTargets, *collector)
+		}
+	}
+
+	if m.scraperName != "" {
+		for idx := range newTargets {
+			newTargets[idx].labels[gloutonTypes.LabelMetaProbeScraperName] = m.scraperName
+		}
+	}
+
+	m.targets = newTargets
+
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")
 
-	return nil
+	return m.updateRegistrations()
 }
