@@ -237,7 +237,9 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
-			if _, found := d.containerInfo.Container(service.ContainerID); !found {
+			if container, found := d.containerInfo.Container(service.ContainerID); !found {
+				service.Active = false
+			} else if container.StoppedAndReplaced() {
 				service.Active = false
 			}
 		} else if service.ExePath != "" {

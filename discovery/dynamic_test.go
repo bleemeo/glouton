@@ -58,11 +58,12 @@ type mockContainerInfo struct {
 }
 
 type mockContainer struct {
-	ipAddress       string
-	listenAddresses []facts.ListenAddress
-	env             []string
-	labels          map[string]string
-	ignoredPorts    map[int]bool
+	ipAddress          string
+	listenAddresses    []facts.ListenAddress
+	env                []string
+	labels             map[string]string
+	ignoredPorts       map[int]bool
+	stoppedAndReplaced bool
 }
 
 func (mci mockContainerInfo) Container(containerID string) (container container, found bool) {
@@ -92,6 +93,10 @@ func (mc mockContainer) Ignored() bool {
 
 func (mc mockContainer) IgnoredPorts() map[int]bool {
 	return mc.ignoredPorts
+}
+
+func (mc mockContainer) StoppedAndReplaced() bool {
+	return mc.stoppedAndReplaced
 }
 
 type mockFileReader struct {

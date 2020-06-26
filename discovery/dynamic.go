@@ -55,6 +55,7 @@ type container interface {
 	Labels() map[string]string
 	Ignored() bool
 	IgnoredPorts() map[int]bool
+	StoppedAndReplaced() bool
 }
 
 type containerInfoProvider interface {
