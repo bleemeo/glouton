@@ -20,7 +20,9 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"time"
 
@@ -54,31 +56,33 @@ type agentInterface interface {
 
 // API contains API's port.
 type API struct {
-	bindAddress  string
-	router       http.Handler
-	db           storeInterface
-	dockerFact   dockerInterface
-	psFact       *facts.ProcessProvider
-	factProvider *facts.FactProvider
-	disc         *discovery.Discovery
-	agent        agentInterface
-	threshold    *threshold.Registry
+	BindAddress        string
+	StaticCDNURL       string
+	DB                 storeInterface
+	DockerFact         dockerInterface
+	PsFact             *facts.ProcessProvider
+	FactProvider       *facts.FactProvider
+	Disccovery         *discovery.Discovery
+	AgentInfo          agentInterface
+	PrometheurExporter http.Handler
+	Threshold          *threshold.Registry
+	DiagnosticPage     func() string
+	DiagnosticZip      func(w io.Writer) error
+
+	router http.Handler
 }
 
 type gloutonUIConfig struct {
 	StaticCDNURL string
 }
 
-// New instantiate a new API's port from environment variable or from a default port.
-func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.ProcessProvider, factProvider *facts.FactProvider, bindAddress string, disc *discovery.Discovery, agent agentInterface, promExporter http.Handler, threshold *threshold.Registry, staticCDNURL string) *API {
+func (api *API) init() {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowCredentials: true,
 		Debug:            false,
 	}).Handler)
-
-	api := &API{bindAddress: bindAddress, db: db, psFact: psFact, dockerFact: dockerFact, factProvider: factProvider, disc: disc, agent: agent, threshold: threshold}
 
 	boxAssets := packr.New("assets", "./static/assets")
 	boxHTML := packr.New("html", "./static")
@@ -96,9 +100,51 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
 	}
 
-	router.Handle("/metrics", promExporter) // promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(reg, promhttp.HandlerOpts{})))
+	var diagnosticTmpl *template.Template
+
+	diagnosticBody, err := boxHTML.Find("diagnostic.html")
+	if err != nil {
+		logger.Printf("Error while loading diagnostic.html: %v", err)
+	} else {
+		diagnosticTmpl, err = template.New("diagnostic").Parse(string(diagnosticBody))
+		if err != nil {
+			diagnosticTmpl = nil
+			logger.Printf("Error while loading diagnostic.html. Local UI will be broken: %v", err)
+		}
+	}
+
+	router.Handle("/metrics", api.PrometheurExporter)
 	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
+	router.HandleFunc("/diagnostic", func(w http.ResponseWriter, r *http.Request) {
+		content := api.DiagnosticPage()
+
+		var err error
+
+		if diagnosticTmpl == nil {
+			fmt.Fprintln(w, "diagnostic.html load failed. Fallback to simple text")
+			_, err = w.Write([]byte(content))
+		} else {
+			err = diagnosticTmpl.Execute(w, content)
+		}
+
+		if err != nil {
+			logger.V(2).Printf("fail to serve index.html: %v", err)
+		}
+	})
+
+	router.HandleFunc("/diagnostic.zip", func(w http.ResponseWriter, r *http.Request) {
+		hdr := w.Header()
+		hdr.Add("Content-Type", "application/zip")
+		if err := hdr.Write(w); err != nil {
+			logger.V(1).Printf("failed to server diagnostic.zip: %v", err)
+			return
+		}
+
+		if err := api.DiagnosticZip(w); err != nil {
+			logger.V(1).Printf("failed to server diagnostic.zip: %v", err)
+		}
+	})
 
 	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +153,7 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 			_, err = w.Write(fallbackIndex)
 		} else {
 			err = indexTmpl.Execute(w, gloutonUIConfig{
-				StaticCDNURL: staticCDNURL,
+				StaticCDNURL: api.StaticCDNURL,
 			})
 		}
 		if err != nil {
@@ -116,14 +162,14 @@ func New(db storeInterface, dockerFact *facts.DockerProvider, psFact *facts.Proc
 	})
 
 	api.router = router
-
-	return api
 }
 
 // Run starts our API.
-func (api API) Run(ctx context.Context) error {
+func (api *API) Run(ctx context.Context) error {
+	api.init()
+
 	srv := http.Server{
-		Addr:    api.bindAddress,
+		Addr:    api.BindAddress,
 		Handler: api.router,
 	}
 
@@ -142,8 +188,8 @@ func (api API) Run(ctx context.Context) error {
 		close(idleConnsClosed)
 	}()
 
-	logger.Printf("Starting API on %s ✔️", api.bindAddress)
-	logger.Printf("To access the local panel connect to http://%s 🌐", api.bindAddress)
+	logger.Printf("Starting API on %s ✔️", api.BindAddress)
+	logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		return err

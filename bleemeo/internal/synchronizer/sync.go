@@ -19,6 +19,7 @@ package synchronizer
 import (
 	"context"
 	cryptoRand "crypto/rand"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
@@ -30,6 +31,9 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -192,6 +196,55 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// DiagnosticPage return useful information to troubleshoot issue.
+func (s *Synchronizer) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	var tlsConfig *tls.Config
+
+	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
+
+	if err != nil {
+		fmt.Fprintf(builder, "Bad URL %#v: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+		return builder.String()
+	}
+
+	port := 80
+
+	if u.Scheme == "https" {
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: s.option.Config.Bool("bleemeo.api_ssl_insecure"), // nolint: gosec
+		}
+		port = 443
+	}
+
+	if u.Port() != "" {
+		tmp, err := strconv.ParseInt(u.Port(), 10, 0)
+		if err != nil {
+			fmt.Fprintf(builder, "Bad URL %#v, invalid port: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+			return builder.String()
+		}
+
+		port = int(tmp)
+	}
+
+	tcpMessage := make(chan string)
+	httpMessage := make(chan string)
+
+	go func() {
+		tcpMessage <- common.DiagnosticTCP(u.Hostname(), port, tlsConfig)
+	}()
+
+	go func() {
+		httpMessage <- common.DiagnosticHTTP(u.String(), tlsConfig)
+	}()
+
+	builder.WriteString(<-tcpMessage)
+	builder.WriteString(<-httpMessage)
+
+	return builder.String()
 }
 
 // NotifyConfigUpdate notify that an Agent configuration change occurred.
