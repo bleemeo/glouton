@@ -469,9 +469,9 @@ func Test_updateContainers(t *testing.T) {
 		{
 			containerNameContains: "rabbitmq_rabbitmq-container-port",
 			ignored:               false,
-			primaryAddress:        "172.18.0.7",
+			primaryAddress:        "172.18.0.4",
 			listenAddress: []ListenAddress{
-				{Address: "172.18.0.7", NetworkFamily: "tcp", Port: 5672},
+				{Address: "172.18.0.4", NetworkFamily: "tcp", Port: 5672},
 			},
 			ignoredPorts: map[int]bool{},
 		},
@@ -510,8 +510,8 @@ func Test_updateContainers(t *testing.T) {
 		},
 	}
 
-	if len(containers) != 7 {
-		t.Errorf("len(containers) = %d, want 7", len(containers))
+	if len(containers) != 13 {
+		t.Errorf("len(containers) = %d, want 9", len(containers))
 	}
 
 	for _, w := range want {
