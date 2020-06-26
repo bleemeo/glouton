@@ -102,6 +102,7 @@ type metricPayload struct {
 	Value             forceDecimalFloat `json:"value"`
 	Status            string            `json:"status,omitempty"`
 	StatusDescription string            `json:"status_description,omitempty"`
+	CheckOutput       string            `json:"check_output,omitempty"` // TODO: drop this field once consumer is updated to support status_description
 	EventGracePeriod  int               `json:"event_grace_period,omitempty"`
 }
 
@@ -499,6 +500,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 			if p.Annotations.Status.CurrentStatus.IsSet() {
 				value.Status = p.Annotations.Status.CurrentStatus.String()
 				value.StatusDescription = p.Annotations.Status.StatusDescription
+				value.CheckOutput = value.StatusDescription
 
 				if p.Annotations.ContainerID != "" {
 					lastKilledAt := c.option.Docker.ContainerLastKill(p.Annotations.ContainerID)
