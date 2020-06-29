@@ -3,6 +3,7 @@ package registry
 import (
 	"fmt"
 	"glouton/types"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -20,7 +21,7 @@ import (
 // queries on /metrics to always probe the collectors, and respectTime chaneg that behavior).
 type GatherState struct {
 	// respectTime allows the gatherer to collect metrics only from time to time, and not for every call.
-	// THis ia notably the way we notify TickingGatherer to actually use the ticker.
+	// This is notably the way we notify TickingGatherer to actually use the ticker.
 	respectTime bool
 }
 
@@ -36,45 +37,67 @@ type CustomGatherer interface {
 type TickingGatherer struct {
 	gatherer prometheus.Gatherer
 	ticker   *time.Ticker
+	rate     time.Duration
+
+	started    bool
+	startTime  time.Time
+	startDelay time.Duration
 }
 
 // NewTickingGatherer creates a gatherer that only collect metrics once every refreshRateSeconds.
-func NewTickingGatherer(gatherer prometheus.Gatherer, refreshRateSeconds int) TickingGatherer {
-	res := TickingGatherer{
-		gatherer: gatherer,
-		ticker:   time.NewTicker(time.Duration(refreshRateSeconds) * time.Second),
-	}
+func NewTickingGatherer(gatherer prometheus.Gatherer, refreshRateSeconds int) *TickingGatherer {
+	refreshRate := time.Duration(refreshRateSeconds) * time.Second
 
-	return res
+	return &TickingGatherer{
+		gatherer: gatherer,
+		rate:     refreshRate,
+
+		started:   false,
+		startTime: time.Now(),
+		// we divive the network load over time by randomizing the start time
+		startDelay: time.Duration(rand.Int63n(int64(refreshRate))).Truncate(10 * time.Second),
+	}
 }
 
 // Gather implements CustomGatherer.
-func (g TickingGatherer) Gather() ([]*dto.MetricFamily, error) {
+func (g *TickingGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return g.GatherWithState(GatherState{})
 }
 
 // GatherWithState implements CustomGatherer.
-func (g TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	// when we have respectTime (set when we do internal queries, but not when /metrics is probed),
 	// we check with the timer to see if we must Gather().
 	if !state.respectTime {
-		if cg, ok := g.gatherer.(CustomGatherer); ok {
-			return cg.GatherWithState(state)
+		return g.gatherNow(state)
+	}
+
+	if !g.started {
+		// if we have elapsed our random time, start the ticker and run immediately
+		if time.Now().After(g.startTime.Add(g.startDelay)) {
+			g.started = true
+			g.ticker = time.NewTicker(g.rate)
+
+			return g.gatherNow(state)
 		}
 
-		return g.gatherer.Gather()
+		return make([]*dto.MetricFamily, 0), nil
 	}
 
 	select {
 	case <-g.ticker.C:
-		if cg, ok := g.gatherer.(CustomGatherer); ok {
-			return cg.GatherWithState(state)
-		}
-
-		return g.gatherer.Gather()
+		return g.gatherNow(state)
 	default:
 		return make([]*dto.MetricFamily, 0), nil
 	}
+}
+
+func (g *TickingGatherer) gatherNow(state GatherState) ([]*dto.MetricFamily, error) {
+	if cg, ok := g.gatherer.(CustomGatherer); ok {
+		return cg.GatherWithState(state)
+	}
+
+	return g.gatherer.Gather()
 }
 
 // labeledGatherer provide a gatherer that will add provided labels to all metrics.
