@@ -26,7 +26,7 @@ type GatherState struct {
 
 type CollectState GatherState
 
-// CustomGatherer is a generalization of prometheus.Gather
+// CustomGatherer is a generalization of prometheus.Gather.
 type CustomGatherer interface {
 	prometheus.Gatherer
 	GatherWithState(GatherState) ([]*dto.MetricFamily, error)
@@ -60,18 +60,18 @@ func (g TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily
 	if !state.respectTime {
 		if cg, ok := g.gatherer.(CustomGatherer); ok {
 			return cg.GatherWithState(state)
-		} else {
-			return g.gatherer.Gather()
 		}
+
+		return g.gatherer.Gather()
 	}
 
 	select {
 	case <-g.ticker.C:
 		if cg, ok := g.gatherer.(CustomGatherer); ok {
 			return cg.GatherWithState(state)
-		} else {
-			return g.gatherer.Gather()
 		}
+
+		return g.gatherer.Gather()
 	default:
 		return make([]*dto.MetricFamily, 0), nil
 	}
@@ -113,6 +113,7 @@ func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 // GatherWithState implements CustomGatherer.
 func (g labeledGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	var mfs []*dto.MetricFamily
+
 	var err error
 
 	if cg, ok := g.source.(CustomGatherer); ok {
@@ -205,6 +206,7 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 	for _, g := range gs {
 		go func(g prometheus.Gatherer) {
 			var mfs []*dto.MetricFamily
+
 			var err error
 
 			if cg, ok := g.(CustomGatherer); ok {
@@ -212,6 +214,7 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 			} else {
 				mfs, err = g.Gather()
 			}
+
 			if err != nil {
 				errs = append(errs, err)
 			}
