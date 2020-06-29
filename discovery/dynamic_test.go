@@ -71,8 +71,8 @@ func (mci mockContainerInfo) Container(containerID string) (container container,
 	return c, ok
 }
 
-func (mc mockContainer) ListenAddresses() []facts.ListenAddress {
-	return mc.listenAddresses
+func (mc mockContainer) ListenAddressesEx() ([]facts.ListenAddress, facts.ConfidenceLevel) {
+	return mc.listenAddresses, facts.ConfidenceMedium
 }
 
 func (mc mockContainer) Env() []string {
@@ -756,7 +756,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerIgnoredPorts: map[int]bool{
 				8080: true,
 			},
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 7990}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 7990}},
 			want: Service{
 				Name:            "bitbucket",
 				ServiceType:     BitBucketService,

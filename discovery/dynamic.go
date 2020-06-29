@@ -51,7 +51,7 @@ type DynamicDiscovery struct {
 type container interface {
 	Env() []string
 	PrimaryAddress() string
-	ListenAddresses() []facts.ListenAddress
+	ListenAddressesEx() ([]facts.ListenAddress, facts.ConfidenceLevel)
 	Labels() map[string]string
 	Ignored() bool
 	IgnoredPorts() map[int]bool
@@ -283,8 +283,14 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if service.ContainerID == "" {
 			service.ListenAddresses = netstat[pid]
 		} else {
-			service.ListenAddresses = service.container.ListenAddresses()
+			var confidence facts.ConfidenceLevel
+
+			service.ListenAddresses, confidence = service.container.ListenAddressesEx()
 			service.IgnoredPorts = service.container.IgnoredPorts()
+
+			if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && confidence == facts.ConfidenceLow) {
+				service.ListenAddresses = netstat[pid]
+			}
 		}
 
 		if len(service.ListenAddresses) > 0 {

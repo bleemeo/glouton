@@ -422,9 +422,17 @@ func (c Container) Annotations() map[string]string {
 
 // ListenAddresses returns the addresseses this container listen on.
 func (c Container) ListenAddresses() []ListenAddress {
+	r, _ := c.ListenAddressesEx()
+	return r
+}
+
+// ListenAddressesEx returns the addresseses this container listen on.
+func (c Container) ListenAddressesEx() ([]ListenAddress, ConfidenceLevel) {
 	if c.PrimaryAddress() == "" {
-		return nil
+		return nil, 0
 	}
+
+	confidence := ConfidenceLow
 
 	exposedPorts := make([]ListenAddress, 0)
 
@@ -436,6 +444,8 @@ func (c Container) ListenAddresses() []ListenAddress {
 				Address:       c.PrimaryAddress(),
 			})
 		}
+
+		confidence = ConfidenceHigh
 	}
 
 	if len(exposedPorts) == 0 && c.inspect.NetworkSettings != nil && len(c.inspect.NetworkSettings.Ports) > 0 {
@@ -449,6 +459,8 @@ func (c Container) ListenAddresses() []ListenAddress {
 				Address:       c.PrimaryAddress(),
 				Port:          k.Int(),
 			})
+
+			confidence = ConfidenceHigh
 		}
 	}
 
@@ -456,13 +468,18 @@ func (c Container) ListenAddresses() []ListenAddress {
 		for v := range c.inspect.Config.ExposedPorts {
 			exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: v.Proto(), Address: c.PrimaryAddress(), Port: v.Int()})
 		}
+
+		// The information come from "EXPOSE" from Dockerfile. It's easy to have configuration of the service
+		// which make is listen on another port, but user can't override EXPOSE without building it own Docker image.
+		// So this information is likely to be wrong.
+		confidence = ConfidenceLow
 	}
 
 	sort.Slice(exposedPorts, func(i, j int) bool {
 		return exposedPorts[i].Port < exposedPorts[j].Port
 	})
 
-	return exposedPorts
+	return exposedPorts, confidence
 }
 
 // Name returns the Container name.
