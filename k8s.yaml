@@ -87,7 +87,7 @@ spec:
       hostPID: true
       containers:
       - image: bleemeo/glouton
-        imagePullPolicy: IfNotPresent
+        imagePullPolicy: Always
         name: glouton
         ports:
         - name: http
