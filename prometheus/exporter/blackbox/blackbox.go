@@ -19,7 +19,7 @@ package blackbox
 import (
 	"context"
 	"glouton/logger"
-	"glouton/prometheus/exporter/collectors"
+	"glouton/prometheus/registry"
 	"time"
 
 	"github.com/prometheus/blackbox_exporter/prober"
@@ -157,25 +157,26 @@ func (m *RegisterManager) updateRegistrations() error {
 	// register new probes
 	for _, collectorFromConfig := range m.targets {
 		if !inMap(collectorFromConfig, m.registrations) {
+			reg := prometheus.NewRegistry()
+
+			if err := reg.Register(collectorFromConfig.collector); err != nil {
+				return err
+			}
+
+			var g prometheus.Gatherer
+
+			// static targets are always probed, while dynamic targets are probed according to
+			// their refresh rates
+			g = reg
+			if collectorFromConfig.collector.AgentID != "" {
+				g = registry.NewTickingGatherer(reg, collectorFromConfig.collector.RefreshRateSeconds)
+			}
+
 			// this weird "dance" where we create a registry and add it to the registererGatherer
 			// for each probe is the product of our unability to expose a "__meta_something"
 			// label while doing Collect(). We end up adding the meta labels statically at
 			// registration.
-			reg := prometheus.NewRegistry()
-
-			var collector prometheus.Collector
-
-			// static targets are always probed, while dynamic targets are probed according to their refresh rates
-			collector = collectorFromConfig.collector
-			if collectorFromConfig.collector.AgentID != "" {
-				collector = collectors.NewTickingCollector(collectorFromConfig.collector, collectorFromConfig.collector.RefreshRateSeconds)
-			}
-
-			if err := reg.Register(collector); err != nil {
-				return err
-			}
-
-			id, err := m.registry.RegisterGatherer(reg, nil, collectorFromConfig.labels)
+			id, err := m.registry.RegisterGatherer(g, nil, collectorFromConfig.labels)
 			if err != nil {
 				return err
 			}

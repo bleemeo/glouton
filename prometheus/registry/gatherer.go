@@ -5,12 +5,77 @@ import (
 	"glouton/types"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
+
+// GatherState is an argument given to gatherers that support it. It allows us to give extra informations
+// to gatherers. Due to the way such objects are contructed when no argument is supplied (when calling
+// Gather() on a CustomGatherer, most of the time Gather() will directly call GatherWithState(GatherState{}),
+// please make sure that default values are sensible. For example, respectTime *must* be false, as we want
+// queries on /metrics to always probe the collectors, and respectTime chaneg that behavior).
+type GatherState struct {
+	// respectTime allows the gatherer to collect metrics only from time to time, and not for every call.
+	// THis ia notably the way we notify TickingGatherer to actually use the ticker.
+	respectTime bool
+}
+
+type CollectState GatherState
+
+// CustomGatherer is a generalization of prometheus.Gather
+type CustomGatherer interface {
+	prometheus.Gatherer
+	GatherWithState(GatherState) ([]*dto.MetricFamily, error)
+}
+
+// TickingGatherer is a prometheus gatherer that only collect metrics every once in a while.
+type TickingGatherer struct {
+	gatherer prometheus.Gatherer
+	ticker   *time.Ticker
+}
+
+// NewTickingGatherer creates a gatherer that only collect metrics once every refreshRateSeconds.
+func NewTickingGatherer(gatherer prometheus.Gatherer, refreshRateSeconds int) TickingGatherer {
+	res := TickingGatherer{
+		gatherer: gatherer,
+		ticker:   time.NewTicker(time.Duration(refreshRateSeconds) * time.Second),
+	}
+
+	return res
+}
+
+// Gather implements CustomGatherer.
+func (g TickingGatherer) Gather() ([]*dto.MetricFamily, error) {
+	return g.GatherWithState(GatherState{})
+}
+
+// GatherWithState implements CustomGatherer.
+func (g TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+	// when we have respectTime (set when we do internal queries, but not when /metrics is probed),
+	// we check with the timer to see if we must Gather().
+	if !state.respectTime {
+		if cg, ok := g.gatherer.(CustomGatherer); ok {
+			return cg.GatherWithState(state)
+		} else {
+			return g.gatherer.Gather()
+		}
+	}
+
+	select {
+	case <-g.ticker.C:
+		if cg, ok := g.gatherer.(CustomGatherer); ok {
+			return cg.GatherWithState(state)
+		} else {
+			return g.gatherer.Gather()
+		}
+	default:
+		return make([]*dto.MetricFamily, 0), nil
+	}
+}
 
 // labeledGatherer provide a gatherer that will add provided labels to all metrics.
 // It also allow to gather to MetricPoints.
@@ -40,8 +105,21 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annota
 	}
 }
 
+// Gather implements CustomGatherer.
 func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
-	mfs, err := g.source.Gather()
+	return g.GatherWithState(GatherState{})
+}
+
+// GatherWithState implements CustomGatherer.
+func (g labeledGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+	var mfs []*dto.MetricFamily
+	var err error
+
+	if cg, ok := g.source.(CustomGatherer); ok {
+		mfs, err = cg.GatherWithState(state)
+	} else {
+		mfs, err = g.source.Gather()
+	}
 
 	if len(g.labels) == 0 {
 		return mfs, err
@@ -83,8 +161,8 @@ func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 	return result
 }
 
-func (g labeledGatherer) GatherPoints() ([]types.MetricPoint, error) {
-	mfs, err := g.Gather()
+func (g labeledGatherer) GatherPoints(state GatherState) ([]types.MetricPoint, error) {
+	mfs, err := g.GatherWithState(state)
 	points := familiesToMetricPoints(mfs)
 
 	if (g.annotations != types.MetricAnnotations{}) {
@@ -113,8 +191,8 @@ func (s sliceGatherer) Gather() ([]*dto.MetricFamily, error) {
 // The first help_text win.
 type Gatherers []prometheus.Gatherer
 
-// Gather implements Gatherer.
-func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
+// GatherWithState implements CustomGatherer.
+func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	metricFamiliesByName := map[string]*dto.MetricFamily{}
 
 	var errs prometheus.MultiError
@@ -126,7 +204,14 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 
 	for _, g := range gs {
 		go func(g prometheus.Gatherer) {
-			mfs, err := g.Gather()
+			var mfs []*dto.MetricFamily
+			var err error
+
+			if cg, ok := g.(CustomGatherer); ok {
+				mfs, err = cg.GatherWithState(state)
+			} else {
+				mfs, err = g.Gather()
+			}
 			if err != nil {
 				errs = append(errs, err)
 			}
@@ -191,10 +276,15 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	return sortedResult, errs.MaybeUnwrap()
 }
 
+// Gather implements CustomGatherer.
+func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
+	return gs.GatherWithState(GatherState{})
+}
+
 type labeledGatherers []labeledGatherer
 
 // GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily.
-func (gs labeledGatherers) GatherPoints() ([]types.MetricPoint, error) {
+func (gs labeledGatherers) GatherPoints(state GatherState) ([]types.MetricPoint, error) {
 	result := []types.MetricPoint{}
 
 	var errs prometheus.MultiError
@@ -206,7 +296,7 @@ func (gs labeledGatherers) GatherPoints() ([]types.MetricPoint, error) {
 
 	for _, g := range gs {
 		go func(g labeledGatherer) {
-			points, err := g.GatherPoints()
+			points, err := g.GatherPoints(state)
 
 			mutex.Lock()
 

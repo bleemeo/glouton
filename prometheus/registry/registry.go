@@ -348,8 +348,13 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 	return true
 }
 
-// Gather implement prometheus Gatherer.
+// Gather implements CustomeGatherer.
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
+	return r.GatherWithState(GatherState{})
+}
+
+// GatherWithState implements CustomeGatherer.
+func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	r.init()
 	r.l.Lock()
 
@@ -364,7 +369,7 @@ func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	r.l.Unlock()
 
 	t0 := time.Now()
-	mfs, err := gatherers.Gather()
+	mfs, err := gatherers.GatherWithState(state)
 
 	if r.metricGatherExporterTime != nil {
 		r.metricGatherExporterTime.Observe(time.Since(t0).Seconds())
@@ -517,7 +522,7 @@ func (r *Registry) runOnce() {
 	if r.MetricFormat == types.MetricFormatPrometheus {
 		var err error
 
-		points, err = labeledGatherers(gatherers).GatherPoints()
+		points, err = labeledGatherers(gatherers).GatherPoints(GatherState{respectTime: true})
 		if err != nil {
 			logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
 		}
