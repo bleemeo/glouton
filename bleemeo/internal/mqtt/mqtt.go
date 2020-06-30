@@ -61,7 +61,7 @@ type Option struct {
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
 
-	InitialPoints map[bleemeoTypes.AgentID][]types.MetricPoint
+	InitialPoints []types.MetricPoint
 }
 
 // Client is an MQTT client for Bleemeo Cloud platform.
@@ -71,13 +71,13 @@ type Client struct {
 	// Those variable are write once or only read/write from Run() gorouting. No lock needed
 	ctx                        context.Context
 	mqttClient                 paho.Client
-	failedPoints               map[bleemeoTypes.AgentID][]types.MetricPoint
+	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
 
 	l                 sync.Mutex
 	pendingMessage    []message
-	pendingPoints     map[bleemeoTypes.AgentID][]types.MetricPoint
+	pendingPoints     []types.MetricPoint
 	lastReport        time.Time
 	failedPointsCount int
 	disabledUntil     time.Time
@@ -143,12 +143,6 @@ func New(option Option, first bool) *Client {
 		option: option,
 	}
 
-	res.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
-	// assignments on nil maps are a great recipes for panics, let's try to not allow such behavior
-	if res.option.InitialPoints == nil {
-		res.option.InitialPoints = map[bleemeoTypes.AgentID][]types.MetricPoint{}
-	}
-
 	return res
 }
 
@@ -202,9 +196,8 @@ func (c *Client) Run(ctx context.Context) error {
 	c.l.Lock()
 	c.disableNotify = make(chan interface{})
 	c.connectionLost = make(chan interface{})
-	c.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 	c.pendingPoints = c.option.InitialPoints
-	c.option.InitialPoints = nil
+	c.option.InitialPoints = make([]types.MetricPoint, 0)
 	c.l.Unlock()
 
 	for !c.ready() {
@@ -408,79 +401,45 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 		return
 	}
 
-	// If we wanted to limit allocations, the best strategy would probably be a two-pass approach where we
-	// first get the number of MetricPoints for each agent/monitor, so that we can allocate them only once
-	// (chances are such an approach would increase performances too, as linear iteration ought to be faster
-	// than reallocation(s)).
-	// I settled for the simple way for now.
-
-	// Determine the appropriate agent ID and add the point to the matching list
-	for _, newPoint := range points {
-		id := c.option.AgentID
-
-		if newPoint.Annotations.BleemeoAgentID != "" {
-			// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-			id = bleemeoTypes.AgentID(newPoint.Annotations.BleemeoAgentID)
-		}
-
-		c.pendingPoints[id] = append(c.pendingPoints[id], newPoint)
-	}
+	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
-// popPoints returns the mapping between agent IDs and lists of corresponding metrics to be sent for
-// that agent. When 'includeFailedPoints' is set to true, the returned data will no only include all
-// pending points, but also all the points whose submission failed previously.
-func (c *Client) popPoints(includeFailedPoints bool) map[bleemeoTypes.AgentID][]types.MetricPoint {
+// PopPoints returns the list of metrics to be sent. When 'includeFailedPoints' is set to true, the returned
+// data will not only include all pending points, but also all the points whose submission failed previously.
+func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	points := map[bleemeoTypes.AgentID][]types.MetricPoint{}
+	var points []types.MetricPoint
 
 	if includeFailedPoints {
 		points = c.failedPoints
-		c.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
+		c.failedPoints = make([]types.MetricPoint, 0)
 		c.failedPointsCount = 0
 	}
 
-	for agentID, pendingPoints := range c.pendingPoints {
-		points[agentID] = append(points[agentID], pendingPoints...)
-	}
+	points = append(points, c.pendingPoints...)
 
-	c.pendingPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
+	c.pendingPoints = make([]types.MetricPoint, 0)
 
 	return points
 }
 
-func (c *Client) popNewPendingPoints() map[bleemeoTypes.AgentID][]types.MetricPoint {
-	return c.popPoints(false)
-}
-
-// PopPendingPoints gets and removes all pending points from this MQTT connector, including points that
-// previously failed.
-func (c *Client) PopPendingPoints() map[bleemeoTypes.AgentID][]types.MetricPoint {
-	return c.popPoints(true)
-}
-
 func (c *Client) sendPoints() {
 	metricWhitelist := c.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
-	points := filterPoints(c.popNewPendingPoints(), metricWhitelist)
+	points := filterPoints(c.PopPoints(false), metricWhitelist)
 
 	if !c.Connected() {
 		c.l.Lock()
 
 		// store all new points as failed ones
-		for idx, v := range points {
-			c.failedPoints[idx] = append(c.failedPoints[idx], v...)
+		c.failedPoints = append(c.failedPoints, points...)
+
+		if len(c.failedPoints) > maxPendingPoints {
+			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
 		}
 
-		// maxPendingPoints is no longer a global limit but a limit per agent and per probe
-		for idx := range c.failedPoints {
-			if len(c.failedPoints[idx]) > maxPendingPoints {
-				c.failedPoints[idx] = c.failedPoints[idx][len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
-			}
-		}
-
-		// Make sure that when connection is back we retry failed point as soon as possible
+		// Make sure that when connection is back we retry failed points as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
 
 		defer c.l.Unlock()
@@ -508,26 +467,24 @@ func (c *Client) sendPoints() {
 
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
-		newPoints := make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
 
-		for agentID, agentFailedPoints := range c.failedPoints {
-			for _, p := range agentFailedPoints {
-				key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
-				if localExistsByKey[key] {
-					newPoints[agentID] = append(newPoints[agentID], p)
-				}
+		newPoints := make([]types.MetricPoint, 1)
+
+		for _, p := range c.failedPoints {
+			key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+			if localExistsByKey[key] {
+				newPoints = append(newPoints, p)
 			}
 		}
 
-		for idx, v := range filterPoints(newPoints, metricWhitelist) {
-			points[idx] = append(v, points[idx]...)
+		for _, v := range filterPoints(newPoints, metricWhitelist) {
+			points = append(points, v)
 		}
 
-		c.failedPoints = make(map[bleemeoTypes.AgentID][]types.MetricPoint, 1)
+		c.failedPoints = make([]types.MetricPoint, 0)
 	}
 
-	payload := make(map[bleemeoTypes.AgentID][]metricPayload, len(points))
-	payload = c.preparePoints(payload, registreredMetricByKey, points)
+	payload := c.preparePoints(registreredMetricByKey, points)
 	nbPoints := 0
 
 	for _, metrics := range payload {
@@ -559,46 +516,51 @@ func (c *Client) sendPoints() {
 	c.failedPointsCount = len(c.failedPoints)
 }
 
-// preparePoints updates the MQTT payload by processing some points and appending the result to `payload`.
-func (c *Client) preparePoints(payload map[bleemeoTypes.AgentID][]metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric,
-	points map[bleemeoTypes.AgentID][]types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
-	for agentID, agentPoints := range points {
-		for _, p := range agentPoints {
-			key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
-			if m, ok := registreredMetricByKey[key]; ok {
-				value := metricPayload{
-					LabelsText:  m.LabelsText,
-					Timestamp:   p.Time.Unix(),
-					TimestampMS: p.Time.UnixNano() / 1e6,
-					Value:       forceDecimalFloat(p.Value),
-				}
+// preparePoints updates the MQTT payload by processing some points and returning the a map between agent uuids and the metrics.
+func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
+	payload := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
+	for _, p := range points {
+		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+		if m, ok := registreredMetricByKey[key]; ok {
+			value := metricPayload{
+				LabelsText:  m.LabelsText,
+				Timestamp:   p.Time.Unix(),
+				TimestampMS: p.Time.UnixNano() / 1e6,
+				Value:       forceDecimalFloat(p.Value),
+			}
 
-				value.UUID = m.ID
-				if c.option.MetricFormat == types.MetricFormatBleemeo {
-					value.LabelsText = ""
-					value.Measurement = p.Labels[types.LabelName]
-					value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
-				}
+			value.UUID = m.ID
+			if c.option.MetricFormat == types.MetricFormatBleemeo {
+				value.LabelsText = ""
+				value.Measurement = p.Labels[types.LabelName]
+				value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
+			}
 
-				if p.Annotations.Status.CurrentStatus.IsSet() {
-					value.Status = p.Annotations.Status.CurrentStatus.String()
-					value.StatusDescription = p.Annotations.Status.StatusDescription
-					value.CheckOutput = value.StatusDescription
+			if p.Annotations.Status.CurrentStatus.IsSet() {
+				value.Status = p.Annotations.Status.CurrentStatus.String()
+				value.StatusDescription = p.Annotations.Status.StatusDescription
+				value.CheckOutput = value.StatusDescription
 
-					if p.Annotations.ContainerID != "" {
-						lastKilledAt := c.option.Docker.ContainerLastKill(p.Annotations.ContainerID)
-						gracePeriod := time.Since(lastKilledAt) + 300*time.Second
+				if p.Annotations.ContainerID != "" {
+					lastKilledAt := c.option.Docker.ContainerLastKill(p.Annotations.ContainerID)
+					gracePeriod := time.Since(lastKilledAt) + 300*time.Second
 
-						if gracePeriod > 60*time.Second {
-							value.EventGracePeriod = int(gracePeriod.Seconds())
-						}
+					if gracePeriod > 60*time.Second {
+						value.EventGracePeriod = int(gracePeriod.Seconds())
 					}
 				}
-
-				payload[agentID] = append(payload[agentID], value)
-			} else {
-				c.failedPoints[agentID] = append(c.failedPoints[agentID], p)
 			}
+
+			bleemeoAgentId := c.option.AgentID
+
+			if p.Annotations.BleemeoAgentID != "" {
+				// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
+				bleemeoAgentId = bleemeoTypes.AgentID(p.Annotations.BleemeoAgentID)
+			}
+
+			payload[bleemeoAgentId] = append(payload[bleemeoAgentId], value)
+		} else {
+			c.failedPoints = append(c.failedPoints, p)
 		}
 	}
 
@@ -781,14 +743,12 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func filterPoints(input map[bleemeoTypes.AgentID][]types.MetricPoint, metricWhitelist map[string]bool) map[bleemeoTypes.AgentID][]types.MetricPoint {
-	result := map[bleemeoTypes.AgentID][]types.MetricPoint{}
+func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []types.MetricPoint {
+	result := make([]types.MetricPoint, len(input))
 
-	for k, mps := range input {
-		for _, mp := range mps {
-			if common.AllowMetric(mp.Labels, mp.Annotations, metricWhitelist) {
-				result[k] = append(result[k], mp)
-			}
+	for _, mp := range input {
+		if common.AllowMetric(mp.Labels, mp.Annotations, metricWhitelist) {
+			result = append(result, mp)
 		}
 	}
 

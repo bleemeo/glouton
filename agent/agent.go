@@ -418,7 +418,9 @@ func (a *agent) run() { //nolint:gocyclo
 			}
 
 			if s == syscall.SIGHUP {
-				a.bleemeoConnector.UpdateMonitors()
+				if a.bleemeoConnector != nil {
+					a.bleemeoConnector.UpdateMonitors()
+				}
 				a.FireTrigger(true, true, false, true)
 			}
 		}
