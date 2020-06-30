@@ -18,45 +18,56 @@ package mqtt
 
 import (
 	"bytes"
-	"compress/zlib"
 	"encoding/json"
 	"glouton/facts"
+
+	"github.com/klauspost/compress/zstd"
 )
 
 type topinfoEncoder struct {
+	encoder *zstd.Encoder
+	decoder *zstd.Decoder
+	buffer  bytes.Buffer
 }
 
 // Encode is NOT thread-safe.
 func (enc *topinfoEncoder) Encode(topinfo facts.TopInfo) ([]byte, error) {
-	var buffer bytes.Buffer
-
-	w := zlib.NewWriter(&buffer)
-
-	err := json.NewEncoder(w).Encode(topinfo)
-	if err != nil {
-		w.Close()
-
-		return nil, err
+	if enc.encoder == nil {
+		enc.encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBestCompression))
 	}
 
-	err = w.Close()
+	enc.buffer.Reset()
+	enc.encoder.Reset(&enc.buffer)
+
+	err := json.NewEncoder(enc.encoder).Encode(topinfo)
 	if err != nil {
 		return nil, err
 	}
 
-	return buffer.Bytes(), nil
+	err = enc.encoder.Flush()
+	if err != nil {
+		return nil, err
+	}
+
+	clone := make([]byte, enc.buffer.Len())
+	copy(clone, enc.buffer.Bytes())
+
+	return clone, nil
 }
 
 func (enc *topinfoEncoder) Decode(input []byte) (facts.TopInfo, error) {
-	r, err := zlib.NewReader(bytes.NewReader(input))
+	if enc.decoder == nil {
+		enc.decoder, _ = zstd.NewReader(nil)
+	}
+
+	err := enc.decoder.Reset(bytes.NewReader(input))
 	if err != nil {
 		return facts.TopInfo{}, err
 	}
 
 	var topinfo facts.TopInfo
 
-	err = json.NewDecoder(r).Decode(&topinfo)
-	r.Close()
+	err = json.NewDecoder(enc.decoder).Decode(&topinfo)
 
 	return topinfo, err
 }
