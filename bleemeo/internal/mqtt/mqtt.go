@@ -418,9 +418,9 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	for _, newPoint := range points {
 		id := c.option.AgentID
 
-		if newPoint.Annotations.AgentID != "" {
+		if newPoint.Annotations.BleemeoAgentID != "" {
 			// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-			id = bleemeoTypes.AgentID(newPoint.Annotations.AgentID)
+			id = bleemeoTypes.AgentID(newPoint.Annotations.BleemeoAgentID)
 		}
 
 		c.pendingPoints[id] = append(c.pendingPoints[id], newPoint)

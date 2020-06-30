@@ -174,8 +174,8 @@ type MetricAnnotations struct {
 	ServiceName string
 	StatusOf    string
 	// store the agent for which we want to emit the metric
-	AgentID string
-	Status  StatusDescription
+	BleemeoAgentID string
+	Status         StatusDescription
 }
 
 // Point is the value of one metric at a given time.

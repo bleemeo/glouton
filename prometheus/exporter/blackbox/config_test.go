@@ -18,6 +18,7 @@ package blackbox
 
 import (
 	gloutonConfig "glouton/config"
+	"glouton/prometheus/registry"
 	"reflect"
 	"testing"
 	"time"
@@ -63,7 +64,9 @@ func TestConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the yaml configuration")
 	}
 
-	bbManager, err := New(nil, blackboxConf)
+	registry := &registry.Registry{}
+
+	bbManager, err := New(registry, blackboxConf)
 	if err != nil {
 		t.Fatal(err)
 	}

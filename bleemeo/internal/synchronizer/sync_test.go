@@ -13,6 +13,7 @@ import (
 	"glouton/store"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
 	"regexp"
 	"strings"
@@ -22,7 +23,6 @@ import (
 
 const (
 	// fixed "random" values are enought for tests
-	apiBase          string = "localhost:8001"
 	accountID        string = "9da59f53-1d90-4441-ae58-42c661cfea83"
 	registrationKey  string = "e2c22e59-0621-49e6-b5dd-bdb02cbac9f1"
 	activeMonitorURL string = "http://bleemeo.com"
@@ -92,14 +92,6 @@ func writeListing(w io.Writer, elems interface{}) {
 	fmt.Fprintf(w, "{\"count\": %d, \"next\": null, \"previous\": null, \"results\": %s}", reflect.ValueOf(elems).Len(), results.String())
 }
 
-// httpHandleFunc is a very tiny wraper around http.HandleFunc to add proper headers to responses.
-func httpHandleFunc(url string, f func(http.ResponseWriter, *http.Request)) {
-	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Add("Content-Type", "application/json")
-		f(w, r)
-	})
-}
-
 // getUUID returns the UUID stored in the HTTP query path, if any.
 func getUUID(r *http.Request) (string, bool) {
 	// we don't care about http parameters
@@ -111,8 +103,10 @@ func getUUID(r *http.Request) (string, bool) {
 	return "", false
 }
 
-func runFakeAPI(t *testing.T) {
-	httpHandleFunc("/v1/agent/", func(w http.ResponseWriter, r *http.Request) {
+func runFakeAPI(t *testing.T) *httptest.Server {
+	serveMux := http.NewServeMux()
+
+	serveMux.HandleFunc("/v1/agent/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
 			decoder := json.NewDecoder(r.Body)
@@ -142,11 +136,11 @@ func runFakeAPI(t *testing.T) {
 		}
 	})
 
-	httpHandleFunc("/v1/jwt-auth/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("/v1/jwt-auth/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprint(w, jwtToken)
 	})
 
-	httpHandleFunc("/v1/agentfact/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("/v1/agentfact/", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusCreated)
 			if err := json.NewEncoder(w).Encode(newAgentFact); err != nil {
@@ -165,15 +159,15 @@ func runFakeAPI(t *testing.T) {
 		}
 	})
 
-	httpHandleFunc("/v1/container/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("/v1/container/", func(w http.ResponseWriter, r *http.Request) {
 		writeListing(w, []types.Container{})
 	})
 
-	httpHandleFunc("/v1/service/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("/v1/service/", func(w http.ResponseWriter, r *http.Request) {
 		writeListing(w, newMonitors)
 	})
 
-	httpHandleFunc("/v1/metric/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("/v1/metric/", func(w http.ResponseWriter, r *http.Request) {
 		uuid, present := getUUID(r)
 		if present {
 			for _, v := range newMetrics {
@@ -192,7 +186,7 @@ func runFakeAPI(t *testing.T) {
 		writeListing(w, newMetrics)
 	})
 
-	httpHandleFunc("/v1/accountconfig/", func(w http.ResponseWriter, r *http.Request) {
+	serveMux.HandleFunc("/v1/accountconfig/", func(w http.ResponseWriter, r *http.Request) {
 		if _, present := getUUID(r); present {
 			if err := json.NewEncoder(w).Encode(newAccountConfig); err != nil {
 				t.Error(err)
@@ -203,14 +197,12 @@ func runFakeAPI(t *testing.T) {
 		}
 	})
 
-	t.Error(http.ListenAndServe(apiBase, nil))
+	return httptest.NewServer(serveMux)
 }
 
-func basicTestSetup(t *testing.T) *Synchronizer {
-	go runFakeAPI(t)
-
-	// Wait for the HTTP server to start
-	time.Sleep(250 * time.Millisecond)
+func TestSyncMetrics(t *testing.T) {
+	httpServer := runFakeAPI(t)
+	defer httpServer.Close()
 
 	cfg := &config.Configuration{}
 
@@ -219,10 +211,11 @@ func basicTestSetup(t *testing.T) *Synchronizer {
 	}
 
 	cfg.Set("logging.level", "debug")
-	cfg.Set("bleemeo.api_base", "http://"+apiBase)
+	cfg.Set("bleemeo.api_base", httpServer.URL)
 	cfg.Set("bleemeo.account_id", accountID)
 	cfg.Set("bleemeo.registration_key", registrationKey)
 	cfg.Set("blackbox.enabled", true)
+	cfg.Set("blackbox.bleemeo_mode", true)
 
 	cache := cache.Cache{}
 
@@ -258,12 +251,6 @@ func basicTestSetup(t *testing.T) *Synchronizer {
 		t.Fatal(err)
 	}
 
-	return s
-}
-
-func TestSyncMetrics(t *testing.T) {
-	s := basicTestSetup(t)
-
 	if err := s.runOnce(); err != nil {
 		t.Fatal(err)
 	}
@@ -290,4 +277,5 @@ func TestSyncMetrics(t *testing.T) {
 	if !reflect.DeepEqual(newMonitor, syncedMonitor) {
 		t.Fatalf("got invalid metrics %v, want %v", syncedMonitor, newMonitor)
 	}
+
 }

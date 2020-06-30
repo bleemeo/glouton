@@ -130,8 +130,8 @@ func inMap(value collectorWithLabels, iterable map[int]collectorWithLabels) bool
 	for _, mapValue := range iterable {
 		// two collectors are equals if they both are a monitor in bleemeo mode (romet monitor) with the same service identifier,
 		// OR if they are local monitors wit hthe same URL and the same module
-		if (value.collector.AgentID == mapValue.collector.AgentID && value.collector.AgentID != "") ||
-			(value.collector.ModuleName == mapValue.collector.ModuleName && value.collector.URL == mapValue.collector.URL && value.collector.AgentID == "") {
+		if (value.collector.BleemeoAgentID == mapValue.collector.BleemeoAgentID && value.collector.BleemeoAgentID != "") ||
+			(value.collector.ModuleName == mapValue.collector.ModuleName && value.collector.URL == mapValue.collector.URL && value.collector.BleemeoAgentID == "") {
 			return true
 		}
 	}
@@ -142,8 +142,8 @@ func inMap(value collectorWithLabels, iterable map[int]collectorWithLabels) bool
 func inArray(value collectorWithLabels, iterable []collectorWithLabels) bool {
 	for _, arrayValue := range iterable {
 		// see inMap() above
-		if (value.collector.AgentID == arrayValue.collector.AgentID && value.collector.AgentID != "") ||
-			(value.collector.ModuleName == arrayValue.collector.ModuleName && value.collector.URL == arrayValue.collector.URL && value.collector.AgentID == "") {
+		if (value.collector.BleemeoAgentID == arrayValue.collector.BleemeoAgentID && value.collector.BleemeoAgentID != "") ||
+			(value.collector.ModuleName == arrayValue.collector.ModuleName && value.collector.URL == arrayValue.collector.URL && value.collector.BleemeoAgentID == "") {
 			return true
 		}
 	}
@@ -178,7 +178,7 @@ func (m *RegisterManager) updateRegistrations() error {
 
 	// unregister any obsolete probe
 	for idx, managerCollector := range m.registrations {
-		if managerCollector.collector.AgentID != "" && !inArray(managerCollector, m.targets) {
+		if managerCollector.collector.BleemeoAgentID != "" && !inArray(managerCollector, m.targets) {
 			logger.V(2).Printf("The probe for '%s' is now deactivated", managerCollector.collector.Name)
 			m.registry.UnregisterGatherer(idx)
 			delete(m.registrations, idx)

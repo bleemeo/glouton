@@ -8,11 +8,11 @@ import (
 
 // configTarget is the information we will supply to the probe() function.
 type configTarget struct {
-	Name       string
-	URL        string
-	Module     bbConf.Module
-	ModuleName string
-	AgentID    string
+	Name           string
+	URL            string
+	Module         bbConf.Module
+	ModuleName     string
+	BleemeoAgentID string
 }
 
 // We define labels to apply on a specific collector at registration, as those labels cannot be exposed

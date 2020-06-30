@@ -705,7 +705,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	}
 
 	// override the agent and service UUIDs when the metric is a probe's
-	if metric.Annotations().AgentID != "" {
+	if metric.Annotations().BleemeoAgentID != "" {
 		found := false
 
 		if metric.Labels()[types.LabelScraperUUID] != s.agentID {
@@ -713,7 +713,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		}
 
 		for _, monitor := range monitors {
-			if monitor.AgentID == metric.Annotations().AgentID {
+			if monitor.AgentID == metric.Annotations().BleemeoAgentID {
 				payload.Agent = monitor.AgentID
 				payload.ServiceID = monitor.ID
 				found = true

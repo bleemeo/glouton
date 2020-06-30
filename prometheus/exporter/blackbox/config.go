@@ -111,10 +111,10 @@ func genCollectorFromDynamicTarget(uri string, monitor types.Monitor) (*collecto
 	}
 
 	confTarget := configTarget{
-		Module:  mod,
-		Name:    monitor.URL,
-		AgentID: monitor.AgentID,
-		URL:     uri,
+		Module:         mod,
+		Name:           monitor.URL,
+		BleemeoAgentID: monitor.AgentID,
+		URL:            uri,
 	}
 
 	return &collectorWithLabels{
@@ -198,6 +198,10 @@ func New(registry *registry.Registry, externalConf interface{}) (*RegisterManage
 		dynamicMode:   conf.BleemeoMode,
 	}
 
+	if err := manager.updateRegistrations(); err != nil {
+		return nil, err
+	}
+
 	return manager, nil
 }
 
@@ -210,7 +214,7 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 
 	// get a list of static monitors
 	for _, currentTarget := range m.targets {
-		if currentTarget.collector.AgentID == "" {
+		if currentTarget.collector.BleemeoAgentID == "" {
 			newTargets = append(newTargets, currentTarget)
 		}
 	}

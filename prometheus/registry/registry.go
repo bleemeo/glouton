@@ -678,7 +678,7 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	// annotate the metric if it comes from a probe
 	agentID := promLabels.Get(types.LabelMetaProbeAgentUUID)
 	if agentID != "" {
-		annotations.AgentID = agentID
+		annotations.BleemeoAgentID = agentID
 	}
 
 	promLabels = relabel.Process(

@@ -25,7 +25,7 @@ import (
 
 // syncMonitors updates the list of monitors accessible to the agent.
 func (s *Synchronizer) syncMonitors(fullSync bool) error {
-	bbEnabled := s.option.Config.Bool("blackbox.enabled")
+	bbEnabled := s.option.Config.Bool("blackbox.enabled") && s.option.Config.Bool("blackbox.bleemeo_mode")
 	if !bbEnabled {
 		return nil
 	}
