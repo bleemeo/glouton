@@ -45,7 +45,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 			Input: netInput,
 			Accumulator: internal.Accumulator{
 				RenameGlobal:     nt.renameGlobal,
-				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent"},
+				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent", "net_err_out", "net_err_in"},
 				TransformMetrics: nt.transformMetrics,
 			},
 		}

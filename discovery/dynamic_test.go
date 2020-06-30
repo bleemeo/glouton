@@ -58,11 +58,12 @@ type mockContainerInfo struct {
 }
 
 type mockContainer struct {
-	ipAddress       string
-	listenAddresses []facts.ListenAddress
-	env             []string
-	labels          map[string]string
-	ignoredPorts    map[int]bool
+	ipAddress          string
+	listenAddresses    []facts.ListenAddress
+	env                []string
+	labels             map[string]string
+	ignoredPorts       map[int]bool
+	stoppedAndReplaced bool
 }
 
 func (mci mockContainerInfo) Container(containerID string) (container container, found bool) {
@@ -70,8 +71,8 @@ func (mci mockContainerInfo) Container(containerID string) (container container,
 	return c, ok
 }
 
-func (mc mockContainer) ListenAddresses() []facts.ListenAddress {
-	return mc.listenAddresses
+func (mc mockContainer) ListenAddressesEx() ([]facts.ListenAddress, facts.ConfidenceLevel) {
+	return mc.listenAddresses, facts.ConfidenceMedium
 }
 
 func (mc mockContainer) Env() []string {
@@ -92,6 +93,10 @@ func (mc mockContainer) Ignored() bool {
 
 func (mc mockContainer) IgnoredPorts() map[int]bool {
 	return mc.ignoredPorts
+}
+
+func (mc mockContainer) StoppedAndReplaced() bool {
+	return mc.stoppedAndReplaced
 }
 
 type mockFileReader struct {
@@ -751,7 +756,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerIgnoredPorts: map[int]bool{
 				8080: true,
 			},
-			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "0.0.0.0", Port: 7990}},
+			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 7990}},
 			want: Service{
 				Name:            "bitbucket",
 				ServiceType:     BitBucketService,

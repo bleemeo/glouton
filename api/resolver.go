@@ -45,7 +45,7 @@ type queryResolver struct{ *Resolver }
 // Metrics returns a list of metrics
 // They can be filtered with an array of metrics which contains an array of labels.
 func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInput) ([]*Metric, error) {
-	if r.api.db == nil {
+	if r.api.DB == nil {
 		return nil, gqlerror.Errorf("Can not retrieve metrics at this moment. Please try later")
 	}
 
@@ -60,7 +60,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 					metricFilters[label.Key] = label.Value
 				}
 
-				newMetrics, err := r.api.db.Metrics(metricFilters)
+				newMetrics, err := r.api.DB.Metrics(metricFilters)
 				if err != nil {
 					logger.V(2).Printf("Can not retrieve metrics: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve metrics")
@@ -72,7 +72,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 	} else {
 		var err error
 
-		metrics, err = r.api.db.Metrics(map[string]string{})
+		metrics, err = r.api.DB.Metrics(map[string]string{})
 		if err != nil {
 			logger.V(2).Printf("Can not retrieve metrics: %v", err)
 			return nil, gqlerror.Errorf("Can not retrieve metrics")
@@ -100,7 +100,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 // This interval could be between a start and end dates or X minutes from now
 // Metrics can also be filtered.
 func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput, start string, end string, minutes int) ([]*Metric, error) {
-	if r.api.db == nil || r.api.threshold == nil {
+	if r.api.DB == nil || r.api.Threshold == nil {
 		return nil, gqlerror.Errorf("Can not retrieve points at this moment. Please try later")
 	}
 
@@ -115,7 +115,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 					metricFilters[label.Key] = label.Value
 				}
 
-				newMetrics, err := r.api.db.Metrics(metricFilters)
+				newMetrics, err := r.api.DB.Metrics(metricFilters)
 				if err != nil {
 					logger.V(2).Printf("Can not retrieve metrics: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve metrics")
@@ -165,7 +165,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			metricRes.Points = append(metricRes.Points, pointRes)
 		}
 
-		thresholds := r.api.threshold.GetThreshold(threshold.MetricNameItem{Item: annotations.BleemeoItem, Name: labels[types.LabelName]})
+		thresholds := r.api.Threshold.GetThreshold(threshold.MetricNameItem{Item: annotations.BleemeoItem, Name: labels[types.LabelName]})
 		threshold := &Threshold{
 			LowCritical:  &thresholds.LowCritical,
 			LowWarning:   &thresholds.LowWarning,
@@ -200,11 +200,11 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 // These containers could be paginated and filtered by a search input or allContainers flag
 // If there is a search filter, it will check search is contained in container's name / Image name / ID / command.
 func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error) {
-	if r.api.dockerFact == nil {
+	if r.api.DockerFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve containers at this moment. Please try later")
 	}
 
-	containers, err := r.api.dockerFact.Containers(ctx, time.Hour, false)
+	containers, err := r.api.DockerFact.Containers(ctx, time.Hour, false)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve containers: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve containers")
@@ -256,7 +256,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 					types.LabelName:              m,
 				}
 
-				metrics, err := r.api.db.Metrics(metricFilters)
+				metrics, err := r.api.DB.Metrics(metricFilters)
 				if err != nil {
 					logger.V(2).Printf("Can not retrieve metrics: %v", err)
 					return nil, gqlerror.Errorf("Can not retrieve metrics")
@@ -316,11 +316,11 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 // Processes returns a list of processes
 // They can be filtered by container's ID.
 func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*Topinfo, error) {
-	if r.api.psFact == nil {
+	if r.api.PsFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
 	}
 
-	processes, updatedAt, err := r.api.psFact.ProcessesWithTime(ctx, time.Second*15)
+	processes, updatedAt, err := r.api.PsFact.ProcessesWithTime(ctx, time.Second*15)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve processes: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve processes")
@@ -353,11 +353,11 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 
 // Facts returns a list of facts discovered by agent.
 func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
-	if r.api.factProvider == nil {
+	if r.api.FactProvider == nil {
 		return nil, gqlerror.Errorf("Can not retrieve facts at this moment. Please try later")
 	}
 
-	facts, err := r.api.factProvider.Facts(ctx, time.Hour)
+	facts, err := r.api.FactProvider.Facts(ctx, time.Hour)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve facts: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve facts")
@@ -379,11 +379,11 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 // Services returns a list services discovered by agent
 // They can be filtered by active flag.
 func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service, error) {
-	if r.api.disc == nil {
+	if r.api.Disccovery == nil {
 		return nil, gqlerror.Errorf("Can not retrieve services at this moment. Please try later")
 	}
 
-	services, err := r.api.disc.Discovery(ctx, time.Hour)
+	services, err := r.api.Disccovery.Discovery(ctx, time.Hour)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve facts: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve facts")
@@ -408,7 +408,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 				Active:          service.Active,
 			}
 
-			metrics, err := r.api.db.Metrics(map[string]string{types.LabelName: service.Name + "_status"})
+			metrics, err := r.api.DB.Metrics(map[string]string{types.LabelName: service.Name + "_status"})
 			if err != nil {
 				logger.V(2).Printf("Can not retrieve services: %v", err)
 				return nil, gqlerror.Errorf("Can not retrieve services")
@@ -431,13 +431,13 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 
 // AgentInformation returns some informations about agent registration to Bleemeo Cloud.
 func (r *queryResolver) AgentInformation(ctx context.Context) (*AgentInfo, error) {
-	if r.api.agent == nil {
+	if r.api.AgentInfo == nil {
 		return nil, gqlerror.Errorf("Can not retrieve agent information at this moment. Please try later")
 	}
 
-	registrationAt := r.api.agent.BleemeoRegistrationAt()
-	lastReport := r.api.agent.BleemeoLastReport()
-	connected := r.api.agent.BleemeoConnected()
+	registrationAt := r.api.AgentInfo.BleemeoRegistrationAt()
+	lastReport := r.api.AgentInfo.BleemeoLastReport()
+	connected := r.api.AgentInfo.BleemeoConnected()
 	agentInfo := &AgentInfo{
 		RegistrationAt: &registrationAt,
 		LastReport:     &lastReport,
@@ -449,11 +449,11 @@ func (r *queryResolver) AgentInformation(ctx context.Context) (*AgentInfo, error
 
 // Tags returns a list of tags from system.
 func (r *queryResolver) Tags(ctx context.Context) ([]*Tag, error) {
-	if r.api.agent == nil {
+	if r.api.AgentInfo == nil {
 		return nil, gqlerror.Errorf("Can not retrieve tags at this moment. Please try later")
 	}
 
-	tags := r.api.agent.Tags()
+	tags := r.api.AgentInfo.Tags()
 	tagsResult := []*Tag{}
 
 	for _, tag := range tags {
@@ -468,11 +468,11 @@ func (r *queryResolver) Tags(ctx context.Context) ([]*Tag, error) {
 
 // AgentStatus returns an integer that represent global server status over several metrics.
 func (r *queryResolver) AgentStatus(ctx context.Context) (*AgentStatus, error) {
-	if r.api.db == nil {
+	if r.api.DB == nil {
 		return nil, gqlerror.Errorf("Can not retrieve agent status at this moment. Please try later")
 	}
 
-	metrics, err := r.api.db.Metrics(map[string]string{})
+	metrics, err := r.api.DB.Metrics(map[string]string{})
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve metrics: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve metrics from agent status")

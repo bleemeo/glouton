@@ -34,6 +34,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -102,6 +103,7 @@ type metricPayload struct {
 	Value             forceDecimalFloat `json:"value"`
 	Status            string            `json:"status,omitempty"`
 	StatusDescription string            `json:"status_description,omitempty"`
+	CheckOutput       string            `json:"check_output,omitempty"` // TODO: drop this field once consumer is updated to support status_description
 	EventGracePeriod  int               `json:"event_grace_period,omitempty"`
 }
 
@@ -168,6 +170,13 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	if reason == bleemeoTypes.DisableAuthenticationError {
+		// Kept MQTT disabled a bit longer, this will allow synchronizer to
+		// test if the authentication error is resolved and don't check this
+		// twice (one in MQTT and one in synchronized)
+		until = until.Add(80 * time.Second)
+	}
+
 	if c.disabledUntil.Before(until) {
 		c.disabledUntil = until
 		c.disableReason = reason
@@ -209,6 +218,18 @@ func (c *Client) Run(ctx context.Context) error {
 	err := c.run(ctx)
 
 	return err
+}
+
+// DiagnosticPage return useful information to troubleshoot issue.
+func (c *Client) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	host := c.option.Config.String("bleemeo.mqtt.host")
+	port := c.option.Config.Int("bleemeo.mqtt.port")
+
+	builder.WriteString(common.DiagnosticTCP(host, port, c.tlsConfig()))
+
+	return builder.String()
 }
 
 // LastReport returns the date of last report with Bleemeo API.
@@ -256,20 +277,7 @@ func (c *Client) setupMQTT() paho.Client {
 	brokerURL := fmt.Sprintf("%s:%d", c.option.Config.String("bleemeo.mqtt.host"), c.option.Config.Int("bleemeo.mqtt.port"))
 
 	if c.option.Config.Bool("bleemeo.mqtt.ssl") {
-		tlsConfig := &tls.Config{}
-
-		caFile := c.option.Config.String("bleemeo.mqtt.cafile")
-		if caFile != "" {
-			if rootCAs, err := loadRootCAs(caFile); err != nil {
-				logger.Printf("Unable to load CAs from %#v", caFile)
-			} else {
-				tlsConfig.RootCAs = rootCAs
-			}
-		}
-
-		if c.option.Config.Bool("bleemeo.mqtt.ssl_insecure") {
-			tlsConfig.InsecureSkipVerify = true
-		}
+		tlsConfig := c.tlsConfig()
 
 		pahoOptions.SetTLSConfig(tlsConfig)
 
@@ -286,6 +294,29 @@ func (c *Client) setupMQTT() paho.Client {
 	pahoOptions.SetOnConnectHandler(c.onConnect)
 
 	return paho.NewClient(pahoOptions)
+}
+
+func (c *Client) tlsConfig() *tls.Config {
+	if !c.option.Config.Bool("bleemeo.mqtt.ssl") {
+		return nil
+	}
+
+	tlsConfig := &tls.Config{}
+
+	caFile := c.option.Config.String("bleemeo.mqtt.cafile")
+	if caFile != "" {
+		if rootCAs, err := loadRootCAs(caFile); err != nil {
+			logger.Printf("Unable to load CAs from %#v", caFile)
+		} else {
+			tlsConfig.RootCAs = rootCAs
+		}
+	}
+
+	if c.option.Config.Bool("bleemeo.mqtt.ssl_insecure") {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
+	return tlsConfig
 }
 
 func (c *Client) shutdown() error {
@@ -552,6 +583,7 @@ func (c *Client) preparePoints(payload map[bleemeoTypes.AgentID][]metricPayload,
 				if p.Annotations.Status.CurrentStatus.IsSet() {
 					value.Status = p.Annotations.Status.CurrentStatus.String()
 					value.StatusDescription = p.Annotations.Status.StatusDescription
+					value.CheckOutput = value.StatusDescription
 
 					if p.Annotations.ContainerID != "" {
 						lastKilledAt := c.option.Docker.ContainerLastKill(p.Annotations.ContainerID)

@@ -18,9 +18,11 @@
 package agent
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"math/rand"
@@ -30,6 +32,7 @@ import (
 	"reflect"
 	"regexp"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -159,6 +162,11 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 func (a *agent) setupLogger() {
 	useSyslog := false
+
+	logger.SetBufferCapacity(
+		a.config.Int("logging.buffer.head_size"),
+		a.config.Int("logging.buffer.tail_size"),
+	)
 
 	if a.config.String("logging.output") == "syslog" {
 		useSyslog = true
@@ -601,7 +609,20 @@ func (a *agent) run() { //nolint:gocyclo
 
 	promExporter := a.gathererRegistry.Exporter()
 
-	api := api.New(a.store, a.dockerFact, psFact, a.factProvider, apiBindAddress, a.discovery, a, promExporter, a.threshold, a.config.String("web.static_cdn_url"))
+	api := &api.API{
+		DB:                 a.store,
+		DockerFact:         a.dockerFact,
+		PsFact:             psFact,
+		FactProvider:       a.factProvider,
+		BindAddress:        apiBindAddress,
+		Disccovery:         a.discovery,
+		AgentInfo:          a,
+		PrometheurExporter: promExporter,
+		Threshold:          a.threshold,
+		StaticCDNURL:       a.config.String("web.static_cdn_url"),
+		DiagnosticPage:     a.DiagnosticPage,
+		DiagnosticZip:      a.DiagnosticZip,
+	}
 
 	a.FireTrigger(true, true, false, false)
 
@@ -1307,6 +1328,108 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 func (a *agent) migrateState() {
 	// This "secret" was only present in Bleemeo agent and not really used.
 	_ = a.state.Delete("web_secret_key")
+}
+
+// DiagnosticPage return useful information to troubleshoot issue.
+func (a *agent) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	fmt.Fprintf(
+		builder,
+		"Run diagnostic at %s with Glouton version %s (commit %s built using Go %s)\n",
+		time.Now().Format(time.RFC3339),
+		version.Version,
+		version.BuildHash,
+		runtime.Version(),
+	)
+
+	if a.config.Bool("bleemeo.enabled") {
+		fmt.Fprintln(builder, "Glouton has Bleemeo connection enabled")
+
+		if a.bleemeoConnector == nil {
+			fmt.Fprintln(builder, "Unexpected error: Bleemeo is enabled by Bleemeo connector is not created")
+		} else {
+			builder.WriteString(a.bleemeoConnector.DiagnosticPage())
+		}
+	} else {
+		fmt.Fprintln(builder, "Glouton has Bleemeo connection DISABLED")
+	}
+
+	allMetrics, err := a.store.Metrics(nil)
+	if err != nil {
+		fmt.Fprintf(builder, "Unable to query internal metrics store: %v\n", err)
+	} else {
+		fmt.Fprintf(builder, "Glouton measure %d metrics\n", len(allMetrics))
+	}
+
+	fmt.Fprintf(builder, "Glouton was build for %s %s\n", runtime.GOOS, runtime.GOARCH)
+
+	facts, err := a.factProvider.Facts(ctx, time.Hour)
+	if err != nil {
+		fmt.Fprintf(builder, "Unable to gather facts: %v\n", err)
+	} else {
+		lines := make([]string, 0, len(facts))
+
+		for k, v := range facts {
+			lines = append(lines, " * "+k+" = "+v)
+		}
+
+		sort.Strings(lines)
+
+		fmt.Fprintln(builder, "Facts:")
+		for _, l := range lines {
+			fmt.Fprintln(builder, l)
+		}
+	}
+
+	return builder.String()
+}
+
+func (a *agent) DiagnosticZip(w io.Writer) error {
+	zipFile := zip.NewWriter(w)
+	defer zipFile.Close()
+
+	file, err := zipFile.Create("diagnostic.txt")
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write([]byte(a.DiagnosticPage()))
+	if err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("gorouting.txt")
+	if err != nil {
+		return err
+	}
+
+	// We don't know how big the buffer needs to be to collect
+	// all the goroutines. Use 2MB buffer which hopefully is enough
+	buffer := make([]byte, 1<<21)
+
+	n := runtime.Stack(buffer, true)
+	buffer = buffer[:n]
+
+	_, err = file.Write(buffer)
+	if err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("log.txt")
+	if err != nil {
+		return err
+	}
+
+	_, err = file.Write(logger.Buffer())
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func parseIPOutput(content []byte) string {

@@ -79,6 +79,7 @@ type DockerProvider struct {
 
 	containers                     map[string]Container
 	containerID2Pods               map[string]corev1.Pod
+	podID2Pods                     map[string]corev1.Pod
 	lastKill                       map[string]time.Time
 	ignoredID                      map[string]interface{}
 	lastUpdate                     time.Time
@@ -421,9 +422,17 @@ func (c Container) Annotations() map[string]string {
 
 // ListenAddresses returns the addresseses this container listen on.
 func (c Container) ListenAddresses() []ListenAddress {
+	r, _ := c.ListenAddressesEx()
+	return r
+}
+
+// ListenAddressesEx returns the addresseses this container listen on.
+func (c Container) ListenAddressesEx() ([]ListenAddress, ConfidenceLevel) {
 	if c.PrimaryAddress() == "" {
-		return nil
+		return nil, 0
 	}
+
+	confidence := ConfidenceLow
 
 	exposedPorts := make([]ListenAddress, 0)
 
@@ -435,6 +444,8 @@ func (c Container) ListenAddresses() []ListenAddress {
 				Address:       c.PrimaryAddress(),
 			})
 		}
+
+		confidence = ConfidenceHigh
 	}
 
 	if len(exposedPorts) == 0 && c.inspect.NetworkSettings != nil && len(c.inspect.NetworkSettings.Ports) > 0 {
@@ -448,6 +459,8 @@ func (c Container) ListenAddresses() []ListenAddress {
 				Address:       c.PrimaryAddress(),
 				Port:          k.Int(),
 			})
+
+			confidence = ConfidenceHigh
 		}
 	}
 
@@ -455,13 +468,18 @@ func (c Container) ListenAddresses() []ListenAddress {
 		for v := range c.inspect.Config.ExposedPorts {
 			exposedPorts = append(exposedPorts, ListenAddress{NetworkFamily: v.Proto(), Address: c.PrimaryAddress(), Port: v.Int()})
 		}
+
+		// The information come from "EXPOSE" from Dockerfile. It's easy to have configuration of the service
+		// which make is listen on another port, but user can't override EXPOSE without building it own Docker image.
+		// So this information is likely to be wrong.
+		confidence = ConfidenceLow
 	}
 
 	sort.Slice(exposedPorts, func(i, j int) bool {
 		return exposedPorts[i].Port < exposedPorts[j].Port
 	})
 
-	return exposedPorts
+	return exposedPorts, confidence
 }
 
 // Name returns the Container name.
@@ -516,6 +534,32 @@ func (c Container) State() string {
 	}
 
 	return c.inspect.State.Status
+}
+
+// StoppedAndReplaced return true if this container is stopped and known to be replace by another container
+// Currently this is only the case with Kubernetes Pod.
+func (c Container) StoppedAndReplaced() bool {
+	if c.IsRunning() {
+		return false
+	}
+
+	if len(c.pod.Status.ContainerStatuses) != 0 {
+		// If the container is not current containersStatus, it's replaced
+		for _, container := range c.pod.Status.ContainerStatuses {
+			containerID := container.ContainerID
+			if strings.HasPrefix(containerID, "docker://") {
+				containerID = strings.TrimPrefix(containerID, "docker://")
+			}
+
+			if c.inspect.ID == containerID {
+				return false
+			}
+		}
+
+		return true
+	}
+
+	return false
 }
 
 // FinishedAt returns the date of last container stop.
@@ -648,13 +692,12 @@ func (d *DockerProvider) primaryAddress(ctx context.Context, inspect types.Conta
 		return strings.Split(ipMask, "/")[0]
 	}
 
-	if pod, ok := d.containerID2Pods[inspect.ID]; ok {
-		return pod.Status.PodIP
+	var labels map[string]string
+	if inspect.Config != nil {
+		labels = inspect.Config.Labels
 	}
 
-	d.updatePods(ctx)
-
-	if pod, ok := d.containerID2Pods[inspect.ID]; ok {
+	if pod, ok := d.getPod(ctx, inspect.ID, labels); ok {
 		return pod.Status.PodIP
 	}
 
@@ -712,8 +755,11 @@ func (d *DockerProvider) updatePods(ctx context.Context) {
 	}
 
 	d.containerID2Pods = make(map[string]corev1.Pod, len(pods))
+	d.podID2Pods = make(map[string]corev1.Pod, len(pods))
 
 	for _, pod := range pods {
+		d.podID2Pods[string(pod.UID)] = pod
+
 		for _, container := range pod.Status.ContainerStatuses {
 			containerID := container.ContainerID
 			if strings.HasPrefix(containerID, "docker://") {
@@ -766,14 +812,14 @@ func (d *DockerProvider) updateContainer(ctx context.Context, cl dockerClient, c
 		inspect:        inspect,
 	}
 
-	if pod, ok := d.containerID2Pods[containerID]; ok {
+	if pod, ok := d.getPod(ctx, containerID, container.Labels()); ok {
 		container.pod = pod
 	} else if container.Labels()["io.kubernetes.pod.name"] != "" {
+		// updateContainer is called from the Docker event listenner,
+		// which is called when a container is created.
+		// We know this container belong to a Pod, so force an update
 		d.kubernetesUpdated = false
-
-		d.updatePods(ctx)
-
-		container.pod = d.containerID2Pods[containerID]
+		container.pod, _ = d.getPod(ctx, containerID, container.Labels())
 	}
 
 	d.containers[containerID] = container
@@ -842,12 +888,8 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 			inspect:        inspect,
 		}
 
-		if pod, ok := d.containerID2Pods[c.ID]; ok {
+		if pod, ok := d.getPod(ctx, c.ID, container.Labels()); ok {
 			container.pod = pod
-		} else if container.Labels()["io.kubernetes.pod.name"] != "" {
-			d.updatePods(ctx)
-
-			container.pod = d.containerID2Pods[c.ID]
 		}
 
 		containers[c.ID] = container
@@ -968,6 +1010,27 @@ func (d *DockerProvider) isIgnored(containerID string) bool {
 	_, ok := d.ignoredID[containerID]
 
 	return ok
+}
+
+func (d *DockerProvider) getPod(ctx context.Context, containerID string, containerLabels map[string]string) (corev1.Pod, bool) {
+	if pod, ok := d.containerID2Pods[containerID]; ok {
+		return pod, ok
+	}
+
+	uid := containerLabels["io.kubernetes.pod.uid"]
+	if uid == "" {
+		return corev1.Pod{}, false
+	}
+
+	if pod, ok := d.podID2Pods[uid]; ok {
+		return pod, ok
+	}
+
+	d.updatePods(ctx)
+
+	pod, ok := d.podID2Pods[uid]
+
+	return pod, ok
 }
 
 func sortInspect(inspect types.ContainerJSON) {
