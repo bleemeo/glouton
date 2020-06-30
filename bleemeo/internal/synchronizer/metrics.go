@@ -715,6 +715,10 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		}
 
 		if !found {
+			// This is not an error: either this is a metric from a local monitor, and it should
+			// never be registred, or this is from a monitor that is not yet loaded, and it is
+			// not an issue per se as it will get registered when monitors are loaded, as it will
+			// trigger a metric synchronization.
 			return nil
 		}
 	}

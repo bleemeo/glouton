@@ -506,6 +506,11 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		syncMethods["metrics"] = false
 	}
 
+	if _, ok := syncMethods["monitors"]; ok {
+		// Metrics registration may need monitors to be synced, trigger metrics synchronization
+		syncMethods["metrics"] = false
+	}
+
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = fullSync
 	}
