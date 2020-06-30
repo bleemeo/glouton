@@ -421,6 +421,7 @@ func (a *agent) run() { //nolint:gocyclo
 				if a.bleemeoConnector != nil {
 					a.bleemeoConnector.UpdateMonitors()
 				}
+
 				a.FireTrigger(true, true, false, true)
 			}
 		}
@@ -605,6 +606,10 @@ func (a *agent) run() { //nolint:gocyclo
 			logger.V(1).Printf("Couldn't start blackbox_exporter: %v", err)
 			return
 		}
+
+		if a.config.Bool("bleemeo.remote_probing_enabled") {
+			monitorManager.EnableDynamicProbing()
+		}
 	} else {
 		logger.V(2).Println("blackbox_exporter not enabled, will not start...")
 	}
@@ -684,7 +689,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 		if a.metricFormat == types.MetricFormatPrometheus {
 			logger.Printf("Prometheus format is not yet supported with Bleemeo")
-			//return
+			return
 		}
 	}
 

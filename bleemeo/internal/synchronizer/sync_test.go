@@ -277,5 +277,4 @@ func TestSyncMetrics(t *testing.T) {
 	if !reflect.DeepEqual(newMonitor, syncedMonitor) {
 		t.Fatalf("got invalid metrics %v, want %v", syncedMonitor, newMonitor)
 	}
-
 }

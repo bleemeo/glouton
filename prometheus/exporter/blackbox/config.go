@@ -36,7 +36,6 @@ type yamlConfig struct {
 	Targets     []yamlConfigTarget       `yaml:"targets"`
 	Modules     map[string]bbConf.Module `yaml:"modules"`
 	ScraperName string                   `yaml:"scraper_name,omitempty"`
-	BleemeoMode bool                     `yaml:"bleemeo_mode,omitempty"`
 }
 
 // ConfigTarget is the information we will supply to the probe() function.
@@ -195,7 +194,6 @@ func New(registry *registry.Registry, externalConf interface{}) (*RegisterManage
 		registrations: make(map[int]collectorWithLabels, len(conf.Targets)),
 		registry:      registry,
 		scraperName:   conf.ScraperName,
-		dynamicMode:   conf.BleemeoMode,
 	}
 
 	if err := manager.updateRegistrations(); err != nil {
@@ -203,6 +201,10 @@ func New(registry *registry.Registry, externalConf interface{}) (*RegisterManage
 	}
 
 	return manager, nil
+}
+
+func (m *RegisterManager) EnableDynamicProbing() {
+	m.dynamicMode = true
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).

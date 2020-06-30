@@ -477,9 +477,7 @@ func (c *Client) sendPoints() {
 			}
 		}
 
-		for _, v := range filterPoints(newPoints, metricWhitelist) {
-			points = append(points, v)
-		}
+		points = append(filterPoints(newPoints, metricWhitelist), points...)
 
 		c.failedPoints = make([]types.MetricPoint, 0)
 	}
@@ -519,6 +517,7 @@ func (c *Client) sendPoints() {
 // preparePoints updates the MQTT payload by processing some points and returning the a map between agent uuids and the metrics.
 func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
 	payload := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
+
 	for _, p := range points {
 		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
 		if m, ok := registreredMetricByKey[key]; ok {
@@ -529,8 +528,8 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 				Value:       forceDecimalFloat(p.Value),
 			}
 
-			value.UUID = m.ID
 			if c.option.MetricFormat == types.MetricFormatBleemeo {
+				value.UUID = m.ID
 				value.LabelsText = ""
 				value.Measurement = p.Labels[types.LabelName]
 				value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
@@ -551,14 +550,14 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 				}
 			}
 
-			bleemeoAgentId := c.option.AgentID
+			bleemeoAgentID := c.option.AgentID
 
 			if p.Annotations.BleemeoAgentID != "" {
 				// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-				bleemeoAgentId = bleemeoTypes.AgentID(p.Annotations.BleemeoAgentID)
+				bleemeoAgentID = bleemeoTypes.AgentID(p.Annotations.BleemeoAgentID)
 			}
 
-			payload[bleemeoAgentId] = append(payload[bleemeoAgentId], value)
+			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
 		} else {
 			c.failedPoints = append(c.failedPoints, p)
 		}
