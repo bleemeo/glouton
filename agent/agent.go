@@ -407,26 +407,6 @@ func (a *agent) run() { //nolint:gocyclo
 		a.config.String("agent.public_ip_indicator"),
 	)
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-
-	go func() {
-		for s := range c {
-			if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
-				cancel()
-				break
-			}
-
-			if s == syscall.SIGHUP {
-				if a.bleemeoConnector != nil {
-					a.bleemeoConnector.UpdateMonitors()
-				}
-
-				a.FireTrigger(true, true, false, true)
-			}
-		}
-	}()
-
 	factsMap, err := a.factProvider.Facts(ctx, 0)
 	if err != nil {
 		logger.Printf("Warning: get facts failed, some information (e.g. name of this server) may be wrong. %v", err)
@@ -787,6 +767,26 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
+
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+
+	go func() {
+		for s := range c {
+			if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
+				cancel()
+				break
+			}
+
+			if s == syscall.SIGHUP {
+				if a.bleemeoConnector != nil {
+					a.bleemeoConnector.UpdateMonitors()
+				}
+
+				a.FireTrigger(true, true, false, true)
+			}
+		}
+	}()
 
 	a.startTasks(tasks)
 
