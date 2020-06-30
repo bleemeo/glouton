@@ -17,8 +17,6 @@
 package mqtt
 
 import (
-	"bytes"
-	"compress/zlib"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -74,6 +72,7 @@ type Client struct {
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
+	topinfoEncoder             topinfoEncoder
 
 	l                 sync.Mutex
 	pendingMessage    []message
@@ -639,25 +638,13 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.AgentID)
 
-	var buffer bytes.Buffer
-
-	w := zlib.NewWriter(&buffer)
-
-	err = json.NewEncoder(w).Encode(topinfo)
+	compressed, err := c.topinfoEncoder.Encode(topinfo)
 	if err != nil {
-		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
-		w.Close()
-
+		logger.V(1).Printf("Unable to encode topinfo: %v", err)
 		return
 	}
 
-	err = w.Close()
-	if err != nil {
-		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
-		return
-	}
-
-	c.publish(topic, buffer.Bytes(), false)
+	c.publish(topic, compressed, false)
 }
 
 func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {

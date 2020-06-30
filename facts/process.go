@@ -714,6 +714,10 @@ func (d *dockerProcessImpl) findContainerOfProcess(ctx context.Context, newProce
 		}
 	}
 
+	if d.dockerProvider == nil {
+		return allProcesses
+	}
+
 	if containers, err := d.dockerProvider.Containers(ctx, 2*time.Second, true); err == nil {
 		for _, c := range containers {
 			if containerDone[c.ID()] {
