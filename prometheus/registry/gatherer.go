@@ -32,8 +32,9 @@ type GathererWithState interface {
 
 // TickingGatherer is a prometheus gatherer that only collect metrics every once in a while.
 type TickingGatherer struct {
+	// we need this exposed in order to stop it (otherwise we'll leak goroutines)
+	Ticker   *time.Ticker
 	gatherer prometheus.Gatherer
-	ticker   *time.Ticker
 	rate     time.Duration
 
 	startOnce  sync.Once
@@ -73,7 +74,7 @@ func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamil
 		if time.Now().After(g.startTime.Add(g.startDelay)) {
 			g.startOnce.Do(func() {
 				g.started = true
-				g.ticker = time.NewTicker(g.rate)
+				g.Ticker = time.NewTicker(g.rate)
 			})
 
 			return g.gatherNow(state)
@@ -83,7 +84,7 @@ func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamil
 	}
 
 	select {
-	case <-g.ticker.C:
+	case <-g.Ticker.C:
 		return g.gatherNow(state)
 	default:
 		return nil, nil

@@ -195,7 +195,7 @@ func New(registry *registry.Registry, externalConf interface{}) (*RegisterManage
 
 	manager := &RegisterManager{
 		targets:       targets,
-		registrations: make(map[int]collectorWithLabels, len(conf.Targets)),
+		registrations: make(map[int]gathererWithConfigTarget, len(conf.Targets)),
 		registry:      registry,
 		scraperName:   conf.ScraperName,
 	}

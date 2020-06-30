@@ -127,12 +127,12 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 
-func inMap(value collectorWithLabels, iterable map[int]collectorWithLabels) bool {
+func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
 	for _, mapValue := range iterable {
 		// two collectors are equals if they both are a monitor in bleemeo mode (romet monitor) with the same service identifier,
-		// OR if they are local monitors wit hthe same URL and the same module
-		if (value.collector.BleemeoAgentID == mapValue.collector.BleemeoAgentID && value.collector.BleemeoAgentID != "") ||
-			(value.collector.ModuleName == mapValue.collector.ModuleName && value.collector.URL == mapValue.collector.URL && value.collector.BleemeoAgentID == "") {
+		// OR if they are local monitors with the same URL and the same blackbox module
+		if (value.collector.BleemeoAgentID == mapValue.target.BleemeoAgentID && value.collector.BleemeoAgentID != "") ||
+			(value.collector.ModuleName == mapValue.target.ModuleName && value.collector.URL == mapValue.target.URL && value.collector.BleemeoAgentID == "") {
 			return true
 		}
 	}
@@ -140,11 +140,11 @@ func inMap(value collectorWithLabels, iterable map[int]collectorWithLabels) bool
 	return false
 }
 
-func inArray(value collectorWithLabels, iterable []collectorWithLabels) bool {
+func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLabels) bool {
 	for _, arrayValue := range iterable {
 		// see inMap() above
-		if (value.collector.BleemeoAgentID == arrayValue.collector.BleemeoAgentID && value.collector.BleemeoAgentID != "") ||
-			(value.collector.ModuleName == arrayValue.collector.ModuleName && value.collector.URL == arrayValue.collector.URL && value.collector.BleemeoAgentID == "") {
+		if (value.target.BleemeoAgentID == arrayValue.collector.BleemeoAgentID && value.target.BleemeoAgentID != "") ||
+			(value.target.ModuleName == arrayValue.collector.ModuleName && value.target.URL == arrayValue.collector.URL && value.target.BleemeoAgentID == "") {
 			return true
 		}
 	}
@@ -156,7 +156,7 @@ func inArray(value collectorWithLabels, iterable []collectorWithLabels) bool {
 func (m *RegisterManager) updateRegistrations() error {
 	// register new probes
 	for _, collectorFromConfig := range m.targets {
-		if !inMap(collectorFromConfig, m.registrations) {
+		if !collectorInMap(collectorFromConfig, m.registrations) {
 			reg := prometheus.NewRegistry()
 
 			if err := reg.Register(collectorFromConfig.collector); err != nil {
@@ -179,15 +179,26 @@ func (m *RegisterManager) updateRegistrations() error {
 				return err
 			}
 
-			m.registrations[id] = collectorFromConfig
+			m.registrations[id] = gathererWithConfigTarget{
+				target:   collectorFromConfig.collector,
+				gatherer: g,
+			}
+
 			logger.V(2).Printf("New probe registered for '%s'", collectorFromConfig.collector.Name)
 		}
 	}
 
 	// unregister any obsolete probe
-	for idx, managerCollector := range m.registrations {
-		if managerCollector.collector.BleemeoAgentID != "" && !inArray(managerCollector, m.targets) {
-			logger.V(2).Printf("The probe for '%s' is now deactivated", managerCollector.collector.Name)
+	for idx, gatherer := range m.registrations {
+		if gatherer.target.BleemeoAgentID != "" && !gathererInArray(gatherer, m.targets) {
+			logger.V(2).Printf("The probe for '%s' is now deactivated", gatherer.target.Name)
+
+			// if this is a ticking gatherer, we need to unregister it (this is breaking the
+			// abstraction, but adding an interface for this particular case seems overkill)
+			if cg, ok := gatherer.gatherer.(*registry.TickingGatherer); ok {
+				cg.Ticker.Stop()
+			}
+
 			m.registry.UnregisterGatherer(idx)
 			delete(m.registrations, idx)
 		}
