@@ -118,51 +118,53 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	metricFamiliesByName := map[string]*dto.MetricFamily{}
 
 	var errs prometheus.MultiError
+	var mfs []*dto.MetricFamily
 
 	wg := sync.WaitGroup{}
 	wg.Add(len(gs))
 
-	mutex := sync.RWMutex{}
+	mutex := sync.Mutex{}
 
+	// run gather in parallel
 	for _, g := range gs {
 		go func(g prometheus.Gatherer) {
-			mfs, err := g.Gather()
+			currentMFs, err := g.Gather()
+
+			mutex.Lock()
 			if err != nil {
 				errs = append(errs, err)
 			}
-
-			for _, mf := range mfs {
-				mutex.RLock()
-				existingMF, exists := metricFamiliesByName[mf.GetName()]
-				mutex.RUnlock()
-
-				if exists {
-					if existingMF.GetType() != mf.GetType() {
-						errs = append(errs, fmt.Errorf(
-							"gathered metric family %s has type %s but should have %s",
-							mf.GetName(), mf.GetType(), existingMF.GetType(),
-						))
-
-						continue
-					}
-				} else {
-					existingMF = &dto.MetricFamily{}
-					existingMF.Name = mf.Name
-					existingMF.Help = mf.Help
-					existingMF.Type = mf.Type
-					mutex.Lock()
-					metricFamiliesByName[mf.GetName()] = existingMF
-					mutex.Unlock()
-				}
-
-				existingMF.Metric = append(existingMF.Metric, mf.Metric...)
-			}
+			mfs = append(mfs, currentMFs...)
+			mutex.Unlock()
 
 			wg.Done()
 		}(g)
 	}
 
 	wg.Wait()
+
+	for _, mf := range mfs {
+		existingMF, exists := metricFamiliesByName[mf.GetName()]
+
+		if exists {
+			if existingMF.GetType() != mf.GetType() {
+				errs = append(errs, fmt.Errorf(
+					"gathered metric family %s has type %s but should have %s",
+					mf.GetName(), mf.GetType(), existingMF.GetType(),
+				))
+
+				continue
+			}
+		} else {
+			existingMF = &dto.MetricFamily{}
+			existingMF.Name = mf.Name
+			existingMF.Help = mf.Help
+			existingMF.Type = mf.Type
+			metricFamiliesByName[mf.GetName()] = existingMF
+		}
+
+		existingMF.Metric = append(existingMF.Metric, mf.Metric...)
+	}
 
 	result := make([]*dto.MetricFamily, 0, len(metricFamiliesByName))
 
