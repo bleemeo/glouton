@@ -141,11 +141,11 @@ func filterMetrics(input []types.Metric, metricWhitelist map[string]bool) []type
 	return result
 }
 
-func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []string {
+func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.Metric {
 	registeredMetrics := s.option.Cache.Metrics()
 	registeredMetricsByKey := common.MetricLookupFromList(registeredMetrics)
 
-	result := make([]string, 0)
+	result := make([]types.Metric, 0)
 
 	for _, v := range metrics {
 		key := common.LabelsToText(v.Labels(), v.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
@@ -154,7 +154,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []string 
 			continue
 		}
 
-		result = append(result, key)
+		result = append(result, v)
 	}
 
 	return result
@@ -201,7 +201,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	}
 
 	if fullSync {
-		err := s.metricUpdateList(fullForInactive)
+		err := s.metricUpdateAll(fullForInactive)
 		if err != nil {
 			s.UpdateMetrics(pendingMetricsUpdate...)
 			return err
@@ -218,7 +218,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	if !fullForInactive {
 		logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
 
-		err := s.metricUpdateListOfMetrics(unregisteredMetrics)
+		err := s.metricUpdateList(unregisteredMetrics)
 		if err != nil {
 			return err
 		}
@@ -334,7 +334,7 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bo
 	return metricsByUUID, nil
 }
 
-func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
+func (s *Synchronizer) metricUpdateAll(includeInactive bool) error {
 	// iterate over our agent AND every monitor for metrics
 	metrics := []bleemeoTypes.Metric{}
 
@@ -363,26 +363,25 @@ func (s *Synchronizer) metricUpdateList(includeInactive bool) error {
 	return nil
 }
 
-// metricUpdateListOfMetrics fetches a list of metrics (represented by their Labelstext value), and updates the metricsByUUID cache.
-func (s *Synchronizer) metricUpdateListOfMetrics(requests []string) error {
+// metricUpdateList fetches a list of metrics, and updates the cache.
+func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
-	for _, key := range requests {
+	for _, metric := range metrics {
 		agentID := s.agentID
-		if types.TextToLabels(key)[types.LabelScraperUUID] != "" {
-			agentID = types.TextToLabels(key)[types.LabelScraperUUID]
+		if metric.Annotations().BleemeoAgentID != "" {
+			agentID = metric.Annotations().BleemeoAgentID
 		}
 
 		params := map[string]string{
-			"labels_text": key,
+			"labels_text": common.LabelsToText(metric.Labels(), metric.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo),
 			"agent":       agentID,
 			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 
 		if s.option.MetricFormat == types.MetricFormatBleemeo {
-			labels := types.TextToLabels(key)
-			params["label"] = labels[types.LabelName]
-			params["item"] = labels[common.LabelBleemeoItem]
+			params["label"] = metric.Labels()[types.LabelName]
+			params["item"] = metric.Labels()[common.LabelBleemeoItem]
 			delete(params, "labels_text")
 		}
 
@@ -411,13 +410,13 @@ func (s *Synchronizer) metricUpdateListOfMetrics(requests []string) error {
 		}
 	}
 
-	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
+	rebuiltMetrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
 
 	for _, m := range metricsByUUID {
-		metrics = append(metrics, m)
+		rebuiltMetrics = append(rebuiltMetrics, m)
 	}
 
-	s.option.Cache.SetMetrics(metrics)
+	s.option.Cache.SetMetrics(rebuiltMetrics)
 
 	return nil
 }
@@ -536,14 +535,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 
 				s.option.Cache.SetMetrics(metrics)
 
-				requests := make([]string, len(registerMetrics))
-
-				for i, m := range registerMetrics {
-					labels := m.Labels()
-					requests[i] = common.LabelsToText(labels, m.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
-				}
-
-				if err := s.metricUpdateListOfMetrics(requests); err != nil {
+				if err := s.metricUpdateList(registerMetrics); err != nil {
 					return err
 				}
 

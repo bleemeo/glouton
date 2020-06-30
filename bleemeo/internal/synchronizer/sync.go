@@ -484,6 +484,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync {
 		syncMethods["agent"] = fullSync
+		syncMethods["monitors"] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
@@ -493,7 +494,6 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["services"] = fullSync
 		syncMethods["containers"] = fullSync
-		syncMethods["monitors"] = fullSync
 	}
 
 	if _, ok := syncMethods["services"]; ok {
