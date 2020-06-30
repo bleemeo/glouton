@@ -76,13 +76,17 @@ spec:
       labels:
         app: glouton
     spec:
+      tolerations:
+      # this toleration is to have the daemonset runnable on master nodes
+      # remove it if your masters can't run pods
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
       serviceAccountName: glouton
       terminationGracePeriodSeconds: 60
       hostNetwork: true
       hostPID: true
       containers:
       - image: bleemeo/glouton
-        imagePullPolicy: IfNotPresent
         name: glouton
         ports:
         - name: http
@@ -97,10 +101,13 @@ spec:
         - name: hostroot
           mountPath: /hostroot
           readOnly: true
+        # We used another folder than "conf.d" because we want to merge existing
+        # file from conf.d and file coming from Kubernetes glouton-config.
         - name: glouton-config
-          mountPath: /etc/glouton/conf.d/99-local.conf
-          subPath: 99-local.conf
+          mountPath: /etc/glouton/conf-k8s.d/
         env:
+        - name: GLOUTON_CONFIG_FILES
+          value: "/etc/glouton/glouton.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
         - name: GLOUTON_KUBERNETES_ENABLED
           value: "True"
         - name: GLOUTON_KUBERNETES_NODENAME

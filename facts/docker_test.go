@@ -461,7 +461,9 @@ func Test_updateContainers(t *testing.T) {
 
 	want := []struct {
 		containerNameContains string
+		containerNameEndsWith string
 		ignored               bool
+		stoppedAndReplaced    bool
 		primaryAddress        string
 		listenAddress         []ListenAddress
 		ignoredPorts          map[int]bool
@@ -469,9 +471,9 @@ func Test_updateContainers(t *testing.T) {
 		{
 			containerNameContains: "rabbitmq_rabbitmq-container-port",
 			ignored:               false,
-			primaryAddress:        "172.18.0.7",
+			primaryAddress:        "172.18.0.4",
 			listenAddress: []ListenAddress{
-				{Address: "172.18.0.7", NetworkFamily: "tcp", Port: 5672},
+				{Address: "172.18.0.4", NetworkFamily: "tcp", Port: 5672},
 			},
 			ignoredPorts: map[int]bool{},
 		},
@@ -508,17 +510,37 @@ func Test_updateContainers(t *testing.T) {
 			},
 			ignoredPorts: map[int]bool{},
 		},
+		{
+			containerNameContains: "true_delete-me-once",
+			containerNameEndsWith: "_1", // _1 because it was restarted only 1 time.
+			primaryAddress:        "172.18.0.8",
+			stoppedAndReplaced:    false,
+		},
+		{
+			containerNameContains: "true_delete-me-once",
+			containerNameEndsWith: "_0",
+			primaryAddress:        "172.18.0.8",
+			stoppedAndReplaced:    true,
+		},
 	}
 
-	if len(containers) != 7 {
-		t.Errorf("len(containers) = %d, want 7", len(containers))
+	if len(containers) != 13 {
+		t.Errorf("len(containers) = %d, want 9", len(containers))
 	}
 
 	for _, w := range want {
 		found := false
 
 		for _, c := range containers {
+			if c.pod.Name == "" {
+				t.Errorf("Container %#v is not associated with a Pod", c.Name())
+			}
+
 			if !strings.Contains(c.Name(), w.containerNameContains) {
+				continue
+			}
+
+			if !strings.HasSuffix(c.Name(), w.containerNameEndsWith) {
 				continue
 			}
 
@@ -542,6 +564,10 @@ func Test_updateContainers(t *testing.T) {
 
 			if w.ignoredPorts != nil && !reflect.DeepEqual(c.IgnoredPorts(), w.ignoredPorts) {
 				t.Errorf("c.IgnoredPorts() = %v, want %v", c.IgnoredPorts(), w.ignoredPorts)
+			}
+
+			if c.StoppedAndReplaced() != w.stoppedAndReplaced {
+				t.Errorf("c.StoppedAndReplaced() = %v, want %v", c.StoppedAndReplaced(), w.stoppedAndReplaced)
 			}
 		}
 

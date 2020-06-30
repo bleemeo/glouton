@@ -160,8 +160,13 @@ const AgentDetails = ({ facts }) => {
                   ) : null}
                   <li>
                     <div className="d-flex flex-row align-items-center">
-                      <b style={{ marginRight: '0.4rem' }}>Is connected to Bleemeo ?</b>
+                      <b style={{ marginRight: '0.4rem' }}>Connected to Bleemeo ?</b>
                       <div className={agentInformation.isConnected ? 'isConnected' : 'isNotConnected'} />
+                    </div>
+                  </li>
+                  <li>
+                    <div className="d-flex flex-row align-items-center">
+                      <b>Need to troubleshoot ? <a href="/diagnostic">/diagnostic</a> may help you.</b>
                     </div>
                   </li>
                 </ul>
@@ -194,8 +199,8 @@ const AgentDetails = ({ facts }) => {
                       ))}
                     </ul>
                   ) : (
-                    <h4>There is no tag to display</h4>
-                  )}
+                      <h4>There is no tag to display</h4>
+                    )}
                 </div>
               </Panel>
             )}

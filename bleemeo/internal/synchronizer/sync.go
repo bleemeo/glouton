@@ -19,6 +19,7 @@ package synchronizer
 import (
 	"context"
 	cryptoRand "crypto/rand"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
@@ -30,6 +31,9 @@ import (
 	"math"
 	"math/big"
 	"math/rand"
+	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -84,17 +88,6 @@ func New(option Option) *Synchronizer {
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = time.Now()
-	accountID := s.option.Config.String("bleemeo.account_id")
-	registrationKey := s.option.Config.String("bleemeo.registration_key")
-
-	for accountID == "" || registrationKey == "" {
-		logger.Printf("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Minute):
-		}
-	}
 
 	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
 		return err
@@ -113,6 +106,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	s.successiveErrors = 0
+	successiveAuthErrors := 0
 
 	var minimalDelay time.Duration
 
@@ -133,9 +127,24 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
-			delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 
-			s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+			if client.IsAuthError(err) {
+				successiveAuthErrors++
+			}
+
+			switch {
+			case client.IsAuthError(err) && successiveAuthErrors >= 3:
+				delay := common.JitterDelay(60*math.Pow(1.55, float64(successiveAuthErrors)), 0.1, 21600)
+				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(delay))
+			default:
+				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+				s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+
+				if client.IsAuthError(err) && successiveAuthErrors == 1 {
+					// we disable only to trigger a reconnection on MQTT
+					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(10*time.Second))
+				}
+			}
 
 			switch {
 			case client.IsAuthError(err) && s.agentID != "":
@@ -151,11 +160,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					s.agentID,
 					fqdnMessage,
 				)
-
-				if s.successiveErrors%10 == 1 {
-					// we disable only to trigger a reconnection on MQTT
-					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(10*time.Second))
-				}
 			case client.IsAuthError(err):
 				registrationKey := []rune(s.option.Config.String("bleemeo.registration_key"))
 				for i := range registrationKey {
@@ -170,7 +174,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					string(registrationKey),
 				)
 			default:
-				if s.successiveErrors%5 == 0 {
+				if s.successiveErrors%5 == 1 {
 					logger.Printf("Unable to synchronize with Bleemeo: %v", err)
 				} else {
 					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", err)
@@ -178,6 +182,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			}
 		} else {
 			s.successiveErrors = 0
+			successiveAuthErrors = 0
 			minimalDelay = common.JitterDelay(15, 0.05, 15)
 
 			if firstSync {
@@ -191,6 +196,55 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// DiagnosticPage return useful information to troubleshoot issue.
+func (s *Synchronizer) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	var tlsConfig *tls.Config
+
+	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
+
+	if err != nil {
+		fmt.Fprintf(builder, "Bad URL %#v: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+		return builder.String()
+	}
+
+	port := 80
+
+	if u.Scheme == "https" {
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: s.option.Config.Bool("bleemeo.api_ssl_insecure"), // nolint: gosec
+		}
+		port = 443
+	}
+
+	if u.Port() != "" {
+		tmp, err := strconv.ParseInt(u.Port(), 10, 0)
+		if err != nil {
+			fmt.Fprintf(builder, "Bad URL %#v, invalid port: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+			return builder.String()
+		}
+
+		port = int(tmp)
+	}
+
+	tcpMessage := make(chan string)
+	httpMessage := make(chan string)
+
+	go func() {
+		tcpMessage <- common.DiagnosticTCP(u.Hostname(), port, tlsConfig)
+	}()
+
+	go func() {
+		httpMessage <- common.DiagnosticHTTP(u.String(), tlsConfig)
+	}()
+
+	builder.WriteString(<-tcpMessage)
+	builder.WriteString(<-httpMessage)
+
+	return builder.String()
 }
 
 // NotifyConfigUpdate notify that an Agent configuration change occurred.
@@ -522,6 +576,11 @@ func (s *Synchronizer) register() error {
 	}
 
 	accountID := s.option.Config.String("bleemeo.account_id")
+	registrationKey := s.option.Config.String("bleemeo.registration_key")
+
+	for accountID == "" || registrationKey == "" {
+		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
+	}
 
 	password := generatePassword(20)
 
@@ -543,7 +602,7 @@ func (s *Synchronizer) register() error {
 			"fqdn":             fqdn,
 		},
 		fmt.Sprintf("%s@bleemeo.com", accountID),
-		s.option.Config.String("bleemeo.registration_key"),
+		registrationKey,
 		&objectID,
 	)
 	if err != nil {
