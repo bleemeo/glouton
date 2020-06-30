@@ -55,14 +55,19 @@ func getTopinfo() facts.TopInfo {
 
 func TestTopinfoEncoding(t *testing.T) {
 	topinfo := getTopinfo()
-	encoder := &topinfoEncoder{}
+	encoder := &mqttEncoder{}
+
+	var (
+		decoded  facts.TopInfo
+		decoded2 facts.TopInfo
+	)
 
 	encoded, err := encoder.Encode(topinfo)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	decoded, err := encoder.Decode(encoded)
+	err = encoder.Decode(encoded, &decoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +82,7 @@ func TestTopinfoEncoding(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decoded, err = encoder.Decode(encoded)
+	err = encoder.Decode(encoded, &decoded)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +91,7 @@ func TestTopinfoEncoding(t *testing.T) {
 		t.Errorf("encoded output buffer seems to be reused between Encode call")
 	}
 
-	decoded2, err := encoder.Decode(encoded2)
+	err = encoder.Decode(encoded2, &decoded2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +105,7 @@ func TestTopinfoEncoding(t *testing.T) {
 
 func BenchmarkTopinfoEncoding(b *testing.B) {
 	topinfo := getTopinfo()
-	encoder := &topinfoEncoder{}
+	encoder := &mqttEncoder{}
 
 	b.ResetTimer()
 
@@ -114,7 +119,7 @@ func BenchmarkTopinfoEncoding(b *testing.B) {
 
 func BenchmarkTopinfoDecoding(b *testing.B) {
 	topinfo := getTopinfo()
-	encoder := &topinfoEncoder{}
+	encoder := &mqttEncoder{}
 
 	encoded, err := encoder.Encode(topinfo)
 	if err != nil {
@@ -124,7 +129,9 @@ func BenchmarkTopinfoDecoding(b *testing.B) {
 	b.ResetTimer()
 
 	for n := 0; n < b.N; n++ {
-		_, err := encoder.Decode(encoded)
+		var value facts.TopInfo
+
+		err := encoder.Decode(encoded, &value)
 		if err != nil {
 			b.Error(err)
 		}

@@ -19,19 +19,18 @@ package mqtt
 import (
 	"bytes"
 	"encoding/json"
-	"glouton/facts"
 
 	"github.com/klauspost/compress/zstd"
 )
 
-type topinfoEncoder struct {
+type mqttEncoder struct {
 	encoder *zstd.Encoder
 	decoder *zstd.Decoder
 	buffer  bytes.Buffer
 }
 
 // Encode is NOT thread-safe.
-func (enc *topinfoEncoder) Encode(topinfo facts.TopInfo) ([]byte, error) {
+func (enc *mqttEncoder) Encode(obj interface{}) ([]byte, error) {
 	if enc.encoder == nil {
 		enc.encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBestCompression))
 	}
@@ -39,7 +38,7 @@ func (enc *topinfoEncoder) Encode(topinfo facts.TopInfo) ([]byte, error) {
 	enc.buffer.Reset()
 	enc.encoder.Reset(&enc.buffer)
 
-	err := json.NewEncoder(enc.encoder).Encode(topinfo)
+	err := json.NewEncoder(enc.encoder).Encode(obj)
 	if err != nil {
 		return nil, err
 	}
@@ -55,19 +54,17 @@ func (enc *topinfoEncoder) Encode(topinfo facts.TopInfo) ([]byte, error) {
 	return clone, nil
 }
 
-func (enc *topinfoEncoder) Decode(input []byte) (facts.TopInfo, error) {
+func (enc *mqttEncoder) Decode(input []byte, obj interface{}) error {
 	if enc.decoder == nil {
 		enc.decoder, _ = zstd.NewReader(nil)
 	}
 
 	err := enc.decoder.Reset(bytes.NewReader(input))
 	if err != nil {
-		return facts.TopInfo{}, err
+		return err
 	}
 
-	var topinfo facts.TopInfo
+	err = json.NewDecoder(enc.decoder).Decode(obj)
 
-	err = json.NewDecoder(enc.decoder).Decode(&topinfo)
-
-	return topinfo, err
+	return err
 }

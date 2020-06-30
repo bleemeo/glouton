@@ -72,7 +72,7 @@ type Client struct {
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
-	topinfoEncoder             topinfoEncoder
+	encoder                    mqttEncoder
 
 	l                 sync.Mutex
 	pendingMessage    []message
@@ -486,7 +486,7 @@ func (c *Client) sendPoints() {
 			end = len(payload)
 		}
 
-		buffer, err := json.Marshal(payload[i:end])
+		buffer, err := c.encoder.Encode(payload[i:end])
 		if err != nil {
 			logger.V(1).Printf("Unable to encode points: %v", err)
 			return
@@ -638,7 +638,7 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.AgentID)
 
-	compressed, err := c.topinfoEncoder.Encode(topinfo)
+	compressed, err := c.encoder.Encode(topinfo)
 	if err != nil {
 		logger.V(1).Printf("Unable to encode topinfo: %v", err)
 		return
