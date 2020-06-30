@@ -2,18 +2,19 @@ package blackbox
 
 import (
 	"glouton/prometheus/registry"
+	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 )
 
 // configTarget is the information we will supply to the probe() function.
 type configTarget struct {
-	Name               string
-	URL                string
-	Module             bbConf.Module
-	ModuleName         string
-	BleemeoAgentID     string
-	RefreshRateSeconds int
+	Name           string
+	URL            string
+	Module         bbConf.Module
+	ModuleName     string
+	BleemeoAgentID string
+	RefreshRate    time.Duration
 }
 
 // We define labels to apply on a specific collector at registration, as those labels cannot be exposed

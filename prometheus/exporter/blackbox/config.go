@@ -117,9 +117,7 @@ func genCollectorFromDynamicTarget(uri string, monitor types.Monitor) (*collecto
 	}
 
 	if monitor.RefreshRateSeconds != 0 {
-		confTarget.RefreshRateSeconds = monitor.RefreshRateSeconds
-	} else {
-		confTarget.RefreshRateSeconds = 10
+		confTarget.RefreshRate = time.Duration(monitor.RefreshRateSeconds) * time.Second
 	}
 
 	return &collectorWithLabels{

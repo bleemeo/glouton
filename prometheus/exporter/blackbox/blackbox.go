@@ -166,8 +166,8 @@ func (m *RegisterManager) updateRegistrations() error {
 			// static targets are always probed, while dynamic targets are probed according to
 			// their refresh rates
 			var g prometheus.Gatherer = reg
-			if collectorFromConfig.collector.AgentID != "" {
-				g = registry.NewTickingGatherer(reg, collectorFromConfig.collector.RefreshRateSeconds)
+			if collectorFromConfig.collector.RefreshRate != 0 {
+				g = registry.NewTickingGatherer(reg, collectorFromConfig.collector.RefreshRate)
 			}
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer

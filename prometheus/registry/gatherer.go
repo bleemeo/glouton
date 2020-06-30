@@ -16,7 +16,7 @@ import (
 
 // GatherState is an argument given to gatherers that support it. It allows us to give extra informations
 // to gatherers. Due to the way such objects are contructed when no argument is supplied (when calling
-// Gather() on a CustomGatherer, most of the time Gather() will directly call GatherWithState(GatherState{}),
+// Gather() on a GathererWithState, most of the time Gather() will directly call GatherWithState(GatherState{}),
 // please make sure that default values are sensible. For example, respectTime *must* be false, as we want
 // queries on /metrics to always probe the collectors, and respectTime chaneg that behavior).
 type GatherState struct {
@@ -25,11 +25,8 @@ type GatherState struct {
 	respectTime bool
 }
 
-type CollectState GatherState
-
-// CustomGatherer is a generalization of prometheus.Gather.
-type CustomGatherer interface {
-	prometheus.Gatherer
+// GathererWithState is a generalization of prometheus.Gather.
+type GathererWithState interface {
 	GatherWithState(GatherState) ([]*dto.MetricFamily, error)
 }
 
@@ -39,32 +36,31 @@ type TickingGatherer struct {
 	ticker   *time.Ticker
 	rate     time.Duration
 
+	startOnce  sync.Once
 	started    bool
 	startTime  time.Time
 	startDelay time.Duration
 }
 
-// NewTickingGatherer creates a gatherer that only collect metrics once every refreshRateSeconds.
-func NewTickingGatherer(gatherer prometheus.Gatherer, refreshRateSeconds int) *TickingGatherer {
-	refreshRate := time.Duration(refreshRateSeconds) * time.Second
-
+// NewTickingGatherer creates a gatherer that only collect metrics once every refreshRate instants.
+func NewTickingGatherer(gatherer prometheus.Gatherer, refreshRate time.Duration) *TickingGatherer {
 	return &TickingGatherer{
 		gatherer: gatherer,
 		rate:     refreshRate,
 
-		started:   false,
+		startOnce: sync.Once{},
 		startTime: time.Now(),
 		// we divive the network load over time by randomizing the start time
 		startDelay: time.Duration(rand.Int63n(int64(refreshRate))).Truncate(10 * time.Second),
 	}
 }
 
-// Gather implements CustomGatherer.
+// Gather implements prometheus.Gather.
 func (g *TickingGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return g.GatherWithState(GatherState{})
 }
 
-// GatherWithState implements CustomGatherer.
+// GatherWithState implements GathererWithState.
 func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	// when we have respectTime (set when we do internal queries, but not when /metrics is probed),
 	// we check with the timer to see if we must Gather().
@@ -75,25 +71,27 @@ func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamil
 	if !g.started {
 		// if we have elapsed our random time, start the ticker and run immediately
 		if time.Now().After(g.startTime.Add(g.startDelay)) {
-			g.started = true
-			g.ticker = time.NewTicker(g.rate)
+			g.startOnce.Do(func() {
+				g.started = true
+				g.ticker = time.NewTicker(g.rate)
+			})
 
 			return g.gatherNow(state)
 		}
 
-		return make([]*dto.MetricFamily, 0), nil
+		return nil, nil
 	}
 
 	select {
 	case <-g.ticker.C:
 		return g.gatherNow(state)
 	default:
-		return make([]*dto.MetricFamily, 0), nil
+		return nil, nil
 	}
 }
 
 func (g *TickingGatherer) gatherNow(state GatherState) ([]*dto.MetricFamily, error) {
-	if cg, ok := g.gatherer.(CustomGatherer); ok {
+	if cg, ok := g.gatherer.(GathererWithState); ok {
 		return cg.GatherWithState(state)
 	}
 
@@ -128,18 +126,18 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annota
 	}
 }
 
-// Gather implements CustomGatherer.
+// Gather implements prometheus.Gather.
 func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return g.GatherWithState(GatherState{})
 }
 
-// GatherWithState implements CustomGatherer.
+// GatherWithState implements GathererWithState.
 func (g labeledGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	var mfs []*dto.MetricFamily
 
 	var err error
 
-	if cg, ok := g.source.(CustomGatherer); ok {
+	if cg, ok := g.source.(GathererWithState); ok {
 		mfs, err = cg.GatherWithState(state)
 	} else {
 		mfs, err = g.source.Gather()
@@ -215,7 +213,7 @@ func (s sliceGatherer) Gather() ([]*dto.MetricFamily, error) {
 // The first help_text win.
 type Gatherers []prometheus.Gatherer
 
-// GatherWithState implements CustomGatherer.
+// GatherWithState implements GathererWithState.
 func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	metricFamiliesByName := map[string]*dto.MetricFamily{}
 
@@ -232,7 +230,7 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 
 			var err error
 
-			if cg, ok := g.(CustomGatherer); ok {
+			if cg, ok := g.(GathererWithState); ok {
 				mfs, err = cg.GatherWithState(state)
 			} else {
 				mfs, err = g.Gather()
@@ -302,7 +300,7 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 	return sortedResult, errs.MaybeUnwrap()
 }
 
-// Gather implements CustomGatherer.
+// Gather implements prometheus.Gather.
 func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	return gs.GatherWithState(GatherState{})
 }
