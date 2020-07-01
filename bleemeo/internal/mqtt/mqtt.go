@@ -139,11 +139,9 @@ func New(option Option, first bool) *Client {
 		paho.DEBUG = logger.V(3)
 	}
 
-	res := &Client{
+	return &Client{
 		option: option,
 	}
-
-	return res
 }
 
 // Connected returns true if MQTT connection is established.
@@ -197,7 +195,7 @@ func (c *Client) Run(ctx context.Context) error {
 	c.disableNotify = make(chan interface{})
 	c.connectionLost = make(chan interface{})
 	c.pendingPoints = c.option.InitialPoints
-	c.option.InitialPoints = make([]types.MetricPoint, 0)
+	c.option.InitialPoints = nil
 	c.l.Unlock()
 
 	for !c.ready() {
@@ -414,13 +412,13 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 
 	if includeFailedPoints {
 		points = c.failedPoints
-		c.failedPoints = make([]types.MetricPoint, 0)
+		c.failedPoints = nil
 		c.failedPointsCount = 0
 	}
 
 	points = append(points, c.pendingPoints...)
 
-	c.pendingPoints = make([]types.MetricPoint, 0)
+	c.pendingPoints = nil
 
 	return points
 }
@@ -434,7 +432,6 @@ func (c *Client) sendPoints() {
 
 		// store all new points as failed ones
 		c.failedPoints = append(c.failedPoints, points...)
-
 		if len(c.failedPoints) > maxPendingPoints {
 			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
 		}
@@ -467,8 +464,7 @@ func (c *Client) sendPoints() {
 
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
-
-		newPoints := make([]types.MetricPoint, 1)
+		newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 
 		for _, p := range c.failedPoints {
 			key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
@@ -478,8 +474,7 @@ func (c *Client) sendPoints() {
 		}
 
 		points = append(filterPoints(newPoints, metricWhitelist), points...)
-
-		c.failedPoints = make([]types.MetricPoint, 0)
+		c.failedPoints = nil
 	}
 
 	payload := c.preparePoints(registreredMetricByKey, points)
@@ -743,7 +738,7 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 }
 
 func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []types.MetricPoint {
-	result := make([]types.MetricPoint, len(input))
+	result := make([]types.MetricPoint, 0, len(input))
 
 	for _, mp := range input {
 		if common.AllowMetric(mp.Labels, mp.Annotations, metricWhitelist) {
