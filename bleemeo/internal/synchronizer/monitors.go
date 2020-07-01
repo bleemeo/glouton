@@ -62,6 +62,15 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 		return nil
 	}
 
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	// 5 is definitely a random heuristic, but we consider more than five simultaneous updates as more
+	// costly that a single full sync, due to the cost of updateMonitorManager()
+	if len(s.pendingMonitorsUpdate) > 5 {
+		fullSync = true
+	}
+
 	// only perform partial updates if we have some and we are not going to refresh all monitors
 	// immediately after
 	if !fullSync && len(s.pendingMonitorsUpdate) > 0 {
@@ -78,9 +87,7 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 	}
 
 	// we did a full sync, that includes every pending monitor update
-	s.l.Lock()
 	s.pendingMonitorsUpdate = nil
-	s.l.Unlock()
 
 	s.option.Cache.SetMonitors(apiMonitors)
 
@@ -173,7 +180,7 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 	params := map[string]string{
 		"monitor": "true",
 		"active":  "true",
-		"fields":  "id,agent,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_metric_resolution_seconds",
+		"fields":  "id,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content,monitor_metric_resolution_seconds",
 	}
 
 	result, err := s.client.Iter("service", params)

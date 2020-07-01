@@ -109,11 +109,17 @@ func genCollectorFromDynamicTarget(uri string, monitor types.Monitor) (*collecto
 		mod.Prober = proberNameICMP
 	}
 
+	creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
+	if err != nil {
+		return nil, err
+	}
+
 	confTarget := configTarget{
 		Module:         mod,
 		Name:           monitor.URL,
 		BleemeoAgentID: monitor.AgentID,
 		URL:            uri,
+		CreationDate:   creationDate,
 	}
 
 	if monitor.RefreshRateSeconds != 0 {

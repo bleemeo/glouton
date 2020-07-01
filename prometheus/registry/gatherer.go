@@ -3,7 +3,6 @@ package registry
 import (
 	"fmt"
 	"glouton/types"
-	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -30,33 +29,54 @@ type GathererWithState interface {
 	GatherWithState(GatherState) ([]*dto.MetricFamily, error)
 }
 
+type TickingGathererState int
+
+const (
+	// Initial state, no gather() calls have been received yet, the next gather() calls will succeed,
+	// so that metric colleciton can start as soon as possible
+	Initialized TickingGathererState = iota
+	// one gather() call have been received, do not gather() anymore until startTime is reached, at which
+	// point we will enter the Running state
+	FirstRun
+	// Ticker have been starting, normal operating mode
+	Running
+	// Ticked have been stopped, using this gatherer will no longer work
+	Stopped
+)
+
 // TickingGatherer is a prometheus gatherer that only collect metrics every once in a while.
 type TickingGatherer struct {
 	// we need this exposed in order to stop it (otherwise we'll leak goroutines)
-	Ticker   *time.Ticker
-	gatherer prometheus.Gatherer
-	rate     time.Duration
+	Ticker    *time.Ticker
+	gatherer  prometheus.Gatherer
+	rate      time.Duration
+	startTime time.Time
 
-	startOnce  sync.Once
-	started    bool
-	startTime  time.Time
-	startDelay time.Duration
+	l     sync.Mutex
+	state TickingGathererState
 }
 
 // NewTickingGatherer creates a gatherer that only collect metrics once every refreshRate instants.
-func NewTickingGatherer(gatherer prometheus.Gatherer, refreshRate time.Duration) *TickingGatherer {
-	return &TickingGatherer{
-		gatherer: gatherer,
-		rate:     refreshRate,
+func NewTickingGatherer(gatherer prometheus.Gatherer, creationDate time.Time, refreshRate time.Duration) *TickingGatherer {
+	// the logic is that the point at which we should start the ticker is the first occurence of creationDate + x * refreshRate in the future
+	// (this is sadly necessary as we cannot start a ticker in the past, per go design)
+	startTime := creationDate.Add(time.Now().Sub(creationDate).Truncate(refreshRate)).Add(refreshRate).Truncate(10 * time.Second)
 
-		startOnce: sync.Once{},
-		startTime: time.Now(),
-		// we divive the network load over time by randomizing the start time
-		startDelay: time.Duration(rand.Int63n(int64(refreshRate))).Truncate(10 * time.Second),
+	return &TickingGatherer{
+		gatherer:  gatherer,
+		rate:      refreshRate,
+		startTime: startTime,
+
+		l: sync.Mutex{},
 	}
 }
 
 func (g *TickingGatherer) Stop() {
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	g.state = Stopped
+
 	if g.Ticker != nil {
 		g.Ticker.Stop()
 	}
@@ -75,26 +95,31 @@ func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamil
 		return g.gatherNow(state)
 	}
 
-	if !g.started {
-		// if we have elapsed our random time, start the ticker and run immediately
-		if time.Now().After(g.startTime.Add(g.startDelay)) {
-			g.startOnce.Do(func() {
-				g.started = true
-				g.Ticker = time.NewTicker(g.rate)
-			})
+	g.l.Lock()
+	defer g.l.Unlock()
+
+	switch g.state {
+	case Initialized:
+		g.state = FirstRun
+
+		return g.gatherNow(state)
+	case FirstRun:
+		if time.Now().After(g.startTime) {
+			// we are now synced with the date of creation of the object, start the ticker and run immediately
+			g.state = Running
+			g.Ticker = time.NewTicker(g.rate)
 
 			return g.gatherNow(state)
 		}
-
-		return nil, nil
+	case Running:
+		select {
+		case <-g.Ticker.C:
+			return g.gatherNow(state)
+		default:
+		}
 	}
 
-	select {
-	case <-g.Ticker.C:
-		return g.gatherNow(state)
-	default:
-		return nil, nil
-	}
+	return nil, nil
 }
 
 func (g *TickingGatherer) gatherNow(state GatherState) ([]*dto.MetricFamily, error) {

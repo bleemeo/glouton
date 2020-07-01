@@ -15,6 +15,7 @@ type configTarget struct {
 	Module         bbConf.Module
 	ModuleName     string
 	BleemeoAgentID string
+	CreationDate   time.Time
 	RefreshRate    time.Duration
 }
 

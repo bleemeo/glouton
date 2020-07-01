@@ -69,6 +69,7 @@ type Service struct {
 	ExePath         string `json:"exe_path"`
 	Stack           string `json:"stack"`
 	Active          bool   `json:"active"`
+	CreationDate    string `json:"created_at"`
 }
 
 // Container is a Contaier object on Bleemeo API.

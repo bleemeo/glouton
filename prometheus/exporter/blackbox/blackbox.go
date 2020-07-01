@@ -174,7 +174,7 @@ func (m *RegisterManager) updateRegistrations() error {
 			// their refresh rates
 			var g prometheus.Gatherer = reg
 			if collectorFromConfig.collector.RefreshRate != 0 {
-				g = registry.NewTickingGatherer(reg, collectorFromConfig.collector.RefreshRate)
+				g = registry.NewTickingGatherer(reg, collectorFromConfig.collector.CreationDate, collectorFromConfig.collector.RefreshRate)
 			}
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer
