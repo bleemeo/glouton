@@ -20,6 +20,7 @@ import (
 	"context"
 	"glouton/logger"
 	"glouton/prometheus/registry"
+	"reflect"
 	"time"
 
 	"github.com/prometheus/blackbox_exporter/prober"
@@ -127,24 +128,30 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 
+// compareConfigTargets returns true if the monitors are identical, and false otherwise.
+func compareConfigTargets(a configTarget, b configTarget) bool {
+	// two targets are equals if they both are a monitor in bleemeo mode (remote monitor) with the same monitor uuid and the same module configuration,
+	// OR if they are local monitors with the same URL and the same blackbox module
+	if a.BleemeoAgentID != "" {
+		return a.BleemeoAgentID == b.BleemeoAgentID && reflect.DeepEqual(a.Module, b.Module)
+	}
+
+	return a.URL == b.URL && a.ModuleName == b.ModuleName
+}
+
 func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
 	for _, mapValue := range iterable {
-		// two collectors are equals if they both are a monitor in bleemeo mode (romet monitor) with the same service identifier,
-		// OR if they are local monitors with the same URL and the same blackbox module
-		if (value.collector.BleemeoAgentID == mapValue.target.BleemeoAgentID && value.collector.BleemeoAgentID != "") ||
-			(value.collector.ModuleName == mapValue.target.ModuleName && value.collector.URL == mapValue.target.URL && value.collector.BleemeoAgentID == "") {
+		if compareConfigTargets(value.collector, mapValue.target) {
 			return true
 		}
 	}
 
 	return false
 }
-
 func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLabels) bool {
 	for _, arrayValue := range iterable {
 		// see inMap() above
-		if (value.target.BleemeoAgentID == arrayValue.collector.BleemeoAgentID && value.target.BleemeoAgentID != "") ||
-			(value.target.ModuleName == arrayValue.collector.ModuleName && value.target.URL == arrayValue.collector.URL && value.target.BleemeoAgentID == "") {
+		if compareConfigTargets(value.target, arrayValue.collector) {
 			return true
 		}
 	}
@@ -196,7 +203,7 @@ func (m *RegisterManager) updateRegistrations() error {
 			// if this is a ticking gatherer, we need to unregister it (this is breaking the
 			// abstraction, but adding an interface for this particular case seems overkill)
 			if cg, ok := gatherer.gatherer.(*registry.TickingGatherer); ok {
-				cg.Ticker.Stop()
+				cg.Stop()
 			}
 
 			m.registry.UnregisterGatherer(idx)

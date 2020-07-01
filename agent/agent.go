@@ -590,7 +590,10 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 
 		if a.config.Bool("bleemeo.remote_probing_enabled") {
+			a.factProvider.SetFact("dynamic_probe", "true")
 			monitorManager.EnableDynamicProbing()
+		} else {
+			a.factProvider.SetFact("dynamic_probe", "false")
 		}
 	} else {
 		logger.V(2).Println("blackbox_exporter not enabled, will not start...")

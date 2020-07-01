@@ -56,6 +56,12 @@ func NewTickingGatherer(gatherer prometheus.Gatherer, refreshRate time.Duration)
 	}
 }
 
+func (g *TickingGatherer) Stop() {
+	if g.Ticker != nil {
+		g.Ticker.Stop()
+	}
+}
+
 // Gather implements prometheus.Gather.
 func (g *TickingGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return g.GatherWithState(GatherState{})

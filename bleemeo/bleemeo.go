@@ -91,6 +91,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			AgentPassword:        password,
 			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
 			UpdateMetrics:        c.sync.UpdateMetrics,
+			UpdateMonitor:        c.sync.UpdateMonitor,
 			InitialPoints:        previousPoint,
 		},
 		first,

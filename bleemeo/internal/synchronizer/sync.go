@@ -54,11 +54,12 @@ type Synchronizer struct {
 	lastMetricCount         int
 	agentID                 string
 
-	l                    sync.Mutex
-	disabledUntil        time.Time
-	disableReason        bleemeoTypes.DisableReason
-	forceSync            map[string]bool
-	pendingMetricsUpdate []string
+	l                     sync.Mutex
+	disabledUntil         time.Time
+	disableReason         bleemeoTypes.DisableReason
+	forceSync             map[string]bool
+	pendingMetricsUpdate  []string
+	pendingMonitorsUpdate []MonitorUpdate
 }
 
 // Option are parameters for the synchronizer.
@@ -290,7 +291,7 @@ func (s *Synchronizer) UpdateContainers() {
 	s.forceSync["containers"] = false
 }
 
-// UpdateContainers updates the monitors.
+// UpdateMonitors requests to update all the monitors.
 func (s *Synchronizer) UpdateMonitors() {
 	s.l.Lock()
 	defer s.l.Unlock()

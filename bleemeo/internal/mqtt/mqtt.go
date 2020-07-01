@@ -60,6 +60,8 @@ type Option struct {
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
+	// UpdateMonitor requests a sync of a monitor
+	UpdateMonitor func(op string, uuid string)
 
 	InitialPoints []types.MetricPoint
 }
@@ -592,8 +594,10 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 }
 
 type notificationPayload struct {
-	MessageType string `json:"message_type"`
-	MetricUUID  string `json:"metric_uuid,omitempty"`
+	MessageType          string `json:"message_type"`
+	MetricUUID           string `json:"metric_uuid,omitempty"`
+	MonitorUUID          string `json:"monitor_uuid,omitempty"`
+	MonitorOperationType string `json:"monitor_operation_type,omitempty"`
 }
 
 func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
@@ -618,6 +622,8 @@ func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
 		c.option.UpdateConfigCallback(false)
 	case "threshold-update":
 		c.option.UpdateMetrics(payload.MetricUUID)
+	case "monitor-update":
+		c.option.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
 	}
 }
 
