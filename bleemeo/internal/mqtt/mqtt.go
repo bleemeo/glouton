@@ -17,6 +17,7 @@
 package mqtt
 
 import (
+	"archive/zip"
 	"bytes"
 	"compress/zlib"
 	"context"
@@ -221,6 +222,39 @@ func (c *Client) DiagnosticPage() string {
 	builder.WriteString(common.DiagnosticTCP(host, port, c.tlsConfig()))
 
 	return builder.String()
+}
+
+// DiagnosticZip add to a zipfile useful diagnostic information
+func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
+	c.l.Lock()
+	if len(c.failedPoints) > 100 {
+		file, err := zipFile.Create("mqtt-failed-metric-points.txt")
+		if err != nil {
+			return err
+		}
+
+		maxSample := 50
+
+		fmt.Fprintf(file, "MQTT connector has %d points that are failing.\n", len(c.failedPoints))
+		fmt.Fprintf(file, "It usually happen when MQTT is not connector OR when metric are not registered with Bleemeo.\n")
+		if maxSample > len(c.failedPoints) {
+			fmt.Fprintf(file, "Here is the list of all blocked metrics:\n")
+			for _, p := range c.failedPoints {
+				fmt.Fprintf(file, "%v\n", p.Labels)
+			}
+		} else {
+			fmt.Fprintf(file, "Here is a sample of %d blocked metrics:\n", maxSample)
+			indices := rand.Perm(len(c.failedPoints))
+			for _, i := range indices[:maxSample] {
+				p := c.failedPoints[i]
+				fmt.Fprintf(file, "%v\n", p.Labels)
+			}
+		}
+	}
+
+	c.l.Unlock()
+
+	return nil
 }
 
 // LastReport returns the date of last report with Bleemeo API.

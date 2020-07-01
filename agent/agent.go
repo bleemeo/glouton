@@ -1410,6 +1410,10 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		return err
 	}
 
+	if a.bleemeoConnector != nil {
+		a.bleemeoConnector.DiagnosticZip(zipFile)
+	}
+
 	return nil
 }
 
