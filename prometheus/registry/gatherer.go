@@ -19,7 +19,6 @@ type QueryType int
 const (
 	NoProbe QueryType = iota
 	OnlyProbes
-	MetricsAndLocalProbes
 	All
 )
 
@@ -30,18 +29,15 @@ const (
 // we do not want queries on /metrics to always probe the collectors by default).
 type GatherState struct {
 	QueryType QueryType
-	// NoTick indicates whether TickingGatherer should perform immediately the gathering instead of its
-	// normal "ticking" operation mode.
+	// Shall TickingGatherer perform immediately the gathering (instead of its normal "ticking"
+	// operation mode) ?
 	NoTick bool
+	// Is the ongoing Gather operation coming from a scrape on /metrics ?
+	PrometheusQuery bool
 }
 
 func GatherStateFromMap(params map[string][]string) GatherState {
 	state := GatherState{}
-
-	// TODO: document this somewhere user-facing
-	if _, includeLocalProbes := params["includeLocalProbes"]; includeLocalProbes {
-		state.QueryType = MetricsAndLocalProbes
-	}
 
 	// TODO: same as above
 	if _, includeProbes := params["includeProbes"]; includeProbes {
@@ -94,8 +90,12 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 // Specific gatherer that wraps probes, choose when to Gather() depending on the GatherState argument.
 type ProbeGatherer struct {
 	G prometheus.Gatherer
-	// is the probe defined in the local config ?
-	Local bool
+
+	L       *sync.Mutex
+	Failing bool
+	// LastFailed tells us whether the last check was a falling edge (a new failure)
+	LastFailed     bool
+	LastFailedTime time.Time
 }
 
 func (p ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
@@ -110,15 +110,50 @@ func (p ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, 
 		return nil, nil
 	}
 
-	if state.QueryType == MetricsAndLocalProbes && !p.Local {
-		return nil, nil
+	var mfs []*dto.MetricFamily
+
+	var err error
+
+	// when the query comes for /metrics, do not use the normal "ticking" mode
+	if state.PrometheusQuery {
+		state.NoTick = true
+	}
+
+	p.L.Lock()
+	defer p.L.Unlock()
+
+	// when we see a new failure, we run the check again a minute later
+	if p.LastFailed && time.Since(p.LastFailedTime) > time.Minute {
+		// execute the query, do not wait for the next tick
+		state.NoTick = true
 	}
 
 	if cg, ok := p.G.(GathererWithState); ok {
-		return cg.GatherWithState(state)
+		mfs, err = cg.GatherWithState(state)
+	} else {
+		mfs, err = p.G.Gather()
 	}
 
-	return p.G.Gather()
+	for _, mf := range mfs {
+		if *mf.Name == "probe_success" {
+			if len(mf.Metric) == 0 {
+				logger.V(2).Println("Invalid metric family 'probe_success', got 0 values inside")
+				break
+			}
+
+			// '0.5' carries not specific meaning, but I didn't want to compare to '1.' directly, because float equality is evilness
+			success := mf.Metric[0].GetGauge().GetValue() > 0.5
+
+			p.LastFailed = !success && !p.Failing
+			p.Failing = !success
+
+			if p.LastFailed {
+				p.LastFailedTime = time.Now()
+			}
+		}
+	}
+
+	return mfs, err
 }
 
 // Gatherer that wraps gatherers that aren't probe and that are not themselves wrapped by labeledGatherer
@@ -371,6 +406,7 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 	metricFamiliesByName := map[string]*dto.MetricFamily{}
 
 	var errs prometheus.MultiError
+
 	var mfs []*dto.MetricFamily
 
 	wg := sync.WaitGroup{}
@@ -394,10 +430,13 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 			}
 
 			mutex.Lock()
+
 			if err != nil {
 				errs = append(errs, err)
 			}
+
 			mfs = append(mfs, currentMFs...)
+
 			mutex.Unlock()
 		}(g)
 	}

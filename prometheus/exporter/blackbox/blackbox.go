@@ -21,6 +21,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"reflect"
+	"sync"
 	"time"
 
 	"github.com/prometheus/blackbox_exporter/prober"
@@ -179,7 +180,10 @@ func (m *RegisterManager) updateRegistrations() error {
 			}
 
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.ProbeGatherer{G: g, Local: collectorFromConfig.collector.BleemeoAgentID == ""}
+			g = registry.ProbeGatherer{
+				G: g,
+				L: &sync.Mutex{},
+			}
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer
 			// for each probe is the product of our unability to expose a "__meta_something"

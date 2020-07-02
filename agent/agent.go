@@ -674,7 +674,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 		if a.metricFormat == types.MetricFormatPrometheus {
 			logger.Printf("Prometheus format is not yet supported with Bleemeo")
-			//return
+			return
 		}
 	}
 

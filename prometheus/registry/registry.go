@@ -426,7 +426,7 @@ func (r *Registry) Exporter() http.Handler {
 		wrapper := NewGathererWithStateWrapper(r)
 
 		state := GatherStateFromMap(req.URL.Query())
-		state.NoTick = true
+		state.PrometheusQuery = true
 
 		wrapper.SetState(state)
 
