@@ -348,12 +348,12 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 	return true
 }
 
-// Gather implements CustomeGatherer.
+// Gather implements prometheus.Gatherer.
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 	return r.GatherWithState(GatherState{})
 }
 
-// GatherWithState implements CustomeGatherer.
+// GatherWithState implements GathererGatherWithState.
 func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	r.init()
 	r.l.Lock()
@@ -364,7 +364,7 @@ func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, erro
 		gatherers = append(gatherers, reg.gatherer)
 	}
 
-	gatherers = append(gatherers, r.registyPush)
+	gatherers = append(gatherers, NonProbeGatherer{G: r.registyPush})
 
 	r.l.Unlock()
 
@@ -422,9 +422,18 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 // Exporter return an HTTP exporter.
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
-	handler := promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(r, promhttp.HandlerOpts{
-		ErrorHandling: promhttp.ContinueOnError,
-		ErrorLog:      prefixLogger("/metrics endpoint:"),
+	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		wrapper := NewGathererWithStateWrapper(r)
+
+		state := GatherStateFromMap(req.URL.Query())
+		state.NoTick = true
+
+		wrapper.SetState(state)
+
+		promhttp.HandlerFor(wrapper, promhttp.HandlerOpts{
+			ErrorHandling: promhttp.ContinueOnError,
+			ErrorLog:      prefixLogger("/metrics endpoint:"),
+		}).ServeHTTP(w, req)
 	}))
 	_, _ = r.RegisterGatherer(reg, nil, nil)
 
@@ -522,7 +531,7 @@ func (r *Registry) runOnce() {
 	if r.MetricFormat == types.MetricFormatPrometheus {
 		var err error
 
-		points, err = labeledGatherers(gatherers).GatherPoints(GatherState{respectTime: true})
+		points, err = labeledGatherers(gatherers).GatherPoints(GatherState{QueryType: All})
 		if err != nil {
 			logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
 		}

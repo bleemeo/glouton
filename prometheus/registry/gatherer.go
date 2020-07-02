@@ -2,6 +2,7 @@ package registry
 
 import (
 	"fmt"
+	"glouton/logger"
 	"glouton/types"
 	"strings"
 	"sync"
@@ -13,15 +14,46 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
+type QueryType int
+
+const (
+	NoProbe QueryType = iota
+	OnlyProbes
+	MetricsAndLocalProbes
+	All
+)
+
 // GatherState is an argument given to gatherers that support it. It allows us to give extra informations
 // to gatherers. Due to the way such objects are contructed when no argument is supplied (when calling
 // Gather() on a GathererWithState, most of the time Gather() will directly call GatherWithState(GatherState{}),
-// please make sure that default values are sensible. For example, respectTime *must* be false, as we want
-// queries on /metrics to always probe the collectors, and respectTime chaneg that behavior).
+// please make sure that default values are sensible. For example, NoProbe *must* be the default queryType, as
+// we do not want queries on /metrics to always probe the collectors by default).
 type GatherState struct {
-	// respectTime allows the gatherer to collect metrics only from time to time, and not for every call.
-	// This is notably the way we notify TickingGatherer to actually use the ticker.
-	respectTime bool
+	QueryType QueryType
+	// NoTick indicates whether TickingGatherer should perform immediately the gathering instead of its
+	// normal "ticking" operation mode.
+	NoTick bool
+}
+
+func GatherStateFromMap(params map[string][]string) GatherState {
+	state := GatherState{}
+
+	// TODO: document this somewhere user-facing
+	if _, includeLocalProbes := params["includeLocalProbes"]; includeLocalProbes {
+		state.QueryType = MetricsAndLocalProbes
+	}
+
+	// TODO: same as above
+	if _, includeProbes := params["includeProbes"]; includeProbes {
+		state.QueryType = All
+	}
+
+	// TODO: same as above
+	if _, excludeMetrics := params["onlyProbes"]; excludeMetrics {
+		state.QueryType = OnlyProbes
+	}
+
+	return state
 }
 
 // GathererWithState is a generalization of prometheus.Gather.
@@ -29,11 +61,97 @@ type GathererWithState interface {
 	GatherWithState(GatherState) ([]*dto.MetricFamily, error)
 }
 
+// GathererWithStateWrapper is a wrapper around GathererWithState that allows to specify a state to forward
+// to the wrapped gatherer when the caller does not know about GathererWithState and uses raw Gather().
+// The main use case is the /metrics HTTP endpoint, where we want to be able to gather() only some metrics
+// (e.g. all metrics/only probes/no probes).
+// In the prometheus exporter endpoint, when receiving an request, the (user-provided)
+// HTTP handler will:
+// - create a new wrapper instance, generate a GatherState accordingly, and call wrapper.setState(newState).
+// - pass the wrapper to a new prometheus HTTP handler.
+// - when Gather() is called upon the wrapper by prometheus, the wrapper calls GathererWithState(newState)
+// on its internal gatherer.
+type GathererWithStateWrapper struct {
+	gatherState GatherState
+	gatherer    GathererWithState
+}
+
+// NewGathererWithStateWrapper creates a new wrapper around GathererWithState.
+func NewGathererWithStateWrapper(g GathererWithState) *GathererWithStateWrapper {
+	return &GathererWithStateWrapper{gatherer: g}
+}
+
+// SetState updates the state the wrapper will provide to its internal gatherer when called.
+func (w *GathererWithStateWrapper) SetState(state GatherState) {
+	w.gatherState = state
+}
+
+// Gather implements prometheus.Gatherer for GathererWithStateWrapper.
+func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
+	return w.gatherer.GatherWithState(w.gatherState)
+}
+
+// Specific gatherer that wraps probes, choose when to Gather() depending on the GatherState argument.
+type ProbeGatherer struct {
+	G prometheus.Gatherer
+	// is the probe defined in the local config ?
+	Local bool
+}
+
+func (p ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
+	// While not a critical error, this function should never be called, as callers should know about
+	// GatherWithState().
+	logger.V(2).Println("Gather() called directly on a ProbeGatherer, this is a bug !")
+	return p.GatherWithState(GatherState{})
+}
+
+func (p ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+	if state.QueryType == NoProbe {
+		return nil, nil
+	}
+
+	if state.QueryType == MetricsAndLocalProbes && !p.Local {
+		return nil, nil
+	}
+
+	if cg, ok := p.G.(GathererWithState); ok {
+		return cg.GatherWithState(state)
+	}
+
+	return p.G.Gather()
+}
+
+// Gatherer that wraps gatherers that aren't probe and that are not themselves wrapped by labeledGatherer
+// (labeledGatherer perform roughly the same job w.r.t. probes and and it is thus not necessary to wrap all
+// non-probes gatherers inside this struct).
+type NonProbeGatherer struct {
+	G prometheus.Gatherer
+}
+
+func (p NonProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
+	// While not a critical error, this function should never be called, as callers should know about
+	// GatherWithState().
+	logger.V(2).Println("Gather() called directly on a NonProbeGatherer, this is a bug !")
+	return p.GatherWithState(GatherState{})
+}
+
+func (p NonProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+	if state.QueryType == OnlyProbes {
+		return nil, nil
+	}
+
+	if cg, ok := p.G.(GathererWithState); ok {
+		return cg.GatherWithState(state)
+	}
+
+	return p.G.Gather()
+}
+
 type TickingGathererState int
 
 const (
 	// Initial state, no gather() calls have been received yet, the next gather() calls will succeed,
-	// so that metric colleciton can start as soon as possible
+	// so that metric collection can start as soon as possible
 	Initialized TickingGathererState = iota
 	// one gather() call have been received, do not gather() anymore until startTime is reached, at which
 	// point we will enter the Running state
@@ -58,9 +176,9 @@ type TickingGatherer struct {
 
 // NewTickingGatherer creates a gatherer that only collect metrics once every refreshRate instants.
 func NewTickingGatherer(gatherer prometheus.Gatherer, creationDate time.Time, refreshRate time.Duration) *TickingGatherer {
-	// the logic is that the point at which we should start the ticker is the first occurence of creationDate + x * refreshRate in the future
+	// the logic is that the point at which we should start the ticker is the first occurrence of creationDate + x * refreshRate in the future
 	// (this is sadly necessary as we cannot start a ticker in the past, per go design)
-	startTime := creationDate.Add(time.Now().Sub(creationDate).Truncate(refreshRate)).Add(refreshRate).Truncate(10 * time.Second)
+	startTime := creationDate.Add(time.Since(creationDate).Truncate(refreshRate)).Add(refreshRate).Truncate(10 * time.Second)
 
 	return &TickingGatherer{
 		gatherer:  gatherer,
@@ -89,9 +207,7 @@ func (g *TickingGatherer) Gather() ([]*dto.MetricFamily, error) {
 
 // GatherWithState implements GathererWithState.
 func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
-	// when we have respectTime (set when we do internal queries, but not when /metrics is probed),
-	// we check with the timer to see if we must Gather().
-	if !state.respectTime {
+	if state.NoTick {
 		return g.gatherNow(state)
 	}
 
@@ -165,6 +281,11 @@ func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 
 // GatherWithState implements GathererWithState.
 func (g labeledGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+	// do not collect non-probes metrics when the user only wants probes
+	if _, probe := g.source.(ProbeGatherer); !probe && state.QueryType == OnlyProbes {
+		return nil, nil
+	}
+
 	var mfs []*dto.MetricFamily
 
 	var err error
@@ -260,6 +381,8 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 	// run gather in parallel
 	for _, g := range gs {
 		go func(g prometheus.Gatherer) {
+			defer wg.Done()
+
 			var currentMFs []*dto.MetricFamily
 
 			var err error
@@ -276,8 +399,6 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 			}
 			mfs = append(mfs, currentMFs...)
 			mutex.Unlock()
-
-			wg.Done()
 		}(g)
 	}
 
@@ -353,6 +474,8 @@ func (gs labeledGatherers) GatherPoints(state GatherState) ([]types.MetricPoint,
 
 	for _, g := range gs {
 		go func(g labeledGatherer) {
+			defer wg.Done()
+
 			points, err := g.GatherPoints(state)
 
 			mutex.Lock()
@@ -364,7 +487,6 @@ func (gs labeledGatherers) GatherPoints(state GatherState) ([]types.MetricPoint,
 			result = append(result, points...)
 
 			mutex.Unlock()
-			wg.Done()
 		}(g)
 	}
 

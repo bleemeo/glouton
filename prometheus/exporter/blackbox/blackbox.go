@@ -170,12 +170,16 @@ func (m *RegisterManager) updateRegistrations() error {
 				return err
 			}
 
+			var g prometheus.Gatherer = reg
+
 			// static targets are always probed, while dynamic targets are probed according to
 			// their refresh rates
-			var g prometheus.Gatherer = reg
 			if collectorFromConfig.collector.RefreshRate != 0 {
-				g = registry.NewTickingGatherer(reg, collectorFromConfig.collector.CreationDate, collectorFromConfig.collector.RefreshRate)
+				g = registry.NewTickingGatherer(g, collectorFromConfig.collector.CreationDate, collectorFromConfig.collector.RefreshRate)
 			}
+
+			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
+			g = registry.ProbeGatherer{G: g, Local: collectorFromConfig.collector.BleemeoAgentID == ""}
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer
 			// for each probe is the product of our unability to expose a "__meta_something"
