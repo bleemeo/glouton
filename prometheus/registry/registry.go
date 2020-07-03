@@ -152,7 +152,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID},
+			SourceLabels: model.LabelNames{types.LabelMetaProbeAgentUUID},
 			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
 		},
