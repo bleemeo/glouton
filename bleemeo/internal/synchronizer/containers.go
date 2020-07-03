@@ -43,7 +43,7 @@ type containerPayload struct {
 func (s *Synchronizer) syncContainers(fullSync bool) error {
 	var localContainers []facts.Container
 
-	if s.option.Cache.AccountConfig().DockerIntegration {
+	if s.option.Cache.CurrentAccountConfig().DockerIntegration {
 		var err error
 
 		localContainers, err = s.option.Docker.Containers(s.ctx, 24*time.Second, false)

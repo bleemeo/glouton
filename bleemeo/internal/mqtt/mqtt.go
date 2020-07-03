@@ -368,7 +368,7 @@ func (c *Client) run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		cfg := c.option.Cache.AccountConfig()
+		cfg := c.option.Cache.CurrentAccountConfig()
 
 		c.sendPoints()
 
@@ -426,8 +426,7 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 }
 
 func (c *Client) sendPoints() {
-	metricWhitelist := c.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
-	points := filterPoints(c.PopPoints(false), metricWhitelist)
+	points := c.filterPoints(c.PopPoints(false))
 
 	if !c.Connected() {
 		c.l.Lock()
@@ -475,7 +474,7 @@ func (c *Client) sendPoints() {
 			}
 		}
 
-		points = append(filterPoints(newPoints, metricWhitelist), points...)
+		points = append(c.filterPoints(newPoints), points...)
 		c.failedPoints = nil
 	}
 
@@ -743,11 +742,34 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []types.MetricPoint {
+func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
+	currentAccountConfig := c.option.Cache.CurrentAccountConfig()
+	accountConfigs := c.option.Cache.AccountConfigs()
+	monitors := c.option.Cache.MonitorsByAgentUUID()
+
 	for _, mp := range input {
-		if common.AllowMetric(mp.Labels, mp.Annotations, metricWhitelist) {
+		// retrieve the appropriate configuration for the metric
+		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+
+		if mp.Annotations.BleemeoAgentID != "" {
+			monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]
+			if !present {
+				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", mp.Annotations.BleemeoAgentID)
+				continue
+			}
+
+			accountConfig, present := accountConfigs[monitor.AccountConfig]
+			if !present {
+				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
+				continue
+			}
+
+			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		}
+
+		if common.AllowMetric(mp.Labels, mp.Annotations, whitelist) {
 			result = append(result, mp)
 		}
 	}
@@ -756,7 +778,7 @@ func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []
 }
 
 func (c *Client) ready() bool {
-	cfg := c.option.Cache.AccountConfig()
+	cfg := c.option.Cache.CurrentAccountConfig()
 	if cfg.LiveProcessResolution == 0 || cfg.MetricAgentResolution == 0 {
 		logger.V(2).Printf("MQTT not ready, Agent as no configuration")
 		return false

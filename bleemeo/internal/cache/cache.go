@@ -35,15 +35,20 @@ type Cache struct {
 }
 
 type data struct {
-	Version       int
-	AccountID     string
-	Facts         []bleemeoTypes.AgentFact
-	Containers    []bleemeoTypes.Container
-	Metrics       []bleemeoTypes.Metric
-	Agent         bleemeoTypes.Agent
-	AccountConfig bleemeoTypes.AccountConfig
-	Services      []bleemeoTypes.Service
-	Monitors      []bleemeoTypes.Monitor
+	Version    int
+	AccountID  string
+	Facts      []bleemeoTypes.AgentFact
+	Containers []bleemeoTypes.Container
+	Metrics    []bleemeoTypes.Metric
+	Agent      bleemeoTypes.Agent
+	// AccountConfig groups the configuration of other accounts, something we may need for probes.
+	// mapping config UUID -> Config
+	AccountConfigs map[string]bleemeoTypes.AccountConfig
+	// In contrast, CurrentAccountConfig stores the configuration of the account in which this
+	// agent is registered.
+	CurrentAccountConfig bleemeoTypes.AccountConfig
+	Services             []bleemeoTypes.Service
+	Monitors             []bleemeoTypes.Monitor
 }
 
 // SetAccountID update the AccountID.
@@ -116,21 +121,43 @@ func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.dirty = true
 }
 
-// SetAccountConfig update the AccountConfig object.
-func (c *Cache) SetAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
+// SetCurrentAccountConfig updates the AccountConfig of this agent.
+func (c *Cache) SetCurrentAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	c.data.AccountConfig = accountConfig
+	c.data.CurrentAccountConfig = accountConfig
 	c.dirty = true
 }
 
-// AccountConfig returns AccountConfig.
-func (c *Cache) AccountConfig() bleemeoTypes.AccountConfig {
+// CurrentAccountConfig returns our own AccountConfig.
+func (c *Cache) CurrentAccountConfig() bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	return c.data.AccountConfig
+	return c.data.CurrentAccountConfig
+}
+
+// SetAccountConfigs updates all the external accounts configurations we care about
+// (in particular, this is necessary for the monitors).
+func (c *Cache) SetAccountConfigs(configs map[string]bleemeoTypes.AccountConfig) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.AccountConfigs = configs
+}
+
+// AccountConfigs returns the mapping between the accoutn config UUID and  list of external account configurations.
+func (c *Cache) AccountConfigs() map[string]bleemeoTypes.AccountConfig {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
+	for k, v := range c.data.AccountConfigs {
+		result[k] = v
+	}
+
+	return result
 }
 
 // FactsByKey returns a map fact.key => facts.
@@ -192,6 +219,19 @@ func (c *Cache) Monitors() []bleemeoTypes.Monitor {
 	result := make([]bleemeoTypes.Monitor, len(c.data.Monitors))
 
 	copy(result, c.data.Monitors)
+
+	return result
+}
+
+// Monitors returns a mapping between their agent ID and the Monitors.
+func (c *Cache) MonitorsByAgentUUID() map[bleemeoTypes.AgentID]bleemeoTypes.Monitor {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[bleemeoTypes.AgentID]bleemeoTypes.Monitor, len(c.data.Monitors))
+	for _, v := range c.data.Monitors {
+		result[bleemeoTypes.AgentID(v.AgentID)] = v
+	}
 
 	return result
 }

@@ -480,7 +480,7 @@ func (c *Connector) emitInternalMetric() {
 }
 
 func (c *Connector) uppdateConfig() {
-	currentConfig := c.cache.AccountConfig()
+	currentConfig := c.cache.CurrentAccountConfig()
 
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 

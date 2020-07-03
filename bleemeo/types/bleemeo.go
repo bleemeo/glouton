@@ -52,17 +52,19 @@ type Tag struct {
 
 // AccountConfig is the configuration used by this agent.
 type AccountConfig struct {
-	ID                    string `json:"id"`
-	Name                  string `json:"name"`
-	MetricsAgentWhitelist string `json:"metrics_agent_whitelist"`
-	MetricAgentResolution int    `json:"metrics_agent_resolution"`
-	LiveProcessResolution int    `json:"live_process_resolution"`
-	DockerIntegration     bool   `json:"docker_integration"`
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	MetricsAgentWhitelist   string `json:"metrics_agent_whitelist"`
+	MetricAgentResolution   int    `json:"metrics_agent_resolution"`
+	MetricMonitorResolution int    `json:"metrics_monitor_resolution"`
+	LiveProcessResolution   int    `json:"live_process_resolution"`
+	DockerIntegration       bool   `json:"docker_integration"`
 }
 
 // Service is a Service object on Bleemeo API.
 type Service struct {
 	ID              string `json:"id"`
+	AccountConfig   string `json:"account_config"`
 	Label           string `json:"label"`
 	Instance        string `json:"instance"`
 	ListenAddresses string `json:"listen_addresses"`
@@ -93,9 +95,8 @@ type Threshold struct {
 // Monitor groups all the informations required to write metrics to a monitor.
 type Monitor struct {
 	Service
-	URL                string `json:"monitor_url"`
-	AgentID            string `json:"agent"`
-	RefreshRateSeconds int    `json:"monitor_metric_resolution_seconds"`
+	URL     string `json:"monitor_url"`
+	AgentID string `json:"agent"`
 	MonitorHTTPOptions
 }
 

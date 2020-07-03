@@ -71,7 +71,7 @@ func defaultModule() bbConf.Module {
 	}
 }
 
-func genCollectorFromDynamicTarget(uri string, monitor types.Monitor) (*collectorWithLabels, error) {
+func genCollectorFromDynamicTarget(uri string, monitor types.Monitor, conf types.AccountConfig) (*collectorWithLabels, error) {
 	mod := defaultModule()
 
 	url, err := url.Parse(uri)
@@ -122,8 +122,8 @@ func genCollectorFromDynamicTarget(uri string, monitor types.Monitor) (*collecto
 		CreationDate:   creationDate,
 	}
 
-	if monitor.RefreshRateSeconds != 0 {
-		confTarget.RefreshRate = time.Duration(monitor.RefreshRateSeconds) * time.Second
+	if conf.MetricMonitorResolution != 0 {
+		confTarget.RefreshRate = time.Duration(conf.MetricMonitorResolution) * time.Second
 	}
 
 	return &collectorWithLabels{
@@ -218,7 +218,7 @@ func (m *RegisterManager) EnableDynamicProbing() {
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
-func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
+func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor, accountConfigs map[string]types.AccountConfig) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
 	// than to compute the difference between the new and the old configuration.
 	// This is simple because calling UpdateDynamicTargets with the same argument should be idempotent.
@@ -234,7 +234,14 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	// append all dynamic target to the list, when the bleemeo mode is enabled
 	if m.dynamicMode {
 		for _, monitor := range monitors {
-			collector, err := genCollectorFromDynamicTarget(monitor.URL, monitor)
+			// try to retrieve the account config associated with this monitor
+			conf, present := accountConfigs[monitor.AccountConfig]
+			if !present {
+				return fmt.Errorf("missing account configuration '%s' for probe '%s'", monitor.AccountConfig, monitor.URL)
+
+			}
+
+			collector, err := genCollectorFromDynamicTarget(monitor.URL, monitor, conf)
 			if err != nil {
 				return err
 			}

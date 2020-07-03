@@ -129,11 +129,35 @@ func prioritizeMetrics(metrics []types.Metric) {
 	}
 }
 
-func filterMetrics(input []types.Metric, metricWhitelist map[string]bool) []types.Metric {
+// nearly a duplicate of mqtt.filterPoint, but not quite. Alas we cannot easily generalize this as go doesn't have generics (yet).
+func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
 
+	currentAccountConfig := s.option.Cache.CurrentAccountConfig()
+	accountConfigs := s.option.Cache.AccountConfigs()
+	monitors := s.option.Cache.MonitorsByAgentUUID()
+
 	for _, m := range input {
-		if common.AllowMetric(m.Labels(), m.Annotations(), metricWhitelist) {
+		// retrieve the appropriate configuration for the metric
+		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+
+		if m.Annotations().BleemeoAgentID != "" {
+			monitor, present := monitors[bleemeoTypes.AgentID(m.Annotations().BleemeoAgentID)]
+			if !present {
+				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", m.Annotations().BleemeoAgentID)
+				continue
+			}
+
+			accountConfig, present := accountConfigs[monitor.AccountConfig]
+			if !present {
+				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
+				continue
+			}
+
+			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		}
+
+		if common.AllowMetric(m.Labels(), m.Annotations(), whitelist) {
 			result = append(result, m)
 		}
 	}
@@ -161,14 +185,12 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 }
 
 func (s *Synchronizer) syncMetrics(fullSync bool) error {
-	metricWhitelist := s.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
-
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return err
 	}
 
-	filteredMetrics := filterMetrics(localMetrics, metricWhitelist)
+	filteredMetrics := s.filterMetrics(localMetrics)
 	unregisteredMetrics := s.findUnregisteredMetrics(filteredMetrics)
 
 	if s.successiveErrors == 3 {
@@ -237,7 +259,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		return err
 	}
 
-	filteredMetrics = filterMetrics(localMetrics, metricWhitelist)
+	filteredMetrics = s.filterMetrics(localMetrics)
 
 	// If one metric fail to register, it may block other metric that would register correctly.
 	// To reduce this risk, randomize the list, so on next run, the metric that failed to register
