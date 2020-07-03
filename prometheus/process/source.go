@@ -3,18 +3,32 @@ package process
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/facts"
+	"glouton/logger"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/AstromechZA/etcpwdparse"
 	"github.com/ncabatoff/process-exporter/proc"
+	"github.com/prometheus/procfs"
 	"github.com/shirou/gopsutil/process"
 )
+
+// See https://github.com/prometheus/procfs/blob/master/proc_stat.go for details on userHZ.
+const userHZ = 100
+
+//go:linkname getCmdLinePrivateMethod github.com/ncabatoff/process-exporter/proc.(*proccache).getCmdLine
+func getCmdLinePrivateMethod(unsafe.Pointer) ([]string, error)
+
+//go:linkname getStatPrivateMethod github.com/ncabatoff/process-exporter/proc.(*proccache).getStat
+func getStatPrivateMethod(unsafe.Pointer) (procfs.ProcStat, error)
 
 // Processes allow to list process and kept in cache the last value
 // It allow to query list of processes for multiple usage without re-doing the list.
@@ -23,7 +37,7 @@ type Processes struct {
 	DefaultValidity time.Duration
 
 	l          sync.Mutex
-	source     proc.Source
+	source     *proc.FS
 	cache      []procValue
 	exeCache   map[proc.ID]string
 	userCache  map[proc.ID]string
@@ -89,18 +103,11 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 	result := make([]facts.Process, len(procs))
 
 	for i, p := range procs {
-		status := "?"
-
-		switch {
-		case p.Metrics.States.Running > 0:
-			status = "running"
-		case p.Metrics.States.Sleeping > 0:
-			status = "sleeping"
-		case p.Metrics.States.Waiting > 0:
-			status = "disk-sleep"
-		case p.Metrics.States.Zombie > 0:
-			status = "zombie"
+		if p.procErr != nil {
+			return nil, err
 		}
+
+		status := facts.PsStat2Status(p.procStat.State)
 
 		executable, ok := exeCache[p.ID]
 		if !ok {
@@ -114,21 +121,32 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 
 		username, ok := userCache[p.ID]
 		if !ok {
-			username, _ = pwdLookup(p.Static.EffectiveUID)
+			static, err := p.proc.GetStatic()
+			if err == nil {
+				username, _ = pwdLookup(static.EffectiveUID)
+			}
 		}
 
 		newUserCache[p.ID] = username
 
+		startTime := time.Unix(int64(c.source.BootTime), 0).UTC()
+		startTime = startTime.Add(time.Second / userHZ * time.Duration(p.procStat.Starttime))
+
+		cmdline, err := getCmdline(p.proc)
+		if err != nil {
+			logger.V(2).Printf("getCmdline failed: %v", err)
+		}
+
 		result[i] = facts.Process{
 			PID:             p.ID.Pid,
-			PPID:            p.Static.ParentPid,
-			CreateTime:      p.Static.StartTime,
-			CreateTimestamp: p.Static.StartTime.Unix(),
-			CmdLineList:     p.Static.Cmdline,
-			CmdLine:         strings.Join(p.Static.Cmdline, " "),
-			Name:            p.Static.Name,
-			MemoryRSS:       p.Metrics.Memory.ResidentBytes / 1024,
-			CPUTime:         p.Metrics.CPUSystemTime + p.Metrics.CPUUserTime,
+			PPID:            p.procStat.PPID,
+			CreateTime:      startTime,
+			CreateTimestamp: startTime.Unix(),
+			CmdLineList:     cmdline,
+			CmdLine:         strings.Join(cmdline, " "),
+			Name:            p.procStat.Comm,
+			MemoryRSS:       uint64(p.procStat.ResidentMemory()) / 1024,
+			CPUTime:         float64(p.procStat.UTime+p.procStat.STime) / userHZ,
 			Status:          status,
 			Username:        username,
 			Executable:      executable,
@@ -188,15 +206,9 @@ type procValue struct {
 	ID    proc.ID
 	IDErr error
 
-	Static    proc.Static
-	StaticErr error
-
-	Metrics          proc.Metrics
-	MetricsSoftError int
-	MetricsErr       error
-
-	Threads   []proc.Thread
-	ThreadErr error
+	proc     proc.Proc
+	procStat procfs.ProcStat
+	procErr  error
 }
 
 func newProcValue(p proc.Proc) procValue {
@@ -209,15 +221,110 @@ func newProcValue(p proc.Proc) procValue {
 		result.ID.Pid = p.GetPid()
 	}
 
-	result.Static, result.StaticErr = p.GetStatic()
-	result.Metrics, result.MetricsSoftError, result.MetricsErr = p.GetMetrics()
-	result.Threads, result.ThreadErr = p.GetThreads()
+	result.proc, result.procErr = getProc(p)
+
+	if result.procErr == nil {
+		result.procStat, result.procErr = getStat(result.proc)
+	}
 
 	return result
 }
 
+// getProc extract the proc.proc from proc.procIterator
+//
+// We want to do that to get a reference to a specific process to lazily call GetStatic(), GetMetric() or GetThreads().
+func getProc(p proc.Proc) (proc.Proc, error) {
+	value := reflect.ValueOf(p)
+
+	if value.Kind() != reflect.Ptr {
+		return nil, errors.New("process-exporter changed its internal, expected a pointer")
+	}
+
+	value = value.Elem()
+
+	if value.Type().Name() != "procIterator" {
+		return nil, fmt.Errorf("process-exporter changed its internal, expected procIterator, got %v", value.Type().Name())
+	}
+
+	if value.Kind() != reflect.Struct {
+		return nil, errors.New("process-exporter changed its internal, expected a struct")
+	}
+
+	procValue := value.FieldByName("Proc")
+
+	result, ok := procValue.Interface().(proc.Proc)
+
+	if !ok {
+		return nil, errors.New("process-exporter changed its internal, expected a proc.Proc")
+	}
+
+	return result, nil
+}
+
+// getProcCache extract the unsafePointer to proccache object.
+func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
+	value := reflect.ValueOf(p)
+
+	if value.Kind() != reflect.Ptr {
+		return nil, errors.New("process-exporter changed its internal, expected a pointer")
+	}
+
+	value = value.Elem()
+
+	if value.Type().Name() != "proc" {
+		return nil, fmt.Errorf("process-exporter changed its internal, expected proc, got %v", value.Type().Name())
+	}
+
+	if value.Kind() != reflect.Struct {
+		return nil, errors.New("process-exporter changed its internal, expected a struct")
+	}
+
+	value = value.FieldByName("proccache")
+
+	if value.Type().Name() != "proccache" {
+		return nil, fmt.Errorf("process-exporter changed its internal, expected proccache, got %v", value.Type().Name())
+	}
+
+	value = value.Addr()
+
+	ptr := value.Pointer()
+	if ptr == 0 {
+		return nil, errors.New("process-exporter changed its internal, getProcCache return null-pointer")
+	}
+
+	return unsafe.Pointer(ptr), nil
+}
+
+// getStat extract the procfs.ProcStat from proc.proccache
+//
+// ProcStat allow to fill nearly all fields from facts.Process.
+func getStat(p proc.Proc) (procfs.ProcStat, error) {
+	ptr, err := getProcCache(p)
+
+	if err != nil {
+		return procfs.ProcStat{}, err
+	}
+
+	return getStatPrivateMethod(ptr)
+}
+
+// getCmdline extract the command line from proc.proccache.
+func getCmdline(p proc.Proc) ([]string, error) {
+	ptr, err := getProcCache(p)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return getCmdLinePrivateMethod(ptr)
+}
+
 func (p procValue) GetThreads() ([]proc.Thread, error) {
-	return p.Threads, p.ThreadErr
+	if p.procErr != nil {
+		return nil, p.procErr
+	}
+
+	return p.proc.GetThreads()
 }
 
 // GetPid implements Proc.
@@ -232,26 +339,46 @@ func (p procValue) GetProcID() (proc.ID, error) {
 
 // GetStatic implements Proc.
 func (p procValue) GetStatic() (proc.Static, error) {
-	return p.Static, p.StaticErr
+	if p.procErr != nil {
+		return proc.Static{}, p.procErr
+	}
+
+	return p.proc.GetStatic()
 }
 
 // GetCounts implements Proc.
 func (p procValue) GetCounts() (proc.Counts, int, error) {
-	return p.Metrics.Counts, p.MetricsSoftError, p.MetricsErr
+	if p.procErr != nil {
+		return proc.Counts{}, 0, p.procErr
+	}
+
+	return p.proc.GetCounts()
 }
 
 // GetMetrics implements Proc.
 func (p procValue) GetMetrics() (proc.Metrics, int, error) {
-	return p.Metrics, p.MetricsSoftError, p.MetricsErr
+	if p.procErr != nil {
+		return proc.Metrics{}, 0, p.procErr
+	}
+
+	return p.proc.GetMetrics()
 }
 
 // GetStates implements Proc.
 func (p procValue) GetStates() (proc.States, error) {
-	return p.Metrics.States, p.MetricsErr
+	if p.procErr != nil {
+		return proc.States{}, p.procErr
+	}
+
+	return p.proc.GetStates()
 }
 
 func (p procValue) GetWchan() (string, error) {
-	return p.Metrics.Wchan, p.MetricsErr
+	if p.procErr != nil {
+		return "", p.procErr
+	}
+
+	return p.proc.GetWchan()
 }
 
 type iter struct {

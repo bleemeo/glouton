@@ -304,7 +304,7 @@ func decodeDocker(top container.ContainerTopOKBody, containerID string, containe
 		}
 
 		if statIndex != -1 {
-			process.Status = psStat2Status(row[statIndex])
+			process.Status = PsStat2Status(row[statIndex])
 		}
 
 		if ppidIndex != -1 {
@@ -430,7 +430,8 @@ func psTime2Second(psTime string) (int, error) {
 	return 0, fmt.Errorf("unknown pstime format %#v", psTime)
 }
 
-func psStat2Status(psStat string) string {
+// PsStat2Status convert status (value in ps output - or in /proc/pid/stat) to human status.
+func PsStat2Status(psStat string) string {
 	if psStat == "" {
 		return "?"
 	}
@@ -915,7 +916,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 			Name:            name,
 			MemoryRSS:       memoryInfo.RSS / 1024,
 			CPUTime:         cpuTimes.Total(),
-			Status:          psStat2Status(status),
+			Status:          PsStat2Status(status),
 			Username:        userName,
 			Executable:      executable,
 		}

@@ -43,6 +43,7 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.10.0
 	github.com/prometheus/node_exporter v1.0.0
+	github.com/prometheus/procfs v0.1.1
 	github.com/prometheus/prometheus v1.8.2-0.20200213233353-b90be6f32a33
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v2.20.4+incompatible

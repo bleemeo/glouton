@@ -137,7 +137,7 @@ func TestPsStat2Status(t *testing.T) {
 		{"t", "tracing-stop"},
 	}
 	for _, c := range cases {
-		got := psStat2Status(c.in)
+		got := PsStat2Status(c.in)
 		if got != c.want {
 			t.Errorf("psStat2Status(%#v) == %#v, want %#v", c.in, got, c.want)
 		}
