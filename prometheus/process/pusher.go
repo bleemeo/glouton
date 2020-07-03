@@ -42,7 +42,7 @@ func (p *pusher) push() {
 	}
 
 	now := time.Now()
-	permErrs, groups, err := p.exporter.grouper.Update(p.exporter.source.AllProcs())
+	permErrs, groups, err := p.exporter.grouper.Update(p.exporter.Source.AllProcs())
 
 	p.exporter.scrapePartialErrors += permErrs.Partial
 

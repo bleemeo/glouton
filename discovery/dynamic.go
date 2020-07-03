@@ -117,11 +117,11 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 		return "", ""
 	}
 
-	// gopsutil round create time to second.
+	// gopsutil round create time to second. So we do equality at second precision only
 	createTime = createTime.Truncate(time.Second)
 
 	for _, p := range processes {
-		if p.PID == pid && p.CreateTime.Equal(createTime) {
+		if p.PID == pid && p.CreateTime.Truncate(time.Second).Equal(createTime) {
 			if p.ContainerID != "" {
 				container, ok := dd.containerInfo.Container(p.ContainerID)
 				if ok && container.Ignored() {

@@ -51,7 +51,7 @@ type ProcessProvider struct {
 	l sync.Mutex
 
 	dp                    dockerProcess
-	psutil                processLister
+	pslister              ProcessLister
 	containerIDFromCGroup func(int) string
 
 	processes           map[int]Process
@@ -122,11 +122,28 @@ type SwapUsage struct {
 	Free  float64 `json:"free"`
 }
 
+func NewPsUtilLister(hostRootPath string) ProcessLister {
+	ps := psutilLister{}
+
+	if hostRootPath != "" && hostRootPath != "/" {
+		pwdCache := etcpwdparse.NewEtcPasswdCache(true)
+		fileName := filepath.Join(hostRootPath, "etc/passwd")
+
+		if err := pwdCache.LoadFromPath(fileName); err != nil {
+			logger.V(1).Printf("Unable to load %#v, username lookup may fail: %v", fileName, err)
+		} else {
+			ps.PwdCache = pwdCache
+		}
+	}
+
+	return ps
+}
+
 // NewProcess creates a new Process provider
 //
 // Docker provider should be given to allow processes to be associated with a Docker container.
 // useProc should be true if the Agent see all processes (running outside container or with host PID namespace).
-func NewProcess(useProc bool, hostRootPath string, dockerProvider *DockerProvider) *ProcessProvider {
+func NewProcess(pslister ProcessLister, hostRootPath string, dockerProvider *DockerProvider) *ProcessProvider {
 	pp := &ProcessProvider{
 		dp: &dockerProcessImpl{
 			dockerProvider: dockerProvider,
@@ -135,22 +152,7 @@ func NewProcess(useProc bool, hostRootPath string, dockerProvider *DockerProvide
 		pidExists:             process.PidExists,
 	}
 
-	if useProc {
-		ps := psutilLister{}
-
-		if hostRootPath != "" && hostRootPath != "/" {
-			pwdCache := etcpwdparse.NewEtcPasswdCache(true)
-			fileName := filepath.Join(hostRootPath, "etc/passwd")
-
-			if err := pwdCache.LoadFromPath(fileName); err != nil {
-				logger.V(1).Printf("Unable to load %#v, username lookup may fail: %v", fileName, err)
-			} else {
-				ps.PwdCache = pwdCache
-			}
-		}
-
-		pp.psutil = ps
-	}
+	pp.pslister = pslister
 
 	return pp
 }
@@ -464,8 +466,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 	onlyStartedBefore := t0.Add(-20 * time.Millisecond)
 	newProcessesMap := make(map[int]Process)
 
-	if pp.psutil != nil {
-		psProcesses, err := pp.psutil.processes(ctx, 0)
+	if pp.pslister != nil {
+		psProcesses, err := pp.pslister.Processes(ctx, 0)
 		if err != nil {
 			return err
 		}
@@ -483,7 +485,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 		// If we have too few processes listed by gopsutil, it probably means
 		// we don't have access to root PID namespace. In this case do a processes
 		// listing using Docker. We avoid it if possible as it's rather slow.
-		dockerProcesses, err := pp.dp.processes(ctx, 0)
+		dockerProcesses, err := pp.dp.Processes(ctx, 0)
 		if err != nil {
 			return err
 		}
@@ -499,7 +501,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 	}
 
 	// Complet ContainerID/ContainerName
-	if pp.dp != nil && pp.psutil != nil {
+	if pp.dp != nil && pp.pslister != nil {
 		var id2name map[string]string
 
 		containerPSDone := make(map[string]bool)
@@ -798,12 +800,14 @@ func (p *Process) update(other Process) {
 	}
 }
 
-type processLister interface {
-	processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error)
+// ProcessLister return a list of Process. Some fields won't be used and will be filled by ProcessProvider.
+// For example Container or CPUPercent.
+type ProcessLister interface {
+	Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error)
 }
 
 type dockerProcess interface {
-	processLister
+	ProcessLister
 	containerID2Name(ctx context.Context, maxAge time.Duration) (containerID2Name map[string]string, err error)
 	processesContainer(ctx context.Context, containerID string, containerName string) (processes []Process, err error)
 	findContainerOfProcess(ctx context.Context, newProcessesMap map[int]Process, p Process, containerDone map[string]bool) []Process
@@ -813,7 +817,7 @@ type psutilLister struct {
 	PwdCache *etcpwdparse.EtcPasswdCache
 }
 
-func (z psutilLister) processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
+func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	psutilProcesses, err := process.Processes()
 	if err != nil {
 		return nil, err
@@ -990,7 +994,7 @@ func (d *dockerProcessImpl) processesContainer(ctx context.Context, containerID 
 	return processes, nil
 }
 
-func (d *dockerProcessImpl) processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
+func (d *dockerProcessImpl) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	if d.dockerProvider == nil {
 		return
 	}

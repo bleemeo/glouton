@@ -36,12 +36,11 @@ type processerQuerier interface {
 // It based on github.com/ncabatoff/process-exporter.
 type Exporter struct {
 	ProcessQuerier processerQuerier
-	ProcPath       string
+	Source         proc.Source
 
 	l sync.Mutex
 
 	grouper     *proc.Grouper
-	source      proc.Source
 	groupActive map[string]bool
 
 	scrapePartialErrors  int
@@ -192,19 +191,6 @@ func (e *Exporter) init() {
 		)
 	}
 
-	procPath := e.ProcPath
-	if procPath == "" {
-		procPath = "/proc"
-	}
-
-	fs, err := proc.NewFS(procPath, false)
-	if err != nil {
-		logger.V(1).Printf("Unable to read processes information from %s: %v", procPath, err)
-		return
-	}
-
-	fs.GatherSMaps = true
-	e.source = fs
 	e.grouper = proc.NewGrouper(
 		matchNamer{querier: e.ProcessQuerier},
 		true,
@@ -213,7 +199,7 @@ func (e *Exporter) init() {
 		false,
 	)
 
-	colErrs, _, err := e.grouper.Update(e.source.AllProcs())
+	colErrs, _, err := e.grouper.Update(e.Source.AllProcs())
 	if err != nil {
 		logger.V(1).Printf("Unable to read processes information: %v", err)
 		return
@@ -252,7 +238,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.l.Lock()
 	defer e.l.Unlock()
 
-	permErrs, groups, err := e.grouper.Update(e.source.AllProcs())
+	permErrs, groups, err := e.grouper.Update(e.Source.AllProcs())
 
 	e.scrapePartialErrors += permErrs.Partial
 

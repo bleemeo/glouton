@@ -190,7 +190,7 @@ type mockDockerProcess struct {
 	containerID2NameResult map[string]string
 }
 
-func (m mockDockerProcess) processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
+func (m mockDockerProcess) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	return m.processesResult, nil
 }
 func (m mockDockerProcess) containerID2Name(ctx context.Context, maxAge time.Duration) (containerID2Name map[string]string, err error) {
@@ -277,7 +277,7 @@ func TestUpdateProcesses(t *testing.T) {
 				"golang-container-id": "golang-name",
 			},
 		},
-		psutil:    psutil,
+		pslister:  psutil,
 		pidExists: psutil.pidExists,
 		containerIDFromCGroup: func(pid int) string {
 			switch pid {
@@ -408,7 +408,7 @@ func TestDeltaCPUPercent(t *testing.T) {
 				CPUTime:    75.6,
 			},
 		},
-		psutil: mockDockerProcess{
+		pslister: mockDockerProcess{
 			processesResult: []Process{
 				{
 					PID:        1,

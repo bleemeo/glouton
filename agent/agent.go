@@ -504,13 +504,26 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.dockerFact = facts.NewDocker(a.deletedContainersCallback, kubernetesProvider)
 
+	var (
+		psLister facts.ProcessLister
+	)
+
 	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
+	} else {
+		if a.config.Bool("agent.process_exporter.enabled") {
+			psLister = &process.Processes{
+				HostRootPath:    a.hostRootPath,
+				DefaultValidity: 9 * time.Second,
+			}
+		} else {
+			psLister = facts.NewPsUtilLister(a.hostRootPath)
+		}
 	}
 
 	psFact := facts.NewProcess(
-		useProc,
+		psLister,
 		a.hostRootPath,
 		a.dockerFact,
 	)
@@ -595,9 +608,9 @@ func (a *agent) run() { //nolint:gocyclo
 
 	promExporter := a.gathererRegistry.Exporter()
 
-	if a.config.Bool("agent.process_exporter.enabled") {
+	if source, ok := psLister.(*process.Processes); ok && a.config.Bool("agent.process_exporter.enabled") {
 		processExporter := &process.Exporter{
-			ProcPath:       filepath.Join(a.hostRootPath, "proc"),
+			Source:         source,
 			ProcessQuerier: dynamicDiscovery,
 		}
 		processGathere := prometheus.NewRegistry()
