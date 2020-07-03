@@ -26,7 +26,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
 
-// New initialise mysql.Input
+// New initialise mysql.Input.
 func New(server string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mysql"]
 	if ok {

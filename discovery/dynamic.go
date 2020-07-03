@@ -51,9 +51,11 @@ type DynamicDiscovery struct {
 type container interface {
 	Env() []string
 	PrimaryAddress() string
-	ListenAddresses() []facts.ListenAddress
+	ListenAddressesEx() ([]facts.ListenAddress, facts.ConfidenceLevel)
 	Labels() map[string]string
 	Ignored() bool
+	IgnoredPorts() map[int]bool
+	StoppedAndReplaced() bool
 }
 
 type containerInfoProvider interface {
@@ -65,7 +67,7 @@ type fileReader interface {
 }
 
 // NewDynamic create a new dynamic service discovery which use information from
-// processess and netstat to discovery services
+// processess and netstat to discovery services.
 func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	return &DynamicDiscovery{
 		ps:            ps,
@@ -91,7 +93,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 	return dd.services, nil
 }
 
-// LastUpdate return when the last update occurred
+// LastUpdate return when the last update occurred.
 func (dd *DynamicDiscovery) LastUpdate() time.Time {
 	dd.l.Lock()
 	defer dd.l.Unlock()
@@ -99,7 +101,7 @@ func (dd *DynamicDiscovery) LastUpdate() time.Time {
 	return dd.lastDiscoveryUpdate
 }
 
-// ProcessServiceInfo return the service & container a process belong based on its command line + pid & start time
+// ProcessServiceInfo return the service & container a process belong based on its command line + pid & start time.
 func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, createTime time.Time) (serviceName ServiceName, containerName string) {
 	serviceType, ok := serviceByCommand(cmdLine)
 	if !ok {
@@ -320,7 +322,14 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if service.ContainerID == "" {
 			service.ListenAddresses = netstat[pid]
 		} else {
-			service.ListenAddresses = service.container.ListenAddresses()
+			var confidence facts.ConfidenceLevel
+
+			service.ListenAddresses, confidence = service.container.ListenAddressesEx()
+			service.IgnoredPorts = service.container.IgnoredPorts()
+
+			if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && confidence == facts.ConfidenceLow) {
+				service.ListenAddresses = netstat[pid]
+			}
 		}
 
 		if len(service.ListenAddresses) > 0 {
@@ -328,6 +337,20 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		}
 
 		di := servicesDiscoveryInfo[service.ServiceType]
+
+		for port, ignore := range di.DefaultIgnoredPorts {
+			if !ignore {
+				continue
+			}
+
+			if _, ok := service.IgnoredPorts[port]; !ok {
+				if service.IgnoredPorts == nil {
+					service.IgnoredPorts = make(map[int]bool)
+				}
+
+				service.IgnoredPorts[port] = ignore
+			}
+		}
 
 		dd.updateListenAddresses(&service, di)
 

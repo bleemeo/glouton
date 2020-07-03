@@ -27,14 +27,14 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/inputs/haproxy" // we use it
 )
 
-// We use a dedicated function to be able to recover from a panic
+// We use a dedicated function to be able to recover from a panic.
 func reflectSet(url string, input telegraf.Input) {
 	inputValue := reflect.Indirect(reflect.ValueOf(input))
 	serverValue := inputValue.FieldByName("Servers")
 	serverValue.Set(reflect.ValueOf(append(make([]string, 0), url)))
 }
 
-// New initialise haproxy.Input
+// New initialise haproxy.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["haproxy"]
 	if ok {
@@ -76,7 +76,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		drop = true
 	}
 
-	newContext.Tags["item"] = newContext.Tags["proxy"]
+	newContext.Annotations.BleemeoItem = newContext.Tags["proxy"]
 
 	return
 }

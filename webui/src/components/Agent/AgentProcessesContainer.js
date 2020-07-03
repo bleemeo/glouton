@@ -5,7 +5,7 @@ import Loading from '../UI/Loading'
 import Panel from '../UI/Panel'
 import QueryError from '../UI/QueryError'
 import { useFetch } from '../utils/hooks'
-import { isNullOrUndefined } from '../utils'
+import { isNullOrUndefined, LabelName } from '../utils'
 import FetchSuspense from '../UI/FetchSuspense'
 import { PROCESSES } from '../utils/gqlRequests'
 
@@ -69,22 +69,22 @@ const getSystemInfo = points => {
   let usersLogged = 0
   systemMetrics.forEach(m => {
     if (m.points) {
-      if (memRegexp.test(m.labels.find(l => l.key === '__name__').value)) {
-        memTypes[m.labels.find(l => l.key === '__name__').value] = m.points[m.points.length - 1].value
+      if (memRegexp.test(m.labels.find(l => l.key === LabelName).value)) {
+        memTypes[m.labels.find(l => l.key === LabelName).value] = m.points[m.points.length - 1].value
       }
-      if (loadRegexp.test(m.labels.find(l => l.key === '__name__').value)) {
-        loadTypes[m.labels.find(l => l.key === '__name__').value] = m.points[m.points.length - 1].value
+      if (loadRegexp.test(m.labels.find(l => l.key === LabelName).value)) {
+        loadTypes[m.labels.find(l => l.key === LabelName).value] = m.points[m.points.length - 1].value
       }
-      if (swapRegexp.test(m.labels.find(l => l.key === '__name__').value)) {
-        swapTypes[m.labels.find(l => l.key === '__name__').value] = m.points[m.points.length - 1].value
+      if (swapRegexp.test(m.labels.find(l => l.key === LabelName).value)) {
+        swapTypes[m.labels.find(l => l.key === LabelName).value] = m.points[m.points.length - 1].value
       }
-      if (cpuRegexp.test(m.labels.find(l => l.key === '__name__').value)) {
-        cpuTypes[m.labels.find(l => l.key === '__name__').value] = m.points[m.points.length - 1].value
+      if (cpuRegexp.test(m.labels.find(l => l.key === LabelName).value)) {
+        cpuTypes[m.labels.find(l => l.key === LabelName).value] = m.points[m.points.length - 1].value
       }
-      if (m.labels.find(l => l.key === '__name__').value === 'uptime') {
+      if (m.labels.find(l => l.key === LabelName).value === 'uptime') {
         uptime = m.points[m.points.length - 1].value
       }
-      if (m.labels.find(l => l.key === '__name__').value === 'users_logged') {
+      if (m.labels.find(l => l.key === LabelName).value === 'users_logged') {
         usersLogged = m.points[m.points.length - 1].value
       }
     }

@@ -29,7 +29,7 @@ import (
 	"time"
 )
 
-// Logger allow to print message
+// Logger allow to print message.
 type Logger bool
 
 // V return a Level which will only log (Printf do something) if logger is configured to log this level.
@@ -60,17 +60,21 @@ func V(level int) Logger {
 	return Logger(false)
 }
 
-// Printf behave like fmt.Printf
+// Printf behave like fmt.Printf.
 func (l Logger) Printf(fmtArg string, a ...interface{}) {
 	if l {
 		printf(fmtArg, a...)
+	} else {
+		fmt.Fprintf(logBuffer, fmtArg+"\n", a...)
 	}
 }
 
-// Println behave like fmt.Println
+// Println behave like fmt.Println.
 func (l Logger) Println(v ...interface{}) {
 	if l {
 		println(v...)
+	} else {
+		fmt.Fprintln(logBuffer, v...)
 	}
 }
 
@@ -82,7 +86,7 @@ func printf(fmtArg string, a ...interface{}) {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
-	_, _ = fmt.Fprintf(cfg.writer, fmtArg+"\n", a...)
+	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
 }
 
 func println(v ...interface{}) {
@@ -93,10 +97,10 @@ func println(v ...interface{}) {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
-	_, _ = fmt.Fprintln(cfg.writer, v...)
+	_, _ = fmt.Fprintln(cfg.teeWriter, v...)
 }
 
-// Printf behave like fmt.Printf
+// Printf behave like fmt.Printf.
 func Printf(fmt string, a ...interface{}) {
 	printf(fmt, a...)
 }
@@ -107,14 +111,34 @@ type config struct {
 	pkgLevels map[string]int
 	useSyslog bool
 
-	writer io.Writer
+	writer    io.Writer
+	teeWriter io.Writer
 }
 
 //nolint:gochecknoglobals
-var cfg = config{writer: os.Stderr}
+var (
+	logBuffer = &buffer{}
+	cfg       = config{
+		writer:    os.Stderr,
+		teeWriter: io.MultiWriter(logBuffer, os.Stderr),
+	}
+)
+
+// Buffer return content of the log buffer.
+func Buffer() []byte {
+	return logBuffer.Content()
+}
+
+// SetBufferCapacity define the size of the buffer
+// The buffer had two part, the head (first line ever logger, never dropped) and
+// the tail (oldest line dropped when tail is full).
+// Changing capacity will always drop the tail.
+func SetBufferCapacity(headSize int, tailSize int) {
+	logBuffer.SetCapacity(headSize, tailSize)
+}
 
 // UseSyslog enable or disable logging to syslog. If syslog is not used, message
-// are sent to StdErr
+// are sent to StdErr.
 func UseSyslog(useSyslog bool) error {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
@@ -140,12 +164,14 @@ func UseSyslog(useSyslog bool) error {
 		cfg.writer = os.Stderr
 	}
 
+	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
+
 	log.SetOutput(cfg.writer)
 
 	return err
 }
 
-// SetLevel configure the log level
+// SetLevel configure the log level.
 func SetLevel(level int) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
@@ -154,7 +180,7 @@ func SetLevel(level int) {
 }
 
 // SetPkgLevels configure the log level per package.
-// The format is "package=level,package2=level2"
+// The format is "package=level,package2=level2".
 func SetPkgLevels(levels string) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()

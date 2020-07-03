@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/zookeeper"
 )
 
-// New initialise the Input
+// New initialise the Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["zookeeper"]
 	if ok {

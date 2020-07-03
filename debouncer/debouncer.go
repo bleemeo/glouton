@@ -44,7 +44,7 @@ func New(target func(context.Context), delay time.Duration) *Debouncer {
 	}
 }
 
-// Run perform the call to target() when trigger is called
+// Run perform the call to target() when trigger is called.
 func (dd *Debouncer) Run(ctx context.Context) error {
 	dd.run(ctx, false)
 

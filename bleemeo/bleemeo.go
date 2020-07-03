@@ -17,7 +17,11 @@
 package bleemeo
 
 import (
+	"archive/zip"
 	"context"
+	"fmt"
+	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -26,27 +30,32 @@ import (
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	gloutonTypes "glouton/types"
 )
 
-// Connector manager the connection between the Agent and Bleemeo
+// Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
 	option types.GlobalOption
 
-	cache *cache.Cache
-	sync  *synchronizer.Synchronizer
-	mqtt  *mqtt.Client
+	cache       *cache.Cache
+	sync        *synchronizer.Synchronizer
+	mqtt        *mqtt.Client
+	mqttRestart chan interface{}
 
 	l sync.Mutex
 	// initDone      bool
-	disabledUntil time.Time
-	disableReason types.DisableReason
+	lastKnownReport time.Time
+	lastMQTTRestart time.Time
+	disabledUntil   time.Time
+	disableReason   types.DisableReason
 }
 
-// New create a new Connector
+// New create a new Connector.
 func New(option types.GlobalOption) *Connector {
 	c := &Connector{
-		option: option,
-		cache:  cache.Load(option.State),
+		option:      option,
+		cache:       cache.Load(option.State),
+		mqttRestart: make(chan interface{}, 1),
 	}
 	c.sync = synchronizer.New(synchronizer.Option{
 		GlobalOption:         c.option,
@@ -58,12 +67,12 @@ func New(option types.GlobalOption) *Connector {
 	return c
 }
 
-// UpdateUnitsAndThresholds update metrics units & threshold (from cache)
+// UpdateUnitsAndThresholds update metrics units & threshold (from cache).
 func (c *Connector) UpdateUnitsAndThresholds(firstUpdate bool) {
 	c.sync.UpdateUnitsAndThresholds(firstUpdate)
 }
 
-func (c *Connector) initMQTT() error {
+func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -74,20 +83,111 @@ func (c *Connector) initMQTT() error {
 		return err
 	}
 
-	c.mqtt = mqtt.New(mqtt.Option{
-		GlobalOption:         c.option,
-		Cache:                c.cache,
-		DisableCallback:      c.disableCallback,
-		AgentID:              c.AgentID(),
-		AgentPassword:        password,
-		UpdateConfigCallback: c.sync.NotifyConfigUpdate,
-		UpdateMetrics:        c.sync.UpdateMetrics,
-	})
+	c.mqtt = mqtt.New(
+		mqtt.Option{
+			GlobalOption:         c.option,
+			Cache:                c.cache,
+			DisableCallback:      c.disableCallback,
+			AgentID:              c.AgentID(),
+			AgentPassword:        password,
+			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
+			UpdateMetrics:        c.sync.UpdateMetrics,
+			InitialPoints:        previousPoint,
+		},
+		first,
+	)
 
 	return nil
 }
+func (c *Connector) mqttRestarter(ctx context.Context) error {
+	var (
+		wg             sync.WaitGroup
+		mqttErr        error
+		l              sync.Mutex
+		previousPoints []gloutonTypes.MetricPoint
+		alreadyInit    bool
+	)
 
-// Run run the Connector
+	subCtx, cancel := context.WithCancel(ctx)
+
+	c.l.Lock()
+	mqttRestart := c.mqttRestart
+	c.l.Unlock()
+
+	if mqttRestart == nil {
+		return nil
+	}
+
+	select {
+	case mqttRestart <- nil:
+	default:
+	}
+
+	for range mqttRestart {
+		cancel()
+
+		subCtx, cancel = context.WithCancel(ctx)
+
+		c.l.Lock()
+
+		if c.mqtt != nil {
+			// Try to retrieve pending points
+			resultChan := make(chan []gloutonTypes.MetricPoint, 1)
+
+			go func() {
+				resultChan <- c.mqtt.PopPendingPoints()
+			}()
+
+			select {
+			case previousPoints = <-resultChan:
+			case <-time.After(10 * time.Second):
+			}
+		}
+
+		c.mqtt = nil
+
+		c.l.Unlock()
+
+		err := c.initMQTT(previousPoints, !alreadyInit)
+		previousPoints = nil
+		alreadyInit = true
+
+		if err != nil {
+			l.Lock()
+
+			if mqttErr == nil {
+				mqttErr = err
+			}
+
+			l.Unlock()
+
+			break
+		}
+
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			err := c.mqtt.Run(subCtx)
+
+			l.Lock()
+
+			if mqttErr == nil {
+				mqttErr = err
+			}
+
+			l.Unlock()
+		}()
+	}
+
+	cancel()
+	wg.Wait()
+
+	return mqttErr
+}
+
+// Run run the Connector.
 func (c *Connector) Run(ctx context.Context) error {
 	defer c.cache.Save()
 
@@ -126,26 +226,23 @@ func (c *Connector) Run(ctx context.Context) error {
 			}
 		}
 
+		c.l.Lock()
+		close(c.mqttRestart)
+		c.mqttRestart = nil
+		c.l.Unlock()
+
 		logger.V(2).Printf("Bleemeo connector stopping")
 	}()
 
 	for subCtx.Err() == nil {
 		if c.AgentID() != "" {
-			if err := c.initMQTT(); err != nil {
-				cancel()
-
-				mqttErr = err
-
-				break
-			}
-
 			wg.Add(1)
 
 			go func() {
 				defer wg.Done()
 				defer cancel()
 
-				mqttErr = c.mqtt.Run(subCtx)
+				mqttErr = c.mqttRestarter(subCtx)
 			}()
 
 			break
@@ -167,12 +264,93 @@ func (c *Connector) Run(ctx context.Context) error {
 	return mqttErr
 }
 
-// UpdateContainers request to update a containers
+// UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
 	c.sync.UpdateContainers()
 }
 
-// Tags returns the Tags set on Bleemeo Cloud platform
+// DiagnosticPage return useful information to troubleshoot issue.
+func (c *Connector) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	registrationKey := []rune(c.option.Config.String("bleemeo.registration_key"))
+	for i := range registrationKey {
+		if i >= 6 && i < len(registrationKey)-4 {
+			registrationKey[i] = '*'
+		}
+	}
+
+	fmt.Fprintf(
+		builder,
+		"Bleemeo account ID is %#v and registration key is %#v\n",
+		c.AccountID(), string(registrationKey),
+	)
+
+	if c.AgentID() == "" {
+		fmt.Fprintln(builder, "Glouton is not registered with Bleemeo")
+	} else {
+		fmt.Fprintf(builder, "Glouton is registered with Bleemeo with ID %v\n", c.AgentID())
+	}
+
+	lastReport := c.LastReport().Format(time.RFC3339)
+
+	if c.Connected() {
+		fmt.Fprintf(builder, "Glouton is currently connected. Last report to Bleemeo at %s\n", lastReport)
+	} else {
+		fmt.Fprintf(builder, "Glouton is currently NOT connected. Last report to Bleemeo at %s\n", lastReport)
+	}
+
+	c.l.Lock()
+	if time.Now().Before(c.disabledUntil) {
+		fmt.Fprintf(
+			builder,
+			"Glouton connection to Bleemeo is disabled until %s (%v remain) due to %v\n",
+			c.disabledUntil.Format(time.RFC3339),
+			time.Until(c.disabledUntil).Truncate(time.Second),
+			c.disableReason,
+		)
+	}
+
+	mqtt := c.mqtt
+	c.l.Unlock()
+
+	syncPage := make(chan string)
+	mqttPage := make(chan string)
+
+	go func() {
+		syncPage <- c.sync.DiagnosticPage()
+	}()
+
+	go func() {
+		if mqtt == nil {
+			mqttPage <- "MQTT connector is not (yet) initialized\n"
+		} else {
+			mqttPage <- c.mqtt.DiagnosticPage()
+		}
+	}()
+
+	builder.WriteString(<-syncPage)
+	builder.WriteString(<-mqttPage)
+
+	return builder.String()
+}
+
+// DiagnosticZip add to a zipfile useful diagnostic information.
+func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
+	c.l.Lock()
+	mqtt := c.mqtt
+	c.l.Unlock()
+
+	if mqtt != nil {
+		if err := mqtt.DiagnosticZip(zipFile); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Tags returns the Tags set on Bleemeo Cloud platform.
 func (c *Connector) Tags() []string {
 	agent := c.cache.Agent()
 	tags := make([]string, len(agent.Tags))
@@ -185,7 +363,7 @@ func (c *Connector) Tags() []string {
 }
 
 // AccountID returns the Account UUID of Bleemeo
-// It return the empty string if the Account UUID is not available
+// It return the empty string if the Account UUID is not available.
 func (c *Connector) AccountID() string {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -199,7 +377,7 @@ func (c *Connector) AccountID() string {
 }
 
 // AgentID returns the Agent UUID of Bleemeo
-// It return the empty string if the Account UUID is not available
+// It return the empty string if the Account UUID is not available.
 func (c *Connector) AgentID() string {
 	var agentID string
 
@@ -211,7 +389,7 @@ func (c *Connector) AgentID() string {
 	return agentID
 }
 
-// RegistrationAt returns the date of registration with Bleemeo API
+// RegistrationAt returns the date of registration with Bleemeo API.
 func (c *Connector) RegistrationAt() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -221,7 +399,7 @@ func (c *Connector) RegistrationAt() time.Time {
 	return agent.CreatedAt
 }
 
-// Connected returns the date of registration with Bleemeo API
+// Connected returns the date of registration with Bleemeo API.
 func (c *Connector) Connected() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -233,19 +411,22 @@ func (c *Connector) Connected() bool {
 	return c.mqtt.Connected()
 }
 
-// LastReport returns the date of last report with Bleemeo API over MQTT
+// LastReport returns the date of last report with Bleemeo API over MQTT.
 func (c *Connector) LastReport() time.Time {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if c.mqtt == nil {
-		return time.Time{}
+	if c.mqtt != nil {
+		tmp := c.mqtt.LastReport()
+		if tmp.After(c.lastKnownReport) {
+			c.lastKnownReport = tmp
+		}
 	}
 
-	return c.mqtt.LastReport()
+	return c.lastKnownReport
 }
 
-// HealthCheck perform some health check and logger any issue found
+// HealthCheck perform some health check and logger any issue found.
 func (c *Connector) HealthCheck() bool {
 	ok := true
 
@@ -254,6 +435,8 @@ func (c *Connector) HealthCheck() bool {
 
 		ok = false
 	}
+
+	lastReport := c.LastReport()
 
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -268,6 +451,30 @@ func (c *Connector) HealthCheck() bool {
 
 	if c.mqtt != nil {
 		ok = c.mqtt.HealthCheck() && ok
+
+		if !lastReport.IsZero() && time.Since(lastReport) > time.Hour && (c.lastMQTTRestart.IsZero() || time.Since(c.lastMQTTRestart) > 4*time.Hour) {
+			c.lastMQTTRestart = time.Now()
+
+			logger.Printf("MQTT connection fail to re-establish since %s. This may be a long network issue or a Glouton bug", lastReport.Format(time.RFC3339))
+
+			if time.Since(lastReport) > 36*time.Hour {
+				logger.Printf("Restarting MQTT is not enough. Glouton seems unhealthy, killing mysel")
+
+				// We don't know how big the buffer needs to be to collect
+				// all the goroutines. Use 2MB buffer which hopefully is enough
+				buffer := make([]byte, 1<<21)
+
+				runtime.Stack(buffer, true)
+				logger.Printf("%s", string(buffer))
+				panic("Glouton seems unhealthy, killing myself")
+			}
+
+			logger.Printf("Trying to restart the MQTT connection from scratch")
+
+			if c.mqttRestart != nil {
+				c.mqttRestart <- nil
+			}
+		}
 	}
 
 	return ok
@@ -293,15 +500,25 @@ func (c *Connector) uppdateConfig() {
 }
 
 func (c *Connector) disableCallback(reason types.DisableReason, until time.Time) {
+	c.l.Lock()
+
+	if c.disabledUntil.After(until) {
+		return
+	}
+
+	c.disabledUntil = until
+	c.disableReason = reason
+
+	mqtt := c.mqtt
+
+	c.l.Unlock()
+
 	delay := time.Until(until)
 
 	logger.Printf("Disabling Bleemeo connector for %v due to %v", delay.Truncate(time.Second), reason)
 	c.sync.Disable(until, reason)
-	c.mqtt.Disable(until, reason)
 
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.disabledUntil = until
-	c.disableReason = reason
+	if mqtt != nil {
+		mqtt.Disable(until, reason)
+	}
 }

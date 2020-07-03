@@ -33,7 +33,7 @@ type processerQuerier interface {
 }
 
 // Exporter is a Prometheus exporter to export processes metrics.
-// It based on github.com/ncabatoff/process-exporter
+// It based on github.com/ncabatoff/process-exporter.
 type Exporter struct {
 	ProcessQuerier processerQuerier
 	ProcPath       string
@@ -67,7 +67,7 @@ type Exporter struct {
 	threadWchanDesc          *prometheus.Desc
 }
 
-// Input return a telegraf.Input that send metric using Telegraf Accumulator
+// Input return a telegraf.Input that send metric using Telegraf Accumulator.
 func (e *Exporter) Input() telegraf.Input {
 	return &input{
 		exporter: e,
@@ -222,7 +222,7 @@ func (e *Exporter) init() {
 	e.scrapeProcReadErrors += colErrs.Read
 }
 
-// Describe implment Describe of a Prometheus collector
+// Describe implment Describe of a Prometheus collector.
 func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	e.init()
 
@@ -244,7 +244,7 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- e.scrapePartialErrorsDesc
 }
 
-// Collect implment Collect of a Prometheus collector
+// Collect implment Collect of a Prometheus collector.
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	e.init()
 

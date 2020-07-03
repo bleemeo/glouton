@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/types"
 	"net"
 	"strconv"
 	"time"
@@ -28,28 +29,28 @@ import (
 
 const tcpPortocol = "tcp"
 
-// Discoverer allow to discover services. See DynamicDiscovery and Discovery
+// Discoverer allow to discover services. See DynamicDiscovery and Discovery.
 type Discoverer interface {
 	Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error)
 	LastUpdate() time.Time
 }
 
-// PersistentDiscoverer also allow to remove a non-running service
+// PersistentDiscoverer also allow to remove a non-running service.
 type PersistentDiscoverer interface {
 	Discoverer
 	RemoveIfNonRunning(ctx context.Context, services []Service)
 }
 
-// NameContainer contains the service and container names
+// NameContainer contains the service and container names.
 type NameContainer struct {
 	Name          string
 	ContainerName string
 }
 
-// ServiceName is the name of a supported service
+// ServiceName is the name of a supported service.
 type ServiceName string
 
-// List of known service names
+// List of known service names.
 const (
 	ApacheService        ServiceName = "apache"
 	AsteriskService      ServiceName = "asterisk"
@@ -88,7 +89,7 @@ const (
 	CustomService ServiceName = "__custom__"
 )
 
-// Service is the information found about a given service
+// Service is the information found about a given service.
 type Service struct {
 	Name            string
 	ServiceType     ServiceName
@@ -101,10 +102,10 @@ type Service struct {
 	// ExtraAttributes contains additional service-dependant attribute. It may be password for MySQL, URL for HAProxy, ...
 	// Both configuration and dynamic discovery may set value here.
 	ExtraAttributes map[string]string
+	IgnoredPorts    map[int]bool
 	Active          bool
-
-	CheckIgnored   bool
-	MetricsIgnored bool
+	CheckIgnored    bool
+	MetricsIgnored  bool
 
 	HasNetstatInfo bool
 	container      container
@@ -118,7 +119,7 @@ func (s Service) String() string {
 	return s.Name
 }
 
-// AddressForPort return the IP address for given port & network (tcp, udp)
+// AddressForPort return the IP address for given port & network (tcp, udp).
 func (s Service) AddressForPort(port int, network string, force bool) string {
 	if s.ExtraAttributes["address"] != "" {
 		return s.ExtraAttributes["address"]
@@ -155,7 +156,7 @@ func (s Service) AddressForPort(port int, network string, force bool) string {
 	return ""
 }
 
-// AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port)
+// AddressPort return the IP address &port for the "main" service (e.g. for RabbitMQ the AMQP port, not the management port).
 func (s Service) AddressPort() (string, int) {
 	di := servicesDiscoveryInfo[s.ServiceType]
 	port := di.ServicePort
@@ -178,6 +179,33 @@ func (s Service) AddressPort() (string, int) {
 	return s.AddressForPort(port, di.ServiceProtocol, force), port
 }
 
+// LabelsOfStatus returns the labels for the status metrics of this service.
+func (s Service) LabelsOfStatus() map[string]string {
+	labels := map[string]string{
+		types.LabelName: fmt.Sprintf("%s_status", s.Name),
+	}
+
+	if s.ContainerName != "" {
+		labels[types.LabelContainerName] = s.ContainerName
+	}
+
+	return labels
+}
+
+// AnnotationsOfStatus returns the annotations for the status metrics of this service.
+func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
+	annotations := types.MetricAnnotations{
+		ServiceName: s.Name,
+	}
+
+	if s.ContainerName != "" {
+		annotations.BleemeoItem = s.ContainerName
+		annotations.ContainerID = s.ContainerID
+	}
+
+	return annotations
+}
+
 // nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
@@ -191,6 +219,9 @@ var (
 			ServiceProtocol:     "tcp",
 			IgnoreHighPort:      true,
 			ExtraAttributeNames: []string{"address", "port", "jmx_port", "jmx_username", "jmx_password", "jmx_metrics"},
+			DefaultIgnoredPorts: map[int]bool{
+				5701: true,
+			},
 		},
 		BindService: {
 			ServicePort:         53,
@@ -343,4 +374,5 @@ type discoveryInfo struct {
 	IgnoreHighPort              bool
 	DisablePersistentConnection bool
 	ExtraAttributeNames         []string
+	DefaultIgnoredPorts         map[int]bool
 }

@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react'
 import VisibilitySensor from 'react-visibility-sensor'
 import WidgetDashboardItem from '../UI/WidgetDashboardItem'
-import { chartTypes, UNIT_PERCENTAGE, UNIT_BYTE, UNIT_NUMBER, computeBackwardForward } from '../utils'
+import { chartTypes, UNIT_PERCENTAGE, UNIT_BYTE, UNIT_NUMBER, computeBackwardForward, LabelName } from '../utils'
 import { formatDateTime } from '../utils/formater'
 import EditPeriodModal, { lastQuickRanges } from './EditPeriodModal'
 import MetricGaugeItem from '../Metric/MetricGaugeItem'
@@ -10,10 +10,10 @@ import { useWindowWidth } from '../utils/hooks'
 import { getStorageItem, setStorageItem } from '../utils/storage'
 
 const gaugesBar = [
-  { title: 'CPU', name: 'cpu_used', unit: UNIT_PERCENTAGE },
-  { title: 'Memory', name: 'mem_used_perc', unit: UNIT_PERCENTAGE },
-  { title: 'IO', name: 'io_utilization', unit: UNIT_PERCENTAGE },
-  { title: '/', name: 'disk_used_perc', item: '/', unit: UNIT_PERCENTAGE }
+  { title: 'CPU', metrics: [{ [LabelName]: 'cpu_used' }], unit: UNIT_PERCENTAGE },
+  { title: 'Memory', metrics: [{ [LabelName]: 'mem_used_perc' }], unit: UNIT_PERCENTAGE },
+  { title: 'IO', metrics: [{ [LabelName]: 'io_utilization' }], unit: UNIT_PERCENTAGE },
+  { title: '/', metrics: [{ [LabelName]: 'disk_used_perc', 'mountpoint': '/' }], unit: UNIT_PERCENTAGE }
 ]
 
 const widgets = [
@@ -23,26 +23,26 @@ const widgets = [
     title: 'Disk IO Utilization',
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    namesItems: [{ name: 'io_utilization' }]
+    metrics: [{ [LabelName]: 'io_utilization' }]
   },
-  { title: 'Disk Read Bytes', type: chartTypes[2], unit: UNIT_BYTE, namesItems: [{ name: 'io_read_bytes' }] },
-  { title: 'Disk Write Bytes', type: chartTypes[2], unit: UNIT_BYTE, namesItems: [{ name: 'io_write_bytes' }] },
-  { title: 'Disk Read Number', type: chartTypes[2], unit: UNIT_NUMBER, namesItems: [{ name: 'io_reads' }] },
-  { title: 'Disk Write Number', type: chartTypes[2], unit: UNIT_NUMBER, namesItems: [{ name: 'io_writes' }] },
+  { title: 'Disk Read Bytes', type: chartTypes[2], unit: UNIT_BYTE, metrics: [{ [LabelName]: 'io_read_bytes' }] },
+  { title: 'Disk Write Bytes', type: chartTypes[2], unit: UNIT_BYTE, metrics: [{ [LabelName]: 'io_write_bytes' }] },
+  { title: 'Disk Read Number', type: chartTypes[2], unit: UNIT_NUMBER, metrics: [{ [LabelName]: 'io_reads' }] },
+  { title: 'Disk Write Number', type: chartTypes[2], unit: UNIT_NUMBER, metrics: [{ [LabelName]: 'io_writes' }] },
   {
     title: 'Network Packets',
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    namesItems: [{ name: 'net_packets_recv' }, { name: 'net_packets_sent' }]
+    metrics: [{ [LabelName]: 'net_packets_recv' }, { [LabelName]: 'net_packets_sent' }]
   },
   {
     title: 'Network Errors',
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    namesItems: [{ name: 'net_err_in' }, { name: 'net_err_out' }]
+    metrics: [{ [LabelName]: 'net_err_in' }, { [LabelName]: 'net_err_out' }]
   },
-  { title: 'Disk Space', type: chartTypes[2], unit: UNIT_PERCENTAGE, namesItems: [{ name: 'disk_used_perc' }] },
-  { title: 'Swap Usage', type: chartTypes[2], unit: UNIT_PERCENTAGE, namesItems: [{ name: 'swap_used_perc' }] }
+  { title: 'Disk Space', type: chartTypes[2], unit: UNIT_PERCENTAGE, metrics: [{ [LabelName]: 'disk_used_perc' }] },
+  { title: 'Swap Usage', type: chartTypes[2], unit: UNIT_PERCENTAGE, metrics: [{ [LabelName]: 'swap_used_perc' }] }
 ]
 
 const AgentSystemDashboard = () => {
@@ -57,8 +57,6 @@ const AgentSystemDashboard = () => {
   }, [period])
 
   const windowWidth = useWindowWidth()
-
-  console.log(windowWidth)
 
   let periodText = ''
   if (period.minutes) {
@@ -135,7 +133,7 @@ const AgentSystemDashboard = () => {
                       <WidgetDashboardItem
                         type={chartTypes[0]}
                         title={gaugeItem.title}
-                        namesItems={[{ name: gaugeItem.name, item: gaugeItem.item }]}
+                        metrics={gaugeItem.metrics}
                         unit={gaugeItem.unit}
                         refetchTime={refetchTime}
                         period={period}
@@ -166,7 +164,7 @@ const AgentSystemDashboard = () => {
                         refetchTime={refetchTime}
                         period={period}
                         unit={widget.unit}
-                        namesItems={widget.namesItems}
+                        metrics={widget.metrics}
                         handleBackwardForward={handleBackwardForwardFunc}
                         windowWidth={windowWidth}
                       />

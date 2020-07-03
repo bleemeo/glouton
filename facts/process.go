@@ -61,7 +61,7 @@ type ProcessProvider struct {
 	lastProcessesUpdate time.Time
 }
 
-// Process describe one Process
+// Process describe one Process.
 type Process struct {
 	PID             int       `json:"pid"`
 	PPID            int       `json:"ppid"`
@@ -80,7 +80,7 @@ type Process struct {
 	ContainerName   string    `json:"instance"`
 }
 
-// TopInfo contains all information to show a top-like view
+// TopInfo contains all information to show a top-like view.
 type TopInfo struct {
 	Time      int64       `json:"time"`
 	Uptime    int         `json:"uptime"`
@@ -92,7 +92,7 @@ type TopInfo struct {
 	Swap      SwapUsage   `json:"swap"`
 }
 
-// CPUUsage contains usage of CPU
+// CPUUsage contains usage of CPU.
 type CPUUsage struct {
 	User      float64 `json:"user"`
 	Nice      float64 `json:"nice"`
@@ -106,7 +106,7 @@ type CPUUsage struct {
 	Steal     float64 `json:"steal"`
 }
 
-// MemoryUsage contains usage of Memory
+// MemoryUsage contains usage of Memory.
 type MemoryUsage struct {
 	Total   float64 `json:"total"`
 	Used    float64 `json:"used"`
@@ -115,7 +115,7 @@ type MemoryUsage struct {
 	Cached  float64 `json:"cached"`
 }
 
-// SwapUsage contains usage of Swap
+// SwapUsage contains usage of Swap.
 type SwapUsage struct {
 	Total float64 `json:"total"`
 	Used  float64 `json:"used"`
@@ -124,8 +124,8 @@ type SwapUsage struct {
 
 // NewProcess creates a new Process provider
 //
-// Docker provider should be given to allow processes to be associated with a Docker container
-// useProc should be true if the Agent see all processes (running outside container or with host PID namespace)
+// Docker provider should be given to allow processes to be associated with a Docker container.
+// useProc should be true if the Agent see all processes (running outside container or with host PID namespace).
 func NewProcess(useProc bool, hostRootPath string, dockerProvider *DockerProvider) *ProcessProvider {
 	pp := &ProcessProvider{
 		dp: &dockerProcessImpl{
@@ -182,7 +182,7 @@ func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (t
 
 // ProcessesWithTime returns the list of processes present on this system and the date of last update
 //
-// It the same as Processes but also return the date of last update
+// It the same as Processes but also return the date of last update.
 func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Duration) (processes map[int]Process, updateAt time.Time, err error) {
 	pp.l.Lock()
 	defer pp.l.Unlock()

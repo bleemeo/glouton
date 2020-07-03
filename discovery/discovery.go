@@ -20,29 +20,33 @@ import (
 	"context"
 	"fmt"
 	"glouton/facts"
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/task"
 	"glouton/types"
 	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/influxdata/telegraf"
+	"github.com/prometheus/client_golang/prometheus"
 )
-
-const ignoredConfField string = "nagios_nrpe_name"
 
 const localhostIP = "127.0.0.1"
 
-// Accumulator will gather metrics point for added checks
-type Accumulator interface {
-	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
-}
+// List of common ExtraAttributes supported by all services.
+// This list + ExtraAttributes from discoveryInfo list all overidable settings.
+const (
+	nrpeExposedName = "nagios_nrpe_name"
+	ignoredPorts    = "ignore_ports"
+)
 
 // Discovery implement the full discovery mecanisme. It will take informations
 // from both the dynamic discovery (service currently running) and previously
 // detected services.
-// It will configure metrics input and add them to a Collector
+// It will configure metrics input and add them to a Collector.
 type Discovery struct {
 	l sync.Mutex
 
@@ -52,33 +56,41 @@ type Discovery struct {
 	servicesMap           map[NameContainer]Service
 	lastDiscoveryUpdate   time.Time
 
-	acc                   Accumulator
+	acc                   inputs.AnnotationAccumulator
 	lastConfigservicesMap map[NameContainer]Service
-	activeInput           map[NameContainer]int
+	activeCollector       map[NameContainer]collectorDetails
 	activeCheck           map[NameContainer]CheckDetails
 	coll                  Collector
 	taskRegistry          Registry
+	metricRegistry        GathererRegistry
 	containerInfo         containerInfoProvider
 	state                 State
 	servicesOverride      map[NameContainer]map[string]string
 	isCheckIgnored        func(NameContainer) bool
 	isInputIgnored        func(NameContainer) bool
+	metricFormat          types.MetricFormat
 }
 
-// Collector will gather metrics for added inputs
+// Collector will gather metrics for added inputs.
 type Collector interface {
 	AddInput(input telegraf.Input, shortName string) (int, error)
 	RemoveInput(int)
 }
 
-// Registry will contains checks
+// Registry will contains checks.
 type Registry interface {
 	AddTask(task task.Runner, shortName string) (int, error)
 	RemoveTask(int)
 }
 
-// New returns a new Discovery
-func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, state State, acc Accumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool) *Discovery {
+// GathererRegistry allow to register/unregister prometheus Gatherer.
+type GathererRegistry interface {
+	RegisterGatherer(gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string) (int, error)
+	UnregisterGatherer(id int) bool
+}
+
+// New returns a new Discovery.
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -114,19 +126,21 @@ func New(dynamicDiscovery Discoverer, coll Collector, taskRegistry Registry, sta
 		dynamicDiscovery:      dynamicDiscovery,
 		discoveredServicesMap: discoveredServicesMap,
 		coll:                  coll,
+		metricRegistry:        metricRegistry,
 		taskRegistry:          taskRegistry,
 		containerInfo:         (*dockerWrapper)(containerInfo),
 		acc:                   acc,
-		activeInput:           make(map[NameContainer]int),
+		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
 		state:                 state,
 		servicesOverride:      servicesOverrideMap,
 		isCheckIgnored:        isCheckIgnored,
 		isInputIgnored:        isInputIgnored,
+		metricFormat:          metricFormat,
 	}
 }
 
-// Close stop & cleanup inputs & check created by the discovery
+// Close stop & cleanup inputs & check created by the discovery.
 func (d *Discovery) Close() {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -138,7 +152,7 @@ func (d *Discovery) Close() {
 
 // Discovery detect service on the system and return a list of Service object.
 //
-// It may trigger an update of metric inputs present in the Collector
+// It may trigger an update of metric inputs present in the Collector.
 func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -146,7 +160,7 @@ func (d *Discovery) Discovery(ctx context.Context, maxAge time.Duration) (servic
 	return d.discovery(ctx, maxAge)
 }
 
-// LastUpdate return when the last update occurred
+// LastUpdate return when the last update occurred.
 func (d *Discovery) LastUpdate() time.Time {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -223,7 +237,9 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
-			if _, found := d.containerInfo.Container(service.ContainerID); !found {
+			if container, found := d.containerInfo.Container(service.ContainerID); !found {
+				service.Active = false
+			} else if container.StoppedAndReplaced() {
 				service.Active = false
 			}
 		} else if service.ExePath != "" {
@@ -255,7 +271,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	d.discoveredServicesMap = servicesMap
 	d.servicesMap = applyOveride(servicesMap, d.servicesOverride)
 
-	d.ignoreServices()
+	d.ignoreServicesAndPorts()
 
 	return nil
 }
@@ -295,6 +311,29 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			service.ExtraAttributes = make(map[string]string)
 		}
 
+		if value, ok := overrideCopy[ignoredPorts]; ok {
+			values := strings.Split(value, ",")
+
+			if service.IgnoredPorts == nil {
+				service.IgnoredPorts = make(map[int]bool)
+			}
+
+			for _, s := range values {
+				port, err := strconv.ParseInt(strings.TrimSpace(s), 10, 0)
+				if err != nil {
+					logger.V(1).Printf(
+						"In %s for service %s: %s", ignoredPorts, serviceKey, err,
+					)
+
+					continue
+				}
+
+				service.IgnoredPorts[int(port)] = true
+			}
+
+			delete(overrideCopy, ignoredPorts)
+		}
+
 		di := servicesDiscoveryInfo[service.ServiceType]
 		for _, name := range di.ExtraAttributeNames {
 			if value, ok := overrideCopy[name]; ok {
@@ -308,7 +347,8 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 			ignoredNames := make([]string, 0, len(overrideCopy))
 
 			for k := range overrideCopy {
-				if k != ignoredConfField {
+				// nrpeExposedName is not managed by us. See nrpe/responder.go
+				if k != nrpeExposedName {
 					ignoredNames = append(ignoredNames, k)
 				}
 			}
@@ -351,7 +391,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 	return servicesMap
 }
 
-func (d *Discovery) ignoreServices() {
+func (d *Discovery) ignoreServicesAndPorts() {
 	servicesMap := d.servicesMap
 	for nameContainer, service := range servicesMap {
 		if d.isCheckIgnored != nil {
@@ -362,14 +402,27 @@ func (d *Discovery) ignoreServices() {
 			service.MetricsIgnored = d.isInputIgnored(nameContainer)
 		}
 
+		if len(service.IgnoredPorts) > 0 {
+			n := 0
+
+			for _, x := range service.ListenAddresses {
+				if !service.IgnoredPorts[x.Port] {
+					service.ListenAddresses[n] = x
+					n++
+				}
+			}
+
+			service.ListenAddresses = service.ListenAddresses[:n]
+		}
+
 		d.servicesMap[nameContainer] = service
 	}
 }
 
-// CheckNow is type of check function
+// CheckNow is type of check function.
 type CheckNow func(ctx context.Context) types.StatusDescription
 
-// GetCheckNow returns the GetCheckNow function associated to a NameContainer
+// GetCheckNow returns the GetCheckNow function associated to a NameContainer.
 func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
 	CheckDetails, ok := d.activeCheck[nameContainer]
 	if !ok {

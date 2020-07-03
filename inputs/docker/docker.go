@@ -18,7 +18,9 @@ package docker
 
 import (
 	"errors"
+	"glouton/facts"
 	"glouton/inputs/internal"
+	"glouton/types"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -26,7 +28,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/docker"
 )
 
-// New initialise docker.Input
+// New initialise docker.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["docker"]
 	if ok {
@@ -58,23 +60,24 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 	newContext.Tags = make(map[string]string)
 
 	if name, ok := originalContext.Tags["container_name"]; ok {
-		newContext.Tags["item"] = name
+		newContext.Annotations.BleemeoItem = name
+		newContext.Tags[types.LabelContainerName] = name
 	}
 
 	if id, ok := originalContext.OriginalFields["container_id"]; ok {
 		if containerID, ok := id.(string); ok {
-			newContext.Tags["container_id"] = containerID
+			newContext.Annotations.ContainerID = containerID
 		}
 	}
 
-	if enable, ok := originalContext.Tags["glouton.enable"]; ok {
+	if enable, ok := originalContext.Tags[facts.EnableLabel]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
 		case "0", "off", "false", "no":
 			drop = true
 			return
 		}
-	} else if enable, ok := originalContext.Tags["bleemeo.enable"]; ok {
+	} else if enable, ok := originalContext.Tags[facts.EnableLegacyLabel]; ok {
 		enable = strings.ToLower(enable)
 		switch enable {
 		case "0", "off", "false", "no":

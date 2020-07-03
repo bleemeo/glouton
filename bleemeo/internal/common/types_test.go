@@ -17,26 +17,68 @@
 package common
 
 import (
-	"glouton/bleemeo/types"
+	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/types"
 	"reflect"
 	"testing"
 	"time"
 )
 
 func TestMetricLookupFromList(t *testing.T) {
-	input := []types.Metric{
-		{Label: "io_reads", Labels: map[string]string{"item": "sda"}, ID: "index-0"},
-		{Label: "io_reads", Labels: map[string]string{"item": "sda"}, ID: "index-1", DeactivatedAt: time.Now()},
-		{Label: "io_reads", Labels: map[string]string{"item": "sdb"}, ID: "index-2", DeactivatedAt: time.Now()},
-		{Label: "io_reads", Labels: map[string]string{"item": "sdb"}, ID: "index-3"},
-		{Label: "cpu_user", Labels: map[string]string{}, ID: "index-4"},
-		{Label: "cpu_system", ID: "index-5"},
+	input := []bleemeoTypes.Metric{
+		{
+			Labels: map[string]string{
+				types.LabelName: "io_reads",
+				"device":        "sda",
+			},
+			ID: "index-0",
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "io_reads",
+				"device":        "sda",
+			},
+			ID:            "index-1",
+			DeactivatedAt: time.Now(),
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "io_reads",
+				"device":        "sdb",
+			},
+			ID:            "index-2",
+			DeactivatedAt: time.Now(),
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "io_reads",
+				"device":        "sdb",
+			},
+			ID: "index-3",
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "cpu_user",
+				"device":        "",
+			},
+			ID: "index-4",
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "cpu_system",
+			},
+			ID: "index-5",
+		},
 	}
-	want := map[MetricLabelItem]types.Metric{
-		{Label: "io_reads", Item: "sda"}: input[0],
-		{Label: "io_reads", Item: "sdb"}: input[3],
-		{Label: "cpu_user", Item: ""}:    input[4],
-		{Label: "cpu_system", Item: ""}:  input[5],
+	for i, v := range input {
+		input[i].LabelsText = types.LabelsToText(v.Labels)
+	}
+
+	want := map[string]bleemeoTypes.Metric{
+		input[0].LabelsText: input[0],
+		input[3].LabelsText: input[3],
+		input[4].LabelsText: input[4],
+		input[5].LabelsText: input[5],
 	}
 	got := MetricLookupFromList(input)
 

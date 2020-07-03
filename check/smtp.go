@@ -23,11 +23,12 @@ import (
 	"net/smtp"
 	"time"
 
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 )
 
-// SMTPCheck perform a SMTP check
+// SMTPCheck perform a SMTP check.
 type SMTPCheck struct {
 	*baseCheck
 	mainAddress string
@@ -39,11 +40,12 @@ type SMTPCheck struct {
 //
 // For each persitentAddresses this checker will maintain a TCP connection open, if broken (and unable to re-open), the check will
 // be immediately run.
-func NewSMTP(address string, persitentAddresses []string, metricName string, labels map[string]string, acc accumulator) *SMTPCheck {
+func NewSMTP(address string, persitentAddresses []string, persistentConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *SMTPCheck {
 	sc := &SMTPCheck{
 		mainAddress: address,
 	}
-	sc.baseCheck = newBase("", persitentAddresses, true, sc.doCheck, metricName, labels, acc)
+
+	sc.baseCheck = newBase("", persitentAddresses, persistentConnection, sc.doCheck, labels, annotations, acc)
 
 	return sc
 }
@@ -74,12 +76,12 @@ func (sc *SMTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: fmt.Sprintf("Connection timed out after 10 seconds"),
+			StatusDescription: "Connection timed out after 10 seconds",
 		}
 	} else if err != nil {
 		return types.StatusDescription{
 			CurrentStatus:     types.StatusCritical,
-			StatusDescription: fmt.Sprintf("Unable to connect to SMTP server: connection refused"),
+			StatusDescription: "Unable to connect to SMTP server: connection refused",
 		}
 	}
 

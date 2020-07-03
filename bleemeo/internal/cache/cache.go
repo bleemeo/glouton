@@ -17,34 +17,35 @@
 package cache
 
 import (
-	"glouton/bleemeo/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/types"
 	"sync"
 )
 
 const cacheVersion = 1
 const cacheKey = "CacheBleemeoConnector"
 
-// Cache store information about object registered in Bleemeo API
+// Cache store information about object registered in Bleemeo API.
 type Cache struct {
 	data  data
 	l     sync.Mutex
 	dirty bool
-	state types.State
+	state bleemeoTypes.State
 }
 
 type data struct {
 	Version       int
 	AccountID     string
-	Facts         []types.AgentFact
-	Containers    []types.Container
-	Metrics       []types.Metric
-	Agent         types.Agent
-	AccountConfig types.AccountConfig
-	Services      []types.Service
+	Facts         []bleemeoTypes.AgentFact
+	Containers    []bleemeoTypes.Container
+	Metrics       []bleemeoTypes.Metric
+	Agent         bleemeoTypes.Agent
+	AccountConfig bleemeoTypes.AccountConfig
+	Services      []bleemeoTypes.Service
 }
 
-// SetAccountID update the AccountID
+// SetAccountID update the AccountID.
 func (c *Cache) SetAccountID(accountID string) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -53,7 +54,7 @@ func (c *Cache) SetAccountID(accountID string) {
 	c.dirty = true
 }
 
-// AccountID returns the AccountID
+// AccountID returns the AccountID.
 func (c *Cache) AccountID() string {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -61,8 +62,8 @@ func (c *Cache) AccountID() string {
 	return c.data.AccountID
 }
 
-// SetFacts update the AgentFact list
-func (c *Cache) SetFacts(facts []types.AgentFact) {
+// SetFacts update the AgentFact list.
+func (c *Cache) SetFacts(facts []bleemeoTypes.AgentFact) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -70,8 +71,8 @@ func (c *Cache) SetFacts(facts []types.AgentFact) {
 	c.dirty = true
 }
 
-// SetServices update the Services list
-func (c *Cache) SetServices(services []types.Service) {
+// SetServices update the Services list.
+func (c *Cache) SetServices(services []bleemeoTypes.Service) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -79,8 +80,8 @@ func (c *Cache) SetServices(services []types.Service) {
 	c.dirty = true
 }
 
-// SetContainers update the Container list
-func (c *Cache) SetContainers(containers []types.Container) {
+// SetContainers update the Container list.
+func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -88,16 +89,16 @@ func (c *Cache) SetContainers(containers []types.Container) {
 	c.dirty = true
 }
 
-// Agent returns the Agent object
-func (c *Cache) Agent() (agent types.Agent) {
+// Agent returns the Agent object.
+func (c *Cache) Agent() (agent bleemeoTypes.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	return c.data.Agent
 }
 
-// SetAgent update the Agent object
-func (c *Cache) SetAgent(agent types.Agent) {
+// SetAgent update the Agent object.
+func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -105,8 +106,8 @@ func (c *Cache) SetAgent(agent types.Agent) {
 	c.dirty = true
 }
 
-// SetAccountConfig update the AccountConfig object
-func (c *Cache) SetAccountConfig(accountConfig types.AccountConfig) {
+// SetAccountConfig update the AccountConfig object.
+func (c *Cache) SetAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -114,20 +115,20 @@ func (c *Cache) SetAccountConfig(accountConfig types.AccountConfig) {
 	c.dirty = true
 }
 
-// AccountConfig returns AccountConfig
-func (c *Cache) AccountConfig() types.AccountConfig {
+// AccountConfig returns AccountConfig.
+func (c *Cache) AccountConfig() bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	return c.data.AccountConfig
 }
 
-// FactsByKey returns a map fact.key => facts
-func (c *Cache) FactsByKey() map[string]types.AgentFact {
+// FactsByKey returns a map fact.key => facts.
+func (c *Cache) FactsByKey() map[string]bleemeoTypes.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]types.AgentFact)
+	result := make(map[string]bleemeoTypes.AgentFact)
 	for _, v := range c.data.Facts {
 		result[v.Key] = v
 	}
@@ -135,12 +136,12 @@ func (c *Cache) FactsByKey() map[string]types.AgentFact {
 	return result
 }
 
-// FactsByUUID returns a map fact.id => facts
-func (c *Cache) FactsByUUID() map[string]types.AgentFact {
+// FactsByUUID returns a map fact.id => facts.
+func (c *Cache) FactsByUUID() map[string]bleemeoTypes.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]types.AgentFact)
+	result := make(map[string]bleemeoTypes.AgentFact)
 
 	for _, v := range c.data.Facts {
 		result[v.ID] = v
@@ -149,34 +150,36 @@ func (c *Cache) FactsByUUID() map[string]types.AgentFact {
 	return result
 }
 
-// Facts returns a (copy) of the Facts
-func (c *Cache) Facts() []types.AgentFact {
+// Facts returns a (copy) of the Facts.
+func (c *Cache) Facts() []bleemeoTypes.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make([]types.AgentFact, len(c.data.Facts))
+	result := make([]bleemeoTypes.AgentFact, len(c.data.Facts))
+
 	copy(result, c.data.Facts)
 
 	return result
 }
 
-// Services returns a (copy) of the Services
-func (c *Cache) Services() []types.Service {
+// Services returns a (copy) of the Services.
+func (c *Cache) Services() []bleemeoTypes.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make([]types.Service, len(c.data.Services))
+	result := make([]bleemeoTypes.Service, len(c.data.Services))
+
 	copy(result, c.data.Services)
 
 	return result
 }
 
-// ServicesByUUID returns a map service.id => service
-func (c *Cache) ServicesByUUID() map[string]types.Service {
+// ServicesByUUID returns a map service.id => service.
+func (c *Cache) ServicesByUUID() map[string]bleemeoTypes.Service {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]types.Service)
+	result := make(map[string]bleemeoTypes.Service)
 
 	for _, v := range c.data.Services {
 		result[v.ID] = v
@@ -185,23 +188,23 @@ func (c *Cache) ServicesByUUID() map[string]types.Service {
 	return result
 }
 
-// Containers returns a (copy) of the Containers
-func (c *Cache) Containers() (containers []types.Container) {
+// Containers returns a (copy) of the Containers.
+func (c *Cache) Containers() (containers []bleemeoTypes.Container) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make([]types.Container, len(c.data.Containers))
+	result := make([]bleemeoTypes.Container, len(c.data.Containers))
 	copy(result, c.data.Containers)
 
 	return result
 }
 
-// ContainersByContainerID returns a map container.ContainerId => container
-func (c *Cache) ContainersByContainerID() map[string]types.Container {
+// ContainersByContainerID returns a map container.ContainerId => container.
+func (c *Cache) ContainersByContainerID() map[string]bleemeoTypes.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]types.Container)
+	result := make(map[string]bleemeoTypes.Container)
 
 	for _, v := range c.data.Containers {
 		result[v.DockerID] = v
@@ -210,12 +213,12 @@ func (c *Cache) ContainersByContainerID() map[string]types.Container {
 	return result
 }
 
-// ContainersByUUID returns a map container.id => container
-func (c *Cache) ContainersByUUID() map[string]types.Container {
+// ContainersByUUID returns a map container.id => container.
+func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]types.Container)
+	result := make(map[string]bleemeoTypes.Container)
 
 	for _, v := range c.data.Containers {
 		result[v.ID] = v
@@ -224,8 +227,8 @@ func (c *Cache) ContainersByUUID() map[string]types.Container {
 	return result
 }
 
-// SetMetrics update the Metric list
-func (c *Cache) SetMetrics(metrics []types.Metric) {
+// SetMetrics update the Metric list.
+func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -233,23 +236,23 @@ func (c *Cache) SetMetrics(metrics []types.Metric) {
 	c.dirty = true
 }
 
-// Metrics returns a (copy) of the Metrics
-func (c *Cache) Metrics() (metrics []types.Metric) {
+// Metrics returns a (copy) of the Metrics.
+func (c *Cache) Metrics() (metrics []bleemeoTypes.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make([]types.Metric, len(c.data.Metrics))
+	result := make([]bleemeoTypes.Metric, len(c.data.Metrics))
 	copy(result, c.data.Metrics)
 
 	return result
 }
 
-// MetricsByUUID returns a map metric.id => metric
-func (c *Cache) MetricsByUUID() map[string]types.Metric {
+// MetricsByUUID returns a map metric.id => metric.
+func (c *Cache) MetricsByUUID() map[string]bleemeoTypes.Metric {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]types.Metric)
+	result := make(map[string]bleemeoTypes.Metric)
 
 	for _, v := range c.data.Metrics {
 		result[v.ID] = v
@@ -258,7 +261,7 @@ func (c *Cache) MetricsByUUID() map[string]types.Metric {
 	return result
 }
 
-// Save saves the cache into State
+// Save saves the cache into State.
 func (c *Cache) Save() {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -279,8 +282,8 @@ func (c *Cache) Save() {
 	c.dirty = false
 }
 
-// Load loads the cache from State
-func Load(state types.State) *Cache {
+// Load loads the cache from State.
+func Load(state bleemeoTypes.State) *Cache {
 	cache := &Cache{
 		state: state,
 	}
@@ -302,6 +305,20 @@ func Load(state types.State) *Cache {
 		logger.V(2).Printf("Bleemeo connector cache is too recent. Discarding content")
 
 		cache.data.Version = cacheVersion
+	}
+
+	for i, m := range cache.data.Metrics {
+		m.Labels = types.TextToLabels(m.LabelsText)
+
+		if m.Item != "" {
+			// This metric is using Bleemeo mode, labels must only contains name and item
+			// it stored in the Item fields
+			m.Labels = map[string]string{
+				types.LabelName: m.Labels[types.LabelName],
+			}
+		}
+
+		cache.data.Metrics[i] = m
 	}
 
 	return cache

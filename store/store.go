@@ -31,27 +31,27 @@ import (
 
 // Store implement an interface to retrieve metrics and metric points.
 //
-// See methods GetMetrics and GetMetricPoints
+// See methods GetMetrics and GetMetricPoints.
 type Store struct {
 	metrics         map[int]metric
-	points          map[int][]types.PointStatus
+	points          map[int][]types.Point
 	notifyCallbacks map[int]func([]types.MetricPoint)
 	lock            sync.Mutex
 	notifeeLock     sync.Mutex
 }
 
-// New create a return a store. Store should be Close()d before leaving
+// New create a return a store. Store should be Close()d before leaving.
 func New() *Store {
 	s := &Store{
 		metrics:         make(map[int]metric),
-		points:          make(map[int][]types.PointStatus),
+		points:          make(map[int][]types.Point),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
 	}
 
 	return s
 }
 
-// Run will run the store until context is cancelled
+// Run will run the store until context is cancelled.
 func (s *Store) Run(ctx context.Context) error {
 	for {
 		s.run()
@@ -89,7 +89,7 @@ func (s *Store) AddNotifiee(cb func([]types.MetricPoint)) int {
 
 // RemoveNotifiee remove a callback that was notified
 // Note: RemoveNotifiee should not be called while in the callback.
-// Once RemoveNotifiee() returns, the callbacl won't be called anymore
+// Once RemoveNotifiee() returns, the callbacl won't be called anymore.
 func (s *Store) RemoveNotifiee(id int) {
 	s.notifeeLock.Lock()
 	defer s.notifeeLock.Unlock()
@@ -98,7 +98,7 @@ func (s *Store) RemoveNotifiee(id int) {
 }
 
 // DropMetrics delete metrics and they points.
-// The provided labels list is an exact match (e.g. {"__name__": "disk_used"} won't delete the metrics for all disk. You need to specify all labels)
+// The provided labels list is an exact match (e.g. {"__name__": "disk_used"} won't delete the metrics for all disk. You need to specify all labels).
 func (s *Store) DropMetrics(labelsList []map[string]string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -113,7 +113,16 @@ func (s *Store) DropMetrics(labelsList []map[string]string) {
 	}
 }
 
-// Metrics return a list of Metric matching given labels filter
+// DropAllMetrics clear the full content of the store.
+func (s *Store) DropAllMetrics() {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+
+	s.metrics = make(map[int]metric)
+	s.points = make(map[int][]types.Point)
+}
+
+// Metrics return a list of Metric matching given labels filter.
 func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err error) {
 	result = make([]types.Metric, 0)
 
@@ -129,7 +138,7 @@ func (s *Store) Metrics(filters map[string]string) (result []types.Metric, err e
 	return
 }
 
-// MetricsCount return the count of metrics stored
+// MetricsCount return the count of metrics stored.
 func (s *Store) MetricsCount() int {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -137,7 +146,7 @@ func (s *Store) MetricsCount() int {
 	return len(s.metrics)
 }
 
-// Labels returns all label of the metric
+// Labels returns all label of the metric.
 func (m metric) Labels() map[string]string {
 	labels := make(map[string]string)
 
@@ -148,13 +157,18 @@ func (m metric) Labels() map[string]string {
 	return labels
 }
 
+// Annotations returns all annotations of the metric.
+func (m metric) Annotations() types.MetricAnnotations {
+	return m.annotations
+}
+
 // Points returns points between the two given time range (boundary are included).
-func (m metric) Points(start, end time.Time) (result []types.PointStatus, err error) {
+func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
 	m.store.lock.Lock()
 	defer m.store.lock.Unlock()
 
 	points := m.store.points[m.metricID]
-	result = make([]types.PointStatus, 0)
+	result = make([]types.Point, 0)
 
 	for _, point := range points {
 		pointTimeUTC := point.Time.UTC()
@@ -167,13 +181,13 @@ func (m metric) Points(start, end time.Time) (result []types.PointStatus, err er
 }
 
 type metric struct {
-	labels   map[string]string
-	statusOf int
-	store    *Store
-	metricID int
+	labels      map[string]string
+	annotations types.MetricAnnotations
+	store       *Store
+	metricID    int
 }
 
-// Return true if filter match given labels
+// Return true if filter match given labels.
 func labelsMatch(labels, filter map[string]string, exact bool) bool {
 	if exact && len(labels) != len(filter) {
 		return false
@@ -198,7 +212,7 @@ func (s *Store) run() {
 
 	for metricID := range s.metrics {
 		points := s.points[metricID]
-		newPoints := make([]types.PointStatus, 0)
+		newPoints := make([]types.Point, 0)
 
 		for _, p := range points {
 			if time.Since(p.Time) < time.Hour {
@@ -227,11 +241,14 @@ func (s *Store) run() {
 // metricGetOrCreate will return the metric that exactly match given labels.
 //
 // If the metric does not exists, it's created.
-// statusOf is only used at creation.
 // The store lock is assumed to be held.
-func (s *Store) metricGetOrCreate(labels map[string]string, statusOf int) metric {
-	for _, m := range s.metrics {
+// Annotations is always updated with value provided as argument.
+func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.MetricAnnotations) metric {
+	for id, m := range s.metrics {
 		if labelsMatch(m.labels, labels, true) {
+			m.annotations = annotations
+			s.metrics[id] = m
+
 			return m
 		}
 	}
@@ -249,23 +266,32 @@ func (s *Store) metricGetOrCreate(labels map[string]string, statusOf int) metric
 	}
 
 	m := metric{
-		labels:   labels,
-		store:    s,
-		statusOf: statusOf,
-		metricID: newID,
+		labels:      labels,
+		annotations: annotations,
+		store:       s,
+		metricID:    newID,
 	}
 	s.metrics[newID] = m
 
 	return m
 }
 
-// addPoint appends point for given metric
-//
-// The store lock is assumed to be held
-func (s *Store) addPoint(metricID int, point types.PointStatus) {
-	if _, ok := s.points[metricID]; !ok {
-		s.points[metricID] = make([]types.PointStatus, 0)
+// PushPoints append new metric points to the store, creating new metric
+// if needed.
+// The points must not be mutated after this call.
+func (s *Store) PushPoints(points []types.MetricPoint) {
+	s.lock.Lock()
+	for _, point := range points {
+		metric := s.metricGetOrCreate(point.Labels, point.Annotations)
+		s.points[metric.metricID] = append(s.points[metric.metricID], point.Point)
+	}
+	s.lock.Unlock()
+
+	s.notifeeLock.Lock()
+
+	for _, cb := range s.notifyCallbacks {
+		cb(points)
 	}
 
-	s.points[metricID] = append(s.points[metricID], point)
+	s.notifeeLock.Unlock()
 }

@@ -68,7 +68,7 @@ func (c *Configuration) LoadDirectory(dirPath string) error {
 	return firstError
 }
 
-// LoadByte will load given YAML data
+// LoadByte will load given YAML data.
 func (c *Configuration) LoadByte(data []byte) error {
 	var newValue map[string]interface{}
 
@@ -143,7 +143,7 @@ func (c *Configuration) Set(key string, value interface{}) {
 
 // String return the given key as string.
 //
-// Return "" if the key does not exists or could not be converted to string
+// Return "" if the key does not exists or could not be converted to string.
 func (c Configuration) String(key string) string {
 	rawValue, ok := c.Get(key)
 	if !ok {
@@ -164,7 +164,7 @@ func (c Configuration) String(key string) string {
 
 // StringList return the given key as []string.
 //
-// Return nil if the key does not exists or could not be converted to []string
+// Return nil if the key does not exists or could not be converted to []string.
 func (c Configuration) StringList(key string) []string {
 	rawValue, ok := c.Get(key)
 	if !ok {
@@ -195,9 +195,9 @@ func (c Configuration) StringList(key string) []string {
 	}
 }
 
-// StringMap return the given key as a string map
+// StringMap return the given key as a string map.
 //
-// Return an empty map if the key does not existor could not be converted to a string map
+// Return an empty map if the key does not existor could not be converted to a string map.
 func (c Configuration) StringMap(key string) map[string]string {
 	rawValue, ok := c.Get(key)
 	if !ok {
@@ -272,7 +272,7 @@ func (c Configuration) Bool(key string) bool {
 	}
 }
 
-// Get return the given key as interface{}
+// Get return the given key as interface{}.
 func (c Configuration) Get(key string) (result interface{}, found bool) {
 	keyPart := strings.Split(key, ".")
 	return get(c.rawValues, keyPart)

@@ -18,7 +18,7 @@ package internal
 
 import "glouton/logger"
 
-// Logger is an implementation of telegraf.Logger
+// Logger is an implementation of telegraf.Logger.
 type Logger struct{}
 
 // Errorf logs an error message, patterned after log.Printf.

@@ -29,12 +29,16 @@ import (
 
 type diskIOTransformer struct {
 	whitelist []*regexp.Regexp
+	blacklist []*regexp.Regexp
 }
 
-// New initialise diskio.Input
+// New initialise diskio.Input.
 //
 // whitelist is a list of regular expretion for device to include
-func New(whitelist []string) (i telegraf.Input, err error) {
+// blacklist is a list of regular expretion for device to include
+//
+// If blacklist is provided (not empty) it's used and whitelist is ignored.
+func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
 
 	whitelistRE := make([]*regexp.Regexp, len(whitelist))
@@ -47,11 +51,22 @@ func New(whitelist []string) (i telegraf.Input, err error) {
 		}
 	}
 
+	blacklistRE := make([]*regexp.Regexp, len(blacklist))
+
+	for index, v := range blacklist {
+		blacklistRE[index], err = regexp.Compile(v)
+		if err != nil {
+			err = fmt.Errorf("diskio blacklist RE compile fail: %s", err)
+			return
+		}
+	}
+
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
 		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
 			whitelist: whitelistRE,
+			blacklist: blacklistRE,
 		}
 		i = &internal.Input{
 			Input: diskioInput,
@@ -74,27 +89,37 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 	item, ok := originalContext.Tags["name"]
 
 	if !ok {
-		drop = true
-		return
+		return newContext, true
 	}
 
 	match := false
 
-	for _, r := range dt.whitelist {
-		if r.MatchString(item) {
-			match = true
-			break
+	if len(dt.blacklist) > 0 {
+		match = true
+
+		for _, r := range dt.blacklist {
+			if r.MatchString(item) {
+				match = false
+				break
+			}
+		}
+	} else {
+		for _, r := range dt.whitelist {
+			if r.MatchString(item) {
+				match = true
+				break
+			}
 		}
 	}
 
 	if !match {
-		drop = true
-		return
+		return newContext, true
 	}
 
-	newContext.Tags["item"] = item
+	newContext.Annotations.BleemeoItem = item
+	newContext.Tags["device"] = item
 
-	return
+	return newContext, false
 }
 
 func (dt diskIOTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {

@@ -32,7 +32,7 @@ type netTransformer struct {
 
 // New initialise net.Input
 //
-// blacklist contains a list of interface name prefix to ignore
+// blacklist contains a list of interface name prefix to ignore.
 func New(blacklist []string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["net"]
 	if ok {
@@ -45,7 +45,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 			Input: netInput,
 			Accumulator: internal.Accumulator{
 				RenameGlobal:     nt.renameGlobal,
-				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent"},
+				DerivatedMetrics: []string{"bytes_sent", "bytes_recv", "drop_in", "drop_out", "packets_recv", "packets_sent", "err_out", "err_in"},
 				TransformMetrics: nt.transformMetrics,
 			},
 		}
@@ -73,7 +73,8 @@ func (nt netTransformer) renameGlobal(originalContext internal.GatherContext) (n
 		}
 	}
 
-	newContext.Tags["item"] = item
+	newContext.Annotations.BleemeoItem = item
+	newContext.Tags["device"] = item
 
 	return
 }

@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/rabbitmq"
 )
 
-// New initialise rabbitmq.Input
+// New initialise rabbitmq.Input.
 func New(url string, username string, password string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["rabbitmq"]
 	if ok {

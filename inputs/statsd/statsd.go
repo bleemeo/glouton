@@ -38,7 +38,7 @@ func reflectSetPercentile(input *statsd.Statsd) {
 	percentilesValue.Set(slice)
 }
 
-// New initialise statsd.Input
+// New initialise statsd.Input.
 func New(bindAddress string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["statsd"]
 	if ok {

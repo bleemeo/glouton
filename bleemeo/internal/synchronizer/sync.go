@@ -19,21 +19,26 @@ package synchronizer
 import (
 	"context"
 	cryptoRand "crypto/rand"
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"glouton/bleemeo/client"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
-	"glouton/bleemeo/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/types"
 	"math"
 	"math/big"
 	"math/rand"
+	"net/url"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
 
-// Synchronizer synchronize object with Bleemeo
+// Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
 	ctx    context.Context
 	option Option
@@ -46,31 +51,30 @@ type Synchronizer struct {
 	lastFactUpdatedAt       string
 	successiveErrors        int
 	warnAccountMismatchDone bool
-	apiSupportLabels        bool
 	lastMetricCount         int
 	agentID                 string
 
 	l                    sync.Mutex
 	disabledUntil        time.Time
-	disableReason        types.DisableReason
+	disableReason        bleemeoTypes.DisableReason
 	forceSync            map[string]bool
 	pendingMetricsUpdate []string
 }
 
-// Option are parameter for the syncrhonizer
+// Option are parameter for the syncrhonizer.
 type Option struct {
-	types.GlobalOption
+	bleemeoTypes.GlobalOption
 	Cache *cache.Cache
 
 	// DisableCallback is a function called when Synchronizer request Bleemeo connector to be disabled
 	// reason state why it's disabled and until set for how long it should be disabled.
-	DisableCallback func(reason types.DisableReason, until time.Time)
+	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func()
 }
 
-// New return a new Synchronizer
+// New return a new Synchronizer.
 func New(option Option) *Synchronizer {
 	return &Synchronizer{
 		option: option,
@@ -80,21 +84,10 @@ func New(option Option) *Synchronizer {
 	}
 }
 
-// Run run the Connector
+// Run run the Connector.
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = time.Now()
-	accountID := s.option.Config.String("bleemeo.account_id")
-	registrationKey := s.option.Config.String("bleemeo.registration_key")
-
-	for accountID == "" || registrationKey == "" {
-		logger.Printf("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(time.Minute):
-		}
-	}
 
 	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
 		return err
@@ -113,6 +106,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	s.successiveErrors = 0
+	successiveAuthErrors := 0
 
 	var minimalDelay time.Duration
 
@@ -133,8 +127,24 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		err := s.runOnce()
 		if err != nil {
 			s.successiveErrors++
-			delay := common.JitterDelay(15+math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
-			s.disable(time.Now().Add(delay), types.DisableTooManyErrors, false)
+
+			if client.IsAuthError(err) {
+				successiveAuthErrors++
+			}
+
+			switch {
+			case client.IsAuthError(err) && successiveAuthErrors >= 3:
+				delay := common.JitterDelay(60*math.Pow(1.55, float64(successiveAuthErrors)), 0.1, 21600)
+				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(delay))
+			default:
+				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+				s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+
+				if client.IsAuthError(err) && successiveAuthErrors == 1 {
+					// we disable only to trigger a reconnection on MQTT
+					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(10*time.Second))
+				}
+			}
 
 			switch {
 			case client.IsAuthError(err) && s.agentID != "":
@@ -164,7 +174,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 					string(registrationKey),
 				)
 			default:
-				if s.successiveErrors%5 == 0 {
+				if s.successiveErrors%5 == 1 {
 					logger.Printf("Unable to synchronize with Bleemeo: %v", err)
 				} else {
 					logger.V(1).Printf("Unable to synchronize with Bleemeo: %v", err)
@@ -172,6 +182,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			}
 		} else {
 			s.successiveErrors = 0
+			successiveAuthErrors = 0
 			minimalDelay = common.JitterDelay(15, 0.05, 15)
 
 			if firstSync {
@@ -185,6 +196,55 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// DiagnosticPage return useful information to troubleshoot issue.
+func (s *Synchronizer) DiagnosticPage() string {
+	builder := &strings.Builder{}
+
+	var tlsConfig *tls.Config
+
+	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
+
+	if err != nil {
+		fmt.Fprintf(builder, "Bad URL %#v: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+		return builder.String()
+	}
+
+	port := 80
+
+	if u.Scheme == "https" {
+		tlsConfig = &tls.Config{
+			InsecureSkipVerify: s.option.Config.Bool("bleemeo.api_ssl_insecure"), // nolint: gosec
+		}
+		port = 443
+	}
+
+	if u.Port() != "" {
+		tmp, err := strconv.ParseInt(u.Port(), 10, 0)
+		if err != nil {
+			fmt.Fprintf(builder, "Bad URL %#v, invalid port: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+			return builder.String()
+		}
+
+		port = int(tmp)
+	}
+
+	tcpMessage := make(chan string)
+	httpMessage := make(chan string)
+
+	go func() {
+		tcpMessage <- common.DiagnosticTCP(u.Hostname(), port, tlsConfig)
+	}()
+
+	go func() {
+		httpMessage <- common.DiagnosticHTTP(u.String(), tlsConfig)
+	}()
+
+	builder.WriteString(<-tcpMessage)
+	builder.WriteString(<-httpMessage)
+
+	return builder.String()
 }
 
 // NotifyConfigUpdate notify that an Agent configuration change occurred.
@@ -203,7 +263,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.forceSync["containers"] = true
 }
 
-// UpdateMetrics request to update a specific metrics
+// UpdateMetrics request to update a specific metrics.
 func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -221,7 +281,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 	s.forceSync["metrics"] = false
 }
 
-// UpdateContainers request to update a containers
+// UpdateContainers request to update a containers.
 func (s *Synchronizer) UpdateContainers() {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -252,18 +312,24 @@ func (s *Synchronizer) popPendingMetricsUpdate() []string {
 func (s *Synchronizer) waitCPUMetric() {
 	metrics := s.option.Cache.Metrics()
 	for _, m := range metrics {
-		if m.Label == "cpu_used" {
+		if m.Labels[types.LabelName] == "cpu_used" || m.Labels[types.LabelName] == "node_cpu_seconds_total" {
 			return
 		}
 	}
 
-	filter := map[string]string{"__name__": "cpu_used"}
+	filter := map[string]string{types.LabelName: "cpu_used"}
+	filter2 := map[string]string{types.LabelName: "node_cpu_seconds_total"}
 	count := 0
 
 	for s.ctx.Err() == nil && count < 20 {
 		count++
 
 		m, _ := s.option.Store.Metrics(filter)
+		if len(m) > 0 {
+			return
+		}
+
+		m, _ = s.option.Store.Metrics(filter2)
 		if len(m) > 0 {
 			return
 		}
@@ -275,7 +341,7 @@ func (s *Synchronizer) waitCPUMetric() {
 	}
 }
 
-func (s *Synchronizer) getDisabledUntil() (time.Time, types.DisableReason) {
+func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -283,16 +349,16 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, types.DisableReason) {
 }
 
 // Disable will disable (or re-enable) the Synchronized until given time.
-// To re-enable, set a time in the past.
-func (s *Synchronizer) Disable(until time.Time, reason types.DisableReason) {
-	s.disable(until, reason, true)
+// To re-enable, use the (not yet implmented) Enable().
+func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
+	s.disable(until, reason)
 }
 
-func (s *Synchronizer) disable(until time.Time, reason types.DisableReason, force bool) {
+func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	if force || s.disabledUntil.Before(until) {
+	if s.disabledUntil.Before(until) {
 		s.disabledUntil = until
 		s.disableReason = reason
 	}
@@ -322,6 +388,8 @@ func (s *Synchronizer) runOnce() error {
 		if err := s.register(); err != nil {
 			return err
 		}
+
+		s.option.NotifyFirstRegistration(s.ctx)
 	}
 
 	syncMethods := s.syncToPerform()
@@ -468,10 +536,10 @@ func (s *Synchronizer) checkDuplicated() error {
 		}
 
 		until := time.Now().Add(common.JitterDelay(900, 0.05, 900))
-		s.Disable(until, types.DisableDuplicatedAgent)
+		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
 
 		if s.option.DisableCallback != nil {
-			s.option.DisableCallback(types.DisableDuplicatedAgent, until)
+			s.option.DisableCallback(bleemeoTypes.DisableDuplicatedAgent, until)
 		}
 
 		logger.Printf(
@@ -508,8 +576,13 @@ func (s *Synchronizer) register() error {
 	}
 
 	accountID := s.option.Config.String("bleemeo.account_id")
+	registrationKey := s.option.Config.String("bleemeo.registration_key")
 
-	password := generatePassword(10)
+	for accountID == "" || registrationKey == "" {
+		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
+	}
+
+	password := generatePassword(20)
 
 	var objectID struct {
 		ID string
@@ -529,7 +602,7 @@ func (s *Synchronizer) register() error {
 			"fqdn":             fqdn,
 		},
 		fmt.Sprintf("%s@bleemeo.com", accountID),
-		s.option.Config.String("bleemeo.registration_key"),
+		registrationKey,
 		&objectID,
 	)
 	if err != nil {
@@ -558,7 +631,7 @@ func (s *Synchronizer) register() error {
 }
 
 func generatePassword(length int) string {
-	letters := []rune("abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789")
+	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#-_@%*:;$")
 	b := make([]rune, length)
 
 	for i := range b {

@@ -55,7 +55,7 @@ type servicePayload struct {
 	Agent   string `json:"agent"`
 }
 
-// Bleemeo API only support limited service instance name. Truncate internal container name to match limitation of the API
+// Bleemeo API only support limited service instance name. Truncate internal container name to match limitation of the API.
 func longToShortKey(services []discovery.Service) map[serviceNameInstance]serviceNameInstance {
 	revertLookup := make(map[serviceNameInstance]discovery.Service)
 

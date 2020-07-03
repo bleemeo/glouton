@@ -25,7 +25,7 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/postgresql"
 )
 
-// New initialise postgresql.Input
+// New initialise postgresql.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["postgresql"]
 	if ok {
@@ -59,7 +59,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		return originalContext, true
 	}
 
-	originalContext.Tags["item"] = originalContext.Tags["db"]
+	originalContext.Annotations.BleemeoItem = originalContext.Tags["db"]
 
 	return originalContext, false
 }

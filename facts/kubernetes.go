@@ -12,7 +12,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// KubernetesProvider provide information about Kubernetes & PODs
+// KubernetesProvider provide information about Kubernetes & PODs.
 type KubernetesProvider struct {
 	NodeName   string
 	KubeConfig string
@@ -23,7 +23,7 @@ type KubernetesProvider struct {
 	pods       []corev1.Pod
 }
 
-// PODs returns the list of PODs. If possible only list pods running on local node
+// PODs returns the list of PODs. If possible only list pods running on local node.
 func (k *KubernetesProvider) PODs(ctx context.Context, maxAge time.Duration) ([]corev1.Pod, error) {
 	k.l.Lock()
 	defer k.l.Unlock()

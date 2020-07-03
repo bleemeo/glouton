@@ -22,7 +22,7 @@ import (
 	"strings"
 )
 
-// ValueType is a list of known value type
+// ValueType is a list of known value type.
 type ValueType int
 
 // Possible values for the ValueType enum.

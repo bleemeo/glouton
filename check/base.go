@@ -22,13 +22,10 @@ import (
 	"sync"
 	"time"
 
+	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 )
-
-type accumulator interface {
-	AddFieldsWithStatus(measurement string, fields map[string]interface{}, tags map[string]string, statuses map[string]types.StatusDescription, createStatusOf bool, t ...time.Time)
-}
 
 // baseCheck perform a service.
 //
@@ -42,14 +39,15 @@ type accumulator interface {
 // The check is run at the first of:
 // * One minute after last check
 // * 30 seconds after checks change to not Ok (to quickly recover from a service restart)
-// * (if persistentConnection is active) after a TCP connection is broken
+// * (if persistentConnection is active) after a TCP connection is broken.
 type baseCheck struct {
 	metricName     string
 	labels         map[string]string
+	annotations    types.MetricAnnotations
 	mainTCPAddress string
 	tcpAddresses   []string
 	mainCheck      func(ctx context.Context) types.StatusDescription
-	acc            accumulator
+	acc            inputs.AnnotationAccumulator
 
 	timer    *time.Timer
 	dialer   *net.Dialer
@@ -58,12 +56,13 @@ type baseCheck struct {
 
 	persistentConnection bool
 
-	l              sync.Mutex
-	cancel         func()
-	previousStatus types.StatusDescription
+	l                   sync.Mutex
+	cancel              func()
+	previousStatus      types.StatusDescription
+	disabledPerstistent map[string]bool
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, metricName string, labels map[string]string, acc accumulator) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *baseCheck {
 	if mainTCPAddress != "" {
 		found := false
 
@@ -82,9 +81,13 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		}
 	}
 
+	metricName := labels[types.LabelName]
+	delete(labels, types.LabelName)
+
 	return &baseCheck{
 		metricName:           metricName,
 		labels:               labels,
+		annotations:          annotations,
 		mainTCPAddress:       mainTCPAddress,
 		tcpAddresses:         tcpAddresses,
 		persistentConnection: persistentConnection,
@@ -98,10 +101,11 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 			CurrentStatus:     types.StatusOk,
 			StatusDescription: "initial status - description is ignored",
 		},
+		disabledPerstistent: make(map[string]bool),
 	}
 }
 
-// Run execute the TCP check
+// Run execute the TCP check.
 func (bc *baseCheck) Run(ctx context.Context) error {
 	// Open connectionS to address
 	// when openned, keep checking that port stay open
@@ -138,7 +142,7 @@ func (bc *baseCheck) Run(ctx context.Context) error {
 // check does the check and add the metric depends of addMetric
 // if successful, ensure sockets are openned
 // if fail, ensure sockets are closed
-// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed
+// if just fail (ok -> critical), does a fast check and add the metric to the accumulator if the status has changed.
 func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.StatusDescription {
 	bc.l.Lock()
 	defer bc.l.Unlock()
@@ -173,25 +177,27 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 	}
 
 	if callFromSchedule || (bc.previousStatus.CurrentStatus != result.CurrentStatus) {
-		bc.acc.AddFieldsWithStatus(
+		annotations := bc.annotations
+		annotations.Status = result
+
+		bc.acc.AddFieldsWithAnnotations(
 			"",
 			map[string]interface{}{
 				bc.metricName: result.CurrentStatus.NagiosCode(),
 			},
 			bc.labels,
-			map[string]types.StatusDescription{bc.metricName: result},
-			false,
+			annotations,
 		)
 	}
 
-	logger.V(2).Printf("check for %#v on %#v: %v", bc.metricName, bc.labels["item"], result)
+	logger.V(2).Printf("check for %#v %#v: %v", bc.metricName, bc.labels, result)
 
 	bc.previousStatus = result
 
 	return result
 }
 
-// ChechNow runs the check now without waiting the timer
+// ChechNow runs the check now without waiting the timer.
 func (bc *baseCheck) CheckNow(ctx context.Context) types.StatusDescription {
 	replyChan := make(chan types.StatusDescription)
 	bc.triggerC <- replyChan
@@ -234,11 +240,19 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 		return
 	}
 
+	if !bc.persistentConnection {
+		return
+	}
+
 	ctx2, cancel := context.WithCancel(ctx)
 	bc.cancel = cancel
 
 	for _, addr := range bc.tcpAddresses {
 		addr := addr
+
+		if bc.disabledPerstistent[addr] {
+			continue
+		}
 
 		bc.wg.Add(1)
 
@@ -250,12 +264,39 @@ func (bc *baseCheck) openSockets(ctx context.Context) {
 }
 
 func (bc *baseCheck) openSocket(ctx context.Context, addr string) {
-	for ctx.Err() == nil {
-		longSleep := bc.openSocketOnce(ctx, addr)
-		delay := 10 * time.Second
+	delay := 1 * time.Second / 2
+	consecutiveFailure := 0
 
-		if !longSleep {
-			delay = time.Second
+	for ctx.Err() == nil {
+		lastConnect := time.Now()
+		longSleep := bc.openSocketOnce(ctx, addr)
+
+		if time.Since(lastConnect) < time.Minute {
+			consecutiveFailure++
+		}
+
+		if consecutiveFailure > 12 {
+			logger.V(1).Printf("persitent connection to check %s keep getting closed quickly. Disabled persistent connection for this port", addr)
+			bc.l.Lock()
+			bc.disabledPerstistent[addr] = true
+			bc.l.Unlock()
+
+			return
+		}
+
+		delay *= 2
+
+		if time.Since(lastConnect) > 5*time.Minute {
+			delay = 1 * time.Second
+			consecutiveFailure = 0
+		}
+
+		if delay > 40*time.Second {
+			delay = 40 * time.Second
+		}
+
+		if longSleep && delay < 10*time.Second {
+			delay = 10 * time.Second
 		}
 
 		select {

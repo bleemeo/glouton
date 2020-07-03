@@ -24,12 +24,12 @@ import (
 	"path/filepath"
 )
 
-// SudoFileReader read file using sudo cat (or direct read if running as root)
+// SudoFileReader read file using sudo cat (or direct read if running as root).
 type SudoFileReader struct {
 	HostRootPath string
 }
 
-// ReadFile does the same as ioutil.ReadFile but use sudo cat
+// ReadFile does the same as ioutil.ReadFile but use sudo cat.
 func (s SudoFileReader) ReadFile(path string) ([]byte, error) {
 	path = filepath.Join(s.HostRootPath, path)
 

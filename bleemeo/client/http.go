@@ -31,7 +31,7 @@ import (
 	"time"
 )
 
-// HTTPClient is a wrapper around Bleemeo API. It mostly perform JWT authentication
+// HTTPClient is a wrapper around Bleemeo API. It mostly perform JWT authentication.
 type HTTPClient struct {
 	baseURL  *url.URL
 	username string
@@ -45,7 +45,7 @@ type HTTPClient struct {
 }
 
 // APIError are returned when HTTP request got a response but that response is
-// an error (400 or 500)
+// an error (400 or 500).
 type APIError struct {
 	StatusCode   int
 	Content      string
@@ -53,7 +53,7 @@ type APIError struct {
 	IsAuthError  bool
 }
 
-// IsAuthError return true if the error is an APIError due to authentication failure
+// IsAuthError return true if the error is an APIError due to authentication failure.
 func IsAuthError(err error) bool {
 	if apiError, ok := err.(APIError); ok {
 		return apiError.IsAuthError
@@ -62,7 +62,7 @@ func IsAuthError(err error) bool {
 	return false
 }
 
-// IsNotFound return true if the error is an APIError due to 404
+// IsNotFound return true if the error is an APIError due to 404.
 func IsNotFound(err error) bool {
 	if apiError, ok := err.(APIError); ok {
 		return apiError.StatusCode == 404
@@ -71,7 +71,7 @@ func IsNotFound(err error) bool {
 	return false
 }
 
-// IsServerError return true if the error is an APIError due to 5xx
+// IsServerError return true if the error is an APIError due to 5xx.
 func IsServerError(err error) bool {
 	if apiError, ok := err.(APIError); ok {
 		return apiError.StatusCode >= 500
@@ -88,7 +88,7 @@ func (ae APIError) Error() string {
 	return fmt.Sprintf("response code %d: %s", ae.StatusCode, ae.Content)
 }
 
-// NewClient return a client to talk with Bleemeo API
+// NewClient return a client to talk with Bleemeo API.
 //
 // It does the authentication (using JWT currently) and may do rate-limiting/throtteling, so
 // most function may return a ThrottleError.
@@ -183,9 +183,9 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 	return c.sendRequest(req, result)
 }
 
-// Iter read all page for given resource
+// Iter read all page for given resource.
 //
-// params may be modified
+// params may be modified.
 func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.RawMessage, error) {
 	if params == nil {
 		params = make(map[string]string)
@@ -251,7 +251,7 @@ func (c *HTTPClient) do(req *http.Request, result interface{}, firstCall bool) (
 	return statusCode, err
 }
 
-// GetJWT return a new JWT token for authentication with Bleemeo API
+// GetJWT return a new JWT token for authentication with Bleemeo API.
 func (c *HTTPClient) GetJWT() (string, error) {
 	u, _ := c.baseURL.Parse("v1/jwt-auth/")
 
@@ -318,71 +318,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		if resp.Header.Get("Content-Type") != "application/json" {
-			partialBody := make([]byte, 250)
-			n, _ := resp.Body.Read(partialBody)
-
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      string(partialBody[:n]),
-				UnmarshalErr: nil,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		var (
-			jsonMessage json.RawMessage
-			jsonError   struct {
-				Error          string
-				Detail         string
-				NonFieldErrors []string `json:"non_field_errors"`
-			}
-		)
-
-		err = json.NewDecoder(resp.Body).Decode(&jsonMessage)
-		if err != nil {
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      "",
-				UnmarshalErr: err,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		err = json.Unmarshal(jsonMessage, &jsonError)
-		if err != nil {
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      "",
-				UnmarshalErr: err,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		if jsonError.Error != "" || jsonError.Detail != "" || len(jsonError.NonFieldErrors) > 0 {
-			errorMessage := jsonError.Error
-			if errorMessage == "" {
-				errorMessage = jsonError.Detail
-			}
-
-			if errorMessage == "" && len(jsonError.NonFieldErrors) > 0 {
-				errorMessage = strings.Join(jsonError.NonFieldErrors, ", ")
-			}
-
-			return 0, APIError{
-				StatusCode:   resp.StatusCode,
-				Content:      errorMessage,
-				UnmarshalErr: nil,
-				IsAuthError:  resp.StatusCode == 401,
-			}
-		}
-
-		return 0, APIError{
-			StatusCode:   resp.StatusCode,
-			Content:      string(jsonMessage),
-			UnmarshalErr: nil,
-			IsAuthError:  resp.StatusCode == 401,
-		}
+		return 0, decodeError(resp)
 	}
 
 	if result != nil {
@@ -397,4 +333,86 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 	}
 
 	return resp.StatusCode, nil
+}
+
+func decodeError(resp *http.Response) APIError {
+	if resp.Header.Get("Content-Type") != "application/json" {
+		partialBody := make([]byte, 250)
+		n, _ := resp.Body.Read(partialBody)
+
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      string(partialBody[:n]),
+			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	var (
+		jsonMessage json.RawMessage
+		jsonError   struct {
+			Error          string
+			Detail         string
+			NonFieldErrors []string `json:"non_field_errors"`
+		}
+		errorList []string
+	)
+
+	err := json.NewDecoder(resp.Body).Decode(&jsonMessage)
+	if err != nil {
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      "",
+			UnmarshalErr: err,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	err = json.Unmarshal(jsonMessage, &jsonError)
+	if err != nil {
+		err = json.Unmarshal(jsonMessage, &errorList)
+	}
+
+	if err != nil {
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      "",
+			UnmarshalErr: err,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	if errorList != nil {
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      strings.Join(errorList, ", "),
+			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	if jsonError.Error != "" || jsonError.Detail != "" || len(jsonError.NonFieldErrors) > 0 {
+		errorMessage := jsonError.Error
+		if errorMessage == "" {
+			errorMessage = jsonError.Detail
+		}
+
+		if errorMessage == "" && len(jsonError.NonFieldErrors) > 0 {
+			errorMessage = strings.Join(jsonError.NonFieldErrors, ", ")
+		}
+
+		return APIError{
+			StatusCode:   resp.StatusCode,
+			Content:      errorMessage,
+			UnmarshalErr: nil,
+			IsAuthError:  resp.StatusCode == 401,
+		}
+	}
+
+	return APIError{
+		StatusCode:   resp.StatusCode,
+		Content:      string(jsonMessage),
+		UnmarshalErr: nil,
+		IsAuthError:  resp.StatusCode == 401,
+	}
 }

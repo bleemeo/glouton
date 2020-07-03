@@ -32,7 +32,7 @@ import (
 const defaultMaxPendingPoints = 100000
 const defaultBatchSize = 1000
 
-// Client is an influxdb client for Bleemeo Cloud platform
+// Client is an influxdb client for Bleemeo Cloud platform.
 type Client struct {
 	serverAddress       string
 	dataBaseName        string
@@ -51,7 +51,7 @@ type Client struct {
 	influxClient         influxDBClient.Client
 }
 
-// New create a new influxDB client
+// New create a new influxDB client.
 func New(serverAddress, dataBaseName string, storeAgent *store.Store, additionalTags map[string]string) *Client {
 	return &Client{
 		serverAddress:    serverAddress,
@@ -64,7 +64,7 @@ func New(serverAddress, dataBaseName string, storeAgent *store.Store, additional
 	}
 }
 
-// doConnect connects an influxDB client to the server and returns true if the connection is established
+// doConnect connects an influxDB client to the server and returns true if the connection is established.
 func (c *Client) doConnect() error {
 	// Create the influxBD client
 	if c.influxClient == nil {
@@ -139,7 +139,7 @@ func (c *Client) connect(ctx context.Context) {
 	}
 }
 
-// addPoints adds metrics points to the the client attribute BleemeopendingPoints
+// addPoints adds metrics points to the the client attribute BleemeopendingPoints.
 func (c *Client) addPoints(points []types.MetricPoint) {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -156,12 +156,12 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	}
 }
 
-// convertMetricPoint convert a gloutonMetricPoint in influxDBClient.Point
+// convertMetricPoint convert a gloutonMetricPoint in influxDBClient.Point.
 func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string]string) (*influxDBClient.Point, error) {
-	measurement := metricPoint.Labels["__name__"]
-	time := metricPoint.PointStatus.Point.Time
+	measurement := metricPoint.Labels[types.LabelName]
+	time := metricPoint.Point.Time
 	fields := map[string]interface{}{
-		"value": metricPoint.PointStatus.Point.Value,
+		"value": metricPoint.Point.Value,
 	}
 	tags := make(map[string]string)
 
@@ -173,12 +173,12 @@ func convertMetricPoint(metricPoint types.MetricPoint, additionalTags map[string
 		tags[key] = value
 	}
 
-	delete(tags, "__name__")
+	delete(tags, types.LabelName)
 
 	return influxDBClient.NewPoint(measurement, tags, fields, time)
 }
 
-// convertPendingPoints converts the 1000 older points from BleemeoPendingPoints in InfluxDBPendingPoints
+// convertPendingPoints converts the 1000 older points from BleemeoPendingPoints in InfluxDBPendingPoints.
 func (c *Client) convertPendingPoints() {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -194,7 +194,7 @@ func (c *Client) convertPendingPoints() {
 	for i, metricPoint := range c.gloutonPendingPoints {
 		pt, err := convertMetricPoint(metricPoint, c.additionalTags)
 		if err != nil {
-			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels["__name__"])
+			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels[types.LabelName])
 			nbFailConversion++
 
 			continue
@@ -215,7 +215,7 @@ func (c *Client) convertPendingPoints() {
 	c.gloutonPendingPoints = c.gloutonPendingPoints[:0]
 }
 
-// sendPoints sends points cointain in the influxDBBatchPoint
+// sendPoints sends points cointain in the influxDBBatchPoint.
 func (c *Client) sendPoints() {
 	if c.influxClient == nil {
 		logger.Printf("influxdbClient is not initialized, impossible to send points to the influxdb server")
@@ -258,7 +258,7 @@ func (c *Client) sendPoints() {
 	c.sendPointsState.hasChange = false
 }
 
-// sendCheck performs some health checks after running sendPoints and logs the result
+// sendCheck performs some health checks after running sendPoints and logs the result.
 func (c *Client) sendCheck() bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -280,7 +280,7 @@ func (c *Client) sendCheck() bool {
 	return false
 }
 
-// HealthCheck perform some health check and logger any issue found
+// HealthCheck perform some health check and logger any issue found.
 func (c *Client) HealthCheck() bool {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -309,7 +309,7 @@ func (c *Client) HealthCheck() bool {
 	return ok
 }
 
-// lenGloutonPendingPoints return the len of the slice c.gloutonPendingPoints
+// lenGloutonPendingPoints return the len of the slice c.gloutonPendingPoints.
 func (c *Client) lenGloutonPendingPoints() int {
 	c.lock.Lock()
 	defer c.lock.Unlock()
@@ -317,7 +317,7 @@ func (c *Client) lenGloutonPendingPoints() int {
 	return len(c.gloutonPendingPoints)
 }
 
-// Run runs the influxDB service
+// Run runs the influxDB service.
 func (c *Client) Run(ctx context.Context) error {
 	// Connect the client to the server and create the database
 	c.connect(ctx)

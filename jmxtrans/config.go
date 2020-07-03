@@ -17,6 +17,7 @@
 package jmxtrans
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -87,13 +88,17 @@ func (cfg *jmxtransConfig) UpdateConfig(services []discovery.Service, metricReso
 	return nil
 }
 
-// UpdateTarget set the address where jmxtrans send metrics
+// UpdateTarget set the address where jmxtrans send metrics.
 func (cfg *jmxtransConfig) UpdateTarget(targetAddress string, targetPort int) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
 	cfg.targetAddress = targetAddress
 	cfg.targetPort = targetPort
+}
+
+func (cfg *jmxtransConfig) IsEmpty(config []byte) bool {
+	return len(config) == 0 || bytes.Equal(config, []byte("{\"servers\":[]}"))
 }
 
 func (cfg *jmxtransConfig) CurrentConfig() []byte {
@@ -162,7 +167,7 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 
 		metrics := getJMXMetrics(service)
 		for _, m := range metrics {
-			hash := sha256.New() // nolint: gosec
+			hash := sha256.New()
 			_, _ = hash.Write([]byte(m.MBean))
 
 			attr := m.Attribute

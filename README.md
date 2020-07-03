@@ -22,7 +22,7 @@ Our release version will be set by goreleaser from the current date.
 ```
 docker run --rm -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
-   node:12.13.0 \
+   node:lts \
    sh -c 'rm -fr node_modules && npm install && npm run deploy'
 ```
 
@@ -33,7 +33,7 @@ docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CG
    -v $(pwd):/src -w /src \
    -v /var/run/docker.sock:/var/run/docker.sock \
    --entrypoint '' \
-   goreleaser/goreleaser sh -c 'go test ./... && goreleaser --rm-dist --snapshot'
+   goreleaser/goreleaser:v0.137 sh -c 'go test ./... && goreleaser --rm-dist --snapshot'
 ```
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
@@ -103,7 +103,7 @@ alias go=$GOCMD
 
 Glouton use golangci-lint as linter. You may run it with:
 ```
-mkdir -p /tmp/golangci-lint-cache; docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -w /app golangci/golangci-lint:v1.23.7 golangci-lint run
+mkdir -p /tmp/golangci-lint-cache; docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -w /app golangci/golangci-lint:v1.27 golangci-lint run
 ```
 
 Glouton use Go tests, you may run them with:
@@ -121,6 +121,29 @@ go generate glouton/...
 Then run Glouton from source:
 
 ```
+go run glouton
+```
+
+### Developping the local UI JavaScript
+
+When working on the JavaScript rebuilding the Javascript bundle and running go generate could be slow
+and will use minified JavaScript file which are harded to debug.
+
+To avoid this, you may want to run and use webpack-dev-server which will serve non-minified
+JavaScript file and rebuild the JavaScript bundle on the file. When doing a change in
+any JavaScript files, you will only need to refresh the page on your browser.
+
+To run with this configuration, start webpack-dev-server:
+```
+docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
+   -v $(pwd):/src -w /src/webui \
+   node:12.13.0 \
+   sh -c 'npm install && npm start'
+```
+
+Then tell Glouton to use JavaScript file from webpack-dev-server:
+```
+export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015
 go run glouton
 ```
 
