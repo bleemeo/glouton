@@ -36,6 +36,7 @@ var defaultConfig = map[string]interface{}{
 	"agent.http_debug.bind_address":  "localhost:6060",
 	"agent.installation_format":      "manual",
 	"agent.netstat_file":             "netstat.out",
+	"agent.process_exporter.enabled": true,
 	"agent.public_ip_indicator":      "https://myip.bleemeo.com",
 	"agent.state_file":               "state.json",
 	"agent.upgrade_file":             "upgrade",

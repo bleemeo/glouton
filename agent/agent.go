@@ -594,26 +594,29 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	promExporter := a.gathererRegistry.Exporter()
-	processExporter := &process.Exporter{
-		ProcPath:       filepath.Join(a.hostRootPath, "proc"),
-		ProcessQuerier: dynamicDiscovery,
-	}
-	processGathere := prometheus.NewRegistry()
 
-	err = processGathere.Register(processExporter)
-	if err != nil {
-		logger.Printf("Failed to register process-exporter: %v", err)
-		logger.Printf("Processes metrics won't be available on /metrics endpoints")
-	} else {
-		_, err = a.gathererRegistry.RegisterGatherer(processGathere, nil, nil)
+	if a.config.Bool("agent.process_exporter.enabled") {
+		processExporter := &process.Exporter{
+			ProcPath:       filepath.Join(a.hostRootPath, "proc"),
+			ProcessQuerier: dynamicDiscovery,
+		}
+		processGathere := prometheus.NewRegistry()
+
+		err = processGathere.Register(processExporter)
 		if err != nil {
 			logger.Printf("Failed to register process-exporter: %v", err)
 			logger.Printf("Processes metrics won't be available on /metrics endpoints")
+		} else {
+			_, err = a.gathererRegistry.RegisterGatherer(processGathere, nil, nil)
+			if err != nil {
+				logger.Printf("Failed to register process-exporter: %v", err)
+				logger.Printf("Processes metrics won't be available on /metrics endpoints")
+			}
 		}
-	}
 
-	if a.metricFormat == types.MetricFormatBleemeo {
-		a.gathererRegistry.AddPushPointsCallback(processExporter.PushTo(a.gathererRegistry.WithTTL(5 * time.Minute)))
+		if a.metricFormat == types.MetricFormatBleemeo {
+			a.gathererRegistry.AddPushPointsCallback(processExporter.PushTo(a.gathererRegistry.WithTTL(5 * time.Minute)))
+		}
 	}
 
 	api := &api.API{
