@@ -56,7 +56,6 @@ func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
 		}
 
 		configs[uuid] = ac
-
 	}
 
 	s.option.Cache.SetAccountConfigs(configs)

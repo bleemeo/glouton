@@ -89,23 +89,30 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 
 // Specific gatherer that wraps probes, choose when to Gather() depending on the GatherState argument.
 type ProbeGatherer struct {
-	G prometheus.Gatherer
+	g prometheus.Gatherer
 
-	L       *sync.Mutex
-	Failing bool
+	l       sync.Mutex
+	failing bool
 	// LastFailed tells us whether the last check was a falling edge (a new failure)
-	LastFailed     bool
-	LastFailedTime time.Time
+	lastFailed     bool
+	lastFailedTime time.Time
 }
 
-func (p ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
+func NewProbeGatherer(gatherer prometheus.Gatherer) *ProbeGatherer {
+	return &ProbeGatherer{
+		g: gatherer,
+		l: sync.Mutex{},
+	}
+}
+
+func (p *ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	// While not a critical error, this function should never be called, as callers should know about
 	// GatherWithState().
 	logger.V(2).Println("Gather() called directly on a ProbeGatherer, this is a bug !")
 	return p.GatherWithState(GatherState{})
 }
 
-func (p ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+func (p *ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	if state.QueryType == NoProbe {
 		return nil, nil
 	}
@@ -119,19 +126,19 @@ func (p ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, 
 		state.NoTick = true
 	}
 
-	p.L.Lock()
-	defer p.L.Unlock()
+	p.l.Lock()
+	defer p.l.Unlock()
 
 	// when we see a new failure, we run the check again a minute later
-	if p.LastFailed && time.Since(p.LastFailedTime) > time.Minute {
+	if p.lastFailed && time.Since(p.lastFailedTime) > time.Minute {
 		// execute the query, do not wait for the next tick
 		state.NoTick = true
 	}
 
-	if cg, ok := p.G.(GathererWithState); ok {
+	if cg, ok := p.g.(GathererWithState); ok {
 		mfs, err = cg.GatherWithState(state)
 	} else {
-		mfs, err = p.G.Gather()
+		mfs, err = p.g.Gather()
 	}
 
 	for _, mf := range mfs {
@@ -144,11 +151,11 @@ func (p ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, 
 			// '0.5' carries not specific meaning, but I didn't want to compare to '1.' directly, because float equality is evilness
 			success := mf.Metric[0].GetGauge().GetValue() > 0.5
 
-			p.LastFailed = !success && !p.Failing
-			p.Failing = !success
+			p.lastFailed = !success && !p.failing
+			p.failing = !success
 
-			if p.LastFailed {
-				p.LastFailedTime = time.Now()
+			if p.lastFailed {
+				p.lastFailedTime = time.Now()
 			}
 		}
 	}
@@ -317,7 +324,7 @@ func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 // GatherWithState implements GathererWithState.
 func (g labeledGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	// do not collect non-probes metrics when the user only wants probes
-	if _, probe := g.source.(ProbeGatherer); !probe && state.QueryType == OnlyProbes {
+	if _, probe := g.source.(*ProbeGatherer); !probe && state.QueryType == OnlyProbes {
 		return nil, nil
 	}
 

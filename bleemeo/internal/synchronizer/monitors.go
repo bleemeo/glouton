@@ -156,7 +156,9 @@ func (s *Synchronizer) applyMonitorUpdate(monitors []bleemeoTypes.Monitor) error
 		uuids = append(uuids, m.AccountConfig)
 	}
 
-	s.updateAccountConfigsFromList(uuids)
+	if err := s.updateAccountConfigsFromList(uuids); err != nil {
+		return err
+	}
 
 	if s.option.MonitorManager == nil {
 		logger.V(2).Println("blackbox_exporter is not configured in the synchronizer")

@@ -238,7 +238,6 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor, account
 			conf, present := accountConfigs[monitor.AccountConfig]
 			if !present {
 				return fmt.Errorf("missing account configuration '%s' for probe '%s'", monitor.AccountConfig, monitor.URL)
-
 			}
 
 			collector, err := genCollectorFromDynamicTarget(monitor.URL, monitor, conf)
