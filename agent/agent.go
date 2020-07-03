@@ -520,7 +520,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 
 	a.collector = collector.New(acc)
-	a.gathererRegistry.UpdatePushedPoints = a.collector.RunGather
+	a.gathererRegistry.AddPushPointsCallback(a.collector.RunGather)
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -612,10 +612,8 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 	}
 
-	_, err = a.collector.AddInput(processExporter.Input(), "processes")
-	if err != nil {
-		logger.Printf("Failed to add process-exporter input: %v", err)
-		logger.Printf("Processes metrics won't be available")
+	if a.metricFormat == types.MetricFormatBleemeo {
+		a.gathererRegistry.AddPushPointsCallback(processExporter.PushTo(a.gathererRegistry.WithTTL(5 * time.Minute)))
 	}
 
 	api := &api.API{

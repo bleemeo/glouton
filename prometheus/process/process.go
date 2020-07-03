@@ -19,10 +19,10 @@ package process
 import (
 	"glouton/discovery"
 	"glouton/logger"
+	"glouton/types"
 	"sync"
 	"time"
 
-	"github.com/influxdata/telegraf"
 	common "github.com/ncabatoff/process-exporter"
 	"github.com/ncabatoff/process-exporter/proc"
 	"github.com/prometheus/client_golang/prometheus"
@@ -67,11 +67,12 @@ type Exporter struct {
 	threadWchanDesc          *prometheus.Desc
 }
 
-// Input return a telegraf.Input that send metric using Telegraf Accumulator.
-func (e *Exporter) Input() telegraf.Input {
-	return &input{
+// PushTo return a callback function that will push points on each call.
+func (e *Exporter) PushTo(p types.PointPusher) func() {
+	return (&pusher{
 		exporter: e,
-	}
+		pusher:   p,
+	}).push
 }
 
 func (e *Exporter) init() {
