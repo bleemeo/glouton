@@ -335,7 +335,7 @@ func (c *Connector) DiagnosticPage() string {
 	return builder.String()
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information
+// DiagnosticZip add to a zipfile useful diagnostic information.
 func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 	c.l.Lock()
 	mqtt := c.mqtt

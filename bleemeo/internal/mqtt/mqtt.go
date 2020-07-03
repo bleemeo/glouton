@@ -224,7 +224,7 @@ func (c *Client) DiagnosticPage() string {
 	return builder.String()
 }
 
-// DiagnosticZip add to a zipfile useful diagnostic information
+// DiagnosticZip add to a zipfile useful diagnostic information.
 func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
 	c.l.Lock()
 	if len(c.failedPoints) > 100 {
@@ -237,8 +237,10 @@ func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
 
 		fmt.Fprintf(file, "MQTT connector has %d points that are failing.\n", len(c.failedPoints))
 		fmt.Fprintf(file, "It usually happen when MQTT is not connector OR when metric are not registered with Bleemeo.\n")
+
 		if maxSample > len(c.failedPoints) {
 			fmt.Fprintf(file, "Here is the list of all blocked metrics:\n")
+
 			for _, p := range c.failedPoints {
 				fmt.Fprintf(file, "%v\n", p.Labels)
 			}

@@ -1411,7 +1411,10 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 	}
 
 	if a.bleemeoConnector != nil {
-		a.bleemeoConnector.DiagnosticZip(zipFile)
+		err = a.bleemeoConnector.DiagnosticZip(zipFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
