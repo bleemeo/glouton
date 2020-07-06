@@ -17,6 +17,7 @@
 package cache
 
 import (
+	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/types"
@@ -32,6 +33,8 @@ type Cache struct {
 	l     sync.Mutex
 	dirty bool
 	state bleemeoTypes.State
+
+	cachedMetricLookup map[string]bleemeoTypes.Metric
 }
 
 type data struct {
@@ -233,6 +236,7 @@ func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {
 	defer c.l.Unlock()
 
 	c.data.Metrics = metrics
+	c.cachedMetricLookup = nil
 	c.dirty = true
 }
 
@@ -245,6 +249,21 @@ func (c *Cache) Metrics() (metrics []bleemeoTypes.Metric) {
 	copy(result, c.data.Metrics)
 
 	return result
+}
+
+// MetricLookupFromList return a map[MetricLabelItem]Metric of all known Metrics
+//
+// This is an optimized version of common.MetricLookupFromList(c.Metrics()).
+// You should NOT mutate the result.
+func (c *Cache) MetricLookupFromList() map[string]bleemeoTypes.Metric {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.cachedMetricLookup == nil {
+		c.cachedMetricLookup = common.MetricLookupFromList(c.data.Metrics)
+	}
+
+	return c.cachedMetricLookup
 }
 
 // MetricsByUUID returns a map metric.id => metric.

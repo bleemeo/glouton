@@ -142,8 +142,7 @@ func filterMetrics(input []types.Metric, metricWhitelist map[string]bool) []type
 }
 
 func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []string {
-	registeredMetrics := s.option.Cache.Metrics()
-	registeredMetricsByKey := common.MetricLookupFromList(registeredMetrics)
+	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
 	result := make([]string, 0)
 
@@ -444,7 +443,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 
 func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, fullForInactive bool) error {
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
+	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	services := s.option.Cache.Services()
@@ -500,7 +499,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 				}
 
 				registeredMetricsByUUID = s.option.Cache.MetricsByUUID()
-				registeredMetricsByKey = common.MetricLookupFromList(s.option.Cache.Metrics())
+				registeredMetricsByKey = s.option.Cache.MetricLookupFromList()
 			}
 		case metricPassRetry:
 			currentList = retryMetrics
@@ -718,7 +717,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	longToShortKeyLookup := longToShortKey(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
+	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
 	for _, srv := range localServices {
 		if !srv.CheckIgnored {

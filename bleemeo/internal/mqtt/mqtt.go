@@ -482,8 +482,7 @@ func (c *Client) sendPoints() {
 		return
 	}
 
-	registreredMetrics := c.option.Cache.Metrics()
-	registreredMetricByKey := common.MetricLookupFromList(registreredMetrics)
+	registreredMetricByKey := c.option.Cache.MetricLookupFromList()
 
 	if len(c.failedPoints) > 0 && c.Connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
 		localMetrics, err := c.option.Store.Metrics(nil)
