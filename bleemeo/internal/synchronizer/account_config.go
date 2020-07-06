@@ -38,7 +38,7 @@ func (s *Synchronizer) getAccountConfig(uuid string) (config types.AccountConfig
 // We assume the numbers of account configs (<10) to be low enough that it is acceptable to reload
 // every single one when adding/removing a monitor.
 func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
-	configs := make(map[string]types.AccountConfig, len(uuids))
+	configs := make(map[string]types.AccountConfig, 1)
 
 	defer func() {
 		s.option.Cache.SetAccountConfigs(configs)
