@@ -512,13 +512,9 @@ func (a *agent) run() { //nolint:gocyclo
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
-		if a.config.Bool("agent.process_exporter.enabled") {
-			psLister = &process.Processes{
-				HostRootPath:    a.hostRootPath,
-				DefaultValidity: 9 * time.Second,
-			}
-		} else {
-			psLister = facts.NewPsUtilLister(a.hostRootPath)
+		psLister = &process.Processes{
+			HostRootPath:    a.hostRootPath,
+			DefaultValidity: 9 * time.Second,
 		}
 	}
 
