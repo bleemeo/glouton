@@ -53,6 +53,7 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
 	s.forceSync["monitors"] = true
+
 	if mu.op == Change {
 		// syncing metrics is necessary when an account in which there is a probe is downgraded to a plan with
 		// a stricter metric whitelist, as we need to stop using the metrics in our cache, as they were deleted by the API.

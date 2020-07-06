@@ -17,6 +17,7 @@
 package bleemeo
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
 	"runtime"
@@ -343,6 +344,21 @@ func (c *Connector) DiagnosticPage() string {
 	builder.WriteString(<-mqttPage)
 
 	return builder.String()
+}
+
+// DiagnosticZip add to a zipfile useful diagnostic information.
+func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
+	c.l.Lock()
+	mqtt := c.mqtt
+	c.l.Unlock()
+
+	if mqtt != nil {
+		if err := mqtt.DiagnosticZip(zipFile); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Tags returns the Tags set on Bleemeo Cloud platform.

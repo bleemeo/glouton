@@ -37,12 +37,14 @@ require (
 	github.com/mdlayher/wifi v0.0.0-20200527114002-84f0b9457fdd // indirect
 	github.com/mitchellh/mapstructure v1.3.1 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
+	github.com/ncabatoff/process-exporter v0.7.1
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/prometheus/blackbox_exporter v0.17.0
 	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/client_model v0.2.0
 	github.com/prometheus/common v0.10.0
 	github.com/prometheus/node_exporter v1.0.0
+	github.com/prometheus/procfs v0.1.1
 	github.com/prometheus/prometheus v1.8.2-0.20200213233353-b90be6f32a33
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v2.20.4+incompatible
@@ -71,3 +73,5 @@ require (
 	k8s.io/utils v0.0.0-20200529193333-24a76e807f40 // indirect
 	sigs.k8s.io/yaml v1.2.0
 )
+
+replace github.com/ncabatoff/process-exporter => github.com/PierreF/process-exporter v0.6.1-0.20200610182819-0fb770c071f3

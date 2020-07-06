@@ -58,15 +58,15 @@ func (f pushFunction) PushPoints(points []types.MetricPoint) {
 // but it allow to attach labels to each Gatherers.
 // It also support pushed metrics.
 type Registry struct {
-	UpdatePushedPoints func()
-	PushPoint          types.PointPusher
-	FQDN               string
-	GloutonPort        string
-	BleemeoAgentID     string
-	MetricFormat       types.MetricFormat
+	PushPoint      types.PointPusher
+	FQDN           string
+	GloutonPort    string
+	BleemeoAgentID string
+	MetricFormat   types.MetricFormat
 
 	l sync.Mutex
 
+	pushUpdates     []func()
 	condition       *sync.Cond
 	countRunOnce    int
 	countPushPoints int
@@ -250,6 +250,18 @@ func (r *Registry) init() {
 	// Describe and/or Collect which may take the lock
 
 	_ = r.registyPush.Register((*pushCollector)(r))
+}
+
+// AddPushPointsCallback add a callback that should push points to the registry.
+// This callback will be called for each collection period. It's mostly used to
+// add Telegraf input (using glouton/collector).
+func (r *Registry) AddPushPointsCallback(f func()) {
+	r.init()
+
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	r.pushUpdates = append(r.pushUpdates, f)
 }
 
 // UpdateBleemeoAgentID change the BleemeoAgentID and wait for all pending metrics emission.
@@ -504,6 +516,27 @@ func (r *Registry) run(ctx context.Context) {
 	}
 }
 
+func (r *Registry) updatePushedPoints() {
+	r.l.Lock()
+	funcs := r.pushUpdates
+	r.l.Unlock()
+
+	var wg sync.WaitGroup
+
+	wg.Add(len(funcs))
+
+	for _, f := range funcs {
+		f := f
+
+		go func() {
+			defer wg.Done()
+			f()
+		}()
+	}
+
+	wg.Wait()
+}
+
 func (r *Registry) runOnce() {
 	r.l.Lock()
 
@@ -523,9 +556,7 @@ func (r *Registry) runOnce() {
 
 	t0 := time.Now()
 
-	if r.UpdatePushedPoints != nil {
-		r.UpdatePushedPoints()
-	}
+	r.updatePushedPoints()
 
 	var points []types.MetricPoint
 
