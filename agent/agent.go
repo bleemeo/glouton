@@ -53,12 +53,14 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
+	processInput "glouton/inputs/process"
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/node"
+	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/store"
@@ -70,6 +72,8 @@ import (
 
 	"net/http"
 	"net/url"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 type agent struct {
@@ -486,13 +490,22 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.dockerFact = facts.NewDocker(a.deletedContainersCallback, kubernetesProvider)
 
+	var (
+		psLister facts.ProcessLister
+	)
+
 	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
+	} else {
+		psLister = &process.Processes{
+			HostRootPath:    a.hostRootPath,
+			DefaultValidity: 9 * time.Second,
+		}
 	}
 
 	psFact := facts.NewProcess(
-		useProc,
+		psLister,
 		a.hostRootPath,
 		a.dockerFact,
 	)
@@ -501,8 +514,14 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 
+	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
+
 	a.collector = collector.New(acc)
-	a.gathererRegistry.UpdatePushedPoints = a.collector.RunGather
+	a.gathererRegistry.AddPushPointsCallback(a.collector.RunGather)
+
+	if a.metricFormat == types.MetricFormatBleemeo {
+		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
+	}
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -512,8 +531,9 @@ func (a *agent) run() { //nolint:gocyclo
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack"))
 	a.discovery = discovery.New(
-		discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack")),
+		dynamicDiscovery,
 		a.collector,
 		a.gathererRegistry,
 		a.taskRegistry,
@@ -595,6 +615,30 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	promExporter := a.gathererRegistry.Exporter()
+
+	if source, ok := psLister.(*process.Processes); ok && a.config.Bool("agent.process_exporter.enabled") {
+		processExporter := &process.Exporter{
+			Source:         source,
+			ProcessQuerier: dynamicDiscovery,
+		}
+		processGathere := prometheus.NewRegistry()
+
+		err = processGathere.Register(processExporter)
+		if err != nil {
+			logger.Printf("Failed to register process-exporter: %v", err)
+			logger.Printf("Processes metrics won't be available on /metrics endpoints")
+		} else {
+			_, err = a.gathererRegistry.RegisterGatherer(processGathere, nil, nil)
+			if err != nil {
+				logger.Printf("Failed to register process-exporter: %v", err)
+				logger.Printf("Processes metrics won't be available on /metrics endpoints")
+			}
+		}
+
+		if a.metricFormat == types.MetricFormatBleemeo {
+			a.gathererRegistry.AddPushPointsCallback(processExporter.PushTo(a.gathererRegistry.WithTTL(5 * time.Minute)))
+		}
+	}
 
 	api := &api.API{
 		DB:                 a.store,
@@ -1434,6 +1478,13 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 	_, err = file.Write(logger.Buffer())
 	if err != nil {
 		return err
+	}
+
+	if a.bleemeoConnector != nil {
+		err = a.bleemeoConnector.DiagnosticZip(zipFile)
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
