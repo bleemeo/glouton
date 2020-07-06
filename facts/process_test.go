@@ -292,7 +292,7 @@ func TestUpdateProcesses(t *testing.T) {
 		},
 	}
 
-	err := pp.updateProcesses(context.Background())
+	err := pp.updateProcesses(context.Background(), 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -438,7 +438,7 @@ func TestDeltaCPUPercent(t *testing.T) {
 		},
 	}
 
-	err := pp.updateProcesses(context.Background())
+	err := pp.updateProcesses(context.Background(), 0)
 	if err != nil {
 		t.Error(err)
 	}
