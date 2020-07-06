@@ -254,3 +254,14 @@ func TextToLabels(text string) map[string]string {
 
 	return results
 }
+
+type Monitor struct {
+	ID                      string
+	MetricMonitorResolution int
+	CreationDate            string
+	URL                     string
+	BleemeoAgentID          string
+	ExpectedContent         string
+	ExpectedResponseCode    int
+	ForbiddenContent        string
+}

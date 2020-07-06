@@ -21,6 +21,7 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/types"
 )
 
 type MonitorOperation int
@@ -36,6 +37,7 @@ type MonitorUpdate struct {
 	uuid string
 }
 
+// UpdateMonitor requests to update a monitor, identified by its UUID. It allows for adding, updating and removing a monitor.
 func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -89,7 +91,7 @@ func (s *Synchronizer) syncMonitors(fullSync bool) error {
 
 	s.option.Cache.SetMonitors(apiMonitors)
 
-	return s.applyMonitorUpdate(apiMonitors)
+	return s.ApplyMonitorUpdate(true)
 }
 
 // should we try to modify as much monitors as possible, and return a list of errors, instead of failing early ?
@@ -145,19 +147,23 @@ OuterBreak:
 
 	s.option.Cache.SetMonitors(currentMonitors)
 
-	return s.applyMonitorUpdate(currentMonitors)
+	return s.ApplyMonitorUpdate(true)
 }
 
-func (s *Synchronizer) applyMonitorUpdate(monitors []bleemeoTypes.Monitor) error {
-	// get the list of needed account configurations
-	uuids := make([]string, 0, len(monitors))
+func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error {
+	monitors := s.option.Cache.Monitors()
 
-	for _, m := range monitors {
-		uuids = append(uuids, m.AccountConfig)
-	}
+	if forceAccountConfigsReload {
+		// get the list of needed account configurations
+		uuids := make([]string, 0, len(monitors))
 
-	if err := s.updateAccountConfigsFromList(uuids); err != nil {
-		return err
+		for _, m := range monitors {
+			uuids = append(uuids, m.AccountConfig)
+		}
+
+		if err := s.updateAccountConfigsFromList(uuids); err != nil {
+			return err
+		}
 	}
 
 	if s.option.MonitorManager == nil {
@@ -165,8 +171,31 @@ func (s *Synchronizer) applyMonitorUpdate(monitors []bleemeoTypes.Monitor) error
 		return nil
 	}
 
+	accountConfigs := s.option.Cache.AccountConfigs()
+
+	processedMonitors := make([]types.Monitor, 0, len(monitors))
+
+	for _, monitor := range monitors {
+		// try to retrieve the account config associated with this monitor
+		conf, present := accountConfigs[monitor.AccountConfig]
+		if !present {
+			return fmt.Errorf("missing account configuration '%s' for probe '%s'", monitor.AccountConfig, monitor.URL)
+		}
+
+		processedMonitors = append(processedMonitors, types.Monitor{
+			ID:                      monitor.ID,
+			MetricMonitorResolution: conf.MetricMonitorResolution,
+			CreationDate:            monitor.CreationDate,
+			URL:                     monitor.URL,
+			BleemeoAgentID:          monitor.AgentID,
+			ExpectedContent:         monitor.ExpectedContent,
+			ExpectedResponseCode:    monitor.ExpectedResponseCode,
+			ForbiddenContent:        monitor.ForbiddenContent,
+		})
+	}
+
 	// refresh blackbox collectors to meet the new configuration
-	if err := s.option.MonitorManager.UpdateDynamicTargets(monitors, s.option.Cache.AccountConfigs()); err != nil {
+	if err := s.option.MonitorManager.UpdateDynamicTargets(processedMonitors); err != nil {
 		logger.V(1).Printf("Could not update blackbox_exporter")
 		return err
 	}

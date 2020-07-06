@@ -35,13 +35,14 @@ func (s *Synchronizer) getAccountConfig(uuid string) (config types.AccountConfig
 	return
 }
 
+// We assume the numbers of account configs (<10) to be low enough that it is acceptable to reload
+// every single one when adding/removing a monitor.
 func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
-	var err error
-
-	// we assume the numbers of account configs (<10) to be low enough that it is acceptable to reload
-	// every single one when adding/removing a monitor
-
 	configs := make(map[string]types.AccountConfig, len(uuids))
+
+	defer func() {
+		s.option.Cache.SetAccountConfigs(configs)
+	}()
 
 	for _, uuid := range uuids {
 		// We already loaded this config in a previous iteration of this loop, let's not do it again
@@ -49,16 +50,13 @@ func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
 			continue
 		}
 
-		// we only return a single error each time, but that is okay
 		ac, err := s.getAccountConfig(uuid)
 		if err != nil {
-			continue
+			return err
 		}
 
 		configs[uuid] = ac
 	}
 
-	s.option.Cache.SetAccountConfigs(configs)
-
-	return err
+	return nil
 }

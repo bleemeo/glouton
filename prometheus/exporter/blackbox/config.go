@@ -18,7 +18,6 @@ package blackbox
 
 import (
 	"fmt"
-	"glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	gloutonTypes "glouton/types"
@@ -71,14 +70,16 @@ func defaultModule() bbConf.Module {
 	}
 }
 
-func genCollectorFromDynamicTarget(uri string, monitor types.Monitor, conf types.AccountConfig) (*collectorWithLabels, error) {
+func genCollectorFromDynamicTarget(monitor gloutonTypes.Monitor) (*collectorWithLabels, error) {
 	mod := defaultModule()
 
-	url, err := url.Parse(uri)
+	url, err := url.Parse(monitor.URL)
 	if err != nil {
-		logger.V(2).Printf("Invalid URL: '%s'", uri)
+		logger.V(2).Printf("Invalid URL: '%s'", monitor.URL)
 		return nil, err
 	}
+
+	uri := monitor.URL
 
 	switch url.Scheme {
 	case proberNameHTTP, "https":
@@ -117,13 +118,13 @@ func genCollectorFromDynamicTarget(uri string, monitor types.Monitor, conf types
 	confTarget := configTarget{
 		Module:         mod,
 		Name:           monitor.URL,
-		BleemeoAgentID: monitor.AgentID,
+		BleemeoAgentID: monitor.BleemeoAgentID,
 		URL:            uri,
 		CreationDate:   creationDate,
 	}
 
-	if conf.MetricMonitorResolution != 0 {
-		confTarget.RefreshRate = time.Duration(conf.MetricMonitorResolution) * time.Second
+	if monitor.MetricMonitorResolution != 0 {
+		confTarget.RefreshRate = time.Duration(monitor.MetricMonitorResolution) * time.Second
 	}
 
 	return &collectorWithLabels{
@@ -131,7 +132,7 @@ func genCollectorFromDynamicTarget(uri string, monitor types.Monitor, conf types
 		labels: map[string]string{
 			gloutonTypes.LabelMetaProbeTarget:      confTarget.Name,
 			gloutonTypes.LabelMetaProbeServiceUUID: monitor.ID,
-			gloutonTypes.LabelMetaProbeAgentUUID:   monitor.AgentID,
+			gloutonTypes.LabelMetaProbeAgentUUID:   monitor.BleemeoAgentID,
 		},
 	}, nil
 }
@@ -218,7 +219,7 @@ func (m *RegisterManager) EnableDynamicProbing() {
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
-func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor, accountConfigs map[string]types.AccountConfig) error {
+func (m *RegisterManager) UpdateDynamicTargets(monitors []gloutonTypes.Monitor) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
 	// than to compute the difference between the new and the old configuration.
 	// This is simple because calling UpdateDynamicTargets with the same argument should be idempotent.
@@ -234,13 +235,7 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor, account
 	// append all dynamic target to the list, when the bleemeo mode is enabled
 	if m.dynamicMode {
 		for _, monitor := range monitors {
-			// try to retrieve the account config associated with this monitor
-			conf, present := accountConfigs[monitor.AccountConfig]
-			if !present {
-				return fmt.Errorf("missing account configuration '%s' for probe '%s'", monitor.AccountConfig, monitor.URL)
-			}
-
-			collector, err := genCollectorFromDynamicTarget(monitor.URL, monitor, conf)
+			collector, err := genCollectorFromDynamicTarget(monitor)
 			if err != nil {
 				return err
 			}

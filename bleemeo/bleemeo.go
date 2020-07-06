@@ -274,6 +274,11 @@ func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
 }
 
+// RunMonitors starts the monitors from the cache.
+func (c *Connector) RunMonitors() error {
+	return c.sync.ApplyMonitorUpdate(false)
+}
+
 // DiagnosticPage return useful information to troubleshoot issue.
 func (c *Connector) DiagnosticPage() string {
 	builder := &strings.Builder{}

@@ -101,7 +101,6 @@ type ProbeGatherer struct {
 func NewProbeGatherer(gatherer prometheus.Gatherer) *ProbeGatherer {
 	return &ProbeGatherer{
 		g: gatherer,
-		l: sync.Mutex{},
 	}
 }
 

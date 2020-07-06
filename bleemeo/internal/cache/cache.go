@@ -23,7 +23,7 @@ import (
 	"sync"
 )
 
-const cacheVersion = 1
+const cacheVersion = 2
 const cacheKey = "CacheBleemeoConnector"
 
 // Cache store information about object registered in Bleemeo API.
@@ -49,6 +49,10 @@ type data struct {
 	CurrentAccountConfig bleemeoTypes.AccountConfig
 	Services             []bleemeoTypes.Service
 	Monitors             []bleemeoTypes.Monitor
+}
+
+type dataVersion1 struct {
+	AccountConfig bleemeoTypes.AccountConfig
 }
 
 // SetAccountID update the AccountID.
@@ -361,6 +365,20 @@ func Load(state bleemeoTypes.State) *Cache {
 		logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
 
 		cache.data.Version = cacheVersion
+	case 1:
+		logger.V(1).Printf("Old version of the cache found, upgrading it.")
+
+		// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
+		// the addition of Monitors and AccountConfigs
+		var oldCache dataVersion1
+
+		if err := state.Get(cacheKey, &oldCache); err == nil {
+			newData.CurrentAccountConfig = oldCache.AccountConfig
+		}
+
+		newData.Version = cacheVersion
+
+		cache.data = newData
 	case cacheVersion:
 		cache.data = newData
 	default:
