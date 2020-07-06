@@ -203,7 +203,7 @@ func (c *Processes) getProcs(validity time.Duration) ([]procValue, error) {
 
 	if err == nil {
 		c.cache = procs
-		c.lastUpdate = time.Now()
+		c.lastUpdate = start
 	}
 
 	if err != nil {

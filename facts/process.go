@@ -173,7 +173,7 @@ func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (t
 	defer pp.l.Unlock()
 
 	if time.Since(pp.lastProcessesUpdate) > maxAge {
-		err = pp.updateProcesses(ctx)
+		err = pp.updateProcesses(ctx, maxAge)
 		if err != nil {
 			return
 		}
@@ -190,7 +190,7 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 	defer pp.l.Unlock()
 
 	if time.Since(pp.lastProcessesUpdate) > maxAge {
-		err = pp.updateProcesses(ctx)
+		err = pp.updateProcesses(ctx, maxAge)
 		if err != nil {
 			return
 		}
@@ -458,7 +458,7 @@ func PsStat2Status(psStat string) string {
 	}
 }
 
-func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint: gocyclo
+func (pp *ProcessProvider) updateProcesses(ctx context.Context, maxAge time.Duration) error { //nolint: gocyclo
 	t0 := time.Now()
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
@@ -468,7 +468,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 	newProcessesMap := make(map[int]Process)
 
 	if pp.pslister != nil {
-		psProcesses, err := pp.pslister.Processes(ctx, 0)
+		psProcesses, err := pp.pslister.Processes(ctx, maxAge)
 		if err != nil {
 			return err
 		}
@@ -486,7 +486,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 		// If we have too few processes listed by gopsutil, it probably means
 		// we don't have access to root PID namespace. In this case do a processes
 		// listing using Docker. We avoid it if possible as it's rather slow.
-		dockerProcesses, err := pp.dp.Processes(ctx, 0)
+		dockerProcesses, err := pp.dp.Processes(ctx, maxAge)
 		if err != nil {
 			return err
 		}
