@@ -667,7 +667,7 @@ func (c *Client) publish(topic string, payload []byte, retry bool) {
 }
 
 func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig) {
-	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second/2)
+	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second-time.Second)
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
 		return

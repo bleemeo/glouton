@@ -78,6 +78,7 @@ type Process struct {
 	Executable      string    `json:"exe"`
 	ContainerID     string    `json:"-"`
 	ContainerName   string    `json:"instance"`
+	NumThreads      int       `json:"num_threads"`
 }
 
 // TopInfo contains all information to show a top-like view.
@@ -906,6 +907,8 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 			continue
 		}
 
+		numThread, _ := p.NumThreads()
+
 		p := Process{
 			PID:             int(p.Pid),
 			PPID:            int(ppid),
@@ -919,6 +922,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 			Status:          PsStat2Status(status),
 			Username:        userName,
 			Executable:      executable,
+			NumThreads:      int(numThread),
 		}
 
 		processes = append(processes, p)

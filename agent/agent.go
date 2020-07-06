@@ -53,6 +53,7 @@ import (
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
+	processInput "glouton/inputs/process"
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
@@ -528,8 +529,14 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.AddCallback(a.dockerFact.DockerFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 
+	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
+
 	a.collector = collector.New(acc)
 	a.gathererRegistry.AddPushPointsCallback(a.collector.RunGather)
+
+	if a.metricFormat == types.MetricFormatBleemeo {
+		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
+	}
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")

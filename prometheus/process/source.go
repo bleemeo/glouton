@@ -155,6 +155,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 			Status:          status,
 			Username:        username,
 			Executable:      executable,
+			NumThreads:      p.procStat.NumThreads,
 		}
 	}
 
