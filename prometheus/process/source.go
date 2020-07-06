@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
+	"os"
 	"os/user"
 	"path/filepath"
 	"reflect"
@@ -103,8 +104,12 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 	result := make([]facts.Process, len(procs))
 
 	for i, p := range procs {
+		if os.IsNotExist(p.procErr) {
+			continue
+		}
+
 		if p.procErr != nil {
-			return nil, err
+			return nil, p.procErr
 		}
 
 		status := facts.PsStat2Status(p.procStat.State)
@@ -165,6 +170,8 @@ func (c *Processes) getProcs(validity time.Duration) ([]procValue, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	start := time.Now()
+
 	if c.source == nil {
 		procPath := filepath.Join(c.HostRootPath, "proc")
 		if c.HostRootPath == "" {
@@ -198,6 +205,12 @@ func (c *Processes) getProcs(validity time.Duration) ([]procValue, error) {
 		c.cache = procs
 		c.lastUpdate = time.Now()
 	}
+
+	if err != nil {
+		logger.V(1).Printf("listing process failed: %v", err)
+	}
+
+	logger.V(2).Printf("procfs listed %d processes in %v", len(procs), time.Since(start))
 
 	return procs, err
 }

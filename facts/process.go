@@ -608,7 +608,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context) error { //nolint
 	pp.processes = newProcessesMap
 	pp.lastProcessesUpdate = time.Now()
 
-	logger.V(2).Printf("Completed processes update in %v", time.Since(t0))
+	logger.V(2).Printf("Completed %d processes update in %v", len(pp.processes), time.Since(t0))
 
 	return nil
 }
