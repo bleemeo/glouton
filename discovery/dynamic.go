@@ -242,10 +242,6 @@ func (dw *dockerWrapper) Container(containerID string) (c container, found bool)
 }
 
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
-	if maxAge < 500*time.Millisecond {
-		maxAge = 500 * time.Millisecond
-	}
-
 	processes, err := dd.ps.Processes(ctx, maxAge)
 	if err != nil {
 		return err
