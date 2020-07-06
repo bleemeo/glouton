@@ -99,7 +99,7 @@ var defaultConfig = map[string]interface{}{
 	"kubernetes.enabled":               false,
 	"kubernetes.nodename":              "",
 	"kubernetes.kubeconfig":            "",
-	"logging.buffer.head_size":         30,
+	"logging.buffer.head_size":         150,
 	"logging.buffer.tail_size":         1000,
 	"logging.level":                    "INFO",
 	"logging.output":                   "console",
