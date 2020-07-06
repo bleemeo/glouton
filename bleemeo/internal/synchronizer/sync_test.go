@@ -215,7 +215,7 @@ func TestSyncMetrics(t *testing.T) {
 	cfg.Set("bleemeo.account_id", accountID)
 	cfg.Set("bleemeo.registration_key", registrationKey)
 	cfg.Set("blackbox.enabled", true)
-	cfg.Set("blackbox.bleemeo_mode", true)
+	cfg.Set("bleemeo.remote_probing_enabled", true)
 
 	cache := cache.Cache{}
 
