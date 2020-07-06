@@ -285,14 +285,12 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 		return nil, fmt.Errorf("process-exporter changed its internal, expected proccache, got %v", value.Type().Name())
 	}
 
-	value = value.Addr()
-
-	ptr := value.Pointer()
-	if ptr == 0 {
+	ptr := unsafe.Pointer(value.UnsafeAddr())
+	if uintptr(ptr) == 0 {
 		return nil, errors.New("process-exporter changed its internal, getProcCache return null-pointer")
 	}
 
-	return unsafe.Pointer(ptr), nil
+	return ptr, nil
 }
 
 // getStat extract the procfs.ProcStat from proc.proccache
