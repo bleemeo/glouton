@@ -131,21 +131,22 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			TargetLabel:  types.LabelScraperUUID,
 			Replacement:  "$2",
 		},
-		// when the metric comes from a probe, the 'scraper' label is the value we traditionnaly put in the 'instance' label
+		// when the metric comes from a probe, the 'scraper' label is the value we usually put in the 'instance' label
 		{
 			Action:       relabel.Replace,
-			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeScraperName},
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelInstance},
 			TargetLabel:  types.LabelScraper,
-			Replacement:  "$1",
+			Replacement:  "$2",
 		},
 		// when the metric comes from a probe and the user specified it in the config file, the 'scraper' label is the user-provided string
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID},
-			TargetLabel:  types.LabelScraperUUID,
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaProbeScraperName},
+			TargetLabel:  types.LabelScraper,
 			Replacement:  "$2",
 		},
 		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the service watched
