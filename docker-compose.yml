@@ -24,6 +24,8 @@ services:
     - jmxtrans-config:/var/lib/jmxtrans
     network_mode: "host"
     pid: "host"
+    cap_add:
+    - CAP_SYS_PTRACE # This permission is needed to monitor processes IO and memory used per processes.
   jmxtrans:
     image: jmxtrans/jmxtrans
     volumes:
