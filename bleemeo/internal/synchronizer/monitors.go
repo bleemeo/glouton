@@ -65,6 +65,8 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 func (s *Synchronizer) syncMonitors(fullSync bool) error {
 	bbEnabled := s.option.Config.Bool("blackbox.enabled") && s.option.Config.Bool("bleemeo.remote_probing_enabled")
 	if !bbEnabled {
+		// prevent a tiny memory leak
+		s.pendingMonitorsUpdate = nil
 		return nil
 	}
 
