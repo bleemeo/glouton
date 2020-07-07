@@ -20,6 +20,8 @@ import (
 	"errors"
 	"fmt"
 	"glouton/collector"
+	"glouton/config"
+	"glouton/inputs"
 	"glouton/inputs/apache"
 	"glouton/inputs/cpu"
 	"glouton/inputs/disk"
@@ -39,10 +41,14 @@ import (
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
 	"glouton/inputs/system"
+	winPerfCounters "glouton/inputs/win_perf_counters"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
 	"glouton/types"
+	"regexp"
+	"runtime"
 	"strconv"
+	"strings"
 
 	"github.com/influxdata/telegraf"
 )
@@ -51,21 +57,46 @@ var (
 	errNotSupported = errors.New("service not supported by Prometheus collector")
 )
 
-// InputOption are option used by system inputs.
-type InputOption struct {
-	DFRootPath      string
-	DFPathBlacklist []string
-	NetIfBlacklist  []string
-	IODiskWhitelist []string
-	IODiskBlacklist []string
-}
-
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
-	var (
-		input telegraf.Input
-		err   error
-	)
+func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hostRootPath string) error {
+	var input telegraf.Input
+
+	var err error
+
+	diskWhitelist := conf.StringList("disk_monitor")
+	whitelistRE := make([]*regexp.Regexp, len(diskWhitelist))
+
+	for index, v := range diskWhitelist {
+		whitelistRE[index], err = regexp.Compile(v)
+		if err != nil {
+			return fmt.Errorf("diskio whitelist RE compile fail: %s", err)
+		}
+	}
+
+	diskBlacklist := conf.StringList("disk_ignore")
+	blacklistRE := make([]*regexp.Regexp, len(diskBlacklist))
+
+	for index, v := range diskBlacklist {
+		blacklistRE[index], err = regexp.Compile(v)
+		if err != nil {
+			return fmt.Errorf("diskio blacklist RE compile fail: %s", err)
+		}
+	}
+
+	pathBlacklist := conf.StringList("df.path_ignore")
+	pathBlacklistTrimed := make([]string, len(pathBlacklist))
+
+	for i, v := range pathBlacklist {
+		pathBlacklistTrimed[i] = strings.TrimRight(v, "/")
+	}
+
+	inputsConfig := inputs.CollectorConfig{
+		DFRootPath:      hostRootPath,
+		NetIfBlacklist:  conf.StringList("network_interface_blacklist"),
+		IODiskWhitelist: whitelistRE,
+		IODiskBlacklist: blacklistRE,
+		DFPathBlacklist: pathBlacklistTrimed,
+	}
 
 	input, err = system.New()
 	if err != nil {
@@ -103,7 +134,7 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		return err
 	}
 
-	input, err = netInput.New(option.NetIfBlacklist)
+	input, err = netInput.New(inputsConfig.NetIfBlacklist)
 	if err != nil {
 		return err
 	}
@@ -112,8 +143,8 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		return err
 	}
 
-	if option.DFRootPath != "" {
-		input, err = disk.New(option.DFRootPath, option.DFPathBlacklist)
+	if inputsConfig.DFRootPath != "" {
+		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathBlacklist)
 		if err != nil {
 			return err
 		}
@@ -123,7 +154,7 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		}
 	}
 
-	input, err = diskio.New(option.IODiskWhitelist, option.IODiskBlacklist)
+	input, err = diskio.New(inputsConfig.IODiskWhitelist, inputsConfig.IODiskBlacklist)
 	if err != nil {
 		return err
 	}
@@ -132,7 +163,16 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		return err
 	}
 
-	return nil
+	if runtime.GOOS == "windows" {
+		input, err = winPerfCounters.New(conf.String("telegraf.win_perf_counters.config_file"), inputsConfig)
+		if err != nil {
+			return err
+		}
+
+		_, err = coll.AddInput(input, "win_perf_counters")
+	}
+
+	return err
 }
 
 func (d *Discovery) configureMetricInputs(oldServices, services map[NameContainer]Service) (err error) {

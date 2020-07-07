@@ -103,6 +103,8 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 		valueFloat = float64(value)
 	case float64:
 		valueFloat = value
+	case float32:
+		valueFloat = float64(value)
 	case int:
 		valueFloat = float64(value)
 	case int64:

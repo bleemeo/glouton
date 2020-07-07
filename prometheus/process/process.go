@@ -14,11 +14,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build linux
+
 package process
 
 import (
 	"glouton/discovery"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/types"
 	"sync"
 	"time"
@@ -27,6 +30,39 @@ import (
 	"github.com/ncabatoff/process-exporter/proc"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDiscovery *discovery.DynamicDiscovery, bleemeoFormat bool) {
+	if processExporter := NewExporter(psLister, dynamicDiscovery); processExporter != nil {
+		processGatherer := prometheus.NewRegistry()
+
+		err := processGatherer.Register(processExporter)
+		if err != nil {
+			logger.Printf("Failed to register process-exporter: %v", err)
+			logger.Printf("Processes metrics won't be available on /metrics endpoints")
+		} else {
+			_, err = reg.RegisterGatherer(processGatherer, nil, nil)
+			if err != nil {
+				logger.Printf("Failed to register process-exporter: %v", err)
+				logger.Printf("Processes metrics won't be available on /metrics endpoints")
+			}
+		}
+
+		if bleemeoFormat {
+			reg.AddPushPointsCallback(processExporter.PushTo(reg.WithTTL(5 * time.Minute)))
+		}
+	}
+}
+
+func NewExporter(psLister interface{}, processQuerier *discovery.DynamicDiscovery) *Exporter {
+	if source, ok := psLister.(*Processes); ok {
+		return &Exporter{
+			Source:         source,
+			ProcessQuerier: processQuerier,
+		}
+	}
+
+	return nil
+}
 
 type processerQuerier interface {
 	ProcessServiceInfo(cmdLine []string, pid int, createTime time.Time) (serviceName discovery.ServiceName, containerName string)

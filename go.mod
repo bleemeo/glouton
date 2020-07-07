@@ -7,7 +7,7 @@ require (
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 // indirect
-	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 	github.com/containerd/containerd v1.3.4 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20200228174753-40b2b4b08306
@@ -33,6 +33,7 @@ require (
 	github.com/imdario/mergo v0.3.9 // indirect
 	github.com/influxdata/influxdb1-client v0.0.0-20200515024757-02f0bf5dbca3
 	github.com/influxdata/telegraf v1.14.3
+	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
 	github.com/karrick/godirwalk v1.15.6 // indirect
 	github.com/klauspost/compress v1.10.10
@@ -77,3 +78,5 @@ require (
 )
 
 replace github.com/ncabatoff/process-exporter => github.com/PierreF/process-exporter v0.6.1-0.20200610182819-0fb770c071f3
+
+replace github.com/shirou/gopsutil => github.com/nightmared/gopsutil v2.20.7-0.20200709151433-3b649445347b+incompatible

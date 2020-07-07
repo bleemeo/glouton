@@ -1,3 +1,5 @@
+// +build linux
+
 package process
 
 import (
@@ -43,6 +45,13 @@ type Processes struct {
 	exeCache   map[proc.ID]string
 	userCache  map[proc.ID]string
 	lastUpdate time.Time
+}
+
+func NewProcessLister(hostRootPath string, defaultValidity time.Duration) facts.ProcessLister {
+	return &Processes{
+		HostRootPath:    hostRootPath,
+		DefaultValidity: defaultValidity,
+	}
 }
 
 // AllProcs return all processes.

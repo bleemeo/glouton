@@ -38,11 +38,6 @@ type diskTransformer struct {
 // blacklist is a list of path-prefix to ignore. Path prefix means that "/mnt" and "/mnt/disk" both have "/mnt"
 // as prefix, but "/mnt-disk" does not.
 func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
-	blacklistTrimed := make([]string, len(blacklist))
-	for i, v := range blacklist {
-		blacklistTrimed[i] = strings.TrimRight(v, "/")
-	}
-
 	input, ok := telegraf_inputs.Inputs["disk"]
 
 	if ok {
@@ -52,7 +47,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 		}
 		dt := diskTransformer{
 			strings.TrimRight(mountPoint, "/"),
-			blacklistTrimed,
+			blacklist,
 		}
 		i = &internal.Input{
 			Input: diskInput,

@@ -22,6 +22,7 @@ import (
 	"glouton/bleemeo/types"
 	"glouton/facts"
 	"glouton/logger"
+	"runtime"
 	"time"
 )
 
@@ -41,6 +42,11 @@ type containerPayload struct {
 }
 
 func (s *Synchronizer) syncContainers(fullSync bool) error {
+	// TODO: support windows containers (only on windows server ?) ?
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	var localContainers []facts.Container
 
 	if s.option.Cache.AccountConfig().DockerIntegration {

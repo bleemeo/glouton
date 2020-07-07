@@ -18,7 +18,6 @@ package diskio
 
 import (
 	"errors"
-	"fmt"
 	"glouton/inputs/internal"
 	"regexp"
 
@@ -38,35 +37,15 @@ type diskIOTransformer struct {
 // blacklist is a list of regular expretion for device to include
 //
 // If blacklist is provided (not empty) it's used and whitelist is ignored.
-func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
+func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
-
-	whitelistRE := make([]*regexp.Regexp, len(whitelist))
-
-	for index, v := range whitelist {
-		whitelistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			err = fmt.Errorf("diskio whitelist RE compile fail: %s", err)
-			return
-		}
-	}
-
-	blacklistRE := make([]*regexp.Regexp, len(blacklist))
-
-	for index, v := range blacklist {
-		blacklistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			err = fmt.Errorf("diskio blacklist RE compile fail: %s", err)
-			return
-		}
-	}
 
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
 		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
-			whitelist: whitelistRE,
-			blacklist: blacklistRE,
+			whitelist: whitelist,
+			blacklist: blacklist,
 		}
 		i = &internal.Input{
 			Input: diskioInput,

@@ -5,6 +5,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"reflect"
+	"regexp"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -94,6 +95,8 @@ func convertInterface(value interface{}) (float64, error) {
 		return float64(value), nil
 	case float64:
 		return value, nil
+	case float32:
+		return float64(value), nil
 	case int:
 		return float64(value), nil
 	case int64:
@@ -142,4 +145,12 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 	}
 
 	a.Pusher.PushPoints(points)
+}
+
+type CollectorConfig struct {
+	DFRootPath      string
+	DFPathBlacklist []string
+	NetIfBlacklist  []string
+	IODiskWhitelist []*regexp.Regexp
+	IODiskBlacklist []*regexp.Regexp
 }

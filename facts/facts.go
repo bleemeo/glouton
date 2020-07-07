@@ -33,7 +33,6 @@ import (
 
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
-	psutilNet "github.com/shirou/gopsutil/net"
 	"gopkg.in/yaml.v3"
 )
 
@@ -372,23 +371,6 @@ func guessVirtual(facts map[string]string) string {
 	default:
 		return "physical"
 	}
-}
-
-func macAddressByAddress(ctx context.Context, ipAddress string) string {
-	ifs, err := psutilNet.InterfacesWithContext(ctx)
-	if err != nil {
-		return ""
-	}
-
-	for _, i := range ifs {
-		for _, a := range i.Addrs {
-			if a.Addr == ipAddress {
-				return i.HardwareAddr
-			}
-		}
-	}
-
-	return ""
 }
 
 func urlContent(ctx context.Context, url string) string {

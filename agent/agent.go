@@ -58,7 +58,6 @@ import (
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/nrpe"
-	"glouton/prometheus/exporter/node"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -71,8 +70,6 @@ import (
 
 	"net/http"
 	"net/url"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type agent struct {
@@ -513,10 +510,7 @@ func (a *agent) run() { //nolint:gocyclo
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
-		psLister = &process.Processes{
-			HostRootPath:    a.hostRootPath,
-			DefaultValidity: 9 * time.Second,
-		}
+		psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
 	}
 
 	psFact := facts.NewProcess(
@@ -597,42 +591,13 @@ func (a *agent) run() { //nolint:gocyclo
 		DynamicJobName: "discovered-exporters",
 	}
 
-	nodeOption := node.Option{
-		RootFS:            a.hostRootPath,
-		EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
-	}
-
-	nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
-	nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
-
-	if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
-		logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
-	}
+	// register components only available on a given system, like node_exporter for unixes
+	a.registerOSSpecificComponents()
 
 	promExporter := a.gathererRegistry.Exporter()
 
-	if source, ok := psLister.(*process.Processes); ok && a.config.Bool("agent.process_exporter.enabled") {
-		processExporter := &process.Exporter{
-			Source:         source,
-			ProcessQuerier: dynamicDiscovery,
-		}
-		processGathere := prometheus.NewRegistry()
-
-		err = processGathere.Register(processExporter)
-		if err != nil {
-			logger.Printf("Failed to register process-exporter: %v", err)
-			logger.Printf("Processes metrics won't be available on /metrics endpoints")
-		} else {
-			_, err = a.gathererRegistry.RegisterGatherer(processGathere, nil, nil)
-			if err != nil {
-				logger.Printf("Failed to register process-exporter: %v", err)
-				logger.Printf("Processes metrics won't be available on /metrics endpoints")
-			}
-		}
-
-		if a.metricFormat == types.MetricFormatBleemeo {
-			a.gathererRegistry.AddPushPointsCallback(processExporter.PushTo(a.gathererRegistry.WithTTL(5 * time.Minute)))
-		}
+	if a.config.Bool("agent.process_exporter.enabled") {
+		process.RegisterExporter(a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
 	api := &api.API{
@@ -767,13 +732,8 @@ func (a *agent) run() { //nolint:gocyclo
 	if a.metricFormat == types.MetricFormatBleemeo {
 		err = discovery.AddDefaultInputs(
 			a.collector,
-			discovery.InputOption{
-				DFRootPath:      a.hostRootPath,
-				NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
-				IODiskWhitelist: a.config.StringList("disk_monitor"),
-				IODiskBlacklist: a.config.StringList("disk_ignore"),
-				DFPathBlacklist: a.config.StringList("df.path_ignore"),
-			},
+			a.config,
+			a.hostRootPath,
 		)
 		if err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)

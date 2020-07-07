@@ -34,7 +34,6 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 )
@@ -622,12 +621,10 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 
 	result.Uptime = int(uptime)
 
-	loads, err := load.Avg()
+	result.Loads, err = getCPULoads()
 	if err != nil {
 		return result, err
 	}
-
-	result.Loads = []float64{loads.Load1, loads.Load5, loads.Load15}
 
 	users, err := host.Users()
 	if err != nil {

@@ -19,8 +19,6 @@ package logger
 import (
 	"fmt"
 	"io"
-	"log"
-	"log/syslog"
 	"os"
 	"runtime"
 	"strconv"
@@ -135,40 +133,6 @@ func Buffer() []byte {
 // Changing capacity will always drop the tail.
 func SetBufferCapacity(headSize int, tailSize int) {
 	logBuffer.SetCapacity(headSize, tailSize)
-}
-
-// UseSyslog enable or disable logging to syslog. If syslog is not used, message
-// are sent to StdErr.
-func UseSyslog(useSyslog bool) error {
-	cfg.l.Lock()
-	defer cfg.l.Unlock()
-
-	cfg.useSyslog = useSyslog
-
-	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
-		closer.Close()
-	}
-
-	cfg.writer = nil
-
-	var err error
-
-	if useSyslog {
-		cfg.writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "")
-
-		if err != nil {
-			cfg.writer = os.Stderr
-			cfg.useSyslog = false
-		}
-	} else {
-		cfg.writer = os.Stderr
-	}
-
-	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
-
-	log.SetOutput(cfg.writer)
-
-	return err
 }
 
 // SetLevel configure the log level.
