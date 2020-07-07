@@ -75,6 +75,7 @@ type Client struct {
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
+	topinfoBuffer              bytes.Buffer
 
 	l                 sync.Mutex
 	pendingMessage    []message
@@ -674,9 +675,7 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.AgentID)
 
-	var buffer bytes.Buffer
-
-	w := zlib.NewWriter(&buffer)
+	w := zlib.NewWriter(&c.topinfoBuffer)
 
 	err = json.NewEncoder(w).Encode(topinfo)
 	if err != nil {
@@ -692,7 +691,11 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 		return
 	}
 
-	c.publish(topic, buffer.Bytes(), false)
+	clone := make([]byte, c.topinfoBuffer.Len())
+	copy(clone, c.topinfoBuffer.Bytes())
+	c.topinfoBuffer.Reset()
+
+	c.publish(topic, clone, false)
 }
 
 func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
