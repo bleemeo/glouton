@@ -443,7 +443,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 
 func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, fullForInactive bool) error {
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
+	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	services := s.option.Cache.Services()
@@ -499,7 +499,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 				}
 
 				registeredMetricsByUUID = s.option.Cache.MetricsByUUID()
-				registeredMetricsByKey = s.option.Cache.MetricLookupFromList()
+				registeredMetricsByKey = common.MetricLookupFromList(s.option.Cache.Metrics())
 			}
 		case metricPassRetry:
 			currentList = retryMetrics
