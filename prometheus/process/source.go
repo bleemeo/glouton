@@ -39,7 +39,7 @@ type Processes struct {
 
 	l          sync.Mutex
 	source     *proc.FS
-	cache      []procValue
+	cache      []*procValue
 	exeCache   map[proc.ID]string
 	userCache  map[proc.ID]string
 	lastUpdate time.Time
@@ -126,7 +126,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 
 		username, ok := userCache[p.ID]
 		if !ok {
-			static, err := p.proc.GetStatic()
+			static, err := p.GetStatic()
 			if err == nil {
 				username, _ = pwdLookup(static.EffectiveUID)
 			}
@@ -137,7 +137,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 		startTime := time.Unix(int64(c.source.BootTime), 0).UTC()
 		startTime = startTime.Add(time.Second / userHZ * time.Duration(p.procStat.Starttime))
 
-		cmdline, err := getCmdline(p.proc)
+		cmdline, err := p.getCmdline()
 		if err != nil {
 			logger.V(2).Printf("getCmdline failed: %v", err)
 		}
@@ -167,7 +167,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 	return result, nil
 }
 
-func (c *Processes) getProcs(validity time.Duration) ([]procValue, error) {
+func (c *Processes) getProcs(validity time.Duration) ([]*procValue, error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -194,7 +194,7 @@ func (c *Processes) getProcs(validity time.Duration) ([]procValue, error) {
 
 	procIter := c.source.AllProcs()
 
-	var procs []procValue
+	var procs []*procValue
 
 	for procIter.Next() {
 		procs = append(procs, newProcValue(procIter))
@@ -220,12 +220,13 @@ type procValue struct {
 	ID    proc.ID
 	IDErr error
 
+	l        sync.Mutex
 	proc     proc.Proc
 	procStat procfs.ProcStat
 	procErr  error
 }
 
-func newProcValue(p proc.Proc) procValue {
+func newProcValue(p proc.Proc) *procValue {
 	var (
 		result procValue
 	)
@@ -241,7 +242,7 @@ func newProcValue(p proc.Proc) procValue {
 		result.procStat, result.procErr = getStat(result.proc)
 	}
 
-	return result
+	return &result
 }
 
 // getProc extract the proc.proc from proc.procIterator
@@ -321,82 +322,106 @@ func getStat(p proc.Proc) (procfs.ProcStat, error) {
 }
 
 // getCmdline extract the command line from proc.proccache.
-func getCmdline(p proc.Proc) ([]string, error) {
-	ptr, err := getProcCache(p)
+func (p *procValue) getCmdline() ([]string, error) {
+	if p.procErr != nil {
+		return nil, p.procErr
+	}
 
+	ptr, err := getProcCache(p.proc)
 	if err != nil {
 		return nil, err
 	}
 
+	p.l.Lock()
+	defer p.l.Unlock()
+
 	return getCmdLinePrivateMethod(ptr)
 }
 
-func (p procValue) GetThreads() ([]proc.Thread, error) {
+func (p *procValue) GetThreads() ([]proc.Thread, error) {
 	if p.procErr != nil {
 		return nil, p.procErr
 	}
+
+	p.l.Lock()
+	defer p.l.Unlock()
 
 	return p.proc.GetThreads()
 }
 
 // GetPid implements Proc.
-func (p procValue) GetPid() int {
+func (p *procValue) GetPid() int {
 	return p.ID.Pid
 }
 
 // GetProcID implements Proc.
-func (p procValue) GetProcID() (proc.ID, error) {
+func (p *procValue) GetProcID() (proc.ID, error) {
 	return p.ID, nil
 }
 
 // GetStatic implements Proc.
-func (p procValue) GetStatic() (proc.Static, error) {
+func (p *procValue) GetStatic() (proc.Static, error) {
 	if p.procErr != nil {
 		return proc.Static{}, p.procErr
 	}
+
+	p.l.Lock()
+	defer p.l.Unlock()
 
 	return p.proc.GetStatic()
 }
 
 // GetCounts implements Proc.
-func (p procValue) GetCounts() (proc.Counts, int, error) {
+func (p *procValue) GetCounts() (proc.Counts, int, error) {
 	if p.procErr != nil {
 		return proc.Counts{}, 0, p.procErr
 	}
+
+	p.l.Lock()
+	defer p.l.Unlock()
 
 	return p.proc.GetCounts()
 }
 
 // GetMetrics implements Proc.
-func (p procValue) GetMetrics() (proc.Metrics, int, error) {
+func (p *procValue) GetMetrics() (proc.Metrics, int, error) {
 	if p.procErr != nil {
 		return proc.Metrics{}, 0, p.procErr
 	}
+
+	p.l.Lock()
+	defer p.l.Unlock()
 
 	return p.proc.GetMetrics()
 }
 
 // GetStates implements Proc.
-func (p procValue) GetStates() (proc.States, error) {
+func (p *procValue) GetStates() (proc.States, error) {
 	if p.procErr != nil {
 		return proc.States{}, p.procErr
 	}
 
+	p.l.Lock()
+	defer p.l.Unlock()
+
 	return p.proc.GetStates()
 }
 
-func (p procValue) GetWchan() (string, error) {
+func (p *procValue) GetWchan() (string, error) {
 	if p.procErr != nil {
 		return "", p.procErr
 	}
+
+	p.l.Lock()
+	defer p.l.Unlock()
 
 	return p.proc.GetWchan()
 }
 
 type iter struct {
-	procValue
+	*procValue
 
-	list  []procValue
+	list  []*procValue
 	err   error
 	index int
 }

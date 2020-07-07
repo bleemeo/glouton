@@ -2,6 +2,7 @@ package process
 
 import (
 	"context"
+	"glouton/facts"
 	"os"
 	"reflect"
 	"testing"
@@ -11,30 +12,93 @@ import (
 )
 
 func Test_reflection(t *testing.T) {
-	source := Processes{
+	source := &Processes{
 		HostRootPath:    "/",
 		DefaultValidity: 10 * time.Second,
 	}
 
+	testAllProcs(t, source)
+	testProcessses(t, source, 0)
+	testAllProcs(t, source)
+
+	for _, maxAge := range []time.Duration{0, time.Hour} {
+		maxAge := maxAge
+
+		for _, testName := range []string{"AllProcs", "Processses", "mixed"} {
+			testName := testName
+
+			for n := 0; n < 5; n++ {
+				n := n
+
+				source := &Processes{
+					HostRootPath:    "/",
+					DefaultValidity: 10 * time.Second,
+				}
+
+				t.Run(testName, func(t *testing.T) {
+					t.Parallel()
+
+					switch {
+					case testName == "AllProcs" || (testName == "mixed" && n%2 == 0):
+						testAllProcs(t, source)
+					default:
+						testProcessses(t, source, maxAge)
+					}
+				})
+			}
+		}
+	}
+}
+
+func testAllProcs(t *testing.T, source proc.Source) {
+	myPID := os.Getpid()
+	foundMyself := false
+
 	procs := source.AllProcs()
 	for procs.Next() {
 		testProc(t, procs)
+
+		if procs.GetPid() == myPID {
+			foundMyself = true
+		}
 	}
 
-	_, err := source.Processes(context.Background(), 0)
+	if err := procs.Close(); err != nil {
+		t.Error(err)
+	}
+
+	if !foundMyself {
+		t.Errorf("My PID (=%d) is not in processes list", myPID)
+	}
+}
+
+func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Duration) {
+	myPID := os.Getpid()
+	foundMyself := false
+
+	procs, err := source.Processes(context.Background(), maxAge)
 	if err != nil {
 		t.Error(err)
 	}
 
-	procs = source.AllProcs()
-	for procs.Next() {
-		testProc(t, procs)
+	for _, p := range procs {
+		if p.PID == myPID {
+			foundMyself = true
+		}
+	}
+
+	if !foundMyself {
+		t.Errorf("My PID (=%d) is not in processes list", myPID)
 	}
 }
 
 func testProc(t *testing.T, procs proc.Iter) {
 	internalProc := procs.(*iter)
 	current := internalProc.procValue
+
+	if os.IsNotExist(current.procErr) {
+		return
+	}
 
 	if current.procErr != nil {
 		t.Error(current.procErr)
@@ -57,18 +121,18 @@ func testProc(t *testing.T, procs proc.Iter) {
 		t.Errorf("current.procStat.PID = %d, want %d", current.procStat.PID, procs.GetPid())
 	}
 
-	cmdline, err := getCmdline(current.proc)
+	static, err := procs.GetStatic()
+	if err != nil && os.IsNotExist(err) {
+		return
+	}
+
+	cmdline, err := current.getCmdline()
 	if err != nil {
 		if os.IsNotExist(err) {
 			return
 		}
 
 		t.Error(err)
-	}
-
-	static, err := procs.GetStatic()
-	if err != nil && os.IsNotExist(err) {
-		return
 	}
 
 	if !reflect.DeepEqual(cmdline, static.Cmdline) {
