@@ -762,6 +762,12 @@ func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []
 	result := make([]types.MetricPoint, 0)
 
 	for _, m := range input {
+		// json encoder can't encode NaN (JSON standard don't allow it).
+		// There isn't huge value in storing NaN anyway (it's the default when no value).
+		if math.IsNaN(m.Value) {
+			continue
+		}
+
 		if common.AllowMetric(m.Labels, m.Annotations, metricWhitelist) {
 			result = append(result, m)
 		}
