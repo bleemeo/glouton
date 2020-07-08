@@ -608,13 +608,6 @@ func (a *agent) run() { //nolint:gocyclo
 			logger.V(1).Printf("Couldn't start blackbox_exporter: %v", err)
 			return
 		}
-
-		if a.config.Bool("bleemeo.remote_probing_enabled") {
-			a.factProvider.SetFact("dynamic_probe", "true")
-			monitorManager.EnableDynamicProbing()
-		} else {
-			a.factProvider.SetFact("dynamic_probe", "false")
-		}
 	} else {
 		logger.V(2).Println("blackbox_exporter not enabled, will not start...")
 	}
@@ -716,14 +709,6 @@ func (a *agent) run() { //nolint:gocyclo
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 
-		// enable monitors immediately
-		if a.config.Bool("blackbox.enabled") {
-			if err := a.bleemeoConnector.RunMonitors(); err != nil {
-				// we just log the error, as we will try to run them later anyway
-				logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
-			}
-		}
-
 		if a.metricFormat == types.MetricFormatPrometheus {
 			logger.Printf("Prometheus format is not yet supported with Bleemeo")
 			return
@@ -765,7 +750,7 @@ func (a *agent) run() { //nolint:gocyclo
 	if a.bleemeoConnector == nil {
 		a.updateThresholds(nil, true)
 	} else {
-		a.bleemeoConnector.UpdateUnitsAndThresholds(true)
+		a.bleemeoConnector.ApplyCachedConfiguration()
 	}
 
 	tmp, _ := a.config.Get("metric.softstatus_period")

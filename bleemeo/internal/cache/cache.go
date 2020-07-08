@@ -51,6 +51,11 @@ type data struct {
 	Monitors             []bleemeoTypes.Monitor
 }
 
+// dataVersion1 contains fields that have been deleted since the version 1 of the state file, but that we
+// still need to access to generate a newer state file from it, while retaining all pertinent informations
+// It does *not* contain all the fields of the first version of state files, and should *not* be treated as
+// an earlier version of `data`, and is exclusively manipulated in Load().
+// See Load() for more details on the transformations we will apply to parse old versions.
 type dataVersion1 struct {
 	AccountConfig bleemeoTypes.AccountConfig
 }

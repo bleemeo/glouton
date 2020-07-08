@@ -37,7 +37,6 @@ type gathererWithConfigTarget struct {
 type RegisterManager struct {
 	targets       []collectorWithLabels
 	scraperName   string
-	dynamicMode   bool
 	registrations map[int]gathererWithConfigTarget
 	registry      *registry.Registry
 }

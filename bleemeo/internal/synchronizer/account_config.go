@@ -40,10 +40,6 @@ func (s *Synchronizer) getAccountConfig(uuid string) (config types.AccountConfig
 func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
 	configs := make(map[string]types.AccountConfig, 1)
 
-	defer func() {
-		s.option.Cache.SetAccountConfigs(configs)
-	}()
-
 	for _, uuid := range uuids {
 		// We already loaded this config in a previous iteration of this loop, let's not do it again
 		if _, present := configs[uuid]; present {
@@ -57,6 +53,8 @@ func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
 
 		configs[uuid] = ac
 	}
+
+	s.option.Cache.SetAccountConfigs(configs)
 
 	return nil
 }

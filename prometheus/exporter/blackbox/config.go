@@ -214,10 +214,6 @@ func New(registry *registry.Registry, externalConf interface{}) (*RegisterManage
 	return manager, nil
 }
 
-func (m *RegisterManager) EnableDynamicProbing() {
-	m.dynamicMode = true
-}
-
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
 func (m *RegisterManager) UpdateDynamicTargets(monitors []gloutonTypes.Monitor) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
@@ -232,16 +228,13 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []gloutonTypes.Monitor) 
 		}
 	}
 
-	// append all dynamic target to the list, when the bleemeo mode is enabled
-	if m.dynamicMode {
-		for _, monitor := range monitors {
-			collector, err := genCollectorFromDynamicTarget(monitor)
-			if err != nil {
-				return err
-			}
-
-			newTargets = append(newTargets, *collector)
+	for _, monitor := range monitors {
+		collector, err := genCollectorFromDynamicTarget(monitor)
+		if err != nil {
+			return err
 		}
+
+		newTargets = append(newTargets, *collector)
 	}
 
 	if m.scraperName != "" {

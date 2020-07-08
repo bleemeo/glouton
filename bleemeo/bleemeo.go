@@ -67,9 +67,16 @@ func New(option types.GlobalOption) *Connector {
 	return c
 }
 
-// UpdateUnitsAndThresholds update metrics units & threshold (from cache).
-func (c *Connector) UpdateUnitsAndThresholds(firstUpdate bool) {
-	c.sync.UpdateUnitsAndThresholds(firstUpdate)
+// ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
+func (c *Connector) ApplyCachedConfiguration() {
+	c.sync.UpdateUnitsAndThresholds(true)
+
+	if c.option.Config.Bool("blackbox.enabled") {
+		if err := c.sync.ApplyMonitorUpdate(false); err != nil {
+			// we just log the error, as we will try to run the monitors later anyway
+			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
+		}
+	}
 }
 
 func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
@@ -273,11 +280,6 @@ func (c *Connector) UpdateContainers() {
 // UpdateMonitors trigger a reload of the monitors.
 func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
-}
-
-// RunMonitors starts the monitors from the cache.
-func (c *Connector) RunMonitors() error {
-	return c.sync.ApplyMonitorUpdate(false)
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.

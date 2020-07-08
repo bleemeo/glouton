@@ -439,7 +439,8 @@ func (r *Registry) Exporter() http.Handler {
 		wrapper := NewGathererWithStateWrapper(r)
 
 		state := GatherStateFromMap(req.URL.Query())
-		state.PrometheusQuery = true
+		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
+		state.NoTick = true
 
 		wrapper.SetState(state)
 
