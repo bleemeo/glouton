@@ -17,6 +17,7 @@
 package mqtt
 
 import (
+	"archive/zip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -220,6 +221,41 @@ func (c *Client) DiagnosticPage() string {
 	builder.WriteString(common.DiagnosticTCP(host, port, c.tlsConfig()))
 
 	return builder.String()
+}
+
+// DiagnosticZip add to a zipfile useful diagnostic information.
+func (c *Client) DiagnosticZip(zipFile *zip.Writer) error {
+	c.l.Lock()
+	if len(c.failedPoints) > 100 {
+		file, err := zipFile.Create("mqtt-failed-metric-points.txt")
+		if err != nil {
+			return err
+		}
+
+		maxSample := 50
+
+		fmt.Fprintf(file, "MQTT connector has %d points that are failing.\n", len(c.failedPoints))
+		fmt.Fprintf(file, "It usually happen when MQTT is not connector OR when metric are not registered with Bleemeo.\n")
+
+		if maxSample > len(c.failedPoints) {
+			fmt.Fprintf(file, "Here is the list of all blocked metrics:\n")
+
+			for _, p := range c.failedPoints {
+				fmt.Fprintf(file, "%v\n", p.Labels)
+			}
+		} else {
+			fmt.Fprintf(file, "Here is a sample of %d blocked metrics:\n", maxSample)
+			indices := rand.Perm(len(c.failedPoints))
+			for _, i := range indices[:maxSample] {
+				p := c.failedPoints[i]
+				fmt.Fprintf(file, "%v\n", p.Labels)
+			}
+		}
+	}
+
+	c.l.Unlock()
+
+	return nil
 }
 
 // LastReport returns the date of last report with Bleemeo API.
@@ -445,8 +481,7 @@ func (c *Client) sendPoints() {
 		return
 	}
 
-	registreredMetrics := c.option.Cache.Metrics()
-	registreredMetricByKey := common.MetricLookupFromList(registreredMetrics)
+	registreredMetricByKey := c.option.Cache.MetricLookupFromList()
 
 	if len(c.failedPoints) > 0 && c.Connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
 		localMetrics, err := c.option.Store.Metrics(nil)
@@ -630,7 +665,7 @@ func (c *Client) publish(topic string, payload []byte, retry bool) {
 }
 
 func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig) {
-	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second/2)
+	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second-time.Second)
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
 		return
@@ -711,6 +746,12 @@ func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []
 	result := make([]types.MetricPoint, 0)
 
 	for _, m := range input {
+		// json encoder can't encode NaN (JSON standard don't allow it).
+		// There isn't huge value in storing NaN anyway (it's the default when no value).
+		if math.IsNaN(m.Value) {
+			continue
+		}
+
 		if common.AllowMetric(m.Labels, m.Annotations, metricWhitelist) {
 			result = append(result, m)
 		}

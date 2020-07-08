@@ -17,71 +17,108 @@
 package process
 
 import (
-	"errors"
-	"glouton/inputs/internal"
-
-	"github.com/influxdata/telegraf"
-	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
-	"github.com/influxdata/telegraf/plugins/inputs/processes"
+	"context"
+	"glouton/facts"
+	"glouton/logger"
+	"glouton/types"
+	"time"
 )
 
+const maxAge = 1 * time.Second
+
+type processProvider interface {
+	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
+}
+
+type Input struct {
+	ps     processProvider
+	pusher types.PointPusher
+}
+
 // New initialise process.Input.
-func New() (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["processes"]
-	if ok {
-		processInput := input().(*processes.Processes)
-		processInput.Log = internal.Logger{}
-		i = &internal.Input{
-			Input: processInput,
-			Accumulator: internal.Accumulator{
-				RenameGlobal:     renameGlobal,
-				TransformMetrics: transformMetrics,
+func New(ps processProvider, pusher types.PointPusher) Input {
+	return Input{
+		ps:     ps,
+		pusher: pusher,
+	}
+}
+
+// Gather send metrics to the PointPusher.
+func (i Input) Gather() {
+	ctx := context.Background()
+
+	proc, err := i.ps.Processes(ctx, maxAge)
+	if err != nil {
+		logger.V(1).Printf("unable to gather process metrics: %v", err)
+		return
+	}
+
+	// Glouton should always sent those counters
+	counts := map[string]int{
+		"sleeping": 0,
+		"blocked":  0,
+		"zombies":  0,
+		"paging":   0,
+		"running":  0,
+		"stopped":  0,
+	}
+	total := 0
+	totalThreads := 0
+
+	for _, p := range proc {
+		status := p.Status
+
+		switch status {
+		case "idle":
+			// Merge idle & sleeping
+			status = "sleeping"
+		case "disk-sleep":
+			status = "blocked"
+		case "zombie":
+			status = "zombies"
+		case "?":
+			status = "unknown"
+		}
+
+		counts[status]++
+		total++
+
+		totalThreads += p.NumThreads
+	}
+
+	now := time.Now()
+	points := []types.MetricPoint{
+		{
+			Labels: map[string]string{
+				types.LabelName: "process_total",
 			},
-		}
-	} else {
-		err = errors.New("input processes is not enabled in Telegraf")
+			Point: types.Point{
+				Time:  now,
+				Value: float64(total),
+			},
+		},
+		{
+			Labels: map[string]string{
+				types.LabelName: "process_total_threads",
+			},
+			Point: types.Point{
+				Time:  now,
+				Value: float64(totalThreads),
+			},
+		},
 	}
 
-	return
-}
-
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext = originalContext
-	newContext.Measurement = "process"
-
-	return newContext, false
-}
-
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
-	for metricName, value := range fields {
-		newName := ""
-
-		switch metricName {
-		case "blocked":
-			newName = "status_blocked"
-		case "running":
-			newName = "status_running"
-		case "sleeping":
-			newName = "status_sleeping"
-		case "stopped":
-			newName = "status_stopped"
-		case "total":
-			newName = "total"
-		case "zombies":
-			newName = "status_zombies"
-		case "dead", "idle", "unknown":
-			delete(fields, metricName)
-		case "paging":
-			newName = "status_paging"
-		case "total_threads":
-			newName = "total_threads"
-		}
-
-		if newName != "" {
-			delete(fields, metricName)
-			fields[newName] = value
-		}
+	for name, count := range counts {
+		points = append(points, types.MetricPoint{
+			Labels: map[string]string{
+				types.LabelName: "process_status_" + name,
+			},
+			Point: types.Point{
+				Time:  now,
+				Value: float64(count),
+			},
+		})
 	}
 
-	return fields
+	i.pusher.PushPoints(points)
 }

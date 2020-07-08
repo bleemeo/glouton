@@ -51,6 +51,9 @@ const (
 	MetricFormatPrometheus
 )
 
+//nolint:gochecknoglobals
+var quoter = strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
+
 // StringToMetricFormat convert a string to a MetricFormat. Return MetricFormatUnknown if input is invalid.
 func StringToMetricFormat(input string) MetricFormat {
 	switch strings.ToLower(input) {
@@ -209,7 +212,6 @@ func LabelsToText(labels map[string]string) string {
 	sort.Strings(labelNames)
 
 	strLabels := make([]string, 0, len(labels))
-	quoter := strings.NewReplacer(`\`, `\\`, `"`, `\"`, "\n", `\n`)
 
 	for _, name := range labelNames {
 		value := labels[name]

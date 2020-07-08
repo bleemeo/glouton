@@ -35,7 +35,6 @@ import (
 	"glouton/inputs/nginx"
 	"glouton/inputs/phpfpm"
 	"glouton/inputs/postgresql"
-	"glouton/inputs/process"
 	"glouton/inputs/rabbitmq"
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
@@ -74,15 +73,6 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 	}
 
 	if _, err = coll.AddInput(input, "system"); err != nil {
-		return err
-	}
-
-	input, err = process.New()
-	if err != nil {
-		return err
-	}
-
-	if _, err = coll.AddInput(input, "process"); err != nil {
 		return err
 	}
 

@@ -142,8 +142,7 @@ func filterMetrics(input []types.Metric, metricWhitelist map[string]bool) []type
 }
 
 func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []string {
-	registeredMetrics := s.option.Cache.Metrics()
-	registeredMetricsByKey := common.MetricLookupFromList(registeredMetrics)
+	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
 	result := make([]string, 0)
 
@@ -718,7 +717,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	longToShortKeyLookup := longToShortKey(localServices)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
-	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
+	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
 	for _, srv := range localServices {
 		if !srv.CheckIgnored {

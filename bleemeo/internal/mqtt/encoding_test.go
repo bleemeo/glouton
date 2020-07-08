@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// nolint: scopelint
 package mqtt
 
 import (
@@ -29,7 +28,7 @@ import (
 
 // getTopinfo return a topinfo from the system running the test.
 func getTopinfo() facts.TopInfo {
-	provider := facts.NewProcess(true, "", nil)
+	provider := facts.NewProcess(facts.NewPsUtilLister(""), "", nil)
 
 	topinfo, err := provider.TopInfo(context.Background(), 0)
 	if err != nil {
