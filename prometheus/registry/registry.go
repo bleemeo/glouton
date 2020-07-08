@@ -508,7 +508,13 @@ func (r *Registry) runOnce() {
 
 		points, err = labeledGatherers(gatherers).GatherPoints()
 		if err != nil {
-			logger.Printf("Gather of metrics failed, some metrics may be missing: %v", err)
+			if len(points) == 0 {
+				logger.Printf("Gather of metrics failed: %v", err)
+			} else {
+				// When there is points, log at lower level because we known that some gatherer always
+				// fail on some setup. node_exporter may sent "node_rapl_package_joules_total" duplicated.
+				logger.V(1).Printf("Gather of metrics failed, some metrics may be missing: %v", err)
+			}
 		}
 	} else if r.MetricFormat == types.MetricFormatBleemeo {
 		var metric dto.Metric
