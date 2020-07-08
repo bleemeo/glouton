@@ -56,11 +56,6 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
 	s.forceSync["monitors"] = false
 
-	if mu.op == Change {
-		// syncing metrics is necessary when an account in which there is a probe is downgraded to a plan with
-		// a stricter metric whitelist, as we need to stop using the metrics in our cache, as they were deleted by the API.
-		s.forceSync["metrics"] = false
-	}
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
@@ -227,6 +222,13 @@ OuterBreak:
 
 			for k, v := range currentMonitors {
 				if v.ID == m.uuid {
+					// syncing metrics is necessary when an account in which there is a probe is downgraded to a plan with
+					// a stricter metric whitelist, as we need to stop using the metrics in our cache, as they were deleted by the API.
+					// We could trigger metrics synchronisation even less often, by checking if the linked account config really changed,
+					// but that would required to compare unordered lists or to do some complex machinery, and I'm not sure it's worth
+					// the added complexity.
+					s.forceSync["metrics"] = false
+
 					currentMonitors[k] = result
 					continue OuterBreak
 				}
