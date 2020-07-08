@@ -108,6 +108,7 @@ func genCollectorFromDynamicTarget(monitor gloutonTypes.Monitor) (*collectorWith
 		uri = url.Host
 	case proberNameICMP:
 		mod.Prober = proberNameICMP
+		uri = url.Host
 	}
 
 	creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
