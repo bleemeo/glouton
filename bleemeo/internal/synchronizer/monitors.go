@@ -21,6 +21,7 @@ import (
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/prometheus/exporter/blackbox"
 	"glouton/types"
 )
 
@@ -55,7 +56,6 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
 	s.forceSync["monitors"] = false
-
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
@@ -103,6 +103,11 @@ func (s *Synchronizer) syncMonitors(fullSync bool) (err error) {
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.
 // `forceAccountConfigsReload` determine whether account configurations should be updated via the API.
 func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error {
+	if s.option.MonitorManager == (*blackbox.RegisterManager)(nil) {
+		logger.V(2).Println("blackbox_exporter is not configured, ApplyMonitorUpdate will not update its config.")
+		return nil
+	}
+
 	monitors := s.option.Cache.Monitors()
 
 	if forceAccountConfigsReload {
@@ -118,13 +123,7 @@ func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error 
 		}
 	}
 
-	if s.option.MonitorManager == nil {
-		logger.V(2).Println("blackbox_exporter is not configured in the synchronizer")
-		return nil
-	}
-
 	accountConfigs := s.option.Cache.AccountConfigs()
-
 	processedMonitors := make([]types.Monitor, 0, len(monitors))
 
 	for _, monitor := range monitors {

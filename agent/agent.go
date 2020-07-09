@@ -605,11 +605,10 @@ func (a *agent) run() { //nolint:gocyclo
 
 		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf)
 		if err != nil {
-			logger.V(1).Printf("Couldn't start blackbox_exporter: %v", err)
-			return
+			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
 	} else {
-		logger.V(2).Println("blackbox_exporter not enabled, will not start...")
+		logger.V(1).Println("blackbox_exporter not enabled, will not start...")
 	}
 
 	promExporter := a.gathererRegistry.Exporter()
