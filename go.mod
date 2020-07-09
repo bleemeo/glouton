@@ -24,6 +24,7 @@ require (
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.1
 	github.com/golang/protobuf v1.4.2 // indirect
+	github.com/google/go-cmp v0.4.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
@@ -34,6 +35,7 @@ require (
 	github.com/influxdata/telegraf v1.14.3
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
 	github.com/karrick/godirwalk v1.15.6 // indirect
+	github.com/klauspost/compress v1.10.10
 	github.com/mdlayher/wifi v0.0.0-20200527114002-84f0b9457fdd // indirect
 	github.com/mitchellh/mapstructure v1.3.1 // indirect
 	github.com/morikuni/aec v1.0.0 // indirect

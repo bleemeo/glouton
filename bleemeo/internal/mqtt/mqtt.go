@@ -18,8 +18,6 @@ package mqtt
 
 import (
 	"archive/zip"
-	"bytes"
-	"compress/zlib"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -75,7 +73,7 @@ type Client struct {
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
-	topinfoBuffer              bytes.Buffer
+	encoder                    mqttEncoder
 
 	l                 sync.Mutex
 	pendingMessage    []message
@@ -523,7 +521,7 @@ func (c *Client) sendPoints() {
 			end = len(payload)
 		}
 
-		buffer, err := json.Marshal(payload[i:end])
+		buffer, err := c.encoder.Encode(payload[i:end])
 		if err != nil {
 			logger.V(1).Printf("Unable to encode points: %v", err)
 			return
@@ -675,27 +673,13 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.AgentID)
 
-	w := zlib.NewWriter(&c.topinfoBuffer)
-
-	err = json.NewEncoder(w).Encode(topinfo)
+	compressed, err := c.encoder.Encode(topinfo)
 	if err != nil {
-		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
-		w.Close()
-
+		logger.V(1).Printf("Unable to encode topinfo: %v", err)
 		return
 	}
 
-	err = w.Close()
-	if err != nil {
-		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
-		return
-	}
-
-	clone := make([]byte, c.topinfoBuffer.Len())
-	copy(clone, c.topinfoBuffer.Bytes())
-	c.topinfoBuffer.Reset()
-
-	c.publish(topic, clone, false)
+	c.publish(topic, compressed, false)
 }
 
 func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
