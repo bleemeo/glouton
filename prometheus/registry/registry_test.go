@@ -391,6 +391,53 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				ContainerID: "1234",
 			},
 		},
+		{
+			name:   "blackbox_probe_icmp",
+			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
+			args: args{map[string]string{
+				types.LabelMetaProbeTarget:      "icmp://8.8.8.8",
+				types.LabelMetaProbeScraperName: "test",
+				types.LabelMetaProbeAgentUUID:   "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+				types.LabelMetaBleemeoUUID:      "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				// necessary for some labels to be applied
+				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
+				types.LabelJob:                  "glouton",
+			}},
+			want: labels.FromMap(map[string]string{
+				types.LabelInstance:     "icmp://8.8.8.8",
+				types.LabelScraper:      "test",
+				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelJob:          "glouton",
+			}),
+			wantAnnotations: types.MetricAnnotations{
+				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+			},
+		},
+		// when LabelMetaProbeScraperName is not provided, the 'scraper' label is the traditional 'instance' label
+		{
+			name:   "blackbox_probe_icmp_no_scraper_name",
+			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
+			args: args{map[string]string{
+				types.LabelMetaProbeTarget:    "icmp://8.8.8.8",
+				types.LabelInstance:           "super-instance:1111",
+				types.LabelMetaProbeAgentUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+				types.LabelMetaBleemeoUUID:    "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				// necessary for some labels to be applied
+				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
+				types.LabelJob:                  "glouton",
+			}},
+			want: labels.FromMap(map[string]string{
+				types.LabelInstance:     "icmp://8.8.8.8",
+				types.LabelScraper:      "super-instance:1111",
+				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelJob:          "glouton",
+			}),
+			wantAnnotations: types.MetricAnnotations{
+				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -398,10 +445,10 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			r.relabelConfigs = tt.fields.relabelConfigs
 			promLabels, annotations := r.applyRelabel(tt.args.input)
 			if !reflect.DeepEqual(promLabels, tt.want) {
-				t.Errorf("Registry.applyRelabel() promLabels = %v, want %v", promLabels, tt.want)
+				t.Errorf("Registry.applyRelabel() promLabels = %+v, want %+v", promLabels, tt.want)
 			}
 			if !reflect.DeepEqual(annotations, tt.wantAnnotations) {
-				t.Errorf("Registry.applyRelabel() annotations = %v, want %v", annotations, tt.wantAnnotations)
+				t.Errorf("Registry.applyRelabel() annotations = %+v, want %+v", annotations, tt.wantAnnotations)
 			}
 		})
 	}
