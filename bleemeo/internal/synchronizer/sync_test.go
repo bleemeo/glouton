@@ -10,6 +10,7 @@ import (
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/prometheus/exporter/blackbox"
 	"glouton/store"
 	"io"
 	"net/http"
@@ -236,6 +237,7 @@ func TestSyncMetrics(t *testing.T) {
 			State:                   state,
 			Discovery:               discovery,
 			Store:                   store,
+			MonitorManager:          (*blackbox.RegisterManager)(nil),
 			NotifyFirstRegistration: func(ctx context.Context) {},
 		},
 	})

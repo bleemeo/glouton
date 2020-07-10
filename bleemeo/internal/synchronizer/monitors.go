@@ -67,18 +67,23 @@ func (s *Synchronizer) syncMonitors(fullSync bool) (err error) {
 	}
 
 	s.l.Lock()
+
 	pendingMonitorsUpdate := s.pendingMonitorsUpdate
 	s.pendingMonitorsUpdate = nil
-	s.l.Unlock()
-
-	if !fullSync && len(pendingMonitorsUpdate) == 0 {
-		return nil
-	}
-
 	// 5 is definitely a random heuristic, but we consider more than five simultaneous updates as more
 	// costly that a single full sync, due to the cost of updateMonitorManager()
 	if len(pendingMonitorsUpdate) > 5 {
 		fullSync = true
+		// force metric synchronization
+		if _, forceSync := s.forceSync["metrics"]; !forceSync {
+			s.forceSync["metrics"] = false
+		}
+	}
+
+	s.l.Unlock()
+
+	if !fullSync && len(pendingMonitorsUpdate) == 0 {
+		return nil
 	}
 
 	var monitors []bleemeoTypes.Monitor
@@ -189,6 +194,8 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorU
 
 	currentMonitors := s.option.Cache.Monitors()
 
+	_, forceSync := s.forceSync["metrics"]
+
 OuterBreak:
 	for _, m := range pendingMonitorsUpdate {
 		if m.op == Delete {
@@ -226,7 +233,12 @@ OuterBreak:
 					// We could trigger metrics synchronisation even less often, by checking if the linked account config really changed,
 					// but that would required to compare unordered lists or to do some complex machinery, and I'm not sure it's worth
 					// the added complexity.
-					s.forceSync["metrics"] = false
+					if !forceSync {
+						s.l.Lock()
+						s.forceSync["metrics"] = false
+						forceSync = true
+						s.l.Unlock()
+					}
 
 					currentMonitors[k] = result
 					continue OuterBreak
