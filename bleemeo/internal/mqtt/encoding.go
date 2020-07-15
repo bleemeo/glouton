@@ -18,21 +18,21 @@ package mqtt
 
 import (
 	"bytes"
+	"compress/zlib"
 	"encoding/json"
-
-	"github.com/klauspost/compress/zstd"
+	"io"
+	"io/ioutil"
 )
 
 type mqttEncoder struct {
-	encoder *zstd.Encoder
-	decoder *zstd.Decoder
+	encoder *zlib.Writer
 	buffer  bytes.Buffer
 }
 
 // Encode is NOT thread-safe.
 func (enc *mqttEncoder) Encode(obj interface{}) ([]byte, error) {
 	if enc.encoder == nil {
-		enc.encoder, _ = zstd.NewWriter(nil, zstd.WithEncoderLevel(zstd.SpeedBestCompression))
+		enc.encoder = zlib.NewWriter(&enc.buffer)
 	}
 
 	enc.buffer.Reset()
@@ -43,7 +43,7 @@ func (enc *mqttEncoder) Encode(obj interface{}) ([]byte, error) {
 		return nil, err
 	}
 
-	err = enc.encoder.Flush()
+	err = enc.encoder.Close()
 	if err != nil {
 		return nil, err
 	}
@@ -55,16 +55,22 @@ func (enc *mqttEncoder) Encode(obj interface{}) ([]byte, error) {
 }
 
 func (enc *mqttEncoder) Decode(input []byte, obj interface{}) error {
-	if enc.decoder == nil {
-		enc.decoder, _ = zstd.NewReader(nil)
-	}
-
-	err := enc.decoder.Reset(bytes.NewReader(input))
+	decoder, err := zlib.NewReader(bytes.NewReader(input))
 	if err != nil {
 		return err
 	}
 
-	err = json.NewDecoder(enc.decoder).Decode(obj)
+	err = json.NewDecoder(decoder).Decode(obj)
+	if err != nil {
+		return err
+	}
+
+	_, err = io.Copy(ioutil.Discard, decoder) // nolint: gosec
+	if err != nil {
+		return err
+	}
+
+	err = decoder.Close()
 
 	return err
 }
