@@ -116,15 +116,6 @@ func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hos
 		return err
 	}
 
-	input, err = mem.New()
-	if err != nil {
-		return err
-	}
-
-	if _, err = coll.AddInput(input, "mem"); err != nil {
-		return err
-	}
-
 	input, err = swap.New()
 	if err != nil {
 		return err
@@ -163,7 +154,8 @@ func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hos
 		return err
 	}
 
-	if runtime.GOOS == "windows" {
+	switch runtime.GOOS {
+	case "windows":
 		input, err = winPerfCounters.New(conf.String("telegraf.win_perf_counters.config_file"), inputsConfig)
 		if err != nil {
 			return err
@@ -171,6 +163,16 @@ func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hos
 
 		_, err = coll.AddInput(input, "win_perf_counters")
 		if err != nil {
+			return err
+		}
+	default:
+		// on windows, win_perf_counters provides the metrics for the memory
+		input, err = mem.New()
+		if err != nil {
+			return err
+		}
+
+		if _, err = coll.AddInput(input, "mem"); err != nil {
 			return err
 		}
 	}

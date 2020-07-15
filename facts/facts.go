@@ -95,7 +95,7 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 	f.l.Lock()
 	defer f.l.Unlock()
 
-	if time.Since(f.lastFactsUpdate) > maxAge {
+	if time.Since(f.lastFactsUpdate) >= maxAge {
 		f.updateFacts(ctx)
 	}
 

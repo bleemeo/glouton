@@ -135,7 +135,7 @@ func (d *DockerProvider) Containers(ctx context.Context, maxAge time.Duration, i
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	if time.Since(d.lastUpdate) > maxAge {
+	if time.Since(d.lastUpdate) >= maxAge {
 		err = d.updateContainers(ctx)
 		if err != nil {
 			return

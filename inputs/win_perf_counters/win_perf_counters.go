@@ -34,12 +34,15 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/win_perf_counters"
 	"github.com/influxdata/toml"
 	"github.com/influxdata/toml/ast"
+	"github.com/shirou/gopsutil/mem"
 )
 
 const diskIOModuleName string = "win_diskio"
+const memModuleName string = "win_mem"
 
 type winCollector struct {
-	option inputs.CollectorConfig
+	option      inputs.CollectorConfig
+	totalMemory uint64
 }
 
 // New initialise win_perf_counters.Input.
@@ -98,7 +101,15 @@ func New(configFilePath string, inputsConfig inputs.CollectorConfig) (result tel
 		}
 	}
 
-	option := winCollector{option: inputsConfig}
+	memInfo, err := mem.VirtualMemory()
+	if err != nil {
+		return result, err
+	}
+
+	option := winCollector{
+		option:      inputsConfig,
+		totalMemory: memInfo.Total,
+	}
 
 	result = &internal.Input{
 		Input: winInput,
@@ -164,16 +175,41 @@ func (c winCollector) renameGlobal(originalContext internal.GatherContext) (newC
 }
 
 func (c winCollector) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	res := make(map[string]float64, len(fields))
+
 	if currentContext.Measurement == diskIOModuleName {
 		if freePerc, present := fields["Percent_Idle_Time"]; present {
-			fields["utilization"] = 100. - freePerc
+			res["utilization"] = 100. - freePerc
 			// io_time is the number of ms spent doing IO in the last second.
 			// utilization is 100% when we spent 1000ms during one second
-			fields["time"] = fields["utilization"] * 1000. / 100.
+			res["time"] = fields["utilization"] * 1000. / 100.
 		}
 	}
 
-	return fields
+	if originalContext.Measurement == memModuleName {
+		totalMemory := float64(c.totalMemory)
+
+		if val, present := fields["Available_Bytes"]; present {
+			res["available"] = val
+			res["available_perc"] = val * 100. / totalMemory
+			res["used"] = totalMemory - val
+			res["used_perc"] = res["used"] * 100. / totalMemory
+		}
+
+		cacheReserve, p1 := fields["Standby_Cache_Reserve_Bytes"]
+		cacheNormal, p2 := fields["Standby_Cache_Normal_Priority_Bytes"]
+		cacheCore, p3 := fields["Standby_Cache_Core_Bytes"]
+
+		if !(p1 && p2 && p3) {
+			return res
+		}
+
+		res["cached"] = cacheCore + cacheNormal + cacheReserve
+		res["free"] = totalMemory - res["used"] - res["cached"]
+		res["buffered"] = 0.
+	}
+
+	return res
 }
 
 func (c winCollector) renameMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
@@ -183,6 +219,13 @@ func (c winCollector) renameMetrics(originalContext internal.GatherContext, curr
 		switch metricName {
 		case "utilization", "time":
 			newMeasurement = "io"
+		}
+	}
+
+	if currentContext.Measurement == memModuleName {
+		switch metricName {
+		case "available", "available_perc", "used", "used_perc", "cached", "free", "buffered":
+			newMeasurement = "mem"
 		}
 	}
 

@@ -172,7 +172,7 @@ func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (t
 	pp.l.Lock()
 	defer pp.l.Unlock()
 
-	if time.Since(pp.lastProcessesUpdate) > maxAge {
+	if time.Since(pp.lastProcessesUpdate) >= maxAge {
 		err = pp.updateProcesses(ctx, maxAge)
 		if err != nil {
 			return
@@ -189,7 +189,7 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 	pp.l.Lock()
 	defer pp.l.Unlock()
 
-	if time.Since(pp.lastProcessesUpdate) > maxAge {
+	if time.Since(pp.lastProcessesUpdate) >= maxAge {
 		err = pp.updateProcesses(ctx, maxAge)
 		if err != nil {
 			return

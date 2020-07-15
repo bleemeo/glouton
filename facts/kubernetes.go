@@ -35,7 +35,7 @@ func (k *KubernetesProvider) PODs(ctx context.Context, maxAge time.Duration) ([]
 		}
 	}
 
-	if time.Since(k.lastUpdate) > maxAge {
+	if time.Since(k.lastUpdate) >= maxAge {
 		err := k.updatePODs(ctx)
 		if err != nil {
 			return nil, err
