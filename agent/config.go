@@ -41,6 +41,7 @@ var defaultConfig = map[string]interface{}{
 	"agent.state_file":               "state.json",
 	"agent.upgrade_file":             "upgrade",
 	"agent.metrics_format":           "Bleemeo",
+	"agent.node_exporter.enabled":    true,
 	"agent.node_exporter.collectors": []string{},
 	"bleemeo.account_id":             "",
 	"bleemeo.api_base":               "https://api.bleemeo.com/",
