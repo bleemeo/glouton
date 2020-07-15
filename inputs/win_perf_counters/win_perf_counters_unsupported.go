@@ -20,11 +20,12 @@ package winperfcounters
 
 import (
 	"errors"
+	"glouton/inputs"
 
 	"github.com/influxdata/telegraf"
 )
 
 // New initialise win_perf_counters.Input.
-func New() (i telegraf.Input, err error) {
-	return i, errors.New("win_perf_counters is only supported on windows")
+func New(configFilePath string, inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
+	return result, errors.New("win_perf_counters is only supported on windows")
 }

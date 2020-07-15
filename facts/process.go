@@ -903,9 +903,13 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 			continue
 		}
 
-		status, err := p.StatusWithContext(ctx)
-		if err != nil {
-			continue
+		status := ""
+		// the process status is not simple to derive on windows, and not currently supported by gopsutil
+		if runtime.GOOS != "windows" {
+			status, err = p.StatusWithContext(ctx)
+			if err != nil {
+				continue
+			}
 		}
 
 		numThread, _ := p.NumThreads()

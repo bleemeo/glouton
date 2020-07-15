@@ -169,7 +169,7 @@ func (d *Discovery) LastUpdate() time.Time {
 }
 
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
-	if time.Since(d.lastDiscoveryUpdate) > maxAge {
+	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
 		err := d.updateDiscovery(ctx, maxAge)
 		if err != nil {
 			return nil, err

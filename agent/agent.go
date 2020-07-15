@@ -510,7 +510,11 @@ func (a *agent) run() { //nolint:gocyclo
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
-		psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
+		if runtime.GOOS == "windows" {
+			psLister = facts.NewPsUtilLister("")
+		} else {
+			psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
+		}
 	}
 
 	psFact := facts.NewProcess(

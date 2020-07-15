@@ -170,9 +170,12 @@ func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hos
 		}
 
 		_, err = coll.AddInput(input, "win_perf_counters")
+		if err != nil {
+			return err
+		}
 	}
 
-	return err
+	return nil
 }
 
 func (d *Discovery) configureMetricInputs(oldServices, services map[NameContainer]Service) (err error) {
