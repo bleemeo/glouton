@@ -23,8 +23,6 @@ import (
 	"fmt"
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"io/ioutil"
-	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -40,13 +38,42 @@ import (
 const diskIOModuleName string = "win_diskio"
 const memModuleName string = "win_mem"
 
+const config string = `
+[[inputs.win_perf_counters]]
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "PhysicalDisk"
+    Instances = ["*"]
+    Counters = [
+      "Disk Read Bytes/sec",
+      "Disk Write Bytes/sec",
+      "Current Disk Queue Length",
+      "Disk Reads/sec",
+      "Disk Writes/sec",
+      "% Idle Time",
+    ]
+    Measurement = "win_diskio"
+
+  [[inputs.win_perf_counters.object]]
+    # Example query where the Instance portion must be removed to get data back,
+    # such as from the Memory object.
+    ObjectName = "Memory"
+    Counters = [
+      "Available Bytes",
+      "Standby Cache Reserve Bytes",
+      "Standby Cache Normal Priority Bytes",
+      "Standby Cache Core Bytes",
+    ]
+    # Use 6 x - to remove the Instance bit from the query.
+    Instances = ["------"]
+    Measurement = "win_mem"`
+
 type winCollector struct {
 	option      inputs.CollectorConfig
 	totalMemory uint64
 }
 
 // New initialise win_perf_counters.Input.
-func New(configFilePath string, inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
+func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["win_perf_counters"]
 	if !ok {
 		return result, errors.New("input 'win_perf_counters' is not enabled in Telegraf")
@@ -59,20 +86,9 @@ func New(configFilePath string, inputsConfig inputs.CollectorConfig) (result tel
 		return result, fmt.Errorf("invalid type for telegraf input 'win_perf_counters', got %T, expected *win_perf_counters.Win_PerfCounters", tmpInput)
 	}
 
-	// load and parse the config, and "patch" the telegraf input with the decoded structure
-	configFD, err := os.Open(configFilePath)
-	if err != nil {
-		return result, fmt.Errorf("couldn't load win_perf_counters' config: %v", err)
-	}
-
-	config, err := ioutil.ReadAll(configFD)
-	if err != nil {
-		return result, fmt.Errorf("reading in_perf_counters failed: %v", err)
-	}
-
 	var parsedConfig *ast.Table
 
-	parsedConfig, err = toml.Parse(config)
+	parsedConfig, err = toml.Parse([]byte(config))
 	if err != nil {
 		return result, err
 	}

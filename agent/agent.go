@@ -205,6 +205,8 @@ func Run(configFiles []string) {
 		taskIDs:      make(map[string]int),
 	}
 
+	agent.initOSSpecificParts()
+
 	if !agent.init(configFiles) {
 		os.Exit(1)
 		return

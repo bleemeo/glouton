@@ -156,7 +156,7 @@ func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hos
 
 	switch runtime.GOOS {
 	case "windows":
-		input, err = winPerfCounters.New(conf.String("telegraf.win_perf_counters.config_file"), inputsConfig)
+		input, err = winPerfCounters.New(inputsConfig)
 		if err != nil {
 			return err
 		}

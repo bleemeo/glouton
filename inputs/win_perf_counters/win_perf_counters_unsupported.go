@@ -26,6 +26,6 @@ import (
 )
 
 // New initialise win_perf_counters.Input.
-func New(configFilePath string, inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
+func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
 	return result, errors.New("win_perf_counters is only supported on windows")
 }

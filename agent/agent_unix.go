@@ -7,6 +7,9 @@ import (
 	"glouton/prometheus/exporter/node"
 )
 
+func (a *agent) initOSSpecificParts() {
+}
+
 func (a *agent) registerOSSpecificComponents() {
 	if a.config.Bool("agent.node_exporter.enabled") {
 		nodeOption := node.Option{
