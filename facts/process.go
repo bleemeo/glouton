@@ -646,14 +646,17 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 	result.Memory.Buffers = float64(memUsage.Buffers) / 1024.
 	result.Memory.Cached = float64(memUsage.Cached) / 1024.
 
-	swapUsage, err := mem.SwapMemory()
-	if err != nil {
-		return result, err
-	}
+	// swap is a complex topic on windows
+	if runtime.GOOS != Windows {
+		swapUsage, err := mem.SwapMemory()
+		if err != nil {
+			return result, err
+		}
 
-	result.Swap.Total = float64(swapUsage.Total) / 1024.
-	result.Swap.Used = float64(swapUsage.Used) / 1024.
-	result.Swap.Free = float64(swapUsage.Free) / 1024.
+		result.Swap.Total = float64(swapUsage.Total) / 1024.
+		result.Swap.Used = float64(swapUsage.Used) / 1024.
+		result.Swap.Free = float64(swapUsage.Free) / 1024.
+	}
 
 	cpusTimes, err := cpu.Times(false)
 	if err != nil {
@@ -850,7 +853,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		userName, err := p.UsernameWithContext(ctx)
 		if err != nil {
-			if runtime.GOOS != "windows" {
+			if runtime.GOOS != Windows {
 				uids, err := p.UidsWithContext(ctx)
 				if err == nil && len(uids) > 0 {
 					userName = fmt.Sprintf("%d", uids[0])
@@ -905,7 +908,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		status := ""
 		// the process status is not simple to derive on windows, and not currently supported by gopsutil
-		if runtime.GOOS != "windows" {
+		if runtime.GOOS != Windows {
 			status, err = p.StatusWithContext(ctx)
 			if err != nil {
 				continue

@@ -23,6 +23,7 @@ import (
 	"net"
 
 	"github.com/StackExchange/wmi"
+	"golang.org/x/sys/windows/registry"
 )
 
 //nolint
@@ -59,12 +60,32 @@ func (f *FactProvider) platformFacts() map[string]string {
 	facts := make(map[string]string)
 
 	facts["kernel"] = "Windows"
+	facts["os_family"] = "NT"
+	facts["os_name"] = "Windows"
+
+	reg, err := registry.OpenKey(registry.LOCAL_MACHINE, `SOFTWARE\Microsoft\Windows NT\CurrentVersion`, registry.QUERY_VALUE)
+	if err != nil {
+		logger.V(1).Println("Couldn't open the windows registry, some facts may not be exposed")
+	} else {
+		defer reg.Close()
+		major, _, err1 := reg.GetIntegerValue("CurrentMajorVersionNumber")
+		minor, _, err2 := reg.GetIntegerValue("CurrentMinorVersionNumber")
+		buildNumber, _, err3 := reg.GetStringValue("CurrentBuildNumber")
+		if err1 == nil && err2 == nil && err3 == nil {
+			facts["os_version"] = fmt.Sprintf("%d.%d", major, minor)
+			facts["os_version_long"] = fmt.Sprintf("%d.%d build %s", major, minor, buildNumber)
+		}
+		productName, _, err := reg.GetStringValue("ProductName")
+		if err == nil {
+			facts["os_pretty_name"] = productName
+		}
+	}
 
 	wmiClient := &wmi.Client{AllowMissingFields: true}
 
 	var system []Win32_ComputerSystem
 
-	err := wmiClient.Query(wmi.CreateQuery(&system, ""), &system)
+	err = wmiClient.Query(wmi.CreateQuery(&system, ""), &system)
 
 	switch {
 	case err != nil:

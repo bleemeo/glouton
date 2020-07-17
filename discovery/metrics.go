@@ -116,15 +116,6 @@ func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hos
 		return err
 	}
 
-	input, err = swap.New()
-	if err != nil {
-		return err
-	}
-
-	if _, err = coll.AddInput(input, "swap"); err != nil {
-		return err
-	}
-
 	input, err = netInput.New(inputsConfig.NetIfBlacklist)
 	if err != nil {
 		return err
@@ -173,6 +164,15 @@ func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hos
 		}
 
 		if _, err = coll.AddInput(input, "mem"); err != nil {
+			return err
+		}
+
+		input, err = swap.New()
+		if err != nil {
+			return err
+		}
+
+		if _, err = coll.AddInput(input, "swap"); err != nil {
 			return err
 		}
 	}

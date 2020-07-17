@@ -14,7 +14,9 @@ InstallDir "$PROGRAMFILES\bleemeo\glouton"
 
 !define PRODUCT_ICON "bleemeo.ico"
 !define PRODUCT_NAME "glouton"
-!define CONFIGDIR "C:\ProgramData\bleemeo\glouton"
+!define CONFIGDIR "C:\ProgramData\glouton"
+!define PRODUCT_VERSION "0.1"
+!define AGENT_SERVICE_NAME "bleemeo-glouton-agent"
 
 !define MUI_ABORTWARNING
 !define MUI_ICON ${PRODUCT_ICON}
@@ -44,19 +46,59 @@ Var RegistrationKeyValue
 Section "!${PRODUCT_NAME}"
   SetOutPath "$INSTDIR"
 
-  # Stopping the service is required before try to overwrite its file, if it is already installed
-  ExecShellWait "sc.exe" "stop glouton" SW_HIDE
+  # Create config directories
+  CreateDirectory "${CONFIGDIR}"
+  CreateDirectory "${CONFIGDIR}\glouton.conf.d"
 
+  #### CLEANUP ####
+
+  # Delete stray versions of the service
+  nsExec::ExecToLog 'sc.exe query "${AGENT_SERVICE_NAME}"'
+  Pop $0
+  # the service already exists -> let's delete it, and re-install it, in case the config changed
+  ${If} $0 == 0
+    # Stopping the service is required before try to overwrite its file, if it is already installed
+    nsExec::ExecToLog 'sc.exe stop "${AGENT_SERVICE_NAME}"'
+    nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
+  ${EndIf}
+
+  #### UPGRADE FROM BLEEMEO-AGENT ####
+
+  # Delete bleemeo agent if present
+  IfFileExists "$PROGRAMFILES\bleemeo-agent" 0 old_agent_not_present
+
+  # Move its config & state
+  SetOverwrite off
+  CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf" "${CONFIGDIR}\glouton.conf"
+  CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf.d\*.conf" "${CONFIGDIR}\glouton.conf.d\"
+  CopyFiles "C:\ProgramData\bleemeo\state.json" "${CONFIGDIR}"
+  SetOverwrite on
+
+  # Uninstall the bleemeo-agent
+  ExecWait '"$PROGRAMFILES\bleemeo-agent\uninstall.exe" /S'
+
+old_agent_not_present:
+
+  #### INSTALLATION ####
   File ../../dist/glouton_windows_amd64/glouton.exe
+  # Needed for the icon shown in 'Apps & Features'
   File ${PRODUCT_ICON}
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
+
+  IfFileExists "${CONFIGDIR}\glouton.conf.d\30-install.conf" +4 0
+  # generate the config file with the account ID and registration ID
+  File gen_config.exe
+  nsExec::ExecToLog '"$INSTDIR\gen_config.exe" --account "$AccountIDValue" --key "$RegistrationKeyValue"'
+  Delete gen_config.exe
 
   # Let's expose proper values in the "Apps & Features" Windows settings by registering our installer
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
                    "DisplayName" "glouton by Bleemeo -- Easy Monitoring for Scalable Infrastructure"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
                    "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+                   "DisplayVersion" "${PRODUCT_VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
                    "RegOwner" "Bleemeo"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
@@ -74,37 +116,22 @@ Section "!${PRODUCT_NAME}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
                    "URLInfoAbout" "https://bleemeo.com/"
 
-  # Delete stray versions of the service
-  ExecWait 'sc.exe query glouton' $0
-  DetailPrint $0
-  # the service already exists -> let's delete it, and re-install it, in case the config changed
-  ${If} $0 == 0
-    ExecWait 'sc.exe delete glouton'
-  ${EndIf}
-
-  # 
-  ExecWait 'sc.exe create glouton binPath="$INSTDIR\glouton.exe" type=own start=auto DisplayName="Glouton by Bleemeo -- Monitoring Agent"' $0
-  DetailPrint $0
-  ${If} $0 != 0
-    MessageBox MB_OK "Service installation failed. You may consider restarting this machine, in case there is ongoing windows updates or services changes, and restarting this installer. If this happens again, please report us the issue at support@bleemeo.com." 
-    Abort "The installation of the Windows service failed !"
-  ${EndIf}
-
-  # do not overwrite the config file
-  SetOverwrite off
-
-  CreateDirectory "${CONFIGDIR}"
-
-  SetOverwrite on
-
   # Compute the folder size to tell windows about the approximate size of glouton
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
                    "EstimatedSize" "$0"
 
+  # Create the service
+  nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" type=own start=auto DisplayName="Glouton by Bleemeo -- Monitoring Agent"'
+  Pop $0
+  ${If} $0 != 0
+    MessageBox MB_OK "Service installation failed. You may consider restarting this machine, in case there is ongoing windows updates or services changes, and restarting this installer. If this happens again, please report us the issue at support@bleemeo.com." 
+    Abort "The installation of the Windows service failed !"
+  ${EndIf}
+
   # Start the service
-  ExecWait 'sc.exe start glouton'
+  nsExec::ExecToLog 'sc.exe start "${AGENT_SERVICE_NAME}"'
 SectionEnd
 
 
@@ -112,7 +139,8 @@ Section "Uninstall"
   # Unregister our uninstaller
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton"
 
-  ExecWait  'sc.exe delete glouton'
+  nsExec::ExecToLog 'sc.exe stop "${AGENT_SERVICE_NAME}"'
+  nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
 
   RMDir /r "$INSTDIR"
   # delete the bleemeo folder too if it is empty

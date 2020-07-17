@@ -37,7 +37,7 @@ import (
 
 const diskIOModuleName string = "win_diskio"
 const memModuleName string = "win_mem"
-
+const swapModuleName string = "win_swap"
 const config string = `
 [[inputs.win_perf_counters]]
   [[inputs.win_perf_counters.object]]
@@ -65,11 +65,22 @@ const config string = `
     ]
     # Use 6 x - to remove the Instance bit from the query.
     Instances = ["------"]
-    Measurement = "win_mem"`
+    Measurement = "win_mem"
+
+  [[inputs.win_perf_counters.object]]
+    # Example query where the Instance portion must be removed to get data back,
+    # such as from the Paging File object.
+    ObjectName = "Paging File"
+    Counters = [
+      "% Usage",
+    ]
+    Instances = ["_Total"]
+    Measurement = "win_swap"`
 
 type winCollector struct {
 	option      inputs.CollectorConfig
 	totalMemory uint64
+	totalSwap   uint64
 }
 
 // New initialise win_perf_counters.Input.
@@ -122,9 +133,15 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 		return result, err
 	}
 
+	swapInfo, err := mem.SwapMemory()
+	if err != nil {
+		return result, err
+	}
+
 	option := winCollector{
 		option:      inputsConfig,
 		totalMemory: memInfo.Total,
+		totalSwap:   swapInfo.Total,
 	}
 
 	result = &internal.Input{
@@ -202,7 +219,7 @@ func (c winCollector) transformMetrics(originalContext internal.GatherContext, c
 		}
 	}
 
-	if originalContext.Measurement == memModuleName {
+	if currentContext.Measurement == memModuleName {
 		totalMemory := float64(c.totalMemory)
 
 		if val, present := fields["Available_Bytes"]; present {
@@ -225,6 +242,12 @@ func (c winCollector) transformMetrics(originalContext internal.GatherContext, c
 		res["buffered"] = 0.
 	}
 
+	if currentContext.Measurement == swapModuleName {
+		if val, present := fields["Percent_Usage"]; present {
+			res["used_perc"] = val
+		}
+	}
+
 	return res
 }
 
@@ -242,6 +265,12 @@ func (c winCollector) renameMetrics(originalContext internal.GatherContext, curr
 		switch metricName {
 		case "available", "available_perc", "used", "used_perc", "cached", "free", "buffered":
 			newMeasurement = "mem"
+		}
+	}
+
+	if currentContext.Measurement == swapModuleName {
+		if metricName == "used_perc" {
+			newMeasurement = "swap"
 		}
 	}
 

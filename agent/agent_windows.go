@@ -23,23 +23,20 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 	status <- svc.Status{State: svc.StartPending}
 	status <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 loop:
-	for {
-		select {
-		case c := <-req:
-			switch c.Cmd {
-			case svc.Interrogate:
-				status <- c.CurrentStatus
-			case svc.Stop, svc.Shutdown:
-				(*ws.cancelFunc)()
-				break loop
-			default:
-				logger.V(1).Printf("unexpected control request #%d", c)
-			}
+	for c := range req {
+		switch c.Cmd {
+		case svc.Interrogate:
+			status <- c.CurrentStatus
+		case svc.Stop, svc.Shutdown:
+			(*ws.cancelFunc)()
+			break loop
+		default:
+			logger.V(1).Printf("unexpected control request #%d", c)
 		}
 	}
 	status <- svc.Status{State: svc.StopPending}
-	return
 
+	return
 }
 
 func (a *agent) initOSSpecificParts() {

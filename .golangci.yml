@@ -1,3 +1,6 @@
+run:
+  skip-dirs:
+    - work
 linters:
   enable-all: true
   disable:
