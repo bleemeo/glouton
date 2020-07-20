@@ -51,7 +51,6 @@ func (a *agent) initOSSpecificParts() {
 	wmi.DefaultClient.AllowMissingFields = true
 	wmi.DefaultClient.SWbemServicesClient = s
 
-	// start a windows service if necessary
 	isInteractive, err := svc.IsAnInteractiveSession()
 	if err != nil {
 		logger.V(0).Println(err)
@@ -61,7 +60,7 @@ func (a *agent) initOSSpecificParts() {
 	// Not interactive ? let's start a windows service
 	if !isInteractive {
 		go func() {
-			err = svc.Run(serviceName, &winService{})
+			err = svc.Run(serviceName, &winService{cancelFunc: &a.cancel})
 			if err != nil {
 				logger.V(0).Printf("Failed to start the windows service: %v", err)
 			}

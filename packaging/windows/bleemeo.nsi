@@ -1,10 +1,7 @@
-# Rewrite modernui block to support the following change:
-# * Add our custom page after the welcome page (to ask account id and registration key)
-# * Add a confirmation on uninstall.
-# * Change the installer icon.
-!include "MUI2.nsh"
+!include MUI2.nsh
 !include LogicLib.nsh
 !include FileFunc.nsh
+!include x64.nsh
 
 Name "glouton"
 OutFile "glouton-installer.exe"
@@ -49,6 +46,7 @@ Section "!${PRODUCT_NAME}"
   # Create config directories
   CreateDirectory "${CONFIGDIR}"
   CreateDirectory "${CONFIGDIR}\glouton.conf.d"
+  CreateDirectory "${CONFIGDIR}\logs"
 
   #### CLEANUP ####
 
@@ -80,13 +78,20 @@ Section "!${PRODUCT_NAME}"
 old_agent_not_present:
 
   #### INSTALLATION ####
-  File ../../dist/glouton_windows_amd64/glouton.exe
+
+  ${If} ${RunningX64}
+    File ../../dist/glouton_windows_amd64/glouton.exe
+  ${Else}
+    File ../../dist/glouton_windows_386/glouton.exe
+  ${EndIf}
+
   # Needed for the icon shown in 'Apps & Features'
   File ${PRODUCT_ICON}
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  IfFileExists "${CONFIGDIR}\glouton.conf.d\30-install.conf" +4 0
+  File "/oname=${CONFIGDIR}\glouton.conf.d\05-system.conf" ../../packaging/windows/glouton.conf
+
   # generate the config file with the account ID and registration ID
   File gen_config.exe
   nsExec::ExecToLog '"$INSTDIR\gen_config.exe" --account "$AccountIDValue" --key "$RegistrationKeyValue"'
@@ -126,7 +131,7 @@ old_agent_not_present:
   nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" type=own start=auto DisplayName="Glouton by Bleemeo -- Monitoring Agent"'
   Pop $0
   ${If} $0 != 0
-    MessageBox MB_OK "Service installation failed. You may consider restarting this machine, in case there is ongoing windows updates or services changes, and restarting this installer. If this happens again, please report us the issue at support@bleemeo.com." 
+    MessageBox MB_OK "Service installation failed. You may consider restarting this machine, in case there is ongoing windows updates or services changes, and then restarting this installer. If this happens again, please report us the issue at support@bleemeo.com."
     Abort "The installation of the Windows service failed !"
   ${EndIf}
 

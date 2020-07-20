@@ -2,7 +2,7 @@
 
 set -e
 
-[ ! -f "dist/glouton_windows_amd64/glouton.exe" -o ! -f "dist/glouton_windows_amd64/glouton.exe" ] && (echo "Source executables not found. Please run goreleaser on the project prior to launching this script"; exit 1)
+[ ! -f "dist/glouton_windows_amd64/glouton.exe" -o ! -f "dist/glouton_windows_386/glouton.exe" ] && (echo "Source executables  not found. Please run goreleaser on the project prior to launching this script"; exit 1)
 
 WORKSPACE=`pwd`/work/
 COMMIT_HASH=$(git rev-parse --short HEAD)
