@@ -19,6 +19,7 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -80,7 +81,7 @@ func (r *rotatingLogs) Write(p []byte) (n int, err error) {
 		r.lastRotate = time.Now()
 	}
 
-	return r.fd.Write(p)
+	return fmt.Fprintf(r.fd, "[%s] %s", time.Now().Format(time.RFC3339), p)
 }
 
 func (cfg *config) enableSyslog() error {

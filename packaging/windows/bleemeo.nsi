@@ -56,7 +56,9 @@ Section "!${PRODUCT_NAME}"
   # the service already exists -> let's delete it, and re-install it, in case the config changed
   ${If} $0 == 0
     # Stopping the service is required before try to overwrite its file, if it is already installed
-    nsExec::ExecToLog 'sc.exe stop "${AGENT_SERVICE_NAME}"'
+    # Note that 'net.exe' is somewhat synchronous (it timeouts after 20-ish seconds), unlike 'sc.exe'
+    # and we *need* to wait for the service to be stopped to be able to overwrite its executable
+    nsExec::ExecToLog 'net stop "${AGENT_SERVICE_NAME}"'
     nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
   ${EndIf}
 
@@ -144,7 +146,7 @@ Section "Uninstall"
   # Unregister our uninstaller
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton"
 
-  nsExec::ExecToLog 'sc.exe stop "${AGENT_SERVICE_NAME}"'
+  nsExec::ExecToLog 'net stop "${AGENT_SERVICE_NAME}"'
   nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
 
   RMDir /r "$INSTDIR"
