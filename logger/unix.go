@@ -19,42 +19,17 @@
 package logger
 
 import (
-	"io"
 	"log"
 	"log/syslog"
-	"os"
 )
 
-// UseSyslog enable or disable logging to syslog. If syslog is not used, message
-// are sent to StdErr.
-func UseSyslog(useSyslog bool) error {
-	cfg.l.Lock()
-	defer cfg.l.Unlock()
-
-	cfg.useSyslog = useSyslog
-
-	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
-		closer.Close()
+func (cfg *config) enableSyslog() (err error) {
+	cfg.writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "")
+	if err != nil {
+		return
 	}
-
-	cfg.writer = nil
-
-	var err error
-
-	if useSyslog {
-		cfg.writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "")
-
-		if err != nil {
-			cfg.writer = os.Stderr
-			cfg.useSyslog = false
-		}
-	} else {
-		cfg.writer = os.Stderr
-	}
-
-	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
 
 	log.SetOutput(cfg.writer)
 
-	return err
+	return
 }

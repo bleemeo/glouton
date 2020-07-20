@@ -122,6 +122,37 @@ var (
 	}
 )
 
+// UseSyslog enable or disable logging to syslog. If syslog is not used, message
+// are sent to StdErr.
+func UseSyslog(useSyslog bool) error {
+	cfg.l.Lock()
+	defer cfg.l.Unlock()
+
+	cfg.useSyslog = useSyslog
+
+	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
+		closer.Close()
+	}
+
+	cfg.writer = nil
+
+	var err error
+
+	if useSyslog {
+		err = cfg.enableSyslog()
+		if err != nil {
+			cfg.writer = os.Stderr
+			cfg.useSyslog = false
+		}
+	} else {
+		cfg.writer = os.Stderr
+	}
+
+	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
+
+	return err
+}
+
 // Buffer return content of the log buffer.
 func Buffer() []byte {
 	return logBuffer.Content()
