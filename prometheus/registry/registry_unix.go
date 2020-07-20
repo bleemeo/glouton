@@ -16,28 +16,29 @@
 
 // +build !windows
 
-package agent
+package registry
 
 import (
-	"glouton/logger"
 	"glouton/prometheus/exporter/node"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-func (a *agent) initOSSpecificParts() {
-}
-
-func (a *agent) registerOSSpecificComponents() {
-	if a.config.Bool("agent.node_exporter.enabled") {
-		nodeOption := node.Option{
-			RootFS:            a.hostRootPath,
-			EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
-		}
-
-		nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
-		nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
-
-		if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
-			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)
-		}
+// AddNodeExporter add a node_exporter to collector.
+func (r *Registry) AddNodeExporter(option node.Option) error {
+	collector, err := node.NewCollector(option)
+	if err != nil {
+		return err
 	}
+
+	reg := prometheus.NewRegistry()
+
+	err = reg.Register(collector)
+	if err != nil {
+		return err
+	}
+
+	_, err = r.RegisterGatherer(reg, nil, nil)
+
+	return err
 }

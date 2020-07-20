@@ -41,6 +41,7 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/ncabatoff/process-exporter v0.7.1
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/prometheus-community/windows_exporter v0.13.0
 	github.com/prometheus/blackbox_exporter v0.17.0
 	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/client_model v0.2.0

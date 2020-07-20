@@ -69,4 +69,9 @@ func (a *agent) initOSSpecificParts() {
 }
 
 func (a *agent) registerOSSpecificComponents() {
+	if a.config.Bool("agent.windows_exporter.enabled") {
+		if err := a.gathererRegistry.AddWindowsExporter(a.config.StringList("agent.windows_exporter.collectors")); err != nil {
+			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
+		}
+	}
 }
