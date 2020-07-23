@@ -38,6 +38,7 @@ type connectorState uint32
 
 const (
 	running connectorState = iota
+	runningWithMQTTSendingDisabled
 	stopped
 )
 
@@ -49,6 +50,10 @@ type Connector struct {
 	sync        *synchronizer.Synchronizer
 	mqtt        *mqtt.Client
 	mqttRestart chan interface{}
+
+	// theses channels allows the sync and mqtt connector for sending back informations to the bleemeo connector,
+	// which takes action upon theses messages
+	// The advantage of this is that we no longer need to pass plenty of "callbacks" functions
 
 	l sync.Mutex
 	// initDone      bool
@@ -70,8 +75,15 @@ func New(option types.GlobalOption) *Connector {
 	c.sync = synchronizer.New(synchronizer.Option{
 		GlobalOption:         c.option,
 		Cache:                c.cache,
-		UpdateConfigCallback: c.uppdateConfig,
+		UpdateConfigCallback: c.updateConfig,
 		DisableCallback:      c.disableCallback,
+		MqttSetReadOnly:      c.mqttSetReadOnly,
+		MqttIsReadOnly: func() bool {
+			if c.mqtt != nil {
+				return c.mqtt.IsSendingSuspended()
+			}
+			return connectorState(atomic.LoadUint32((*uint32)(&c.state))) == runningWithMQTTSendingDisabled
+		},
 	})
 
 	return c
@@ -79,7 +91,7 @@ func New(option types.GlobalOption) *Connector {
 
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
 func (c *Connector) ApplyCachedConfiguration() {
-	if c.state != running {
+	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
 		return
 	}
 
@@ -108,7 +120,6 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 		mqtt.Option{
 			GlobalOption:         c.option,
 			Cache:                c.cache,
-			DisableCallback:      c.disableCallback,
 			AgentID:              types.AgentID(c.AgentID()),
 			AgentPassword:        password,
 			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
@@ -119,8 +130,31 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 		first,
 	)
 
+	if c.state == runningWithMQTTSendingDisabled {
+		c.mqtt.SuspendSending(true)
+	}
+
 	return nil
 }
+
+func (c *Connector) mqttSetReadOnly(readOnly bool) {
+	// if we prevent the mqtt connector from sending metrics, and the bleemeo mode is
+	// running, then we store that choice, and it will be used the next time we start
+	// the mqtt client.
+	// This ensures that even if the mqtt client starts after this function is called
+	// - given that sync is supposed to start later, this should seldom happen, but still -
+	// or the mqtt connector restarts, the read-only choice will be preserved.
+	if readOnly {
+		_ = atomic.CompareAndSwapUint32((*uint32)(&c.state), uint32(running), uint32(runningWithMQTTSendingDisabled))
+	} else {
+		_ = atomic.CompareAndSwapUint32((*uint32)(&c.state), uint32(runningWithMQTTSendingDisabled), uint32(running))
+	}
+
+	if c.mqtt != nil {
+		c.mqtt.SuspendSending(readOnly)
+	}
+}
+
 func (c *Connector) mqttRestarter(ctx context.Context) error {
 	var (
 		wg             sync.WaitGroup
@@ -288,7 +322,7 @@ func (c *Connector) Run(ctx context.Context) error {
 
 // UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
-	if c.state != running {
+	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
 		return
 	}
 
@@ -459,7 +493,7 @@ func (c *Connector) LastReport() time.Time {
 
 // HealthCheck perform some health check and logger any issue found.
 func (c *Connector) HealthCheck() bool {
-	if c.state != running {
+	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
 		return true
 	}
 
@@ -524,8 +558,8 @@ func (c *Connector) emitInternalMetric() {
 	}
 }
 
-func (c *Connector) uppdateConfig() {
-	if c.state != running {
+func (c *Connector) updateConfig() {
+	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
 		return
 	}
 
@@ -564,7 +598,7 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 
 // IsStopped returns true when the bleemeo connector is stopped andisabled, and false otherwise.
 func (c *Connector) IsStopped() bool {
-	return c.state == stopped
+	return connectorState(atomic.LoadUint32((*uint32)(&c.state))) == stopped
 }
 
 // SetStopped set the status of the connector to stop, and tells the connector to stop performing requests.

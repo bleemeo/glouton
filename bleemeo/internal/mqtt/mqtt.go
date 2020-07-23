@@ -53,8 +53,6 @@ type Option struct {
 	AgentID       bleemeoTypes.AgentID
 	AgentPassword string
 
-	// DisableCallback is a function called when MQTT got too much connect/disconnection.
-	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 	// UpdateConfigCallback is a function called when Agent configuration (will) change
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
@@ -69,7 +67,7 @@ type Option struct {
 type Client struct {
 	option Option
 
-	// Those variable are write once or only read/write from Run() gorouting. No lock needed
+	// Those variable are only written once or read/written exclusively from the Run() goroutine. No lock needed
 	ctx                        context.Context
 	mqttClient                 paho.Client
 	failedPoints               []types.MetricPoint
@@ -82,6 +80,7 @@ type Client struct {
 	pendingPoints     []types.MetricPoint
 	lastReport        time.Time
 	failedPointsCount int
+	sendingSuspended  bool // stop sending points, used when the user is is read-only mode
 	disabledUntil     time.Time
 	disableReason     bleemeoTypes.DisableReason
 	connectionLost    chan interface{}
@@ -383,6 +382,22 @@ func (c *Client) shutdown() error {
 	return nil
 }
 
+// SuspendSending sets whether the mqtt client should stop sendings metrics (and topinfo).
+func (c *Client) SuspendSending(suspended bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.sendingSuspended = suspended
+}
+
+// IsSendingSuspended returns true if the mqtt connector is suspended from sending merics (and topinfo).
+func (c *Client) IsSendingSuspended() bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.sendingSuspended
+}
+
 func (c *Client) run(ctx context.Context) error {
 	var wg sync.WaitGroup
 
@@ -405,12 +420,14 @@ func (c *Client) run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		cfg := c.option.Cache.CurrentAccountConfig()
 
-		c.sendPoints()
+		if !c.IsSendingSuspended() {
+			c.sendPoints()
 
-		if time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
-			topinfoSendAt = time.Now()
+			if time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
+				topinfoSendAt = time.Now()
 
-			c.sendTopinfo(ctx, cfg)
+				c.sendTopinfo(ctx, cfg)
+			}
 		}
 
 		c.waitPublish(time.Now().Add(5 * time.Second))

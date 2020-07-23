@@ -73,6 +73,11 @@ type Option struct {
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func()
+
+	// SetReadOnly makes the mqtt connector stop sending metrics and topinfo
+	MqttSetReadOnly func(readOnly bool)
+	// Conversely, IsReadOnly read that information
+	MqttIsReadOnly func() bool
 }
 
 // New return a new Synchronizer.
@@ -258,6 +263,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	s.forceSync["info"] = true
 	s.forceSync["agent"] = true
 
 	if !immediate {
@@ -420,6 +426,7 @@ func (s *Synchronizer) runOnce() error {
 		name   string
 		method func(bool) error
 	}{
+		{name: "info", method: s.syncInfo},
 		{name: "agent", method: s.syncAgent},
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
@@ -493,6 +500,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 
 	if fullSync {
+		syncMethods["info"] = fullSync
 		syncMethods["agent"] = fullSync
 		syncMethods["monitors"] = fullSync
 	}
@@ -669,8 +677,4 @@ func generatePassword(length int) string {
 	}
 
 	return string(b)
-}
-
-type minimumSupportedVersions struct {
-	Glouton string `json:"glouton"`
 }

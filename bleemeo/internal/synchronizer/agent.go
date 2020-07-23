@@ -21,25 +21,12 @@ import (
 	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
-	"glouton/version"
 	"reflect"
 )
 
 const apiTagsLength = 100
 
 func (s *Synchronizer) syncAgent(fullSync bool) error {
-	// retrieve the min supported glouton version the API supports
-	var requiredVersions minimumSupportedVersions
-
-	_, err := s.client.Do("GET", "v1/versions/", nil, nil, &requiredVersions)
-	// maybe the API does not support this version reporting ? We do not consider this an error for the moment
-	if err == nil {
-		if !version.Compare(version.Version, requiredVersions.Glouton) {
-			logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, requiredVersions.Glouton)
-			return &types.ErrShutdownRequested{Reason: types.DisableAgentTooOld}
-		}
-	}
-
 	var agent types.Agent
 
 	params := map[string]string{
@@ -55,7 +42,7 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 		}
 	}
 
-	_, err = s.client.Do("PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
+	_, err := s.client.Do("PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
 	if err != nil {
 		return err
 	}
