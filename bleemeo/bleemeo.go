@@ -23,6 +23,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"glouton/bleemeo/internal/cache"
@@ -31,6 +32,13 @@ import (
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	gloutonTypes "glouton/types"
+)
+
+type connectorState uint32
+
+const (
+	running connectorState = iota
+	stopped
 )
 
 // Connector manager the connection between the Agent and Bleemeo.
@@ -48,6 +56,8 @@ type Connector struct {
 	lastMQTTRestart time.Time
 	disabledUntil   time.Time
 	disableReason   types.DisableReason
+
+	state connectorState
 }
 
 // New create a new Connector.
@@ -69,6 +79,10 @@ func New(option types.GlobalOption) *Connector {
 
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
 func (c *Connector) ApplyCachedConfiguration() {
+	if c.state != running {
+		return
+	}
+
 	c.sync.UpdateUnitsAndThresholds(true)
 
 	if c.option.Config.Bool("blackbox.enabled") {
@@ -274,6 +288,10 @@ func (c *Connector) Run(ctx context.Context) error {
 
 // UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
+	if c.state != running {
+		return
+	}
+
 	c.sync.UpdateContainers()
 }
 
@@ -441,6 +459,10 @@ func (c *Connector) LastReport() time.Time {
 
 // HealthCheck perform some health check and logger any issue found.
 func (c *Connector) HealthCheck() bool {
+	if c.state != running {
+		return true
+	}
+
 	ok := true
 
 	if c.AgentID() == "" {
@@ -503,6 +525,10 @@ func (c *Connector) emitInternalMetric() {
 }
 
 func (c *Connector) uppdateConfig() {
+	if c.state != running {
+		return
+	}
+
 	currentConfig := c.cache.CurrentAccountConfig()
 
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
@@ -534,4 +560,18 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 	if mqtt != nil {
 		mqtt.Disable(until, reason)
 	}
+}
+
+// IsStopped returns true when the bleemeo connector is stopped andisabled, and false otherwise.
+func (c *Connector) IsStopped() bool {
+	return c.state == stopped
+}
+
+// SetStopped set the status of the connector to stop, and tells the connector to stop performing requests.
+func (c *Connector) SetStopped(reason types.DisableReason) {
+	atomic.StoreUint32((*uint32)(&c.state), uint32(stopped))
+
+	c.l.Lock()
+	c.disableReason = reason
+	c.l.Unlock()
 }

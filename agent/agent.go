@@ -1004,7 +1004,24 @@ func (a *agent) healthCheck(ctx context.Context) error {
 
 		mandatoryTasks := []string{"Bleemeo SAAS connector", "Metric collector", "Metric store"}
 		for _, name := range mandatoryTasks {
+			if name == "Bleemeo SAAS connector" && (a.bleemeoConnector == nil || a.bleemeoConnector.IsStopped()) {
+				continue
+			}
+
 			crashed, err := a.doesTaskCrashed(ctx, name)
+
+			if reason, ok := err.(*bleemeoTypes.ErrShutdownRequested); err != nil && ok {
+				if id, ok := a.taskIDs[name]; ok {
+					a.taskRegistry.RemoveTask(id)
+				}
+
+				a.bleemeoConnector.SetStopped(reason.Reason)
+
+				logger.V(0).Println("The bleemeo mode was disabled due to the previous error, your metrics will no longer be sent... Consider upgrading the agent !")
+
+				continue
+			}
+
 			if crashed {
 				logger.Printf("Task %#v crashed: %v", name, err)
 				logger.Printf("Stopping the agent as task %#v is critical", name)

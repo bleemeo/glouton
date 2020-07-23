@@ -18,6 +18,7 @@ package types
 
 import (
 	"context"
+	"fmt"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/threshold"
@@ -115,7 +116,7 @@ func (r DisableReason) String() string {
 	case DisableTooManyErrors:
 		return "too many errors"
 	case DisableAgentTooOld:
-		return "this agent being too old"
+		return "this agent is too old, and can no longer be connected to our managed service"
 	case DisableMaintenance:
 		return "maintenance on Bleemeo API"
 	case DisableAuthenticationError:
@@ -123,4 +124,12 @@ func (r DisableReason) String() string {
 	default:
 		return "unspecified reason"
 	}
+}
+
+type ErrShutdownRequested struct {
+	Reason DisableReason
+}
+
+func (e *ErrShutdownRequested) Error() string {
+	return fmt.Sprintf("the bleemeo mode was stopped for the following reason:\n%s\n", e.Reason)
 }

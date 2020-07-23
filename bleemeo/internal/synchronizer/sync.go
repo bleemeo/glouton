@@ -127,6 +127,10 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 		err := s.runOnce()
 		if err != nil {
+			if _, ok := err.(*bleemeoTypes.ErrShutdownRequested); ok {
+				return err
+			}
+
 			s.successiveErrors++
 
 			if client.IsAuthError(err) {
@@ -444,6 +448,11 @@ func (s *Synchronizer) runOnce() error {
 		if full, ok := syncMethods[step.name]; ok {
 			err := step.method(full)
 			if err != nil {
+				// ErrShutdownRequested short-circuit the execution of the steps to disable immediately the bleemeo mode
+				if _, ok := err.(*bleemeoTypes.ErrShutdownRequested); ok {
+					return err
+				}
+
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 				lastErr = err
 			}
@@ -637,7 +646,7 @@ func (s *Synchronizer) register() error {
 		return err
 	}
 
-	logger.V(1).Printf("regisration successful with UUID %v", objectID.ID)
+	logger.V(1).Printf("registration successful with UUID %v", objectID.ID)
 
 	_ = s.setClient()
 
@@ -660,4 +669,8 @@ func generatePassword(length int) string {
 	}
 
 	return string(b)
+}
+
+type minimumSupportedVersions struct {
+	Glouton string `json:"glouton"`
 }
