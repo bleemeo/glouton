@@ -18,8 +18,6 @@ package mqtt
 
 import (
 	"archive/zip"
-	"bytes"
-	"compress/zlib"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
@@ -77,6 +75,7 @@ type Client struct {
 	failedPoints               []types.MetricPoint
 	lastRegisteredMetricsCount int
 	lastFailedPointsRetry      time.Time
+	encoder                    mqttEncoder
 
 	l                 sync.Mutex
 	pendingMessage    []message
@@ -483,8 +482,7 @@ func (c *Client) sendPoints() {
 		return
 	}
 
-	registreredMetrics := c.option.Cache.Metrics()
-	registreredMetricByKey := common.MetricLookupFromList(registreredMetrics)
+	registreredMetricByKey := c.option.Cache.MetricLookupFromList()
 
 	if len(c.failedPoints) > 0 && c.Connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
 		localMetrics, err := c.option.Store.Metrics(nil)
@@ -530,7 +528,7 @@ func (c *Client) sendPoints() {
 				end = len(agentPayload)
 			}
 
-			buffer, err := json.Marshal(agentPayload[i:end])
+			buffer, err := c.encoder.Encode(agentPayload[i:end])
 			if err != nil {
 				logger.V(1).Printf("Unable to encode points: %v", err)
 				return
@@ -697,25 +695,13 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 
 	topic := fmt.Sprintf("v1/agent/%s/top_info", c.option.AgentID)
 
-	var buffer bytes.Buffer
-
-	w := zlib.NewWriter(&buffer)
-
-	err = json.NewEncoder(w).Encode(topinfo)
+	compressed, err := c.encoder.Encode(topinfo)
 	if err != nil {
-		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
-		w.Close()
-
+		logger.V(1).Printf("Unable to encode topinfo: %v", err)
 		return
 	}
 
-	err = w.Close()
-	if err != nil {
-		logger.V(1).Printf("Unable to get encode topinfo: %v", err)
-		return
-	}
-
-	c.publish(topic, buffer.Bytes(), false)
+	c.publish(topic, compressed, false)
 }
 
 func (c *Client) waitPublish(deadline time.Time) (stillPendingCount int) {
@@ -803,6 +789,12 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 			}
 
 			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		}
+
+		// json encoder can't encode NaN (JSON standard don't allow it).
+		// There isn't huge value in storing NaN anyway (it's the default when no value).
+		if math.IsNaN(mp.Value) {
+			continue
 		}
 
 		if common.AllowMetric(mp.Labels, mp.Annotations, whitelist) {

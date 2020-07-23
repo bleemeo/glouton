@@ -76,10 +76,6 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		return err
 	}
 
-	if _, err = coll.AddInput(input, "process"); err != nil {
-		return err
-	}
-
 	input, err = cpu.New()
 	if err != nil {
 		return err
