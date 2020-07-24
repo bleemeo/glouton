@@ -45,7 +45,7 @@ docker build -t nsisbuilder packaging/windows
 ./packaging/windows/generate_installer.sh
 ```
 
-The final executable will be `dist/windows_installer.exe`.
+The final executable will be `dist/glouton_<VERSION>_windows_installer.exe`.
 
 ## Run Glouton
 
