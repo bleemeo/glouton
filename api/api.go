@@ -16,13 +16,14 @@
 
 package api
 
-//go:generate go run github.com/gobuffalo/packr/v2/packr2
+//go:generate go run github.com/markbates/pkger/cmd/pkger
 
 import (
 	"context"
 	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -35,7 +36,7 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
-	"github.com/gobuffalo/packr/v2"
+	"github.com/markbates/pkger"
 	"github.com/rs/cors"
 )
 
@@ -84,11 +85,19 @@ func (api *API) init() {
 		Debug:            false,
 	}).Handler)
 
-	boxAssets := packr.New("assets", "./static/assets")
-	boxHTML := packr.New("html", "./static")
+	_ = pkger.Include("/api/static")
+	staticFolder := pkger.Dir("/api/static")
+	assetsFolder := pkger.Dir("/api/static/assets")
+
 	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
 
-	indexBody, err := boxHTML.Find("index.html")
+	var indexBody []byte
+
+	indexFile, err := staticFolder.Open("/index.html")
+	if err == nil {
+		indexBody, err = ioutil.ReadAll(indexFile)
+	}
+
 	if err != nil {
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
 
@@ -102,7 +111,13 @@ func (api *API) init() {
 
 	var diagnosticTmpl *template.Template
 
-	diagnosticBody, err := boxHTML.Find("diagnostic.html")
+	var diagnosticBody []byte
+
+	diagnosticFile, err := staticFolder.Open("/diagnostic.html")
+	if err == nil {
+		diagnosticBody, err = ioutil.ReadAll(diagnosticFile)
+	}
+
 	if err != nil {
 		logger.Printf("Error while loading diagnostic.html: %v", err)
 	} else {
@@ -142,7 +157,7 @@ func (api *API) init() {
 		}
 	})
 
-	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(boxAssets)))
+	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(assetsFolder)))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if indexTmpl == nil {
