@@ -1,6 +1,6 @@
 module glouton
 
-go 1.12
+go 1.13
 
 require (
 	github.com/99designs/gqlgen v0.11.3
