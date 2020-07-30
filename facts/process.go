@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 	"glouton/logger"
+	"glouton/version"
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -647,7 +647,7 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 	result.Memory.Cached = float64(memUsage.Cached) / 1024.
 
 	// swap is a complex topic on windows
-	if runtime.GOOS != Windows {
+	if version.IsWindows() {
 		swapUsage, err := mem.SwapMemory()
 		if err != nil {
 			return result, err
@@ -853,7 +853,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		userName, err := p.UsernameWithContext(ctx)
 		if err != nil {
-			if runtime.GOOS != Windows {
+			if version.IsWindows() {
 				uids, err := p.UidsWithContext(ctx)
 				if err == nil && len(uids) > 0 {
 					userName = fmt.Sprintf("%d", uids[0])
@@ -908,7 +908,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		status := ""
 		// the process status is not simple to derive on windows, and not currently supported by gopsutil
-		if runtime.GOOS != Windows {
+		if version.IsWindows() {
 			status, err = p.StatusWithContext(ctx)
 			if err != nil {
 				continue

@@ -16,7 +16,10 @@
 
 package version
 
-import "fmt"
+import (
+	"fmt"
+	"runtime"
+)
 
 //nolint:gochecknoglobals
 var (
@@ -30,4 +33,9 @@ var (
 // UserAgent returns the User-Agent for request performed by the agent.
 func UserAgent() string {
 	return fmt.Sprintf("Glouton %s", Version)
+}
+
+// IsWindows returns true when the current operating system is windows.
+func IsWindows() bool {
+	return runtime.GOOS == "windows"
 }

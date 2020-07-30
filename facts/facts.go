@@ -36,9 +36,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// it's crazy what we do for keeping the linter happy, isn't it ?
-const Windows string = "windows"
-
 // FactProvider provider information about system. Mostly static facts like OS version, architecture, ...
 //
 // It also possible to define fixed facts that this provider won't discover. This is useful for
@@ -187,7 +184,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		}
 	}
 
-	if runtime.GOOS != "windows" {
+	if version.IsWindows() {
 		if s, err := mem.SwapMemoryWithContext(ctx); err == nil {
 			if s.Total > 0 {
 				newFacts["swap_present"] = "true"

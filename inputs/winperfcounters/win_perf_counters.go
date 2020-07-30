@@ -36,11 +36,28 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-const diskIOModuleName string = "win_diskio"
-const memModuleName string = "win_mem"
-const swapModuleName string = "win_swap"
+const (
+	diskIOModuleName    string = "win_diskio"
+	memModuleName       string = "win_mem"
+	swapModuleName      string = "win_swap"
+	processorModuleName string = "win_processor"
+	systemModuleName    string = "win_system"
+)
+
 const config string = `
 [[inputs.win_perf_counters]]
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "System"
+    Instances = ["*"]
+    Counters = ["Processor Queue Length"]
+    Measurement = "win_system"
+
+  [[inputs.win_perf_counters.object]]
+    ObjectName = "Processor"
+    Instances = ["_Total"]
+    Counters = ["% Idle Time"]
+    Measurement = "win_processor"
+
   [[inputs.win_perf_counters.object]]
     ObjectName = "PhysicalDisk"
     Instances = ["*"]
@@ -82,6 +99,7 @@ type winCollector struct {
 	option      inputs.CollectorConfig
 	totalMemory uint64
 	totalSwap   uint64
+	runLength   []float64
 }
 
 // New initialise win_perf_counters.Input.
@@ -108,13 +126,13 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 	if val, ok := parsedConfig.Fields["inputs"]; ok {
 		inputsConfig, ok := val.(*ast.Table)
 		if !ok {
-			return result, errors.New("cannot find 'inputs' in your win_perfs_counters config file")
+			return result, errors.New("cannot find 'inputs' in the win_perfs_counters config")
 		}
 
 		if val, ok := inputsConfig.Fields["win_perf_counters"]; ok {
 			winConfig, ok := val.([]*ast.Table)
 			if !ok {
-				return result, errors.New("cannot find toml parsedConfig inputs.win_perfs_counters in win_perfs_counters config")
+				return result, errors.New("cannot find toml parsedConfig inputs.win_perfs_counters in the win_perfs_counters config")
 			}
 
 			if len(winConfig) > 1 {
@@ -139,7 +157,7 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 		return result, err
 	}
 
-	option := winCollector{
+	option := &winCollector{
 		option:      inputsConfig,
 		totalMemory: memInfo.Total,
 		totalSwap:   swapInfo.Total,
@@ -157,7 +175,7 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 	return result, nil
 }
 
-func (c winCollector) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	if originalContext.Measurement == diskIOModuleName {
 		instance, present := originalContext.Tags["instance"]
 		if !present || instance == "_Total" {
@@ -208,7 +226,7 @@ func (c winCollector) renameGlobal(originalContext internal.GatherContext) (newC
 	return originalContext, false
 }
 
-func (c winCollector) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (c *winCollector) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	res := make(map[string]float64, len(fields))
 
 	if currentContext.Measurement == diskIOModuleName {
@@ -249,6 +267,41 @@ func (c winCollector) transformMetrics(originalContext internal.GatherContext, c
 		}
 	}
 
+	if currentContext.Measurement == processorModuleName {
+		if val, present := fields["Percent_Idle_Time"]; present {
+			queueLength := 0.
+
+			for _, v := range c.runLength {
+				queueLength += v
+			}
+
+			queueLength /= float64(len(c.runLength))
+
+			// Reproduce the behavior exhibited in the python agent: we estimate the load to be
+			// the current cpu_usage + Processor Queue Length (the number of starved threads).
+			// A slight improvement over the python agent is that we now compute the average queue
+			// length over the last minute (or less if we haven't collected 6 points yet), instead
+			// of using only the last measurement.
+			res["load1"] = 1. - val/100. + queueLength
+		}
+	}
+
+	if currentContext.Measurement == systemModuleName {
+		// we will have a offset of up to 10s, depending on the order of collection.
+		// However, 'System' should be collected prior to the processor, so it should be pretty accurate.
+		// And 10s of delay is probably ok too (even more so given that they are averaged over a minute).
+		if val, present := fields["Processor_Queue_Length"]; present {
+			tmp := append(c.runLength, val)
+
+			start := len(tmp) - 6
+			if start < 0 {
+				start = 0
+			}
+
+			c.runLength = tmp[start:]
+		}
+	}
+
 	return res
 }
 
@@ -272,6 +325,12 @@ func (c winCollector) renameMetrics(originalContext internal.GatherContext, curr
 	if currentContext.Measurement == swapModuleName {
 		if metricName == "used_perc" {
 			newMeasurement = "swap"
+		}
+	}
+
+	if currentContext.Measurement == processorModuleName {
+		if metricName == "load1" {
+			newMeasurement = "system"
 		}
 	}
 
