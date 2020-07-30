@@ -40,7 +40,7 @@ import (
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
 	"glouton/inputs/system"
-	winPerfCounters "glouton/inputs/win_perf_counters"
+	"glouton/inputs/winperfcounters"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
 	"glouton/types"
@@ -105,7 +105,7 @@ func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorCo
 
 	switch runtime.GOOS {
 	case "windows":
-		input, err = winPerfCounters.New(inputsConfig)
+		input, err = winperfcounters.New(inputsConfig)
 		if err != nil {
 			return err
 		}
