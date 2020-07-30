@@ -38,6 +38,15 @@ docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CG
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
 
+- To build an all-in-one installer for Windows, run:
+
+```
+docker build -t bleemeo/installer_builder packaging/windows/
+docker run --rm -e COMMIT_HASH="$(git rev-parse --short HEAD)" -v "$(pwd):/work" bleemeo/installer_builder
+```
+
+The final executable will be `dist/windows_installer.exe`.
+
 ## Run Glouton
 
 On Linux amd64, after building the release you may run it with:
