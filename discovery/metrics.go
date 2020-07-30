@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"glouton/collector"
-	"glouton/config"
 	"glouton/inputs"
 	"glouton/inputs/apache"
 	"glouton/inputs/cpu"
@@ -45,10 +44,8 @@ import (
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
 	"glouton/types"
-	"regexp"
 	"runtime"
 	"strconv"
-	"strings"
 
 	"github.com/influxdata/telegraf"
 )
@@ -58,47 +55,8 @@ var (
 )
 
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(coll *collector.Collector, conf *config.Configuration, hostRootPath string) error {
-	var input telegraf.Input
-
-	var err error
-
-	diskWhitelist := conf.StringList("disk_monitor")
-	whitelistRE := make([]*regexp.Regexp, len(diskWhitelist))
-
-	for index, v := range diskWhitelist {
-		whitelistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			return fmt.Errorf("diskio whitelist RE compile fail: %s", err)
-		}
-	}
-
-	diskBlacklist := conf.StringList("disk_ignore")
-	blacklistRE := make([]*regexp.Regexp, len(diskBlacklist))
-
-	for index, v := range diskBlacklist {
-		blacklistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			return fmt.Errorf("diskio blacklist RE compile fail: %s", err)
-		}
-	}
-
-	pathBlacklist := conf.StringList("df.path_ignore")
-	pathBlacklistTrimed := make([]string, len(pathBlacklist))
-
-	for i, v := range pathBlacklist {
-		pathBlacklistTrimed[i] = strings.TrimRight(v, "/")
-	}
-
-	inputsConfig := inputs.CollectorConfig{
-		DFRootPath:      hostRootPath,
-		NetIfBlacklist:  conf.StringList("network_interface_blacklist"),
-		IODiskWhitelist: whitelistRE,
-		IODiskBlacklist: blacklistRE,
-		DFPathBlacklist: pathBlacklistTrimed,
-	}
-
-	input, err = system.New()
+func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorConfig) error {
+	input, err := system.New()
 	if err != nil {
 		return err
 	}

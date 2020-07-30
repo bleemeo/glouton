@@ -736,11 +736,42 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {
-		err = discovery.AddDefaultInputs(
-			a.collector,
-			a.config,
-			a.hostRootPath,
-		)
+		diskWhitelist := a.config.StringList("disk_monitor")
+		whitelistRE := make([]*regexp.Regexp, len(diskWhitelist))
+
+		for index, v := range diskWhitelist {
+			whitelistRE[index], err = regexp.Compile(v)
+			if err != nil {
+				logger.Printf("Unable to initialize system collector: the whitelist for diskio regexp couldn't compile: %s", err)
+				return
+			}
+		}
+
+		diskBlacklist := a.config.StringList("disk_ignore")
+		blacklistRE := make([]*regexp.Regexp, len(diskBlacklist))
+
+		for index, v := range diskBlacklist {
+			blacklistRE[index], err = regexp.Compile(v)
+			if err != nil {
+				logger.Printf("Unable to initialize system collector: the blacklist for diskio regexp couldn't compile: %s", err)
+				return
+			}
+		}
+
+		pathBlacklist := a.config.StringList("df.path_ignore")
+		pathBlacklistTrimed := make([]string, len(pathBlacklist))
+
+		for i, v := range pathBlacklist {
+			pathBlacklistTrimed[i] = strings.TrimRight(v, "/")
+		}
+
+		err = discovery.AddDefaultInputs(a.collector, inputs.CollectorConfig{
+			DFRootPath:      a.hostRootPath,
+			NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
+			IODiskWhitelist: whitelistRE,
+			IODiskBlacklist: blacklistRE,
+			DFPathBlacklist: pathBlacklistTrimed,
+		})
 		if err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 			return
