@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -212,7 +213,7 @@ func (c winCollector) transformMetrics(originalContext internal.GatherContext, c
 
 	if currentContext.Measurement == diskIOModuleName {
 		if freePerc, present := fields["Percent_Idle_Time"]; present {
-			res["utilization"] = 100. - freePerc
+			res["utilization"] = 100. - freePerc/float64(runtime.NumCPU())
 			// io_time is the number of ms spent doing IO in the last second.
 			// utilization is 100% when we spent 1000ms during one second
 			res["time"] = fields["utilization"] * 1000. / 100.
