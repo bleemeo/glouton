@@ -23,7 +23,7 @@ import (
 	"fmt"
 	"glouton/inputs"
 	"glouton/inputs/internal"
-	"runtime"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -62,13 +62,9 @@ const config string = `
     ObjectName = "PhysicalDisk"
     Instances = ["*"]
     Counters = [
-      "Disk Read Bytes/sec",
-      "Disk Write Bytes/sec",
-      "Current Disk Queue Length",
-      "Disk Reads/sec",
-      "Disk Writes/sec",
       "% Idle Time",
     ]
+    IncludeTotal = true
     Measurement = "win_diskio"
 
   [[inputs.win_perf_counters.object]]
@@ -178,11 +174,15 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	if originalContext.Measurement == diskIOModuleName {
 		instance, present := originalContext.Tags["instance"]
-		if !present || instance == "_Total" {
+		if !present {
 			return originalContext, true
 		}
 
-		// 'instance' has a pattern '<DISK_NUMBER> (<PARTITION_NAME> )+', e.g. "0 C:" or "0_C:_D:"
+		if instance == "_Total" {
+			return originalContext, false
+		}
+
+		// 'instance' has a pattern '<DISK_NUMBER> (<PARTITION_NAME> )+', e.g. "0 C:" or "0 C: D:"
 		// (here we have two partitions on the same disk). We keep the lowest letter, as it is more
 		// probably an essential device).
 		splitInstance := strings.Split(instance, " ")
@@ -198,7 +198,7 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 		sort.Strings(partitions)
 
 		instance = partitions[0]
-		originalContext.Tags["instance"] = instance
+		originalContext.Annotations.BleemeoItem = instance
 
 		for _, r := range c.option.IODiskBlacklist {
 			if r.MatchString(instance) {
@@ -231,10 +231,11 @@ func (c *winCollector) transformMetrics(originalContext internal.GatherContext, 
 
 	if currentContext.Measurement == diskIOModuleName {
 		if freePerc, present := fields["Percent_Idle_Time"]; present {
-			res["utilization"] = 100. - freePerc/float64(runtime.NumCPU())
+			// we clamp the min value to zero as due to what I believe to be timing imprecisions a sightly negative value can be returned
+			res["utilization"] = math.Max(0., 100.-freePerc)
 			// io_time is the number of ms spent doing IO in the last second.
 			// utilization is 100% when we spent 1000ms during one second
-			res["time"] = fields["utilization"] * 1000. / 100.
+			res["time"] = res["utilization"] * 1000. / 100.
 		}
 	}
 
@@ -305,34 +306,19 @@ func (c *winCollector) transformMetrics(originalContext internal.GatherContext, 
 	return res
 }
 
-func (c winCollector) renameMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
-	newMeasurement, newMetricName = currentContext.Measurement, metricName
+func (c winCollector) renameMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) (string, string) {
+	newMeasurement := currentContext.Measurement
 
-	if currentContext.Measurement == diskIOModuleName {
-		switch metricName {
-		case "utilization", "time":
-			newMeasurement = "io"
-		}
+	switch currentContext.Measurement {
+	case diskIOModuleName:
+		newMeasurement = "io"
+	case memModuleName:
+		newMeasurement = "mem"
+	case swapModuleName:
+		newMeasurement = "swap"
+	case processorModuleName:
+		newMeasurement = "system"
 	}
 
-	if currentContext.Measurement == memModuleName {
-		switch metricName {
-		case "available", "available_perc", "used", "used_perc", "cached", "free", "buffered":
-			newMeasurement = "mem"
-		}
-	}
-
-	if currentContext.Measurement == swapModuleName {
-		if metricName == "used_perc" {
-			newMeasurement = "swap"
-		}
-	}
-
-	if currentContext.Measurement == processorModuleName {
-		if metricName == "load1" {
-			newMeasurement = "system"
-		}
-	}
-
-	return
+	return newMeasurement, metricName
 }

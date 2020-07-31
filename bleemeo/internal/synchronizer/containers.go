@@ -40,7 +40,6 @@ type containerPayload struct {
 	DockerImageName  string    `json:"docker_image_name"`
 }
 
-// TODO: support windows containers (only on windows server ?) ?
 func (s *Synchronizer) syncContainers(fullSync bool) error {
 	var localContainers []facts.Container
 

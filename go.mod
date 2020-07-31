@@ -49,7 +49,7 @@ require (
 	github.com/prometheus/procfs v0.1.1
 	github.com/prometheus/prometheus v1.8.2-0.20200213233353-b90be6f32a33
 	github.com/rs/cors v1.7.0
-	github.com/shirou/gopsutil v2.20.4+incompatible
+	github.com/shirou/gopsutil v2.20.7-0.20200724130941-7e94bb8bcde0+incompatible
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	github.com/stretchr/testify v1.6.0 // indirect
@@ -78,5 +78,3 @@ require (
 )
 
 replace github.com/ncabatoff/process-exporter => github.com/PierreF/process-exporter v0.6.1-0.20200610182819-0fb770c071f3
-
-replace github.com/shirou/gopsutil => github.com/nightmared/gopsutil v2.20.7-0.20200709151433-3b649445347b+incompatible

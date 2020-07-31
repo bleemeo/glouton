@@ -174,6 +174,7 @@ func (a *agent) setupLogger() {
 	case "file":
 		err = logger.UseFile(a.config.String("logging.folder"), a.config.String("logging.filename"))
 	}
+
 	if err != nil {
 		logger.Printf("Unable to use syslog: %v", err)
 	}

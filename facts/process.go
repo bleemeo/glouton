@@ -647,7 +647,7 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 	result.Memory.Cached = float64(memUsage.Cached) / 1024.
 
 	// swap is a complex topic on windows
-	if version.IsWindows() {
+	if !version.IsWindows() {
 		swapUsage, err := mem.SwapMemory()
 		if err != nil {
 			return result, err

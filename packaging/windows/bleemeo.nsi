@@ -60,6 +60,8 @@ Section "!${PRODUCT_NAME}"
     # and we *need* to wait for the service to be stopped to be able to overwrite its executable
     nsExec::ExecToLog 'net stop "${AGENT_SERVICE_NAME}"'
     nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
+    # Give the service time to delete itself
+    Sleep 1000
   ${EndIf}
 
   #### UPGRADE FROM BLEEMEO-AGENT ####
@@ -158,7 +160,8 @@ Function informationPage
 
     # Only show this page if it's the first installation. After first installation, the file
     # 30-install.conf will be created.
-    IfFileExists "${CONFIGDIR}\glouton.conf.d\30-install.conf" NotFirstInstall FirstInstall
+    IfFileExists "${CONFIGDIR}\glouton.conf.d\30-install.conf" NotFirstInstall 0
+    IfFileExists "C:\ProgramData\bleemeo\etc\agent.conf.d\30-install.conf" NotFirstInstall FirstInstall
     NotFirstInstall:
     Abort
     FirstInstall:

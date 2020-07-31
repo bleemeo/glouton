@@ -96,12 +96,13 @@ func matchServerVersion(major, minor uint64) string {
 	}
 }
 
-func getWindowsVersionName(major uint64, minor uint64, buildNumber string, isServer bool, servicePack string) string {
-	if major < 6 || major > 10 || (major > 6 && major < 10) {
+func getWindowsVersionName(major uint64, minor uint64, isServer bool, servicePack string) string {
+	if major != 6 && major != 10 {
 		return unsupportedVersion
 	}
 
 	var res string
+
 	var version string
 
 	if isServer {
@@ -112,7 +113,8 @@ func getWindowsVersionName(major uint64, minor uint64, buildNumber string, isSer
 
 	if servicePack != "" {
 		res = fmt.Sprintf("Windows %s SP %s", version, servicePack)
-
+	} else {
+		res = fmt.Sprintf("Windows %s", version)
 	}
 
 	return res
@@ -143,7 +145,7 @@ func (f *FactProvider) platformFacts() map[string]string {
 		}
 
 		if err1 == nil && err2 == nil && err3 == nil {
-			facts["os_version"] = getWindowsVersionName(major, minor, buildNumber, isServer, servicePack)
+			facts["os_version"] = getWindowsVersionName(major, minor, isServer, servicePack)
 			facts["os_version_long"] = fmt.Sprintf("Windows NT %d.%d build %s", major, minor, buildNumber)
 		}
 

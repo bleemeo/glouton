@@ -19,6 +19,7 @@ package diskio
 import (
 	"errors"
 	"glouton/inputs/internal"
+	"glouton/version"
 	"regexp"
 
 	"github.com/influxdata/telegraf"
@@ -104,9 +105,16 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 func (dt diskIOTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	if ioTime, ok := fields["io_time"]; ok {
 		delete(fields, "io_time")
+
 		fields["time"] = ioTime
 		// io_time is millisecond per second.
 		fields["utilization"] = ioTime / 1000. * 100.
+	}
+
+	// win_perf_counters will report io_time and io_utilization on windows
+	if version.IsWindows() {
+		delete(fields, "time")
+		delete(fields, "utilization")
 	}
 
 	delete(fields, "weighted_io_time")

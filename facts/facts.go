@@ -184,7 +184,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		}
 	}
 
-	if version.IsWindows() {
+	if !version.IsWindows() {
 		if s, err := mem.SwapMemoryWithContext(ctx); err == nil {
 			if s.Total > 0 {
 				newFacts["swap_present"] = "true"
