@@ -17,9 +17,11 @@
 package logger
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -27,26 +29,10 @@ const rotatePeriod time.Duration = 24 * time.Hour
 
 type rotatingLogs struct {
 	location   string
-	filename   string
+	basename   string
+	extension  string
 	fd         io.WriteCloser
-	lastRotate time.Time
-}
-
-func (r *rotatingLogs) moveOldFile() error {
-	// rotate the file and sets its name in function of its "end time"
-	// Note: we're not using a classic time formatting like RC3339 because windows doesn't like some characters, for instance ':'
-	filename := filepath.Join(r.location, r.filename+".log")
-	oldFilename := filepath.Join(r.location, r.filename+"."+r.lastRotate.Format("2006-01-02")+".log")
-
-	curFileInfo, err := os.Stat(filename)
-	if err == nil {
-		if time.Since(curFileInfo.ModTime().Truncate(rotatePeriod)) < rotatePeriod {
-			// the file is recent enough, no rotation needed
-			return nil
-		}
-	}
-
-	return os.Rename(filename, oldFilename)
+	lastPeriod time.Time
 }
 
 func (r *rotatingLogs) open() error {
@@ -54,19 +40,32 @@ func (r *rotatingLogs) open() error {
 		return nil
 	}
 
-	r.lastRotate = time.Now().Truncate(rotatePeriod)
-
 	// this is safe, as calls to the logger are wrapped in a mutex, so no concurrent calls should be made,
 	// and no one wil attempt to write to this logger while "closed"
-	filename := filepath.Join(r.location, r.filename+".log")
+	filename := filepath.Join(r.location, r.basename+r.extension)
+
+	r.lastPeriod = time.Now().Truncate(rotatePeriod)
 
 	// if the destination already exists, and its content is older than the rotation period,
 	// move the current content to another file (rotate it)
-	_, err := os.Stat(filename)
-	if err == nil {
-		err = r.moveOldFile()
-		if err != nil {
+	fileInfo, err := os.Stat(filename)
+	if err != nil {
+		if !os.IsNotExist(err) {
 			return err
+		}
+	} else {
+		curMtimePeriod := fileInfo.ModTime().Truncate(rotatePeriod)
+		if curMtimePeriod != time.Now().Truncate(rotatePeriod) {
+			// rotate the file and sets its name in function of its "end time"
+			// Note: we're not using a classic time formatting like RC3339 because windows doesn't like some characters, for instance ':'
+			oldFilename := filepath.Join(r.location, fmt.Sprintf("%s.%s%s", r.basename, r.lastPeriod.Format("2006-01-02"), r.extension))
+
+			if err := os.Rename(filename, oldFilename); err != nil {
+				return err
+			}
+		} else {
+			// we want to rotate the file as soon as its last modification date exits the current "period"
+			r.lastPeriod = curMtimePeriod
 		}
 	}
 
@@ -82,7 +81,7 @@ func (r *rotatingLogs) open() error {
 
 // rotatingLogs implements io.WriteCloser.
 func (r *rotatingLogs) Write(p []byte) (n int, err error) {
-	if r.fd == nil || time.Since(r.lastRotate) >= rotatePeriod {
+	if r.fd == nil || time.Now().Truncate(rotatePeriod) != r.lastPeriod {
 		if r.fd != nil {
 			_ = r.fd.Close()
 			r.fd = nil
@@ -98,18 +97,17 @@ func (r *rotatingLogs) Write(p []byte) (n int, err error) {
 	return r.fd.Write(p)
 }
 
-func (cfg *config) useFile(folder string, filename string) error {
-	writer := &rotatingLogs{
-		location: folder,
-		filename: filename,
-	}
+func (cfg *config) useFile(filename string) error {
+	ext := filepath.Ext(filename)
+	basename := strings.TrimRight(filepath.Base(filename), ext)
 
-	err := writer.open()
-	if err != nil {
-		return err
+	writer := &rotatingLogs{
+		location:  filepath.Dir(filename),
+		basename:  basename,
+		extension: ext,
 	}
 
 	cfg.writer = writer
 
-	return nil
+	return writer.open()
 }

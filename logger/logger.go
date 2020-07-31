@@ -81,7 +81,7 @@ func printf(fmtArg string, a ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
-	if cfg.useSyslog {
+	if !cfg.useSyslog {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
@@ -92,7 +92,7 @@ func println(v ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
-	if cfg.useSyslog {
+	if !cfg.useSyslog {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
@@ -119,7 +119,6 @@ var (
 	logBuffer = &buffer{}
 	cfg       = config{
 		writer:    os.Stderr,
-		useSyslog: true,
 		teeWriter: io.MultiWriter(logBuffer, os.Stderr),
 	}
 )
@@ -138,7 +137,7 @@ func setLogger(cb func() error) error {
 	err := cb()
 	if err != nil {
 		cfg.writer = os.Stderr
-		cfg.useSyslog = true
+		cfg.useSyslog = false
 	}
 
 	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
@@ -150,25 +149,22 @@ func setLogger(cb func() error) error {
 
 // UseSyslog enable logging to syslog.
 func UseSyslog() error {
-	return setLogger(func() (err error) {
-		if err = cfg.enableSyslog(); err != nil {
-			return
+	return setLogger(func() error {
+		err := cfg.enableSyslog()
+		if err == nil {
+			return nil
 		}
+
 		cfg.useSyslog = false
 
-		return
+		return err
 	})
 }
 
 // UseFile enable logging to a file, in a given folder, with automatic file rotation (on a daily basis).
-func UseFile(folder string, filename string) error {
-	return setLogger(func() (err error) {
-		if err = cfg.useFile(folder, filename); err != nil {
-			return
-		}
-		cfg.useSyslog = false
-
-		return
+func UseFile(filename string) error {
+	return setLogger(func() error {
+		return cfg.useFile(filename)
 	})
 }
 

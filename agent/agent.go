@@ -172,11 +172,11 @@ func (a *agent) setupLogger() {
 	case "syslog":
 		err = logger.UseSyslog()
 	case "file":
-		err = logger.UseFile(a.config.String("logging.folder"), a.config.String("logging.filename"))
+		err = logger.UseFile(a.config.String("logging.filename"))
 	}
 
 	if err != nil {
-		logger.Printf("Unable to use syslog: %v", err)
+		fmt.Printf("Unable to use logging backend '%s': %v\n", a.config.String("logging.output"), err)
 	}
 
 	if level := a.config.Int("logging.level"); level != 0 {
