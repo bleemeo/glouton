@@ -4,24 +4,15 @@ set -e
 
 [ ! -f "dist/glouton_windows_amd64/glouton.exe" -o ! -f "dist/glouton_windows_386/glouton.exe" ] && (echo "Source executables  not found. Please run goreleaser on the project prior to launching this script"; exit 1)
 
-WORKSPACE=`pwd`/work/
 VERSION=$(dist/glouton_linux_amd64/glouton --version)
+COMMIT_HASH=$(git rev-parse --short HEAD)
 
-OUTDIR="`pwd`/dist/"
+mkdir -p work
 
-rm -rf "$WORKSPACE"
-mkdir "$WORKSPACE"
-cd "$WORKSPACE"
+cp -r packaging/windows work
 
-cp -r ../packaging/windows "$WORKSPACE"
+sed -i -e "s/^!define PRODUCT_VERSION \"0.1\"$/!define PRODUCT_VERSION \"${VERSION}\"/" "work/windows/bleemeo.nsi"
 
-cd "$WORKSPACE/windows"
+docker run --rm -v "$(pwd):/work" nsisbuilder makensis work/windows/bleemeo.nsi
 
-sed -i -e "s/^!define PRODUCT_VERSION \"0.1\"$/!define PRODUCT_VERSION \"${VERSION}\"/" bleemeo.nsi
-
-GOOS=windows GOARCH=386 go build -o gen_config.exe gen_config.go
-makensis bleemeo.nsi
-
-cp "$WORKSPACE/windows/glouton-installer.exe" "$OUTDIR/windows_installer.exe"
-
-rm -rf "$WORKSPACE"
+cp "work/windows/glouton-installer.exe" "dist/glouton_${VERSION}_windows_installer.exe"

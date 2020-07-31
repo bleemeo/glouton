@@ -41,8 +41,8 @@ Release files are present in dist/ folder and a Docker image is build (glouton:l
 - To build an all-in-one installer for Windows, run:
 
 ```
-docker build -t bleemeo/installer_builder packaging/windows/
-docker run --rm -e COMMIT_HASH="$(git rev-parse --short HEAD)" -v "$(pwd):/work" bleemeo/installer_builder
+docker build -t nsisbuilder packaging/windows
+./packaging/windows/generate_installer.sh
 ```
 
 The final executable will be `dist/windows_installer.exe`.

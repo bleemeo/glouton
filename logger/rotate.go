@@ -41,7 +41,7 @@ func (r *rotatingLogs) moveOldFile() error {
 
 	curFileInfo, err := os.Stat(filename)
 	if err == nil {
-		if time.Since(curFileInfo.ModTime()) < rotatePeriod {
+		if time.Since(curFileInfo.ModTime().Truncate(rotatePeriod)) < rotatePeriod {
 			// the file is recent enough, no rotation needed
 			return nil
 		}

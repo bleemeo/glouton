@@ -32,6 +32,12 @@ var (
 	runAsRoot   = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
 	configFiles = flag.String("config", "", "Configuration files/dirs to load.")
 	showVersion = flag.Bool("version", false, "Show version and exit")
+
+	// flags related to the installation
+	postInstall       = flag.Bool("post-install", false, "Run the post-install step")
+	installConfigPath = flag.String("install-config-path", "", "Config file used to store the account id and registration key")
+	account           = flag.String("account-id", "", "Account ID")
+	registration      = flag.String("registration-key", "", "Registration key of your account")
 )
 
 //nolint: gochecknoglobals
@@ -62,6 +68,31 @@ func main() {
 		fmt.Println("    service glouton start")
 		fmt.Println("")
 		os.Exit(1)
+	}
+
+	if *postInstall {
+		if *installConfigPath == "" {
+			fmt.Println("No config file specified, cannot install the agent configuration")
+			return
+		}
+
+		_, err := os.Stat(*installConfigPath)
+		if err == nil {
+			fmt.Println("The config file already exists, doing nothing")
+			return
+		}
+
+		fd, err := os.Create(*installConfigPath)
+		if err != nil {
+			fmt.Printf("Couldn't open the config file: %v.\n", err)
+			os.Exit(1)
+		}
+
+		fmt.Fprintf(fd, "bleemeo:\n  account_id: %s\n  registration_key: %s", *account, *registration)
+
+		fd.Close()
+
+		return
 	}
 
 	agent.Run(strings.Split(*configFiles, ","))

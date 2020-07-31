@@ -908,7 +908,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		status := ""
 		// the process status is not simple to derive on windows, and not currently supported by gopsutil
-		if version.IsWindows() {
+		if !version.IsWindows() {
 			status, err = p.StatusWithContext(ctx)
 			if err != nil {
 				continue

@@ -18,7 +18,7 @@ InstallDir "$PROGRAMFILES\bleemeo\glouton"
 !define MUI_ABORTWARNING
 !define MUI_ICON ${PRODUCT_ICON}
 !define MUI_UNICON ${PRODUCT_ICON}
-!define MUI_WELCOMEFINISHPAGE_BITMAP ../../packaging/windows/bleemeo_logo.bmp
+!define MUI_WELCOMEFINISHPAGE_BITMAP bleemeo_logo.bmp
 
 !insertmacro MUI_PAGE_WELCOME
 Page custom informationPage informationPageLeave
@@ -82,9 +82,9 @@ old_agent_not_present:
   #### INSTALLATION ####
 
   ${If} ${RunningX64}
-    File ../../dist/glouton_windows_amd64/glouton.exe
+    File ../../dist/${PRODUCT_NAME}_windows_amd64/${PRODUCT_NAME}.exe
   ${Else}
-    File ../../dist/glouton_windows_386/glouton.exe
+    File ../../dist/${PRODUCT_NAME}_windows_386/${PRODUCT_NAME}.exe
   ${EndIf}
 
   # Needed for the icon shown in 'Apps & Features'
@@ -95,9 +95,7 @@ old_agent_not_present:
   File "/oname=${CONFIGDIR}\glouton.conf.d\05-system.conf" ../../packaging/windows/glouton.conf
 
   # generate the config file with the account ID and registration ID
-  File gen_config.exe
-  nsExec::ExecToLog '"$INSTDIR\gen_config.exe" --account "$AccountIDValue" --key "$RegistrationKeyValue"'
-  Delete gen_config.exe
+  nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --install-config-path "${CONFIGDIR}\glouton.conf.d\30-install.conf"'
 
   # Let's expose proper values in the "Apps & Features" Windows settings by registering our installer
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
