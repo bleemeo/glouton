@@ -50,7 +50,7 @@ const stableConnection = 5 * time.Minute
 type Option struct {
 	bleemeoTypes.GlobalOption
 	Cache         *cache.Cache
-	AgentID       string
+	AgentID       bleemeoTypes.AgentID
 	AgentPassword string
 
 	// DisableCallback is a function called when MQTT got too much connect/disconnection.
@@ -59,6 +59,8 @@ type Option struct {
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
+	// UpdateMonitor requests a sync of a monitor
+	UpdateMonitor func(op string, uuid string)
 
 	InitialPoints []types.MetricPoint
 }
@@ -401,7 +403,7 @@ func (c *Client) run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		cfg := c.option.Cache.AccountConfig()
+		cfg := c.option.Cache.CurrentAccountConfig()
 
 		c.sendPoints()
 
@@ -425,6 +427,7 @@ func (c *Client) run(ctx context.Context) error {
 	return nil
 }
 
+// addPoints preprocesses and appends a list of metric points to those pending transmission over MQTT.
 func (c *Client) addPoints(points []types.MetricPoint) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -436,42 +439,40 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
-func (c *Client) popNewPendingPoints() []types.MetricPoint {
+// PopPoints returns the list of metrics to be sent. When 'includeFailedPoints' is set to true, the returned
+// data will not only include all pending points, but also all the points whose submission failed previously.
+func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	points := c.pendingPoints
-	c.pendingPoints = nil
+	var points []types.MetricPoint
 
-	return points
-}
+	if includeFailedPoints {
+		points = c.failedPoints
+		c.failedPoints = nil
+		c.failedPointsCount = 0
+	}
 
-// PopPendingPoints get and remove all pending points from this MQTT connector.
-func (c *Client) PopPendingPoints() []types.MetricPoint {
-	c.l.Lock()
-	defer c.l.Unlock()
+	points = append(points, c.pendingPoints...)
 
-	points := append(c.failedPoints, c.pendingPoints...)
-	c.failedPoints = nil
-	c.failedPointsCount = 0
 	c.pendingPoints = nil
 
 	return points
 }
 
 func (c *Client) sendPoints() {
-	metricWhitelist := c.option.Cache.AccountConfig().MetricsAgentWhitelistMap()
-	points := filterPoints(c.popNewPendingPoints(), metricWhitelist)
+	points := c.filterPoints(c.PopPoints(false))
 
 	if !c.Connected() {
 		c.l.Lock()
 
+		// store all new points as failed ones
 		c.failedPoints = append(c.failedPoints, points...)
 		if len(c.failedPoints) > maxPendingPoints {
 			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
 		}
 
-		// Make sure that when connection is back we retry failed point as soon as possible
+		// Make sure that when connection is back we retry failed points as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
 
 		defer c.l.Unlock()
@@ -507,27 +508,34 @@ func (c *Client) sendPoints() {
 			}
 		}
 
-		points = append(filterPoints(newPoints, metricWhitelist), points...)
+		points = append(c.filterPoints(newPoints), points...)
 		c.failedPoints = nil
 	}
 
-	payload := make([]metricPayload, 0, len(points))
-	payload = c.preparePoints(payload, registreredMetricByKey, points)
-	logger.V(2).Printf("MQTT send %d points", len(payload))
+	payload := c.preparePoints(registreredMetricByKey, points)
+	nbPoints := 0
 
-	for i := 0; i < len(payload); i += pointsBatchSize {
-		end := i + pointsBatchSize
-		if end > len(payload) {
-			end = len(payload)
+	for _, metrics := range payload {
+		nbPoints += len(metrics)
+	}
+
+	logger.V(2).Printf("MQTT: sending %d points", nbPoints)
+
+	for agentID, agentPayload := range payload {
+		for i := 0; i < len(agentPayload); i += pointsBatchSize {
+			end := i + pointsBatchSize
+			if end > len(agentPayload) {
+				end = len(agentPayload)
+			}
+
+			buffer, err := c.encoder.Encode(agentPayload[i:end])
+			if err != nil {
+				logger.V(1).Printf("Unable to encode points: %v", err)
+				return
+			}
+
+			c.publish(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
 		}
-
-		buffer, err := c.encoder.Encode(payload[i:end])
-		if err != nil {
-			logger.V(1).Printf("Unable to encode points: %v", err)
-			return
-		}
-
-		c.publish(fmt.Sprintf("v1/agent/%s/data", c.option.AgentID), buffer, true)
 	}
 
 	c.l.Lock()
@@ -536,7 +544,10 @@ func (c *Client) sendPoints() {
 	c.failedPointsCount = len(c.failedPoints)
 }
 
-func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) []metricPayload {
+// preparePoints updates the MQTT payload by processing some points and returning the a map between agent uuids and the metrics.
+func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Metric, points []types.MetricPoint) map[bleemeoTypes.AgentID][]metricPayload {
+	payload := make(map[bleemeoTypes.AgentID][]metricPayload, 1)
+
 	for _, p := range points {
 		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
 		if m, ok := registreredMetricByKey[key]; ok {
@@ -550,7 +561,7 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 			if c.option.MetricFormat == types.MetricFormatBleemeo {
 				value.UUID = m.ID
 				value.LabelsText = ""
-				value.Measurement = p.Labels["__name__"]
+				value.Measurement = p.Labels[types.LabelName]
 				value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
 			}
 
@@ -569,7 +580,14 @@ func (c *Client) preparePoints(payload []metricPayload, registreredMetricByKey m
 				}
 			}
 
-			payload = append(payload, value)
+			bleemeoAgentID := c.option.AgentID
+
+			if p.Annotations.BleemeoAgentID != "" {
+				// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
+				bleemeoAgentID = bleemeoTypes.AgentID(p.Annotations.BleemeoAgentID)
+			}
+
+			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
 		} else {
 			c.failedPoints = append(c.failedPoints, p)
 		}
@@ -609,8 +627,10 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 }
 
 type notificationPayload struct {
-	MessageType string `json:"message_type"`
-	MetricUUID  string `json:"metric_uuid,omitempty"`
+	MessageType          string `json:"message_type"`
+	MetricUUID           string `json:"metric_uuid,omitempty"`
+	MonitorUUID          string `json:"monitor_uuid,omitempty"`
+	MonitorOperationType string `json:"monitor_operation_type,omitempty"`
 }
 
 func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
@@ -635,6 +655,8 @@ func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
 		c.option.UpdateConfigCallback(false)
 	case "threshold-update":
 		c.option.UpdateMetrics(payload.MetricUUID)
+	case "monitor-update":
+		c.option.UpdateMonitor(payload.MonitorOperationType, payload.MonitorUUID)
 	}
 }
 
@@ -742,18 +764,41 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 	return rootCAs, nil
 }
 
-func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []types.MetricPoint {
-	result := make([]types.MetricPoint, 0)
+func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
+	result := make([]types.MetricPoint, 0, len(input))
 
-	for _, m := range input {
+	currentAccountConfig := c.option.Cache.CurrentAccountConfig()
+	accountConfigs := c.option.Cache.AccountConfigs()
+	monitors := c.option.Cache.MonitorsByAgentUUID()
+
+	for _, mp := range input {
+		// retrieve the appropriate configuration for the metric
+		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+
+		if mp.Annotations.BleemeoAgentID != "" {
+			monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]
+			if !present {
+				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", mp.Annotations.BleemeoAgentID)
+				continue
+			}
+
+			accountConfig, present := accountConfigs[monitor.AccountConfig]
+			if !present {
+				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
+				continue
+			}
+
+			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		}
+
 		// json encoder can't encode NaN (JSON standard don't allow it).
 		// There isn't huge value in storing NaN anyway (it's the default when no value).
-		if math.IsNaN(m.Value) {
+		if math.IsNaN(mp.Value) {
 			continue
 		}
 
-		if common.AllowMetric(m.Labels, m.Annotations, metricWhitelist) {
-			result = append(result, m)
+		if common.AllowMetric(mp.Labels, mp.Annotations, whitelist) {
+			result = append(result, mp)
 		}
 	}
 
@@ -761,7 +806,7 @@ func filterPoints(input []types.MetricPoint, metricWhitelist map[string]bool) []
 }
 
 func (c *Client) ready() bool {
-	cfg := c.option.Cache.AccountConfig()
+	cfg := c.option.Cache.CurrentAccountConfig()
 	if cfg.LiveProcessResolution == 0 || cfg.MetricAgentResolution == 0 {
 		logger.V(2).Printf("MQTT not ready, Agent as no configuration")
 		return false

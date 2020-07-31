@@ -252,8 +252,8 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 
 			for _, m := range containerMetrics {
 				metricFilters := map[string]string{
-					types.LabelContainerName: container.Name(),
-					types.LabelName:          m,
+					types.LabelMetaContainerName: container.Name(),
+					types.LabelName:              m,
 				}
 
 				metrics, err := r.api.DB.Metrics(metricFilters)

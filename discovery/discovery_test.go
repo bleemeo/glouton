@@ -24,22 +24,9 @@ import (
 	"glouton/types"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/influxdata/telegraf"
 )
-
-type mockDiscoverer struct {
-	result []Service
-}
-
-func (md mockDiscoverer) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
-	return md.result, nil
-}
-
-func (md mockDiscoverer) LastUpdate() time.Time {
-	return time.Now()
-}
 
 type mockState struct {
 	DiscoveredService []Service
@@ -219,7 +206,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc := New(mockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
+		disc := New(MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -493,7 +480,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		ExpectedAddedName: "nginx",
 		NewID:             42,
 	}
-	mockDynamic := &mockDiscoverer{result: []Service{}}
+	mockDynamic := NewMockDiscoverer()
 	docker := mockContainerInfo{
 		containers: map[string]mockContainer{
 			"1234": {},

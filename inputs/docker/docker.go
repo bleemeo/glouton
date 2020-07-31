@@ -61,7 +61,7 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 
 	if name, ok := originalContext.Tags["container_name"]; ok {
 		newContext.Annotations.BleemeoItem = name
-		newContext.Tags[types.LabelContainerName] = name
+		newContext.Tags[types.LabelMetaContainerName] = name
 	}
 
 	if id, ok := originalContext.OriginalFields["container_id"]; ok {

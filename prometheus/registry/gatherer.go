@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"glouton/types"
 	"strings"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -11,7 +12,78 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
-// gathlabeledGatherererer provide a gatherer that will add provided labels to all metrics.
+type QueryType int
+
+const (
+	NoProbe QueryType = iota
+	OnlyProbes
+	All
+)
+
+// GatherState is an argument given to gatherers that support it. It allows us to give extra informations
+// to gatherers. Due to the way such objects are contructed when no argument is supplied (when calling
+// Gather() on a GathererWithState, most of the time Gather() will directly call GatherWithState(GatherState{}),
+// please make sure that default values are sensible. For example, NoProbe *must* be the default queryType, as
+// we do not want queries on /metrics to always probe the collectors by default).
+type GatherState struct {
+	QueryType QueryType
+	// Shall TickingGatherer perform immediately the gathering (instead of its normal "ticking"
+	// operation mode) ?
+	NoTick bool
+}
+
+func GatherStateFromMap(params map[string][]string) GatherState {
+	state := GatherState{}
+
+	// TODO: add this in some user-facing documentation
+	if _, includeProbes := params["includeMonitors"]; includeProbes {
+		state.QueryType = All
+	}
+
+	// TODO: add this in some user-facing documentation
+	if _, excludeMetrics := params["onlyMonitors"]; excludeMetrics {
+		state.QueryType = OnlyProbes
+	}
+
+	return state
+}
+
+// GathererWithState is a generalization of prometheus.Gather.
+type GathererWithState interface {
+	GatherWithState(GatherState) ([]*dto.MetricFamily, error)
+}
+
+// GathererWithStateWrapper is a wrapper around GathererWithState that allows to specify a state to forward
+// to the wrapped gatherer when the caller does not know about GathererWithState and uses raw Gather().
+// The main use case is the /metrics HTTP endpoint, where we want to be able to gather() only some metrics
+// (e.g. all metrics/only probes/no probes).
+// In the prometheus exporter endpoint, when receiving an request, the (user-provided)
+// HTTP handler will:
+// - create a new wrapper instance, generate a GatherState accordingly, and call wrapper.setState(newState).
+// - pass the wrapper to a new prometheus HTTP handler.
+// - when Gather() is called upon the wrapper by prometheus, the wrapper calls GathererWithState(newState)
+// on its internal gatherer.
+type GathererWithStateWrapper struct {
+	gatherState GatherState
+	gatherer    GathererWithState
+}
+
+// NewGathererWithStateWrapper creates a new wrapper around GathererWithState.
+func NewGathererWithStateWrapper(g GathererWithState) *GathererWithStateWrapper {
+	return &GathererWithStateWrapper{gatherer: g}
+}
+
+// SetState updates the state the wrapper will provide to its internal gatherer when called.
+func (w *GathererWithStateWrapper) SetState(state GatherState) {
+	w.gatherState = state
+}
+
+// Gather implements prometheus.Gatherer for GathererWithStateWrapper.
+func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
+	return w.gatherer.GatherWithState(w.gatherState)
+}
+
+// labeledGatherer provide a gatherer that will add provided labels to all metrics.
 // It also allow to gather to MetricPoints.
 type labeledGatherer struct {
 	source      prometheus.Gatherer
@@ -39,8 +111,27 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annota
 	}
 }
 
+// Gather implements prometheus.Gather.
 func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
-	mfs, err := g.source.Gather()
+	return g.GatherWithState(GatherState{})
+}
+
+// GatherWithState implements GathererWithState.
+func (g labeledGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+	// do not collect non-probes metrics when the user only wants probes
+	if _, probe := g.source.(*ProbeGatherer); !probe && state.QueryType == OnlyProbes {
+		return nil, nil
+	}
+
+	var mfs []*dto.MetricFamily
+
+	var err error
+
+	if cg, ok := g.source.(GathererWithState); ok {
+		mfs, err = cg.GatherWithState(state)
+	} else {
+		mfs, err = g.source.Gather()
+	}
 
 	if len(g.labels) == 0 {
 		return mfs, err
@@ -82,8 +173,8 @@ func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 	return result
 }
 
-func (g labeledGatherer) GatherPoints() ([]types.MetricPoint, error) {
-	mfs, err := g.Gather()
+func (g labeledGatherer) GatherPoints(state GatherState) ([]types.MetricPoint, error) {
+	mfs, err := g.GatherWithState(state)
 	points := familiesToMetricPoints(mfs)
 
 	if (g.annotations != types.MetricAnnotations{}) {
@@ -112,39 +203,69 @@ func (s sliceGatherer) Gather() ([]*dto.MetricFamily, error) {
 // The first help_text win.
 type Gatherers []prometheus.Gatherer
 
-// Gather implements Gatherer.
-func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
+// GatherWithState implements GathererWithState.
+func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	metricFamiliesByName := map[string]*dto.MetricFamily{}
 
 	var errs prometheus.MultiError
 
+	var mfs []*dto.MetricFamily
+
+	wg := sync.WaitGroup{}
+	wg.Add(len(gs))
+
+	mutex := sync.Mutex{}
+
+	// run gather in parallel
 	for _, g := range gs {
-		mfs, err := g.Gather()
-		if err != nil {
-			errs = append(errs, err)
-		}
+		go func(g prometheus.Gatherer) {
+			defer wg.Done()
 
-		for _, mf := range mfs {
-			existingMF, exists := metricFamiliesByName[mf.GetName()]
-			if exists {
-				if existingMF.GetType() != mf.GetType() {
-					errs = append(errs, fmt.Errorf(
-						"gathered metric family %s has type %s but should have %s",
-						mf.GetName(), mf.GetType(), existingMF.GetType(),
-					))
+			var currentMFs []*dto.MetricFamily
 
-					continue
-				}
+			var err error
+
+			if cg, ok := g.(GathererWithState); ok {
+				currentMFs, err = cg.GatherWithState(state)
 			} else {
-				existingMF = &dto.MetricFamily{}
-				existingMF.Name = mf.Name
-				existingMF.Help = mf.Help
-				existingMF.Type = mf.Type
-				metricFamiliesByName[mf.GetName()] = existingMF
+				currentMFs, err = g.Gather()
 			}
 
-			existingMF.Metric = append(existingMF.Metric, mf.Metric...)
+			mutex.Lock()
+
+			if err != nil {
+				errs = append(errs, err)
+			}
+
+			mfs = append(mfs, currentMFs...)
+
+			mutex.Unlock()
+		}(g)
+	}
+
+	wg.Wait()
+
+	for _, mf := range mfs {
+		existingMF, exists := metricFamiliesByName[mf.GetName()]
+
+		if exists {
+			if existingMF.GetType() != mf.GetType() {
+				errs = append(errs, fmt.Errorf(
+					"gathered metric family %s has type %s but should have %s",
+					mf.GetName(), mf.GetType(), existingMF.GetType(),
+				))
+
+				continue
+			}
+		} else {
+			existingMF = &dto.MetricFamily{}
+			existingMF.Name = mf.Name
+			existingMF.Help = mf.Help
+			existingMF.Type = mf.Type
+			metricFamiliesByName[mf.GetName()] = existingMF
 		}
+
+		existingMF.Metric = append(existingMF.Metric, mf.Metric...)
 	}
 
 	result := make([]*dto.MetricFamily, 0, len(metricFamiliesByName))
@@ -174,22 +295,43 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	return sortedResult, errs.MaybeUnwrap()
 }
 
+// Gather implements prometheus.Gather.
+func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
+	return gs.GatherWithState(GatherState{})
+}
+
 type labeledGatherers []labeledGatherer
 
 // GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily.
-func (gs labeledGatherers) GatherPoints() ([]types.MetricPoint, error) {
+func (gs labeledGatherers) GatherPoints(state GatherState) ([]types.MetricPoint, error) {
 	result := []types.MetricPoint{}
 
 	var errs prometheus.MultiError
 
-	for _, g := range gs {
-		points, err := g.GatherPoints()
-		if err != nil {
-			errs = append(errs, err)
-		}
+	wg := sync.WaitGroup{}
+	wg.Add(len(gs))
 
-		result = append(result, points...)
+	mutex := sync.Mutex{}
+
+	for _, g := range gs {
+		go func(g labeledGatherer) {
+			defer wg.Done()
+
+			points, err := g.GatherPoints(state)
+
+			mutex.Lock()
+
+			if err != nil {
+				errs = append(errs, err)
+			}
+
+			result = append(result, points...)
+
+			mutex.Unlock()
+		}(g)
 	}
+
+	wg.Wait()
 
 	return result, errs.MaybeUnwrap()
 }

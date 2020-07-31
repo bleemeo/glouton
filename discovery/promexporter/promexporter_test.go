@@ -84,8 +84,8 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample:9102/metrics",
 					ExtraLabels: map[string]string{
-						"container_name":     "my_container",
-						types.LabelScrapeJob: fakeJobName,
+						types.LabelContainerName: "my_container",
+						types.LabelMetaScrapeJob: fakeJobName,
 					},
 				},
 			},
@@ -108,7 +108,7 @@ func TestListExporters(t *testing.T) {
 					ExtraLabels: map[string]string{
 						"kubernetes.pod.namespace": fakePodNamespace,
 						"kubernetes.pod.name":      "my_pod-1234",
-						types.LabelScrapeJob:       fakeJobName,
+						types.LabelMetaScrapeJob:   fakeJobName,
 					},
 				},
 			},
@@ -154,8 +154,8 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample1:9102/metrics",
 					ExtraLabels: map[string]string{
-						"container_name":     "sample1_1",
-						types.LabelScrapeJob: fakeJobName,
+						types.LabelContainerName: "sample1_1",
+						types.LabelMetaScrapeJob: fakeJobName,
 					},
 				},
 				{
@@ -163,7 +163,7 @@ func TestListExporters(t *testing.T) {
 					ExtraLabels: map[string]string{
 						"kubernetes.pod.namespace": fakePodNamespace,
 						"kubernetes.pod.name":      "sample2-1234",
-						types.LabelScrapeJob:       fakeJobName,
+						types.LabelMetaScrapeJob:   fakeJobName,
 					},
 				},
 			},
@@ -185,8 +185,8 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample:8080/metrics.txt",
 					ExtraLabels: map[string]string{
-						"container_name":     "testname",
-						types.LabelScrapeJob: fakeJobName,
+						types.LabelContainerName: "testname",
+						types.LabelMetaScrapeJob: fakeJobName,
 					},
 				},
 			},
@@ -207,8 +207,8 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample:9102/metrics.txt",
 					ExtraLabels: map[string]string{
-						"container_name":     "testname",
-						types.LabelScrapeJob: fakeJobName,
+						types.LabelContainerName: "testname",
+						types.LabelMetaScrapeJob: fakeJobName,
 					},
 				},
 			},
@@ -216,7 +216,7 @@ func TestListExporters(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := DynamicSrapper{
+			d := DynamicScrapper{
 				DynamicJobName: "jobname",
 			}
 			if got := d.listExporters(tt.containers); !reflect.DeepEqual(got, tt.want) {
