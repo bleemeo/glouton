@@ -17,7 +17,6 @@
 package logger
 
 import (
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -47,47 +46,7 @@ func (r *rotatingLogs) moveOldFile() error {
 		}
 	}
 
-	oldFile, err := os.OpenFile(oldFilename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0755)
-	if err != nil {
-		return err
-	}
-
-	defer oldFile.Close()
-
-	curFile, err := os.OpenFile(filename, os.O_RDONLY, 0)
-	if err != nil {
-		return err
-	}
-
-	defer curFile.Close()
-
-	var n int
-
-	// copy the file at the end of the previous log file
-	buf := make([]byte, 1<<16)
-
-	for {
-		n, err = curFile.Read(buf)
-		if err != nil {
-			if err == io.EOF {
-				break
-			}
-
-			return err
-		}
-
-		cur := 0
-		for cur < n {
-			nOut, err := oldFile.Write(buf[cur:n])
-			if err != nil {
-				return err
-			}
-
-			cur += nOut
-		}
-	}
-
-	return nil
+	return os.Rename(filename, oldFilename)
 }
 
 func (r *rotatingLogs) open() error {
@@ -136,7 +95,7 @@ func (r *rotatingLogs) Write(p []byte) (n int, err error) {
 		}
 	}
 
-	return fmt.Fprintf(r.fd, "[%s] %s", time.Now().Format(time.RFC3339), p)
+	return r.fd.Write(p)
 }
 
 func (cfg *config) useFile(folder string, filename string) error {

@@ -95,7 +95,7 @@ type winCollector struct {
 	option      inputs.CollectorConfig
 	totalMemory uint64
 	totalSwap   uint64
-	runLength   []float64
+	runLength   float64
 }
 
 // New initialise win_perf_counters.Input.
@@ -270,36 +270,18 @@ func (c *winCollector) transformMetrics(originalContext internal.GatherContext, 
 
 	if currentContext.Measurement == processorModuleName {
 		if val, present := fields["Percent_Idle_Time"]; present {
-			queueLength := 0.
-
-			for _, v := range c.runLength {
-				queueLength += v
-			}
-
-			queueLength /= float64(len(c.runLength))
-
 			// Reproduce the behavior exhibited in the python agent: we estimate the load to be
 			// the current cpu_usage + Processor Queue Length (the number of starved threads).
-			// A slight improvement over the python agent is that we now compute the average queue
-			// length over the last minute (or less if we haven't collected 6 points yet), instead
-			// of using only the last measurement.
-			res["load1"] = 1. - val/100. + queueLength
+			res["load1"] = 1. - val/100. + c.runLength
 		}
 	}
 
 	if currentContext.Measurement == systemModuleName {
 		// we will have a offset of up to 10s, depending on the order of collection.
 		// However, 'System' should be collected prior to the processor, so it should be pretty accurate.
-		// And 10s of delay is probably ok too (even more so given that they are averaged over a minute).
+		// And 10s of delay is probably ok too.
 		if val, present := fields["Processor_Queue_Length"]; present {
-			tmp := append(c.runLength, val)
-
-			start := len(tmp) - 6
-			if start < 0 {
-				start = 0
-			}
-
-			c.runLength = tmp[start:]
+			c.runLength = val
 		}
 	}
 

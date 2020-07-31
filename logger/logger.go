@@ -81,7 +81,7 @@ func printf(fmtArg string, a ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
-	if cfg.onConsole {
+	if cfg.useSyslog {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
@@ -92,7 +92,7 @@ func println(v ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
-	if cfg.onConsole {
+	if cfg.useSyslog {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
@@ -108,7 +108,7 @@ type config struct {
 	l         sync.Mutex
 	level     int
 	pkgLevels map[string]int
-	onConsole bool
+	useSyslog bool
 
 	writer    io.Writer
 	teeWriter io.Writer
@@ -119,7 +119,7 @@ var (
 	logBuffer = &buffer{}
 	cfg       = config{
 		writer:    os.Stderr,
-		onConsole: true,
+		useSyslog: true,
 		teeWriter: io.MultiWriter(logBuffer, os.Stderr),
 	}
 )
@@ -138,7 +138,7 @@ func setLogger(cb func() error) error {
 	err := cb()
 	if err != nil {
 		cfg.writer = os.Stderr
-		cfg.onConsole = true
+		cfg.useSyslog = true
 	}
 
 	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
@@ -154,7 +154,7 @@ func UseSyslog() error {
 		if err = cfg.enableSyslog(); err != nil {
 			return
 		}
-		cfg.onConsole = false
+		cfg.useSyslog = false
 
 		return
 	})
@@ -166,7 +166,7 @@ func UseFile(folder string, filename string) error {
 		if err = cfg.useFile(folder, filename); err != nil {
 			return
 		}
-		cfg.onConsole = false
+		cfg.useSyslog = false
 
 		return
 	})
