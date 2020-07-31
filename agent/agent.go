@@ -1447,7 +1447,7 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		return err
 	}
 
-	file, err = zipFile.Create("gorouting.txt")
+	file, err = zipFile.Create("goroutines.txt")
 	if err != nil {
 		return err
 	}

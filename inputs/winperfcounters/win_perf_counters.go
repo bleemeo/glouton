@@ -172,11 +172,17 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 }
 
 func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+	// unneccessary data from the telegraf input
+	delete(originalContext.Tags, "objectname")
+
 	if originalContext.Measurement == diskIOModuleName {
 		instance, present := originalContext.Tags["instance"]
 		if !present {
 			return originalContext, true
 		}
+
+		// necessary to prevent the local webUI from crashing (looks like it doesn't handle well 'item' with "weird values")
+		delete(originalContext.Tags, "instance")
 
 		if instance == "_Total" {
 			return originalContext, false
