@@ -161,18 +161,19 @@ func (a *agent) init(configFiles []string) (ok bool) {
 }
 
 func (a *agent) setupLogger() {
-	useSyslog := false
-
 	logger.SetBufferCapacity(
 		a.config.Int("logging.buffer.head_size"),
 		a.config.Int("logging.buffer.tail_size"),
 	)
 
-	if a.config.String("logging.output") == "syslog" {
-		useSyslog = true
-	}
+	var err error
 
-	err := logger.UseSyslog(useSyslog)
+	switch a.config.String("logging.output") {
+	case "syslog":
+		err = logger.UseSyslog()
+	case "file":
+		err = logger.UseFile(a.config.String("logging.folder"), a.config.String("logging.filename"))
+	}
 	if err != nil {
 		logger.Printf("Unable to use syslog: %v", err)
 	}

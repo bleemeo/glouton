@@ -56,6 +56,68 @@ type Win32_PerfFormattedData_PerfOS_Processor struct {
 	PercentIdleTime int
 }
 
+const unsupportedVersion = "Unsupported Version"
+
+func matchClientVersion(major, minor uint64) string {
+	if major == 10 {
+		return "10"
+	}
+
+	switch minor {
+	case 0:
+		return "Vista"
+	case 1:
+		return "7"
+	case 2:
+		return "8"
+	case 3:
+		return "8.1"
+	default:
+		return unsupportedVersion
+	}
+}
+
+func matchServerVersion(major, minor uint64) string {
+	if major == 10 {
+		return "Server 2016 or higher"
+	}
+
+	switch minor {
+	case 0:
+		return "Server 2008"
+	case 1:
+		return "Server 2008 R2"
+	case 2:
+		return "Server 2012"
+	case 3:
+		return "Server 2012 R2"
+	default:
+		return unsupportedVersion
+	}
+}
+
+func getWindowsVersionName(major uint64, minor uint64, buildNumber string, isServer bool, servicePack string) string {
+	if major < 6 || major > 10 || (major > 6 && major < 10) {
+		return unsupportedVersion
+	}
+
+	var res string
+	var version string
+
+	if isServer {
+		version = matchServerVersion(major, minor)
+	} else {
+		version = matchClientVersion(major, minor)
+	}
+
+	if servicePack != "" {
+		res = fmt.Sprintf("Windows %s SP %s", version, servicePack)
+
+	}
+
+	return res
+}
+
 func (f *FactProvider) platformFacts() map[string]string {
 	facts := make(map[string]string)
 
@@ -68,13 +130,23 @@ func (f *FactProvider) platformFacts() map[string]string {
 		logger.V(1).Println("Couldn't open the windows registry, some facts may not be exposed")
 	} else {
 		defer reg.Close()
+
 		major, _, err1 := reg.GetIntegerValue("CurrentMajorVersionNumber")
 		minor, _, err2 := reg.GetIntegerValue("CurrentMinorVersionNumber")
 		buildNumber, _, err3 := reg.GetStringValue("CurrentBuildNumber")
-		if err1 == nil && err2 == nil && err3 == nil {
-			facts["os_version"] = fmt.Sprintf("%d.%d", major, minor)
-			facts["os_version_long"] = fmt.Sprintf("%d.%d build %s", major, minor, buildNumber)
+		servicePack, _, _ := reg.GetStringValue("CSDVersion")
+		installationType, _, _ := reg.GetStringValue("InstallationType")
+
+		isServer := true
+		if installationType == "Client" {
+			isServer = false
 		}
+
+		if err1 == nil && err2 == nil && err3 == nil {
+			facts["os_version"] = getWindowsVersionName(major, minor, buildNumber, isServer, servicePack)
+			facts["os_version_long"] = fmt.Sprintf("Windows NT %d.%d build %s", major, minor, buildNumber)
+		}
+
 		productName, _, err := reg.GetStringValue("ProductName")
 		if err == nil {
 			facts["os_pretty_name"] = productName

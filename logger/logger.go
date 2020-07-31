@@ -19,6 +19,7 @@ package logger
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"runtime"
 	"strconv"
@@ -80,7 +81,7 @@ func printf(fmtArg string, a ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
-	if !cfg.useSyslog {
+	if cfg.onConsole {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
@@ -91,7 +92,7 @@ func println(v ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
-	if !cfg.useSyslog {
+	if cfg.onConsole {
 		_, _ = fmt.Fprintf(cfg.writer, "%s ", time.Now().Format("2006/01/02 15:04:05"))
 	}
 
@@ -107,7 +108,7 @@ type config struct {
 	l         sync.Mutex
 	level     int
 	pkgLevels map[string]int
-	useSyslog bool
+	onConsole bool
 
 	writer    io.Writer
 	teeWriter io.Writer
@@ -118,17 +119,15 @@ var (
 	logBuffer = &buffer{}
 	cfg       = config{
 		writer:    os.Stderr,
+		onConsole: true,
 		teeWriter: io.MultiWriter(logBuffer, os.Stderr),
 	}
 )
 
-// UseSyslog enable or disable logging to syslog. If syslog is not used, message
-// are sent to StdErr.
-func UseSyslog(useSyslog bool) error {
+// setLogger calls the function passed as argument, and revert to stderr if there is an error.
+func setLogger(cb func() error) error {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
-
-	cfg.useSyslog = useSyslog
 
 	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
 		closer.Close()
@@ -136,21 +135,41 @@ func UseSyslog(useSyslog bool) error {
 
 	cfg.writer = nil
 
-	var err error
-
-	if useSyslog {
-		err = cfg.enableSyslog()
-		if err != nil {
-			cfg.writer = os.Stderr
-			cfg.useSyslog = false
-		}
-	} else {
+	err := cb()
+	if err != nil {
 		cfg.writer = os.Stderr
+		cfg.onConsole = true
 	}
 
 	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
 
+	log.SetOutput(cfg.writer)
+
 	return err
+}
+
+// UseSyslog enable logging to syslog.
+func UseSyslog() error {
+	return setLogger(func() (err error) {
+		if err = cfg.enableSyslog(); err != nil {
+			return
+		}
+		cfg.onConsole = false
+
+		return
+	})
+}
+
+// UseFile enable logging to a file, in a given folder, with automatic file rotation (on a daily basis).
+func UseFile(folder string, filename string) error {
+	return setLogger(func() (err error) {
+		if err = cfg.useFile(folder, filename); err != nil {
+			return
+		}
+		cfg.onConsole = false
+
+		return
+	})
 }
 
 // Buffer return content of the log buffer.

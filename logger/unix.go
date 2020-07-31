@@ -19,7 +19,6 @@
 package logger
 
 import (
-	"log"
 	"log/syslog"
 )
 
@@ -28,8 +27,6 @@ func (cfg *config) enableSyslog() (err error) {
 	if err != nil {
 		return
 	}
-
-	log.SetOutput(cfg.writer)
 
 	return
 }
