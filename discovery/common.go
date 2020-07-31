@@ -186,7 +186,7 @@ func (s Service) LabelsOfStatus() map[string]string {
 	}
 
 	if s.ContainerName != "" {
-		labels[types.LabelContainerName] = s.ContainerName
+		labels[types.LabelMetaContainerName] = s.ContainerName
 	}
 
 	return labels

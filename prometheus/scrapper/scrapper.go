@@ -52,7 +52,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("prepare request to Prometheus expoter %s: %v", u.String(), err)
+		return nil, fmt.Errorf("prepare request to Prometheus exporter %s: %v", u.String(), err)
 	}
 
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
@@ -72,7 +72,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 		// Ensure response body is read to allow HTTP keep-alive to works
 		_, _ = io.Copy(ioutil.Discard, resp.Body)
 
-		return nil, fmt.Errorf("expoter %s HTTP status is %s", u.String(), resp.Status)
+		return nil, fmt.Errorf("exporter %s HTTP status is %s", u.String(), resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)

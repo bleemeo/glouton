@@ -31,7 +31,7 @@ func (s *Synchronizer) syncFacts(fullSync bool) error {
 		return err
 	}
 
-	if !s.option.Cache.AccountConfig().DockerIntegration {
+	if !s.option.Cache.CurrentAccountConfig().DockerIntegration {
 		copyFacts := make(map[string]string)
 
 		for k, v := range localFacts {
@@ -87,7 +87,7 @@ func (s *Synchronizer) factsUpdateList() error {
 }
 
 func (s *Synchronizer) factRegister(localFacts map[string]string) error {
-	currentConfig := s.option.Cache.AccountConfig()
+	currentConfig := s.option.Cache.CurrentAccountConfig()
 
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()

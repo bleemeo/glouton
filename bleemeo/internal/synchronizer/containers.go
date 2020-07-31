@@ -43,7 +43,7 @@ type containerPayload struct {
 func (s *Synchronizer) syncContainers(fullSync bool) error {
 	var localContainers []facts.Container
 
-	if s.option.Cache.AccountConfig().DockerIntegration {
+	if s.option.Cache.CurrentAccountConfig().DockerIntegration {
 		var err error
 
 		localContainers, err = s.option.Docker.Containers(s.ctx, 24*time.Second, false)
@@ -180,7 +180,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 				return err
 			}
 
-			logger.V(2).Printf("Container %v registrered with UUID %s", result.Name, result.ID)
+			logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
 			remoteContainers = append(remoteContainers, result)
 		}
 	}

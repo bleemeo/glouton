@@ -67,9 +67,16 @@ func New(option types.GlobalOption) *Connector {
 	return c
 }
 
-// UpdateUnitsAndThresholds update metrics units & threshold (from cache).
-func (c *Connector) UpdateUnitsAndThresholds(firstUpdate bool) {
-	c.sync.UpdateUnitsAndThresholds(firstUpdate)
+// ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
+func (c *Connector) ApplyCachedConfiguration() {
+	c.sync.UpdateUnitsAndThresholds(true)
+
+	if c.option.Config.Bool("blackbox.enabled") {
+		if err := c.sync.ApplyMonitorUpdate(false); err != nil {
+			// we just log the error, as we will try to run the monitors later anyway
+			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
+		}
+	}
 }
 
 func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
@@ -88,10 +95,11 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			GlobalOption:         c.option,
 			Cache:                c.cache,
 			DisableCallback:      c.disableCallback,
-			AgentID:              c.AgentID(),
+			AgentID:              types.AgentID(c.AgentID()),
 			AgentPassword:        password,
 			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
 			UpdateMetrics:        c.sync.UpdateMetrics,
+			UpdateMonitor:        c.sync.UpdateMonitor,
 			InitialPoints:        previousPoint,
 		},
 		first,
@@ -135,7 +143,7 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 			resultChan := make(chan []gloutonTypes.MetricPoint, 1)
 
 			go func() {
-				resultChan <- c.mqtt.PopPendingPoints()
+				resultChan <- c.mqtt.PopPoints(true)
 			}()
 
 			select {
@@ -267,6 +275,11 @@ func (c *Connector) Run(ctx context.Context) error {
 // UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
 	c.sync.UpdateContainers()
+}
+
+// UpdateMonitors trigger a reload of the monitors.
+func (c *Connector) UpdateMonitors() {
+	c.sync.UpdateMonitors()
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
@@ -490,7 +503,7 @@ func (c *Connector) emitInternalMetric() {
 }
 
 func (c *Connector) uppdateConfig() {
-	currentConfig := c.cache.AccountConfig()
+	currentConfig := c.cache.CurrentAccountConfig()
 
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 

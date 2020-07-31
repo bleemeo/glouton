@@ -86,16 +86,27 @@ const (
 
 	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
 	// They are actually dropped by the metric registry and/or the
-	LabelContainerName  = "__meta_container_name"
-	LabelContainerID    = "__meta_container_id"
-	LabelServiceName    = "__meta_service_name"
-	LabelGloutonFQDN    = "__meta__fqdn"
-	LabelGloutonPort    = "__meta_glouton_port"
-	LabelServicePort    = "__meta_service_port"
-	LabelPort           = "__meta_port"
-	LabelScrapeInstance = "__meta_scrape_instance"
-	LabelScrapeJob      = "__meta_scrape_job"
-	LabelBleemeoUUID    = "__meta_bleemeo_uuid"
+	LabelMetaContainerName    = "__meta_container_name"
+	LabelMetaContainerID      = "__meta_container_id"
+	LabelMetaServiceName      = "__meta_service_name"
+	LabelMetaGloutonFQDN      = "__meta__fqdn"
+	LabelMetaGloutonPort      = "__meta_glouton_port"
+	LabelMetaServicePort      = "__meta_service_port"
+	LabelMetaPort             = "__meta_port"
+	LabelMetaScrapeInstance   = "__meta_scrape_instance"
+	LabelMetaScrapeJob        = "__meta_scrape_job"
+	LabelMetaBleemeoUUID      = "__meta_bleemeo_uuid"
+	LabelMetaProbeTarget      = "__meta_probe_target"
+	LabelMetaProbeServiceUUID = "__meta_probe_service_uuid"
+	LabelMetaProbeAgentUUID   = "__meta_probe_agent_uuid"
+	LabelMetaProbeScraperName = "__meta_probe_scraper_name"
+	LabelInstanceUUID         = "instance_uuid"
+	LabelScraperUUID          = "scraper_uuid"
+	LabelScraper              = "scraper"
+	LabelInstance             = "instance"
+	LabelJob                  = "job"
+	LabelContainerName        = "container_name"
+	LabelGloutonJob           = "glouton_job"
 )
 
 // IsSet return true if the status is set.
@@ -165,7 +176,9 @@ type MetricAnnotations struct {
 	ContainerID string
 	ServiceName string
 	StatusOf    string
-	Status      StatusDescription
+	// store the agent for which we want to emit the metric
+	BleemeoAgentID string
+	Status         StatusDescription
 }
 
 // Point is the value of one metric at a given time.
@@ -242,4 +255,15 @@ func TextToLabels(text string) map[string]string {
 	}
 
 	return results
+}
+
+type Monitor struct {
+	ID                      string
+	MetricMonitorResolution int
+	CreationDate            string
+	URL                     string
+	BleemeoAgentID          string
+	ExpectedContent         string
+	ExpectedResponseCode    int
+	ForbiddenContent        string
 }

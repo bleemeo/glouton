@@ -52,23 +52,26 @@ type Tag struct {
 
 // AccountConfig is the configuration used by this agent.
 type AccountConfig struct {
-	ID                    string `json:"id"`
-	Name                  string `json:"name"`
-	MetricsAgentWhitelist string `json:"metrics_agent_whitelist"`
-	MetricAgentResolution int    `json:"metrics_agent_resolution"`
-	LiveProcessResolution int    `json:"live_process_resolution"`
-	DockerIntegration     bool   `json:"docker_integration"`
+	ID                      string `json:"id"`
+	Name                    string `json:"name"`
+	MetricsAgentWhitelist   string `json:"metrics_agent_whitelist"`
+	MetricAgentResolution   int    `json:"metrics_agent_resolution"`
+	MetricMonitorResolution int    `json:"metrics_monitor_resolution"`
+	LiveProcessResolution   int    `json:"live_process_resolution"`
+	DockerIntegration       bool   `json:"docker_integration"`
 }
 
 // Service is a Service object on Bleemeo API.
 type Service struct {
 	ID              string `json:"id"`
+	AccountConfig   string `json:"account_config"`
 	Label           string `json:"label"`
 	Instance        string `json:"instance"`
 	ListenAddresses string `json:"listen_addresses"`
 	ExePath         string `json:"exe_path"`
 	Stack           string `json:"stack"`
 	Active          bool   `json:"active"`
+	CreationDate    string `json:"created_at"`
 }
 
 // Container is a Contaier object on Bleemeo API.
@@ -87,6 +90,21 @@ type Threshold struct {
 	LowCrictical  *float64 `json:"threshold_low_critical"`
 	HighWarning   *float64 `json:"threshold_high_warning"`
 	HighCrictical *float64 `json:"threshold_high_critical"`
+}
+
+// Monitor groups all the informations required to write metrics to a monitor.
+type Monitor struct {
+	Service
+	URL     string `json:"monitor_url"`
+	AgentID string `json:"agent"`
+	MonitorHTTPOptions
+}
+
+// MonitorHTTPOptions groups all the possible options when the probe is targeting an HTTP or HTTPS service.
+type MonitorHTTPOptions struct {
+	ExpectedContent      string `json:"monitor_expected_content,omitempty"`
+	ExpectedResponseCode int    `json:"monitor_expected_response_code,omitempty"`
+	ForbiddenContent     string `json:"monitor_unexpected_content,omitempty"`
 }
 
 // Metric is a Metric object on Bleemeo API.

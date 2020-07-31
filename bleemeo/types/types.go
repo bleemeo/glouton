@@ -37,12 +37,18 @@ type GlobalOption struct {
 	Store                   Store
 	Acc                     telegraf.Accumulator
 	Discovery               discovery.PersistentDiscoverer
+	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
 	NotifyFirstRegistration func(ctx context.Context)
 
 	UpdateMetricResolution func(resolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
+}
+
+type MonitorManager interface {
+	// UpdateDynamicTargets updates the list of dynamic monitors to watch.
+	UpdateDynamicTargets(monitors []types.Monitor) error
 }
 
 // Config is the interface used by Bleemeo to access Config.
@@ -87,6 +93,10 @@ type Store interface {
 
 // DisableReason is a list of status why Bleemeo connector may be (temporary) disabled.
 type DisableReason int
+
+// AgentID is an agent UUID.
+// This type exists for the sole purpose of making type definitions clearer.
+type AgentID string
 
 // List of possible value for DisableReason.
 const (

@@ -64,20 +64,14 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 		)
 	}
 
-	var config types.AccountConfig
-
-	params = map[string]string{
-		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,live_process_resolution,docker_integration",
-	}
-
-	_, err = s.client.Do("GET", fmt.Sprintf("v1/accountconfig/%s/", agent.CurrentConfigID), params, nil, &config)
+	config, err := s.getAccountConfig(agent.CurrentConfigID)
 	if err != nil {
 		return err
 	}
 
-	currentConfig := s.option.Cache.AccountConfig()
+	currentConfig := s.option.Cache.CurrentAccountConfig()
 	if !reflect.DeepEqual(currentConfig, config) {
-		s.option.Cache.SetAccountConfig(config)
+		s.option.Cache.SetCurrentAccountConfig(config)
 
 		if s.option.UpdateConfigCallback != nil {
 			s.option.UpdateConfigCallback()

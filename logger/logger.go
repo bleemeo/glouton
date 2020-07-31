@@ -216,3 +216,27 @@ func SetPkgLevels(levels string) {
 
 	cfg.pkgLevels = pkgLevels
 }
+
+// GoKitLoggerWrapper wraps a logger objet and can be used wherever a go-kit compatible logger is expected.
+type GoKitLoggerWrapper Logger
+
+// Log implements the go-kit/log.Logger interface.
+func (wrapper GoKitLoggerWrapper) Log(keyvals ...interface{}) error {
+	if len(keyvals)%2 == 1 {
+		V(2).Printf("logger: Invalid number of arguments, received an odd number of arguments, '%v' unexpected", keyvals...)
+	}
+
+	var res strings.Builder
+
+	for i := 0; i < len(keyvals)/2; i++ {
+		fmt.Fprintf(&res, "%v=\"%v\"", keyvals[2*i], keyvals[2*i+1])
+
+		if i != len(keyvals)/2-1 {
+			res.WriteByte(' ')
+		}
+	}
+
+	Logger(wrapper).Println(res.String())
+
+	return nil
+}

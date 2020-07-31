@@ -58,6 +58,7 @@ import (
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/nrpe"
+	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -91,7 +92,7 @@ type agent struct {
 	store             *store.Store
 	gathererRegistry  *registry.Registry
 	metricFormat      types.MetricFormat
-	dynamicScrapper   *promexporter.DynamicSrapper
+	dynamicScrapper   *promexporter.DynamicScrapper
 	lastHealCheck     int64
 
 	triggerHandler            *debouncer.Debouncer
@@ -411,22 +412,6 @@ func (a *agent) run() { //nolint:gocyclo
 		a.config.String("agent.public_ip_indicator"),
 	)
 
-	c := make(chan os.Signal, 1)
-	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
-
-	go func() {
-		for s := range c {
-			if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
-				cancel()
-				break
-			}
-
-			if s == syscall.SIGHUP {
-				a.FireTrigger(true, true, false, true)
-			}
-		}
-	}()
-
 	factsMap, err := a.factProvider.Facts(ctx, 0)
 	if err != nil {
 		logger.Printf("Warning: get facts failed, some information (e.g. name of this server) may be wrong. %v", err)
@@ -578,8 +563,8 @@ func (a *agent) run() { //nolint:gocyclo
 
 		target := (*scrapper.Target)(u)
 		extraLabels := map[string]string{
-			types.LabelScrapeJob:      name,
-			types.LabelScrapeInstance: target.HostPort(),
+			types.LabelMetaScrapeJob:      name,
+			types.LabelMetaScrapeInstance: target.HostPort(),
 		}
 
 		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, extraLabels); err != nil {
@@ -594,13 +579,28 @@ func (a *agent) run() { //nolint:gocyclo
 		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
 	}
 
-	a.dynamicScrapper = &promexporter.DynamicSrapper{
+	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
 		DynamicJobName: "discovered-exporters",
 	}
 
 	// register components only available on a given system, like node_exporter for unixes
 	a.registerOSSpecificComponents()
+
+	var monitorManager *blackbox.RegisterManager
+
+	if a.config.Bool("blackbox.enabled") {
+		logger.V(1).Println("Starting blackbox_exporter...")
+		// the config is present, otherwise we would not be in this block
+		blackboxConf, _ := a.config.Get("blackbox")
+
+		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf)
+		if err != nil {
+			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
+		}
+	} else {
+		logger.V(1).Println("blackbox_exporter not enabled, will not start...")
+	}
 
 	promExporter := a.gathererRegistry.Exporter()
 
@@ -669,6 +669,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Store:                   a.store,
 			Acc:                     acc,
 			Discovery:               a.discovery,
+			MonitorManager:          monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
 			UpdateThresholds:        a.UpdateThresholds,
 			UpdateUnits:             a.threshold.SetUnits,
@@ -719,7 +720,7 @@ func (a *agent) run() { //nolint:gocyclo
 	if a.bleemeoConnector == nil {
 		a.updateThresholds(nil, true)
 	} else {
-		a.bleemeoConnector.UpdateUnitsAndThresholds(true)
+		a.bleemeoConnector.ApplyCachedConfiguration()
 	}
 
 	tmp, _ := a.config.Get("metric.softstatus_period")
@@ -805,6 +806,26 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
+
+	go func() {
+		for s := range c {
+			if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
+				cancel()
+				break
+			}
+
+			if s == syscall.SIGHUP {
+				if a.bleemeoConnector != nil {
+					a.bleemeoConnector.UpdateMonitors()
+				}
+
+				a.FireTrigger(true, true, false, true)
+			}
+		}
+	}()
+
 	a.startTasks(tasks)
 
 	<-ctx.Done()
@@ -844,10 +865,10 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				}
 
 				labels := map[string]string{
-					types.LabelName:          "postfix_queue_size",
-					types.LabelContainerName: srv.ContainerName,
-					types.LabelContainerID:   srv.ContainerID,
-					types.LabelServiceName:   srv.ContainerName,
+					types.LabelName:              "postfix_queue_size",
+					types.LabelMetaContainerName: srv.ContainerName,
+					types.LabelMetaContainerID:   srv.ContainerID,
+					types.LabelMetaServiceName:   srv.ContainerName,
 				}
 
 				annotations := types.MetricAnnotations{
@@ -874,10 +895,10 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				}
 
 				labels := map[string]string{
-					types.LabelName:          "exim_queue_size",
-					types.LabelContainerName: srv.ContainerName,
-					types.LabelContainerID:   srv.ContainerID,
-					types.LabelServiceName:   srv.ContainerName,
+					types.LabelName:              "exim_queue_size",
+					types.LabelMetaContainerName: srv.ContainerName,
+					types.LabelMetaContainerID:   srv.ContainerID,
+					types.LabelMetaServiceName:   srv.ContainerName,
 				}
 
 				annotations := types.MetricAnnotations{
@@ -1157,8 +1178,8 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
-				types.LabelName:          "docker_container_health_status",
-				types.LabelContainerName: container.Name(),
+				types.LabelName:              "docker_container_health_status",
+				types.LabelMetaContainerName: container.Name(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,

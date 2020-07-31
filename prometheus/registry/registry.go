@@ -102,47 +102,90 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelBleemeoUUID},
-			TargetLabel:  "instance_uuid",
+			SourceLabels: model.LabelNames{types.LabelMetaBleemeoUUID},
+			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelGloutonFQDN, types.LabelPort},
-			TargetLabel:  "instance",
+			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaPort},
+			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1:$2",
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.+);(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelGloutonFQDN, types.LabelContainerName, types.LabelPort},
-			TargetLabel:  "instance",
+			SourceLabels: model.LabelNames{types.LabelMetaGloutonFQDN, types.LabelMetaContainerName, types.LabelMetaPort},
+			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1-$2:$3",
+		},
+		// when the metric comes from a probe, the 'scraper_uuid' label is the uuid of the agent
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID},
+			TargetLabel:  types.LabelScraperUUID,
+			Replacement:  "$2",
+		},
+		// when the metric comes from a probe, the 'scraper' label is the value we usually put in the 'instance' label
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelInstance},
+			TargetLabel:  types.LabelScraper,
+			Replacement:  "$2",
+		},
+		// when the metric comes from a probe and the user specified it in the config file, the 'scraper' label is the user-provided string
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaProbeScraperName},
+			TargetLabel:  types.LabelScraper,
+			Replacement:  "$2",
+		},
+		// when the metric comes from a probe, the 'instance_uuid' label is the uuid of the service watched
+		{
+			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeAgentUUID},
+			TargetLabel:  types.LabelInstanceUUID,
+			Replacement:  "$1",
+		},
+		// when the metric comes from a probe, the 'instance' label is the target URI
+		{
+			Action:       relabel.Replace,
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeTarget},
+			TargetLabel:  types.LabelInstance,
+			Replacement:  "$1",
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.*)"),
-			SourceLabels: model.LabelNames{types.LabelContainerName},
-			TargetLabel:  "container_name",
+			SourceLabels: model.LabelNames{types.LabelMetaContainerName},
+			TargetLabel:  types.LabelContainerName,
 			Replacement:  "$1",
 		},
 		{
 			Action:      relabel.Replace,
 			Separator:   ";",
 			Regex:       relabel.MustNewRegexp("(.*)"),
-			TargetLabel: "job",
+			TargetLabel: types.LabelJob,
 			Replacement: "glouton",
 		},
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.*)"),
-			SourceLabels: model.LabelNames{types.LabelScrapeJob},
-			TargetLabel:  "glouton_job",
+			SourceLabels: model.LabelNames{types.LabelMetaScrapeJob},
+			TargetLabel:  types.LabelGloutonJob,
 			Replacement:  "$1",
 		},
 	}
@@ -277,7 +320,7 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback f
 	for ok {
 		id++
 		if id == 0 {
-			return 0, errors.New("too many gatheres in the registry. Unable to find new slot")
+			return 0, errors.New("too many gatherers in the registry. Unable to find a new slot")
 		}
 
 		_, ok = r.registrations[id]
@@ -318,8 +361,13 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 	return true
 }
 
-// Gather implement prometheus Gatherer.
+// Gather implements prometheus.Gatherer.
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
+	return r.GatherWithState(GatherState{})
+}
+
+// GatherWithState implements GathererGatherWithState.
+func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	r.init()
 	r.l.Lock()
 
@@ -329,12 +377,12 @@ func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 		gatherers = append(gatherers, reg.gatherer)
 	}
 
-	gatherers = append(gatherers, r.registyPush)
+	gatherers = append(gatherers, NonProbeGatherer{G: r.registyPush})
 
 	r.l.Unlock()
 
 	t0 := time.Now()
-	mfs, err := gatherers.Gather()
+	mfs, err := gatherers.GatherWithState(state)
 
 	if r.metricGatherExporterTime != nil {
 		r.metricGatherExporterTime.Observe(time.Since(t0).Seconds())
@@ -387,9 +435,19 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 // Exporter return an HTTP exporter.
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
-	handler := promhttp.InstrumentMetricHandler(reg, promhttp.HandlerFor(r, promhttp.HandlerOpts{
-		ErrorHandling: promhttp.ContinueOnError,
-		ErrorLog:      prefixLogger("/metrics endpoint:"),
+	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		wrapper := NewGathererWithStateWrapper(r)
+
+		state := GatherStateFromMap(req.URL.Query())
+		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
+		state.NoTick = true
+
+		wrapper.SetState(state)
+
+		promhttp.HandlerFor(wrapper, promhttp.HandlerOpts{
+			ErrorHandling: promhttp.ContinueOnError,
+			ErrorLog:      prefixLogger("/metrics endpoint:"),
+		}).ServeHTTP(w, req)
 	}))
 	_, _ = r.RegisterGatherer(reg, nil, nil)
 
@@ -506,7 +564,7 @@ func (r *Registry) runOnce() {
 	if r.MetricFormat == types.MetricFormatPrometheus {
 		var err error
 
-		points, err = labeledGatherers(gatherers).GatherPoints()
+		points, err = labeledGatherers(gatherers).GatherPoints(GatherState{QueryType: All})
 		if err != nil {
 			if len(points) == 0 {
 				logger.Printf("Gather of metrics failed: %v", err)
@@ -645,19 +703,19 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 		result[k] = v
 	}
 
-	result[types.LabelGloutonFQDN] = r.FQDN
-	result[types.LabelGloutonPort] = r.GloutonPort
+	result[types.LabelMetaGloutonFQDN] = r.FQDN
+	result[types.LabelMetaGloutonPort] = r.GloutonPort
 
 	if r.BleemeoAgentID != "" {
-		result[types.LabelBleemeoUUID] = r.BleemeoAgentID
+		result[types.LabelMetaBleemeoUUID] = r.BleemeoAgentID
 	}
 
-	servicePort := result[types.LabelServicePort]
+	servicePort := result[types.LabelMetaServicePort]
 	if servicePort == "" {
 		servicePort = r.GloutonPort
 	}
 
-	result[types.LabelPort] = servicePort
+	result[types.LabelMetaPort] = servicePort
 
 	return result
 }
@@ -666,8 +724,14 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	promLabels := labels.FromMap(input)
 
 	annotations := types.MetricAnnotations{
-		ServiceName: promLabels.Get(types.LabelServiceName),
-		ContainerID: promLabels.Get(types.LabelContainerID),
+		ServiceName: promLabels.Get(types.LabelMetaServiceName),
+		ContainerID: promLabels.Get(types.LabelMetaContainerID),
+	}
+
+	// annotate the metric if it comes from a probe
+	agentID := promLabels.Get(types.LabelMetaProbeAgentUUID)
+	if agentID != "" {
+		annotations.BleemeoAgentID = agentID
 	}
 
 	promLabels = relabel.Process(

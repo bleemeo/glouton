@@ -54,14 +54,15 @@ type Synchronizer struct {
 	lastMetricCount         int
 	agentID                 string
 
-	l                    sync.Mutex
-	disabledUntil        time.Time
-	disableReason        bleemeoTypes.DisableReason
-	forceSync            map[string]bool
-	pendingMetricsUpdate []string
+	l                     sync.Mutex
+	disabledUntil         time.Time
+	disableReason         bleemeoTypes.DisableReason
+	forceSync             map[string]bool
+	pendingMetricsUpdate  []string
+	pendingMonitorsUpdate []MonitorUpdate
 }
 
-// Option are parameter for the syncrhonizer.
+// Option are parameters for the synchronizer.
 type Option struct {
 	bleemeoTypes.GlobalOption
 	Cache *cache.Cache
@@ -111,7 +112,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	var minimalDelay time.Duration
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
-		logger.V(2).Printf("Waiting few second before first synchroization as this agent has a valid cache")
+		logger.V(2).Printf("Waiting a few seconds before the first synchronization as this agent has a valid cache")
 
 		minimalDelay = common.JitterDelay(20, 0.5, 20)
 	}
@@ -261,6 +262,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 
 	s.forceSync["metrics"] = true
 	s.forceSync["containers"] = true
+	s.forceSync["monitors"] = true
 }
 
 // UpdateMetrics request to update a specific metrics.
@@ -287,6 +289,14 @@ func (s *Synchronizer) UpdateContainers() {
 	defer s.l.Unlock()
 
 	s.forceSync["containers"] = false
+}
+
+// UpdateMonitors requests to update all the monitors.
+func (s *Synchronizer) UpdateMonitors() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.forceSync["monitors"] = true
 }
 
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
@@ -410,6 +420,7 @@ func (s *Synchronizer) runOnce() error {
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
+		{name: "monitors", method: s.syncMonitors},
 		{name: "metrics", method: s.syncMetrics},
 	}
 	startAt := time.Now()
@@ -474,6 +485,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync {
 		syncMethods["agent"] = fullSync
+		syncMethods["monitors"] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
@@ -482,9 +494,6 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["services"] = fullSync
-	}
-
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
 		syncMethods["containers"] = fullSync
 	}
 
@@ -495,6 +504,11 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if _, ok := syncMethods["containers"]; ok {
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
+		syncMethods["metrics"] = false
+	}
+
+	if _, ok := syncMethods["monitors"]; ok {
+		// Metrics registration may need monitors to be synced, trigger metrics synchronization
 		syncMethods["metrics"] = false
 	}
 
