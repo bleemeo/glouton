@@ -7,13 +7,14 @@ Name "glouton"
 OutFile "glouton-installer.exe"
 Unicode True
 
-InstallDir "$PROGRAMFILES\bleemeo\glouton"
+InstallDir "$PROGRAMFILES\glouton"
 
+!define COMPANY_NAME "Bleemeo"
 !define PRODUCT_ICON "bleemeo.ico"
 !define PRODUCT_NAME "glouton"
 !define CONFIGDIR "C:\ProgramData\glouton"
 !define PRODUCT_VERSION "0.1"
-!define AGENT_SERVICE_NAME "bleemeo-glouton-agent"
+!define AGENT_SERVICE_NAME "glouton"
 
 !define MUI_ABORTWARNING
 !define MUI_ICON ${PRODUCT_ICON}
@@ -100,37 +101,40 @@ old_agent_not_present:
   nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --install-config-path "${CONFIGDIR}\glouton.conf.d\30-install.conf"'
 
   # Let's expose proper values in the "Apps & Features" Windows settings by registering our installer
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
-                   "DisplayName" "glouton by Bleemeo -- Easy Monitoring for Scalable Infrastructure"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
+                   "DisplayName" "${PRODUCT_NAME} by ${COMPANY_NAME} -- Easy Monitoring for Scalable Infrastructure"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "DisplayVersion" "${PRODUCT_VERSION}"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
-                   "RegOwner" "Bleemeo"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
-                   "RegCompany" "Bleemeo"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
-                   "Publisher" "Bleemeo"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
+                   "RegOwner" "${COMPANY_NAME}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
+                   "RegCompany" "${COMPANY_NAME}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
+                   "Publisher" "${COMPANY_NAME}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "InstallLocation" "$\"$INSTDIR$\""
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "DisplayIcon" "$\"$INSTDIR\${PRODUCT_ICON}$\""
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "NoModify" 1
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "NoRepair" 1
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "URLInfoAbout" "https://bleemeo.com/"
 
   # Compute the folder size to tell windows about the approximate size of glouton
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   IntFmt $0 "0x%08X" $0
-  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton" \
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "EstimatedSize" "$0"
 
   # Create the service
-  nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" type=own start=auto DisplayName="Glouton by Bleemeo -- Monitoring Agent"'
+  nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" type=own start=auto DisplayName="${PRODUCT_NAME} by ${COMPANY_NAME} -- Monitoring Agent"'
+  # Restart automatically in case of failure
+  nsExec::ExecToLog 'sc.exe failure "${AGENT_SERVICE_NAME}" actions=restart/1000 reset=180'
+
   Pop $0
   ${If} $0 != 0
     MessageBox MB_OK "Service installation failed. You may consider restarting this machine, in case there is ongoing windows updates or services changes, and then restarting this installer. If this happens again, please report us the issue at support@bleemeo.com."
@@ -144,7 +148,7 @@ SectionEnd
 
 Section "Uninstall"
   # Unregister our uninstaller
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\glouton"
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}"
 
   nsExec::ExecToLog 'net stop "${AGENT_SERVICE_NAME}"'
   nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
@@ -166,7 +170,7 @@ Function informationPage
     Abort
     FirstInstall:
 
-    !insertmacro MUI_HEADER_TEXT "Configure your agent" "Enter the credentials for communication with Bleemeo"
+    !insertmacro MUI_HEADER_TEXT "Configure your agent" "Enter your credentials to communicate with Bleemeo"
 
     nsDialogs::Create 1018
     Pop $0
