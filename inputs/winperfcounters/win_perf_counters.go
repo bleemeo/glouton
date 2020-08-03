@@ -172,7 +172,7 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 }
 
 func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	// unneccessary data from the telegraf input
+	// unnecessary data from the telegraf input
 	delete(originalContext.Tags, "objectname")
 
 	if originalContext.Measurement == diskIOModuleName {
