@@ -179,24 +179,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		newFacts["virtual"] = guessVirtual(newFacts)
 	}
 
-	// while this could also identify a Surface device, it is much more probable that this is a VM (or maybe a container) on Microsoft Azure
-	if newFacts["system_vendor"] == "Microsoft Corporation" {
-		for k, v := range azureFacts(ctx) {
-			newFacts[k] = v
-		}
-	}
-
-	if strings.Contains(newFacts["bios_version"], "Google") {
-		for k, v := range gceFacts(ctx) {
-			newFacts[k] = v
-		}
-	}
-
-	if strings.Contains(newFacts["bios_version"], "amazon") {
-		for k, v := range awsFacts(ctx) {
-			newFacts[k] = v
-		}
-	}
+	collectCloudProvidersFacts(ctx, newFacts)
 
 	if s, err := mem.SwapMemoryWithContext(ctx); err == nil {
 		if s.Total > 0 {
