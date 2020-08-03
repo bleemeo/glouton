@@ -129,20 +129,16 @@ func (api *API) init() {
 		}
 
 		if err != nil {
-			logger.V(2).Printf("fail to serve index.html: %v", err)
+			logger.V(2).Printf("failed to serve index.html: %v", err)
 		}
 	})
 
 	router.HandleFunc("/diagnostic.zip", func(w http.ResponseWriter, r *http.Request) {
 		hdr := w.Header()
 		hdr.Add("Content-Type", "application/zip")
-		if err := hdr.Write(w); err != nil {
-			logger.V(1).Printf("failed to server diagnostic.zip: %v", err)
-			return
-		}
 
 		if err := api.DiagnosticZip(w); err != nil {
-			logger.V(1).Printf("failed to server diagnostic.zip: %v", err)
+			logger.V(1).Printf("failed to serve diagnostic.zip: %v", err)
 		}
 	})
 
