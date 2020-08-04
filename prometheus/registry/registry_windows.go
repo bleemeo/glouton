@@ -17,14 +17,15 @@
 package registry
 
 import (
+	"glouton/inputs"
 	"glouton/prometheus/exporter/windows"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
 
 // AddWindowsExporter add a node_exporter to collector.
-func (r *Registry) AddWindowsExporter(collectors []string) error {
-	collector, err := windows.NewCollector(collectors)
+func (r *Registry) AddWindowsExporter(collectors []string, options inputs.CollectorConfig) error {
+	collector, err := windows.NewCollector(collectors, options)
 	if err != nil {
 		return err
 	}

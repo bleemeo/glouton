@@ -5,6 +5,7 @@ package agent
 import (
 	"context"
 	"glouton/logger"
+	"glouton/types"
 	"os"
 
 	"github.com/StackExchange/wmi"
@@ -69,8 +70,15 @@ func (a *agent) initOSSpecificParts() {
 }
 
 func (a *agent) registerOSSpecificComponents() {
-	if a.config.Bool("agent.windows_exporter.enabled") {
-		if err := a.gathererRegistry.AddWindowsExporter(a.config.StringList("agent.windows_exporter.collectors")); err != nil {
+	if a.metricFormat == types.MetricFormatPrometheus && a.config.Bool("agent.windows_exporter.enabled") {
+		conf, err := a.buildCollectorsConfig()
+		if err != nil {
+			logger.V(0).Printf("Couldn't build configuration for windows_exporter: %v", err)
+			return
+		}
+
+		collectors := a.config.StringList("agent.windows_exporter.collectors")
+		if err := a.gathererRegistry.AddWindowsExporter(collectors, conf); err != nil {
 			logger.Printf("Unable to start windows_exporter, system metrics will be missing: %v", err)
 		}
 	}
