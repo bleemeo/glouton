@@ -21,14 +21,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/logger"
-	"io/ioutil"
 	"net"
-	"os"
-	"runtime"
 	"strconv"
 	"strings"
-
-	"github.com/google/uuid"
 )
 
 type azureTag struct {
@@ -157,10 +152,10 @@ func parseAzureFacts(inst azureInstance, facts map[string]string) {
 	}
 }
 
-func azureFacts(ctx context.Context, facts map[string]string) {
+func azureFacts(ctx context.Context, facts map[string]string) (found bool) {
 	instanceData := httpQuery(ctx, "http://169.254.169.254/metadata/instance?api-version=2019-11-01", []string{"Metadata:true"})
 	if instanceData == "" {
-		return
+		return false
 	}
 
 	var inst azureInstance
@@ -168,10 +163,12 @@ func azureFacts(ctx context.Context, facts map[string]string) {
 	err := json.Unmarshal([]byte(instanceData), &inst)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't parse azure instance informations, some facts may be missing on your dashboard: %v", err)
-		return
+		return false
 	}
 
 	parseAzureFacts(inst, facts)
+
+	return true
 }
 
 type gceNetworkExternalIP struct {
@@ -272,18 +269,18 @@ func parseGceFacts(projectID int, inst gceInstance, facts map[string]string) {
 	}
 }
 
-func gceFacts(ctx context.Context, facts map[string]string) {
+func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 	// retrieve the ID of the (GCE) project for which this VM instance was spawned. We will use it later to "sanitize" machine types, zone names, and so on.
 	projectID, err := strconv.Atoi(httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id", []string{"Metadata-Flavor:Google"}))
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't retrieve your google cloud project ID, some facts may be missing on your dashboard: %v", err)
-		return
+		return false
 	}
 
 	// retrieve the metadata itself
 	instanceData := httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/instance/?recursive=true", []string{"Metadata-Flavor:Google"})
 	if instanceData == "" {
-		return
+		return false
 	}
 
 	var inst gceInstance
@@ -291,20 +288,21 @@ func gceFacts(ctx context.Context, facts map[string]string) {
 	err = json.Unmarshal([]byte(instanceData), &inst)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't parse google cloud instance informations, some facts may be missing on your dashboard: %v", err)
-		return
+		return false
 	}
 
 	parseGceFacts(projectID, inst, facts)
+
+	return true
 }
 
-func awsFacts(ctx context.Context) map[string]string {
-	facts := make(map[string]string)
+func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id")
 
 	if facts["aws_ami_id"] == "" {
 		// If first request fail, don't try other one, it's probably not an
 		// AWS EC2.
-		return facts
+		return false
 	}
 
 	facts["aws_instance_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-id")
@@ -318,7 +316,7 @@ func awsFacts(ctx context.Context) map[string]string {
 
 	macs := urlContent(ctx, baseURL)
 	if macs == "" {
-		return facts
+		return false
 	}
 
 	resultVPC := make([]string, 0)
@@ -344,72 +342,15 @@ func awsFacts(ctx context.Context) map[string]string {
 		facts["aws_vpc_ipv4_cidr_block"] = strings.Join(resultIPv4, ",")
 	}
 
-	return facts
-}
-
-func getUUIDFromFile(path string) (string, error) {
-	fd, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-
-	defer fd.Close()
-
-	buf, err := ioutil.ReadAll(fd)
-	if err != nil {
-		return "", err
-	}
-
-	// the main point of parsing the uuid is making sure the file is valid
-	id, err := uuid.ParseBytes(buf[:36])
-	if err != nil {
-		return "", err
-	}
-
-	return strings.ToLower(id.String()), nil
-}
-
-func isAWSInstance(facts map[string]string) bool {
-	// TODO: when merging with the windows branch, add support for collecting this information via WMI
-	// (see https://docs.aws.amazon.com/AWSEC2/latest/WindowsGuide/identify_ec2_instances.html)
-	if runtime.GOOS == "linux" {
-		uuid, err := getUUIDFromFile("/sys/hypervisor/uuid")
-		if err == nil {
-			// we check for both big and little endian
-			if strings.HasPrefix(uuid, "ec2") || (uuid[4] == '2' && uuid[6] == 'e' && uuid[7] == 'c') {
-				return true
-			}
-
-			return false
-		}
-
-		uuid, err = getUUIDFromFile("/sys/devices/virtual/dmi/id/product_uuid")
-		if err == nil {
-			// we check for both big and little endian
-			if strings.HasPrefix(uuid, "ec2") || (uuid[4] == '2' && uuid[6] == 'e' && uuid[7] == 'c') {
-				return true
-			}
-
-			return false
-		}
-	}
-
-	return strings.Contains(strings.ToLower(facts["bios_version"]), "amazon")
+	return true
 }
 
 func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
-	// while this could also identify a Surface device, it is much more probable that this is a VM (or maybe a container) on Microsoft Azure
-	if strings.HasPrefix(strings.ToLower(facts["system_vendor"]), "microsoft") {
-		azureFacts(ctx, facts)
-	}
-
-	if strings.Contains(strings.ToLower(facts["bios_version"]), "google") {
-		gceFacts(ctx, facts)
-	}
-
-	if isAWSInstance(facts) {
-		for k, v := range awsFacts(ctx) {
-			facts[k] = v
+	// we always perform the queries, because even if the queries timeout it's not an issue,
+	// it will simply delay the update of the facts by a few seconds.
+	if !awsFacts(ctx, facts) {
+		if !azureFacts(ctx, facts) {
+			gceFacts(ctx, facts)
 		}
 	}
 }
