@@ -76,8 +76,6 @@ type Option struct {
 
 	// SetReadOnly makes the mqtt connector stop sending metrics and topinfo
 	MqttSetReadOnly func(readOnly bool)
-	// Conversely, IsReadOnly read that information
-	MqttIsReadOnly func() bool
 }
 
 // New return a new Synchronizer.

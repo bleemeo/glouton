@@ -40,6 +40,7 @@ type Agent struct {
 	NextConfigAt    time.Time `json:"next_config_at"`
 	CurrentConfigID string    `json:"current_config"`
 	Tags            []Tag     `json:"tags"`
+	ReadOnly        bool      `json:"is_read_only"`
 }
 
 // Tag is an Tag object on Bleemeo API.
@@ -172,7 +173,7 @@ func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 }
 
 type MinimumSupportedVersions struct {
-	Glouton string `json:"glouton"`
+	Glouton string `json:"glouton_version"`
 }
 
 type GlobalInfoAgents struct {
@@ -180,6 +181,5 @@ type GlobalInfoAgents struct {
 }
 
 type GlobalInfo struct {
-	Agents   GlobalInfoAgents `json:"agents"`
-	ReadOnly bool             `json:"read_only"`
+	Agents GlobalInfoAgents `json:"agents"`
 }

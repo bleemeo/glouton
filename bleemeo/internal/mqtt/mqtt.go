@@ -420,14 +420,12 @@ func (c *Client) run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		cfg := c.option.Cache.CurrentAccountConfig()
 
-		if !c.IsSendingSuspended() {
-			c.sendPoints()
+		c.sendPoints()
 
-			if time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
-				topinfoSendAt = time.Now()
+		if !c.IsSendingSuspended() && time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
+			topinfoSendAt = time.Now()
 
-				c.sendTopinfo(ctx, cfg)
-			}
+			c.sendTopinfo(ctx, cfg)
 		}
 
 		c.waitPublish(time.Now().Add(5 * time.Second))
@@ -480,7 +478,7 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 func (c *Client) sendPoints() {
 	points := c.filterPoints(c.PopPoints(false))
 
-	if !c.Connected() {
+	if !c.Connected() || c.IsSendingSuspended() {
 		c.l.Lock()
 
 		// store all new points as failed ones

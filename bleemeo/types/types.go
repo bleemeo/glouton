@@ -116,7 +116,7 @@ func (r DisableReason) String() string {
 	case DisableTooManyErrors:
 		return "too many errors"
 	case DisableAgentTooOld:
-		return "this agent is too old, and can no longer be connected to our managed service"
+		return "this agent is too old, and cannot be connected to our managed service"
 	case DisableMaintenance:
 		return "maintenance on Bleemeo API"
 	case DisableAuthenticationError:

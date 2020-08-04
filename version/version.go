@@ -19,8 +19,7 @@ package version
 import (
 	"fmt"
 	"runtime"
-	"strconv"
-	"strings"
+	"time"
 )
 
 //nolint:gochecknoglobals
@@ -29,7 +28,7 @@ var (
 	BuildHash = "unset"
 
 	// Version is the agent version
-	Version = "0.1"
+	Version = "dev"
 )
 
 // UserAgent returns the User-Agent for request performed by the agent.
@@ -42,52 +41,39 @@ func IsWindows() bool {
 	return runtime.GOOS == "windows"
 }
 
-// we do not store or compare git revisions, as we have no easy way to compare them without embedding the git
-// history in the binaries, and we very much not want to do that.
 type version struct {
-	day   int
-	month int
-	year  int
+	valid bool
+	date  time.Time
 }
 
-func parse(s string) *version {
-	splits := strings.SplitN(s, ".", 4)
-	if len(splits) != 4 {
-		return nil
+func parse(s string) version {
+	for _, pattern := range []string{"06.01.02.150405", "2006.01.02.150405", "06.01.02"} {
+		t, err := time.Parse(pattern, s)
+		if err == nil {
+			return version{valid: true, date: t}
+		}
 	}
 
-	year, err1 := strconv.Atoi(splits[0])
-	month, err2 := strconv.Atoi(splits[1])
-	day, err3 := strconv.Atoi(splits[2])
-
-	if err1 != nil || err2 != nil || err3 != nil {
-		return nil
-	}
-
-	if year < 100 {
-		year += 2000
-	}
-
-	return &version{day: day, month: month, year: year}
+	// this is the default value of 'version', but this is the kind of cases where 'explicit is better'
+	return version{valid: false}
 }
 
 // Compare returns true when v >= base.
 // Comparing an invalid version (or a dev version) with any version will return true, as we may lack version
-// numbers when testing, but that doesn't men we don't want to use the bleemeo mode.
-// Comparing any valid version with an invalid (or dev) version will return false.
+// numbers when testing, but that doesn't mean we don't want to use the bleemeo mode.
 func Compare(v string, base string) bool {
 	parsedV := parse(v)
 	parsedBase := parse(base)
 
-	if parsedBase == nil {
-		return parsedV == nil
+	// when the base version (retrieved from the API) is invalid, we assume we cannot parse it, and the
+	// base version is newer than 'v', unless the two versions are identical.
+	if !parsedBase.valid {
+		return v == base
 	}
 
-	if parsedV == nil {
+	if !parsedV.valid {
 		return true
 	}
 
-	return parsedV.year > parsedBase.year ||
-		(parsedV.year == parsedBase.year && parsedV.month > parsedBase.month) ||
-		(parsedV.year == parsedBase.year && parsedV.month == parsedBase.month && parsedV.day >= parsedBase.day)
+	return parsedV.date.After(parsedBase.date) || parsedV.date.Equal(parsedBase.date)
 }

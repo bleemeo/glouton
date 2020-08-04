@@ -35,9 +35,12 @@ func TestCompare(t *testing.T) {
 		{v: "20.07.22.160738", base: "21.05.15.123456", expectation: false},
 		{v: "20.07.22.160738", base: "20.08.15.123456", expectation: false},
 		{v: "20.07.22.160738", base: "20.07.23.123456", expectation: false},
+		{v: "20.07.22.180000", base: "20.07.22.160000", expectation: true},
+		{v: "20.07.22.181500", base: "20.07.22.181000", expectation: true},
+		{v: "20.07.22.181550", base: "20.07.22.181520", expectation: true},
 		{v: "dev", base: "20.07.20.123456", expectation: true},
 		{v: "dev", base: "dev", expectation: true},
-		{v: "20.07.22.160738", base: "dev", expectation: false},
+		{v: "20.07.22.160738", base: "future version", expectation: false},
 	}
 
 	for _, val := range vals {

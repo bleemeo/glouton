@@ -240,6 +240,7 @@ func TestSyncMetrics(t *testing.T) {
 			MonitorManager:          (*blackbox.RegisterManager)(nil),
 			NotifyFirstRegistration: func(ctx context.Context) {},
 		},
+		MqttSetReadOnly: func(readOnly bool) {},
 	})
 
 	s.ctx = context.Background()

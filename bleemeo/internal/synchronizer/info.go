@@ -28,27 +28,14 @@ func (s *Synchronizer) syncInfo(fullSync bool) error {
 
 	_, err := s.client.Do("GET", "v1/info/", nil, nil, &globalInfo)
 	// maybe the API does not support this version reporting ? We do not consider this an error for the moment
-	if err == nil {
-		if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
-			logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
-			return &types.ErrShutdownRequested{Reason: types.DisableAgentTooOld}
-		}
-
-		if globalInfo.ReadOnly {
-			if !s.option.MqttIsReadOnly() {
-				logger.V(0).Println("MQTT: read only mode enabled")
-				s.option.MqttSetReadOnly(true)
-			}
-		} else {
-			if s.option.MqttIsReadOnly() {
-				logger.V(0).Println("MQTT: read only mode is now disabled, will resume sending metrics")
-				s.option.MqttSetReadOnly(false)
-			}
-		}
+	if err != nil {
+		logger.V(2).Printf("Couldn't retrieve global informations, got '%v'", err)
+		return nil
 	}
 
-	if err != nil {
-		logger.V(2).Printf("Couldn't retrieve global informations, got %v", err)
+	if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
+		logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
+		return &types.ErrShutdownRequested{Reason: types.DisableAgentTooOld}
 	}
 
 	return nil

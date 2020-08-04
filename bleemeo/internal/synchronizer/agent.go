@@ -30,7 +30,7 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 	var agent types.Agent
 
 	params := map[string]string{
-		"fields": "tags,id,created_at,account,next_config_at,current_config",
+		"fields": "tags,id,created_at,account,next_config_at,current_config,is_read_only",
 	}
 	data := map[string][]types.Tag{
 		"tags": make([]types.Tag, 0),
@@ -77,6 +77,8 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 			s.option.UpdateConfigCallback()
 		}
 	}
+
+	s.option.MqttSetReadOnly(agent.ReadOnly)
 
 	return nil
 }

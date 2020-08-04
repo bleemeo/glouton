@@ -23,7 +23,6 @@ import (
 	"runtime"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"glouton/bleemeo/internal/cache"
@@ -32,14 +31,6 @@ import (
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	gloutonTypes "glouton/types"
-)
-
-type connectorState uint32
-
-const (
-	running connectorState = iota
-	runningWithMQTTSendingDisabled
-	stopped
 )
 
 // Connector manager the connection between the Agent and Bleemeo.
@@ -51,18 +42,13 @@ type Connector struct {
 	mqtt        *mqtt.Client
 	mqttRestart chan interface{}
 
-	// theses channels allows the sync and mqtt connector for sending back informations to the bleemeo connector,
-	// which takes action upon theses messages
-	// The advantage of this is that we no longer need to pass plenty of "callbacks" functions
-
-	l sync.Mutex
-	// initDone      bool
+	l               sync.RWMutex
 	lastKnownReport time.Time
 	lastMQTTRestart time.Time
 	disabledUntil   time.Time
 	disableReason   types.DisableReason
 
-	state connectorState
+	mqttSendingDisabled bool
 }
 
 // New create a new Connector.
@@ -78,12 +64,6 @@ func New(option types.GlobalOption) *Connector {
 		UpdateConfigCallback: c.updateConfig,
 		DisableCallback:      c.disableCallback,
 		MqttSetReadOnly:      c.mqttSetReadOnly,
-		MqttIsReadOnly: func() bool {
-			if c.mqtt != nil {
-				return c.mqtt.IsSendingSuspended()
-			}
-			return connectorState(atomic.LoadUint32((*uint32)(&c.state))) == runningWithMQTTSendingDisabled
-		},
 	})
 
 	return c
@@ -91,7 +71,11 @@ func New(option types.GlobalOption) *Connector {
 
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
 func (c *Connector) ApplyCachedConfiguration() {
-	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
+	c.l.RLock()
+	disabledUntil := c.disabledUntil
+	defer c.l.RUnlock()
+
+	if time.Now().Before(disabledUntil) {
 		return
 	}
 
@@ -130,7 +114,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 		first,
 	)
 
-	if c.state == runningWithMQTTSendingDisabled {
+	if c.mqttSendingDisabled {
 		c.mqtt.SuspendSending(true)
 	}
 
@@ -138,17 +122,22 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 }
 
 func (c *Connector) mqttSetReadOnly(readOnly bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
 	// if we prevent the mqtt connector from sending metrics, and the bleemeo mode is
 	// running, then we store that choice, and it will be used the next time we start
 	// the mqtt client.
 	// This ensures that even if the mqtt client starts after this function is called
 	// - given that sync is supposed to start later, this should seldom happen, but still -
 	// or the mqtt connector restarts, the read-only choice will be preserved.
-	if readOnly {
-		_ = atomic.CompareAndSwapUint32((*uint32)(&c.state), uint32(running), uint32(runningWithMQTTSendingDisabled))
-	} else {
-		_ = atomic.CompareAndSwapUint32((*uint32)(&c.state), uint32(runningWithMQTTSendingDisabled), uint32(running))
+	if readOnly && !c.mqttSendingDisabled {
+		logger.V(0).Println("MQTT: read only mode enabled")
+	} else if !readOnly && c.mqttSendingDisabled {
+		logger.V(0).Println("MQTT: read only mode is now disabled, will resume sending metrics")
 	}
+
+	c.mqttSendingDisabled = readOnly
 
 	if c.mqtt != nil {
 		c.mqtt.SuspendSending(readOnly)
@@ -166,9 +155,9 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 	subCtx, cancel := context.WithCancel(ctx)
 
-	c.l.Lock()
+	c.l.RLock()
 	mqttRestart := c.mqttRestart
-	c.l.Unlock()
+	c.l.RUnlock()
 
 	if mqttRestart == nil {
 		return nil
@@ -262,6 +251,12 @@ func (c *Connector) Run(ctx context.Context) error {
 		defer cancel()
 
 		syncErr = c.sync.Run(subCtx)
+
+		if requestedShutdown, ok := syncErr.(*types.ErrShutdownRequested); syncErr != nil && ok {
+			logger.V(0).Printf("The bleemeo mode was disabled due to the following reason: '%v', your metrics will no longer be sent...", requestedShutdown.Reason)
+			// this is a normal shutdown, signal to the agent loop that it's intended
+			syncErr = nil
+		}
 	}()
 
 	wg.Add(1)
@@ -322,7 +317,13 @@ func (c *Connector) Run(ctx context.Context) error {
 
 // UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
-	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
+	c.l.RLock()
+
+	disabled := time.Now().Before(c.disabledUntil)
+
+	c.l.RUnlock()
+
+	if disabled {
 		return
 	}
 
@@ -493,11 +494,17 @@ func (c *Connector) LastReport() time.Time {
 
 // HealthCheck perform some health check and logger any issue found.
 func (c *Connector) HealthCheck() bool {
-	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
-		return true
-	}
-
 	ok := true
+
+	c.l.RLock()
+
+	disabled := time.Now().Before(c.disabledUntil)
+
+	c.l.RUnlock()
+
+	if disabled {
+		return ok
+	}
 
 	if c.AgentID() == "" {
 		logger.Printf("Agent not yet registered")
@@ -550,8 +557,8 @@ func (c *Connector) HealthCheck() bool {
 }
 
 func (c *Connector) emitInternalMetric() {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	if c.mqtt != nil && c.mqtt.Connected() {
 		c.option.Acc.AddFields("", map[string]interface{}{"agent_status": 1.0}, nil)
@@ -559,7 +566,10 @@ func (c *Connector) emitInternalMetric() {
 }
 
 func (c *Connector) updateConfig() {
-	if connectorState(atomic.LoadUint32((*uint32)(&c.state))) != running {
+	c.l.RLock()
+	defer c.l.RUnlock()
+
+	if time.Now().Before(c.disabledUntil) {
 		return
 	}
 
@@ -594,18 +604,4 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 	if mqtt != nil {
 		mqtt.Disable(until, reason)
 	}
-}
-
-// IsStopped returns true when the bleemeo connector is stopped andisabled, and false otherwise.
-func (c *Connector) IsStopped() bool {
-	return connectorState(atomic.LoadUint32((*uint32)(&c.state))) == stopped
-}
-
-// SetStopped set the status of the connector to stop, and tells the connector to stop performing requests.
-func (c *Connector) SetStopped(reason types.DisableReason) {
-	atomic.StoreUint32((*uint32)(&c.state), uint32(stopped))
-
-	c.l.Lock()
-	c.disableReason = reason
-	c.l.Unlock()
 }
