@@ -75,7 +75,7 @@ var defaultConfig = map[string]interface{}{
 		"etc/glouton.conf",
 		"etc/conf.d",
 		"C:\\ProgramData\\glouton\\glouton.conf",
-		"C:\\ProgramData\\glouton\\glouton.conf.d",
+		"C:\\ProgramData\\glouton\\conf.d",
 	},
 	"container.pid_namespace_host": false,
 	"container.type":               "",

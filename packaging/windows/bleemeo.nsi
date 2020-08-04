@@ -46,7 +46,7 @@ Section "!${PRODUCT_NAME}"
 
   # Create config directories
   CreateDirectory "${CONFIGDIR}"
-  CreateDirectory "${CONFIGDIR}\glouton.conf.d"
+  CreateDirectory "${CONFIGDIR}\conf.d"
   CreateDirectory "${CONFIGDIR}\logs"
 
   #### CLEANUP ####
@@ -73,7 +73,7 @@ Section "!${PRODUCT_NAME}"
   # Move its config & state
   SetOverwrite off
   CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf" "${CONFIGDIR}\glouton.conf"
-  CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf.d\*.conf" "${CONFIGDIR}\glouton.conf.d\"
+  CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf.d\*.conf" "${CONFIGDIR}\conf.d\"
   CopyFiles "C:\ProgramData\bleemeo\state.json" "${CONFIGDIR}"
   SetOverwrite on
 
@@ -95,10 +95,10 @@ old_agent_not_present:
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
-  File "/oname=${CONFIGDIR}\glouton.conf.d\05-system.conf" ../../packaging/windows/glouton.conf
+  File "/oname=${CONFIGDIR}\conf.d\05-system.conf" ../../packaging/windows/glouton.conf
 
   # generate the config file with the account ID and registration ID
-  nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --install-config-path "${CONFIGDIR}\glouton.conf.d\30-install.conf"'
+  nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --install-config-path "${CONFIGDIR}\conf.d\30-install.conf"'
 
   # Let's expose proper values in the "Apps & Features" Windows settings by registering our installer
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
@@ -164,7 +164,7 @@ Function informationPage
 
     # Only show this page if it's the first installation. After first installation, the file
     # 30-install.conf will be created.
-    IfFileExists "${CONFIGDIR}\glouton.conf.d\30-install.conf" NotFirstInstall 0
+    IfFileExists "${CONFIGDIR}\conf.d\30-install.conf" NotFirstInstall 0
     IfFileExists "C:\ProgramData\bleemeo\etc\agent.conf.d\30-install.conf" NotFirstInstall FirstInstall
     NotFirstInstall:
     Abort
