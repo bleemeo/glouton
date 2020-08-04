@@ -24,6 +24,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type azureTag struct {
@@ -153,6 +154,9 @@ func parseAzureFacts(inst azureInstance, facts map[string]string) {
 }
 
 func azureFacts(ctx context.Context, facts map[string]string) (found bool) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	instanceData := httpQuery(ctx, "http://169.254.169.254/metadata/instance?api-version=2019-11-01", []string{"Metadata:true"})
 	if instanceData == "" {
 		return false
@@ -270,8 +274,13 @@ func parseGceFacts(projectID int, inst gceInstance, facts map[string]string) {
 }
 
 func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
+	projectIDStr := httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id", []string{"Metadata-Flavor:Google"})
+	if projectIDStr == "" {
+		return
+	}
+
 	// retrieve the ID of the (GCE) project for which this VM instance was spawned. We will use it later to "sanitize" machine types, zone names, and so on.
-	projectID, err := strconv.Atoi(httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id", []string{"Metadata-Flavor:Google"}))
+	projectID, err := strconv.Atoi(projectIDStr)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't retrieve your google cloud project ID, some facts may be missing on your dashboard: %v", err)
 		return false
@@ -297,6 +306,9 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 }
 
 func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id")
 
 	if facts["aws_ami_id"] == "" {
@@ -348,9 +360,12 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
 	// we always perform the queries, because even if the queries timeout it's not an issue,
 	// it will simply delay the update of the facts by a few seconds.
-	if !awsFacts(ctx, facts) {
-		if !azureFacts(ctx, facts) {
-			gceFacts(ctx, facts)
+	// Note that we check for gce first, as it perform a dns query, so it will return quickly when not
+	// running on GCE, and conversely it won't have to wait for an http timeout from the azure and aws
+	// facts retriever if the agent runs on GCE.
+	if !gceFacts(ctx, facts) {
+		if !awsFacts(ctx, facts) {
+			azureFacts(ctx, facts)
 		}
 	}
 }

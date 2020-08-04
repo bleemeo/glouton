@@ -97,7 +97,11 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 	defer f.l.Unlock()
 
 	if time.Since(f.lastFactsUpdate) > maxAge {
+		t := time.Now()
+
 		f.updateFacts(ctx)
+
+		logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
 	}
 
 	return f.facts, nil
@@ -342,7 +346,7 @@ func urlContent(ctx context.Context, url string) string {
 }
 
 func httpQuery(ctx context.Context, url string, headers []string) string {
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return ""
 	}
