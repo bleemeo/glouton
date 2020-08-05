@@ -18,7 +18,6 @@ package types
 
 import (
 	"context"
-	"fmt"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/threshold"
@@ -124,12 +123,4 @@ func (r DisableReason) String() string {
 	default:
 		return "unspecified reason"
 	}
-}
-
-type ErrShutdownRequested struct {
-	Reason DisableReason
-}
-
-func (e *ErrShutdownRequested) Error() string {
-	return fmt.Sprintf("the bleemeo mode was stopped for the following reason:\n%s\n", e.Reason)
 }

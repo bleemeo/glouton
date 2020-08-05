@@ -20,6 +20,7 @@ import (
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/version"
+	"time"
 )
 
 func (s *Synchronizer) syncInfo(fullSync bool) error {
@@ -35,7 +36,8 @@ func (s *Synchronizer) syncInfo(fullSync bool) error {
 
 	if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
 		logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
-		return &types.ErrShutdownRequested{Reason: types.DisableAgentTooOld}
+		s.option.DisableCallback(types.DisableAgentTooOld, time.Now().Add(30*time.Second))
+		s.forceSync["info"] = true
 	}
 
 	return nil

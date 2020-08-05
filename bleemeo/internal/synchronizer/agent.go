@@ -78,7 +78,7 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 		}
 	}
 
-	s.option.MqttSetReadOnly(agent.ReadOnly)
+	s.option.SetMaintenanceMode(agent.ReadOnly)
 
 	return nil
 }

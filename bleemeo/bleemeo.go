@@ -47,8 +47,6 @@ type Connector struct {
 	lastMQTTRestart time.Time
 	disabledUntil   time.Time
 	disableReason   types.DisableReason
-
-	mqttSendingDisabled bool
 }
 
 // New create a new Connector.
@@ -63,7 +61,7 @@ func New(option types.GlobalOption) *Connector {
 		Cache:                c.cache,
 		UpdateConfigCallback: c.updateConfig,
 		DisableCallback:      c.disableCallback,
-		MqttSetReadOnly:      c.mqttSetReadOnly,
+		SetMaintenanceMode:   c.setMaintenance,
 	})
 
 	return c
@@ -114,33 +112,27 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 		first,
 	)
 
-	if c.mqttSendingDisabled {
+	if c.disableReason == types.DisableMaintenance {
 		c.mqtt.SuspendSending(true)
 	}
 
 	return nil
 }
 
-func (c *Connector) mqttSetReadOnly(readOnly bool) {
+func (c *Connector) setMaintenance(maintenance bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	// if we prevent the mqtt connector from sending metrics, and the bleemeo mode is
-	// running, then we store that choice, and it will be used the next time we start
-	// the mqtt client.
-	// This ensures that even if the mqtt client starts after this function is called
-	// - given that sync is supposed to start later, this should seldom happen, but still -
-	// or the mqtt connector restarts, the read-only choice will be preserved.
-	if readOnly && !c.mqttSendingDisabled {
-		logger.V(0).Println("MQTT: read only mode enabled")
-	} else if !readOnly && c.mqttSendingDisabled {
-		logger.V(0).Println("MQTT: read only mode is now disabled, will resume sending metrics")
+	if maintenance {
+		logger.V(0).Println("Bleemeo: read only/maintenance mode enabled")
+	} else {
+		logger.V(0).Println("Bleemeo: read only/maintenance mode is now disabled, will resume sending metrics")
 	}
 
-	c.mqttSendingDisabled = readOnly
+	c.sync.SetMaintenance(maintenance)
 
 	if c.mqtt != nil {
-		c.mqtt.SuspendSending(readOnly)
+		c.mqtt.SuspendSending(maintenance)
 	}
 }
 
@@ -251,12 +243,6 @@ func (c *Connector) Run(ctx context.Context) error {
 		defer cancel()
 
 		syncErr = c.sync.Run(subCtx)
-
-		if requestedShutdown, ok := syncErr.(*types.ErrShutdownRequested); syncErr != nil && ok {
-			logger.V(0).Printf("The bleemeo mode was disabled due to the following reason: '%v', your metrics will no longer be sent...", requestedShutdown.Reason)
-			// this is a normal shutdown, signal to the agent loop that it's intended
-			syncErr = nil
-		}
 	}()
 
 	wg.Add(1)
@@ -496,16 +482,6 @@ func (c *Connector) LastReport() time.Time {
 func (c *Connector) HealthCheck() bool {
 	ok := true
 
-	c.l.RLock()
-
-	disabled := time.Now().Before(c.disabledUntil)
-
-	c.l.RUnlock()
-
-	if disabled {
-		return ok
-	}
-
 	if c.AgentID() == "" {
 		logger.Printf("Agent not yet registered")
 
@@ -566,13 +542,6 @@ func (c *Connector) emitInternalMetric() {
 }
 
 func (c *Connector) updateConfig() {
-	c.l.RLock()
-	defer c.l.RUnlock()
-
-	if time.Now().Before(c.disabledUntil) {
-		return
-	}
-
 	currentConfig := c.cache.CurrentAccountConfig()
 
 	logger.Printf("Changed to configuration %s", currentConfig.Name)

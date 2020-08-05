@@ -60,6 +60,7 @@ type Synchronizer struct {
 	forceSync             map[string]bool
 	pendingMetricsUpdate  []string
 	pendingMonitorsUpdate []MonitorUpdate
+	maintenanceMode       bool
 }
 
 // Option are parameters for the synchronizer.
@@ -74,8 +75,8 @@ type Option struct {
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func()
 
-	// SetReadOnly makes the mqtt connector stop sending metrics and topinfo
-	MqttSetReadOnly func(readOnly bool)
+	// SetMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
+	SetMaintenanceMode func(maintenance bool)
 }
 
 // New return a new Synchronizer.
@@ -130,10 +131,6 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 		err := s.runOnce()
 		if err != nil {
-			if _, ok := err.(*bleemeoTypes.ErrShutdownRequested); ok {
-				return err
-			}
-
 			s.successiveErrors++
 
 			if client.IsAuthError(err) {
@@ -146,7 +143,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(delay))
 			default:
 				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
-				s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+				s.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
 				if client.IsAuthError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
@@ -366,13 +363,25 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 	return s.disabledUntil, s.disableReason
 }
 
-// Disable will disable (or re-enable) the Synchronized until given time.
-// To re-enable, use the (not yet implmented) Enable().
-func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
-	s.disable(until, reason)
+func (s *Synchronizer) isMaintenance() bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.maintenanceMode
 }
 
-func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReason) {
+// SetMaintenance allows to trigger the maintenance mode for the synchronize.
+// When running in maintenance mode, only the general infos, the agent and its configuration are synced.
+func (s *Synchronizer) SetMaintenance(maintenance bool) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.maintenanceMode = maintenance
+}
+
+// Disable will disable (or re-enable) the Synchronized until given time.
+// To re-enable, use Enable().
+func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -421,11 +430,12 @@ func (s *Synchronizer) runOnce() error {
 	}
 
 	syncStep := []struct {
-		name   string
-		method func(bool) error
+		name                 string
+		method               func(bool) error
+		enabledInMaintenance bool
 	}{
-		{name: "info", method: s.syncInfo},
-		{name: "agent", method: s.syncAgent},
+		{name: "info", method: s.syncInfo, enabledInMaintenance: true},
+		{name: "agent", method: s.syncAgent, enabledInMaintenance: true},
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
@@ -450,14 +460,14 @@ func (s *Synchronizer) runOnce() error {
 			break
 		}
 
+		maintenance := s.isMaintenance()
+		if maintenance && !step.enabledInMaintenance {
+			continue
+		}
+
 		if full, ok := syncMethods[step.name]; ok {
 			err := step.method(full)
 			if err != nil {
-				// ErrShutdownRequested short-circuit the execution of the steps to disable immediately the bleemeo mode
-				if _, ok := err.(*bleemeoTypes.ErrShutdownRequested); ok {
-					return err
-				}
-
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 				lastErr = err
 			}
