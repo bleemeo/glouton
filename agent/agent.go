@@ -59,6 +59,7 @@ import (
 	"glouton/logger"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
+	"glouton/prometheus/exporter/common"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -808,26 +809,16 @@ func (a *agent) run() { //nolint:gocyclo
 }
 
 func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
-	diskWhitelist := a.config.StringList("disk_monitor")
-	whitelistRE := make([]*regexp.Regexp, len(diskWhitelist))
-
-	for index, v := range diskWhitelist {
-		whitelistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			err = fmt.Errorf("the whitelist for diskio regexp couldn't compile: %s", err)
-			return
-		}
+	whitelistRE, err := common.CompileREs(a.config.StringList("disk_monitor"))
+	if err != nil {
+		logger.V(1).Printf("the whitelist for diskio regexp couldn't compile: %s", err)
+		return
 	}
 
-	diskBlacklist := a.config.StringList("disk_ignore")
-	blacklistRE := make([]*regexp.Regexp, len(diskBlacklist))
-
-	for index, v := range diskBlacklist {
-		blacklistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			err = fmt.Errorf("the blacklist for diskio regexp couldn't compile: %s", err)
-			return
-		}
+	blacklistRE, err := common.CompileREs(a.config.StringList("disk_ignore"))
+	if err != nil {
+		logger.V(1).Printf("the blacklist for diskio regexp couldn't compile: %s", err)
+		return
 	}
 
 	pathBlacklist := a.config.StringList("df.path_ignore")

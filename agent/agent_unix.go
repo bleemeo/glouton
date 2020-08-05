@@ -21,14 +21,13 @@ package agent
 import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/node"
-	"glouton/types"
 )
 
 func (a *agent) initOSSpecificParts() {
 }
 
 func (a *agent) registerOSSpecificComponents() {
-	if a.metricFormat == types.MetricFormatPrometheus && a.config.Bool("agent.node_exporter.enabled") {
+	if a.config.Bool("agent.node_exporter.enabled") {
 		nodeOption := node.Option{
 			RootFS:            a.hostRootPath,
 			EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
