@@ -51,6 +51,7 @@ type Synchronizer struct {
 	lastFactUpdatedAt       string
 	successiveErrors        int
 	warnAccountMismatchDone bool
+	maintenanceMode         bool
 	lastMetricCount         int
 	agentID                 string
 
@@ -60,7 +61,6 @@ type Synchronizer struct {
 	forceSync             map[string]bool
 	pendingMetricsUpdate  []string
 	pendingMonitorsUpdate []MonitorUpdate
-	maintenanceMode       bool
 }
 
 // Option are parameters for the synchronizer.
@@ -123,7 +123,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	for s.ctx.Err() == nil {
 		// TODO: allow WaitDeadline to be interrupted when new metrics arrive
-		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronize with Bleemeo Cloud platform")
+		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronization with Bleemeo Cloud platform")
 
 		if s.ctx.Err() != nil {
 			break
@@ -363,7 +363,8 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 	return s.disabledUntil, s.disableReason
 }
 
-func (s *Synchronizer) isMaintenance() bool {
+// IsMaintenance returns whether the synchronizer is currently in maintenance mode (not making any request except info/agent).
+func (s *Synchronizer) IsMaintenance() bool {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -451,16 +452,21 @@ func (s *Synchronizer) runOnce() error {
 			break
 		}
 
-		until, _ := s.getDisabledUntil()
+		until, reason := s.getDisabledUntil()
 		if time.Now().Before(until) {
-			if lastErr == nil {
+			// If the agent was disabled because it is too old, we do not want the synchronizer
+			// to throw a DisableTooManyErrors because syncInfo() disabled the bleemeo connector.
+			// This could alter the synchronizer would wait to sync again, and we do not desire it.
+			// This would also show errors that could confuse the user like "Synchronization with
+			// Bleemeo Cloud platform still have to wait 1m27s due to too many errors".
+			if lastErr == nil && reason != bleemeoTypes.DisableAgentTooOld {
 				lastErr = errors.New("bleemeo connector is temporary disabled")
 			}
 
 			break
 		}
 
-		maintenance := s.isMaintenance()
+		maintenance := s.IsMaintenance()
 		if maintenance && !step.enabledInMaintenance {
 			continue
 		}

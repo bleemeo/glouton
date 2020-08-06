@@ -163,13 +163,6 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if reason == bleemeoTypes.DisableAuthenticationError {
-		// Kept MQTT disabled a bit longer, this will allow synchronizer to
-		// test if the authentication error is resolved and don't check this
-		// twice (one in MQTT and one in synchronized)
-		until = until.Add(80 * time.Second)
-	}
-
 	if c.disabledUntil.Before(until) {
 		c.disabledUntil = until
 		c.disableReason = reason
@@ -386,6 +379,17 @@ func (c *Client) shutdown() error {
 func (c *Client) SuspendSending(suspended bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
+
+	// send a message on /connect when reconnecting after being in maintenance mode
+	if c.sendingSuspended && !suspended {
+		if c.mqttClient != nil && c.mqttClient.IsConnectionOpen() {
+			// we need to unlock/relock() as sendConnectMessage calls publish() which locks
+			// the mutex too
+			c.l.Unlock()
+			c.sendConnectMessage()
+			c.l.Lock()
+		}
+	}
 
 	c.sendingSuspended = suspended
 }
@@ -620,6 +624,20 @@ func (c *Client) getDisableUntil() (time.Time, bleemeoTypes.DisableReason) {
 
 func (c *Client) onConnect(mqttClient paho.Client) {
 	logger.Printf("MQTT connection established")
+
+	// when in maintenance mode, we do not send messages to /connect
+	if !c.IsSendingSuspended() {
+		c.sendConnectMessage()
+	}
+
+	mqttClient.Subscribe(
+		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
+		0,
+		c.onNotification,
+	)
+}
+
+func (c *Client) sendConnectMessage() {
 	// Use short max-age to force a refresh facts since a reconnection to MQTT may
 	// means that public IP change.
 	facts, err := c.option.Facts.Facts(c.ctx, 10*time.Second)
@@ -634,11 +652,6 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 	}
 
 	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload, true)
-	mqttClient.Subscribe(
-		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
-		0,
-		c.onNotification,
-	)
 }
 
 type notificationPayload struct {
@@ -856,7 +869,7 @@ mainLoop:
 		switch {
 		case time.Now().Before(disableUntil):
 			if c.mqttClient != nil {
-				logger.V(2).Printf("Disconnection from MQTT due to %v", disableReason)
+				logger.V(2).Printf("Disconnecting from MQTT due to '%v'", disableReason)
 				c.mqttClient.Disconnect(0)
 
 				c.l.Lock()
@@ -870,7 +883,7 @@ mainLoop:
 				delay := common.JitterDelay(300, 0.25, 300).Round(time.Second)
 
 				c.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
-				logger.Printf("Too many attempt to connect to MQTT on last 10 minutes. Disable MQTT for %v", delay)
+				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
 				continue
 			}
 

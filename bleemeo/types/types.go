@@ -104,7 +104,6 @@ const (
 	DisableDuplicatedAgent
 	DisableTooManyErrors
 	DisableAgentTooOld
-	DisableMaintenance
 	DisableAuthenticationError
 )
 
@@ -116,11 +115,12 @@ func (r DisableReason) String() string {
 		return "too many errors"
 	case DisableAgentTooOld:
 		return "this agent is too old, and cannot be connected to our managed service"
-	case DisableMaintenance:
-		return "maintenance on Bleemeo API"
 	case DisableAuthenticationError:
 		return "authentication error with Bleemeo API"
 	default:
 		return "unspecified reason"
 	}
 }
+
+const StateEntryAgentTooOld string = "agent-expired"
+const StateEntryAgentReadOnly string = "agent-read-only"

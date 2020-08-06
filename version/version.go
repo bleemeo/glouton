@@ -47,7 +47,7 @@ type version struct {
 }
 
 func parse(s string) version {
-	for _, pattern := range []string{"06.01.02.150405", "2006.01.02.150405", "06.01.02"} {
+	for _, pattern := range []string{"06.01.02.150405", "2006.01.02.150405", "2006.01.02", "06.01.02"} {
 		t, err := time.Parse(pattern, s)
 		if err == nil {
 			return version{valid: true, date: t}

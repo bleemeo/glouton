@@ -112,7 +112,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 		first,
 	)
 
-	if c.disableReason == types.DisableMaintenance {
+	if c.sync.IsMaintenance() {
 		c.mqtt.SuspendSending(true)
 	}
 
@@ -120,14 +120,14 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 }
 
 func (c *Connector) setMaintenance(maintenance bool) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
 	if maintenance {
 		logger.V(0).Println("Bleemeo: read only/maintenance mode enabled")
-	} else {
+	} else if !maintenance && c.sync.IsMaintenance() {
 		logger.V(0).Println("Bleemeo: read only/maintenance mode is now disabled, will resume sending metrics")
 	}
+
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	c.sync.SetMaintenance(maintenance)
 
@@ -227,6 +227,26 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 // Run run the Connector.
 func (c *Connector) Run(ctx context.Context) error {
 	defer c.cache.Save()
+
+	var agentExpired bool
+
+	_ = c.option.State.Get(types.StateEntryAgentTooOld, &agentExpired)
+
+	if agentExpired {
+		logger.V(0).Printf("bleemeo: this agent was deemed too old to connect to our managed service on its previous run, starting in read-only... The agent will check again its version soon.")
+		// if the agent was too old, let it start in read-only mode, the synchronizer will check the version soon
+		// and disable/reenable the agent in function of the exposed minimum version on our API.
+		c.setMaintenance(true)
+	}
+
+	var agentReadOnly bool
+
+	_ = c.option.State.Get(types.StateEntryAgentReadOnly, &agentReadOnly)
+
+	if agentReadOnly {
+		logger.V(0).Printf("bleemeo: this agent was running in read-only/maintenance mode previously and will keep running in read-only... The agent will retrieve again its operating mode soon.")
+		c.setMaintenance(true)
+	}
 
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -356,7 +376,7 @@ func (c *Connector) DiagnosticPage() string {
 	if time.Now().Before(c.disabledUntil) {
 		fmt.Fprintf(
 			builder,
-			"Glouton connection to Bleemeo is disabled until %s (%v remain) due to %v\n",
+			"Glouton connection to Bleemeo is disabled until %s (%v remain) due to '%v'\n",
 			c.disabledUntil.Format(time.RFC3339),
 			time.Until(c.disabledUntil).Truncate(time.Second),
 			c.disableReason,
@@ -496,7 +516,7 @@ func (c *Connector) HealthCheck() bool {
 	if time.Now().Before(c.disabledUntil) {
 		delay := time.Until(c.disabledUntil)
 
-		logger.Printf("Bleemeo connector is still disabled for %v due to %v", delay.Truncate(time.Second), c.disableReason)
+		logger.Printf("Bleemeo connector is still disabled for %v due to '%v'", delay.Truncate(time.Second), c.disableReason)
 
 		return false
 	}
@@ -567,10 +587,22 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 
 	delay := time.Until(until)
 
-	logger.Printf("Disabling Bleemeo connector for %v due to %v", delay.Truncate(time.Second), reason)
+	logger.Printf("Disabling Bleemeo connector for %v due to '%v'", delay.Truncate(time.Second), reason)
 	c.sync.Disable(until, reason)
 
 	if mqtt != nil {
-		mqtt.Disable(until, reason)
+		// delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
+		// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
+		mqttDisableDelay := time.Duration(0)
+
+		switch reason {
+		case types.DisableTooManyErrors:
+			mqttDisableDelay = 20 * time.Second
+		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError:
+			// let the synchronizer check if the error is solved
+			mqttDisableDelay = 80 * time.Second
+		}
+
+		mqtt.Disable(until.Add(mqttDisableDelay), reason)
 	}
 }
