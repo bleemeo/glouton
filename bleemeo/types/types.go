@@ -121,6 +121,3 @@ func (r DisableReason) String() string {
 		return "unspecified reason"
 	}
 }
-
-const StateEntryAgentTooOld string = "agent-expired"
-const StateEntryAgentReadOnly string = "agent-read-only"

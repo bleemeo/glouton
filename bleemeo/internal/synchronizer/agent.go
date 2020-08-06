@@ -80,7 +80,6 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 
 	if s.option.SetMaintenanceMode != nil {
 		s.option.SetMaintenanceMode(agent.ReadOnly)
-		_ = s.option.GlobalOption.State.Set(types.StateEntryAgentReadOnly, agent.ReadOnly)
 	}
 
 	return nil

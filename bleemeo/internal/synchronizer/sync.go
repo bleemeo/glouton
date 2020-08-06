@@ -75,6 +75,9 @@ type Option struct {
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func()
 
+	// SetInitialized tells the bleemeo connector that the MQTT module can be started
+	SetInitialized func()
+
 	// SetMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
 	SetMaintenanceMode func(maintenance bool)
 }
@@ -110,13 +113,33 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
 	}
 
+	// We choose to sync 'info' and 'agent' before running the main loop.
+	// This has the advantage that we can detect if our agent is outdated or in maintenance mode fairly
+	// quickly after starting the agent. This happends prior to enabling MQTT, which means we don't
+	// have metrics sent over MQTT for a few seconds before stopping to send them, we don't have to
+	// store this information in our state file, we don't send a message on the '/connect' endpoint,
+	// and more !
+	// When this is done, we can signal that we are initialized, that in turn will allow the execution of
+	// the MQTT connector to run.
+	err := s.syncInfo(false)
+	if err != nil {
+		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
+	}
+
+	err = s.syncAgent(false)
+	if err != nil {
+		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the agent: %v", err)
+	}
+
+	s.option.SetInitialized()
+
 	s.successiveErrors = 0
 	successiveAuthErrors := 0
 
 	var minimalDelay time.Duration
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
-		logger.V(2).Printf("Waiting a few seconds before the first synchronization as this agent has a valid cache")
+		logger.V(2).Printf("Waiting a few seconds before running a full synchronization as this agent has a valid cache")
 
 		minimalDelay = common.JitterDelay(20, 0.5, 20)
 	}
@@ -257,6 +280,14 @@ func (s *Synchronizer) DiagnosticPage() string {
 func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
+
+	// If we're in maintenance mode, we probably received this message because we're exiting it.
+	// It thus makes sense to check if we should exit it (and if our version is supported, hence
+	// the check for 'info'). If the update is related to other components, then we're not updating
+	// them either, as it doesn't make sense if we're not sending anything.
+	if s.maintenanceMode {
+		immediate = false
+	}
 
 	s.forceSync["info"] = true
 	s.forceSync["agent"] = true

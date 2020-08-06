@@ -47,6 +47,9 @@ type Connector struct {
 	lastMQTTRestart time.Time
 	disabledUntil   time.Time
 	disableReason   types.DisableReason
+
+	// initialized indicates whether the mqtt connetcor can be started
+	initialized bool
 }
 
 // New create a new Connector.
@@ -61,10 +64,25 @@ func New(option types.GlobalOption) *Connector {
 		Cache:                c.cache,
 		UpdateConfigCallback: c.updateConfig,
 		DisableCallback:      c.disableCallback,
+		SetInitialized:       c.setInitialized,
 		SetMaintenanceMode:   c.setMaintenance,
 	})
 
 	return c
+}
+
+func (c *Connector) setInitialized() {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.initialized = true
+}
+
+func (c *Connector) isInitialized() bool {
+	c.l.RLock()
+	defer c.l.RUnlock()
+
+	return c.initialized
 }
 
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
@@ -228,26 +246,6 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 func (c *Connector) Run(ctx context.Context) error {
 	defer c.cache.Save()
 
-	var agentExpired bool
-
-	_ = c.option.State.Get(types.StateEntryAgentTooOld, &agentExpired)
-
-	if agentExpired {
-		logger.V(0).Printf("bleemeo: this agent was deemed too old to connect to our managed service on its previous run, starting in read-only... The agent will check again its version soon.")
-		// if the agent was too old, let it start in read-only mode, the synchronizer will check the version soon
-		// and disable/reenable the agent in function of the exposed minimum version on our API.
-		c.setMaintenance(true)
-	}
-
-	var agentReadOnly bool
-
-	_ = c.option.State.Get(types.StateEntryAgentReadOnly, &agentReadOnly)
-
-	if agentReadOnly {
-		logger.V(0).Printf("bleemeo: this agent was running in read-only/maintenance mode previously and will keep running in read-only... The agent will retrieve again its operating mode soon.")
-		c.setMaintenance(true)
-	}
-
 	subCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -292,7 +290,7 @@ func (c *Connector) Run(ctx context.Context) error {
 	}()
 
 	for subCtx.Err() == nil {
-		if c.AgentID() != "" {
+		if c.AgentID() != "" && c.isInitialized() {
 			wg.Add(1)
 
 			go func() {

@@ -35,24 +35,12 @@ func (s *Synchronizer) syncInfo(fullSync bool) error {
 	}
 
 	if globalInfo.Agents.MinVersions.Glouton != "" {
-		if version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
-			// the agent is recent enought, let's clear the state about it
-			_ = s.option.GlobalOption.State.Set(types.StateEntryAgentTooOld, false)
-		} else {
+		if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
 			logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
 			s.option.DisableCallback(types.DisableAgentTooOld, time.Now().Add(24*time.Hour))
 
 			// force syncing the version again when the synchronizer runs again
 			s.forceSync["info"] = true
-			// we also force the agent sync, because when we start the agent and it was disabled
-			// previously because its version was obsolete, we switch on maintenance mode. Tha
-			// allows us to check almost immdiately for the version, instead of disabling the
-			// bleemeo connector for a whole day like what we do here. The flipside is that we
-			// must also sync the agent to get out of the maintenance mode.
-			s.forceSync["agent"] = true
-
-			// let's store that this is an old agent, and make sure that we remember it on next startup
-			_ = s.option.GlobalOption.State.Set(types.StateEntryAgentTooOld, true)
 		}
 	}
 
