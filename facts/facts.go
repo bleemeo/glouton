@@ -20,6 +20,7 @@ import (
 	"context"
 	"glouton/logger"
 	"glouton/version"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -158,7 +159,10 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts["primary_mac_address"] = primaryMacAddress
 
 	if f.ipIndicatorURL != "" {
-		newFacts["public_ip"] = urlContent(ctx, f.ipIndicatorURL)
+		subctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		newFacts["public_ip"] = urlContent(subctx, f.ipIndicatorURL)
 	}
 
 	newFacts["architecture"] = runtime.GOARCH
@@ -360,14 +364,20 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 		req.Header.Add(splits[0], splits[1])
 	}
 
-	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return ""
 	}
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	// We refuse to decode messages when the request triggered an error
+	if resp.StatusCode >= 400 {
+		return ""
+	}
+
+	// limit the amount of data to 1mb
+	body, err := ioutil.ReadAll(&io.LimitedReader{R: resp.Body, N: 2 << 20})
 	if err != nil {
 		return ""
 	}

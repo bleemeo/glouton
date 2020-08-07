@@ -274,6 +274,9 @@ func parseGceFacts(projectID int, inst gceInstance, facts map[string]string) {
 }
 
 func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	projectIDStr := httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id", []string{"Metadata-Flavor:Google"})
 	if projectIDStr == "" {
 		return
