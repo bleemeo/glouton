@@ -24,7 +24,6 @@ import (
 	"context"
 	"errors"
 	"glouton/logger"
-	"glouton/prometheus/exporter/node"
 	"glouton/types"
 	"net/http"
 	"sort"
@@ -411,25 +410,6 @@ func (r *Registry) AddDefaultCollector() {
 	r.internalRegistry.MustRegister(prometheus.NewGoCollector())
 
 	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil)
-}
-
-// AddNodeExporter add a node_exporter to collector.
-func (r *Registry) AddNodeExporter(option node.Option) error {
-	collector, err := node.NewCollector(option)
-	if err != nil {
-		return err
-	}
-
-	reg := prometheus.NewRegistry()
-
-	err = reg.Register(collector)
-	if err != nil {
-		return err
-	}
-
-	_, err = r.RegisterGatherer(reg, nil, nil)
-
-	return err
 }
 
 // Exporter return an HTTP exporter.

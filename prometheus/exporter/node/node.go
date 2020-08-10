@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/exporter/buildinfo"
+	"glouton/prometheus/exporter/common"
 	"glouton/version"
-	"regexp/syntax"
 	"strings"
 	_ "unsafe" // using hack with go linkname to access private variable :)
 
@@ -98,13 +98,13 @@ func (o *Option) WithPathIgnore(prefixes []string) *Option {
 
 	res := make([]string, len(prefixes))
 	for i, p := range prefixes {
-		res[i], err = reFromPathPrefix(p)
+		res[i], err = common.ReFromPathPrefix(p)
 		if err != nil {
 			return o
 		}
 	}
 
-	re, err := reFromREs(res)
+	re, err := common.ReFromREs(res)
 	if err != nil {
 		return o
 	}
@@ -121,13 +121,13 @@ func (o *Option) WithNetworkIgnore(prefixes []string) *Option {
 
 	res := make([]string, len(prefixes))
 	for i, p := range prefixes {
-		res[i], err = reFromPrefix(p)
+		res[i], err = common.ReFromPrefix(p)
 		if err != nil {
 			return o
 		}
 	}
 
-	re, err := reFromREs(res)
+	re, err := common.ReFromREs(res)
 	if err != nil {
 		return o
 	}
@@ -135,41 +135,4 @@ func (o *Option) WithNetworkIgnore(prefixes []string) *Option {
 	o.NetworkIgnoredDevices = re
 
 	return o
-}
-
-// reFromPrefix return a regular expression matching any prefixes in the input
-// e.g. ReFromPrefixes("eth"}) will match eth, eth0, ...
-func reFromPrefix(prefix string) (string, error) {
-	re, err := syntax.Parse(prefix, syntax.Literal)
-	return "^" + re.String(), err
-}
-
-// reFromPathPrefix return a regular expression matching any path prefix in the input
-// By path-prefix, we means that the path-prefix "/mnt" will match "/mnt", "/mnt/disk" but not "/mnt-disk"
-// Only "/" is supported (e.g. only unix).
-func reFromPathPrefix(prefix string) (string, error) {
-	re, err := syntax.Parse(prefix, syntax.Literal)
-	return "^" + re.String() + "($|/)", err
-}
-
-// reFromREs return an RE matching any of the input REs.
-func reFromREs(input []string) (string, error) {
-	var err error
-
-	res := make([]*syntax.Regexp, len(input))
-
-	for i, v := range input {
-		res[i], err = syntax.Parse(v, syntax.Perl)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	re := syntax.Regexp{
-		Op:    syntax.OpAlternate,
-		Flags: syntax.Perl,
-		Sub:   res,
-	}
-
-	return re.String(), nil
 }

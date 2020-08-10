@@ -59,6 +59,7 @@ import (
 	"glouton/logger"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
+	"glouton/prometheus/exporter/common"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -584,9 +585,6 @@ func (a *agent) run() { //nolint:gocyclo
 		DynamicJobName: "discovered-exporters",
 	}
 
-	// register components only available on a given system, like node_exporter for unixes
-	a.registerOSSpecificComponents()
-
 	var monitorManager *blackbox.RegisterManager
 
 	if a.config.Bool("blackbox.enabled") {
@@ -739,47 +737,20 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {
-		diskWhitelist := a.config.StringList("disk_monitor")
-		whitelistRE := make([]*regexp.Regexp, len(diskWhitelist))
-
-		for index, v := range diskWhitelist {
-			whitelistRE[index], err = regexp.Compile(v)
-			if err != nil {
-				logger.Printf("Unable to initialize system collector: the whitelist for diskio regexp couldn't compile: %s", err)
-				return
-			}
-		}
-
-		diskBlacklist := a.config.StringList("disk_ignore")
-		blacklistRE := make([]*regexp.Regexp, len(diskBlacklist))
-
-		for index, v := range diskBlacklist {
-			blacklistRE[index], err = regexp.Compile(v)
-			if err != nil {
-				logger.Printf("Unable to initialize system collector: the blacklist for diskio regexp couldn't compile: %s", err)
-				return
-			}
-		}
-
-		pathBlacklist := a.config.StringList("df.path_ignore")
-		pathBlacklistTrimed := make([]string, len(pathBlacklist))
-
-		for i, v := range pathBlacklist {
-			pathBlacklistTrimed[i] = strings.TrimRight(v, "/")
-		}
-
-		err = discovery.AddDefaultInputs(a.collector, inputs.CollectorConfig{
-			DFRootPath:      a.hostRootPath,
-			NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
-			IODiskWhitelist: whitelistRE,
-			IODiskBlacklist: blacklistRE,
-			DFPathBlacklist: pathBlacklistTrimed,
-		})
+		conf, err := a.buildCollectorsConfig()
 		if err != nil {
+			logger.V(0).Printf("Unable to initialize system collector: %v", err)
+			return
+		}
+
+		if err = discovery.AddDefaultInputs(a.collector, conf); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 			return
 		}
 	}
+
+	// register components only available on a given system, like node_exporter for unixes
+	a.registerOSSpecificComponents()
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.RunCollection,
@@ -835,6 +806,35 @@ func (a *agent) run() { //nolint:gocyclo
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	logger.V(2).Printf("Agent stopped")
+}
+
+func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
+	whitelistRE, err := common.CompileREs(a.config.StringList("disk_monitor"))
+	if err != nil {
+		logger.V(1).Printf("the whitelist for diskio regexp couldn't compile: %s", err)
+		return
+	}
+
+	blacklistRE, err := common.CompileREs(a.config.StringList("disk_ignore"))
+	if err != nil {
+		logger.V(1).Printf("the blacklist for diskio regexp couldn't compile: %s", err)
+		return
+	}
+
+	pathBlacklist := a.config.StringList("df.path_ignore")
+	pathBlacklistTrimed := make([]string, len(pathBlacklist))
+
+	for i, v := range pathBlacklist {
+		pathBlacklistTrimed[i] = strings.TrimRight(v, "/")
+	}
+
+	return inputs.CollectorConfig{
+		DFRootPath:      a.hostRootPath,
+		NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
+		IODiskWhitelist: whitelistRE,
+		IODiskBlacklist: blacklistRE,
+		DFPathBlacklist: pathBlacklistTrimed,
+	}, nil
 }
 
 func (a *agent) minuteMetric(ctx context.Context) error {

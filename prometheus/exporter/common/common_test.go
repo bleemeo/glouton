@@ -1,10 +1,92 @@
 // nolint: scopelint
-package node
+package common_test
 
 import (
+	"glouton/prometheus/exporter/common"
 	"regexp"
 	"testing"
 )
+
+func TestMergeREs(t *testing.T) {
+	tests := []struct {
+		name       string
+		args       []string
+		matches    []string
+		noMatchers []string
+	}{
+		{
+			name: "two-choice",
+			args: []string{
+				"sda[0-9]?$",
+				"^nvme0n1",
+			},
+			matches: []string{
+				"sda",
+				"sda5",
+				"nvme0n12",
+			},
+			noMatchers: []string{
+				"value",
+				"hda",
+				"sda15",
+				"onvmen1",
+			},
+		},
+		{
+			name: "disk_monitor",
+			args: []string{
+				"^(hd|sd|vd|xvd)[a-z]$",
+				"^mmcblk[0-9]$",
+				"^[A-Z]:$",
+			},
+			matches: []string{
+				"hda",
+				"hdb",
+				"xvdc",
+				"mmcblk8",
+				"C:",
+			},
+			noMatchers: []string{
+				"hda1",
+				"mmcblk10",
+				"AB:",
+				"ram0",
+				"sd",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := common.CompileREs(tt.args)
+			if err != nil {
+				t.Fatalf("failed to compile %#v: %v", tt.args, err)
+			}
+
+			got, err := common.MergeREs(res)
+			if err != nil {
+				t.Fatalf("MergeREs failed: %v", err)
+			}
+
+			gotRE, err := regexp.Compile(got)
+			if err != nil {
+				t.Fatalf("failed to compile %#v: %v", got, err)
+				return
+			}
+
+			for _, v := range tt.matches {
+				if !gotRE.MatchString(v) {
+					t.Errorf("MatchString(%s) == false, want true", v)
+				}
+			}
+
+			for _, v := range tt.noMatchers {
+				if gotRE.MatchString(v) {
+					t.Errorf("MatchString(%s) == true, want false", v)
+				}
+			}
+		})
+	}
+}
 
 func TestReFromREs(t *testing.T) {
 	type args struct {
@@ -70,7 +152,7 @@ func TestReFromREs(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := reFromREs(tt.args.input)
+			got, err := common.ReFromREs(tt.args.input)
 			if err != nil {
 				t.Errorf("ReFromREs failed: %v", err)
 				return
@@ -149,7 +231,7 @@ func TestReFromPrefixes(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := reFromPrefix(tt.args.prefix)
+			got, err := common.ReFromPrefix(tt.args.prefix)
 			if err != nil {
 				t.Errorf("ReFromREs failed: %v", err)
 				return
@@ -214,7 +296,7 @@ func TestReFromPathPrefix(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := reFromPathPrefix(tt.args.prefix)
+			got, err := common.ReFromPathPrefix(tt.args.prefix)
 			if err != nil {
 				t.Errorf("ReFromREs failed: %v", err)
 				return
