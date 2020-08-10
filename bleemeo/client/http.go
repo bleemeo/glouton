@@ -125,15 +125,28 @@ func (c *HTTPClient) Do(method string, path string, params map[string]string, da
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	req, err := c.PrepareRequest(method, path, params, data)
+	req, err := c.prepareRequest(method, path, params, data)
 	if err != nil {
 		return 0, err
 	}
 
-	return c.do(req, result, true)
+	return c.do(req, result, true, true)
 }
 
-func (c *HTTPClient) PrepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
+// DoUnauthenticated perform the specified request, but without the JWT token used in `Do`. It is otherwise exactly similar to `Do.
+func (c *HTTPClient) DoUnauthenticated(method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	req, err := c.prepareRequest(method, path, params, data)
+	if err != nil {
+		return 0, err
+	}
+
+	return c.do(req, result, true, false)
+}
+
+func (c *HTTPClient) prepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
 	u, err := c.baseURL.Parse(path)
 	if err != nil {
 		return nil, err
@@ -173,7 +186,7 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	req, err := c.PrepareRequest("POST", path, nil, data)
+	req, err := c.prepareRequest("POST", path, nil, data)
 	if err != nil {
 		return 0, err
 	}
@@ -225,25 +238,28 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 	return result, nil
 }
 
-func (c *HTTPClient) do(req *http.Request, result interface{}, firstCall bool) (int, error) {
-	if c.jwtToken == "" {
-		newToken, err := c.GetJWT()
-		if err != nil {
-			return 0, err
+func (c *HTTPClient) do(req *http.Request, result interface{}, firstCall bool, withAuth bool) (int, error) {
+	if withAuth {
+		if c.jwtToken == "" {
+			newToken, err := c.GetJWT()
+			if err != nil {
+				return 0, err
+			}
+
+			c.jwtToken = newToken
 		}
 
-		c.jwtToken = newToken
+		req.Header.Set("Authorization", fmt.Sprintf("JWT %s", c.jwtToken))
 	}
-
-	req.Header.Set("Authorization", fmt.Sprintf("JWT %s", c.jwtToken))
 
 	statusCode, err := c.sendRequest(req, result)
 
-	if firstCall && err != nil {
+	// reset the JWT token if the call wasn't authorized, the JWT token may have expired
+	if withAuth && firstCall && err != nil {
 		if apiError, ok := err.(APIError); ok {
 			if apiError.StatusCode == 401 {
 				c.jwtToken = ""
-				return c.do(req, result, false)
+				return c.do(req, result, false, withAuth)
 			}
 		}
 	}

@@ -155,10 +155,6 @@ func (c *Connector) setMaintenance(maintenance bool) {
 	}
 }
 
-func (c *Connector) IsMaintenance() bool {
-	return c.sync.IsMaintenance()
-}
-
 func (c *Connector) mqttRestarter(ctx context.Context) error {
 	var (
 		wg             sync.WaitGroup
@@ -386,6 +382,16 @@ func (c *Connector) DiagnosticPage() string {
 		)
 	}
 
+	now := time.Now()
+
+	if c.disabledUntil.After(now) {
+		fmt.Fprintf(builder, "The Bleemeo connector is currently disabled until %v due to '%v'\n", c.disabledUntil, c.disableReason)
+	}
+
+	if c.sync.IsMaintenance() {
+		fmt.Fprintln(builder, "The Bleemeo connector is currently in read-only/maintenance mode, not syncing nor sending any metric")
+	}
+
 	mqtt := c.mqtt
 	c.l.Unlock()
 
@@ -608,15 +614,4 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 
 		mqtt.Disable(until.Add(mqttDisableDelay), reason)
 	}
-}
-
-func (c *Connector) IsDisabled() (bool, time.Duration, types.DisableReason) {
-	c.l.RLock()
-	defer c.l.RUnlock()
-
-	now := time.Now()
-
-	disabledFor := c.disabledUntil.Sub(now)
-
-	return c.disabledUntil.After(now), disabledFor, c.disableReason
 }

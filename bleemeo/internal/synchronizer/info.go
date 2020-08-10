@@ -17,12 +17,9 @@
 package synchronizer
 
 import (
-	"context"
-	"encoding/json"
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/version"
-	"net/http"
 	"time"
 )
 
@@ -30,32 +27,14 @@ import (
 func (s *Synchronizer) syncInfo(fullSync bool) error {
 	var globalInfo types.GlobalInfo
 
-	ctx, cancel := context.WithTimeout(s.ctx, 10*time.Second)
-	defer cancel()
-
-	req, err := s.client.PrepareRequest("GET", "v1/info/", nil, nil)
+	statusCode, err := s.client.DoUnauthenticated("GET", "v1/info/", nil, nil, &globalInfo)
 	if err != nil {
-		logger.V(2).Printf("Couldn't preprate the requestto retrieve global informations, got '%v'", err)
+		logger.V(2).Printf("Couldn't retrieve global informations, got '%v'", err)
 		return nil
 	}
 
-	res, err := http.DefaultClient.Do(req.WithContext(ctx))
-	// maybe the API does not support this version reporting ? We do not consider this an error for the moment
-	if err != nil {
-		logger.V(2).Printf("Couldn't retrieve global informations, got error '%v'", err)
-		return nil
-	}
-
-	defer res.Body.Close()
-
-	if res.StatusCode >= 300 {
-		logger.V(2).Printf("Couldn't retrieve global informations, got HTTP status code %d", res.StatusCode)
-		return nil
-	}
-
-	err = json.NewDecoder(res.Body).Decode(&globalInfo)
-	if err != nil {
-		logger.V(2).Printf("Couldn't retrieve global informations, decoding failed with error '%v'", err)
+	if statusCode >= 300 {
+		logger.V(2).Printf("Couldn't retrieve global informations, got HTTP status code %d", statusCode)
 		return nil
 	}
 
