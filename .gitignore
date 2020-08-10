@@ -16,4 +16,4 @@
 /dist
 *-packr.go
 api/static/assets/js
-pkged.go
+*-bindata.go

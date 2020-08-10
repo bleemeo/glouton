@@ -16,7 +16,7 @@
 
 package api
 
-//go:generate go run github.com/markbates/pkger/cmd/pkger
+//go:generate go run github.com/go-bindata/go-bindata/go-bindata -o api-bindata.go -pkg api -fs -nomemcopy -prefix static static/...
 
 import (
 	"context"
@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"path"
 	"time"
 
 	"glouton/discovery"
@@ -36,7 +37,6 @@ import (
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
-	"github.com/markbates/pkger"
 	"github.com/rs/cors"
 )
 
@@ -77,6 +77,17 @@ type gloutonUIConfig struct {
 	StaticCDNURL string
 }
 
+type assetsFileServer struct {
+	fs   http.Handler
+	path string
+}
+
+func (f *assetsFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r.URL.Path = path.Join(f.path, r.URL.Path)
+
+	f.fs.ServeHTTP(w, r)
+}
+
 func (api *API) init() {
 	router := chi.NewRouter()
 	router.Use(cors.New(cors.Options{
@@ -85,9 +96,7 @@ func (api *API) init() {
 		Debug:            false,
 	}).Handler)
 
-	_ = pkger.Include("/api/static")
-	staticFolder := pkger.Dir("/api/static")
-	assetsFolder := pkger.Dir("/api/static/assets")
+	staticFolder := AssetFile()
 
 	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
 
@@ -157,7 +166,7 @@ func (api *API) init() {
 		}
 	})
 
-	router.Handle("/static/*", http.StripPrefix("/static", http.FileServer(assetsFolder)))
+	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(staticFolder), path: "assets"}))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if indexTmpl == nil {
