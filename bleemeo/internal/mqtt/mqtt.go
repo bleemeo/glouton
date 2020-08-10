@@ -59,6 +59,8 @@ type Option struct {
 	UpdateMetrics func(metricUUID ...string)
 	// UpdateMonitor requests a sync of a monitor
 	UpdateMonitor func(op string, uuid string)
+	// UpdateMaintenance requests to check for the maintenance mode again
+	UpdateMaintenance func()
 
 	InitialPoints []types.MetricPoint
 }
@@ -681,6 +683,8 @@ func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
 		c.option.UpdateConfigCallback(true)
 	case "config-will-change":
 		c.option.UpdateConfigCallback(false)
+	case "maintenance-toggle":
+		c.option.UpdateMaintenance()
 	case "threshold-update":
 		c.option.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":

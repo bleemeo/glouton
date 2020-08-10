@@ -125,7 +125,7 @@ func (c *HTTPClient) Do(method string, path string, params map[string]string, da
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	req, err := c.prepareRequest(method, path, params, data)
+	req, err := c.PrepareRequest(method, path, params, data)
 	if err != nil {
 		return 0, err
 	}
@@ -133,7 +133,7 @@ func (c *HTTPClient) Do(method string, path string, params map[string]string, da
 	return c.do(req, result, true)
 }
 
-func (c *HTTPClient) prepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
+func (c *HTTPClient) PrepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
 	u, err := c.baseURL.Parse(path)
 	if err != nil {
 		return nil, err
@@ -173,7 +173,7 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	req, err := c.prepareRequest("POST", path, nil, data)
+	req, err := c.PrepareRequest("POST", path, nil, data)
 	if err != nil {
 		return 0, err
 	}

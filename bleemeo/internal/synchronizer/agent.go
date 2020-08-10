@@ -84,3 +84,30 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 
 	return nil
 }
+
+// IsMaintenance returns whether the synchronizer is currently in maintenance mode (not making any request except info/agent).
+func (s *Synchronizer) IsMaintenance() bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.maintenanceMode
+}
+
+// SetMaintenance allows to trigger the maintenance mode for the synchronize.
+// When running in maintenance mode, only the general infos, the agent and its configuration are synced.
+func (s *Synchronizer) SetMaintenance(maintenance bool) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.maintenanceMode = maintenance
+}
+
+// UpdateMaintenance requests to check for the maintenance mode again.
+func (s *Synchronizer) UpdateMaintenance() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	// sync the version too, in case the min version changed during the maintenance
+	s.forceSync["info"] = false
+	s.forceSync["agent"] = false
+}

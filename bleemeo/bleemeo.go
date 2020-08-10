@@ -124,6 +124,7 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 			AgentPassword:        password,
 			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
 			UpdateMetrics:        c.sync.UpdateMetrics,
+			UpdateMaintenance:    c.sync.UpdateMaintenance,
 			UpdateMonitor:        c.sync.UpdateMonitor,
 			InitialPoints:        previousPoint,
 		},
@@ -152,6 +153,10 @@ func (c *Connector) setMaintenance(maintenance bool) {
 	if c.mqtt != nil {
 		c.mqtt.SuspendSending(maintenance)
 	}
+}
+
+func (c *Connector) IsMaintenance() bool {
+	return c.sync.IsMaintenance()
 }
 
 func (c *Connector) mqttRestarter(ctx context.Context) error {
@@ -603,4 +608,15 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 
 		mqtt.Disable(until.Add(mqttDisableDelay), reason)
 	}
+}
+
+func (c *Connector) IsDisabled() (bool, time.Duration, types.DisableReason) {
+	c.l.RLock()
+	defer c.l.RUnlock()
+
+	now := time.Now()
+
+	disabledFor := c.disabledUntil.Sub(now)
+
+	return c.disabledUntil.After(now), disabledFor, c.disableReason
 }

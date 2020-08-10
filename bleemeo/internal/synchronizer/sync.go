@@ -115,7 +115,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 	// We choose to sync 'info' and 'agent' before running the main loop.
 	// This has the advantage that we can detect if our agent is outdated or in maintenance mode fairly
-	// quickly after starting the agent. This happends prior to enabling MQTT, which means we don't
+	// quickly after starting the agent. This happens prior to enabling MQTT, which means we don't
 	// have metrics sent over MQTT for a few seconds before stopping to send them, we don't have to
 	// store this information in our state file, we don't send a message on the '/connect' endpoint,
 	// and more !
@@ -126,9 +126,12 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
 
-	err = s.syncAgent(false)
-	if err != nil {
-		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the agent: %v", err)
+	// sync agent config, except on the first start, where the agent isn't configured yet
+	if s.agentID != "" {
+		err = s.syncAgent(false)
+		if err != nil {
+			logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the agent: %v", err)
+		}
 	}
 
 	s.option.SetInitialized()
@@ -281,14 +284,6 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	// If we're in maintenance mode, we probably received this message because we're exiting it.
-	// It thus makes sense to check if we should exit it (and if our version is supported, hence
-	// the check for 'info'). If the update is related to other components, then we're not updating
-	// them either, as it doesn't make sense if we're not sending anything.
-	if s.maintenanceMode {
-		immediate = false
-	}
-
 	s.forceSync["info"] = true
 	s.forceSync["agent"] = true
 
@@ -392,23 +387,6 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 	defer s.l.Unlock()
 
 	return s.disabledUntil, s.disableReason
-}
-
-// IsMaintenance returns whether the synchronizer is currently in maintenance mode (not making any request except info/agent).
-func (s *Synchronizer) IsMaintenance() bool {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	return s.maintenanceMode
-}
-
-// SetMaintenance allows to trigger the maintenance mode for the synchronize.
-// When running in maintenance mode, only the general infos, the agent and its configuration are synced.
-func (s *Synchronizer) SetMaintenance(maintenance bool) {
-	s.l.Lock()
-	defer s.l.Unlock()
-
-	s.maintenanceMode = maintenance
 }
 
 // Disable will disable (or re-enable) the Synchronized until given time.

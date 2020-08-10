@@ -1411,6 +1411,15 @@ func (a *agent) DiagnosticPage() string {
 
 	fmt.Fprintf(builder, "Glouton was build for %s %s\n", runtime.GOOS, runtime.GOARCH)
 
+	bleemeoDisabled, disableRemainingDuration, disableReason := a.bleemeoConnector.IsDisabled()
+	if bleemeoDisabled {
+		fmt.Fprintf(builder, "The Bleemeo connector is currently disabled for %v due to '%v'\n", disableRemainingDuration, disableReason)
+	}
+
+	if a.bleemeoConnector.IsMaintenance() {
+		fmt.Fprintln(builder, "The Bleemeo connector is currently in read-only/maintenance mode, not syncing nor sending any metric")
+	}
+
 	facts, err := a.factProvider.Facts(ctx, time.Hour)
 	if err != nil {
 		fmt.Fprintf(builder, "Unable to gather facts: %v\n", err)
