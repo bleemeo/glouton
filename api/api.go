@@ -16,7 +16,7 @@
 
 package api
 
-//go:generate go run github.com/go-bindata/go-bindata/go-bindata -o api-bindata.go -pkg api -fs -nomemcopy -prefix static static/...
+//go:generate go run github.com/go-bindata/go-bindata/go-bindata -o api-bindata.go -pkg api -fs -nocompress -nomemcopy -prefix static static/...
 
 import (
 	"context"
@@ -26,6 +26,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"path"
+	"strings"
 	"time"
 
 	"glouton/discovery"
@@ -78,12 +79,16 @@ type gloutonUIConfig struct {
 }
 
 type assetsFileServer struct {
-	fs   http.Handler
-	path string
+	fs http.Handler
 }
 
 func (f *assetsFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = path.Join(f.path, r.URL.Path)
+	r.URL.Path = path.Join("assets", r.URL.Path)
+
+	// let the client browser decode the gzipped js files
+	if strings.HasPrefix(r.URL.Path, "assets/js/") {
+		w.Header().Add("Content-Encoding", "gzip")
+	}
 
 	f.fs.ServeHTTP(w, r)
 }
@@ -107,6 +112,8 @@ func (api *API) init() {
 		indexBody, err = ioutil.ReadAll(indexFile)
 	}
 
+	indexFile.Close()
+
 	if err != nil {
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
 
@@ -126,6 +133,8 @@ func (api *API) init() {
 	if err == nil {
 		diagnosticBody, err = ioutil.ReadAll(diagnosticFile)
 	}
+
+	diagnosticFile.Close()
 
 	if err != nil {
 		logger.Printf("Error while loading diagnostic.html: %v", err)
@@ -166,7 +175,7 @@ func (api *API) init() {
 		}
 	})
 
-	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(staticFolder), path: "assets"}))
+	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(staticFolder)}))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if indexTmpl == nil {

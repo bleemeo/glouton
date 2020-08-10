@@ -14,6 +14,7 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.2.1-0.20200121105743-0d940dd29fd2
+	github.com/go-bindata/go-bindata v3.1.2+incompatible // indirect
 	github.com/go-chi/chi v4.1.1+incompatible
 	github.com/go-kit/kit v0.10.0
 	github.com/go-ole/go-ole v1.2.4 // indirect
