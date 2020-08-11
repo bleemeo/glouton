@@ -29,7 +29,7 @@
     "express": "^4.17.1",
     "graphql": "^14.3.1",
     "history": "^4.7.2",
-    "lodash": "^4.17.11",
+    "lodash": "^4.17.19",
     "prop-types": "^15.6.2",
     "rc-switch": "^1.8.0",
     "react": "^16.5.2",

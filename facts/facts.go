@@ -20,6 +20,7 @@ import (
 	"context"
 	"glouton/logger"
 	"glouton/version"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -96,7 +97,11 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 	defer f.l.Unlock()
 
 	if time.Since(f.lastFactsUpdate) >= maxAge {
+		t := time.Now()
+
 		f.updateFacts(ctx)
+
+		logger.V(2).Printf("facts: updateFacts() took %v", time.Since(t))
 	}
 
 	return f.facts, nil
@@ -153,7 +158,10 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts["primary_mac_address"] = primaryMacAddress
 
 	if f.ipIndicatorURL != "" {
-		newFacts["public_ip"] = urlContent(ctx, f.ipIndicatorURL)
+		subctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+		defer cancel()
+
+		newFacts["public_ip"] = urlContent(subctx, f.ipIndicatorURL)
 	}
 
 	newFacts["architecture"] = runtime.GOARCH
@@ -178,11 +186,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		newFacts["virtual"] = guessVirtual(newFacts)
 	}
 
-	if strings.Contains(newFacts["bios_version"], "amazon") {
-		for k, v := range awsFacts(ctx) {
-			newFacts[k] = v
-		}
-	}
+	collectCloudProvidersFacts(ctx, newFacts)
 
 	if !version.IsWindows() {
 		if s, err := mem.SwapMemoryWithContext(ctx); err == nil {
@@ -256,56 +260,6 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 	return
 }
 
-func awsFacts(ctx context.Context) map[string]string {
-	facts := make(map[string]string)
-	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id")
-
-	if facts["aws_ami_id"] == "" {
-		// If first request fail, don't try other one, it's probably not an
-		// AWS EC2.
-		return facts
-	}
-
-	facts["aws_instance_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-id")
-	facts["aws_instance_type"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/instance-type")
-	facts["aws_local_hostname"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/local-hostname")
-	facts["aws_security_groups"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/security-groups")
-	facts["aws_public_ipv4"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/public-ipv4")
-	facts["aws_placement"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/placement/availability-zone")
-
-	baseURL := "http://169.254.169.254/latest/meta-data/network/interfaces/macs/"
-
-	macs := urlContent(ctx, baseURL)
-	if macs == "" {
-		return facts
-	}
-
-	resultVPC := make([]string, 0)
-	resultIPv4 := make([]string, 0)
-
-	for _, line := range strings.Split(macs, "\n") {
-		t := urlContent(ctx, baseURL+line+"vpc-id")
-		if t != "" {
-			resultVPC = append(resultVPC, t)
-		}
-
-		t = urlContent(ctx, baseURL+line+"vpc-ipv4-cidr-block")
-		if t != "" {
-			resultIPv4 = append(resultIPv4, t)
-		}
-	}
-
-	if len(resultVPC) > 0 {
-		facts["aws_vpc_id"] = strings.Join(resultVPC, ",")
-	}
-
-	if len(resultIPv4) > 0 {
-		facts["aws_vpc_ipv4_cidr_block"] = strings.Join(resultIPv4, ",")
-	}
-
-	return facts
-}
-
 func decodeOsRelease(data string) (map[string]string, error) {
 	result := make(map[string]string)
 
@@ -376,19 +330,38 @@ func guessVirtual(facts map[string]string) string {
 }
 
 func urlContent(ctx context.Context, url string) string {
-	req, err := http.NewRequest("GET", url, nil)
+	return httpQuery(ctx, url, []string{})
+}
+
+func httpQuery(ctx context.Context, url string, headers []string) string {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
 	if err != nil {
 		return ""
 	}
 
-	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	for _, h := range headers {
+		splits := strings.SplitN(h, ":", 2)
+		if len(splits) != 2 {
+			continue
+		}
+
+		req.Header.Add(splits[0], splits[1])
+	}
+
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return ""
 	}
 
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	// We refuse to decode messages when the request triggered an error
+	if resp.StatusCode >= 400 {
+		return ""
+	}
+
+	// limit the amount of data to 1mb
+	body, err := ioutil.ReadAll(&io.LimitedReader{R: resp.Body, N: 2 << 20})
 	if err != nil {
 		return ""
 	}
