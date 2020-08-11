@@ -41,7 +41,6 @@ Release files are present in dist/ folder and a Docker image is build (glouton:l
 - To build an all-in-one installer for Windows, run:
 
 ```
-docker build -t nsisbuilder packaging/windows
 ./packaging/windows/generate_installer.sh
 ```
 
