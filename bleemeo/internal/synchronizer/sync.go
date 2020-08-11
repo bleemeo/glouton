@@ -494,7 +494,9 @@ func (s *Synchronizer) runOnce() error {
 				// This ensures that if the maintenance takes a long time, we will still update the
 				// objects that should have been synced in that period.
 				if full, ok := syncMethods[step.name]; ok {
-					s.forceSync[step.name] = full
+					s.l.Lock()
+					s.forceSync[step.name] = full || s.forceSync[step.name]
+					s.l.Unlock()
 				}
 
 				continue

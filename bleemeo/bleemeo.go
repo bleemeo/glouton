@@ -66,17 +66,7 @@ func New(option types.GlobalOption) *Connector {
 		DisableCallback:             c.disableCallback,
 		SetInitialized:              c.setInitialized,
 		SetBleemeoInMaintenanceMode: c.setMaintenance,
-		IsMqttConnected: func() bool {
-			c.l.RLock()
-			mqtt := c.mqtt
-			c.l.RUnlock()
-
-			if mqtt == nil {
-				return false
-			}
-
-			return mqtt.Connected()
-		},
+		IsMqttConnected:             c.Connected,
 	})
 
 	return c
@@ -483,18 +473,18 @@ func (c *Connector) AgentID() string {
 
 // RegistrationAt returns the date of registration with Bleemeo API.
 func (c *Connector) RegistrationAt() time.Time {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	agent := c.cache.Agent()
 
 	return agent.CreatedAt
 }
 
-// Connected returns the date of registration with Bleemeo API.
+// Connected returns whether the mqtt connector is connected.
 func (c *Connector) Connected() bool {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	if c.mqtt == nil {
 		return false
