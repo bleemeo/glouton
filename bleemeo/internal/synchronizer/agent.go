@@ -96,6 +96,15 @@ func (s *Synchronizer) IsMaintenance() bool {
 // SetMaintenance allows to trigger the maintenance mode for the synchronize.
 // When running in maintenance mode, only the general infos, the agent and its configuration are synced.
 func (s *Synchronizer) SetMaintenance(maintenance bool) {
+	if s.IsMaintenance() && !maintenance {
+		// getting out of maintenance, let's check for a duplicated state.json file
+		err := s.checkDuplicated()
+		if err != nil {
+			// it's not a critical error at all, we will perform this check again on the next synchronization pass
+			logger.V(2).Printf("Couldn't check for duplicated agent: %v", err)
+		}
+	}
+
 	s.l.Lock()
 	defer s.l.Unlock()
 

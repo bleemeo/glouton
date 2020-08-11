@@ -446,8 +446,12 @@ func (s *Synchronizer) runOnce() error {
 		return nil
 	}
 
-	if err := s.checkDuplicated(); err != nil {
-		return err
+	// We do not perform this check in maintennace mode (otherwise we could end up checking it every 15 econds),
+	// we will only do it once when getting out of the maintenance mode
+	if !s.IsMaintenance() {
+		if err := s.checkDuplicated(); err != nil {
+			return err
+		}
 	}
 
 	syncStep := []struct {
