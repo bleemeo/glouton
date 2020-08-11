@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"net"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -148,6 +149,12 @@ func parseAzureFacts(inst azureInstance, facts map[string]string) {
 		tags = append(tags, fmt.Sprintf("%s:%s", v.Key, formattedValue))
 	}
 
+	// sort the tags to get a predictable order
+	sort.Slice(tags, func(i, j int) bool {
+		// lexicographical ordering
+		return tags[i] <= tags[j]
+	})
+
 	if len(tags) > 0 {
 		facts["azure_tags"] = strings.Join(tags, ",")
 	}
@@ -266,6 +273,12 @@ func parseGceFacts(projectID int, inst gceInstance, facts map[string]string) {
 		v = strings.ReplaceAll(strings.ReplaceAll(v, ":", "\\:"), ",", "\\,")
 		tags = append(tags, fmt.Sprintf("%s:%s", k, v))
 	}
+
+	// sort the tags to get a predictable order
+	sort.Slice(tags, func(i, j int) bool {
+		// lexicographical ordering
+		return tags[i] <= tags[j]
+	})
 
 	if len(tags) > 0 {
 		// "tags" are in fact called attributes in GCE parlance, we do not report the GCE tags (presented as "network tags" in the cloud console)
