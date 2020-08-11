@@ -60,12 +60,23 @@ func New(option types.GlobalOption) *Connector {
 		mqttRestart: make(chan interface{}, 1),
 	}
 	c.sync = synchronizer.New(synchronizer.Option{
-		GlobalOption:         c.option,
-		Cache:                c.cache,
-		UpdateConfigCallback: c.updateConfig,
-		DisableCallback:      c.disableCallback,
-		SetInitialized:       c.setInitialized,
-		SetMaintenanceMode:   c.setMaintenance,
+		GlobalOption:                c.option,
+		Cache:                       c.cache,
+		UpdateConfigCallback:        c.updateConfig,
+		DisableCallback:             c.disableCallback,
+		SetInitialized:              c.setInitialized,
+		SetBleemeoInMaintenanceMode: c.setMaintenance,
+		IsMqttConnected: func() bool {
+			c.l.RLock()
+			mqtt := c.mqtt
+			c.l.RUnlock()
+
+			if mqtt == nil {
+				return false
+			}
+
+			return mqtt.Connected()
+		},
 	})
 
 	return c

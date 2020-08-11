@@ -55,6 +55,12 @@ type Synchronizer struct {
 	lastMetricCount         int
 	agentID                 string
 
+	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
+	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
+	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
+	// minutes to check whether we are still in maintenance of not.
+	lastMaintenanceSync time.Time
+
 	l                     sync.Mutex
 	disabledUntil         time.Time
 	disableReason         bleemeoTypes.DisableReason
@@ -78,8 +84,13 @@ type Option struct {
 	// SetInitialized tells the bleemeo connector that the MQTT module can be started
 	SetInitialized func()
 
-	// SetMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
-	SetMaintenanceMode func(maintenance bool)
+	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically that it can receive mqtt notifications.
+	// It is useful for the fallback on http polling described above Synchronizer.lastMaintenanceSync definition.
+	// Note: returns false when the mqtt connector is not enabled.
+	IsMqttConnected func() bool
+
+	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
+	SetBleemeoInMaintenanceMode func(maintenance bool)
 }
 
 // New return a new Synchronizer.
@@ -475,9 +486,19 @@ func (s *Synchronizer) runOnce() error {
 			break
 		}
 
-		maintenance := s.IsMaintenance()
-		if maintenance && !step.enabledInMaintenance {
-			continue
+		if s.IsMaintenance() {
+			if !step.enabledInMaintenance {
+				// store the fact that we must sync this step when we will no longer be in maintenance:
+				// we will try to sync it again at every iteration of runOnce(), until we get out of
+				// maintenance.
+				// This ensures that if the maintenance takes a long time, we will still update the
+				// objects that should have been synced in that period.
+				if full, ok := syncMethods[step.name]; ok {
+					s.forceSync[step.name] = full
+				}
+
+				continue
+			}
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
@@ -554,6 +575,15 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = fullSync
+	}
+
+	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
+	// mode, so we poll more often.
+	if s.maintenanceMode && !s.option.IsMqttConnected() && time.Now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
+		s.forceSync["info"] = false
+		s.forceSync["agent"] = false
+
+		s.lastMaintenanceSync = time.Now()
 	}
 
 	for k, full := range s.forceSync {

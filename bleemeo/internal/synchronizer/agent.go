@@ -78,8 +78,8 @@ func (s *Synchronizer) syncAgent(fullSync bool) error {
 		}
 	}
 
-	if s.option.SetMaintenanceMode != nil {
-		s.option.SetMaintenanceMode(agent.ReadOnly)
+	if s.option.SetBleemeoInMaintenanceMode != nil {
+		s.option.SetBleemeoInMaintenanceMode(agent.ReadOnly)
 	}
 
 	return nil
