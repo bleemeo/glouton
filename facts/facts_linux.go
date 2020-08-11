@@ -26,6 +26,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/shirou/gopsutil/load"
+	psutilNet "github.com/shirou/gopsutil/net"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 )
@@ -128,4 +130,30 @@ func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, ma
 func bytesToString(buffer []byte) string {
 	n := bytes.IndexByte(buffer, 0)
 	return string(buffer[:n])
+}
+
+func macAddressByAddress(ctx context.Context, ipAddress string) string {
+	ifs, err := psutilNet.InterfacesWithContext(ctx)
+	if err != nil {
+		return ""
+	}
+
+	for _, i := range ifs {
+		for _, a := range i.Addrs {
+			if a.Addr == ipAddress {
+				return i.HardwareAddr
+			}
+		}
+	}
+
+	return ""
+}
+
+func getCPULoads() ([]float64, error) {
+	loads, err := load.Avg()
+	if err != nil {
+		return nil, err
+	}
+
+	return []float64{loads.Load1, loads.Load5, loads.Load15}, nil
 }

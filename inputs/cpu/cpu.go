@@ -18,6 +18,7 @@ package cpu
 
 import (
 	"errors"
+	"runtime"
 	"strings"
 
 	"glouton/inputs/internal"
@@ -32,6 +33,8 @@ func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["cpu"]
 	if ok {
 		cpuInput := input().(*cpu.CPUStats)
+		// were we to change this, we should consider returning "interrupt' metrics on Windows
+		// (see the comment below)
 		cpuInput.PerCPU = false
 		cpuInput.CollectCPUTime = false
 		i = &internal.Input{
@@ -94,6 +97,25 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 
 	finalFields["other"] = cpuOther
 	finalFields["used"] = cpuUsed
+
+	// drop unsupported fields on windows, it is needless to generate traffic for "null" metrics
+	if runtime.GOOS == "windows" {
+		for k := range finalFields {
+			switch k {
+			// note: cpu interrupt is a special case, as it CAN be reported (telegraf
+			// uses gopsutil to retrieve cpu metrics, and gopsutil is capable of doing so:
+			// https://github.com/shirou/gopsutil/blob/0e9462eed2c80a710fafb6bea1d412f822c481f6/cpu/cpu_windows.go#L153,
+			// but that ultimately depends on whether the user configuration asks for per-cpu stats or not:
+			// https://github.com/influxdata/telegraf/blob/ef262b137275e63103ef83770c9bcf7388f0eeb7/plugins/inputs/cpu/cpu.go#L51)
+			// It is not returned now as we disabled per-cpu stats in this collector.
+			case "used", "other", "system", "user", "idle":
+				continue
+			default:
+				// apparently, there is no risks of iterator invalidation here in go (https://github.com/golang/go/issues/9926), so...
+				delete(finalFields, k)
+			}
+		}
+	}
 
 	return finalFields
 }

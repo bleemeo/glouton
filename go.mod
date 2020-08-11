@@ -7,7 +7,7 @@ require (
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5 // indirect
-	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d // indirect
+	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 	github.com/containerd/containerd v1.3.4 // indirect
 	github.com/docker/distribution v2.7.1+incompatible // indirect
 	github.com/docker/docker v1.4.2-0.20200228174753-40b2b4b08306
@@ -26,7 +26,6 @@ require (
 	github.com/golang/protobuf v1.4.2 // indirect
 	github.com/google/go-cmp v0.4.0
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/google/uuid v1.1.1
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gorilla/websocket v1.4.2 // indirect
 	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665
@@ -34,6 +33,7 @@ require (
 	github.com/imdario/mergo v0.3.9 // indirect
 	github.com/influxdata/influxdb1-client v0.0.0-20200515024757-02f0bf5dbca3
 	github.com/influxdata/telegraf v1.14.3
+	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
 	github.com/karrick/godirwalk v1.15.6 // indirect
 	github.com/mdlayher/wifi v0.0.0-20200527114002-84f0b9457fdd // indirect
@@ -41,6 +41,7 @@ require (
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/ncabatoff/process-exporter v0.7.1
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/prometheus-community/windows_exporter v0.13.0
 	github.com/prometheus/blackbox_exporter v0.17.0
 	github.com/prometheus/client_golang v1.6.0
 	github.com/prometheus/client_model v0.2.0
@@ -49,7 +50,7 @@ require (
 	github.com/prometheus/procfs v0.1.1
 	github.com/prometheus/prometheus v1.8.2-0.20200213233353-b90be6f32a33
 	github.com/rs/cors v1.7.0
-	github.com/shirou/gopsutil v2.20.4+incompatible
+	github.com/shirou/gopsutil v2.20.7-0.20200724130941-7e94bb8bcde0+incompatible
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
 	github.com/stretchr/testify v1.6.0 // indirect

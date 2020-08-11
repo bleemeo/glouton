@@ -11,12 +11,16 @@ builds:
   - CGO_ENABLED=0
   goos:
   - linux
+  - windows
   goarch:
   - amd64
   - arm
   - 386
   goarm:
   - 6
+  ignore:
+  - goos: windows
+    goarch: arm
 archives:
 - replacements:
     darwin: Darwin

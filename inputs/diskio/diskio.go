@@ -18,8 +18,8 @@ package diskio
 
 import (
 	"errors"
-	"fmt"
 	"glouton/inputs/internal"
+	"glouton/version"
 	"regexp"
 
 	"github.com/influxdata/telegraf"
@@ -38,35 +38,15 @@ type diskIOTransformer struct {
 // blacklist is a list of regular expretion for device to include
 //
 // If blacklist is provided (not empty) it's used and whitelist is ignored.
-func New(whitelist []string, blacklist []string) (i telegraf.Input, err error) {
+func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["diskio"]
-
-	whitelistRE := make([]*regexp.Regexp, len(whitelist))
-
-	for index, v := range whitelist {
-		whitelistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			err = fmt.Errorf("diskio whitelist RE compile fail: %s", err)
-			return
-		}
-	}
-
-	blacklistRE := make([]*regexp.Regexp, len(blacklist))
-
-	for index, v := range blacklist {
-		blacklistRE[index], err = regexp.Compile(v)
-		if err != nil {
-			err = fmt.Errorf("diskio blacklist RE compile fail: %s", err)
-			return
-		}
-	}
 
 	if ok {
 		diskioInput := input().(*diskio.DiskIO)
 		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
-			whitelist: whitelistRE,
-			blacklist: blacklistRE,
+			whitelist: whitelist,
+			blacklist: blacklist,
 		}
 		i = &internal.Input{
 			Input: diskioInput,
@@ -125,9 +105,16 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 func (dt diskIOTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	if ioTime, ok := fields["io_time"]; ok {
 		delete(fields, "io_time")
+
 		fields["time"] = ioTime
 		// io_time is millisecond per second.
 		fields["utilization"] = ioTime / 1000. * 100.
+	}
+
+	// win_perf_counters will report io_time and io_utilization on windows
+	if version.IsWindows() {
+		delete(fields, "time")
+		delete(fields, "utilization")
 	}
 
 	delete(fields, "weighted_io_time")

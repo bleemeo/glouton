@@ -19,6 +19,8 @@ package disk
 import (
 	"errors"
 	"glouton/inputs/internal"
+	"glouton/version"
+	"os"
 	"strings"
 
 	"github.com/influxdata/telegraf"
@@ -38,11 +40,6 @@ type diskTransformer struct {
 // blacklist is a list of path-prefix to ignore. Path prefix means that "/mnt" and "/mnt/disk" both have "/mnt"
 // as prefix, but "/mnt-disk" does not.
 func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
-	blacklistTrimed := make([]string, len(blacklist))
-	for i, v := range blacklist {
-		blacklistTrimed[i] = strings.TrimRight(v, "/")
-	}
-
 	input, ok := telegraf_inputs.Inputs["disk"]
 
 	if ok {
@@ -52,7 +49,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 		}
 		dt := diskTransformer{
 			strings.TrimRight(mountPoint, "/"),
-			blacklistTrimed,
+			blacklist,
 		}
 		i = &internal.Input{
 			Input: diskInput,
@@ -76,6 +73,13 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 	if !ok {
 		drop = true
 		return
+	}
+
+	// telegraf's 'disk' input add a backslash to disk names on Windows (https://github.com/influxdata/telegraf/blob/7ae240326bb2d3de80eab24088cf31cfa9da2f82/plugins/inputs/system/ps.go#L135)
+	// (the forward slash is translated to a backslash by filepath.Join())
+	// TODO: maybe we should do a PR ?
+	if version.IsWindows() && len(item) > 0 && item[0] == os.PathSeparator {
+		item = item[1:]
 	}
 
 	if !strings.HasPrefix(item, dt.mountPoint) {

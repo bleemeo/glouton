@@ -14,28 +14,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+// +build windows
 
-import (
-	"fmt"
-	"runtime"
-)
+package logger
 
-//nolint:gochecknoglobals
-var (
-	// BuildHash is the git hash of the build. (local change ignored)
-	BuildHash = "unset"
+import "fmt"
 
-	// Version is the agent version
-	Version = "0.1"
-)
-
-// UserAgent returns the User-Agent for request performed by the agent.
-func UserAgent() string {
-	return fmt.Sprintf("Glouton %s", Version)
-}
-
-// IsWindows returns true when the current operating system is windows.
-func IsWindows() bool {
-	return runtime.GOOS == "windows"
+func (cfg *config) enableSyslog() error {
+	return fmt.Errorf("syslog is unsupported on windows")
 }

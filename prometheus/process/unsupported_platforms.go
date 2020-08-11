@@ -14,28 +14,22 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+// +build !linux
+
+package process
 
 import (
-	"fmt"
-	"runtime"
+	"time"
+
+	"glouton/discovery"
+	"glouton/facts"
+	"glouton/prometheus/registry"
 )
 
-//nolint:gochecknoglobals
-var (
-	// BuildHash is the git hash of the build. (local change ignored)
-	BuildHash = "unset"
-
-	// Version is the agent version
-	Version = "0.1"
-)
-
-// UserAgent returns the User-Agent for request performed by the agent.
-func UserAgent() string {
-	return fmt.Sprintf("Glouton %s", Version)
+// RegisterExporter does nothing, process_exporter is not supported on this platform.
+func RegisterExporter(reg *registry.Registry, psLister interface{}, processQuerier *discovery.DynamicDiscovery, bleemeoFormat bool) {
 }
 
-// IsWindows returns true when the current operating system is windows.
-func IsWindows() bool {
-	return runtime.GOOS == "windows"
+func NewProcessLister(hostRootPath string, defaultValidity time.Duration) facts.ProcessLister {
+	return nil
 }

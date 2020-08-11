@@ -14,28 +14,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+package registry
 
 import (
-	"fmt"
-	"runtime"
+	"glouton/inputs"
+	"glouton/prometheus/exporter/windows"
+
+	"github.com/prometheus/client_golang/prometheus"
 )
 
-//nolint:gochecknoglobals
-var (
-	// BuildHash is the git hash of the build. (local change ignored)
-	BuildHash = "unset"
+// AddWindowsExporter add a node_exporter to collector.
+func (r *Registry) AddWindowsExporter(collectors []string, options inputs.CollectorConfig) error {
+	collector, err := windows.NewCollector(collectors, options)
+	if err != nil {
+		return err
+	}
 
-	// Version is the agent version
-	Version = "0.1"
-)
+	reg := prometheus.NewRegistry()
 
-// UserAgent returns the User-Agent for request performed by the agent.
-func UserAgent() string {
-	return fmt.Sprintf("Glouton %s", Version)
-}
+	err = reg.Register(collector)
+	if err != nil {
+		return err
+	}
 
-// IsWindows returns true when the current operating system is windows.
-func IsWindows() bool {
-	return runtime.GOOS == "windows"
+	_, err = r.RegisterGatherer(reg, nil, nil)
+
+	return err
 }

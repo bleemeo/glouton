@@ -45,6 +45,8 @@ func Load(path string) (*State, error) {
 		return nil, err
 	}
 
+	defer f.Close()
+
 	decoder := json.NewDecoder(f)
 	err = decoder.Decode(&state.data)
 

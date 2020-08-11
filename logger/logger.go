@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"log/syslog"
 	"os"
 	"runtime"
 	"strconv"
@@ -124,6 +123,51 @@ var (
 	}
 )
 
+// setLogger calls the function passed as argument, and revert to stderr if there is an error.
+func setLogger(cb func() error) error {
+	cfg.l.Lock()
+	defer cfg.l.Unlock()
+
+	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
+		closer.Close()
+	}
+
+	cfg.writer = nil
+
+	err := cb()
+	if err != nil {
+		cfg.writer = os.Stderr
+		cfg.useSyslog = false
+	}
+
+	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
+
+	log.SetOutput(cfg.writer)
+
+	return err
+}
+
+// UseSyslog enable logging to syslog.
+func UseSyslog() error {
+	return setLogger(func() error {
+		err := cfg.enableSyslog()
+		if err == nil {
+			return nil
+		}
+
+		cfg.useSyslog = false
+
+		return err
+	})
+}
+
+// UseFile enable logging to a file, in a given folder, with automatic file rotation (on a daily basis).
+func UseFile(filename string) error {
+	return setLogger(func() error {
+		return cfg.useFile(filename)
+	})
+}
+
 // Buffer return content of the log buffer.
 func Buffer() []byte {
 	return logBuffer.Content()
@@ -135,40 +179,6 @@ func Buffer() []byte {
 // Changing capacity will always drop the tail.
 func SetBufferCapacity(headSize int, tailSize int) {
 	logBuffer.SetCapacity(headSize, tailSize)
-}
-
-// UseSyslog enable or disable logging to syslog. If syslog is not used, message
-// are sent to StdErr.
-func UseSyslog(useSyslog bool) error {
-	cfg.l.Lock()
-	defer cfg.l.Unlock()
-
-	cfg.useSyslog = useSyslog
-
-	if closer, ok := cfg.writer.(io.WriteCloser); ok && cfg.writer != os.Stderr {
-		closer.Close()
-	}
-
-	cfg.writer = nil
-
-	var err error
-
-	if useSyslog {
-		cfg.writer, err = syslog.New(syslog.LOG_INFO|syslog.LOG_DAEMON, "")
-
-		if err != nil {
-			cfg.writer = os.Stderr
-			cfg.useSyslog = false
-		}
-	} else {
-		cfg.writer = os.Stderr
-	}
-
-	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
-
-	log.SetOutput(cfg.writer)
-
-	return err
 }
 
 // SetLevel configure the log level.

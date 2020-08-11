@@ -59,7 +59,7 @@ import (
 	"glouton/logger"
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
-	"glouton/prometheus/exporter/node"
+	"glouton/prometheus/exporter/common"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -72,8 +72,6 @@ import (
 
 	"net/http"
 	"net/url"
-
-	"github.com/prometheus/client_golang/prometheus"
 )
 
 type agent struct {
@@ -165,20 +163,22 @@ func (a *agent) init(configFiles []string) (ok bool) {
 }
 
 func (a *agent) setupLogger() {
-	useSyslog := false
-
 	logger.SetBufferCapacity(
 		a.config.Int("logging.buffer.head_size"),
 		a.config.Int("logging.buffer.tail_size"),
 	)
 
-	if a.config.String("logging.output") == "syslog" {
-		useSyslog = true
+	var err error
+
+	switch a.config.String("logging.output") {
+	case "syslog":
+		err = logger.UseSyslog()
+	case "file":
+		err = logger.UseFile(a.config.String("logging.filename"))
 	}
 
-	err := logger.UseSyslog(useSyslog)
 	if err != nil {
-		logger.Printf("Unable to use syslog: %v", err)
+		fmt.Printf("Unable to use logging backend '%s': %v\n", a.config.String("logging.output"), err)
 	}
 
 	if level := a.config.Int("logging.level"); level != 0 {
@@ -208,6 +208,8 @@ func Run(configFiles []string) {
 		taskRegistry: task.NewRegistry(context.Background()),
 		taskIDs:      make(map[string]int),
 	}
+
+	agent.initOSSpecificParts()
 
 	if !agent.init(configFiles) {
 		os.Exit(1)
@@ -498,9 +500,10 @@ func (a *agent) run() { //nolint:gocyclo
 	if !useProc {
 		logger.V(1).Printf("The agent is running in a container and \"container.pid_namespace_host\", is not true. Not all processes will be seen")
 	} else {
-		psLister = &process.Processes{
-			HostRootPath:    a.hostRootPath,
-			DefaultValidity: 9 * time.Second,
+		if version.IsWindows() {
+			psLister = facts.NewPsUtilLister("")
+		} else {
+			psLister = process.NewProcessLister(a.hostRootPath, 9*time.Second)
 		}
 	}
 
@@ -582,20 +585,6 @@ func (a *agent) run() { //nolint:gocyclo
 		DynamicJobName: "discovered-exporters",
 	}
 
-	if a.config.Bool("agent.node_exporter.enabled") {
-		nodeOption := node.Option{
-			RootFS:            a.hostRootPath,
-			EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),
-		}
-
-		nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
-		nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
-
-		if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
-			logger.Printf("Unable to start node_exporter, system metric will be missing: %v", err)
-		}
-	}
-
 	var monitorManager *blackbox.RegisterManager
 
 	if a.config.Bool("blackbox.enabled") {
@@ -613,28 +602,8 @@ func (a *agent) run() { //nolint:gocyclo
 
 	promExporter := a.gathererRegistry.Exporter()
 
-	if source, ok := psLister.(*process.Processes); ok && a.config.Bool("agent.process_exporter.enabled") {
-		processExporter := &process.Exporter{
-			Source:         source,
-			ProcessQuerier: dynamicDiscovery,
-		}
-		processGathere := prometheus.NewRegistry()
-
-		err = processGathere.Register(processExporter)
-		if err != nil {
-			logger.Printf("Failed to register process-exporter: %v", err)
-			logger.Printf("Processes metrics won't be available on /metrics endpoints")
-		} else {
-			_, err = a.gathererRegistry.RegisterGatherer(processGathere, nil, nil)
-			if err != nil {
-				logger.Printf("Failed to register process-exporter: %v", err)
-				logger.Printf("Processes metrics won't be available on /metrics endpoints")
-			}
-		}
-
-		if a.metricFormat == types.MetricFormatBleemeo {
-			a.gathererRegistry.AddPushPointsCallback(processExporter.PushTo(a.gathererRegistry.WithTTL(5 * time.Minute)))
-		}
+	if a.config.Bool("agent.process_exporter.enabled") {
+		process.RegisterExporter(a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
 	api := &api.API{
@@ -768,21 +737,20 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {
-		err = discovery.AddDefaultInputs(
-			a.collector,
-			discovery.InputOption{
-				DFRootPath:      a.hostRootPath,
-				NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
-				IODiskWhitelist: a.config.StringList("disk_monitor"),
-				IODiskBlacklist: a.config.StringList("disk_ignore"),
-				DFPathBlacklist: a.config.StringList("df.path_ignore"),
-			},
-		)
+		conf, err := a.buildCollectorsConfig()
 		if err != nil {
+			logger.V(0).Printf("Unable to initialize system collector: %v", err)
+			return
+		}
+
+		if err = discovery.AddDefaultInputs(a.collector, conf); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
 			return
 		}
 	}
+
+	// register components only available on a given system, like node_exporter for unixes
+	a.registerOSSpecificComponents()
 
 	tasks = append(tasks, taskInfo{
 		a.gathererRegistry.RunCollection,
@@ -838,6 +806,35 @@ func (a *agent) run() { //nolint:gocyclo
 	a.taskRegistry.Close()
 	a.discovery.Close()
 	logger.V(2).Printf("Agent stopped")
+}
+
+func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error) {
+	whitelistRE, err := common.CompileREs(a.config.StringList("disk_monitor"))
+	if err != nil {
+		logger.V(1).Printf("the whitelist for diskio regexp couldn't compile: %s", err)
+		return
+	}
+
+	blacklistRE, err := common.CompileREs(a.config.StringList("disk_ignore"))
+	if err != nil {
+		logger.V(1).Printf("the blacklist for diskio regexp couldn't compile: %s", err)
+		return
+	}
+
+	pathBlacklist := a.config.StringList("df.path_ignore")
+	pathBlacklistTrimed := make([]string, len(pathBlacklist))
+
+	for i, v := range pathBlacklist {
+		pathBlacklistTrimed[i] = strings.TrimRight(v, "/")
+	}
+
+	return inputs.CollectorConfig{
+		DFRootPath:      a.hostRootPath,
+		NetIfBlacklist:  a.config.StringList("network_interface_blacklist"),
+		IODiskWhitelist: whitelistRE,
+		IODiskBlacklist: blacklistRE,
+		DFPathBlacklist: pathBlacklistTrimed,
+	}, nil
 }
 
 func (a *agent) minuteMetric(ctx context.Context) error {
@@ -1450,7 +1447,7 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		return err
 	}
 
-	file, err = zipFile.Create("gorouting.txt")
+	file, err = zipFile.Create("goroutines.txt")
 	if err != nil {
 		return err
 	}

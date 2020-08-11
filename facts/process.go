@@ -20,10 +20,10 @@ import (
 	"context"
 	"fmt"
 	"glouton/logger"
+	"glouton/version"
 	"io/ioutil"
 	"path/filepath"
 	"regexp"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -34,7 +34,6 @@ import (
 	"github.com/docker/docker/errdefs"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
-	"github.com/shirou/gopsutil/load"
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 )
@@ -173,7 +172,7 @@ func (pp *ProcessProvider) TopInfo(ctx context.Context, maxAge time.Duration) (t
 	pp.l.Lock()
 	defer pp.l.Unlock()
 
-	if time.Since(pp.lastProcessesUpdate) > maxAge {
+	if time.Since(pp.lastProcessesUpdate) >= maxAge {
 		err = pp.updateProcesses(ctx, maxAge)
 		if err != nil {
 			return
@@ -190,7 +189,7 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 	pp.l.Lock()
 	defer pp.l.Unlock()
 
-	if time.Since(pp.lastProcessesUpdate) > maxAge {
+	if time.Since(pp.lastProcessesUpdate) >= maxAge {
 		err = pp.updateProcesses(ctx, maxAge)
 		if err != nil {
 			return
@@ -622,12 +621,10 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 
 	result.Uptime = int(uptime)
 
-	loads, err := load.Avg()
+	result.Loads, err = getCPULoads()
 	if err != nil {
 		return result, err
 	}
-
-	result.Loads = []float64{loads.Load1, loads.Load5, loads.Load15}
 
 	users, err := host.Users()
 	if err != nil {
@@ -649,14 +646,17 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 	result.Memory.Buffers = float64(memUsage.Buffers) / 1024.
 	result.Memory.Cached = float64(memUsage.Cached) / 1024.
 
-	swapUsage, err := mem.SwapMemory()
-	if err != nil {
-		return result, err
-	}
+	// swap is a complex topic on windows
+	if !version.IsWindows() {
+		swapUsage, err := mem.SwapMemory()
+		if err != nil {
+			return result, err
+		}
 
-	result.Swap.Total = float64(swapUsage.Total) / 1024.
-	result.Swap.Used = float64(swapUsage.Used) / 1024.
-	result.Swap.Free = float64(swapUsage.Free) / 1024.
+		result.Swap.Total = float64(swapUsage.Total) / 1024.
+		result.Swap.Used = float64(swapUsage.Used) / 1024.
+		result.Swap.Free = float64(swapUsage.Free) / 1024.
+	}
 
 	cpusTimes, err := cpu.Times(false)
 	if err != nil {
@@ -853,7 +853,7 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		userName, err := p.UsernameWithContext(ctx)
 		if err != nil {
-			if runtime.GOOS != "windows" {
+			if version.IsWindows() {
 				uids, err := p.UidsWithContext(ctx)
 				if err == nil && len(uids) > 0 {
 					userName = fmt.Sprintf("%d", uids[0])
@@ -906,9 +906,13 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 			continue
 		}
 
-		status, err := p.StatusWithContext(ctx)
-		if err != nil {
-			continue
+		status := ""
+		// the process status is not simple to derive on windows, and not currently supported by gopsutil
+		if !version.IsWindows() {
+			status, err = p.StatusWithContext(ctx)
+			if err != nil {
+				continue
+			}
 		}
 
 		numThread, _ := p.NumThreads()

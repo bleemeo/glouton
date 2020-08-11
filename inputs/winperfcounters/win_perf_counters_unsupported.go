@@ -14,28 +14,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package version
+// +build !windows
+
+package winperfcounters
 
 import (
-	"fmt"
-	"runtime"
+	"errors"
+	"glouton/inputs"
+
+	"github.com/influxdata/telegraf"
 )
 
-//nolint:gochecknoglobals
-var (
-	// BuildHash is the git hash of the build. (local change ignored)
-	BuildHash = "unset"
-
-	// Version is the agent version
-	Version = "0.1"
-)
-
-// UserAgent returns the User-Agent for request performed by the agent.
-func UserAgent() string {
-	return fmt.Sprintf("Glouton %s", Version)
-}
-
-// IsWindows returns true when the current operating system is windows.
-func IsWindows() bool {
-	return runtime.GOOS == "windows"
+// New initialise win_perf_counters.Input.
+func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
+	return result, errors.New("win_perf_counters is only supported on windows")
 }

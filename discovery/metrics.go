@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/collector"
+	"glouton/inputs"
 	"glouton/inputs/apache"
 	"glouton/inputs/cpu"
 	"glouton/inputs/disk"
@@ -39,9 +40,11 @@ import (
 	"glouton/inputs/redis"
 	"glouton/inputs/swap"
 	"glouton/inputs/system"
+	"glouton/inputs/winperfcounters"
 	"glouton/inputs/zookeeper"
 	"glouton/logger"
 	"glouton/types"
+	"runtime"
 	"strconv"
 
 	"github.com/influxdata/telegraf"
@@ -51,23 +54,9 @@ var (
 	errNotSupported = errors.New("service not supported by Prometheus collector")
 )
 
-// InputOption are option used by system inputs.
-type InputOption struct {
-	DFRootPath      string
-	DFPathBlacklist []string
-	NetIfBlacklist  []string
-	IODiskWhitelist []string
-	IODiskBlacklist []string
-}
-
 // AddDefaultInputs adds system inputs to a collector.
-func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
-	var (
-		input telegraf.Input
-		err   error
-	)
-
-	input, err = system.New()
+func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorConfig) error {
+	input, err := system.New()
 	if err != nil {
 		return err
 	}
@@ -85,25 +74,7 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		return err
 	}
 
-	input, err = mem.New()
-	if err != nil {
-		return err
-	}
-
-	if _, err = coll.AddInput(input, "mem"); err != nil {
-		return err
-	}
-
-	input, err = swap.New()
-	if err != nil {
-		return err
-	}
-
-	if _, err = coll.AddInput(input, "swap"); err != nil {
-		return err
-	}
-
-	input, err = netInput.New(option.NetIfBlacklist)
+	input, err = netInput.New(inputsConfig.NetIfBlacklist)
 	if err != nil {
 		return err
 	}
@@ -112,8 +83,8 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		return err
 	}
 
-	if option.DFRootPath != "" {
-		input, err = disk.New(option.DFRootPath, option.DFPathBlacklist)
+	if inputsConfig.DFRootPath != "" {
+		input, err = disk.New(inputsConfig.DFRootPath, inputsConfig.DFPathBlacklist)
 		if err != nil {
 			return err
 		}
@@ -123,13 +94,45 @@ func AddDefaultInputs(coll *collector.Collector, option InputOption) error {
 		}
 	}
 
-	input, err = diskio.New(option.IODiskWhitelist, option.IODiskBlacklist)
+	input, err = diskio.New(inputsConfig.IODiskWhitelist, inputsConfig.IODiskBlacklist)
 	if err != nil {
 		return err
 	}
 
 	if _, err = coll.AddInput(input, "diskio"); err != nil {
 		return err
+	}
+
+	switch runtime.GOOS {
+	case "windows":
+		input, err = winperfcounters.New(inputsConfig)
+		if err != nil {
+			return err
+		}
+
+		_, err = coll.AddInput(input, "win_perf_counters")
+		if err != nil {
+			return err
+		}
+	default:
+		// on windows, win_perf_counters provides the metrics for the memory
+		input, err = mem.New()
+		if err != nil {
+			return err
+		}
+
+		if _, err = coll.AddInput(input, "mem"); err != nil {
+			return err
+		}
+
+		input, err = swap.New()
+		if err != nil {
+			return err
+		}
+
+		if _, err = coll.AddInput(input, "swap"); err != nil {
+			return err
+		}
 	}
 
 	return nil
