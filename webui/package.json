@@ -5,7 +5,7 @@
   "scripts": {
     "start": "webpack-dev-server --config webpack.config.dev.js",
     "build": "npm run clean && webpack -p --config webpack.config.production.js --bail",
-    "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && cp ./dist/js/*.js ../api/static/assets/js",
+    "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && for f in $(find ./dist/js -name '*.js'); do cat $f | gzip > ../api/static/assets/js/$(basename $f); done",
     "cleanOldJsFiles": "rm -rf ../api/static/assets/js",
     "clean": "rm -rf dist",
     "lint": "eslint src",

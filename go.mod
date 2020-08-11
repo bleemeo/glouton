@@ -1,6 +1,6 @@
 module glouton
 
-go 1.12
+go 1.13
 
 require (
 	github.com/99designs/gqlgen v0.11.3
@@ -14,12 +14,12 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-units v0.4.0 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.2.1-0.20200121105743-0d940dd29fd2
+	github.com/go-bindata/go-bindata v3.1.2+incompatible // indirect
 	github.com/go-chi/chi v4.1.1+incompatible
 	github.com/go-kit/kit v0.10.0
 	github.com/go-ole/go-ole v1.2.4 // indirect
 	github.com/go-redis/redis v6.15.8+incompatible // indirect
 	github.com/go-sql-driver/mysql v1.5.0 // indirect
-	github.com/gobuffalo/packr/v2 v2.7.0 // Keep v2.7.0 because go run -race is broken with v2.7.1
 	github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.1

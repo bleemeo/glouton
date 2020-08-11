@@ -14,5 +14,5 @@
 /agentgo*
 /glouton*
 /dist
-*-packr.go
 api/static/assets/js
+*-bindata.go
