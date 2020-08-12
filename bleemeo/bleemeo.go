@@ -107,15 +107,14 @@ func (c *Connector) ApplyCachedConfiguration() {
 }
 
 func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {
-	c.l.Lock()
-	defer c.l.Unlock()
-
 	var password string
 
 	err := c.option.State.Get("password", &password)
 	if err != nil {
 		return err
 	}
+
+	c.l.Lock()
 
 	c.mqtt = mqtt.New(
 		mqtt.Option{
@@ -131,6 +130,13 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 		},
 		first,
 	)
+
+	c.l.Unlock()
+
+	// if the connector is disabled, disable mqtt for the same period
+	if c.disabledUntil.After(time.Now()) {
+		c.disableMqtt(c.disableReason, c.disabledUntil)
+	}
 
 	if c.sync.IsMaintenance() {
 		c.mqtt.SuspendSending(true)
@@ -591,14 +597,20 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 	c.disabledUntil = until
 	c.disableReason = reason
 
-	mqtt := c.mqtt
-
 	c.l.Unlock()
 
 	delay := time.Until(until)
 
 	logger.Printf("Disabling Bleemeo connector for %v due to '%v'", delay.Truncate(time.Second), reason)
 	c.sync.Disable(until, reason)
+
+	c.disableMqtt(reason, until)
+}
+
+func (c *Connector) disableMqtt(reason types.DisableReason, until time.Time) {
+	c.l.RLock()
+	mqtt := c.mqtt
+	c.l.RUnlock()
 
 	if mqtt != nil {
 		// delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
