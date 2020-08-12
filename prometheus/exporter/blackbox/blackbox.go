@@ -133,7 +133,7 @@ func compareConfigTargets(a configTarget, b configTarget) bool {
 	// two targets are equals if they both are a monitor in bleemeo mode (remote monitor) with the same monitor uuid and the same module configuration,
 	// OR if they are local monitors with the same URL and the same blackbox module
 	if a.BleemeoAgentID != "" {
-		return a.BleemeoAgentID == b.BleemeoAgentID && reflect.DeepEqual(a.Module, b.Module)
+		return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && reflect.DeepEqual(a.Module, b.Module)
 	}
 
 	return a.URL == b.URL && a.ModuleName == b.ModuleName
