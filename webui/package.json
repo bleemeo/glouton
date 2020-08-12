@@ -47,7 +47,7 @@
     "react-visibility-sensor": "^5.0.2",
     "reactstrap": "^8.2.0",
     "tabler-react": "^1.18.0",
-    "serialize-javascript": ">=2.1.1"
+    "serialize-javascript": ">=3.1.0"
   },
   "devDependencies": {
     "@babel/core": "^7.1.2",
