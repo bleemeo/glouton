@@ -627,10 +627,10 @@ func (c *Client) getDisableUntil() (time.Time, bleemeoTypes.DisableReason) {
 func (c *Client) onConnect(mqttClient paho.Client) {
 	logger.Printf("MQTT connection established")
 
-	if c.IsSendingSuspended() {
-		// refresh 'info' to ensure we are still in maintenance mode
-		c.option.UpdateMaintenance()
-	} else {
+	// refresh 'info' to check the maintenance mode (for which we normally are notified by MQTT message)
+	c.option.UpdateMaintenance()
+
+	if !c.IsSendingSuspended() {
 		// when in maintenance mode, we do not send messages to /connect
 		c.sendConnectMessage()
 	}
