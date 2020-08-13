@@ -14,48 +14,27 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// +build !windows
+
 package main
 
 import (
 	"flag"
 	"fmt"
-	"glouton/agent"
-	versionPkg "glouton/version"
-	"strings"
-
-	_ "net/http/pprof" //nolint: gosec
+	"os"
 )
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
-	configFiles = flag.String("config", "", "Configuration files/dirs to load.")
-	showVersion = flag.Bool("version", false, "Show version and exit")
+	runAsRoot = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
 )
 
-//nolint: gochecknoglobals
-var (
-	version string
-	commit  string
-)
-
-func main() {
-	if version != "" {
-		versionPkg.Version = version
+func OSDependentMain() {
+	if os.Getuid() == 0 && !*runAsRoot {
+		fmt.Println("Error: trying to run Glouton as root without \"--yes-run-as-root\" option.")
+		fmt.Println("If Glouton is installed using standard method, start it with:")
+		fmt.Println("    service glouton start")
+		fmt.Println("")
+		os.Exit(1)
 	}
-
-	if commit != "" {
-		versionPkg.BuildHash = commit
-	}
-
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Println(versionPkg.Version)
-		return
-	}
-
-	// run os-specific initialisation codd
-	OSDependentMain()
-
-	agent.Run(strings.Split(*configFiles, ","))
 }

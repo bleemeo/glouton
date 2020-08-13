@@ -98,7 +98,7 @@ old_agent_not_present:
   File "/oname=${CONFIGDIR}\conf.d\05-system.conf" ../../packaging/windows/glouton.conf
 
   # generate the config file with the account ID and registration ID
-  nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --install-config-path "${CONFIGDIR}\conf.d\30-install.conf"'
+  nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --basedir "${CONFIGDIR}" --config-file-subpath "conf.d\30-install.conf"'
 
   # Let's expose proper values in the "Apps & Features" Windows settings by registering our installer
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
@@ -131,7 +131,7 @@ old_agent_not_present:
                    "EstimatedSize" "$0"
 
   # Create the service
-  nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" type=own start=auto DisplayName="${PRODUCT_NAME} by ${COMPANY_NAME} -- Monitoring Agent"'
+  nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" obj="NT AUTHORITY\LocalService" type=own start=auto DisplayName="${PRODUCT_NAME} by ${COMPANY_NAME} -- Monitoring Agent"'
   # Restart automatically in case of failure
   nsExec::ExecToLog 'sc.exe failure "${AGENT_SERVICE_NAME}" actions=restart/1000 reset=180'
 
