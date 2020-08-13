@@ -40,7 +40,6 @@ type Agent struct {
 	NextConfigAt    time.Time `json:"next_config_at"`
 	CurrentConfigID string    `json:"current_config"`
 	Tags            []Tag     `json:"tags"`
-	ReadOnly        bool      `json:"read_only"`
 }
 
 // Tag is an Tag object on Bleemeo API.
@@ -181,5 +180,6 @@ type GlobalInfoAgents struct {
 }
 
 type GlobalInfo struct {
-	Agents GlobalInfoAgents `json:"agents"`
+	MaintenanceEnabled bool             `json:"maintenance"`
+	Agents             GlobalInfoAgents `json:"agents"`
 }

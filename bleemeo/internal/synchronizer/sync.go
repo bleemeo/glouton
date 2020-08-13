@@ -124,25 +124,21 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
 	}
 
-	// We choose to sync 'info' and 'agent' before running the main loop.
-	// This has the advantage that we can detect if our agent is outdated or in maintenance mode fairly
-	// quickly after starting the agent. This happens prior to enabling MQTT, which means we don't
-	// have metrics sent over MQTT for a few seconds before stopping to send them, we don't have to
-	// store this information in our state file, we don't send a message on the '/connect' endpoint,
-	// and more !
-	// When this is done, we can signal that we are initialized, that in turn will allow the execution of
-	// the MQTT connector to run.
+	// We sync 'info' before running the main loop.
+	// That way, we can detect if our agent is outdated or in maintenance mode quickly after start.
+	// This happens prior to enabling MQTT, so that we can decide whether to
+	// start the various components of the connector. That way, we won't start sending metrics
+	// over MQTT, only to realise we shouldn't send any metric at all because the agent is deprecated.
+	// We also don't need to store this information in our state file, with the complexity and risks of
+	// desync that this method implieds. And finally, we can refrain ourselves from sendin a message on
+	// the '/connect' MQTT endpoint, thus not impacting our connectivity status on the API side (even though
+	// the backend also try to ensures that we do not alter connection statuses of agents when the maintenance
+	// is enabled, so this last point is not strictly necesseary). And there is probably some other advantages
+	// I forgot to mention !
+	// When this is done, we can signal that we are initialized, that in turn will allow the MQTT connector start.
 	err := s.syncInfo(false)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
-	}
-
-	// sync agent config, except on the first start, where the agent isn't configured yet
-	if s.agentID != "" {
-		err = s.syncAgent(false)
-		if err != nil {
-			logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the agent: %v", err)
-		}
 	}
 
 	s.option.SetInitialized()
@@ -460,7 +456,7 @@ func (s *Synchronizer) runOnce() error {
 		enabledInMaintenance bool
 	}{
 		{name: "info", method: s.syncInfo, enabledInMaintenance: true},
-		{name: "agent", method: s.syncAgent, enabledInMaintenance: true},
+		{name: "agent", method: s.syncAgent},
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
@@ -587,7 +583,6 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	// mode, so we poll more often.
 	if s.maintenanceMode && !s.option.IsMqttConnected() && time.Now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
 		s.forceSync["info"] = false
-		s.forceSync["agent"] = false
 
 		s.lastMaintenanceSync = time.Now()
 	}
