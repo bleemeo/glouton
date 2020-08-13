@@ -12,7 +12,7 @@ const PanelLoading = () => {
         marginTop: '10vh'
       }}
     >
-      <img src="/static/img/logo.png" alt="Logo" height="160px" style={{ borderRadius: '80px' }} />
+      <img src="/static/img/favicon.png" alt="Logo" height="160px" style={{ borderRadius: '80px' }} />
       <h1>
         <FaIcon icon="fa fa-sync fa-spin" /> Your Glouton App is loading...
       </h1>

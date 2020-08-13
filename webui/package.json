@@ -46,8 +46,8 @@
     "react-tooltip": "^4.1.2",
     "react-visibility-sensor": "^5.0.2",
     "reactstrap": "^8.2.0",
-    "tabler-react": "^1.18.0",
-    "serialize-javascript": ">=2.1.1"
+    "serialize-javascript": "^4.0.0",
+    "tabler-react": "^1.18.0"
   },
   "devDependencies": {
     "@babel/core": "^7.1.2",
@@ -74,17 +74,17 @@
     "eslint-plugin-promise": "^4.0.1",
     "eslint-plugin-react": "^7.11.1",
     "eslint-plugin-standard": "^4.0.0",
-    "flow-bin": "^0.121.0",
     "file-loader": "^6.0.0",
-    "node-sass": "^4.9.4",
+    "flow-bin": "^0.121.0",
+    "node-sass": "^4.14.1",
     "prettier": "^2.0.0",
     "raw-loader": "^4.0.0",
     "react-hot-loader": "^4.3.11",
     "sass-loader": "^8.0.0",
     "style-loader": "^1.0.1",
     "url-loader": "^4.0.0",
-    "webpack": "^4.41.2",
+    "webpack": "^4.44.1",
     "webpack-cli": "^3.1.2",
-    "webpack-dev-server": "^3.1.11"
+    "webpack-dev-server": "^3.11.0"
   }
 }
