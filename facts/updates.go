@@ -230,6 +230,7 @@ func PendingSystemUpdate(ctx context.Context, inContainer bool, hostRootPath str
 			uf.fromAPTGet,
 			uf.fromDNF,
 			uf.fromYUM,
+			pendingWindowsUpdates,
 		)
 	}
 
