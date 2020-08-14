@@ -1,13 +1,14 @@
 import React, { lazy, Suspense, useEffect } from 'react'
-import { NavLink, BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom'
+import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom'
 import { withRouter } from 'react-router'
 
-import PanelErrorBoundary from '../UI/PanelErrorBoundary'
+import PanelErrorBoundary from './UI/PanelErrorBoundary'
 import 'rc-switch/assets/index.css'
-import Fallback from '../UI/Fallback'
-import FetchSuspense from '../UI/FetchSuspense'
-import { useFetch } from '../utils/hooks'
-import { FACTS } from '../utils/gqlRequests'
+import Fallback from './UI/Fallback'
+import FetchSuspense from './UI/FetchSuspense'
+import { useFetch } from './utils/hooks'
+import { FACTS } from './utils/gqlRequests'
+import SideNavBar from './App/SideNavbar'
 
 const ScrollToTopComponent = props => {
   useEffect(() => {
@@ -22,10 +23,10 @@ const ScrollToTopComponent = props => {
 
 const ScrollToTop = withRouter(ScrollToTopComponent)
 
-const AgentSystemDashboard = lazy(() => import('./AgentSystemDashboard'))
-const AgentDockerListContainer = lazy(() => import('./AgentDockerListContainer'))
-const AgentProcessesContainer = lazy(() => import('./AgentProcessesContainer'))
-const AgentDetails = lazy(() => import('./AgentDetails'))
+const AgentSystemDashboard = lazy(() => import('./Agent/AgentSystemDashboard'))
+const AgentDockerListContainer = lazy(() => import('./Agent/AgentDockerListContainer'))
+const AgentProcessesContainer = lazy(() => import('./Agent/AgentProcessesContainer'))
+const AgentDetails = lazy(() => import('./Agent/AgentDetails'))
 
 const menuEntries = [
   { key: 'dashboard', label: 'Dashboard' },
@@ -35,7 +36,7 @@ const menuEntries = [
   { key: 'informations', label: 'Informations' }
 ]
 
-const AgentContainer = () => {
+const Routes = () => {
   const { isLoading, error, facts } = useFetch(FACTS)
   return (
     <Router>
@@ -45,6 +46,7 @@ const AgentContainer = () => {
             <FetchSuspense isLoading={isLoading} error={error} facts={facts}>
               {({ facts }) => (
                 <>
+                  <SideNavBar />
                   <Switch>
                     <Route exact path="/dashboard" component={AgentSystemDashboard} />
                     {facts.some(f => f.name === 'docker_version') ? (
@@ -64,4 +66,4 @@ const AgentContainer = () => {
   )
 }
 
-export default AgentContainer
+export default Routes
