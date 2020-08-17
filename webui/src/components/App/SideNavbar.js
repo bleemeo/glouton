@@ -34,7 +34,7 @@ const SideNavBar = () => (
             </Link>
             <Link className="navbar-brand mr-auto" to="/processes" title="Processes">
               <li className="nav-item">
-                <img src="/static/img/server.png" style={{ height: '1.7rem' }} />
+                <img src="/static/img/processes.png" style={{ height: '1.7rem' }} />
               </li>
             </Link>
             <Link className="navbar-brand mr-auto" to="/informations" title="Informations">
