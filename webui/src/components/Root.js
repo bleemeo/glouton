@@ -1,6 +1,6 @@
 import React from 'react'
 import { ApolloProvider } from '@apollo/react-hooks'
-import AgentContainer from './Agent/AgentContainer'
+import Routes from './Routes'
 import TopNavBar from './App/TopNavBar'
 import client from '../utils/API'
 
@@ -10,7 +10,7 @@ const Root = () => {
       <div className="marginOffset">
         <TopNavBar />
         <div className="main-content">
-          <AgentContainer />
+          <Routes />
         </div>
       </div>
     </ApolloProvider>

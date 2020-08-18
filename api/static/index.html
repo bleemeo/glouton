@@ -1,29 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>Glouton Panel</title>
+    <link rel="icon" href="/static/img/favicon.png" />
+    <link
+      rel="stylesheet"
+      href="https://use.fontawesome.com/releases/v5.8.1/css/all.css"
+      integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf"
+      crossorigin="anonymous"
+    />
+    <script
+      type="text/javascript"
+      src="{{ .StaticCDNURL }}/js/panel-glouton-main.js"
+    ></script>
+  </head>
 
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="X-UA-Compatible" content="ie=edge">
-  <title>Glouton Panel</title>
-  <link rel="icon" href="/static/img/logo.png" />
-  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.8.1/css/all.css"
-    integrity="sha384-50oBUHEmvpQ+1lW4y57PTFmhCaXp0ML5d60M1M7uH2+nqUivzIebhndOJK28anvf" crossorigin="anonymous">
-  <script type="text/javascript" src="{{ .StaticCDNURL }}/js/panel-glouton-main.js"></script>
-</head>
-
-<body>
-  <div id="main">
-    <p>Loading UI...</p>
-    <p>The loading persit ? Maybe JavaScript file for the UI are not build ? Check the README and run the npm command
-      followed by go generate.</p>
-  </div>
-</body>
-<script type="text/javascript">
-  window.GloutonConfig = {
-    "STATIC_CDN_URL": "{{ .StaticCDNURL }}"
-  };
-  window.GloutonPanel.start()
-</script>
-
+  <body>
+    <div id="main">
+      <p>Loading UI...</p>
+      <p>
+        The loading persit ? Maybe JavaScript file for the UI are not build ?
+        Check the README and run the npm command followed by go generate.
+      </p>
+    </div>
+  </body>
+  <script type="text/javascript">
+    window.GloutonConfig = {
+      STATIC_CDN_URL: "{{ .StaticCDNURL }}",
+    };
+    window.GloutonPanel.start();
+  </script>
 </html>

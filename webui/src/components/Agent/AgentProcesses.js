@@ -296,28 +296,6 @@ export default class AgentProcesses extends React.Component {
               </tbody>
             </table>
           </div>
-          <div className="col-xl-1 col-sm-4">
-            <h4 style={{ textAlign: 'center' }}>Quick filter</h4>
-            <div>
-              <h4>
-                {' '}
-                <span className="badge badge-info">{usernames.length <= 1 ? 'User:' : 'Users:'}</span>
-              </h4>
-              <div style={{ height: '7rem', overflowY: 'scroll', overflowX: 'hidden' }}>
-                {usernames.sort().map(username => (
-                  <div className="form-check" key={username}>
-                    <input
-                      className="form-check-input"
-                      type="checkbox"
-                      checked={usernamesFilter.includes(username)}
-                      onChange={() => this.handleUsersFilter(username)}
-                    />
-                    <label className="form-check-label">{username}</label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
           <div className="col-xl-3 col-sm-8">
             <table className="table table-sm" style={{ marginBottom: 0 }}>
               <tbody>
