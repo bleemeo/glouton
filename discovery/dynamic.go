@@ -90,7 +90,7 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 		}
 	}
 
-	return dd.services, nil
+	return dd.services, ctx.Err()
 }
 
 // LastUpdate return when the last update occurred.

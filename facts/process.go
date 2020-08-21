@@ -196,6 +196,10 @@ func (pp *ProcessProvider) ProcessesWithTime(ctx context.Context, maxAge time.Du
 		}
 	}
 
+	if ctx.Err() != nil {
+		return nil, time.Time{}, ctx.Err()
+	}
+
 	return pp.processes, pp.lastProcessesUpdate, nil
 }
 

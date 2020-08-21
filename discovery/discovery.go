@@ -175,10 +175,12 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 			return nil, err
 		}
 
-		saveState(d.state, d.discoveredServicesMap)
-		d.reconfigure()
+		if ctx.Err() == nil {
+			saveState(d.state, d.discoveredServicesMap)
+			d.reconfigure()
 
-		d.lastDiscoveryUpdate = time.Now()
+			d.lastDiscoveryUpdate = time.Now()
+		}
 	}
 
 	services = make([]Service, 0, len(d.servicesMap))
@@ -187,7 +189,7 @@ func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (servic
 		services = append(services, v)
 	}
 
-	return services, nil
+	return services, ctx.Err()
 }
 
 // RemoveIfNonRunning remove a service if the service is not running
