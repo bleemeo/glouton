@@ -516,7 +516,9 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, maxAge time.Dura
 				if id2name == nil {
 					var err error
 
-					if id2name, err = pp.dp.containerID2Name(ctx, 3*time.Second); err != nil {
+					// 2 Seconds should be enough, because we ignore containers for which we didn't find
+					// the container name that are youger than 3 seconds.
+					if id2name, err = pp.dp.containerID2Name(ctx, 2*time.Second); err != nil {
 						id2name = make(map[string]string)
 					}
 				}
