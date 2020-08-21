@@ -966,7 +966,24 @@ func (d *dockerProcessImpl) processesContainer(ctx context.Context, containerID 
 		return
 	}
 
-	processesMap := make(map[int]Process)
+	processesMap, err := d.processesContainerMap(ctx, nil, containerID, containerName)
+	processes = make([]Process, 0, len(processesMap))
+
+	for _, p := range processesMap {
+		processes = append(processes, p)
+	}
+
+	return processes, err
+}
+
+func (d *dockerProcessImpl) processesContainerMap(ctx context.Context, processesMap map[int]Process, containerID string, containerName string) (processes map[int]Process, err error) {
+	if d.dockerProvider == nil {
+		return
+	}
+
+	if processesMap == nil {
+		processesMap = make(map[int]Process)
+	}
 
 	var top, topWaux container.ContainerTopOKBody
 
@@ -974,12 +991,12 @@ func (d *dockerProcessImpl) processesContainer(ctx context.Context, containerID 
 
 	switch {
 	case err != nil && errdefs.IsNotFound(err):
-		return nil, nil
+		return processesMap, nil
 	case err != nil && strings.Contains(fmt.Sprintf("%v", err), "is not running"):
-		return nil, nil
+		return processesMap, nil
 	case err != nil:
 		logger.Printf("%#v", err)
-		return nil, nil
+		return processesMap, err
 	}
 
 	processes1 := decodeDocker(top, containerID, containerName)
@@ -998,13 +1015,7 @@ func (d *dockerProcessImpl) processesContainer(ctx context.Context, containerID 
 		}
 	}
 
-	processes = make([]Process, 0, len(processesMap))
-
-	for _, p := range processesMap {
-		processes = append(processes, p)
-	}
-
-	return processes, nil
+	return processesMap, nil
 }
 
 func (d *dockerProcessImpl) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
@@ -1024,39 +1035,13 @@ func (d *dockerProcessImpl) Processes(ctx context.Context, maxAge time.Duration)
 	}
 
 	for _, c := range containers {
-		var top, topWaux container.ContainerTopOKBody
-
 		if !c.IsRunning() {
 			continue
 		}
 
-		top, topWaux, err = d.dockerProvider.top(ctx, c.ID())
-
-		switch {
-		case err != nil && errdefs.IsNotFound(err):
-			continue
-		case err != nil && strings.Contains(fmt.Sprintf("%v", err), "is not running"):
-			continue
-		case err != nil:
-			logger.Printf("%#v", err)
-			return
-		}
-
-		processes1 := decodeDocker(top, c.ID(), c.Name())
-		processes2 := decodeDocker(topWaux, c.ID(), c.Name())
-
-		for _, p := range processes1 {
-			processesMap[p.PID] = p
-		}
-
-		for _, p := range processes2 {
-			if pOld, ok := processesMap[p.PID]; ok {
-				pOld.update(p)
-
-				processesMap[p.PID] = pOld
-			} else {
-				processesMap[p.PID] = p
-			}
+		processesMap, err = d.processesContainerMap(ctx, processesMap, c.ID(), c.Name())
+		if err != nil {
+			return nil, err
 		}
 	}
 
