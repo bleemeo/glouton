@@ -19,6 +19,10 @@ package facts
 import (
 	"context"
 	"glouton/logger"
+	"io/ioutil"
+	"os/user"
+	"strconv"
+	"strings"
 
 	"github.com/go-ole/go-ole"
 )
@@ -57,13 +61,49 @@ func countUpdates(updateDispatcher *ole.IDispatch, query string) (res int, succe
 	return int(countVariant.Val), true
 }
 
+//nolint:nakedret
 func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
+	pendingUpdates = -1
+	pendingSecurityUpdates = -1
+
+	// when running under the LocalService account, we do not have enought permissions to call into the COM object,
+	// so we try to read a file that a scheduled task is updating periodically
+	user, err := user.Current()
+	if err == nil && user.Username == `NT AUTHORITY\LOCAL SERVICE` {
+		content, err := ioutil.ReadFile(`C:\ProgramData\glouton\windowsupdate.txt`)
+		if err != nil {
+			logger.V(2).Printf("Couldn't retrieve Windows Update informations: %v", err)
+		}
+
+		splits := strings.Split(string(content), "\r\n")
+
+		// get rid of the trailing newline, if any
+		if splits[len(splits)-1] == "" {
+			splits = splits[:len(splits)-1]
+		}
+
+		if len(splits) != 2 {
+			logger.V(2).Printf("Couldn't retrieve Windows Update informations: got %d values, expected 2 in %v", len(splits), splits)
+			return
+		}
+
+		parsedPendingUpdates, err1 := strconv.Atoi(splits[0])
+		parsedPendingSecurityUpdates, err2 := strconv.Atoi(splits[1])
+
+		if err1 != nil || err2 != nil {
+			logger.V(2).Printf("Couldn't retrieve Windows Update informations: cannot parse the file with content %v", splits)
+			return
+		}
+
+		return parsedPendingUpdates, parsedPendingSecurityUpdates
+	}
+
 	connection := &ole.Connection{}
 
-	err := connection.Initialize()
+	err = connection.Initialize()
 	if err != nil {
 		logger.V(2).Printf("Couldn't instantiate an OLE connection: %v", err)
-		return -1, -1
+		return
 	}
 
 	defer connection.Uninitialize()
@@ -71,25 +111,25 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 	errs := connection.Load("Microsoft.Update.Session")
 	if errs != nil {
 		logger.V(2).Printf("Couldn't load the 'Microsoft.Update.Session' COM object: %v", errs)
-		return -1, -1
+		return
 	}
 
 	dispatch, err := connection.Dispatch()
 	if err != nil {
 		logger.V(2).Printf("Couldn't create an OLE dispatcher: %v", err)
-		return -1, -1
+		return
 	}
 
 	updateSearcherPtr, err := dispatch.Call("CreateUpdateSearcher")
 	if err != nil {
 		logger.V(2).Printf("Couldn't create an IUpdateSearcher: %v", err)
-		return -1, -1
+		return
 	}
 
 	updateSearcher := updateSearcherPtr.ToIDispatch()
 	if updateSearcher == nil {
 		logger.V(2).Printf("Couldn't create an IUpdateSearcher: %v", err)
-		return -1, -1
+		return
 	}
 
 	var success bool
@@ -109,5 +149,5 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 
 	logger.V(2).Println(pendingSecurityUpdates, pendingUpdates)
 
-	return pendingUpdates, pendingSecurityUpdates
+	return
 }

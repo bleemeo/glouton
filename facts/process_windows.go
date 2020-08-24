@@ -53,7 +53,7 @@ type UnicodeString struct {
 	Buffer unsafe.Pointer
 }
 
-// TODO: add a i686 version, as some fields differ.
+// TODO: add a version for i686, as some fields differ between x86 and AMD64.
 //nolint:maligned
 type SystemProcessInformationStruct struct {
 	NextEntryOffset              uint32
@@ -161,6 +161,7 @@ func getInformation(syscall *windows.LazyProc, kind int) ([]byte, error) {
 	}
 
 	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
+		logger.V(1).Println("a", err)
 		return nil, err
 	}
 
@@ -173,6 +174,7 @@ func getInformation(syscall *windows.LazyProc, kind int) ([]byte, error) {
 	)
 	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
 	if r >= 0x80000000 {
+		logger.V(1).Println("b", r, err)
 		return nil, err
 	}
 
@@ -232,14 +234,11 @@ func retrieveUsername(pid uint32) (string, error) {
 	}
 
 	res, _, _, err := userToken.User.Sid.LookupAccount("")
-	if err != nil {
-		return "", err
-	}
 
 	_ = windows.CloseHandle(windows.Handle(token))
 	_ = windows.CloseHandle(h)
 
-	return res, nil
+	return res, err
 }
 
 func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok bool) {

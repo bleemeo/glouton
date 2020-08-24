@@ -90,8 +90,9 @@ old_agent_not_present:
     File ../../dist/${PRODUCT_NAME}_windows_386/${PRODUCT_NAME}.exe
   ${EndIf}
 
-  # Needed for the icon shown in 'Apps & Features'
+  # We need the icon to be shown in 'Apps & Features'
   File ${PRODUCT_ICON}
+  File windows_update_checker.ps1
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
@@ -141,6 +142,11 @@ old_agent_not_present:
     Abort "The installation of the Windows service failed !"
   ${EndIf}
 
+  # Register the windows update task (first try to delete it in cas it already exists, then add it and run it)
+  nsExec::ExecToLog 'schtasks.exe /DELETE /F /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker"'
+  nsExec::ExecToLog 'schtasks.exe /CREATE /RU System /SC HOURLY /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker" /TR "powershell.exe -NonInteractive -File \"$INSTDIR\windows_update_checker.ps1\""'
+  nsExec::ExecToLog 'schtasks.exe /RUN /I /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker"'
+
   # Start the service
   nsExec::ExecToLog 'sc.exe start "${AGENT_SERVICE_NAME}"'
 SectionEnd
@@ -152,6 +158,8 @@ Section "Uninstall"
 
   nsExec::ExecToLog 'net stop "${AGENT_SERVICE_NAME}"'
   nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
+
+  nsExec::ExecToLog 'schtasks.exe /DELETE /F /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker"'
 
   RMDir /r "$INSTDIR"
   # delete the bleemeo folder too if it is empty
