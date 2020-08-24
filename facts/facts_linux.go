@@ -157,7 +157,3 @@ func getCPULoads() ([]float64, error) {
 
 	return []float64{loads.Load1, loads.Load5, loads.Load15}, nil
 }
-
-func pendingWindowsUpdates(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
-	return -1, -1
-}
