@@ -1004,8 +1004,7 @@ func (a *agent) healthCheck(ctx context.Context) error {
 
 		mandatoryTasks := []string{"Bleemeo SAAS connector", "Metric collector", "Metric store"}
 		for _, name := range mandatoryTasks {
-			crashed, err := a.doesTaskCrashed(ctx, name)
-			if crashed {
+			if crashed, err := a.doesTaskCrashed(ctx, name); crashed && err != nil {
 				logger.Printf("Task %#v crashed: %v", name, err)
 				logger.Printf("Stopping the agent as task %#v is critical", name)
 				a.cancel()

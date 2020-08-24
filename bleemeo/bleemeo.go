@@ -42,12 +42,14 @@ type Connector struct {
 	mqtt        *mqtt.Client
 	mqttRestart chan interface{}
 
-	l sync.Mutex
-	// initDone      bool
+	l               sync.RWMutex
 	lastKnownReport time.Time
 	lastMQTTRestart time.Time
 	disabledUntil   time.Time
 	disableReason   types.DisableReason
+
+	// initialized indicates whether the mqtt connetcor can be started
+	initialized bool
 }
 
 // New create a new Connector.
@@ -58,17 +60,42 @@ func New(option types.GlobalOption) *Connector {
 		mqttRestart: make(chan interface{}, 1),
 	}
 	c.sync = synchronizer.New(synchronizer.Option{
-		GlobalOption:         c.option,
-		Cache:                c.cache,
-		UpdateConfigCallback: c.uppdateConfig,
-		DisableCallback:      c.disableCallback,
+		GlobalOption:                c.option,
+		Cache:                       c.cache,
+		UpdateConfigCallback:        c.updateConfig,
+		DisableCallback:             c.disableCallback,
+		SetInitialized:              c.setInitialized,
+		SetBleemeoInMaintenanceMode: c.setMaintenance,
+		IsMqttConnected:             c.Connected,
 	})
 
 	return c
 }
 
+func (c *Connector) setInitialized() {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.initialized = true
+}
+
+func (c *Connector) isInitialized() bool {
+	c.l.RLock()
+	defer c.l.RUnlock()
+
+	return c.initialized
+}
+
 // ApplyCachedConfiguration reload metrics units & threshold & monitors from the cache.
 func (c *Connector) ApplyCachedConfiguration() {
+	c.l.RLock()
+	disabledUntil := c.disabledUntil
+	defer c.l.RUnlock()
+
+	if time.Now().Before(disabledUntil) {
+		return
+	}
+
 	c.sync.UpdateUnitsAndThresholds(true)
 
 	if c.option.Config.Bool("blackbox.enabled") {
@@ -94,19 +121,46 @@ func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first boo
 		mqtt.Option{
 			GlobalOption:         c.option,
 			Cache:                c.cache,
-			DisableCallback:      c.disableCallback,
 			AgentID:              types.AgentID(c.AgentID()),
 			AgentPassword:        password,
 			UpdateConfigCallback: c.sync.NotifyConfigUpdate,
 			UpdateMetrics:        c.sync.UpdateMetrics,
+			UpdateMaintenance:    c.sync.UpdateMaintenance,
 			UpdateMonitor:        c.sync.UpdateMonitor,
 			InitialPoints:        previousPoint,
 		},
 		first,
 	)
 
+	// if the connector is disabled, disable mqtt for the same period
+	if c.disabledUntil.After(time.Now()) {
+		c.disableMqtt(c.mqtt, c.disableReason, c.disabledUntil)
+	}
+
+	if c.sync.IsMaintenance() {
+		c.mqtt.SuspendSending(true)
+	}
+
 	return nil
 }
+
+func (c *Connector) setMaintenance(maintenance bool) {
+	if maintenance {
+		logger.V(0).Println("Bleemeo: read only/maintenance mode enabled")
+	} else if !maintenance && c.sync.IsMaintenance() {
+		logger.V(0).Println("Bleemeo: read only/maintenance mode is now disabled, will resume sending metrics")
+	}
+
+	c.l.RLock()
+	defer c.l.RUnlock()
+
+	c.sync.SetMaintenance(maintenance)
+
+	if c.mqtt != nil {
+		c.mqtt.SuspendSending(maintenance)
+	}
+}
+
 func (c *Connector) mqttRestarter(ctx context.Context) error {
 	var (
 		wg             sync.WaitGroup
@@ -118,9 +172,9 @@ func (c *Connector) mqttRestarter(ctx context.Context) error {
 
 	subCtx, cancel := context.WithCancel(ctx)
 
-	c.l.Lock()
+	c.l.RLock()
 	mqttRestart := c.mqttRestart
-	c.l.Unlock()
+	c.l.RUnlock()
 
 	if mqttRestart == nil {
 		return nil
@@ -243,7 +297,7 @@ func (c *Connector) Run(ctx context.Context) error {
 	}()
 
 	for subCtx.Err() == nil {
-		if c.AgentID() != "" {
+		if c.AgentID() != "" && c.isInitialized() {
 			wg.Add(1)
 
 			go func() {
@@ -274,6 +328,16 @@ func (c *Connector) Run(ctx context.Context) error {
 
 // UpdateContainers request to update a containers.
 func (c *Connector) UpdateContainers() {
+	c.l.RLock()
+
+	disabled := time.Now().Before(c.disabledUntil)
+
+	c.l.RUnlock()
+
+	if disabled {
+		return
+	}
+
 	c.sync.UpdateContainers()
 }
 
@@ -317,11 +381,21 @@ func (c *Connector) DiagnosticPage() string {
 	if time.Now().Before(c.disabledUntil) {
 		fmt.Fprintf(
 			builder,
-			"Glouton connection to Bleemeo is disabled until %s (%v remain) due to %v\n",
+			"Glouton connection to Bleemeo is disabled until %s (%v remain) due to '%v'\n",
 			c.disabledUntil.Format(time.RFC3339),
 			time.Until(c.disabledUntil).Truncate(time.Second),
 			c.disableReason,
 		)
+	}
+
+	now := time.Now()
+
+	if c.disabledUntil.After(now) {
+		fmt.Fprintf(builder, "The Bleemeo connector is currently disabled until %v due to '%v'\n", c.disabledUntil, c.disableReason)
+	}
+
+	if c.sync.IsMaintenance() {
+		fmt.Fprintln(builder, "The Bleemeo connector is currently in read-only/maintenance mode, not syncing nor sending any metric")
 	}
 
 	mqtt := c.mqtt
@@ -404,18 +478,18 @@ func (c *Connector) AgentID() string {
 
 // RegistrationAt returns the date of registration with Bleemeo API.
 func (c *Connector) RegistrationAt() time.Time {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	agent := c.cache.Agent()
 
 	return agent.CreatedAt
 }
 
-// Connected returns the date of registration with Bleemeo API.
+// Connected returns whether the mqtt connector is connected.
 func (c *Connector) Connected() bool {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	if c.mqtt == nil {
 		return false
@@ -457,7 +531,7 @@ func (c *Connector) HealthCheck() bool {
 	if time.Now().Before(c.disabledUntil) {
 		delay := time.Until(c.disabledUntil)
 
-		logger.Printf("Bleemeo connector is still disabled for %v due to %v", delay.Truncate(time.Second), c.disableReason)
+		logger.Printf("Bleemeo connector is still disabled for %v due to '%v'", delay.Truncate(time.Second), c.disableReason)
 
 		return false
 	}
@@ -494,15 +568,15 @@ func (c *Connector) HealthCheck() bool {
 }
 
 func (c *Connector) emitInternalMetric() {
-	c.l.Lock()
-	defer c.l.Unlock()
+	c.l.RLock()
+	defer c.l.RUnlock()
 
 	if c.mqtt != nil && c.mqtt.Connected() {
 		c.option.Acc.AddFields("", map[string]interface{}{"agent_status": 1.0}, nil)
 	}
 }
 
-func (c *Connector) uppdateConfig() {
+func (c *Connector) updateConfig() {
 	currentConfig := c.cache.CurrentAccountConfig()
 
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
@@ -528,10 +602,26 @@ func (c *Connector) disableCallback(reason types.DisableReason, until time.Time)
 
 	delay := time.Until(until)
 
-	logger.Printf("Disabling Bleemeo connector for %v due to %v", delay.Truncate(time.Second), reason)
+	logger.Printf("Disabling Bleemeo connector for %v due to '%v'", delay.Truncate(time.Second), reason)
 	c.sync.Disable(until, reason)
 
+	c.disableMqtt(mqtt, reason, until)
+}
+
+func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, until time.Time) {
 	if mqtt != nil {
-		mqtt.Disable(until, reason)
+		// delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
+		// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
+		mqttDisableDelay := time.Duration(0)
+
+		switch reason {
+		case types.DisableTooManyErrors:
+			mqttDisableDelay = 20 * time.Second
+		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError:
+			// let the synchronizer check if the error is solved
+			mqttDisableDelay = 80 * time.Second
+		}
+
+		mqtt.Disable(until.Add(mqttDisableDelay), reason)
 	}
 }

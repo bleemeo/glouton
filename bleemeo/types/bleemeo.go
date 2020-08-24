@@ -170,3 +170,16 @@ func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 
 	return result
 }
+
+type MinimumSupportedVersions struct {
+	Glouton string `json:"glouton_version"`
+}
+
+type GlobalInfoAgents struct {
+	MinVersions MinimumSupportedVersions `json:"minimum_versions"`
+}
+
+type GlobalInfo struct {
+	MaintenanceEnabled bool             `json:"maintenance"`
+	Agents             GlobalInfoAgents `json:"agents"`
+}

@@ -53,14 +53,14 @@ type Option struct {
 	AgentID       bleemeoTypes.AgentID
 	AgentPassword string
 
-	// DisableCallback is a function called when MQTT got too much connect/disconnection.
-	DisableCallback func(reason bleemeoTypes.DisableReason, until time.Time)
 	// UpdateConfigCallback is a function called when Agent configuration (will) change
 	UpdateConfigCallback func(now bool)
 	// UpdateMetrics request update for given metric UUIDs
 	UpdateMetrics func(metricUUID ...string)
 	// UpdateMonitor requests a sync of a monitor
 	UpdateMonitor func(op string, uuid string)
+	// UpdateMaintenance requests to check for the maintenance mode again
+	UpdateMaintenance func()
 
 	InitialPoints []types.MetricPoint
 }
@@ -69,7 +69,7 @@ type Option struct {
 type Client struct {
 	option Option
 
-	// Those variable are write once or only read/write from Run() gorouting. No lock needed
+	// Those variable are only written once or read/written exclusively from the Run() goroutine. No lock needed
 	ctx                        context.Context
 	mqttClient                 paho.Client
 	failedPoints               []types.MetricPoint
@@ -82,6 +82,7 @@ type Client struct {
 	pendingPoints     []types.MetricPoint
 	lastReport        time.Time
 	failedPointsCount int
+	sendingSuspended  bool // stop sending points, used when the user is is read-only mode
 	disabledUntil     time.Time
 	disableReason     bleemeoTypes.DisableReason
 	connectionLost    chan interface{}
@@ -163,13 +164,6 @@ func (c *Client) Connected() bool {
 func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	c.l.Lock()
 	defer c.l.Unlock()
-
-	if reason == bleemeoTypes.DisableAuthenticationError {
-		// Kept MQTT disabled a bit longer, this will allow synchronizer to
-		// test if the authentication error is resolved and don't check this
-		// twice (one in MQTT and one in synchronized)
-		until = until.Add(80 * time.Second)
-	}
 
 	if c.disabledUntil.Before(until) {
 		c.disabledUntil = until
@@ -383,6 +377,33 @@ func (c *Client) shutdown() error {
 	return nil
 }
 
+// SuspendSending sets whether the mqtt client should stop sendings metrics (and topinfo).
+func (c *Client) SuspendSending(suspended bool) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	// send a message on /connect when reconnecting after being in maintenance mode
+	if c.sendingSuspended && !suspended {
+		if c.mqttClient != nil && c.mqttClient.IsConnectionOpen() {
+			// we need to unlock/relock() as sendConnectMessage calls publish() which locks
+			// the mutex too
+			c.l.Unlock()
+			c.sendConnectMessage()
+			c.l.Lock()
+		}
+	}
+
+	c.sendingSuspended = suspended
+}
+
+// IsSendingSuspended returns true if the mqtt connector is suspended from sending merics (and topinfo).
+func (c *Client) IsSendingSuspended() bool {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.sendingSuspended
+}
+
 func (c *Client) run(ctx context.Context) error {
 	var wg sync.WaitGroup
 
@@ -407,7 +428,7 @@ func (c *Client) run(ctx context.Context) error {
 
 		c.sendPoints()
 
-		if time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
+		if !c.IsSendingSuspended() && time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
 			topinfoSendAt = time.Now()
 
 			c.sendTopinfo(ctx, cfg)
@@ -463,7 +484,7 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 func (c *Client) sendPoints() {
 	points := c.filterPoints(c.PopPoints(false))
 
-	if !c.Connected() {
+	if !c.Connected() || c.IsSendingSuspended() {
 		c.l.Lock()
 
 		// store all new points as failed ones
@@ -605,6 +626,23 @@ func (c *Client) getDisableUntil() (time.Time, bleemeoTypes.DisableReason) {
 
 func (c *Client) onConnect(mqttClient paho.Client) {
 	logger.Printf("MQTT connection established")
+
+	// refresh 'info' to check the maintenance mode (for which we normally are notified by MQTT message)
+	c.option.UpdateMaintenance()
+
+	if !c.IsSendingSuspended() {
+		// when in maintenance mode, we do not send messages to /connect
+		c.sendConnectMessage()
+	}
+
+	mqttClient.Subscribe(
+		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
+		0,
+		c.onNotification,
+	)
+}
+
+func (c *Client) sendConnectMessage() {
 	// Use short max-age to force a refresh facts since a reconnection to MQTT may
 	// means that public IP change.
 	facts, err := c.option.Facts.Facts(c.ctx, 10*time.Second)
@@ -619,11 +657,6 @@ func (c *Client) onConnect(mqttClient paho.Client) {
 	}
 
 	c.publish(fmt.Sprintf("v1/agent/%s/connect", c.option.AgentID), payload, true)
-	mqttClient.Subscribe(
-		fmt.Sprintf("v1/agent/%s/notification", c.option.AgentID),
-		0,
-		c.onNotification,
-	)
 }
 
 type notificationPayload struct {
@@ -653,6 +686,8 @@ func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
 		c.option.UpdateConfigCallback(true)
 	case "config-will-change":
 		c.option.UpdateConfigCallback(false)
+	case "maintenance-toggle":
+		c.option.UpdateMaintenance()
 	case "threshold-update":
 		c.option.UpdateMetrics(payload.MetricUUID)
 	case "monitor-update":
@@ -841,7 +876,7 @@ mainLoop:
 		switch {
 		case time.Now().Before(disableUntil):
 			if c.mqttClient != nil {
-				logger.V(2).Printf("Disconnection from MQTT due to %v", disableReason)
+				logger.V(2).Printf("Disconnecting from MQTT due to '%v'", disableReason)
 				c.mqttClient.Disconnect(0)
 
 				c.l.Lock()
@@ -855,7 +890,7 @@ mainLoop:
 				delay := common.JitterDelay(300, 0.25, 300).Round(time.Second)
 
 				c.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
-				logger.Printf("Too many attempt to connect to MQTT on last 10 minutes. Disable MQTT for %v", delay)
+				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
 				continue
 			}
 

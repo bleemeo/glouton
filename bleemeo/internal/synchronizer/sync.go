@@ -51,8 +51,15 @@ type Synchronizer struct {
 	lastFactUpdatedAt       string
 	successiveErrors        int
 	warnAccountMismatchDone bool
+	maintenanceMode         bool
 	lastMetricCount         int
 	agentID                 string
+
+	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
+	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive
+	// notifications to tell us the backend is out of maintenance. So we resort to HTTP polling every 15
+	// minutes to check whether we are still in maintenance of not.
+	lastMaintenanceSync time.Time
 
 	l                     sync.Mutex
 	disabledUntil         time.Time
@@ -73,6 +80,17 @@ type Option struct {
 
 	// UpdateConfigCallback is a function called when Synchronizer detected a AccountConfiguration change
 	UpdateConfigCallback func()
+
+	// SetInitialized tells the bleemeo connector that the MQTT module can be started
+	SetInitialized func()
+
+	// IsMqttConnected returns wether the MQTT connector is operating nominally, and specifically that it can receive mqtt notifications.
+	// It is useful for the fallback on http polling described above Synchronizer.lastMaintenanceSync definition.
+	// Note: returns false when the mqtt connector is not enabled.
+	IsMqttConnected func() bool
+
+	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
+	SetBleemeoInMaintenanceMode func(maintenance bool)
 }
 
 // New return a new Synchronizer.
@@ -106,20 +124,39 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
 	}
 
+	// We sync 'info' before running the main loop.
+	// That way, we can detect if our agent is outdated or in maintenance mode quickly after start.
+	// This happens prior to enabling MQTT, so that we can decide whether to
+	// start the various components of the connector. That way, we won't start sending metrics
+	// over MQTT, only to realise we shouldn't send any metric at all because the agent is deprecated.
+	// We also don't need to store this information in our state file, with the complexity and risks of
+	// desync that this method implieds. And finally, we can refrain ourselves from sendin a message on
+	// the '/connect' MQTT endpoint, thus not impacting our connectivity status on the API side (even though
+	// the backend also try to ensures that we do not alter connection statuses of agents when the maintenance
+	// is enabled, so this last point is not strictly necesseary). And there is probably some other advantages
+	// I forgot to mention !
+	// When this is done, we can signal that we are initialized, that in turn will allow the MQTT connector start.
+	err := s.syncInfo(false)
+	if err != nil {
+		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
+	}
+
+	s.option.SetInitialized()
+
 	s.successiveErrors = 0
 	successiveAuthErrors := 0
 
 	var minimalDelay time.Duration
 
 	if len(s.option.Cache.FactsByKey()) != 0 {
-		logger.V(2).Printf("Waiting a few seconds before the first synchronization as this agent has a valid cache")
+		logger.V(2).Printf("Waiting a few seconds before running a full synchronization as this agent has a valid cache")
 
 		minimalDelay = common.JitterDelay(20, 0.5, 20)
 	}
 
 	for s.ctx.Err() == nil {
 		// TODO: allow WaitDeadline to be interrupted when new metrics arrive
-		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronize with Bleemeo Cloud platform")
+		common.WaitDeadline(s.ctx, minimalDelay, s.getDisabledUntil, "Synchronization with Bleemeo Cloud platform")
 
 		if s.ctx.Err() != nil {
 			break
@@ -139,7 +176,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(delay))
 			default:
 				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
-				s.disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+				s.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
 				if client.IsAuthError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
@@ -254,6 +291,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	s.forceSync["info"] = true
 	s.forceSync["agent"] = true
 
 	if !immediate {
@@ -359,12 +397,8 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 }
 
 // Disable will disable (or re-enable) the Synchronized until given time.
-// To re-enable, use the (not yet implmented) Enable().
+// To re-enable, use Enable().
 func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
-	s.disable(until, reason)
-}
-
-func (s *Synchronizer) disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -408,14 +442,20 @@ func (s *Synchronizer) runOnce() error {
 		return nil
 	}
 
-	if err := s.checkDuplicated(); err != nil {
-		return err
+	// We do not perform this check in maintennace mode (otherwise we could end up checking it every 15 econds),
+	// we will only do it once when getting out of the maintenance mode
+	if !s.IsMaintenance() {
+		if err := s.checkDuplicated(); err != nil {
+			return err
+		}
 	}
 
 	syncStep := []struct {
-		name   string
-		method func(bool) error
+		name                 string
+		method               func(bool) error
+		enabledInMaintenance bool
 	}{
+		{name: "info", method: s.syncInfo, enabledInMaintenance: true},
 		{name: "agent", method: s.syncAgent},
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
@@ -432,13 +472,35 @@ func (s *Synchronizer) runOnce() error {
 			break
 		}
 
-		until, _ := s.getDisabledUntil()
+		until, reason := s.getDisabledUntil()
 		if time.Now().Before(until) {
-			if lastErr == nil {
+			// If the agent was disabled because it is too old, we do not want the synchronizer
+			// to throw a DisableTooManyErrors because syncInfo() disabled the bleemeo connector.
+			// This could alter the synchronizer would wait to sync again, and we do not desire it.
+			// This would also show errors that could confuse the user like "Synchronization with
+			// Bleemeo Cloud platform still have to wait 1m27s due to too many errors".
+			if lastErr == nil && reason != bleemeoTypes.DisableAgentTooOld {
 				lastErr = errors.New("bleemeo connector is temporary disabled")
 			}
 
 			break
+		}
+
+		if s.IsMaintenance() {
+			if !step.enabledInMaintenance {
+				// store the fact that we must sync this step when we will no longer be in maintenance:
+				// we will try to sync it again at every iteration of runOnce(), until we get out of
+				// maintenance.
+				// This ensures that if the maintenance takes a long time, we will still update the
+				// objects that should have been synced in that period.
+				if full, ok := syncMethods[step.name]; ok {
+					s.l.Lock()
+					s.forceSync[step.name] = full || s.forceSync[step.name]
+					s.l.Unlock()
+				}
+
+				continue
+			}
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
@@ -484,6 +546,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 
 	if fullSync {
+		syncMethods["info"] = fullSync
 		syncMethods["agent"] = fullSync
 		syncMethods["monitors"] = fullSync
 	}
@@ -514,6 +577,14 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = fullSync
+	}
+
+	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
+	// mode, so we poll more often.
+	if s.maintenanceMode && !s.option.IsMqttConnected() && time.Now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
+		s.forceSync["info"] = false
+
+		s.lastMaintenanceSync = time.Now()
 	}
 
 	for k, full := range s.forceSync {
@@ -637,7 +708,7 @@ func (s *Synchronizer) register() error {
 		return err
 	}
 
-	logger.V(1).Printf("regisration successful with UUID %v", objectID.ID)
+	logger.V(1).Printf("registration successful with UUID %v", objectID.ID)
 
 	_ = s.setClient()
 
