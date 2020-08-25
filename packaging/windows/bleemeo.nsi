@@ -68,14 +68,15 @@ Section "!${PRODUCT_NAME}"
   #### UPGRADE FROM BLEEMEO-AGENT ####
 
   # Delete bleemeo agent if present
-  IfFileExists "$PROGRAMFILES\bleemeo-agent" 0 old_agent_not_present
+  IfFileExists "$PROGRAMFILES\bleemeo-agent\uninstall.exe" 0 old_agent_not_present
 
   # Move its config & state
-  SetOverwrite off
+  # Beware, if you reinstall the bleemeo agent and you then upgrade glouton, it will overwrite the config files
+  # with thoses coming from bleemeo-agent !
+  # (We cannot use SetOverwrite as it only impacts the use of File, not CopyFiles :/)
   CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf" "${CONFIGDIR}\glouton.conf"
   CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf.d\*.conf" "${CONFIGDIR}\conf.d\"
   CopyFiles "C:\ProgramData\bleemeo\state.json" "${CONFIGDIR}"
-  SetOverwrite on
 
   # Uninstall the bleemeo-agent
   ExecWait '"$PROGRAMFILES\bleemeo-agent\uninstall.exe" /S'

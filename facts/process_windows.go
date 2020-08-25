@@ -94,9 +94,35 @@ func windowsTimeToTime(t int64) time.Time {
 func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	// In order to retrieve process information on windows, given the fact that LocalService has limited privileges,
 	// we prefer to iterate over processes via the NtQuerySystemInformation syscall
-	buf, err := getInformation(procNtQuerySystemInformation, SystemProcessInformation)
-	if err != nil {
-		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed: %v", err)
+	var bufLen uint32
+
+	ret, _, err := procNtQuerySystemInformation.Call(
+		uintptr(SystemProcessInformation),
+		uintptr(0),
+		uintptr(0),
+		uintptr(unsafe.Pointer(&bufLen)),
+	)
+
+	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
+		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
+		return nil, nil
+	}
+
+	if bufLen == 0 {
+		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed: empty buffer requested")
+		return nil, nil
+	}
+
+	buf := make([]byte, bufLen)
+	r, _, err := procNtQuerySystemInformation.Call(
+		uintptr(SystemProcessInformation),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(bufLen),
+		uintptr(unsafe.Pointer(&bufLen)),
+	)
+	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
+	if r >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
+		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
 		return nil, nil
 	}
 
@@ -119,41 +145,6 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		buf = buf[offset:]
 	}
-}
-
-func getInformation(syscall *windows.LazyProc, kind int) ([]byte, error) {
-	var bufLen uint32
-
-	ret, _, err := syscall.Call(
-		uintptr(kind),
-		uintptr(0),
-		uintptr(0),
-		uintptr(unsafe.Pointer(&bufLen)),
-	)
-
-	if bufLen == 0 {
-		return nil, fmt.Errorf("getSystemInformation: empty buffer requested")
-	}
-
-	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
-		logger.V(1).Println("a", err)
-		return nil, err
-	}
-
-	buf := make([]byte, bufLen)
-	r, _, err := syscall.Call(
-		uintptr(kind),
-		uintptr(unsafe.Pointer(&buf[0])),
-		uintptr(bufLen),
-		uintptr(unsafe.Pointer(&bufLen)),
-	)
-	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
-	if r >= 0x80000000 {
-		logger.V(1).Println("b", r, err)
-		return nil, err
-	}
-
-	return buf, nil
 }
 
 // convertUTF16ToString comes from gopsutil: https://github.com/shirou/gopsutil/blob/7e94bb8bcde053b6d6c98bda5145e9742c913c39/process/process_windows.go#L998-L1009
@@ -179,8 +170,34 @@ func retrieveCmdLine(pid uint32) (cmdline string, err error) {
 		return "", err
 	}
 
-	buf, err := getInformation(procNtQueryInformationProcess, ProcessCommandLineInformation)
-	if err != nil {
+	var bufLen uint32
+
+	ret, _, err := procNtQueryInformationProcess.Call(
+		uintptr(h),
+		uintptr(ProcessCommandLineInformation),
+		uintptr(0),
+		uintptr(0),
+		uintptr(unsafe.Pointer(&bufLen)),
+	)
+
+	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
+		return "", fmt.Errorf("cannot retrieve the command line informations for the process %d, system call 'NtQueryInformationProcess' failed: %v", pid, err)
+	}
+
+	if bufLen == 0 {
+		return "", fmt.Errorf("NtQueryInformationProcess: empty buffer requested")
+	}
+
+	buf := make([]byte, bufLen)
+	ret, _, err = procNtQueryInformationProcess.Call(
+		uintptr(h),
+		uintptr(ProcessCommandLineInformation),
+		uintptr(unsafe.Pointer(&buf[0])),
+		uintptr(bufLen),
+		uintptr(unsafe.Pointer(&bufLen)),
+	)
+	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
+	if ret >= 0x80000000 {
 		return "", fmt.Errorf("cannot retrieve the command line informations for the process %d, system call 'NtQueryInformationProcess' failed: %v", pid, err)
 	}
 
@@ -258,8 +275,9 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 		res.CmdLine = res.Name
 	}
 
-	// TODO: split properly the arguments
-	res.CmdLineList = []string{res.CmdLine}
+	// Split the input arguments.
+	// We do so argument by argument, cutting on `"`, `'` and ` ` boundaries
+	res.CmdLineList = parseCmdLine(res.CmdLine)
 
 	// the process status is not simple to derive on windows, and not currently supported by gopsutil
 	res.Status = "?"
@@ -267,4 +285,56 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 	res.NumThreads = int(process.NumberOfThreads)
 
 	return res, true
+}
+
+func parseCmdLine(cmdLine string) []string {
+	res := []string{}
+
+	remainder := cmdLine
+	for len(remainder) > 0 {
+		switch remainder[0] {
+		case '"':
+			splits := strings.SplitN(remainder, `"`, 3)
+			if len(splits) != 3 {
+				res = append(res, remainder)
+				break
+			}
+
+			if len(splits[0]) > 0 {
+				res = append(res, strings.Split(splits[0], " ")...)
+			}
+
+			res = append(res, splits[1])
+
+			remainder = splits[2]
+		case '\'':
+			splits := strings.SplitN(remainder, "'", 3)
+			if len(splits) != 3 {
+				res = append(res, remainder)
+				break
+			}
+
+			if len(splits[0]) > 0 {
+				res = append(res, strings.Split(splits[0], " ")...)
+			}
+
+			res = append(res, splits[1])
+
+			remainder = splits[2]
+		default:
+			splits := strings.SplitN(remainder, " ", 2)
+			if len(splits) != 2 {
+				res = append(res, remainder)
+				break
+			}
+
+			if len(splits[0]) > 0 {
+				res = append(res, splits[0])
+			}
+
+			remainder = splits[1]
+		}
+	}
+
+	return res
 }
