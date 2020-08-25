@@ -1,5 +1,3 @@
-// +build linux
-
 package facts
 
 import "testing"
