@@ -45,15 +45,6 @@ const (
 	StatusBufferOverflow     = 0x80000005
 )
 
-type UnicodeString struct {
-	Length        uint16
-	MaximumLength uint16
-	// padding
-	_      uint32
-	Buffer unsafe.Pointer
-}
-
-// TODO: add a version for i686, as some fields differ between x86 and AMD64.
 //nolint:maligned
 type SystemProcessInformationStruct struct {
 	NextEntryOffset              uint32
@@ -90,22 +81,6 @@ type SystemProcessInformationStruct struct {
 	ReadTransferCount            int64
 	WriteTransferCount           int64
 	OtherTransferCount           int64
-}
-
-type ProcessDiskCounters struct {
-	BytesRead           uint64
-	BytesWritten        uint64
-	ReadOperationCount  uint64
-	WriteOperationCount uint64
-	FlushOperationCount uint64
-}
-
-type SystemProcessInformationExtension struct {
-	DiskCounters          ProcessDiskCounters
-	ContextSwitches       uint64
-	Reserved              uint32
-	UserSidOffset         uint32
-	PackageFullNameOffset uint64
 }
 
 // windows uses the amount of 100ns increments since Jan 1, 1601 instead of unix time.
