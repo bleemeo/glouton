@@ -21,9 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"unsafe"
-
-	"golang.org/x/sys/windows"
 )
 
 //nolint:gochecknoglobals
@@ -36,111 +33,12 @@ var (
 	registration      = flag.String("registration-key", "", "Registration key of your account")
 )
 
-func fixOsPermissions() error {
-	curProcess := windows.CurrentProcess()
-
-	// we need *moar* permissions to change the owner of the files: the SE_TAKE_OWNERSHIP_NAME !
-	var token windows.Token
-
-	err := windows.OpenProcessToken(curProcess, windows.TOKEN_ADJUST_PRIVILEGES|windows.TOKEN_QUERY, &token)
-	if err != nil {
-		return err
-	}
-
-	// Enable the SE_TAKE_OWNERSHIP_NAME privilege.
-	ownershipPrivilege, err := windows.UTF16PtrFromString("SeTakeOwnershipPrivilege")
-	if err != nil {
-		return err
-	}
-
-	var luid windows.LUID
-
-	err = windows.LookupPrivilegeValue(nil, ownershipPrivilege, &luid)
-	if err != nil {
-		return err
-	}
-
-	privilege := windows.Tokenprivileges{PrivilegeCount: 1}
-	privilege.Privileges[0].Attributes = windows.SE_PRIVILEGE_ENABLED
-	privilege.Privileges[0].Luid = luid
-
-	err = windows.AdjustTokenPrivileges(token, false, &privilege, uint32(unsafe.Sizeof(privilege)), nil, nil)
-	if err != nil {
-		return err
-	}
-
-	// Enable the SE_RESTORE_NAME privilege.
-	ownershipPrivilege, err = windows.UTF16PtrFromString("SeRestorePrivilege")
-	if err != nil {
-		return err
-	}
-
-	err = windows.LookupPrivilegeValue(nil, ownershipPrivilege, &luid)
-	if err != nil {
-		return err
-	}
-
-	privilege.Privileges[0].Luid = luid
-
-	err = windows.AdjustTokenPrivileges(token, false, &privilege, uint32(unsafe.Sizeof(privilege)), nil, nil)
-	if err != nil {
-		return err
-	}
-
-	// fix the permissions of the state.json and the logs with the SID of "NT AUTHORITY\LocalService"
-	sid, _, _, err := windows.LookupSID("", `NT AUTHORITY\LocalService`)
-	if err != nil {
-		fmt.Printf("Couldn't retrieve the SID for LocalService: %v\n", err)
-		os.Exit(1)
-	}
-
-	// TODO: read the configuration to get agent.state_file instead of a static path
-	_ = updateOwner(filepath.Join(*basedir, "state.json"), sid)
-	_ = updateOwner(filepath.Join(*basedir, "state.json.tmp"), sid)
-	_ = updateOwner(filepath.Join(*basedir, `logs\glouton.log`), sid)
-
-	return nil
-}
-
-func updateOwner(filepath string, sid *windows.SID) error {
-	access := []windows.EXPLICIT_ACCESS{
-		{
-			AccessPermissions: windows.STANDARD_RIGHTS_ALL,
-			AccessMode:        windows.GRANT_ACCESS,
-			Inheritance:       windows.SUB_CONTAINERS_AND_OBJECTS_INHERIT,
-			Trustee: windows.TRUSTEE{
-				MultipleTrustee:          nil,
-				MultipleTrusteeOperation: windows.NO_MULTIPLE_TRUSTEE,
-				TrusteeForm:              windows.TRUSTEE_IS_SID,
-				TrusteeType:              windows.TRUSTEE_IS_USER,
-				TrusteeValue:             windows.TrusteeValue(unsafe.Pointer(sid)),
-			},
-		},
-	}
-
-	acl, err := windows.ACLFromEntries(access, nil)
-	if err != nil {
-		return err
-	}
-
-	err = windows.SetNamedSecurityInfo(filepath, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION, sid, nil, nil, nil)
-	if err != nil {
-		return err
-	}
-
-	return windows.SetNamedSecurityInfo(filepath, windows.SE_FILE_OBJECT, windows.DACL_SECURITY_INFORMATION, nil, nil, acl, nil)
-}
-
 func OSDependentMain() {
 	if !*postInstall {
 		return
 	}
 
 	defer os.Exit(0)
-
-	if err := fixOsPermissions(); err != nil {
-		fmt.Printf("Couldn't fix file permissions: %v\n", err)
-	}
 
 	if *configFileSubpath == "" || *basedir == "" {
 		fmt.Println("No config file specified, cannot install the agent configuration")
