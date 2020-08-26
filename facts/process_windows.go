@@ -126,10 +126,9 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 		return nil, nil
 	}
 
-	// length/0x100 is the maximum theoretical number of processes that could be contained in a buffer of size 'bufLen'
-	// on AMD64 (it is probably less in practice, due to thread information being mixed in the result). This should
-	// reduce reallocations.
-	processes = make([]Process, 0, len(buf)/0x100)
+	// We use the maximum theoretical number of processes that could be contained in a buffer of size 'bufLen'
+	// to reduce reallocations.
+	processes = make([]Process, 0, uintptr(len(buf))/unsafe.Sizeof(SystemProcessInformationStruct{}))
 
 	for {
 		process := (*SystemProcessInformationStruct)(unsafe.Pointer(&buf[0]))
@@ -277,7 +276,23 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 
 	// Split the input arguments.
 	// We do so argument by argument, cutting on `"`, `'` and ` ` boundaries
-	res.CmdLineList = parseCmdLine(res.CmdLine)
+	ptr, err := windows.UTF16PtrFromString(res.CmdLine)
+	if err == nil {
+		var argc int32
+
+		argv, err := windows.CommandLineToArgv(ptr, &argc)
+		if err == nil {
+			var i int32
+
+			for i = 0; i < argc; i++ {
+				res.CmdLineList = append(res.CmdLineList, windows.UTF16PtrToString((*uint16)(unsafe.Pointer(&argv[i][0]))))
+			}
+		} else {
+			res.CmdLineList = []string{res.CmdLine}
+		}
+	} else {
+		res.CmdLineList = []string{res.CmdLine}
+	}
 
 	// the process status is not simple to derive on windows, and not currently supported by gopsutil
 	res.Status = "?"
@@ -285,56 +300,4 @@ func parseProcessData(process *SystemProcessInformationStruct) (res Process, ok 
 	res.NumThreads = int(process.NumberOfThreads)
 
 	return res, true
-}
-
-func parseCmdLine(cmdLine string) []string {
-	res := []string{}
-
-	remainder := cmdLine
-	for len(remainder) > 0 {
-		switch remainder[0] {
-		case '"':
-			splits := strings.SplitN(remainder, `"`, 3)
-			if len(splits) != 3 {
-				res = append(res, remainder)
-				break
-			}
-
-			if len(splits[0]) > 0 {
-				res = append(res, strings.Split(splits[0], " ")...)
-			}
-
-			res = append(res, splits[1])
-
-			remainder = splits[2]
-		case '\'':
-			splits := strings.SplitN(remainder, "'", 3)
-			if len(splits) != 3 {
-				res = append(res, remainder)
-				break
-			}
-
-			if len(splits[0]) > 0 {
-				res = append(res, strings.Split(splits[0], " ")...)
-			}
-
-			res = append(res, splits[1])
-
-			remainder = splits[2]
-		default:
-			splits := strings.SplitN(remainder, " ", 2)
-			if len(splits) != 2 {
-				res = append(res, remainder)
-				break
-			}
-
-			if len(splits[0]) > 0 {
-				res = append(res, splits[0])
-			}
-
-			remainder = splits[1]
-		}
-	}
-
-	return res
 }
