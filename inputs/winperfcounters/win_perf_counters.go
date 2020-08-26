@@ -175,61 +175,59 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 	// unnecessary data from the telegraf input
 	delete(originalContext.Tags, "objectname")
 
-	if originalContext.Measurement == diskIOModuleName {
-		instance, present := originalContext.Tags["instance"]
-		if !present {
-			return originalContext, true
-		}
+	if originalContext.Measurement != diskIOModuleName {
+		return originalContext, false
+	}
 
-		// necessary to prevent the local webUI from crashing (looks like it doesn't handle well 'item' with "weird values")
-		delete(originalContext.Tags, "instance")
+	instance, present := originalContext.Tags["instance"]
+	if !present {
+		return originalContext, true
+	}
 
-		if instance == "_Total" {
-			return originalContext, false
-		}
+	// necessary to prevent the local webUI from crashing (looks like it doesn't handle well 'item' with "weird values")
+	delete(originalContext.Tags, "instance")
 
-		// 'instance' has a pattern '<DISK_NUMBER> (<PARTITION_NAME> )+', e.g. "0 C:" or "0 C: D:"
-		// (here we have two partitions on the same disk). We keep the lowest letter, as it is more
-		// probably an essential device).
-		splitInstance := strings.Split(instance, " ")
-		if len(splitInstance) < 2 {
-			return originalContext, false
-		}
+	if instance == "_Total" {
+		return originalContext, true
+	}
 
-		if _, err := strconv.Atoi(splitInstance[0]); err != nil {
-			return originalContext, false
-		}
+	// 'instance' has a pattern '<DISK_NUMBER> (<PARTITION_NAME> )+', e.g. "0 C:" or "0 C: D:"
+	// (here we have two partitions on the same disk). We keep the lowest letter, as it is more
+	// probably an essential device).
+	splitInstance := strings.Split(instance, " ")
+	if len(splitInstance) < 2 {
+		return originalContext, false
+	}
 
-		partitions := splitInstance[1:]
-		sort.Strings(partitions)
+	if _, err := strconv.Atoi(splitInstance[0]); err != nil {
+		return originalContext, false
+	}
 
-		instance = partitions[0]
-		originalContext.Annotations.BleemeoItem = instance
+	partitions := splitInstance[1:]
+	sort.Strings(partitions)
 
-		for _, r := range c.option.IODiskBlacklist {
-			if r.MatchString(instance) {
-				return originalContext, true
-			}
-		}
+	instance = partitions[0]
+	originalContext.Annotations.BleemeoItem = instance
 
-		// if the whitelist is empty, we retrieve all the disks that are not blacklisted
-		// if it is not empty, we filter them with the whitelist
-		keep := len(c.option.IODiskWhitelist) == 0
-		if !keep {
-			for _, r := range c.option.IODiskWhitelist {
-				if r.MatchString(instance) {
-					keep = true
-					break
-				}
-			}
-		}
-
-		if !keep {
+	for _, r := range c.option.IODiskBlacklist {
+		if r.MatchString(instance) {
 			return originalContext, true
 		}
 	}
 
-	return originalContext, false
+	// if the whitelist is empty, we retrun all the disks that are not blacklisted
+	// if it is not empty, we filter them with the whitelist
+	drop = len(c.option.IODiskWhitelist) != 0
+	if drop {
+		for _, r := range c.option.IODiskWhitelist {
+			if r.MatchString(instance) {
+				drop = false
+				break
+			}
+		}
+	}
+
+	return originalContext, drop
 }
 
 func (c *winCollector) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
@@ -237,7 +235,7 @@ func (c *winCollector) transformMetrics(originalContext internal.GatherContext, 
 
 	if currentContext.Measurement == diskIOModuleName {
 		if freePerc, present := fields["Percent_Idle_Time"]; present {
-			// we clamp the min value to zero as due to what I believe to be timing imprecisions a sightly negative value can be returned
+			// we clamp the min value to zero as a slightly negative value can be returned (due to what I believe to be timing imprecisions)
 			res["utilization"] = math.Max(0., 100.-freePerc)
 			// io_time is the number of ms spent doing IO in the last second.
 			// utilization is 100% when we spent 1000ms during one second
