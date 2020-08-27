@@ -202,8 +202,9 @@ func retrieveCmdLine(pid uint32) (cmdline string, err error) {
 
 	_ = syscall.CloseHandle(syscall.Handle(h))
 
-	// the offset is probably 8 bytes instead of 16 on i686, to be confirmed
-	return convertUTF16ToString(buf[16:]), nil
+	str := *(*UnicodeString)(unsafe.Pointer(&buf[0]))
+
+	return windows.UTF16PtrToString((*uint16)(str.Buffer)), nil
 }
 
 func retrieveUsername(pid uint32) (string, error) {
