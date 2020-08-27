@@ -102,6 +102,7 @@ For example to run test:
 GOCMD="docker run --net host --rm -ti -v $(pwd):/srv/workspace -w /srv/workspace -u $UID -e HOME=/tmp/home golang go"
 
 $GOCMD test ./...
+GOARCH=386 $GOCMD test ./...
 ```
 
 The following will assume "go" is golang 1.13 or more, if not replace it with $GOCMD or use an alias:

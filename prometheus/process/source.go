@@ -112,13 +112,16 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 
 	result := make([]facts.Process, len(procs))
 
+	var skippedProcesses error
+
 	for i, p := range procs {
 		if os.IsNotExist(p.procErr) {
 			continue
 		}
 
 		if p.procErr != nil {
-			return nil, p.procErr
+			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %v)", err)
+			continue
 		}
 
 		status := facts.PsStat2Status(p.procStat.State)
@@ -166,6 +169,10 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 			Executable:      executable,
 			NumThreads:      p.procStat.NumThreads,
 		}
+	}
+
+	if skippedProcesses != nil {
+		logger.V(1).Println(skippedProcesses.Error())
 	}
 
 	c.l.Lock()

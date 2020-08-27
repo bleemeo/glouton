@@ -193,7 +193,7 @@ type gceNetworkInterface struct {
 }
 
 type gceInstance struct {
-	ID          int                   `json:"id"`
+	ID          int64                 `json:"id"`
 	Hostname    string                `json:"hostname"`
 	MachineType string                `json:"machineType"`
 	Name        string                `json:"name"`
@@ -202,7 +202,7 @@ type gceInstance struct {
 	Zone        string                `json:"zone"`
 }
 
-func parseGceFacts(projectID int, inst gceInstance, facts map[string]string) {
+func parseGceFacts(projectID int64, inst gceInstance, facts map[string]string) {
 	machineTypePrefix := fmt.Sprintf("projects/%d/machineTypes/", projectID)
 	if strings.HasPrefix(inst.MachineType, machineTypePrefix) {
 		facts["gce_instance_type"] = inst.MachineType[len(machineTypePrefix):]
@@ -215,7 +215,7 @@ func parseGceFacts(projectID int, inst gceInstance, facts map[string]string) {
 
 	facts["gce_local_hostname"] = inst.Hostname
 	facts["gce_local_shortname"] = inst.Name
-	facts["gce_instance_id"] = strconv.Itoa(inst.ID)
+	facts["gce_instance_id"] = strconv.FormatInt(inst.ID, 10)
 
 	publicIPs := make([]string, 0, 1)
 	privateIPs := make([]string, 0, 1)
@@ -296,7 +296,7 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 	}
 
 	// retrieve the ID of the (GCE) project for which this VM instance was spawned. We will use it later to "sanitize" machine types, zone names, and so on.
-	projectID, err := strconv.Atoi(projectIDStr)
+	projectID, err := strconv.ParseInt(projectIDStr, 0, 64)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't retrieve your google cloud project ID, some facts may be missing on your dashboard: %v", err)
 		return false

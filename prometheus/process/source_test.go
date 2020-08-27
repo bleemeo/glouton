@@ -7,6 +7,8 @@ import (
 	"glouton/facts"
 	"os"
 	"reflect"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -103,6 +105,14 @@ func testProc(t *testing.T, procs proc.Iter) {
 	}
 
 	if current.procErr != nil {
+		// skip overflow errors if we are in 32bits mode (we assume we are on a 64bits system).
+		// We do this because enumerating 64bits process when running in 32bits will fail,
+		// as the memory space of theses processes will overflow the capacity of uint,
+		// and uint is the type the procfs uses to represent the VM size of processes.
+		if runtime.GOARCH == "386" && strings.Contains(current.procErr.Error(), "integer overflow") {
+			return
+		}
+
 		t.Error(current.procErr)
 	}
 

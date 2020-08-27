@@ -45,44 +45,6 @@ const (
 	StatusBufferOverflow     = 0x80000005
 )
 
-//nolint:maligned
-type SystemProcessInformationStruct struct {
-	NextEntryOffset              uint32
-	NumberOfThreads              uint32
-	WorkingSetPrivateSize        int64
-	HardFaultCount               uint32
-	NumberOfThreadsHighWatermark uint32
-	CycleTime                    uint64
-	CreateTime                   int64
-	UserTime                     int64
-	KernelTime                   int64
-	ImageName                    UnicodeString
-	BasePriority                 int32
-	UniqueProcessID              uintptr
-	InheritedFromUniqueProcessID uintptr
-	HandleCount                  uint32
-	SessionID                    uint32
-	PageDirectoryBase            uintptr
-	PeakVirtualSize              uintptr
-	VirtualSize                  uintptr
-	PageFaultCount               uint32
-	PeakWorkingSetSize           uintptr
-	WorkingSetSize               uintptr
-	QuotaPeakPagedPoolUsage      uintptr
-	QuotaPagedPoolUsage          uintptr
-	QuotaPeakNonPagedPoolUsage   uintptr
-	QuotaNonPagedPoolUsage       uintptr
-	PagefileUsage                uintptr
-	PeakPagefileUsage            uintptr
-	PrivatePageCount             uintptr
-	ReadOperationCount           int64
-	WriteOperationCount          int64
-	OtherOperationCount          int64
-	ReadTransferCount            int64
-	WriteTransferCount           int64
-	OtherTransferCount           int64
-}
-
 // windows uses the amount of 100ns increments since Jan 1, 1601 instead of unix time.
 // windowsTimeToTime converts a windows timestamp to a proper time object.
 func windowsTimeToTime(t int64) time.Time {
@@ -144,23 +106,6 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 		buf = buf[offset:]
 	}
-}
-
-// convertUTF16ToString comes from gopsutil: https://github.com/shirou/gopsutil/blob/7e94bb8bcde053b6d6c98bda5145e9742c913c39/process/process_windows.go#L998-L1009
-// Note that I have switched the left shift out of the uint16() cast, as it probably doesn't work otherwise.
-func convertUTF16ToString(src []byte) string {
-	srcLen := len(src) / 2
-
-	codePoints := make([]uint16, srcLen)
-
-	srcIdx := 0
-
-	for i := 0; i < srcLen; i++ {
-		codePoints[i] = uint16(src[srcIdx]) | uint16(src[srcIdx+1])<<8
-		srcIdx += 2
-	}
-
-	return syscall.UTF16ToString(codePoints)
 }
 
 func retrieveCmdLine(pid uint32) (cmdline string, err error) {

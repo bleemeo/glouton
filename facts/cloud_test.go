@@ -290,7 +290,7 @@ const (
 		},
 		"zone": "projects/383030834456/zones/europe-west1-d"
 	}`
-	gceTestProjectID int = 383030834456
+	gceTestProjectID int64 = 383030834456
 )
 
 func TestAzureDecodeMetadata(t *testing.T) {

@@ -14,16 +14,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// +build windows
-
 package facts
 
 import (
+	"testing"
 	"unsafe"
 )
 
-type UnicodeString struct {
-	Length        uint16
-	MaximumLength uint16
-	Buffer        unsafe.Pointer
+func TestWindowsStructureSizes(t *testing.T) {
+	if unsafe.Sizeof(UnicodeString{}) != 16 {
+		t.Errorf("unsafe.Sizeof(UnicodeString{}) = %d, want 16", unsafe.Sizeof(UnicodeString{}))
+	}
+
+	if unsafe.Sizeof(SystemProcessInformationStruct{}) != 0x100 {
+		t.Errorf("unsafe.Sizeof(SystemProcessInformationStruct{}) = %d, want 0x100", unsafe.Sizeof(SystemProcessInformationStruct{}))
+	}
 }
