@@ -68,14 +68,15 @@ Section "!${PRODUCT_NAME}"
   #### UPGRADE FROM BLEEMEO-AGENT ####
 
   # Delete bleemeo agent if present
-  IfFileExists "$PROGRAMFILES\bleemeo-agent" 0 old_agent_not_present
+  IfFileExists "$PROGRAMFILES\bleemeo-agent\uninstall.exe" 0 old_agent_not_present
 
   # Move its config & state
-  SetOverwrite off
+  # Beware, if you reinstall the bleemeo agent and you then upgrade glouton, it will overwrite the config files
+  # with thoses coming from bleemeo-agent !
+  # (We cannot use SetOverwrite as it only impacts the use of File, not CopyFiles :/)
   CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf" "${CONFIGDIR}\glouton.conf"
   CopyFiles "C:\ProgramData\bleemeo\etc\agent.conf.d\*.conf" "${CONFIGDIR}\conf.d\"
   CopyFiles "C:\ProgramData\bleemeo\state.json" "${CONFIGDIR}"
-  SetOverwrite on
 
   # Uninstall the bleemeo-agent
   ExecWait '"$PROGRAMFILES\bleemeo-agent\uninstall.exe" /S'
@@ -90,15 +91,16 @@ old_agent_not_present:
     File ../../dist/${PRODUCT_NAME}_windows_386/${PRODUCT_NAME}.exe
   ${EndIf}
 
-  # Needed for the icon shown in 'Apps & Features'
+  # We need the icon to be shown in 'Apps & Features'
   File ${PRODUCT_ICON}
+  File windows_update_checker.ps1
 
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   File "/oname=${CONFIGDIR}\conf.d\05-system.conf" ../../packaging/windows/glouton.conf
 
   # generate the config file with the account ID and registration ID
-  nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --install-config-path "${CONFIGDIR}\conf.d\30-install.conf"'
+  nsExec::ExecToLog '"$INSTDIR\${PRODUCT_NAME}.exe" --post-install --account-id "$AccountIDValue" --registration-key "$RegistrationKeyValue" --basedir "${CONFIGDIR}" --config-file-subpath "conf.d\30-install.conf"'
 
   # Let's expose proper values in the "Apps & Features" Windows settings by registering our installer
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
@@ -131,7 +133,7 @@ old_agent_not_present:
                    "EstimatedSize" "$0"
 
   # Create the service
-  nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" type=own start=auto DisplayName="${PRODUCT_NAME} by ${COMPANY_NAME} -- Monitoring Agent"'
+  nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath="$INSTDIR\glouton.exe" obj="NT AUTHORITY\LocalService" type=own start=auto DisplayName="${PRODUCT_NAME} by ${COMPANY_NAME} -- Monitoring Agent"'
   # Restart automatically in case of failure
   nsExec::ExecToLog 'sc.exe failure "${AGENT_SERVICE_NAME}" actions=restart/1000 reset=180'
 
@@ -140,6 +142,11 @@ old_agent_not_present:
     MessageBox MB_OK "Service installation failed. You may consider restarting this machine, in case there is ongoing windows updates or services changes, and then restarting this installer. If this happens again, please report us the issue at support@bleemeo.com."
     Abort "The installation of the Windows service failed !"
   ${EndIf}
+
+  # Register the windows update task (first try to delete it in cas it already exists, then add it and run it)
+  nsExec::ExecToLog 'schtasks.exe /DELETE /F /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker"'
+  nsExec::ExecToLog 'schtasks.exe /CREATE /RU System /SC HOURLY /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker" /TR "powershell.exe -NonInteractive -File \"$INSTDIR\windows_update_checker.ps1\""'
+  nsExec::ExecToLog 'schtasks.exe /RUN /I /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker"'
 
   # Start the service
   nsExec::ExecToLog 'sc.exe start "${AGENT_SERVICE_NAME}"'
@@ -152,6 +159,8 @@ Section "Uninstall"
 
   nsExec::ExecToLog 'net stop "${AGENT_SERVICE_NAME}"'
   nsExec::ExecToLog 'sc.exe delete "${AGENT_SERVICE_NAME}"'
+
+  nsExec::ExecToLog 'schtasks.exe /DELETE /F /TN "${COMPANY_NAME}\${PRODUCT_NAME}\Windows Update Checker"'
 
   RMDir /r "$INSTDIR"
   # delete the bleemeo folder too if it is empty

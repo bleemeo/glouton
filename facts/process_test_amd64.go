@@ -14,48 +14,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package main
+package facts
 
 import (
-	"flag"
-	"fmt"
-	"glouton/agent"
-	versionPkg "glouton/version"
-	"strings"
-
-	_ "net/http/pprof" //nolint: gosec
+	"testing"
+	"unsafe"
 )
 
-//nolint: gochecknoglobals
-var (
-	configFiles = flag.String("config", "", "Configuration files/dirs to load.")
-	showVersion = flag.Bool("version", false, "Show version and exit")
-)
-
-//nolint: gochecknoglobals
-var (
-	version string
-	commit  string
-)
-
-func main() {
-	if version != "" {
-		versionPkg.Version = version
+func TestWindowsStructureSizes(t *testing.T) {
+	if unsafe.Sizeof(UnicodeString{}) != 16 {
+		t.Errorf("unsafe.Sizeof(UnicodeString{}) = %d, want 16", unsafe.Sizeof(UnicodeString{}))
 	}
 
-	if commit != "" {
-		versionPkg.BuildHash = commit
+	if unsafe.Sizeof(SystemProcessInformationStruct{}) != 0x100 {
+		t.Errorf("unsafe.Sizeof(SystemProcessInformationStruct{}) = %d, want 0x100", unsafe.Sizeof(SystemProcessInformationStruct{}))
 	}
-
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Println(versionPkg.Version)
-		return
-	}
-
-	// run os-specific initialisation codd
-	OSDependentMain()
-
-	agent.Run(strings.Split(*configFiles, ","))
 }

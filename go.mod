@@ -53,14 +53,13 @@ require (
 	github.com/shirou/gopsutil v2.20.7-0.20200724130941-7e94bb8bcde0+incompatible
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/sirupsen/logrus v1.6.0 // indirect
-	github.com/stretchr/testify v1.6.0 // indirect
 	github.com/tidwall/gjson v1.6.0 // indirect
 	github.com/tidwall/pretty v1.0.1 // indirect
 	github.com/vektah/gqlparser v1.3.1
 	github.com/vektah/gqlparser/v2 v2.0.1
 	github.com/vishvananda/netlink v1.1.0
 	github.com/vishvananda/netns v0.0.0-20200520041808-52d707b772fe // indirect
-	golang.org/x/sys v0.0.0-20200523222454-059865788121
+	golang.org/x/sys v0.0.0-20200622214017-ed371f2e16b4
 	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1 // indirect
 	google.golang.org/appengine v1.6.6 // indirect
 	google.golang.org/genproto v0.0.0-20200528191852-705c0b31589b // indirect

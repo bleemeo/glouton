@@ -16,3 +16,5 @@ sed -i -e "s/^!define PRODUCT_VERSION \"0.1\"$/!define PRODUCT_VERSION \"${VERSI
 docker run --rm -v "$(pwd):/work" bleemeolabs/bleemeo-nsis makensis work/windows/bleemeo.nsi
 
 cp "work/windows/glouton-installer.exe" "dist/glouton_${VERSION}_windows_installer.exe"
+
+rm -rf work
