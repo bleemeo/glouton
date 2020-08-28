@@ -223,6 +223,10 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		if v == "" {
 			delete(newFacts, k)
 		}
+
+		if len(v) >= 100 {
+			newFacts[k] = v[:97] + "..."
+		}
 	}
 
 	f.facts = newFacts
