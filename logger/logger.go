@@ -137,7 +137,6 @@ func setLogger(cb func() error) error {
 	err := cb()
 	if err != nil {
 		cfg.writer = os.Stderr
-		cfg.useSyslog = false
 	}
 
 	cfg.teeWriter = io.MultiWriter(logBuffer, cfg.writer)
@@ -152,6 +151,7 @@ func UseSyslog() error {
 	return setLogger(func() error {
 		err := cfg.enableSyslog()
 		if err == nil {
+			cfg.useSyslog = true
 			return nil
 		}
 
