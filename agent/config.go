@@ -53,6 +53,7 @@ var defaultConfig = map[string]interface{}{
 	"agent.process_exporter.enabled":    true,
 	"agent.public_ip_indicator":         "https://myip.bleemeo.com",
 	"agent.state_file":                  "state.json",
+	"agent.deprecated_state_file":       "",
 	"agent.upgrade_file":                "upgrade",
 	"agent.metrics_format":              "Bleemeo",
 	"agent.node_exporter.enabled":       true,

@@ -146,17 +146,56 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		logger.Printf("Warning while loading configuration: %v", w)
 	}
 
-	a.state, err = state.Load(a.config.String("agent.state_file"))
+	statePath := a.config.String("agent.state_file")
+	oldStatePath := a.config.String("agent.deprecated_state_file")
+
+	a.state, err = state.Load(statePath)
 	if err != nil {
 		logger.Printf("Error while loading state file: %v", err)
 		return false
 	}
 
+	if !a.state.IsEmpty() {
+		oldStatePath = ""
+	}
+
+	if oldStatePath != "" {
+		oldState, err := state.Load(oldStatePath)
+		if err != nil {
+			logger.Printf("Error while loading state file: %v", err)
+			return false
+		}
+
+		if oldState.IsEmpty() {
+			oldStatePath = ""
+		} else {
+			a.state = oldState
+		}
+	}
+
 	a.migrateState()
 
-	if err := a.state.Save(); err != nil {
-		logger.Printf("State file is not writable, stopping agent: %v", err)
-		return false
+	if err := a.state.SaveTo(statePath); err != nil {
+		if oldStatePath != "" {
+			stateDir := filepath.Dir(statePath)
+			logger.Printf("State file can't we wrote at new path (%s): %v", statePath, err)
+			logger.Printf("Keeping the deprecated path (%s).", oldStatePath)
+			logger.Printf(
+				"To migrate to new path, simply create a persistent folder %s or move %s to %s while Glouton is stopped",
+				stateDir,
+				oldStatePath,
+				statePath,
+			)
+
+			err = a.state.SaveTo(oldStatePath)
+		}
+
+		if err != nil {
+			logger.Printf("State file is not writable, stopping agent: %v", err)
+			return false
+		}
+	} else if oldStatePath != "" {
+		logger.Printf("The deprecated state file (%s) is migrated to new path (%s).", oldStatePath, statePath)
 	}
 
 	return true

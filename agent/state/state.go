@@ -53,7 +53,27 @@ func Load(path string) (*State, error) {
 	return &state, err
 }
 
-// Save will write back the State to state.json.
+// IsEmpty return true is the state is empty. This usually only happen when the state file does not exists.
+func (s *State) IsEmpty() bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return len(s.data) == 0
+}
+
+// SaveTo will write back the State to specified filename and following Save() will use the same file.
+//
+// Note that Save() will use the new filename even if this function fail.
+func (s *State) SaveTo(filename string) error {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.path = filename
+
+	return s.save()
+}
+
+// Save will write back the State to disk.
 func (s *State) Save() error {
 	s.l.Lock()
 	defer s.l.Unlock()
