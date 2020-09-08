@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"glouton/version"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"strings"
@@ -331,7 +332,12 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 		return 0, err
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		// Ensure we read the whole response to avoid "Connection reset by peer" on server
+		// and ensure HTTP connection can be resused
+		_, _ = io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 
 	if resp.StatusCode >= 400 {
 		return 0, decodeError(resp)
