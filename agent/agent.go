@@ -667,7 +667,6 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.store.Run, "Metric store"},
 		{a.triggerHandler.Run, "Internal trigger handler"},
 		{a.dockerFact.Run, "Docker connector"},
-		{api.Run, "Local Web UI"},
 		{a.healthCheck, "Agent healthcheck"},
 		{a.hourlyDiscovery, "Service Discovery"},
 		{a.dailyFact, "Facts gatherer"},
@@ -675,6 +674,10 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.netstatWatcher, "Netstat file watcher"},
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
+	}
+
+	if a.config.Bool("web.enabled") {
+		tasks = append(tasks, taskInfo{api.Run, "Local Web UI"})
 	}
 
 	if a.config.Bool("jmx.enabled") {
