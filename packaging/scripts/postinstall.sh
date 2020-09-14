@@ -140,6 +140,15 @@ if [ "$1" = "configure" ] ; then
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl daemon-reload
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl enable --quiet glouton.service
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl start --quiet glouton.service
+
+    # Glouton version before 20.09.14.12xxxx had the cron.hourly/glouton script not
+    # marked as executable. Fix it.
+    # We only need to fix on upgrade from older version, because fresh install use permission
+    # from package. It's only upgrade that kept permission from filesystem.
+    # (RPM based don't have this behavior and always use permission from package).
+    if dpkg --compare-versions "$2" lt 20.09.14.120000; then
+        chmod +x /etc/cron.hourly/glouton
+    fi
 elif [ "$1" = "1" ] ; then
     # Initial installation on rpm-like system
     test -x /usr/bin/systemctl -o -x /bin/systemctl && systemctl daemon-reload
