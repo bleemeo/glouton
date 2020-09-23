@@ -401,8 +401,9 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 		}
 
 		if s.option.MetricFormat == types.MetricFormatBleemeo {
+			annotations := metric.Annotations()
 			params["label"] = metric.Labels()[types.LabelName]
-			params["item"] = metric.Labels()[common.LabelBleemeoItem]
+			params["item"] = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
 			delete(params, "labels_text")
 		}
 
