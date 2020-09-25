@@ -22,6 +22,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"glouton/logger"
 	"glouton/version"
 	"io"
 	"io/ioutil"
@@ -228,6 +229,12 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 		}
 
 		result = append(result, page.Results...)
+
+		if next == page.Next {
+			logger.V(1).Printf("next page is the same as current page: %s", page.Next)
+			break
+		}
+
 		next = page.Next
 		params = nil // params are now included in next url.
 

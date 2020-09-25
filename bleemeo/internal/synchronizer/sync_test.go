@@ -90,7 +90,7 @@ func writeListing(w io.Writer, elems interface{}) {
 		panic("Cannot encode a constant object !?")
 	}
 
-	fmt.Fprintf(w, "{\"count\": %d, \"next\": null, \"previous\": null, \"results\": %s}", reflect.ValueOf(elems).Len(), results.String())
+	fmt.Fprintf(w, "{\"next\": null, \"previous\": null, \"results\": %s}", results.String())
 }
 
 // getUUID returns the UUID stored in the HTTP query path, if any.
