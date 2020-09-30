@@ -174,6 +174,9 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			case client.IsAuthError(err) && successiveAuthErrors >= 3:
 				delay := common.JitterDelay(60*math.Pow(1.55, float64(successiveAuthErrors)), 0.1, 21600)
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(delay))
+			case client.IsThrottleError(err):
+				deadline := s.client.ThrottleDeadline().Add(common.JitterDelay(15, 0.3, 15))
+				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
 				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
 				s.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
@@ -465,7 +468,7 @@ func (s *Synchronizer) runOnce() error {
 	}
 	startAt := time.Now()
 
-	var lastErr error
+	var firstErr error
 
 	for _, step := range syncStep {
 		if s.ctx.Err() != nil {
@@ -479,8 +482,8 @@ func (s *Synchronizer) runOnce() error {
 			// This could alter the synchronizer would wait to sync again, and we do not desire it.
 			// This would also show errors that could confuse the user like "Synchronization with
 			// Bleemeo Cloud platform still have to wait 1m27s due to too many errors".
-			if lastErr == nil && reason != bleemeoTypes.DisableAgentTooOld {
-				lastErr = errors.New("bleemeo connector is temporary disabled")
+			if firstErr == nil && reason != bleemeoTypes.DisableAgentTooOld {
+				firstErr = errors.New("bleemeo connector is temporary disabled")
 			}
 
 			break
@@ -507,24 +510,30 @@ func (s *Synchronizer) runOnce() error {
 			err := step.method(full)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
-				lastErr = err
+
+				if firstErr == nil {
+					firstErr = err
+				} else if !client.IsAuthError(firstErr) && client.IsAuthError(err) {
+					// Prefere returning Authentication error that other errors
+					firstErr = err
+				}
 			}
 		}
 	}
 
 	logger.V(2).Printf("Synchronization took %v for %v", time.Since(startAt), syncMethods)
 
-	if len(syncMethods) == len(syncStep) && lastErr == nil {
+	if len(syncMethods) == len(syncStep) && firstErr == nil {
 		s.option.Cache.Save()
 		s.nextFullSync = time.Now().Add(common.JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
-	if lastErr == nil {
+	if firstErr == nil {
 		s.lastSync = startAt
 	}
 
-	return lastErr
+	return firstErr
 }
 
 func (s *Synchronizer) syncToPerform() map[string]bool {

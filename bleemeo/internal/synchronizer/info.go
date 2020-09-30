@@ -27,7 +27,7 @@ import (
 func (s *Synchronizer) syncInfo(fullSync bool) error {
 	var globalInfo types.GlobalInfo
 
-	statusCode, err := s.client.DoUnauthenticated("GET", "v1/info/", nil, nil, &globalInfo)
+	statusCode, err := s.client.DoUnauthenticated(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve global informations, got '%v'", err)
 		return nil

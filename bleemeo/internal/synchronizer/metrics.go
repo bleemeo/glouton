@@ -318,7 +318,7 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bo
 		params["active"] = "True"
 	}
 
-	result, err := s.client.Iter("metric", params)
+	result, err := s.client.Iter(s.ctx, "metric", params)
 	if err != nil {
 		return nil, err
 	}
@@ -407,7 +407,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			delete(params, "labels_text")
 		}
 
-		result, err := s.client.Iter("metric", params)
+		result, err := s.client.Iter(s.ctx, "metric", params)
 		if err != nil {
 			return err
 		}
@@ -454,6 +454,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		}
 
 		_, err := s.client.Do(
+			s.ctx,
 			"GET",
 			fmt.Sprintf("v1/metric/%s/", key),
 			params,
@@ -530,7 +531,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 	regCountBeforeUpdate := 30
 	errorCount := 0
 
-	var lastErr error
+	var firstErr error
 
 	retryMetrics := make([]types.Metric, 0)
 	registerMetrics := make([]types.Metric, 0)
@@ -596,7 +597,9 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 					return err
 				}
 
-				lastErr = err
+				if firstErr == nil {
+					firstErr = err
+				}
 
 				errorCount++
 				if errorCount > 10 {
@@ -631,7 +634,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 
 	s.option.Cache.SetMetrics(metrics)
 
-	return lastErr
+	return firstErr
 }
 
 func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registeredMetricsByUUID map[string]bleemeoTypes.Metric,
@@ -745,7 +748,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		}
 	}
 
-	_, err := s.client.Do("POST", "v1/metric/", params, payload, &result)
+	_, err := s.client.Do(s.ctx, "POST", "v1/metric/", params, payload, &result)
 	if err != nil {
 		return err
 	}
@@ -780,6 +783,7 @@ func (s *Synchronizer) metricUpdateOne(key string, metric types.Metric, remoteMe
 			logger.V(2).Printf("Mark active the metric %v (uuid %s)", key, remoteMetric.ID)
 
 			_, err := s.client.Do(
+				s.ctx,
 				"PATCH",
 				fmt.Sprintf("v1/metric/%s/", remoteMetric.ID),
 				map[string]string{"fields": "active"},
@@ -827,7 +831,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 		metricKey := common.LabelsToText(labels, srv.AnnotationsOfStatus(), s.option.MetricFormat == types.MetricFormatBleemeo)
 
 		if metric, ok := registeredMetricsByKey[metricKey]; ok {
-			_, err := s.client.Do("DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
+			_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/metric/%s/", metric.ID), nil, nil, nil)
 			if err != nil {
 				return err
 			}
@@ -887,6 +891,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		logger.V(2).Printf("Mark inactive the metric %v", key)
 
 		_, err := s.client.Do(
+			s.ctx,
 			"PATCH",
 			fmt.Sprintf("v1/metric/%s/", v.ID),
 			map[string]string{"fields": "active"},

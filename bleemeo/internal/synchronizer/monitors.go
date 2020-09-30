@@ -166,7 +166,7 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 		"fields":  fieldList,
 	}
 
-	result, err := s.client.Iter("service", params)
+	result, err := s.client.Iter(s.ctx, "service", params)
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,7 @@ OuterBreak:
 		}
 
 		var result bleemeoTypes.Monitor
-		statusCode, err := s.client.Do("GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
+		statusCode, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/service/%s/", m.uuid), params, nil, &result)
 		if err != nil {
 			return nil, err
 		}

@@ -28,9 +28,17 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
+)
+
+const (
+	minimalThrottle = 15 * time.Second
+	maximalThrottle = 10 * time.Minute
+	// If the throttle delay is less than this, automatically retry the requests
+	maxAutoRetryDelay = time.Minute
 )
 
 // HTTPClient is a wrapper around Bleemeo API. It mostly perform JWT authentication.
@@ -42,8 +50,10 @@ type HTTPClient struct {
 
 	cl *http.Client
 
-	l        sync.Mutex
-	jwtToken string
+	l                   sync.Mutex
+	jwtToken            string
+	throttleDeadline    time.Time
+	throttleConsecutive int
 }
 
 // APIError are returned when HTTP request got a response but that response is
@@ -77,6 +87,17 @@ func IsNotFound(err error) bool {
 func IsServerError(err error) bool {
 	if apiError, ok := err.(APIError); ok {
 		return apiError.StatusCode >= 500
+	}
+
+	return false
+}
+
+// IsThrottleError return true if the error is an APIError due to 429 - Too many request.
+//
+// ThrottleDeadline could be used to get recommended retry deadline.
+func IsThrottleError(err error) bool {
+	if apiError, ok := err.(APIError); ok {
+		return apiError.StatusCode == 429
 	}
 
 	return false
@@ -118,12 +139,20 @@ func NewClient(ctx context.Context, baseURL string, username string, password st
 	}, nil
 }
 
+// ThrottleDeadline return the time request should be retryed.
+func (c *HTTPClient) ThrottleDeadline() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.throttleDeadline
+}
+
 // Do perform the specified request.
 //
 // Response is assumed to be JSON and will be decoded into result. If result is nil, response is not decoded
 //
 // If submittedData is not-nil, it's the body content of the request.
-func (c *HTTPClient) Do(method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
+func (c *HTTPClient) Do(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -132,11 +161,11 @@ func (c *HTTPClient) Do(method string, path string, params map[string]string, da
 		return 0, err
 	}
 
-	return c.do(req, result, true, true)
+	return c.do(ctx, req, result, true, true)
 }
 
 // DoUnauthenticated perform the specified request, but without the JWT token used in `Do`. It is otherwise exactly similar to `Do.
-func (c *HTTPClient) DoUnauthenticated(method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
+func (c *HTTPClient) DoUnauthenticated(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -145,7 +174,7 @@ func (c *HTTPClient) DoUnauthenticated(method string, path string, params map[st
 		return 0, err
 	}
 
-	return c.do(req, result, true, false)
+	return c.do(ctx, req, result, true, false)
 }
 
 func (c *HTTPClient) prepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
@@ -201,7 +230,7 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 // Iter read all page for given resource.
 //
 // params may be modified.
-func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.RawMessage, error) {
+func (c *HTTPClient) Iter(ctx context.Context, resource string, params map[string]string) ([]json.RawMessage, error) {
 	if params == nil {
 		params = make(map[string]string)
 	}
@@ -213,13 +242,13 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 	result := make([]json.RawMessage, 0)
 	next := fmt.Sprintf("v1/%s/", resource)
 
-	for {
+	for ctx.Err() == nil {
 		var page struct {
 			Next    string
 			Results []json.RawMessage
 		}
 
-		_, err := c.Do("GET", next, params, nil, &page)
+		_, err := c.Do(ctx, "GET", next, params, nil, &page)
 		if err != nil && IsNotFound(err) {
 			break
 		}
@@ -243,10 +272,10 @@ func (c *HTTPClient) Iter(resource string, params map[string]string) ([]json.Raw
 		}
 	}
 
-	return result, nil
+	return result, ctx.Err()
 }
 
-func (c *HTTPClient) do(req *http.Request, result interface{}, firstCall bool, withAuth bool) (int, error) {
+func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface{}, firstCall bool, withAuth bool) (int, error) {
 	if withAuth {
 		if c.jwtToken == "" {
 			newToken, err := c.GetJWT()
@@ -260,19 +289,37 @@ func (c *HTTPClient) do(req *http.Request, result interface{}, firstCall bool, w
 		req.Header.Set("Authorization", fmt.Sprintf("JWT %s", c.jwtToken))
 	}
 
-	statusCode, err := c.sendRequest(req, result)
+	for {
+		statusCode, err := c.sendRequest(req, result)
 
-	// reset the JWT token if the call wasn't authorized, the JWT token may have expired
-	if withAuth && firstCall && err != nil {
-		if apiError, ok := err.(APIError); ok {
-			if apiError.StatusCode == 401 {
-				c.jwtToken = ""
-				return c.do(req, result, false, withAuth)
+		// reset the JWT token if the call wasn't authorized, the JWT token may have expired
+		if withAuth && firstCall && err != nil {
+			if apiError, ok := err.(APIError); ok {
+				if apiError.StatusCode == 401 {
+					c.jwtToken = ""
+					return c.do(ctx, req, result, false, withAuth)
+				}
 			}
 		}
-	}
 
-	return statusCode, err
+		if IsThrottleError(err) {
+			delay := time.Until(c.throttleDeadline)
+			if delay > maxAutoRetryDelay {
+				return statusCode, err
+			}
+
+			logger.V(2).Printf("During HTTPClient.do() got too many requests. Had to wait %v", delay)
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+			}
+
+			continue
+		}
+
+		return statusCode, err
+	}
 }
 
 // GetJWT return a new JWT token for authentication with Bleemeo API.
@@ -298,7 +345,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	statusCode, err := c.sendRequest(req, &token)
 	if err != nil {
 		if apiError, ok := err.(APIError); ok {
-			if apiError.StatusCode < 500 {
+			if apiError.StatusCode < 500 && apiError.StatusCode != 429 {
 				apiError.IsAuthError = true
 				return "", apiError
 			}
@@ -308,7 +355,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	}
 
 	if statusCode != 200 {
-		if statusCode < 500 {
+		if statusCode < 500 && statusCode != 429 {
 			return "", APIError{
 				StatusCode:  statusCode,
 				Content:     "Unable to authenticate",
@@ -326,6 +373,13 @@ func (c *HTTPClient) GetJWT() (string, error) {
 }
 
 func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, error) {
+	if time.Until(c.throttleDeadline) > 0 {
+		return 0, APIError{
+			StatusCode: 429,
+			Content:    "Request was throttled",
+		}
+	}
+
 	req.Header.Add("X-Requested-With", "XMLHttpRequest")
 	req.Header.Add("User-Agent", version.UserAgent())
 
@@ -346,8 +400,35 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 		resp.Body.Close()
 	}()
 
+	if resp.StatusCode != 429 && resp.StatusCode < 500 {
+		c.throttleConsecutive = 0
+	}
+
 	if resp.StatusCode >= 400 {
-		return 0, decodeError(resp)
+		err := decodeError(resp)
+
+		if resp.StatusCode == 429 {
+			c.throttleConsecutive++
+
+			delay := minimalThrottle + time.Duration(10*c.throttleConsecutive)*time.Second
+
+			delaySecond, err := strconv.ParseInt(resp.Header.Get("Retry-After"), 10, 64)
+			if err == nil {
+				delay = time.Duration(delaySecond) * time.Second
+			}
+
+			if delay > maximalThrottle {
+				delay = maximalThrottle
+			}
+
+			if delay < minimalThrottle {
+				delay = minimalThrottle
+			}
+
+			c.throttleDeadline = time.Now().Add(delay)
+		}
+
+		return 0, err
 	}
 
 	if result != nil {

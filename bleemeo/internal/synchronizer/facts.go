@@ -64,7 +64,7 @@ func (s *Synchronizer) factsUpdateList() error {
 		"agent": s.agentID,
 	}
 
-	result, err := s.client.Iter("agentfact", params)
+	result, err := s.client.Iter(s.ctx, "agentfact", params)
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func (s *Synchronizer) factRegister(localFacts map[string]string) error {
 
 		var response types.AgentFact
 
-		_, err := s.client.Do("POST", "v1/agentfact/", nil, payload, &response)
+		_, err := s.client.Do(s.ctx, "POST", "v1/agentfact/", nil, payload, &response)
 		if err != nil {
 			return err
 		}
@@ -138,7 +138,7 @@ func (s *Synchronizer) factDeleteFromLocal(localFacts map[string]string) error {
 			continue
 		}
 
-		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
+		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/agentfact/%s/", v.ID), nil, nil, nil)
 		if err != nil {
 			return err
 		}

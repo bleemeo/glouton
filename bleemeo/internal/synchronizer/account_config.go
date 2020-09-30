@@ -27,7 +27,7 @@ func (s *Synchronizer) getAccountConfig(uuid string) (config types.AccountConfig
 		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,docker_integration",
 	}
 
-	_, err = s.client.Do("GET", fmt.Sprintf("v1/accountconfig/%s/", uuid), params, nil, &config)
+	_, err = s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/accountconfig/%s/", uuid), params, nil, &config)
 	if err != nil {
 		return
 	}

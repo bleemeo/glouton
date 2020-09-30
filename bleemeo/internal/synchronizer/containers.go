@@ -83,7 +83,7 @@ func (s *Synchronizer) containerUpdateList() error {
 		"fields": "id,name,docker_id,docker_inspect",
 	}
 
-	result, err := s.client.Iter("container", params)
+	result, err := s.client.Iter(s.ctx, "container", params)
 	if err != nil {
 		return err
 	}
@@ -167,7 +167,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		var result types.Container
 
 		if remoteFound {
-			_, err := s.client.Do("PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
+			_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -175,7 +175,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 			remoteContainers[remoteIndex] = result
 		} else {
-			_, err := s.client.Do("POST", "v1/container/", params, payload, &result)
+			_, err := s.client.Do(s.ctx, "POST", "v1/container/", params, payload, &result)
 			if err != nil {
 				return err
 			}
@@ -206,7 +206,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 			continue
 		}
 
-		_, err := s.client.Do("DELETE", fmt.Sprintf("v1/container/%s/", v.ID), nil, nil, nil)
+		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/container/%s/", v.ID), nil, nil, nil)
 		if err != nil {
 			logger.V(1).Printf("Failed to delete container %v on Bleemeo API: %v", v.Name, err)
 			continue

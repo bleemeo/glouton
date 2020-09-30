@@ -103,6 +103,7 @@ const (
 	NotDisabled DisableReason = iota
 	DisableDuplicatedAgent
 	DisableTooManyErrors
+	DisableTooManyRequests
 	DisableAgentTooOld
 	DisableAuthenticationError
 )
@@ -113,6 +114,8 @@ func (r DisableReason) String() string {
 		return "duplicated state.json"
 	case DisableTooManyErrors:
 		return "too many errors"
+	case DisableTooManyRequests:
+		return "too many requests - client is throttled"
 	case DisableAgentTooOld:
 		return "this agent is too old, and cannot be connected to our managed service"
 	case DisableAuthenticationError:
