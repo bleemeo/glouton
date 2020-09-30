@@ -197,7 +197,6 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		fullSync = true
 	}
 
-	fullForInactive := false
 	previousMetrics := s.option.Cache.MetricsByUUID()
 	activeMetricsCount := 0
 
@@ -217,12 +216,11 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	}
 
 	if len(unregisteredMetrics) > 3*len(previousMetrics)/100 {
-		fullForInactive = true
 		fullSync = true
 	}
 
 	if fullSync {
-		err := s.metricUpdateAll(fullForInactive)
+		err := s.metricUpdateAll(false)
 		if err != nil {
 			s.UpdateMetrics(pendingMetricsUpdate...)
 			return err
@@ -236,16 +234,16 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 		}
 	}
 
-	if !fullForInactive {
-		logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
+	unregisteredMetrics = s.findUnregisteredMetrics(filteredMetrics)
 
-		err := s.metricUpdateList(unregisteredMetrics)
-		if err != nil {
-			return err
-		}
+	logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
+
+	err = s.metricUpdateInactiveList(unregisteredMetrics, fullSync)
+	if err != nil {
+		return err
 	}
 
-	if fullSync || (!fullForInactive && len(unregisteredMetrics) > 0) || len(pendingMetricsUpdate) > 0 {
+	if fullSync || len(unregisteredMetrics) > 0 || len(pendingMetricsUpdate) > 0 {
 		s.UpdateUnitsAndThresholds(false)
 	}
 
@@ -268,7 +266,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	})
 	prioritizeMetrics(filteredMetrics)
 
-	if err := s.metricRegisterAndUpdate(filteredMetrics, fullForInactive); err != nil {
+	if err := s.metricRegisterAndUpdate(filteredMetrics); err != nil {
 		return err
 	}
 
@@ -308,13 +306,15 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 }
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
-func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bool) (map[string]bleemeoTypes.Metric, error) {
+func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
 		"agent":  agentID,
 		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
 	}
 
-	if !includeInactive {
+	if fetchInactive {
+		params["active"] = "False"
+	} else {
 		params["active"] = "True"
 	}
 
@@ -325,11 +325,9 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bo
 
 	metricsByUUID := make(map[string]bleemeoTypes.Metric, len(result))
 
-	if !includeInactive {
-		for _, m := range s.option.Cache.Metrics() {
-			if !m.DeactivatedAt.IsZero() {
-				metricsByUUID[m.ID] = m
-			}
+	for _, m := range s.option.Cache.Metrics() {
+		if m.DeactivatedAt.IsZero() == fetchInactive {
+			metricsByUUID[m.ID] = m
 		}
 	}
 
@@ -355,11 +353,11 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, includeInactive bo
 	return metricsByUUID, nil
 }
 
-func (s *Synchronizer) metricUpdateAll(includeInactive bool) error {
+func (s *Synchronizer) metricUpdateAll(fetchInactive bool) error {
 	// iterate over our agent AND every monitor for metrics
 	metrics := []bleemeoTypes.Metric{}
 
-	agentMetrics, err := s.metricsListWithAgentID(s.agentID, includeInactive)
+	agentMetrics, err := s.metricsListWithAgentID(s.agentID, fetchInactive)
 	if err != nil {
 		return err
 	}
@@ -369,7 +367,7 @@ func (s *Synchronizer) metricUpdateAll(includeInactive bool) error {
 	}
 
 	for _, monitor := range s.option.Cache.Monitors() {
-		monitorMetrics, err := s.metricsListWithAgentID(monitor.AgentID, includeInactive)
+		monitorMetrics, err := s.metricsListWithAgentID(monitor.AgentID, fetchInactive)
 		if err != nil {
 			return err
 		}
@@ -384,8 +382,52 @@ func (s *Synchronizer) metricUpdateAll(includeInactive bool) error {
 	return nil
 }
 
+// metricUpdateInactiveList fetches a list of inactive (or non-existing) metrics.
+//
+// if allowList is true, this function may fetches all inactive metrics. This should only
+// be true if the full list of active metrics was fetched just before.
+func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowList bool) error {
+	if len(metrics) < 10 || !allowList {
+		return s.metricUpdateList(metrics)
+	}
+
+	result := struct {
+		Count int
+	}{}
+
+	_, err := s.client.Do(
+		s.ctx,
+		"GET",
+		"v1/metric/",
+		map[string]string{
+			"fields":    "id",
+			"active":    "False",
+			"agent":     s.agentID,
+			"page_size": "1",
+			"page":      "1", // force using page number paginator which return count
+		},
+		nil,
+		&result,
+	)
+	if err != nil {
+		return err
+	}
+
+	if len(metrics) <= result.Count/100 {
+		// should be faster with one HTTP request per metrics
+		return s.metricUpdateList(metrics)
+	}
+
+	// fewer query with fetching the whole list
+	return s.metricUpdateAll(true)
+}
+
 // metricUpdateList fetches a list of metrics, and updates the cache.
 func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
+	if len(metrics) == 0 {
+		return nil
+	}
+
 	metricsByUUID := s.option.Cache.MetricsByUUID()
 
 	for _, metric := range metrics {
@@ -510,7 +552,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	return nil
 }
 
-func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, fullForInactive bool) error {
+func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error {
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
@@ -549,7 +591,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric, full
 		case metricPassRecreate:
 			currentList = registerMetrics
 
-			if len(registerMetrics) > 0 && !fullForInactive {
+			if len(registerMetrics) > 0 {
 				metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetricsByUUID))
 
 				for _, v := range registeredMetricsByUUID {
