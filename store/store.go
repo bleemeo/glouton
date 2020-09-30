@@ -281,17 +281,26 @@ func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.Me
 // if needed.
 // The points must not be mutated after this call.
 func (s *Store) PushPoints(points []types.MetricPoint) {
+	dedupPoints := make([]types.MetricPoint, 0, len(points))
+
 	s.lock.Lock()
 	for _, point := range points {
 		metric := s.metricGetOrCreate(point.Labels, point.Annotations)
+		length := len(s.points[metric.metricID])
+
+		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {
+			continue
+		}
+
 		s.points[metric.metricID] = append(s.points[metric.metricID], point.Point)
+		dedupPoints = append(dedupPoints, point)
 	}
 	s.lock.Unlock()
 
 	s.notifeeLock.Lock()
 
 	for _, cb := range s.notifyCallbacks {
-		cb(points)
+		cb(dedupPoints)
 	}
 
 	s.notifeeLock.Unlock()

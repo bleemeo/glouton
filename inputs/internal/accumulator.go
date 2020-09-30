@@ -87,6 +87,7 @@ type Accumulator struct {
 	// map a flattened tags to a map[fieldName]value
 	currentValues map[string]map[string]metricPoint
 	pastValues    map[string]map[string]metricPoint
+	now           time.Time
 	l             sync.Mutex
 }
 
@@ -94,6 +95,7 @@ type Accumulator struct {
 func (a *Accumulator) PrepareGather() {
 	a.pastValues = a.currentValues
 	a.currentValues = make(map[string]map[string]metricPoint)
+	a.now = time.Now()
 }
 
 // convertToFloat convert the interface type in float64.
@@ -264,7 +266,7 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 	var metricTime time.Time
 
 	if len(t) != 1 {
-		metricTime = time.Now()
+		metricTime = a.now
 	} else {
 		metricTime = t[0]
 	}
