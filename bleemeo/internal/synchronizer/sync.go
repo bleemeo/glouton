@@ -136,7 +136,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	// is enabled, so this last point is not strictly necesseary). And there is probably some other advantages
 	// I forgot to mention !
 	// When this is done, we can signal that we are initialized, that in turn will allow the MQTT connector start.
-	err := s.syncInfo(false)
+	err := s.syncInfo(false, false)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -162,7 +162,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			break
 		}
 
-		err := s.runOnce()
+		err := s.runOnce(firstSync)
 		if err != nil {
 			s.successiveErrors++
 
@@ -225,14 +225,14 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			s.successiveErrors = 0
 			successiveAuthErrors = 0
 			minimalDelay = common.JitterDelay(15, 0.05, 15)
+		}
 
-			if firstSync {
+		if firstSync {
+			if err == nil {
 				minimalDelay = common.JitterDelay(1, 0.05, 1)
-
-				s.waitCPUMetric()
-
-				firstSync = false
 			}
+
+			firstSync = false
 		}
 	}
 
@@ -430,13 +430,23 @@ func (s *Synchronizer) setClient() error {
 	return nil
 }
 
-func (s *Synchronizer) runOnce() error {
+func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	if s.agentID == "" {
 		if err := s.register(); err != nil {
 			return err
 		}
 
 		s.option.NotifyFirstRegistration(s.ctx)
+		// Do one pass of metric registration to register agent_status.
+		// MQTT connection require this metric to exists before connecting
+		_ = s.syncMetrics(false, true)
+
+		// Also do syncAgent, because agent configuration is also required for MQTT connection
+		_ = s.syncAgent(false, true)
+
+		// Then wait CPU (which should arrive the all other system metrics)
+		// before continuing to process.
+		s.waitCPUMetric()
 	}
 
 	syncMethods := s.syncToPerform()
@@ -455,15 +465,16 @@ func (s *Synchronizer) runOnce() error {
 
 	syncStep := []struct {
 		name                 string
-		method               func(bool) error
+		method               func(bool, bool) error
 		enabledInMaintenance bool
+		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
 	}{
-		{name: "info", method: s.syncInfo, enabledInMaintenance: true},
-		{name: "agent", method: s.syncAgent},
+		{name: "info", method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
+		{name: "agent", method: s.syncAgent, skipOnlyEssential: true},
 		{name: "facts", method: s.syncFacts},
 		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
-		{name: "monitors", method: s.syncMonitors},
+		{name: "monitors", method: s.syncMonitors, skipOnlyEssential: true},
 		{name: "metrics", method: s.syncMetrics},
 	}
 	startAt := time.Now()
@@ -507,7 +518,7 @@ func (s *Synchronizer) runOnce() error {
 		}
 
 		if full, ok := syncMethods[step.name]; ok {
-			err := step.method(full)
+			err := step.method(full, onlyEssential && !step.skipOnlyEssential)
 			if err != nil {
 				logger.V(1).Printf("Synchronization for object %s failed: %v", step.name, err)
 
@@ -517,6 +528,14 @@ func (s *Synchronizer) runOnce() error {
 					// Prefere returning Authentication error that other errors
 					firstErr = err
 				}
+			}
+
+			if onlyEssential && !step.skipOnlyEssential {
+				// We registered only essential object. Make sure all other
+				// object are registered on second run
+				s.l.Lock()
+				s.forceSync[step.name] = false || s.forceSync[step.name]
+				s.l.Unlock()
 			}
 		}
 	}

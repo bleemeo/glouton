@@ -252,7 +252,7 @@ func TestSyncMetrics(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.runOnce(); err != nil {
+	if err := s.runOnce(false); err != nil {
 		t.Fatal(err)
 	}
 

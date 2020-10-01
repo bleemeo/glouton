@@ -26,7 +26,7 @@ import (
 
 const apiTagsLength = 100
 
-func (s *Synchronizer) syncAgent(fullSync bool) error {
+func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
 	var agent types.Agent
 
 	params := map[string]string{

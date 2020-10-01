@@ -24,7 +24,7 @@ import (
 )
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfo(fullSync bool) error {
+func (s *Synchronizer) syncInfo(fullSync bool, onlyEssential bool) error {
 	var globalInfo types.GlobalInfo
 
 	statusCode, err := s.client.DoUnauthenticated(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)

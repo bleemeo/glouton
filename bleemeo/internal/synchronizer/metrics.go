@@ -111,8 +111,13 @@ func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 	return mp.Metric
 }
 
-func prioritizeMetrics(metrics []types.Metric) {
+func prioritizeAndFilterMetrics(metrics []types.Metric, onlyEssential bool) []types.Metric {
 	swapIdx := 0
+	results := metrics
+
+	if onlyEssential {
+		results = make([]types.Metric, 0, 100)
+	}
 
 	for i, m := range metrics {
 		switch m.Labels()[types.LabelName] {
@@ -123,10 +128,16 @@ func prioritizeMetrics(metrics []types.Metric) {
 			"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
 			"swap_used_perc", "cpu_used", "mem_used_perc",
 			"agent_status":
-			metrics[i], metrics[swapIdx] = metrics[swapIdx], metrics[i]
-			swapIdx++
+			if onlyEssential {
+				results = append(results, m)
+			} else {
+				metrics[i], metrics[swapIdx] = metrics[swapIdx], metrics[i]
+				swapIdx++
+			}
 		}
 	}
+
+	return results
 }
 
 // nearly a duplicate of mqtt.filterPoint, but not quite. Alas we cannot easily generalize this as go doesn't have generics (yet).
@@ -183,7 +194,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-func (s *Synchronizer) syncMetrics(fullSync bool) error {
+func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
 		return err
@@ -264,10 +275,15 @@ func (s *Synchronizer) syncMetrics(fullSync bool) error {
 	rand.Shuffle(len(filteredMetrics), func(i, j int) {
 		filteredMetrics[i], filteredMetrics[j] = filteredMetrics[j], filteredMetrics[i]
 	})
-	prioritizeMetrics(filteredMetrics)
+
+	filteredMetrics = prioritizeAndFilterMetrics(filteredMetrics, onlyEssential)
 
 	if err := s.metricRegisterAndUpdate(filteredMetrics); err != nil {
 		return err
+	}
+
+	if onlyEssential {
+		return nil
 	}
 
 	if err := s.metricDeleteFromLocal(); err != nil {

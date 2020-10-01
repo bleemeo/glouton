@@ -37,7 +37,7 @@ func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
 	return nil, errors.New("not implemented")
 }
 
-func TestPrioritizeMetrics(t *testing.T) {
+func TestPrioritizeAndFilterMetrics(t *testing.T) {
 	inputNames := []struct {
 		Name         string
 		HighPriority bool
@@ -52,9 +52,11 @@ func TestPrioritizeMetrics(t *testing.T) {
 	isHighPriority := make(map[string]bool)
 	countHighPriority := 0
 	metrics := make([]types.Metric, len(inputNames))
+	metrics2 := make([]types.Metric, len(inputNames))
 
 	for i, n := range inputNames {
 		metrics[i] = mockMetric{Name: n.Name}
+		metrics2[i] = mockMetric{Name: n.Name}
 
 		if n.HighPriority {
 			countHighPriority++
@@ -63,7 +65,8 @@ func TestPrioritizeMetrics(t *testing.T) {
 		}
 	}
 
-	prioritizeMetrics(metrics)
+	metrics = prioritizeAndFilterMetrics(metrics, false)
+	metrics2 = prioritizeAndFilterMetrics(metrics2, true)
 
 	for i, m := range metrics {
 		if !isHighPriority[m.Labels()[types.LabelName]] && i < countHighPriority {
@@ -72,6 +75,12 @@ func TestPrioritizeMetrics(t *testing.T) {
 
 		if isHighPriority[m.Labels()[types.LabelName]] && i >= countHighPriority {
 			t.Errorf("Found metrics %#v at index %d, want before %d", m.Labels()[types.LabelName], i, countHighPriority)
+		}
+	}
+
+	for i, m := range metrics2 {
+		if !isHighPriority[m.Labels()[types.LabelName]] {
+			t.Errorf("Found metrics %#v at index %d, but it's not prioritary", m.Labels()[types.LabelName], i)
 		}
 	}
 }

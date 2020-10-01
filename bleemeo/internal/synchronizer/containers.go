@@ -40,7 +40,7 @@ type containerPayload struct {
 	DockerImageName  string    `json:"docker_image_name"`
 }
 
-func (s *Synchronizer) syncContainers(fullSync bool) error {
+func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 	var localContainers []facts.Container
 
 	if s.option.Cache.CurrentAccountConfig().DockerIntegration {
@@ -63,6 +63,11 @@ func (s *Synchronizer) syncContainers(fullSync bool) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	if onlyEssential {
+		// no essential containers, skip registering.
+		return nil
 	}
 
 	// s.containerDeleteFromRemote(): API don't delete containers

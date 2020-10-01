@@ -313,6 +313,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 			select {
 			case <-time.After(delay):
 			case <-ctx.Done():
+				return 0, ctx.Err()
 			}
 
 			continue

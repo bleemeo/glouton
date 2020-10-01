@@ -25,10 +25,39 @@ import (
 	"time"
 )
 
-func (s *Synchronizer) syncFacts(fullSync bool) error {
+func getEssentialFacts() map[string]bool {
+	return map[string]bool{
+		"agent_version":       true,
+		"architecture":        true,
+		"fqdn":                true,
+		"glouton_version":     true,
+		"hostname":            true,
+		"installation_format": true,
+		"kernel":              true,
+		"os_name":             true,
+		"os_pretty_name":      true,
+		"public_ip":           true,
+		"virtual":             true,
+	}
+}
+
+func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 	localFacts, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 	if err != nil {
 		return err
+	}
+
+	if onlyEssential {
+		essentialFacts := getEssentialFacts()
+		copyFacts := make(map[string]string)
+
+		for k, v := range localFacts {
+			if essentialFacts[k] {
+				copyFacts[k] = v
+			}
+		}
+
+		localFacts = copyFacts
 	}
 
 	if !s.option.Cache.CurrentAccountConfig().DockerIntegration {
@@ -48,6 +77,11 @@ func (s *Synchronizer) syncFacts(fullSync bool) error {
 
 	if err := s.factRegister(localFacts); err != nil {
 		return err
+	}
+
+	if onlyEssential {
+		// localFacts was filtered, can't delete
+		return nil
 	}
 
 	if err := s.factDeleteFromLocal(localFacts); err != nil {
