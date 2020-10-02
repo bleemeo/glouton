@@ -152,6 +152,10 @@ func (c *Client) Connected() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	return c.connected()
+}
+
+func (c *Client) connected() bool {
 	if c.mqttClient == nil {
 		return false
 	}
@@ -401,6 +405,10 @@ func (c *Client) IsSendingSuspended() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	return c.isSendingSuspended()
+}
+
+func (c *Client) isSendingSuspended() bool {
 	return c.sendingSuspended
 }
 
@@ -484,19 +492,19 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 func (c *Client) sendPoints() {
 	points := c.filterPoints(c.PopPoints(false))
 
-	if !c.Connected() || c.IsSendingSuspended() {
-		c.l.Lock()
+	c.l.Lock()
+	defer c.l.Unlock()
 
+	if !c.connected() || c.isSendingSuspended() {
 		// store all new points as failed ones
 		c.failedPoints = append(c.failedPoints, points...)
 		if len(c.failedPoints) > maxPendingPoints {
+			// TODO: this is a memory leak, no ?
 			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
 		}
 
 		// Make sure that when connection is back we retry failed points as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
-
-		defer c.l.Unlock()
 
 		c.failedPointsCount = len(c.failedPoints)
 
@@ -505,7 +513,7 @@ func (c *Client) sendPoints() {
 
 	registreredMetricByKey := c.option.Cache.MetricLookupFromList()
 
-	if len(c.failedPoints) > 0 && c.Connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
+	if len(c.failedPoints) > 0 && c.connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
 		localMetrics, err := c.option.Store.Metrics(nil)
 		if err != nil {
 			return
@@ -555,12 +563,9 @@ func (c *Client) sendPoints() {
 				return
 			}
 
-			c.publish(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
+			c.publishNoLock(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
 		}
 	}
-
-	c.l.Lock()
-	defer c.l.Unlock()
 
 	c.failedPointsCount = len(c.failedPoints)
 }
@@ -704,6 +709,10 @@ func (c *Client) publish(topic string, payload []byte, retry bool) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	c.publishNoLock(topic, payload, retry)
+}
+
+func (c *Client) publishNoLock(topic string, payload []byte, retry bool) {
 	msg := message{
 		retry:   retry,
 		payload: payload,
