@@ -77,16 +77,16 @@ type Client struct {
 	lastFailedPointsRetry      time.Time
 	encoder                    mqttEncoder
 
-	l                 sync.Mutex
-	pendingMessage    []message
-	pendingPoints     []types.MetricPoint
-	lastReport        time.Time
-	failedPointsCount int
-	sendingSuspended  bool // stop sending points, used when the user is is read-only mode
-	disabledUntil     time.Time
-	disableReason     bleemeoTypes.DisableReason
-	connectionLost    chan interface{}
-	disableNotify     chan interface{}
+	l                sync.Mutex
+	pendingMessage   []message
+	pendingPoints    []types.MetricPoint
+	lastReport       time.Time
+	maxPointCount    int
+	sendingSuspended bool // stop sending points, used when the user is is read-only mode
+	disabledUntil    time.Time
+	disableReason    bleemeoTypes.DisableReason
+	connectionLost   chan interface{}
+	disableNotify    chan interface{}
 }
 
 type message struct {
@@ -279,10 +279,12 @@ func (c *Client) HealthCheck() bool {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	if c.failedPointsCount >= maxPendingPoints {
-		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform. Older points are being dropped", c.failedPointsCount)
-	} else if c.failedPointsCount > 1000 {
-		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform", c.failedPointsCount)
+	failedPointsCount := len(c.failedPoints)
+
+	if failedPointsCount >= maxPendingPoints {
+		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform. Older points are being dropped", failedPointsCount)
+	} else if failedPointsCount > 1000 {
+		logger.Printf("%d points are waiting to be sent to Bleemeo Cloud platform", failedPointsCount)
 	}
 
 	return ok
@@ -479,7 +481,6 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 	if includeFailedPoints {
 		points = c.failedPoints
 		c.failedPoints = nil
-		c.failedPointsCount = 0
 	}
 
 	points = append(points, c.pendingPoints...)
@@ -497,16 +498,10 @@ func (c *Client) sendPoints() {
 
 	if !c.connected() || c.isSendingSuspended() {
 		// store all new points as failed ones
-		c.failedPoints = append(c.failedPoints, points...)
-		if len(c.failedPoints) > maxPendingPoints {
-			// TODO: this is a memory leak, no ?
-			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
-		}
+		c.addFailedPoints(points...)
 
 		// Make sure that when connection is back we retry failed points as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
-
-		c.failedPointsCount = len(c.failedPoints)
 
 		return
 	}
@@ -514,30 +509,10 @@ func (c *Client) sendPoints() {
 	registreredMetricByKey := c.option.Cache.MetricLookupFromList()
 
 	if len(c.failedPoints) > 0 && c.connected() && (time.Since(c.lastFailedPointsRetry) > 5*time.Minute || len(registreredMetricByKey) != c.lastRegisteredMetricsCount) {
-		localMetrics, err := c.option.Store.Metrics(nil)
-		if err != nil {
-			return
-		}
-
-		localExistsByKey := make(map[string]bool, len(localMetrics))
-
-		for _, m := range localMetrics {
-			key := common.LabelsToText(m.Labels(), m.Annotations(), c.option.MetricFormat == types.MetricFormatBleemeo)
-			localExistsByKey[key] = true
-		}
-
 		c.lastRegisteredMetricsCount = len(registreredMetricByKey)
 		c.lastFailedPointsRetry = time.Now()
-		newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
 
-		for _, p := range c.failedPoints {
-			key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
-			if localExistsByKey[key] {
-				newPoints = append(newPoints, p)
-			}
-		}
-
-		points = append(c.filterPoints(newPoints), points...)
+		points = append(c.failedPoints, points...)
 		c.failedPoints = nil
 	}
 
@@ -566,8 +541,55 @@ func (c *Client) sendPoints() {
 			c.publishNoLock(fmt.Sprintf("v1/agent/%s/data", agentID), buffer, true)
 		}
 	}
+}
 
-	c.failedPointsCount = len(c.failedPoints)
+// addFailedPoints add given points to list of failed points.
+func (c *Client) addFailedPoints(points ...types.MetricPoint) {
+	c.failedPoints = append(c.failedPoints, points...)
+	if len(c.failedPoints) > maxPendingPoints {
+		c.maxPointCount++
+
+		// To avoid a memory leak (due to "purge" by re-slicing),
+		// copy points to a fresh array from time-to-time. We don't do it
+		// every run to reduce the impact of copy().
+		if c.maxPointCount%50 == 0 {
+			// At the same time, cleanup any points that won't be sent. Clean will copy points.
+			c.cleanupFailedPoints()
+			numberToDrop := len(c.failedPoints) - maxPendingPoints
+
+			if numberToDrop > 0 {
+				c.failedPoints = c.failedPoints[numberToDrop:len(c.failedPoints)]
+			}
+		} else {
+			c.failedPoints = c.failedPoints[len(c.failedPoints)-maxPendingPoints : len(c.failedPoints)]
+		}
+	}
+}
+
+// cleanupFailedPoints remove points from deleted metrics or points for metric denied by configuration.
+func (c *Client) cleanupFailedPoints() {
+	localMetrics, err := c.option.Store.Metrics(nil)
+	if err != nil {
+		return
+	}
+
+	localExistsByKey := make(map[string]bool, len(localMetrics))
+
+	for _, m := range localMetrics {
+		key := common.LabelsToText(m.Labels(), m.Annotations(), c.option.MetricFormat == types.MetricFormatBleemeo)
+		localExistsByKey[key] = true
+	}
+
+	newPoints := make([]types.MetricPoint, 0, len(c.failedPoints))
+
+	for _, p := range c.failedPoints {
+		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+		if localExistsByKey[key] {
+			newPoints = append(newPoints, p)
+		}
+	}
+
+	c.failedPoints = c.filterPoints(newPoints)
 }
 
 // preparePoints updates the MQTT payload by processing some points and returning the a map between agent uuids and the metrics.
@@ -615,7 +637,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 
 			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
 		} else {
-			c.failedPoints = append(c.failedPoints, p)
+			c.addFailedPoints(p)
 		}
 	}
 
