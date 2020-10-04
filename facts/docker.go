@@ -353,13 +353,20 @@ func (c Container) ID() string {
 
 // Ignored returns true if this container should be ignored by Glouton.
 func (c Container) Ignored() bool {
-	ignore := ignoreContainer(c.inspect)
+	enable, _ := c.Enabled()
+	return !enable
+}
 
-	if !ignore {
-		ignore = !string2Boolean(c.pod.Annotations[EnableLabel], true)
+// Enabled returns true if this container should be monitored by Glouton.
+// Also return a 2nd boolean telling is this container is explicitly enabled or if it's the default.
+func (c Container) Enabled() (bool, bool) {
+	enable, explicit := enableContainer(c.inspect)
+
+	if !explicit {
+		enable, explicit = string2Boolean(c.pod.Annotations[EnableLabel], true)
 	}
 
-	return ignore
+	return enable, explicit
 }
 
 // IgnoredPorts returns ports ignored based on label ignoredPortLabel.
@@ -594,9 +601,9 @@ func (c Container) kubernetesContainer() (corev1.Container, bool) {
 	return corev1.Container{}, false
 }
 
-func ignoreContainer(inspect types.ContainerJSON) bool {
+func enableContainer(inspect types.ContainerJSON) (bool, bool) {
 	if inspect.Config == nil {
-		return false
+		return false, false
 	}
 
 	label, ok := inspect.Config.Labels[EnableLabel]
@@ -604,17 +611,17 @@ func ignoreContainer(inspect types.ContainerJSON) bool {
 		label = inspect.Config.Labels[EnableLegacyLabel]
 	}
 
-	return !string2Boolean(label, true)
+	return string2Boolean(label, true)
 }
 
-func string2Boolean(input string, defaultValue bool) bool {
+func string2Boolean(input string, defaultValue bool) (bool, bool) {
 	switch strings.ToLower(input) {
 	case "0", "off", "false", "no":
-		return false
+		return false, true
 	case "1", "on", "true", "yes":
-		return true
+		return true, true
 	default:
-		return defaultValue
+		return defaultValue, false
 	}
 }
 
@@ -1059,7 +1066,7 @@ func ignoredPortsFromLabels(labels map[string]string, name string) map[int]bool 
 			continue
 		}
 
-		ignore := string2Boolean(v, false)
+		ignore, _ := string2Boolean(v, false)
 
 		portStr := strings.TrimPrefix(k, ignoredPortLabel)
 		port, err := strconv.ParseInt(portStr, 10, 0)

@@ -176,6 +176,47 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	return result
 }
 
+// excludeUnregistrableMetrics remove metrics that cannot be registered, due to missing
+// dependency (like a container that must be registered before).
+func (s *Synchronizer) excludeUnregistrableMetrics(metrics []types.Metric) []types.Metric {
+	result := make([]types.Metric, 0, len(metrics))
+	containersByContainerID := s.option.Cache.ContainersByContainerID()
+	services := s.option.Cache.Services()
+	servicesByKey := make(map[serviceNameInstance]bleemeoTypes.Service, len(services))
+
+	for _, v := range services {
+		k := serviceNameInstance{name: v.Label, instance: v.Instance}
+		servicesByKey[k] = v
+	}
+
+	for _, metric := range metrics {
+		annotations := metric.Annotations()
+		containerName := ""
+
+		if annotations.ContainerID != "" {
+			container, ok := containersByContainerID[annotations.ContainerID]
+			if !ok {
+				continue
+			}
+
+			containerName = container.Name
+		}
+
+		if annotations.ServiceName != "" {
+			srvKey := serviceNameInstance{name: annotations.ServiceName, instance: containerName}
+			srvKey.truncateInstance()
+
+			if _, ok := servicesByKey[srvKey]; !ok {
+				continue
+			}
+		}
+
+		result = append(result, metric)
+	}
+
+	return result
+}
+
 func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.Metric {
 	registeredMetricsByKey := s.option.Cache.MetricLookupFromList()
 
@@ -202,6 +243,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 
 	filteredMetrics := s.filterMetrics(localMetrics)
 	unregisteredMetrics := s.findUnregisteredMetrics(filteredMetrics)
+	unregisteredMetrics = s.excludeUnregistrableMetrics(unregisteredMetrics)
 
 	if s.successiveErrors == 3 {
 		// After 3 error, try to force a full synchronization to see if it solve the issue.
@@ -246,6 +288,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 	}
 
 	unregisteredMetrics = s.findUnregisteredMetrics(filteredMetrics)
+	unregisteredMetrics = s.excludeUnregistrableMetrics(unregisteredMetrics)
 
 	logger.V(2).Printf("Searching %d metrics that may be inactive", len(unregisteredMetrics))
 

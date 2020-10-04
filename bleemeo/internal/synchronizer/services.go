@@ -233,6 +233,11 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	}
 
 	for _, srv := range localServices {
+		if _, ok := s.delayedContainer[srv.ContainerID]; ok {
+			logger.V(2).Printf("Skip service %v due to delayedContainer", srv)
+			continue
+		}
+
 		key := serviceNameInstance{
 			name:     srv.Name,
 			instance: srv.ContainerName,

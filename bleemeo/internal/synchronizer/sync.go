@@ -67,6 +67,7 @@ type Synchronizer struct {
 	forceSync             map[string]bool
 	pendingMetricsUpdate  []string
 	pendingMonitorsUpdate []MonitorUpdate
+	delayedContainer      map[string]time.Time
 }
 
 // Option are parameters for the synchronizer.
@@ -472,8 +473,8 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		{name: "info", method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
 		{name: "agent", method: s.syncAgent, skipOnlyEssential: true},
 		{name: "facts", method: s.syncFacts},
-		{name: "services", method: s.syncServices},
 		{name: "containers", method: s.syncContainers},
+		{name: "services", method: s.syncServices},
 		{name: "monitors", method: s.syncMonitors, skipOnlyEssential: true},
 		{name: "metrics", method: s.syncMetrics},
 	}
@@ -583,7 +584,15 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		syncMethods["facts"] = fullSync
 	}
 
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) {
+	minDelayed := time.Time{}
+
+	for _, delay := range s.delayedContainer {
+		if minDelayed.IsZero() || delay.Before(minDelayed) {
+			minDelayed = delay
+		}
+	}
+
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || (!minDelayed.IsZero() && time.Now().After(minDelayed)) {
 		syncMethods["services"] = fullSync
 		syncMethods["containers"] = fullSync
 	}

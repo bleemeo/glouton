@@ -129,7 +129,18 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at,docker_api_version,docker_image_id,docker_image_name",
 	}
 
+	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
+	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
+
 	for _, container := range localContainers {
+		if time.Since(container.CreatedAt()) < delay {
+			enable, explicit := container.Enabled()
+			if !enable || !explicit {
+				newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
+				continue
+			}
+		}
+
 		name := container.Name()
 		if len(name) > apiContainerNameLength {
 			name = name[:apiContainerNameLength]
@@ -191,6 +202,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	}
 
 	s.option.Cache.SetContainers(remoteContainers)
+	s.delayedContainer = newDelayedContainer
 
 	return nil
 }
