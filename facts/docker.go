@@ -1029,10 +1029,6 @@ func (d *DockerProvider) getPod(ctx context.Context, containerID string, contain
 		return corev1.Pod{}, false
 	}
 
-	if pod, ok := d.podID2Pods[uid]; ok {
-		return pod, ok
-	}
-
 	d.updatePods(ctx)
 
 	pod, ok := d.podID2Pods[uid]
