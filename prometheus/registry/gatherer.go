@@ -5,6 +5,7 @@ import (
 	"glouton/types"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	dto "github.com/prometheus/client_model/go"
@@ -173,9 +174,9 @@ func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 	return result
 }
 
-func (g labeledGatherer) GatherPoints(state GatherState) ([]types.MetricPoint, error) {
+func (g labeledGatherer) GatherPoints(now time.Time, state GatherState) ([]types.MetricPoint, error) {
 	mfs, err := g.GatherWithState(state)
-	points := familiesToMetricPoints(mfs)
+	points := familiesToMetricPoints(now, mfs)
 
 	if (g.annotations != types.MetricAnnotations{}) {
 		for i := range points {
@@ -303,7 +304,7 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 type labeledGatherers []labeledGatherer
 
 // GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily.
-func (gs labeledGatherers) GatherPoints(state GatherState) ([]types.MetricPoint, error) {
+func (gs labeledGatherers) GatherPoints(now time.Time, state GatherState) ([]types.MetricPoint, error) {
 	result := []types.MetricPoint{}
 
 	var errs prometheus.MultiError
@@ -317,7 +318,7 @@ func (gs labeledGatherers) GatherPoints(state GatherState) ([]types.MetricPoint,
 		go func(g labeledGatherer) {
 			defer wg.Done()
 
-			points, err := g.GatherPoints(state)
+			points, err := g.GatherPoints(now, state)
 
 			mutex.Lock()
 

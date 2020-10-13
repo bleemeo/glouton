@@ -44,7 +44,7 @@ func New(ps processProvider, pusher types.PointPusher) Input {
 }
 
 // Gather send metrics to the PointPusher.
-func (i Input) Gather() {
+func (i Input) Gather(now time.Time) {
 	ctx := context.Background()
 
 	proc, err := i.ps.Processes(ctx, maxAge)
@@ -86,7 +86,6 @@ func (i Input) Gather() {
 		totalThreads += p.NumThreads
 	}
 
-	now := time.Now()
 	points := []types.MetricPoint{
 		{
 			Labels: map[string]string{

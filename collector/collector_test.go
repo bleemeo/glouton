@@ -18,6 +18,7 @@ package collector
 
 import (
 	"testing"
+	"time"
 
 	"github.com/influxdata/telegraf"
 )
@@ -64,7 +65,7 @@ func TestAddRemove(t *testing.T) {
 
 func TestRun(t *testing.T) {
 	c := New(nil)
-	c.runOnce()
+	c.runOnce(time.Now())
 
 	input := &mockInput{Name: "input1"}
 
@@ -73,13 +74,13 @@ func TestRun(t *testing.T) {
 		t.Error(err)
 	}
 
-	c.runOnce()
+	c.runOnce(time.Now())
 
 	if input.GatherCallCount != 1 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 1)
 	}
 
-	c.runOnce()
+	c.runOnce(time.Now())
 
 	if input.GatherCallCount != 2 {
 		t.Errorf("input.GatherCallCount == %v, want %v", input.GatherCallCount, 2)

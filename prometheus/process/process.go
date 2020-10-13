@@ -103,7 +103,7 @@ type Exporter struct {
 }
 
 // PushTo return a callback function that will push points on each call.
-func (e *Exporter) PushTo(p types.PointPusher) func() {
+func (e *Exporter) PushTo(p types.PointPusher) func(time.Time) {
 	return (&pusher{
 		exporter: e,
 		pusher:   p,

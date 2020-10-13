@@ -19,6 +19,7 @@ package collector
 
 import (
 	"errors"
+	"glouton/inputs"
 	"glouton/logger"
 	"sync"
 	"time"
@@ -99,8 +100,8 @@ func (c *Collector) RemoveInput(id int) {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather() {
-	c.runOnce()
+func (c *Collector) RunGather(t0 time.Time) {
+	c.runOnce(t0)
 }
 
 func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
@@ -118,8 +119,12 @@ func (c *Collector) inputsForCollection() ([]telegraf.Input, []string) {
 	return inputsCopy, inputsNameCopy
 }
 
-func (c *Collector) runOnce() {
+func (c *Collector) runOnce(t0 time.Time) {
 	inputsCopy, inputsNameCopy := c.inputsForCollection()
+	acc := inputs.FixedTimeAccumulator{
+		Time: t0,
+		Acc:  c.acc,
+	}
 
 	var wg sync.WaitGroup
 
@@ -132,7 +137,7 @@ func (c *Collector) runOnce() {
 		go func() {
 			defer wg.Done()
 
-			err := input.Gather(c.acc)
+			err := input.Gather(acc)
 			if err != nil {
 				logger.Printf("Input %s failed: %v", inputsNameCopy[i], err)
 			}

@@ -572,7 +572,7 @@ func (c *Connector) emitInternalMetric() {
 	defer c.l.RUnlock()
 
 	if c.mqtt != nil && c.mqtt.Connected() {
-		c.option.Acc.AddFields("", map[string]interface{}{"agent_status": 1.0}, nil)
+		c.option.Acc.AddFields("", map[string]interface{}{"agent_status": 1.0}, nil, time.Now().Truncate(time.Second))
 	}
 }
 

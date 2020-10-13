@@ -65,7 +65,7 @@ type Registry struct {
 
 	l sync.Mutex
 
-	pushUpdates     []func()
+	pushUpdates     []func(time.Time)
 	condition       *sync.Cond
 	countRunOnce    int
 	countPushPoints int
@@ -254,7 +254,7 @@ func (r *Registry) init() {
 // AddPushPointsCallback add a callback that should push points to the registry.
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
-func (r *Registry) AddPushPointsCallback(f func()) {
+func (r *Registry) AddPushPointsCallback(f func(time.Time)) {
 	r.init()
 
 	r.l.Lock()
@@ -497,7 +497,7 @@ func (r *Registry) run(ctx context.Context) {
 	}
 }
 
-func (r *Registry) updatePushedPoints() {
+func (r *Registry) updatePushedPoints(t0 time.Time) {
 	r.l.Lock()
 	funcs := r.pushUpdates
 	r.l.Unlock()
@@ -511,7 +511,7 @@ func (r *Registry) updatePushedPoints() {
 
 		go func() {
 			defer wg.Done()
-			f()
+			f(t0)
 		}()
 	}
 
@@ -537,14 +537,14 @@ func (r *Registry) runOnce() {
 
 	t0 := time.Now()
 
-	r.updatePushedPoints()
+	r.updatePushedPoints(t0)
 
 	var points []types.MetricPoint
 
 	if r.MetricFormat == types.MetricFormatPrometheus {
 		var err error
 
-		points, err = labeledGatherers(gatherers).GatherPoints(GatherState{QueryType: All})
+		points, err = labeledGatherers(gatherers).GatherPoints(t0, GatherState{QueryType: All})
 		if err != nil {
 			if len(points) == 0 {
 				logger.Printf("Gather of metrics failed: %v", err)
@@ -587,9 +587,9 @@ func (r *Registry) runOnce() {
 	r.l.Unlock()
 }
 
-func familiesToMetricPoints(families []*dto.MetricFamily) []types.MetricPoint {
+func familiesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types.MetricPoint {
 	samples, err := expfmt.ExtractSamples(
-		&expfmt.DecodeOptions{Timestamp: model.Now()},
+		&expfmt.DecodeOptions{Timestamp: model.TimeFromUnixNano(now.UnixNano())},
 		families...,
 	)
 	if err != nil {

@@ -1,6 +1,7 @@
 package inputs
 
 import (
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
@@ -153,4 +154,76 @@ type CollectorConfig struct {
 	NetIfBlacklist  []string
 	IODiskWhitelist []*regexp.Regexp
 	IODiskBlacklist []*regexp.Regexp
+}
+
+// FixedTimeAccumulator implement telegraf.Accumulator (+AddFieldsWithAnnotations) and use given Time for all points.
+type FixedTimeAccumulator struct {
+	Time time.Time
+	Acc  telegraf.Accumulator
+}
+
+// AddFields adds a metric to the accumulator with the given measurement
+// name, fields, and tags (and timestamp). If a timestamp is not provided,
+// then the accumulator sets it to "now".
+// Create a point with a value, decorating it with tags
+// NOTE: tags is expected to be owned by the caller, don't mutate
+// it after passing to Add.
+func (a FixedTimeAccumulator) AddFields(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.Acc.AddFields(measurement, fields, tags, a.Time)
+}
+
+// AddGauge is the same as AddFields, but will add the metric as a "Gauge" type.
+func (a FixedTimeAccumulator) AddGauge(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.Acc.AddGauge(measurement, fields, tags, a.Time)
+}
+
+// AddCounter is the same as AddFields, but will add the metric as a "Counter" type.
+func (a FixedTimeAccumulator) AddCounter(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.Acc.AddCounter(measurement, fields, tags, a.Time)
+}
+
+// AddSummary is the same as AddFields, but will add the metric as a "Summary" type.
+func (a FixedTimeAccumulator) AddSummary(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.Acc.AddSummary(measurement, fields, tags, a.Time)
+}
+
+// AddHistogram is the same as AddFields, but will add the metric as a "Histogram" type.
+func (a FixedTimeAccumulator) AddHistogram(measurement string, fields map[string]interface{}, tags map[string]string, t ...time.Time) {
+	a.Acc.AddHistogram(measurement, fields, tags, a.Time)
+}
+
+// SetPrecision do nothing right now.
+func (a FixedTimeAccumulator) SetPrecision(precision time.Duration) {
+	a.AddError(fmt.Errorf("SetPrecision not implemented"))
+}
+
+// AddMetric is not yet implemented.
+func (a FixedTimeAccumulator) AddMetric(telegraf.Metric) {
+	a.AddError(fmt.Errorf("AddMetric not implemented"))
+}
+
+// WithTracking is not yet implemented.
+func (a FixedTimeAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
+	a.AddError(fmt.Errorf("WithTracking not implemented"))
+	return nil
+}
+
+// AddError add an error to the Accumulator.
+func (a FixedTimeAccumulator) AddError(err error) {
+	if err != nil {
+		logger.V(1).Printf("Add error called with: %v", err)
+	}
+}
+
+// AddFieldsWithAnnotations have extra fields for the annotations attached to the measurement and fields
+//
+// This method call AddFieldsWithAnnotations() is available and call AddGauge + AddError otherwise.
+func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time) {
+	if annocationAcc, ok := a.Acc.(AnnotationAccumulator); ok {
+		annocationAcc.AddFieldsWithAnnotations(measurement, fields, tags, annotations, a.Time)
+		return
+	}
+
+	a.Acc.AddGauge(measurement, fields, tags, a.Time)
+	a.Acc.AddError(errors.New("AddFieldsWithAnnotations method missing, the annotation is lost"))
 }

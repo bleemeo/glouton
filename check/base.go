@@ -187,6 +187,7 @@ func (bc *baseCheck) check(ctx context.Context, callFromSchedule bool) types.Sta
 			},
 			bc.labels,
 			annotations,
+			time.Now().Truncate(time.Second),
 		)
 	}
 

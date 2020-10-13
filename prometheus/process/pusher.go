@@ -33,7 +33,7 @@ type pusher struct {
 	lastTime  map[string]time.Time
 }
 
-func (p *pusher) push() {
+func (p *pusher) push(t0 time.Time) {
 	p.exporter.init()
 	p.exporter.l.Lock()
 	defer p.exporter.l.Unlock()
@@ -85,7 +85,7 @@ func (p *pusher) push() {
 						"group_name":    gname,
 					},
 					Point: types.Point{
-						Time:  time.Now(),
+						Time:  t0,
 						Value: float64(gcounts.Procs),
 					},
 					Annotations: types.MetricAnnotations{
@@ -98,7 +98,7 @@ func (p *pusher) push() {
 						"group_name":    gname,
 					},
 					Point: types.Point{
-						Time:  time.Now(),
+						Time:  t0,
 						Value: memBytes,
 					},
 					Annotations: types.MetricAnnotations{
@@ -111,7 +111,7 @@ func (p *pusher) push() {
 						"group_name":    gname,
 					},
 					Point: types.Point{
-						Time:  time.Now(),
+						Time:  t0,
 						Value: float64(gcounts.OpenFDs),
 					},
 					Annotations: types.MetricAnnotations{
@@ -124,7 +124,7 @@ func (p *pusher) push() {
 						"group_name":    gname,
 					},
 					Point: types.Point{
-						Time:  time.Now(),
+						Time:  t0,
 						Value: gcounts.WorstFDratio,
 					},
 					Annotations: types.MetricAnnotations{
@@ -137,7 +137,7 @@ func (p *pusher) push() {
 						"group_name":    gname,
 					},
 					Point: types.Point{
-						Time:  time.Now(),
+						Time:  t0,
 						Value: float64(gcounts.NumThreads),
 					},
 					Annotations: types.MetricAnnotations{
@@ -165,7 +165,7 @@ func (p *pusher) push() {
 							"group_name":    gname,
 						},
 						Point: types.Point{
-							Time:  time.Now(),
+							Time:  t0,
 							Value: delta.CPUUserTime / deltaT * 100,
 						},
 						Annotations: types.MetricAnnotations{
@@ -178,7 +178,7 @@ func (p *pusher) push() {
 							"group_name":    gname,
 						},
 						Point: types.Point{
-							Time:  time.Now(),
+							Time:  t0,
 							Value: delta.CPUSystemTime / deltaT * 100,
 						},
 						Annotations: types.MetricAnnotations{
@@ -191,7 +191,7 @@ func (p *pusher) push() {
 							"group_name":    gname,
 						},
 						Point: types.Point{
-							Time:  time.Now(),
+							Time:  t0,
 							Value: float64(delta.MajorPageFaults) / deltaT,
 						},
 						Annotations: types.MetricAnnotations{
@@ -204,7 +204,7 @@ func (p *pusher) push() {
 							"group_name":    gname,
 						},
 						Point: types.Point{
-							Time:  time.Now(),
+							Time:  t0,
 							Value: float64(delta.CtxSwitchVoluntary+delta.CtxSwitchNonvoluntary) / deltaT,
 						},
 						Annotations: types.MetricAnnotations{
@@ -217,7 +217,7 @@ func (p *pusher) push() {
 							"group_name":    gname,
 						},
 						Point: types.Point{
-							Time:  time.Now(),
+							Time:  t0,
 							Value: float64(delta.ReadBytes) / deltaT,
 						},
 						Annotations: types.MetricAnnotations{
@@ -230,7 +230,7 @@ func (p *pusher) push() {
 							"group_name":    gname,
 						},
 						Point: types.Point{
-							Time:  time.Now(),
+							Time:  t0,
 							Value: float64(delta.WriteBytes) / deltaT,
 						},
 						Annotations: types.MetricAnnotations{
