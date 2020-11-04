@@ -2,7 +2,7 @@ version: '3'
 
 services:
   glouton:
-    image: glouton
+    image: bleemeo/bleemeo-agent
     environment:
     # use environment variable from shell running docker-compose. Allow
     # to easily overide them.
