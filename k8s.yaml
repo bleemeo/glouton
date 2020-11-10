@@ -86,7 +86,7 @@ spec:
       hostNetwork: true
       hostPID: true
       containers:
-      - image: bleemeo/glouton
+      - image: bleemeo/bleemeo-agent
         name: glouton
         ports:
         - name: http
