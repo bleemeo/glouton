@@ -671,8 +671,8 @@ func (s *Synchronizer) checkDuplicated() error {
 			new.Value,
 		)
 		logger.Printf(
-			"The following links may be relevant to solve the issue: https://docs.bleemeo.com/agent/migrate-agent-new-server/ " +
-				"and https://docs.bleemeo.com/agent/install-cloudimage-creation/",
+			"The following links may be relevant to solve the issue: https://docs.bleemeo.com/agent/upgrade " +
+				"and https://docs.bleemeo.com/agent/install#install-agent-with-cloud-image-creation",
 		)
 
 		return errors.New("bleemeo connector temporary disabled")
@@ -701,7 +701,7 @@ func (s *Synchronizer) register() error {
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
 
 	for accountID == "" || registrationKey == "" {
-		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/how-to-configure-agent")
+		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see https://docs.bleemeo.com/agent/config#configuration")
 	}
 
 	password := generatePassword(20)
