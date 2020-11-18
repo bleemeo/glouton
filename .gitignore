@@ -16,3 +16,4 @@
 /dist
 api/static/assets/js
 *-bindata.go
+.build-cache

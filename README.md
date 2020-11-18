@@ -16,35 +16,19 @@ If you want to use the Bleemeo Cloud solution see https://docs.bleemeo.com/agent
 
 Our release version will be set by goreleaser from the current date.
 
-- Glouton have a local UI written in ReactJS. The JS files need to be built before
-  the Go binary by running:
+The release build will
+* Build the local UI written in ReactJS using npm and webpack.
+* Compile the Go binary for supported systems
+* Build an Windows installer using NSIS
 
+The build process use Docker and is run by the build script:
 ```
-docker run --rm -u $UID -e HOME=/tmp/home \
-   -v $(pwd):/src -w /src/webui \
-   node:lts \
-   sh -c 'rm -fr node_modules && npm install && npm run deploy'
-```
-
-- Then build the release binaries and Docker image using Goreleaser:
-
-```
-docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
-   -v $(pwd):/src -w /src \
-   -v /var/run/docker.sock:/var/run/docker.sock \
-   --entrypoint '' \
-   goreleaser/goreleaser:v0.137 sh -c 'go generate ./... && go test ./... && goreleaser --rm-dist --snapshot --parallelism 2'
+# Optional, to speed-up subsequent build
+mkdir -p .build-cache
+./build.sh
 ```
 
 Release files are present in dist/ folder and a Docker image is build (glouton:latest).
-
-- To build an all-in-one installer for Windows, run:
-
-```
-./packaging/windows/generate_installer.sh
-```
-
-The final executable will be `dist/glouton_<VERSION>_windows_installer.exe`.
 
 ## Run Glouton
 
@@ -95,45 +79,28 @@ docker-compose up -d
 
 ## Test and Develop
 
-Glouton require Golang 1.13. If your system does not provide it, you may run all Go command using Docker.
-For example to run test:
-
+To build binary you may use build.sh script. For example to just
+compile Go binary (skip building JS, Docker image and Windows installer):
 ```
-GOCMD="docker run --net host --rm -ti -v $(pwd):/srv/workspace -w /srv/workspace -u $UID -e HOME=/tmp/home golang go"
-
-$GOCMD test ./...
-GOARCH=386 $GOCMD test ./...
+mkdir -p .build-cache
+./build.sh go
 ```
 
-The following will assume "go" is golang 1.13 or more, if not replace it with $GOCMD or use an alias:
+Then run Glouton:
 ```
-alias go=$GOCMD
+./glouton
 ```
 
 Glouton use golangci-lint as linter. You may run it with:
 ```
-mkdir -p /tmp/golangci-lint-cache
-docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -e GOOS=linux -e GOARCH=amd64 -w /app golangci/golangci-lint:v1.27 golangci-lint run
-docker run --rm -v $(pwd):/app -u $UID -v /tmp/golangci-lint-cache:/go/pkg -e HOME=/go/pkg -e GOOS=windows -e GOARCH=amd64 -w /app golangci/golangci-lint:v1.27 golangci-lint run
-```
-(This will check the code for both windows/amd64 and linux/amd64)
-
-Glouton use Go tests, you may run them with:
-
-```
-go test ./... || echo "TEST FAILED"
+mkdir -p .build-cache  # enable cache and speed-up build/lint run
+./lint.sh
 ```
 
-If you updated GraphQL schema or JS files, rebuild JS files (see build a release) and run:
+If you updated GraphQL schema or JS files, rebuild JS files by running build.sh:
 
 ```
-go generate glouton/...
-```
-
-Then run Glouton from source:
-
-```
-go run glouton
+./build.sh
 ```
 
 Note: on Windows, you should consider setting an environment variable to disable CGO when building/testing, lest you get funny messages like 'exec: "gcc": executable file not found in %PATH%'.
@@ -152,7 +119,7 @@ To run with this configuration, start webpack-dev-server:
 ```
 docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
    -v $(pwd):/src -w /src/webui \
-   node:12.13.0 \
+   node:lts \
    sh -c 'npm install && npm start'
 ```
 
