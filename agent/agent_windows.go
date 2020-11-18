@@ -56,14 +56,13 @@ loop:
 }
 
 func (a *agent) initOSSpecificParts() {
-	isInteractive, err := svc.IsAnInteractiveSession()
+	isService, err := svc.IsWindowsService()
 	if err != nil {
 		logger.V(0).Println(err)
 		os.Exit(1)
 	}
 
-	// Not interactive ? let's start a windows service
-	if !isInteractive {
+	if isService {
 		go func() {
 			err = svc.Run(serviceName, &winService{cancelFunc: &a.cancel})
 			if err != nil {

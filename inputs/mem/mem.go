@@ -18,6 +18,7 @@ package mem
 
 import (
 	"errors"
+	"fmt"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
@@ -30,6 +31,11 @@ func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mem"]
 	if ok {
 		memInput := input().(*mem.MemStats)
+
+		if err := memInput.Init(); err != nil {
+			return nil, fmt.Errorf("init: %w", err)
+		}
+
 		i = &internal.Input{
 			Input: memInput,
 			Accumulator: internal.Accumulator{

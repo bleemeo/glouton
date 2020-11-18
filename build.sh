@@ -36,7 +36,7 @@ if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
       sh -c 'rm -fr node_modules && npm install && npm run deploy'
 fi
 
-GORELEASER_VERSION="v0.137"
+GORELEASER_VERSION="v0.147.2"
 
 if [ "${ONLY_GO}" = "1" ]; then
    docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
