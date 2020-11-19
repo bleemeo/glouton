@@ -24,6 +24,7 @@ require (
 	github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/gogo/protobuf v1.3.1
+	github.com/golang/protobuf v1.4.3 // indirect
 	github.com/golang/snappy v0.0.2 // indirect
 	github.com/google/go-cmp v0.5.3
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -42,7 +43,7 @@ require (
 	github.com/mdlayher/wifi v0.0.0-20200527114002-84f0b9457fdd // indirect
 	github.com/miekg/dns v1.1.35 // indirect
 	github.com/mitchellh/mapstructure v1.3.3 // indirect
-	github.com/ncabatoff/process-exporter v0.7.5
+	github.com/ncabatoff/process-exporter v0.7.2
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opentracing/opentracing-go v1.2.0 // indirect
 	github.com/prometheus-community/windows_exporter v0.15.0
@@ -87,5 +88,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.0.2 // indirect
 	sigs.k8s.io/yaml v1.2.0
 )
-
-replace github.com/ncabatoff/process-exporter => github.com/PierreF/process-exporter v0.6.1-0.20200610182819-0fb770c071f3
