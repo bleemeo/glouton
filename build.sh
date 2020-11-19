@@ -43,7 +43,7 @@ fi
 
 GORELEASER_VERSION="v0.147.2"
 
-if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "0" ]; then
+if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
