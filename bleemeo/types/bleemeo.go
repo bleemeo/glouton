@@ -58,6 +58,7 @@ type AccountConfig struct {
 	MetricAgentResolution   int    `json:"metrics_agent_resolution"`
 	MetricMonitorResolution int    `json:"metrics_monitor_resolution"`
 	LiveProcessResolution   int    `json:"live_process_resolution"`
+	LiveProcess             bool   `json:"live_process"`
 	DockerIntegration       bool   `json:"docker_integration"`
 }
 

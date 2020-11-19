@@ -438,7 +438,7 @@ func (c *Client) run(ctx context.Context) error {
 
 		c.sendPoints()
 
-		if !c.IsSendingSuspended() && time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
+		if !c.IsSendingSuspended() && cfg.LiveProcess && time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
 			topinfoSendAt = time.Now()
 
 			c.sendTopinfo(ctx, cfg)
