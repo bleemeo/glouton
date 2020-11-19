@@ -10,7 +10,7 @@ Bleemeo Cloud platform.
 
 ## Install
 
-If you want to use the Bleemeo Cloud solution see https://docs.bleemeo.com/agent/install.
+If you want to use the Bleemeo Cloud solution see https://docs.bleemeo.com/agent/installation.
 
 ## Build a release
 
