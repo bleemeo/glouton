@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -460,27 +461,26 @@ func Test_updateContainers(t *testing.T) {
 	}
 
 	want := []struct {
-		containerNameContains string
-		containerNameEndsWith string
-		ignored               bool
-		stoppedAndReplaced    bool
-		primaryAddress        string
-		listenAddress         []ListenAddress
-		ignoredPorts          map[int]bool
+		containerNameGlob  string
+		ignored            bool
+		stoppedAndReplaced bool
+		primaryAddress     string
+		listenAddress      []ListenAddress
+		ignoredPorts       map[int]bool
 	}{
 		{
-			containerNameContains: "rabbitmq_rabbitmq-container-port",
-			ignored:               false,
-			primaryAddress:        "172.18.0.4",
+			containerNameGlob: "k8s_rabbitmq_rabbitmq-container-port-*",
+			ignored:           false,
+			primaryAddress:    "172.18.0.4",
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.4", NetworkFamily: "tcp", Port: 5672},
 			},
 			ignoredPorts: map[int]bool{},
 		},
 		{
-			containerNameContains: "rabbitmq_rabbitmq-labels",
-			ignored:               false,
-			primaryAddress:        "172.18.0.6",
+			containerNameGlob: "k8s_rabbitmq_rabbitmq-labels-*",
+			ignored:           false,
+			primaryAddress:    "172.18.0.6",
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.6", NetworkFamily: "tcp", Port: 4369},
 				{Address: "172.18.0.6", NetworkFamily: "tcp", Port: 5671},
@@ -493,34 +493,43 @@ func Test_updateContainers(t *testing.T) {
 			},
 		},
 		{
-			containerNameContains: "the-redis_redis-memcached",
-			ignored:               true,
-			primaryAddress:        "172.18.0.5",
+			containerNameGlob: "k8s_the-redis_redis-memcached-*",
+			ignored:           true,
+			primaryAddress:    "172.18.0.5",
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.5", NetworkFamily: "tcp", Port: 6363},
 			},
 			ignoredPorts: map[int]bool{},
 		},
 		{
-			containerNameContains: "a-memcached_redis-memcached",
-			ignored:               true,
-			primaryAddress:        "172.18.0.5",
+			containerNameGlob: "k8s_a-memcached_redis-memcached-*",
+			ignored:           true,
+			primaryAddress:    "172.18.0.5",
 			listenAddress: []ListenAddress{
 				{Address: "172.18.0.5", NetworkFamily: "tcp", Port: 11211},
 			},
 			ignoredPorts: map[int]bool{},
 		},
 		{
-			containerNameContains: "true_delete-me-once",
-			containerNameEndsWith: "_1", // _1 because it was restarted only 1 time.
-			primaryAddress:        "172.18.0.8",
-			stoppedAndReplaced:    false,
+			containerNameGlob:  "k8s_true_delete-me-once-*_1", // _1 because it was restarted only 1 time.
+			primaryAddress:     "172.18.0.8",
+			stoppedAndReplaced: false,
 		},
 		{
-			containerNameContains: "true_delete-me-once",
-			containerNameEndsWith: "_0",
-			primaryAddress:        "172.18.0.8",
-			stoppedAndReplaced:    true,
+			containerNameGlob:  "k8s_true_delete-me-once-*_0", // _0 was replaced by _1
+			primaryAddress:     "172.18.0.8",
+			stoppedAndReplaced: true,
+		},
+		{
+			containerNameGlob:  "k8s_POD_delete-me-once-*_0",
+			primaryAddress:     "172.18.0.8",
+			ignored:            true,
+			stoppedAndReplaced: true,
+		},
+		{
+			containerNameGlob: "k8s_POD_delete-me-once-*_1",
+			primaryAddress:    "172.18.0.8",
+			ignored:           true,
 		},
 	}
 
@@ -536,16 +545,14 @@ func Test_updateContainers(t *testing.T) {
 				t.Errorf("Container %#v is not associated with a Pod", c.Name())
 			}
 
-			if !strings.Contains(c.Name(), w.containerNameContains) {
-				continue
-			}
-
-			if !strings.HasSuffix(c.Name(), w.containerNameEndsWith) {
+			if ok, err := filepath.Match(w.containerNameGlob, c.Name()); err != nil {
+				t.Error(err)
+			} else if !ok {
 				continue
 			}
 
 			if found {
-				t.Errorf("two or more containers contains %#v", w.containerNameContains)
+				t.Errorf("two or more containers matching %#v", w.containerNameGlob)
 			}
 
 			found = true
@@ -572,7 +579,7 @@ func Test_updateContainers(t *testing.T) {
 		}
 
 		if !found {
-			t.Errorf("no contains has the name %#v", w.containerNameContains)
+			t.Errorf("no contains has the name %#v", w.containerNameGlob)
 		}
 	}
 }

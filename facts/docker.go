@@ -606,9 +606,13 @@ func enableContainer(inspect types.ContainerJSON) (bool, bool) {
 		return false, false
 	}
 
-	label, ok := inspect.Config.Labels[EnableLabel]
-	if !ok {
+	label := inspect.Config.Labels[EnableLabel]
+	if label == "" {
 		label = inspect.Config.Labels[EnableLegacyLabel]
+	}
+
+	if label == "" && inspect.Config.Labels["io.kubernetes.docker.type"] == "podsandbox" {
+		return false, true
 	}
 
 	return string2Boolean(label, true)
