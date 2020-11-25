@@ -818,6 +818,7 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
+	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
