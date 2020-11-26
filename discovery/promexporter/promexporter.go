@@ -151,7 +151,7 @@ func (d *DynamicScrapper) update(containers []Container) {
 
 		target := (*scrapper.Target)(u)
 
-		id, err := d.Registry.RegisterGatherer(target, nil, t.ExtraLabels)
+		id, err := d.Registry.RegisterGatherer(target, nil, t.ExtraLabels, true)
 		if err != nil {
 			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)
 			continue

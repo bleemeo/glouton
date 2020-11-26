@@ -56,6 +56,24 @@ func (f pushFunction) PushPoints(points []types.MetricPoint) {
 // For the Prometheus metrics source, it mostly a wrapper around prometheus.Gatherers,
 // but it allow to attach labels to each Gatherers.
 // It also support pushed metrics.
+//
+// It is used by Glouton for two main purpose:
+// * provide metrics on /metrics endpoints. For this gather of metrics is
+//   (mostly) done when an HTTP query reach /metrics.
+// * provide metrics to be sent to stored in local store + sent to Bleemeo. Here
+//   gather of metrics is done periodically.
+//
+// It may contains two kind of metrics source:
+// * Prometheus Gatherer. When adding a Gatherer additional labels could be added
+// * "push" callback, which are function that use PushPoints() to add points to
+//   the registry buffer. Points in this buffer are send when /metrics is queried.
+//   Push callbacks are only called periodically by RunCollection, they are NOT called
+//   on query to /metrics.
+//
+// Points send to local store (which forward them to Bleemeo) are:
+// * any point pushed using PushPoints()
+// * any points returned by a registered Gatherer when pushPoint option was set
+//   when gatherer was registered.
 type Registry struct {
 	PushPoint      types.PointPusher
 	FQDN           string
@@ -89,6 +107,7 @@ type Registry struct {
 type registration struct {
 	originalExtraLabels map[string]string
 	stopCallback        func()
+	pushPoints          bool
 	gatherer            labeledGatherer
 }
 
@@ -171,13 +190,6 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			SourceLabels: model.LabelNames{types.LabelMetaContainerName},
 			TargetLabel:  types.LabelContainerName,
 			Replacement:  "$1",
-		},
-		{
-			Action:      relabel.Replace,
-			Separator:   ";",
-			Regex:       relabel.MustNewRegexp("(.*)"),
-			TargetLabel: types.LabelJob,
-			Replacement: "glouton",
 		},
 		{
 			Action:       relabel.Replace,
@@ -308,7 +320,12 @@ func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
 }
 
 // RegisterGatherer add a new gatherer to the list of metric sources.
-func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string) (int, error) {
+//
+// If pushPoints is true, the periodic gather run by RunCollection will forward points to
+// r.PushPoint.
+// stopCallback is called when UnregisterGatherer() is used.
+// extraLabels add labels added. If a labels already exists, extraLabels take precedence.
+func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string, pushPoints bool) (int, error) {
 	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
@@ -328,6 +345,7 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback f
 	reg := registration{
 		originalExtraLabels: extraLabels,
 		stopCallback:        stopCallback,
+		pushPoints:          pushPoints,
 	}
 	r.setupGatherer(&reg, gatherer)
 
@@ -380,7 +398,7 @@ func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, erro
 
 	r.l.Unlock()
 
-	t0 := time.Now()
+	t0 := time.Now().Truncate(time.Millisecond)
 	mfs, err := gatherers.GatherWithState(state)
 
 	if r.metricGatherExporterTime != nil {
@@ -409,7 +427,7 @@ func (r *Registry) AddDefaultCollector() {
 	r.internalRegistry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
 	r.internalRegistry.MustRegister(prometheus.NewGoCollector())
 
-	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil)
+	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
 }
 
 // Exporter return an HTTP exporter.
@@ -429,7 +447,7 @@ func (r *Registry) Exporter() http.Handler {
 			ErrorLog:      prefixLogger("/metrics endpoint:"),
 		}).ServeHTTP(w, req)
 	}))
-	_, _ = r.RegisterGatherer(reg, nil, nil)
+	_, _ = r.RegisterGatherer(reg, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
 
 	return handler
 }
@@ -518,7 +536,7 @@ func (r *Registry) updatePushedPoints(t0 time.Time) {
 	wg.Wait()
 }
 
-func (r *Registry) runOnce() {
+func (r *Registry) runOnce() time.Duration {
 	r.l.Lock()
 
 	for r.blockRunOnce {
@@ -530,31 +548,41 @@ func (r *Registry) runOnce() {
 	gatherers := make([]labeledGatherer, 0, len(r.registrations))
 
 	for _, reg := range r.registrations {
-		gatherers = append(gatherers, reg.gatherer)
+		if reg.pushPoints {
+			gatherers = append(gatherers, reg.gatherer)
+		}
 	}
 
 	r.l.Unlock()
 
-	t0 := time.Now()
+	t0 := time.Now().Truncate(time.Millisecond)
 
 	r.updatePushedPoints(t0)
 
 	var points []types.MetricPoint
 
-	if r.MetricFormat == types.MetricFormatPrometheus {
-		var err error
+	var err error
 
-		points, err = labeledGatherers(gatherers).GatherPoints(t0, GatherState{QueryType: All})
-		if err != nil {
-			if len(points) == 0 {
-				logger.Printf("Gather of metrics failed: %v", err)
-			} else {
-				// When there is points, log at lower level because we known that some gatherer always
-				// fail on some setup. node_exporter may sent "node_rapl_package_joules_total" duplicated.
-				logger.V(1).Printf("Gather of metrics failed, some metrics may be missing: %v", err)
-			}
+	points, err = labeledGatherers(gatherers).GatherPoints(t0, GatherState{QueryType: All})
+	if err != nil {
+		if len(points) == 0 {
+			logger.Printf("Gather of metrics failed: %v", err)
+		} else {
+			// When there is points, log at lower level because we known that some gatherer always
+			// fail on some setup. node_exporter may sent "node_rapl_package_joules_total" duplicated.
+			logger.V(1).Printf("Gather of metrics failed, some metrics may be missing: %v", err)
 		}
-	} else if r.MetricFormat == types.MetricFormatBleemeo {
+	}
+
+	gatherTime := time.Since(t0)
+
+	if r.metricLegacyGatherTime != nil {
+		r.metricLegacyGatherTime.Set(gatherTime.Seconds())
+	} else {
+		r.metricGatherBackgroundTime.Observe(gatherTime.Seconds())
+	}
+
+	if r.MetricFormat == types.MetricFormatBleemeo {
 		var metric dto.Metric
 
 		err := r.metricLegacyGatherTime.Write(&metric)
@@ -563,18 +591,10 @@ func (r *Registry) runOnce() {
 		} else {
 			value := metric.GetGauge().GetValue()
 			points = append(points, types.MetricPoint{
-				Point: types.Point{Time: t0, Value: value},
-				Labels: map[string]string{
-					"__name__": "agent_gather_time",
-				},
+				Point:  types.Point{Time: t0, Value: value},
+				Labels: map[string]string{types.LabelName: "agent_gather_time"},
 			})
 		}
-	}
-
-	if r.metricLegacyGatherTime != nil {
-		r.metricLegacyGatherTime.Set(time.Since(t0).Seconds())
-	} else {
-		r.metricGatherBackgroundTime.Observe(time.Since(t0).Seconds())
 	}
 
 	if len(points) > 0 {
@@ -585,6 +605,8 @@ func (r *Registry) runOnce() {
 	r.countRunOnce--
 	r.condition.Broadcast()
 	r.l.Unlock()
+
+	return gatherTime
 }
 
 func familiesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types.MetricPoint {
@@ -645,13 +667,26 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	now := time.Now()
 	deadline := now.Add(ttl)
 
-	for _, point := range points {
-		extraLabels := r.addMetaLabels(point.Labels)
-		newLabels, _ := r.applyRelabel(extraLabels)
-		newLabelsMap := newLabels.Map()
+	for i, point := range points {
+		var newLabelsMap map[string]string
+
+		if r.MetricFormat == types.MetricFormatBleemeo {
+			newLabelsMap = map[string]string{
+				types.LabelName: point.Labels[types.LabelName],
+			}
+
+			if point.Annotations.BleemeoItem != "" {
+				newLabelsMap[types.LabelItem] = point.Annotations.BleemeoItem
+			}
+		} else {
+			extraLabels := r.addMetaLabels(point.Labels)
+			newLabels, _ := r.applyRelabel(extraLabels)
+			newLabelsMap = newLabels.Map()
+		}
+
 		key := types.LabelsToText(newLabelsMap)
-		point.Labels = newLabelsMap
-		r.pushedPoints[key] = point
+		points[i].Labels = newLabelsMap
+		r.pushedPoints[key] = points[i]
 		r.pushedPointsExpiration[key] = deadline
 	}
 

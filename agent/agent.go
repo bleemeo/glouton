@@ -607,7 +607,7 @@ func (a *agent) run() { //nolint:gocyclo
 			types.LabelMetaScrapeInstance: target.HostPort(),
 		}
 
-		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, extraLabels); err != nil {
+		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, extraLabels, true); err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", u.String(), err)
 		}
 	}
@@ -631,7 +631,7 @@ func (a *agent) run() { //nolint:gocyclo
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
 
-		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf)
+		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}

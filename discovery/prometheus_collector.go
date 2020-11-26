@@ -45,7 +45,7 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		runtime.GC()
 	}
 
-	id, err := d.metricRegistry.RegisterGatherer(reg, stopCallback, labels)
+	id, err := d.metricRegistry.RegisterGatherer(reg, stopCallback, labels, d.metricFormat == types.MetricFormatPrometheus)
 	if err != nil {
 		return err
 	}

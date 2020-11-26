@@ -27,29 +27,35 @@ const (
 	APIMetricItemLengthIfService int = 50
 )
 
-const (
-	// LabelBleemeoItem is the label used for item when using Bleemeo mode.
-	LabelBleemeoItem = "_item"
-)
+// MetricOnlyHasItem return true if the metric only has a name and an item (which could be empty).
+// Said otherwise, the metrics don't need to use labels_text on Bleemeo API to store its labels.
+func MetricOnlyHasItem(labels map[string]string) bool {
+	if len(labels) > 2 {
+		return false
+	}
+
+	for k := range labels {
+		if k != types.LabelName && k != types.LabelItem {
+			return false
+		}
+	}
+
+	return true
+}
 
 // LabelsToText convert labels & annotation to a string version.
 // When using the Bleemeo Mode, result is the name + the item annotation.
 func LabelsToText(labels map[string]string, annotations types.MetricAnnotations, bleemeoMode bool) string {
-	if bleemeoMode {
-		labelsCopy := map[string]string{
-			types.LabelName:  labels[types.LabelName],
-			LabelBleemeoItem: TruncateItem(annotations.BleemeoItem, annotations.ServiceName != ""),
+	if bleemeoMode && labels[types.LabelItem] != TruncateItem(labels[types.LabelItem], annotations.ServiceName != "") {
+		labelsCopy := make(map[string]string, len(labels)+1)
+		for k, v := range labels {
+			labelsCopy[k] = v
 		}
 
-		return types.LabelsToText(labelsCopy)
+		labelsCopy[types.LabelItem] = TruncateItem(labels[types.LabelItem], annotations.ServiceName != "")
 	}
 
-	labelsCopy := make(map[string]string, len(labels)+1)
-	for k, v := range labels {
-		labelsCopy[k] = v
-	}
-
-	return types.LabelsToText(labelsCopy)
+	return types.LabelsToText(labels)
 }
 
 // TruncateItem truncate the item to match maximal length allowed by Bleemeo API.

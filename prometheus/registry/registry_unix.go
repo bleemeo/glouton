@@ -20,6 +20,7 @@ package registry
 
 import (
 	"glouton/prometheus/exporter/node"
+	"glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -38,7 +39,7 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 		return err
 	}
 
-	_, err = r.RegisterGatherer(reg, nil, nil)
+	_, err = r.RegisterGatherer(reg, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
 
 	return err
 }

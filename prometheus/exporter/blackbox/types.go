@@ -2,6 +2,7 @@ package blackbox
 
 import (
 	"glouton/prometheus/registry"
+	"glouton/types"
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -39,4 +40,5 @@ type RegisterManager struct {
 	scraperName   string
 	registrations map[int]gathererWithConfigTarget
 	registry      *registry.Registry
+	metricFormat  types.MetricFormat
 }
