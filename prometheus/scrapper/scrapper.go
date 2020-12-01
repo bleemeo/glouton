@@ -33,11 +33,16 @@ import (
 )
 
 // Target is an URL to scrape.
-type Target url.URL
+type Target struct {
+	URL            *url.URL
+	AllowList      []string
+	DenyList       []string
+	IncludeDefault bool
+	ExtraLabels    map[string]string
+}
 
 // HostPort return host:port.
-func (t *Target) HostPort() string {
-	u := (*url.URL)(t)
+func HostPort(u *url.URL) string {
 	hostname := u.Hostname()
 	port := u.Port()
 
@@ -45,8 +50,8 @@ func (t *Target) HostPort() string {
 }
 
 // Gather implement prometheus.Gatherer.
-func (t *Target) Gather() ([]*dto.MetricFamily, error) {
-	u := (*url.URL)(t)
+func (t Target) Gather() ([]*dto.MetricFamily, error) {
+	u := t.URL
 
 	logger.V(2).Printf("Scrapping Prometheus exporter %s", u.String())
 

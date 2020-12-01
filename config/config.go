@@ -103,7 +103,7 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 	case TypeStringList:
 		c.Set(key, strings.Split(value, ","))
 	case TypeBoolean:
-		value, err := convertBoolean(value)
+		value, err := ConvertBoolean(value)
 		if err != nil {
 			return false, err
 		}
@@ -286,9 +286,9 @@ func (c *Configuration) Bool(key string) bool {
 	case bool:
 		return value
 	case int:
-		return value == 0
+		return value != 0
 	case string:
-		v, err := convertBoolean(value)
+		v, err := ConvertBoolean(value)
 		if err != nil {
 			return false
 		}

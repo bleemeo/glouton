@@ -111,11 +111,6 @@ type agent struct {
 	metricResolution time.Duration
 }
 
-type prometheusTarget struct {
-	URL  string
-	Name string
-}
-
 func zabbixResponse(key string, args []string) (string, error) {
 	if key == "agent.ping" {
 		return "1", nil
@@ -593,27 +588,20 @@ func (a *agent) run() { //nolint:gocyclo
 		a.metricFormat,
 	)
 
-	var targets []prometheusTarget
+	var targets []scrapper.Target
 
 	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(promCfg)
+		targets = prometheusConfigToURLs(
+			promCfg,
+			a.config.StringList("metric.prometheus.allow_metrics"),
+			a.config.StringList("metric.prometheus.deny_metrics"),
+			a.config.Bool("metric.prometheus.include_default_metrics"),
+		)
 	}
 
-	for _, t := range targets {
-		u, err := url.Parse(t.URL)
-		if err != nil {
-			logger.Printf("ignoring invalid exporter config: %v", err)
-			continue
-		}
-
-		target := (*scrapper.Target)(u)
-		extraLabels := map[string]string{
-			types.LabelMetaScrapeJob:      t.Name,
-			types.LabelMetaScrapeInstance: target.HostPort(),
-		}
-
-		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, extraLabels, true); err != nil {
-			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", u.String(), err)
+	for _, target := range targets {
+		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
+			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
@@ -1609,8 +1597,8 @@ func setupContainer(hostRootPath string) {
 // prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(config interface{}) (result []prometheusTarget) {
-	configList, ok := config.([]interface{})
+func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string, globalIncludeDefault bool) (result []scrapper.Target) {
+	configList, ok := cfg.([]interface{})
 	if !ok {
 		return nil
 	}
@@ -1621,17 +1609,69 @@ func prometheusConfigToURLs(config interface{}) (result []prometheusTarget) {
 			continue
 		}
 
-		u, ok := vMap["url"].(string)
+		uText, ok := vMap["url"].(string)
 		if !ok {
+			continue
+		}
+
+		u, err := url.Parse(uText)
+		if err != nil {
+			logger.Printf("ignoring invalid exporter config: %v", err)
 			continue
 		}
 
 		name, _ := vMap["name"].(string)
 
-		result = append(result, prometheusTarget{
-			Name: name,
-			URL:  u,
-		})
+		target := scrapper.Target{
+			ExtraLabels: map[string]string{
+				types.LabelMetaScrapeJob:      name,
+				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
+			},
+			URL:            u,
+			AllowList:      globalAllow,
+			DenyList:       globalDeny,
+			IncludeDefault: globalIncludeDefault,
+		}
+
+		if allow, ok := vMap["allow_metrics"].([]interface{}); ok {
+			target.AllowList = make([]string, 0, len(allow))
+
+			for _, x := range allow {
+				s, _ := x.(string)
+				if s != "" {
+					target.AllowList = append(target.AllowList, x.(string))
+				}
+			}
+		}
+
+		if deny, ok := vMap["deny_metrics"].([]interface{}); ok {
+			target.DenyList = make([]string, 0, len(deny))
+
+			for _, x := range deny {
+				s, _ := x.(string)
+				if s != "" {
+					target.DenyList = append(target.DenyList, x.(string))
+				}
+			}
+		}
+
+		switch value := vMap["include_default_metrics"].(type) {
+		case bool:
+			target.IncludeDefault = value
+		case int:
+			target.IncludeDefault = (value != 0)
+		case string:
+			v, err := config.ConvertBoolean(value)
+			if err != nil {
+				logger.Printf("ignoring invalid boolean \"%s\" for include_default on target %s: %v", value, uText, err)
+			} else {
+				target.IncludeDefault = v
+			}
+		default:
+			logger.Printf("ignoring invalid boolean \"%v\" for include_default on target %s: unknown type", value, uText)
+		}
+
+		result = append(result, target)
 	}
 
 	return result
