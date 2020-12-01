@@ -111,6 +111,11 @@ type agent struct {
 	metricResolution time.Duration
 }
 
+type prometheusTarget struct {
+	URL  string
+	Name string
+}
+
 func zabbixResponse(key string, args []string) (string, error) {
 	if key == "agent.ping" {
 		return "1", nil
@@ -588,14 +593,14 @@ func (a *agent) run() { //nolint:gocyclo
 		a.metricFormat,
 	)
 
-	var targets map[string]string
+	var targets []prometheusTarget
 
-	if promCfg, found := a.config.Get("metric.prometheus"); found {
+	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
 		targets = prometheusConfigToURLs(promCfg)
 	}
 
-	for name, value := range targets {
-		u, err := url.Parse(value)
+	for _, t := range targets {
+		u, err := url.Parse(t.URL)
 		if err != nil {
 			logger.Printf("ignoring invalid exporter config: %v", err)
 			continue
@@ -603,7 +608,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 		target := (*scrapper.Target)(u)
 		extraLabels := map[string]string{
-			types.LabelMetaScrapeJob:      name,
+			types.LabelMetaScrapeJob:      t.Name,
 			types.LabelMetaScrapeInstance: target.HostPort(),
 		}
 
@@ -1601,32 +1606,32 @@ func setupContainer(hostRootPath string) {
 	}
 }
 
-// prometheusConfigToURLs convert metric.prometheus config to a map of target name to URL
+// prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
-// the config is expected to be a like:
-// config:
-//   your_custom_name_here:
-//     url: http://localhost:9100/metrics
-func prometheusConfigToURLs(config interface{}) map[string]string {
-	result := make(map[string]string)
-
-	configMap, ok := config.(map[string]interface{})
+// See tests for the expected config.
+func prometheusConfigToURLs(config interface{}) (result []prometheusTarget) {
+	configList, ok := config.([]interface{})
 	if !ok {
 		return nil
 	}
 
-	for name, v := range configMap {
+	for _, v := range configList {
 		vMap, ok := v.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		url, ok := vMap["url"].(string)
+		u, ok := vMap["url"].(string)
 		if !ok {
 			continue
 		}
 
-		result[name] = url
+		name, _ := vMap["name"].(string)
+
+		result = append(result, prometheusTarget{
+			Name: name,
+			URL:  u,
+		})
 	}
 
 	return result

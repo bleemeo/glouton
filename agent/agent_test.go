@@ -1,6 +1,11 @@
+// nolint: scopelint
 package agent
 
-import "testing"
+import (
+	"glouton/config"
+	"reflect"
+	"testing"
+)
 
 func TestParseIPOutput(t *testing.T) {
 	cases := []struct {
@@ -48,5 +53,65 @@ func TestParseIPOutput(t *testing.T) {
 		if got != c.want {
 			t.Errorf("parseIPOutput([case %s]) == %#v, want %#v", c.description, got, c.want)
 		}
+	}
+}
+
+func Test_prometheusConfigToURLs(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfgFilename string
+		want        []prometheusTarget
+	}{
+		{
+			name:        "old",
+			cfgFilename: "testdata/old-prometheus-targets.conf",
+			want: []prometheusTarget{
+				{
+					Name: "test1",
+					URL:  "http://localhost:9090/metrics",
+				},
+			},
+		},
+		{
+			name:        "new",
+			cfgFilename: "testdata/new-prometheus-targets.conf",
+			want: []prometheusTarget{
+				{
+					Name: "test1",
+					URL:  "http://localhost:9090/metrics",
+				},
+			},
+		},
+		{
+			name:        "both",
+			cfgFilename: "testdata/both-prometheus-targets.conf",
+			want: []prometheusTarget{
+				{
+					Name: "new",
+					URL:  "http://new:9090/metrics",
+				},
+				{
+					Name: "old",
+					URL:  "http://old:9090/metrics",
+				},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Configuration{}
+
+			if err := configLoadFile(tt.cfgFilename, cfg); err != nil {
+				t.Error(err)
+			}
+
+			migrate(cfg)
+
+			input, _ := cfg.Get("metric.prometheus.targets")
+
+			if got := prometheusConfigToURLs(input); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("prometheusConfigToURLs() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }

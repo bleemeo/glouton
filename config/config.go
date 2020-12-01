@@ -141,6 +141,33 @@ func (c *Configuration) Set(key string, value interface{}) {
 	setValue(c.rawValues, keyPart, value)
 }
 
+// Delete delete a key.
+func (c *Configuration) Delete(key string) {
+	keyPart := strings.Split(key, ".")
+	deleteCfg(c.rawValues, keyPart)
+}
+
+func deleteCfg(root map[string]interface{}, keyPart []string) {
+	key := keyPart[0]
+
+	if len(keyPart) == 1 {
+		delete(root, key)
+		return
+	}
+
+	newRoot, ok := root[key]
+	if !ok {
+		return
+	}
+
+	newMap, ok := newRoot.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	deleteCfg(newMap, keyPart[1:])
+}
+
 // String return the given key as string.
 //
 // Return "" if the key does not exists or could not be converted to string.
