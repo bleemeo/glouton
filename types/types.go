@@ -106,7 +106,8 @@ const (
 	LabelScraper              = "scraper"
 	LabelInstance             = "instance"
 	LabelContainerName        = "container_name"
-	LabelGloutonJob           = "glouton_job"
+	LabelScrapeJob            = "scrape_job"
+	LabelScrapeInstance       = "scrape_instance"
 )
 
 // IsSet return true if the status is set.

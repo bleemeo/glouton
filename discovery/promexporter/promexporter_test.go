@@ -19,6 +19,7 @@ package promexporter
 
 import (
 	"glouton/types"
+	"net/url"
 	"reflect"
 	"testing"
 )
@@ -84,8 +85,9 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample:9102/metrics",
 					ExtraLabels: map[string]string{
-						types.LabelContainerName: "my_container",
-						types.LabelMetaScrapeJob: fakeJobName,
+						types.LabelContainerName:      "my_container",
+						types.LabelMetaScrapeJob:      fakeJobName,
+						types.LabelMetaScrapeInstance: "sample:9102",
 					},
 				},
 			},
@@ -106,9 +108,10 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample:9102/metrics",
 					ExtraLabels: map[string]string{
-						"kubernetes.pod.namespace": fakePodNamespace,
-						"kubernetes.pod.name":      "my_pod-1234",
-						types.LabelMetaScrapeJob:   fakeJobName,
+						"kubernetes.pod.namespace":    fakePodNamespace,
+						"kubernetes.pod.name":         "my_pod-1234",
+						types.LabelMetaScrapeJob:      fakeJobName,
+						types.LabelMetaScrapeInstance: "sample:9102",
 					},
 				},
 			},
@@ -154,16 +157,18 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample1:9102/metrics",
 					ExtraLabels: map[string]string{
-						types.LabelContainerName: "sample1_1",
-						types.LabelMetaScrapeJob: fakeJobName,
+						types.LabelContainerName:      "sample1_1",
+						types.LabelMetaScrapeJob:      fakeJobName,
+						types.LabelMetaScrapeInstance: "sample1:9102",
 					},
 				},
 				{
 					URL: "http://sample2:8080/metrics",
 					ExtraLabels: map[string]string{
-						"kubernetes.pod.namespace": fakePodNamespace,
-						"kubernetes.pod.name":      "sample2-1234",
-						types.LabelMetaScrapeJob:   fakeJobName,
+						"kubernetes.pod.namespace":    fakePodNamespace,
+						"kubernetes.pod.name":         "sample2-1234",
+						types.LabelMetaScrapeJob:      fakeJobName,
+						types.LabelMetaScrapeInstance: "sample2:8080",
 					},
 				},
 			},
@@ -185,8 +190,9 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample:8080/metrics.txt",
 					ExtraLabels: map[string]string{
-						types.LabelContainerName: "testname",
-						types.LabelMetaScrapeJob: fakeJobName,
+						types.LabelContainerName:      "testname",
+						types.LabelMetaScrapeJob:      fakeJobName,
+						types.LabelMetaScrapeInstance: "sample:8080",
 					},
 				},
 			},
@@ -207,8 +213,9 @@ func TestListExporters(t *testing.T) {
 				{
 					URL: "http://sample:9102/metrics.txt",
 					ExtraLabels: map[string]string{
-						types.LabelContainerName: "testname",
-						types.LabelMetaScrapeJob: fakeJobName,
+						types.LabelContainerName:      "testname",
+						types.LabelMetaScrapeJob:      fakeJobName,
+						types.LabelMetaScrapeInstance: "sample:9102",
 					},
 				},
 			},
@@ -219,7 +226,20 @@ func TestListExporters(t *testing.T) {
 			d := DynamicScrapper{
 				DynamicJobName: "jobname",
 			}
-			if got := d.listExporters(tt.containers); !reflect.DeepEqual(got, tt.want) {
+			got := d.listExporters(tt.containers)
+
+			for i, g := range got {
+				gotURL := (*url.URL)(g.Target).String()
+				if gotURL != g.URL {
+					t.Errorf("URL = %v, want %v", gotURL, g.URL)
+				}
+
+				// we checked value of Target and can't compare it using DeepEqual,
+				// so set it to nil.
+				got[i].Target = nil
+			}
+
+			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("ListExporters() = %v, want %v", got, tt.want)
 			}
 		})

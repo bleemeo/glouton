@@ -44,6 +44,7 @@ type Container interface {
 type target struct {
 	URL         string
 	ExtraLabels map[string]string
+	Target      *scrapper.Target
 }
 
 // listExporters return list of exporters based on containers labels/annotations.
@@ -57,8 +58,20 @@ func (d *DynamicScrapper) listExporters(containers []Container) []target {
 			u = urlFromLabels(c.Annotations(), c.PrimaryAddress())
 		}
 
+		if u == "" {
+			continue
+		}
+
+		tmp, err := url.Parse(u)
+		if err != nil {
+			logger.Printf("ignoring invalid URL %v: %v", u, err)
+			continue
+		}
+
+		t := (*scrapper.Target)(tmp)
 		labels := map[string]string{
-			types.LabelMetaScrapeJob: d.DynamicJobName,
+			types.LabelMetaScrapeJob:      d.DynamicJobName,
+			types.LabelMetaScrapeInstance: t.HostPort(),
 		}
 
 		if ns, podName := c.PodNamespaceName(); podName != "" {
@@ -68,12 +81,11 @@ func (d *DynamicScrapper) listExporters(containers []Container) []target {
 			labels[types.LabelContainerName] = c.Name()
 		}
 
-		if u != "" {
-			result = append(result, target{
-				URL:         u,
-				ExtraLabels: labels,
-			})
-		}
+		result = append(result, target{
+			Target:      t,
+			URL:         u,
+			ExtraLabels: labels,
+		})
 	}
 
 	return result
@@ -143,15 +155,7 @@ func (d *DynamicScrapper) update(containers []Container) {
 			delete(d.registeredLabels, t.URL)
 		}
 
-		u, err := url.Parse(t.URL)
-		if err != nil {
-			logger.Printf("ignoring invalid URL %v: %v", t.URL, err)
-			continue
-		}
-
-		target := (*scrapper.Target)(u)
-
-		id, err := d.Registry.RegisterGatherer(target, nil, t.ExtraLabels, true)
+		id, err := d.Registry.RegisterGatherer(t.Target, nil, t.ExtraLabels, true)
 		if err != nil {
 			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)
 			continue

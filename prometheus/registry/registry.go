@@ -196,7 +196,15 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.*)"),
 			SourceLabels: model.LabelNames{types.LabelMetaScrapeJob},
-			TargetLabel:  types.LabelGloutonJob,
+			TargetLabel:  types.LabelScrapeJob,
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.*)"),
+			SourceLabels: model.LabelNames{types.LabelMetaScrapeInstance},
+			TargetLabel:  types.LabelScrapeInstance,
 			Replacement:  "$1",
 		},
 	}
