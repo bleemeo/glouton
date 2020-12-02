@@ -43,8 +43,8 @@ type Container interface {
 }
 
 // listExporters return list of exporters based on containers labels/annotations.
-func (d *DynamicScrapper) listExporters(containers []Container) []scrapper.Target {
-	result := make([]scrapper.Target, 0)
+func (d *DynamicScrapper) listExporters(containers []Container) []*scrapper.Target {
+	result := make([]*scrapper.Target, 0)
 
 	for _, c := range containers {
 		u := urlFromLabels(c.Labels(), c.PrimaryAddress())
@@ -75,7 +75,7 @@ func (d *DynamicScrapper) listExporters(containers []Container) []scrapper.Targe
 			labels[types.LabelContainerName] = c.Name()
 		}
 
-		target := scrapper.Target{
+		target := &scrapper.Target{
 			URL:            tmp,
 			ExtraLabels:    labels,
 			AllowList:      d.GlobalAllowMetrics,
@@ -83,8 +83,8 @@ func (d *DynamicScrapper) listExporters(containers []Container) []scrapper.Targe
 			IncludeDefault: d.GlobalIncludeDefaultMetrics,
 		}
 
-		updateAllowDeny(&target, c.Labels())
-		updateAllowDeny(&target, c.Annotations())
+		updateAllowDeny(target, c.Labels())
+		updateAllowDeny(target, c.Annotations())
 
 		result = append(result, target)
 	}

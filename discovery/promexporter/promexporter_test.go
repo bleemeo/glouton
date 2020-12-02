@@ -24,6 +24,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 const fakeJobName = "jobname"
@@ -74,7 +75,7 @@ func TestListExporters(t *testing.T) {
 	tests := []struct {
 		name                 string
 		containers           []Container
-		want                 []scrapper.Target
+		want                 []*scrapper.Target
 		globalAllow          []string
 		globalDeny           []string
 		globalIncludeDefault bool
@@ -82,7 +83,7 @@ func TestListExporters(t *testing.T) {
 		{
 			name:       "empty",
 			containers: []Container{},
-			want:       []scrapper.Target{},
+			want:       []*scrapper.Target{},
 		},
 		{
 			name: "docker",
@@ -95,7 +96,7 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ExtraLabels: map[string]string{
@@ -118,7 +119,7 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ExtraLabels: map[string]string{
@@ -145,7 +146,7 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{},
+			want: []*scrapper.Target{},
 		},
 		{
 			name: "two-with-alternate-port",
@@ -167,7 +168,7 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample1:9102/metrics"),
 					ExtraLabels: map[string]string{
@@ -200,7 +201,7 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:8080/metrics.txt"),
 					ExtraLabels: map[string]string{
@@ -223,7 +224,7 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics.txt"),
 					ExtraLabels: map[string]string{
@@ -248,7 +249,7 @@ func TestListExporters(t *testing.T) {
 			globalAllow:          []string{"global", "allow*"},
 			globalDeny:           []string{"nope"},
 			globalIncludeDefault: true,
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ExtraLabels: map[string]string{
@@ -279,7 +280,7 @@ func TestListExporters(t *testing.T) {
 			globalAllow:          []string{"global", "allow*"},
 			globalDeny:           []string{"nope"},
 			globalIncludeDefault: true,
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ExtraLabels: map[string]string{
@@ -310,7 +311,7 @@ func TestListExporters(t *testing.T) {
 			globalAllow:          []string{"global", "allow*"},
 			globalDeny:           []string{"nope"},
 			globalIncludeDefault: true,
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ExtraLabels: map[string]string{
@@ -341,7 +342,7 @@ func TestListExporters(t *testing.T) {
 			globalAllow:          []string{"global", "allow*"},
 			globalDeny:           []string{"nope"},
 			globalIncludeDefault: false,
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
 					ExtraLabels: map[string]string{
@@ -367,7 +368,7 @@ func TestListExporters(t *testing.T) {
 			}
 			got := d.listExporters(tt.containers)
 
-			if diff := cmp.Diff(tt.want, got); diff != "" {
+			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(scrapper.Target{})); diff != "" {
 				t.Errorf("ListExporters() != want: %v", diff)
 			}
 		})

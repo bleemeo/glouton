@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestParseIPOutput(t *testing.T) {
@@ -74,7 +75,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 	tests := []struct {
 		name                 string
 		cfgFilename          string
-		want                 []scrapper.Target
+		want                 []*scrapper.Target
 		globalAllow          []string
 		globalDeny           []string
 		globalIncludeDefault bool
@@ -82,7 +83,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 		{
 			name:        "old",
 			cfgFilename: "testdata/old-prometheus-targets.conf",
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "test1",
@@ -95,7 +96,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 		{
 			name:        "new",
 			cfgFilename: "testdata/new-prometheus-targets.conf",
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "test1",
@@ -108,7 +109,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 		{
 			name:        "both",
 			cfgFilename: "testdata/both-prometheus-targets.conf",
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "new",
@@ -131,7 +132,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 			globalIncludeDefault: true,
 			globalAllow:          []string{"global1", "global2"},
 			globalDeny:           []string{"!global1"},
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "use-global",
@@ -200,7 +201,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 			globalIncludeDefault: false,
 			globalAllow:          []string{"only", "global"},
 			globalDeny:           []string{"changed"},
-			want: []scrapper.Target{
+			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "use-global",
@@ -277,7 +278,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 			input, _ := cfg.Get("metric.prometheus.targets")
 
 			got := prometheusConfigToURLs(input, tt.globalAllow, tt.globalDeny, tt.globalIncludeDefault)
-			if diff := cmp.Diff(tt.want, got); diff != "" {
+			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(scrapper.Target{})); diff != "" {
 				t.Errorf("prometheusConfigToURLs() != want: %v", diff)
 			}
 		})

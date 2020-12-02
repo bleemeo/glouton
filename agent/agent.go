@@ -588,7 +588,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.metricFormat,
 	)
 
-	var targets []scrapper.Target
+	var targets []*scrapper.Target
 
 	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
 		targets = prometheusConfigToURLs(
@@ -1597,7 +1597,7 @@ func setupContainer(hostRootPath string) {
 // prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string, globalIncludeDefault bool) (result []scrapper.Target) {
+func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string, globalIncludeDefault bool) (result []*scrapper.Target) {
 	configList, ok := cfg.([]interface{})
 	if !ok {
 		return nil
@@ -1622,7 +1622,7 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 
 		name, _ := vMap["name"].(string)
 
-		target := scrapper.Target{
+		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
 				types.LabelMetaScrapeJob:      name,
 				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
@@ -1668,7 +1668,9 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 				target.IncludeDefault = v
 			}
 		default:
-			logger.Printf("ignoring invalid boolean \"%v\" for include_default on target %s: unknown type", value, uText)
+			if value != nil {
+				logger.Printf("ignoring invalid boolean \"%v\" for include_default on target %s: unknown type", value, uText)
+			}
 		}
 
 		result = append(result, target)
