@@ -16,7 +16,7 @@
 
 package api
 
-//go:generate go run github.com/go-bindata/go-bindata/go-bindata -o api-bindata.go -pkg api -fs -nocompress -nomemcopy -prefix static static/...
+//go:generate go run github.com/go-bindata/go-bindata/v3/go-bindata -o api-bindata.go -pkg api -fs -nocompress -nomemcopy -prefix static static/...
 
 import (
 	"context"

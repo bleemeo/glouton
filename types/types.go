@@ -22,7 +22,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/prometheus/prometheus/promql"
+	"github.com/prometheus/prometheus/promql/parser"
 )
 
 // Status is an enumeration of status (ok, warning, critical, unknown).
@@ -243,7 +243,7 @@ func LabelsToText(labels map[string]string) string {
 
 // TextToLabels is the reverse of LabelsToText.
 func TextToLabels(text string) map[string]string {
-	labels, err := promql.ParseMetricSelector("{" + text + "}")
+	labels, err := parser.ParseMetricSelector("{" + text + "}")
 	if err != nil {
 		logger.Printf("unable to decode labels %#v: %v", text, err)
 		return nil
