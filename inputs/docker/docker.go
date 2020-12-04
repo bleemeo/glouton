@@ -110,10 +110,6 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 	newFields := make(map[string]float64)
 
 	switch currentContext.Measurement {
-	case "docker":
-		if value, ok := fields["n_containers"]; ok {
-			newFields["containers"] = value
-		}
 	case "docker_container_cpu":
 		if value, ok := fields["usage_total"]; ok {
 			// Docker sends the total usage in nanosecond.

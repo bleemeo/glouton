@@ -420,7 +420,7 @@ func TestRegress_withoutKubernetes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	dockerProvider := NewDocker(nil, nil)
+	dockerProvider := NewDocker(nil, nil, nil)
 	dockerProvider.client = dockerClient
 
 	_, err = dockerProvider.Containers(context.Background(), 0, true)
@@ -430,7 +430,7 @@ func TestRegress_withoutKubernetes(t *testing.T) {
 
 	var kubeProvider *KubernetesProvider
 
-	dockerProvider = NewDocker(nil, kubeProvider)
+	dockerProvider = NewDocker(nil, kubeProvider, nil)
 	dockerProvider.client = dockerClient
 
 	_, err = dockerProvider.Containers(context.Background(), 0, true)

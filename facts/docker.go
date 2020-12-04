@@ -23,6 +23,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/types"
 	"math"
 	"sort"
 	"strconv"
@@ -30,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/docker/api/types"
+	dockerTypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	docker "github.com/docker/docker/client"
@@ -47,16 +48,16 @@ const (
 )
 
 type dockerClient interface {
-	ContainerExecAttach(ctx context.Context, execID string, config types.ExecStartCheck) (types.HijackedResponse, error)
-	ContainerExecCreate(ctx context.Context, container string, config types.ExecConfig) (types.IDResponse, error)
-	ContainerInspect(ctx context.Context, container string) (types.ContainerJSON, error)
-	ContainerList(ctx context.Context, options types.ContainerListOptions) ([]types.Container, error)
+	ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error)
+	ContainerExecCreate(ctx context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error)
+	ContainerInspect(ctx context.Context, container string) (dockerTypes.ContainerJSON, error)
+	ContainerList(ctx context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error)
 	ContainerTop(ctx context.Context, container string, arguments []string) (container.ContainerTopOKBody, error)
-	Events(ctx context.Context, options types.EventsOptions) (<-chan events.Message, <-chan error)
-	NetworkInspect(ctx context.Context, network string, options types.NetworkInspectOptions) (types.NetworkResource, error)
-	NetworkList(ctx context.Context, options types.NetworkListOptions) ([]types.NetworkResource, error)
-	Ping(ctx context.Context) (types.Ping, error)
-	ServerVersion(ctx context.Context) (types.Version, error)
+	Events(ctx context.Context, options dockerTypes.EventsOptions) (<-chan events.Message, <-chan error)
+	NetworkInspect(ctx context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error)
+	NetworkList(ctx context.Context, options dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error)
+	Ping(ctx context.Context) (dockerTypes.Ping, error)
+	ServerVersion(ctx context.Context) (dockerTypes.Version, error)
 }
 
 type kubernetesProvider interface {
@@ -67,6 +68,7 @@ type kubernetesProvider interface {
 type DockerProvider struct {
 	deletedContainersCallback func(containerIDs []string)
 	kubernetesProvider        kubernetesProvider
+	pusher                    types.PointPusher
 	l                         sync.Mutex
 
 	client           dockerClient
@@ -99,12 +101,12 @@ type DockerEvent struct {
 // Container wraps the Docker inspect values and provide few accessor to useful fields.
 type Container struct {
 	primaryAddress string
-	inspect        types.ContainerJSON
+	inspect        dockerTypes.ContainerJSON
 	pod            corev1.Pod
 }
 
 // NewDocker creates a new Docker provider which must be started with Run() method.
-func NewDocker(deletedContainersCallback func(containerIDs []string), kubeImpl *KubernetesProvider) *DockerProvider {
+func NewDocker(deletedContainersCallback func(containerIDs []string), kubeImpl *KubernetesProvider, pusher types.PointPusher) *DockerProvider {
 	var kube kubernetesProvider
 
 	// an interface type (kubernetesProvider here) store both the real type and real value.
@@ -122,6 +124,7 @@ func NewDocker(deletedContainersCallback func(containerIDs []string), kubeImpl *
 		lastKill:                  make(map[string]time.Time),
 		deletedContainersCallback: deletedContainersCallback,
 		kubernetesProvider:        kube,
+		pusher:                    pusher,
 	}
 }
 
@@ -221,7 +224,7 @@ func (d *DockerProvider) Exec(ctx context.Context, containerID string, cmd []str
 		return nil, err
 	}
 
-	id, err := cl.ContainerExecCreate(ctx, containerID, types.ExecConfig{
+	id, err := cl.ContainerExecCreate(ctx, containerID, dockerTypes.ExecConfig{
 		Cmd:          cmd,
 		AttachStdout: true,
 		AttachStderr: true,
@@ -230,7 +233,7 @@ func (d *DockerProvider) Exec(ctx context.Context, containerID string, cmd []str
 		return nil, err
 	}
 
-	resp, err := cl.ContainerExecAttach(ctx, id.ID, types.ExecStartCheck{})
+	resp, err := cl.ContainerExecAttach(ctx, id.ID, dockerTypes.ExecStartCheck{})
 	if err != nil {
 		return nil, err
 	}
@@ -316,6 +319,34 @@ func (d *DockerProvider) ContainerLastKill(containerID string) time.Time {
 	return d.lastKill[containerID]
 }
 
+// Gather collect global Docker metrics.
+func (d *DockerProvider) Gather(t0 time.Time) {
+	// We don't really care about having up-to-date information because
+	// when containers are started/stopped, the information is updated anyway.
+	containers, err := d.Containers(context.Background(), 2*time.Hour, false)
+	if err != nil {
+		logger.V(2).Printf("gather on DockerProvider failed: %v", err)
+		return
+	}
+
+	countRunning := 0
+
+	for _, c := range containers {
+		if c.IsRunning() {
+			countRunning++
+		}
+	}
+
+	d.pusher.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{Time: t0, Value: float64(countRunning)},
+			Labels: map[string]string{
+				"__name__": "docker_containers",
+			},
+		},
+	})
+}
+
 // Command returns the command run in the container.
 func (c Container) Command() string {
 	if c.inspect.Config == nil {
@@ -399,7 +430,7 @@ func (c Container) Image() string {
 }
 
 // Inspect returns the Docker ContainerJSON object.
-func (c Container) Inspect() types.ContainerJSON {
+func (c Container) Inspect() dockerTypes.ContainerJSON {
 	return c.inspect
 }
 
@@ -601,7 +632,7 @@ func (c Container) kubernetesContainer() (corev1.Container, bool) {
 	return corev1.Container{}, false
 }
 
-func enableContainer(inspect types.ContainerJSON) (bool, bool) {
+func enableContainer(inspect dockerTypes.ContainerJSON) (bool, bool) {
 	if inspect.Config == nil {
 		return false, false
 	}
@@ -668,7 +699,7 @@ func notifyError(err error, lastErrorNotify time.Time, reconnectAttempt int) tim
 	return time.Now()
 }
 
-func (d *DockerProvider) primaryAddress(ctx context.Context, inspect types.ContainerJSON, bridgeNetworks map[string]interface{}, containerAddressOnDockerBridge map[string]string) string {
+func (d *DockerProvider) primaryAddress(ctx context.Context, inspect dockerTypes.ContainerJSON, bridgeNetworks map[string]interface{}, containerAddressOnDockerBridge map[string]string) string {
 	if inspect.NetworkSettings != nil && inspect.NetworkSettings.IPAddress != "" {
 		return inspect.NetworkSettings.IPAddress
 	}
@@ -854,7 +885,7 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 	bridgeNetworks := make(map[string]interface{})
 	containerAddressOnDockerBridge := make(map[string]string)
 
-	if networks, err := cl.NetworkList(ctx, types.NetworkListOptions{}); err == nil {
+	if networks, err := cl.NetworkList(ctx, dockerTypes.NetworkListOptions{}); err == nil {
 		for _, n := range networks {
 			if n.Name == "" {
 				continue
@@ -866,7 +897,7 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		}
 	}
 
-	if network, err := cl.NetworkInspect(ctx, "docker_gwbridge", types.NetworkInspectOptions{}); err == nil {
+	if network, err := cl.NetworkInspect(ctx, "docker_gwbridge", dockerTypes.NetworkInspectOptions{}); err == nil {
 		for containerID, endpoint := range network.Containers {
 			// IPv4Address is an CIDR (like "172.17.0.4/24")
 			address := strings.Split(endpoint.IPv4Address, "/")[0]
@@ -874,7 +905,7 @@ func (d *DockerProvider) updateContainers(ctx context.Context) error {
 		}
 	}
 
-	dockerContainers, err := cl.ContainerList(ctx, types.ContainerListOptions{All: true})
+	dockerContainers, err := cl.ContainerList(ctx, dockerTypes.ContainerListOptions{All: true})
 	if err != nil {
 		return err
 	}
@@ -946,7 +977,7 @@ func (d *DockerProvider) run(ctx context.Context) (err error) {
 	ctx2, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	eventC, errC := cl.Events(ctx2, types.EventsOptions{Since: d.lastEventAt.Format(time.RFC3339Nano)})
+	eventC, errC := cl.Events(ctx2, dockerTypes.EventsOptions{Since: d.lastEventAt.Format(time.RFC3339Nano)})
 
 	var lastCleanup time.Time
 
@@ -1040,7 +1071,7 @@ func (d *DockerProvider) getPod(ctx context.Context, containerID string, contain
 	return pod, ok
 }
 
-func sortInspect(inspect types.ContainerJSON) {
+func sortInspect(inspect dockerTypes.ContainerJSON) {
 	// Sort the docker inspect to have consistent hash value
 	// Mounts order does not matter but is not consistent between call to docker inspect.
 	if len(inspect.Mounts) > 0 {

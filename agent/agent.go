@@ -529,7 +529,7 @@ func (a *agent) run() { //nolint:gocyclo
 		}
 	}
 
-	a.dockerFact = facts.NewDocker(a.deletedContainersCallback, kubernetesProvider)
+	a.dockerFact = facts.NewDocker(a.deletedContainersCallback, kubernetesProvider, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
 
 	var (
 		psLister facts.ProcessLister
@@ -564,6 +564,8 @@ func (a *agent) run() { //nolint:gocyclo
 	if a.metricFormat == types.MetricFormatBleemeo {
 		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
 	}
+
+	a.gathererRegistry.AddPushPointsCallback(a.dockerFact.Gather)
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
