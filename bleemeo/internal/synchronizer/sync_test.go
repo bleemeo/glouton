@@ -2,16 +2,18 @@ package synchronizer
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
-	"glouton/bleemeo/types"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/store"
+	"glouton/types"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -34,48 +36,48 @@ const (
 // this is a go limitation, these are constants but we have to treat them as variables
 //nolint:gochecknoglobals
 var (
-	newAgent types.Agent = types.Agent{
+	newAgent bleemeoTypes.Agent = bleemeoTypes.Agent{
 		ID:        "33708da4-28d4-45aa-b811-49c82b594627",
 		AccountID: accountID,
 		// same one as in newAccountConfig
 		CurrentConfigID: "02eb5b38-d4a0-4db4-9b43-06f63594a515",
 	}
 
-	newAgentFact types.AgentFact = types.AgentFact{
+	newAgentFact bleemeoTypes.AgentFact = bleemeoTypes.AgentFact{
 		ID: "9690d66d-b47c-42ea-86d8-339373e4658c",
 	}
 
-	newAccountConfig types.AccountConfig = types.AccountConfig{
+	newAccountConfig bleemeoTypes.AccountConfig = bleemeoTypes.AccountConfig{
 		ID: "02eb5b38-d4a0-4db4-9b43-06f63594a515",
 	}
 
-	newMetric1 types.Metric = types.Metric{
+	newMetric1 bleemeoTypes.Metric = bleemeoTypes.Metric{
 		ID:            "decce8cf-c2f7-43c3-b66e-10429debd994",
 		LabelsText:    "__name__=\"some_metric_1\",label=\"value\"",
 		Labels:        map[string]string{"__name__": "some_metric_1", "label": "value"},
 		DeactivatedAt: time.Time{},
 	}
-	newMetric2 types.Metric = types.Metric{
+	newMetric2 bleemeoTypes.Metric = bleemeoTypes.Metric{
 		ID:         "055af752-5c01-4abc-9bb2-9d64032ef970",
 		LabelsText: "__name__=\"some_metric_2\",label=\"another_value !\"",
 		Labels:     map[string]string{"__name__": "some_metric_2", "label": "another_value !"},
 	}
-	newMetricActiveMonitor types.Metric = types.Metric{
+	newMetricActiveMonitor bleemeoTypes.Metric = bleemeoTypes.Metric{
 		ID:         "52b9c46e-00b9-4e80-a852-781426a3a193",
 		LabelsText: "__name__=\"probe_whatever\",instance=\"http://bleemeo.com\"",
 		Labels:     map[string]string{"__name__": "probe_whatever", "instance": "http://bleemeo.com"},
 		ServiceID:  newMonitor.ID,
 	}
-	newMetrics []types.Metric = []types.Metric{newMetric1, newMetric2, newMetricActiveMonitor}
+	newMetrics []bleemeoTypes.Metric = []bleemeoTypes.Metric{newMetric1, newMetric2, newMetricActiveMonitor}
 
-	newMonitor types.Monitor = types.Monitor{
-		Service: types.Service{
+	newMonitor bleemeoTypes.Monitor = bleemeoTypes.Monitor{
+		Service: bleemeoTypes.Service{
 			ID: "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
 		},
 		URL:     activeMonitorURL,
 		AgentID: newAgent.ID,
 	}
-	newMonitors []types.Monitor = []types.Monitor{newMonitor}
+	newMonitors []bleemeoTypes.Monitor = []bleemeoTypes.Monitor{newMonitor}
 
 	uuidRegexp *regexp.Regexp = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
 )
@@ -133,7 +135,7 @@ func runFakeAPI(t *testing.T) *httptest.Server {
 			}
 			return
 		default:
-			writeListing(w, []types.Agent{newAgent})
+			writeListing(w, []bleemeoTypes.Agent{newAgent})
 		}
 	})
 
@@ -156,12 +158,12 @@ func runFakeAPI(t *testing.T) *httptest.Server {
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		} else {
-			writeListing(w, []types.AgentFact{newAgentFact})
+			writeListing(w, []bleemeoTypes.AgentFact{newAgentFact})
 		}
 	})
 
 	serveMux.HandleFunc("/v1/container/", func(w http.ResponseWriter, r *http.Request) {
-		writeListing(w, []types.Container{})
+		writeListing(w, []bleemeoTypes.Container{})
 	})
 
 	serveMux.HandleFunc("/v1/service/", func(w http.ResponseWriter, r *http.Request) {
@@ -194,7 +196,7 @@ func runFakeAPI(t *testing.T) *httptest.Server {
 				w.WriteHeader(http.StatusInternalServerError)
 			}
 		} else {
-			writeListing(w, []types.AccountConfig{newAccountConfig})
+			writeListing(w, []bleemeoTypes.AccountConfig{newAccountConfig})
 		}
 	})
 
@@ -228,10 +230,19 @@ func TestSyncMetrics(t *testing.T) {
 	discovery := discovery.NewMockDiscoverer()
 
 	store := store.New()
+	store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  time.Now(),
+				Value: 42.0,
+			},
+			Labels: map[string]string{"__name__": "cpu_used"},
+		},
+	})
 
 	s := New(Option{
 		Cache: &cache,
-		GlobalOption: types.GlobalOption{
+		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:                  cfg,
 			Facts:                   facts,
 			State:                   state,
