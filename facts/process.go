@@ -309,6 +309,8 @@ func decodeDocker(top container.ContainerTopOKBody, containerID string, containe
 
 		if statIndex != -1 {
 			process.Status = PsStat2Status(row[statIndex])
+		} else {
+			process.Status = "?"
 		}
 
 		if ppidIndex != -1 {

@@ -110,11 +110,11 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 	newUserCache := make(map[proc.ID]string, len(userCache))
 	pwdLookup := c.getPwdlookup()
 
-	result := make([]facts.Process, len(procs))
+	result := make([]facts.Process, 0, len(procs))
 
 	var skippedProcesses error
 
-	for i, p := range procs {
+	for _, p := range procs {
 		if os.IsNotExist(p.procErr) {
 			continue
 		}
@@ -154,7 +154,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 			logger.V(2).Printf("getCmdline failed: %v", err)
 		}
 
-		result[i] = facts.Process{
+		result = append(result, facts.Process{
 			PID:             p.ID.Pid,
 			PPID:            p.procStat.PPID,
 			CreateTime:      startTime,
@@ -168,7 +168,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 			Username:        username,
 			Executable:      executable,
 			NumThreads:      p.procStat.NumThreads,
-		}
+		})
 	}
 
 	if skippedProcesses != nil {
