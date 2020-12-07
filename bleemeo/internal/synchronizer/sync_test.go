@@ -112,6 +112,7 @@ func runFakeAPI(t *testing.T) *httptest.Server {
 	serveMux.HandleFunc("/v1/agent/", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPost:
+			basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s@bleemeo.com:%s", accountID, registrationKey)))
 			decoder := json.NewDecoder(r.Body)
 			values := map[string]string{}
 			if err := decoder.Decode(&values); err != nil {
@@ -119,9 +120,15 @@ func runFakeAPI(t *testing.T) *httptest.Server {
 				w.WriteHeader(http.StatusInternalServerError)
 				return
 			}
+
 			if values["account"] != accountID {
 				t.Fatalf("Invalid accountId supplied, got %v, want %v", values["account"], accountID)
 			}
+
+			if r.Header.Get("Authorization") != basicAuth {
+				t.Fatalf("Invalid authorization header, got %v, want %v", r.Header.Get("Authorization"), basicAuth)
+			}
+
 			w.WriteHeader(http.StatusCreated)
 			if err := json.NewEncoder(w).Encode(newAgent); err != nil {
 				t.Error(err)
