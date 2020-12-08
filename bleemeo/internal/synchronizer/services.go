@@ -303,7 +303,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 			var newDeactivatedAt time.Time
 
 			if !result.Active {
-				newDeactivatedAt = time.Now()
+				newDeactivatedAt = s.now()
 			}
 
 			metrics := s.option.Cache.Metrics()

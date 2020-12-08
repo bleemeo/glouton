@@ -23,24 +23,22 @@ import (
 
 // MockDiscoverer is useful for tests.
 type MockDiscoverer struct {
-	result []Service
-}
-
-// NewMockDiscoverer crates a new mock Discoverer for tests.
-func NewMockDiscoverer() *MockDiscoverer {
-	return &MockDiscoverer{
-		result: []Service{},
-	}
+	result    []Service
+	UpdatedAt time.Time
 }
 
 // Discovery implements Discoverer.
-func (md MockDiscoverer) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
+func (md *MockDiscoverer) Discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	return md.result, nil
 }
 
 // LastUpdate implements Discoverer.
-func (md MockDiscoverer) LastUpdate() time.Time {
-	return time.Now()
+func (md *MockDiscoverer) LastUpdate() time.Time {
+	if md.UpdatedAt.IsZero() {
+		return time.Now()
+	}
+
+	return md.UpdatedAt
 }
 
 // RemoveIfNonRunning implements PersistentDiscoverer.

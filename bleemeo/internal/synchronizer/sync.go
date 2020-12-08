@@ -42,6 +42,7 @@ import (
 type Synchronizer struct {
 	ctx    context.Context
 	option Option
+	now    func() time.Time
 
 	client       *client.HTTPClient
 	nextFullSync time.Time
@@ -98,6 +99,7 @@ type Option struct {
 func New(option Option) *Synchronizer {
 	return &Synchronizer{
 		option: option,
+		now:    time.Now,
 
 		forceSync:    make(map[string]bool),
 		nextFullSync: time.Now(),
@@ -107,7 +109,7 @@ func New(option Option) *Synchronizer {
 // Run run the Connector.
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
-	s.startedAt = time.Now()
+	s.startedAt = s.now()
 
 	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
 		return err
@@ -174,17 +176,17 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			switch {
 			case client.IsAuthError(err) && successiveAuthErrors >= 3:
 				delay := common.JitterDelay(60*math.Pow(1.55, float64(successiveAuthErrors)), 0.1, 21600)
-				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(delay))
+				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(delay))
 			case client.IsThrottleError(err):
 				deadline := s.client.ThrottleDeadline().Add(common.JitterDelay(15, 0.3, 15))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
 				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
-				s.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
+				s.Disable(s.now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
 				if client.IsAuthError(err) && successiveAuthErrors == 1 {
 					// we disable only to trigger a reconnection on MQTT
-					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, time.Now().Add(10*time.Second))
+					s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(10*time.Second))
 				}
 			}
 
@@ -478,7 +480,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		{name: "monitors", method: s.syncMonitors, skipOnlyEssential: true},
 		{name: "metrics", method: s.syncMetrics},
 	}
-	startAt := time.Now()
+	startAt := s.now()
 
 	var firstErr error
 
@@ -488,7 +490,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		}
 
 		until, reason := s.getDisabledUntil()
-		if time.Now().Before(until) {
+		if s.now().Before(until) {
 			// If the agent was disabled because it is too old, we do not want the synchronizer
 			// to throw a DisableTooManyErrors because syncInfo() disabled the bleemeo connector.
 			// This could alter the synchronizer would wait to sync again, and we do not desire it.
@@ -541,11 +543,11 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		}
 	}
 
-	logger.V(2).Printf("Synchronization took %v for %v", time.Since(startAt), syncMethods)
+	logger.V(2).Printf("Synchronization took %v for %v", s.now().Sub(startAt), syncMethods)
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
 		s.option.Cache.Save()
-		s.nextFullSync = time.Now().Add(common.JitterDelay(3600, 0.1, 3600))
+		s.nextFullSync = s.now().Add(common.JitterDelay(3600, 0.1, 3600))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
@@ -563,12 +565,12 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	syncMethods := make(map[string]bool)
 
 	fullSync := false
-	if s.nextFullSync.Before(time.Now()) {
+	if s.nextFullSync.Before(s.now()) {
 		fullSync = true
 	}
 
 	nextConfigAt := s.option.Cache.Agent().NextConfigAt
-	if !nextConfigAt.IsZero() && nextConfigAt.Before(time.Now()) {
+	if !nextConfigAt.IsZero() && nextConfigAt.Before(s.now()) {
 		fullSync = true
 	}
 
@@ -592,7 +594,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		}
 	}
 
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || (!minDelayed.IsZero() && time.Now().After(minDelayed)) {
+	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
 		syncMethods["services"] = fullSync
 		syncMethods["containers"] = fullSync
 	}
@@ -618,10 +620,10 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
-	if s.maintenanceMode && !s.option.IsMqttConnected() && time.Now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
+	if s.maintenanceMode && !s.option.IsMqttConnected() && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
 		s.forceSync["info"] = false
 
-		s.lastMaintenanceSync = time.Now()
+		s.lastMaintenanceSync = s.now()
 	}
 
 	for k, full := range s.forceSync {
@@ -657,7 +659,7 @@ func (s *Synchronizer) checkDuplicated() error {
 			continue
 		}
 
-		until := time.Now().Add(common.JitterDelay(900, 0.05, 900))
+		until := s.now().Add(common.JitterDelay(900, 0.05, 900))
 		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
 
 		if s.option.DisableCallback != nil {

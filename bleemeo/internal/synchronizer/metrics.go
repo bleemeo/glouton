@@ -30,6 +30,9 @@ import (
 	"time"
 )
 
+// agentStatusName is the name of the special metrics used to store the agent connection status.
+const agentStatusName = "agent_status"
+
 var (
 	errRetryLater = errors.New("metric registration should be retried laster")
 )
@@ -127,7 +130,7 @@ func prioritizeAndFilterMetrics(metrics []types.Metric, onlyEssential bool) []ty
 			"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
 			"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
 			"swap_used_perc", "cpu_used", "mem_used_perc",
-			"agent_status":
+			agentStatusName:
 			if onlyEssential {
 				results = append(results, m)
 			} else {
@@ -333,7 +336,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 		return err
 	}
 
-	if time.Since(s.startedAt) > 5*time.Minute {
+	if s.now().Sub(s.startedAt) > 5*time.Minute {
 		if err := s.metricDeactivate(filteredMetrics); err != nil {
 			return err
 		}
@@ -643,7 +646,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 		switch state {
 		case metricPassAgentStatus:
 			currentList = []types.Metric{
-				fakeMetric{label: "agent_status"},
+				fakeMetric{label: agentStatusName},
 			}
 		case metricPassMain:
 			currentList = localMetrics
@@ -863,7 +866,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 
 func (s *Synchronizer) metricUpdateOne(key string, metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
 	if !remoteMetric.DeactivatedAt.IsZero() {
-		points, err := metric.Points(time.Now().Add(-10*time.Minute), time.Now())
+		points, err := metric.Points(s.now().Add(-10*time.Minute), s.now())
 		if err != nil {
 			return remoteMetric, nil // assume not seen, we don't re-activate this metric
 		}
@@ -966,14 +969,14 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	for k, v := range registeredMetrics {
 		if !v.DeactivatedAt.IsZero() {
-			if time.Since(v.DeactivatedAt) > 200*24*time.Hour {
+			if s.now().Sub(v.DeactivatedAt) > 200*24*time.Hour {
 				delete(registeredMetrics, k)
 			}
 
 			continue
 		}
 
-		if v.Labels[types.LabelName] == "agent_sent_message" || v.Labels[types.LabelName] == "agent_status" {
+		if v.Labels[types.LabelName] == "agent_sent_message" || v.Labels[types.LabelName] == agentStatusName {
 			continue
 		}
 
@@ -983,7 +986,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		if ok && !duplicatedKey[key] {
 			duplicatedKey[key] = true
 
-			points, _ := metric.Points(time.Now().Add(-70*time.Minute), time.Now())
+			points, _ := metric.Points(s.now().Add(-70*time.Minute), s.now())
 			if len(points) > 0 {
 				continue
 			}
@@ -999,11 +1002,16 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			map[string]string{"active": "False"},
 			nil,
 		)
+		if err != nil && client.IsNotFound(err) {
+			delete(registeredMetrics, k)
+			continue
+		}
+
 		if err != nil {
 			return err
 		}
 
-		v.DeactivatedAt = time.Now()
+		v.DeactivatedAt = s.now()
 		registeredMetrics[k] = v
 	}
 

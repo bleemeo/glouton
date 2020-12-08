@@ -41,7 +41,7 @@ func (s *Synchronizer) syncInfo(fullSync bool, onlyEssential bool) error {
 	if globalInfo.Agents.MinVersions.Glouton != "" {
 		if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
 			logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
-			s.option.DisableCallback(types.DisableAgentTooOld, time.Now().Add(24*time.Hour))
+			s.option.DisableCallback(types.DisableAgentTooOld, s.now().Add(24*time.Hour))
 
 			// force syncing the version again when the synchronizer runs again
 			s.forceSync["info"] = true

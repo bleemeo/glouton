@@ -1,9 +1,11 @@
 package synchronizer
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
@@ -14,11 +16,13 @@ import (
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/store"
 	"glouton/types"
-	"io"
+	"io/ioutil"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"reflect"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -77,23 +81,10 @@ var (
 		URL:     activeMonitorURL,
 		AgentID: newAgent.ID,
 	}
-	newMonitors []bleemeoTypes.Monitor = []bleemeoTypes.Monitor{newMonitor}
 
-	uuidRegexp *regexp.Regexp = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
+	uuidRegexp  *regexp.Regexp = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
+	errNotFound                = errors.New("not found")
 )
-
-// writeListing writes a result listing.
-func writeListing(w io.Writer, elems interface{}) {
-	var results strings.Builder
-
-	reflect.ValueOf(elems).Len()
-
-	if err := json.NewEncoder(&results).Encode(elems); err != nil {
-		panic("Cannot encode a constant object !?")
-	}
-
-	fmt.Fprintf(w, "{\"next\": null, \"previous\": null, \"results\": %s}", results.String())
-}
 
 // getUUID returns the UUID stored in the HTTP query path, if any.
 func getUUID(r *http.Request) (string, bool) {
@@ -106,112 +97,488 @@ func getUUID(r *http.Request) (string, bool) {
 	return "", false
 }
 
-func runFakeAPI(t *testing.T) *httptest.Server {
-	serveMux := http.NewServeMux()
+// mockAPI fake global /v1 API endpoints. Currently only v1/info & v1/jwt-auth
+// Use Handle to add additional endpoints.
+type mockAPI struct {
+	JWTUsername string
+	JWTPassword string
+	JWTToken    string
+	resources   map[string]mockResource
+	serveMux    *http.ServeMux
+	server      *httptest.Server
 
-	serveMux.HandleFunc("/v1/agent/", func(w http.ResponseWriter, r *http.Request) {
+	RequestList  []mockRequest
+	ErrorCount   int
+	RequestCount int
+	LastError    error
+}
+
+type mockRequest struct {
+	URL          *url.URL
+	Method       string
+	ResponseCode int
+	Error        error
+}
+
+type paginatedList []interface{}
+
+type mockResource interface {
+	List(r *http.Request) ([]interface{}, error)
+	Create(r *http.Request) (interface{}, error)
+	Patch(id string, r *http.Request) (interface{}, error)
+	SetStore(...interface{})
+	AddStore(...interface{})
+	DelStore(ids ...string)
+	Store(interface{})
+}
+
+func newAPI() *mockAPI {
+	api := &mockAPI{
+		JWTToken: "random-value",
+	}
+	api.AddResource("agent", &genericResource{
+		Type: bleemeoTypes.Agent{},
+	})
+	api.AddResource("agentfact", &genericResource{
+		Type: bleemeoTypes.AgentFact{},
+	})
+	api.AddResource("metric", &genericResource{
+		Type: metricPayload{},
+		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
+			var data map[string]string
+
+			metricPtr := valuePtr.(*metricPayload)
+
+			err := json.NewDecoder(bytes.NewReader(body)).Decode(&data)
+			if boolText, ok := data["active"]; ok {
+				switch strings.ToLower(boolText) {
+				case "true":
+					metricPtr.DeactivatedAt = time.Time{}
+				case "false":
+					metricPtr.DeactivatedAt = time.Now()
+				default:
+					return fmt.Errorf("unknown boolean %v", boolText)
+				}
+			}
+
+			return err
+		},
+	})
+
+	return api
+}
+
+type apiResponder func(r *http.Request) (interface{}, int, error)
+
+func (api *mockAPI) reply(w http.ResponseWriter, r *http.Request, h apiResponder) {
+	api.RequestCount++
+
+	mr := mockRequest{
+		URL:    r.URL,
+		Method: r.Method,
+	}
+
+	response, status, err := h(r)
+
+	mr.Error = err
+	mr.ResponseCode = status
+	api.RequestList = append(api.RequestList, mr)
+
+	if err != nil {
+		api.ErrorCount++
+		api.LastError = err
+
+		http.Error(w, err.Error(), status)
+
+		return
+	}
+
+	w.WriteHeader(status)
+
+	switch value := response.(type) {
+	case string:
+		_, err = fmt.Fprint(w, value)
+	case []byte:
+		_, err = w.Write(value)
+	case paginatedList:
+		var results struct {
+			Next     string        `json:"next"`
+			Previous string        `json:"previous"`
+			Results  []interface{} `json:"results"`
+		}
+
+		results.Results = value
+		err = json.NewEncoder(w).Encode(results)
+	default:
+		err = json.NewEncoder(w).Encode(value)
+	}
+
+	if err != nil {
+		api.ErrorCount++
+		api.LastError = err
+	}
+}
+
+func (api *mockAPI) jwtHandler(r *http.Request) (interface{}, int, error) {
+	if api.JWTUsername != "" {
+		decoder := json.NewDecoder(r.Body)
+		values := map[string]string{}
+
+		if err := decoder.Decode(&values); err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		if values["username"] != api.JWTUsername {
+			err := fmt.Errorf("invalid username for JWT auth, got %v, want %v", values["username"], api.JWTUsername)
+			return nil, http.StatusUnauthorized, err
+		}
+
+		if values["password"] != api.JWTPassword {
+			err := fmt.Errorf("invalid password for JWT auth, got %v, want %v", values["password"], api.JWTPassword)
+			return nil, http.StatusUnauthorized, err
+		}
+	}
+
+	return map[string]string{"token": api.JWTToken}, 200, nil
+}
+
+func (api *mockAPI) ResetCount() {
+	api.RequestCount = 0
+	api.ErrorCount = 0
+	api.LastError = nil
+	api.RequestList = nil
+}
+
+func (api *mockAPI) ShowRequest(t *testing.T, max int) {
+	for i, req := range api.RequestList {
+		if i >= max {
+			break
+		}
+
+		if req.Error != nil {
+			t.Logf("%s %v %s: %d - %v", req.Method, req.URL.Path, req.URL.Query(), req.ResponseCode, req.Error)
+		} else {
+			t.Logf("%s %v %s: %d", req.Method, req.URL.Path, req.URL.Query(), req.ResponseCode)
+		}
+	}
+}
+
+func (api *mockAPI) init() {
+	if api.serveMux != nil {
+		return
+	}
+
+	api.resources = make(map[string]mockResource)
+
+	api.serveMux = http.NewServeMux()
+	api.Handle("/v1/jwt-auth/", api.jwtHandler)
+
+	api.Handle("/v1/info/", func(r *http.Request) (interface{}, int, error) {
+		return `{"maintenance": false, "agents": {"minimum_versions": {}}}"`, 200, nil
+	})
+
+	api.Handle("/", api.defaultHandler)
+}
+
+func (api *mockAPI) AddResource(resource string, h mockResource) {
+	api.init()
+	api.resources[resource] = h
+}
+
+func (api *mockAPI) Handle(pattern string, h apiResponder) {
+	api.init()
+	api.serveMux.HandleFunc(pattern, func(w http.ResponseWriter, r *http.Request) {
+		api.reply(w, r, h)
+	})
+}
+
+func (api *mockAPI) Server() *httptest.Server {
+	api.init()
+
+	api.server = httptest.NewServer(api.serveMux)
+
+	return api.server
+}
+
+func (api *mockAPI) Close() {
+	api.server.Close()
+}
+
+func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
+	part := strings.Split(r.URL.Path, "/")
+	if len(part) < 4 || part[1] != "v1" || len(part) > 5 {
+		return nil, http.StatusNotImplemented, fmt.Errorf("URL format unknown %#v", part)
+	}
+
+	resource := api.resources[part[2]]
+	if resource == nil {
+		return nil, http.StatusNotImplemented, fmt.Errorf("resource %v unknown", part[2])
+	}
+
+	var id string
+	if len(part) == 5 {
+		id = part[3]
+	}
+
+	switch {
+	case id == "" && r.Method == http.MethodGet:
+		objects, err := resource.List(r)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		return paginatedList(objects), http.StatusOK, nil
+	case id == "" && r.Method == http.MethodPost:
+		response, err := resource.Create(r)
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		return response, http.StatusCreated, nil
+	case id != "" && r.Method == http.MethodPatch:
+		response, err := resource.Patch(id, r)
+		if errors.Is(err, errNotFound) {
+			return nil, http.StatusNotFound, nil
+		}
+
+		if err != nil {
+			return nil, http.StatusInternalServerError, err
+		}
+
+		return response, http.StatusOK, nil
+	default:
+		return nil, http.StatusNotImplemented, fmt.Errorf("type of request unknown for %s %s", r.Method, r.URL.Path)
+	}
+}
+
+type genericResource struct {
+	Type    interface{}
+	store   map[string]interface{}
+	autoinc int
+
+	PatchHook func(r *http.Request, body []byte, valuePtr interface{}) error
+}
+
+func (res *genericResource) SetStore(values ...interface{}) {
+	res.store = nil
+
+	res.AddStore(values...)
+}
+
+func (res *genericResource) AddStore(values ...interface{}) {
+	if res.store == nil {
+		res.store = make(map[string]interface{})
+	}
+
+	for _, x := range values {
+		value := reflect.ValueOf(x)
+		id := value.FieldByName("ID").String()
+		res.store[id] = x
+	}
+}
+
+func (res *genericResource) DelStore(ids ...string) {
+	if res.store == nil {
+		res.store = make(map[string]interface{})
+	}
+
+	for _, id := range ids {
+		delete(res.store, id)
+	}
+}
+
+func (res *genericResource) Store(list interface{}) {
+	valuePtr := reflect.ValueOf(list)
+	if valuePtr.Kind() != reflect.Ptr {
+		panic("Store() called without a pointer")
+	}
+
+	valueSlice := valuePtr.Elem()
+	if valueSlice.Kind() != reflect.Slice {
+		panic("Store() called without a pointer to a slice")
+	}
+
+	valueSlice = valueSlice.Slice(0, 0)
+
+	for _, x := range res.store {
+		valueSlice = reflect.Append(valueSlice, reflect.ValueOf(x))
+	}
+
+	valuePtr.Elem().Set(valueSlice)
+}
+
+func (res *genericResource) List(r *http.Request) ([]interface{}, error) {
+	results := make([]interface{}, 0, len(res.store))
+
+	for _, x := range res.store {
+		results = append(results, x)
+	}
+
+	return results, nil
+}
+
+func (res *genericResource) Create(r *http.Request) (interface{}, error) {
+	decoder := json.NewDecoder(r.Body)
+	valueReflect := reflect.New(reflect.ValueOf(res.Type).Type())
+	value := valueReflect.Interface()
+
+	if err := decoder.Decode(value); err != nil {
+		return nil, err
+	}
+
+	res.autoinc++
+	id := strconv.FormatInt(int64(res.autoinc), 10)
+
+	valueReflect.Elem().FieldByName("ID").SetString(id)
+
+	if res.store == nil {
+		res.store = make(map[string]interface{})
+	}
+
+	res.store[id] = valueReflect.Elem().Interface()
+
+	return res.store[id], nil
+}
+
+func (res *genericResource) Patch(id string, r *http.Request) (interface{}, error) {
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	valueReflect := reflect.New(reflect.ValueOf(res.Type).Type())
+	value := valueReflect.Interface()
+
+	current, ok := res.store[id]
+	if !ok {
+		return nil, fmt.Errorf("%s: %w", id, errNotFound)
+	}
+
+	currentValue := reflect.ValueOf(current)
+
+	for n := 0; n < currentValue.NumField(); n++ {
+		v := currentValue.Field(n)
+		name := currentValue.Type().Field(n).Name
+		valueReflect.Elem().FieldByName(name).Set(v)
+	}
+
+	if err := decoder.Decode(value); err != nil {
+		return nil, err
+	}
+
+	id2 := valueReflect.Elem().FieldByName("ID").String()
+	if id2 != id {
+		return nil, fmt.Errorf("ID = %v, want %v", id2, id)
+	}
+
+	if res.store == nil {
+		res.store = make(map[string]interface{})
+	}
+
+	if res.PatchHook != nil {
+		err := res.PatchHook(r, body, valueReflect.Interface())
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	res.store[id] = valueReflect.Elem().Interface()
+
+	return res.store[id], nil
+}
+
+func runFakeAPI() *mockAPI {
+	api := &mockAPI{
+		JWTToken:    jwtToken,
+		JWTUsername: newAgent.ID + "@bleemeo.com",
+	}
+
+	api.Handle("/v1/agent/", func(r *http.Request) (interface{}, int, error) {
 		switch r.Method {
 		case http.MethodPost:
 			basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s@bleemeo.com:%s", accountID, registrationKey)))
 			decoder := json.NewDecoder(r.Body)
 			values := map[string]string{}
 			if err := decoder.Decode(&values); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-				return
+				return nil, http.StatusInternalServerError, err
 			}
 
 			if values["account"] != accountID {
-				t.Fatalf("Invalid accountId supplied, got %v, want %v", values["account"], accountID)
+				err := fmt.Errorf("Invalid accountId supplied, got %v, want %v", values["account"], accountID)
+				return nil, http.StatusInternalServerError, err
 			}
 
 			if r.Header.Get("Authorization") != basicAuth {
-				t.Fatalf("Invalid authorization header, got %v, want %v", r.Header.Get("Authorization"), basicAuth)
+				err := fmt.Errorf("Invalid authorization header, got %v, want %v", r.Header.Get("Authorization"), basicAuth)
+				return nil, http.StatusInternalServerError, err
 			}
 
-			w.WriteHeader(http.StatusCreated)
-			if err := json.NewEncoder(w).Encode(newAgent); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-			return
+			api.JWTPassword = values["initial_password"]
+
+			return newAgent, http.StatusCreated, nil
 		case http.MethodPatch:
-			if err := json.NewEncoder(w).Encode(newAgent); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-			return
+			return newAgent, http.StatusOK, nil
 		default:
-			writeListing(w, []bleemeoTypes.Agent{newAgent})
+			return paginatedList([]interface{}{newAgent}), http.StatusOK, nil
 		}
 	})
 
-	serveMux.HandleFunc("/v1/jwt-auth/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprint(w, jwtToken)
-	})
-
-	serveMux.HandleFunc("/v1/agentfact/", func(w http.ResponseWriter, r *http.Request) {
+	api.Handle("/v1/agentfact/", func(r *http.Request) (interface{}, int, error) {
 		if r.Method == http.MethodPost {
-			w.WriteHeader(http.StatusCreated)
-			if err := json.NewEncoder(w).Encode(newAgentFact); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-			return
+			return newAgentFact, http.StatusCreated, nil
 		}
+
 		if _, present := getUUID(r); present {
-			if err := json.NewEncoder(w).Encode(newAgentFact); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-		} else {
-			writeListing(w, []bleemeoTypes.AgentFact{newAgentFact})
+			return newAgentFact, http.StatusOK, nil
 		}
+
+		return paginatedList([]interface{}{newAgentFact}), http.StatusOK, nil
 	})
 
-	serveMux.HandleFunc("/v1/container/", func(w http.ResponseWriter, r *http.Request) {
-		writeListing(w, []bleemeoTypes.Container{})
+	api.Handle("/v1/container/", func(r *http.Request) (interface{}, int, error) {
+		return paginatedList([]interface{}{}), http.StatusOK, nil
 	})
 
-	serveMux.HandleFunc("/v1/service/", func(w http.ResponseWriter, r *http.Request) {
-		writeListing(w, newMonitors)
+	api.Handle("/v1/service/", func(r *http.Request) (interface{}, int, error) {
+		return paginatedList([]interface{}{newMonitor}), http.StatusOK, nil
 	})
 
-	serveMux.HandleFunc("/v1/metric/", func(w http.ResponseWriter, r *http.Request) {
+	api.Handle("/v1/metric/", func(r *http.Request) (interface{}, int, error) {
 		uuid, present := getUUID(r)
 		if present {
 			for _, v := range newMetrics {
 				if v.ID == uuid {
-					if err := json.NewEncoder(w).Encode(v); err != nil {
-						t.Error(err)
-						w.WriteHeader(http.StatusInternalServerError)
-					}
-					return
+					return v, http.StatusOK, nil
 				}
 			}
 
-			w.WriteHeader(http.StatusNotFound)
-			return
+			return "", http.StatusNotFound, nil
 		}
-		writeListing(w, newMetrics)
+
+		results := make([]interface{}, len(newMetrics))
+		for i, m := range newMetrics {
+			results[i] = m
+		}
+
+		return paginatedList(results), http.StatusOK, nil
 	})
 
-	serveMux.HandleFunc("/v1/accountconfig/", func(w http.ResponseWriter, r *http.Request) {
+	api.Handle("/v1/accountconfig/", func(r *http.Request) (interface{}, int, error) {
 		if _, present := getUUID(r); present {
-			if err := json.NewEncoder(w).Encode(newAccountConfig); err != nil {
-				t.Error(err)
-				w.WriteHeader(http.StatusInternalServerError)
-			}
-		} else {
-			writeListing(w, []bleemeoTypes.AccountConfig{newAccountConfig})
+			return newAccountConfig, http.StatusOK, nil
 		}
+
+		return paginatedList([]interface{}{newAccountConfig}), http.StatusOK, nil
 	})
 
-	return httptest.NewServer(serveMux)
+	return api
 }
 
-func TestSyncMetrics(t *testing.T) {
-	httpServer := runFakeAPI(t)
+func TestSync(t *testing.T) {
+	api := runFakeAPI()
+	httpServer := api.Server()
+
 	defer httpServer.Close()
 
 	cfg := &config.Configuration{}
@@ -234,7 +601,7 @@ func TestSyncMetrics(t *testing.T) {
 
 	state := state.NewMock()
 
-	discovery := discovery.NewMockDiscoverer()
+	discovery := &discovery.MockDiscoverer{}
 
 	store := store.New()
 	store.PushPoints([]types.MetricPoint{
@@ -272,6 +639,10 @@ func TestSyncMetrics(t *testing.T) {
 
 	if err := s.runOnce(false); err != nil {
 		t.Fatal(err)
+	}
+
+	if api.ErrorCount > 0 {
+		t.Fatalf("Had %d error, last: %v", api.ErrorCount, api.LastError)
 	}
 
 	// Did we store all the metrics ?

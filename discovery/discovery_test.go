@@ -206,7 +206,7 @@ func TestDiscoverySingle(t *testing.T) {
 		state := mockState{
 			DiscoveredService: previousService,
 		}
-		disc := New(MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
+		disc := New(&MockDiscoverer{result: []Service{c.dynamicResult}}, nil, nil, nil, state, nil, nil, nil, nil, nil, types.MetricFormatBleemeo)
 
 		srv, err := disc.Discovery(ctx, 0)
 		if err != nil {
@@ -480,7 +480,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		ExpectedAddedName: "nginx",
 		NewID:             42,
 	}
-	mockDynamic := NewMockDiscoverer()
+	mockDynamic := &MockDiscoverer{}
 	docker := mockContainerInfo{
 		containers: map[string]mockContainer{
 			"1234": {},

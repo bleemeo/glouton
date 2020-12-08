@@ -133,7 +133,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
 
 	for _, container := range localContainers {
-		if time.Since(container.CreatedAt()) < delay {
+		if s.now().Sub(container.CreatedAt()) < delay {
 			enable, explicit := container.Enabled()
 			if !enable || !explicit {
 				newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
