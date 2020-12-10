@@ -62,13 +62,15 @@ type Synchronizer struct {
 	// minutes to check whether we are still in maintenance of not.
 	lastMaintenanceSync time.Time
 
-	l                     sync.Mutex
-	disabledUntil         time.Time
-	disableReason         bleemeoTypes.DisableReason
-	forceSync             map[string]bool
-	pendingMetricsUpdate  []string
-	pendingMonitorsUpdate []MonitorUpdate
-	delayedContainer      map[string]time.Time
+	l                      sync.Mutex
+	disabledUntil          time.Time
+	disableReason          bleemeoTypes.DisableReason
+	forceSync              map[string]bool
+	pendingMetricsUpdate   []string
+	pendingMonitorsUpdate  []MonitorUpdate
+	delayedContainer       map[string]time.Time
+	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
+	metricRetryAt          time.Time
 }
 
 // Option are parameters for the synchronizer.
@@ -101,8 +103,9 @@ func New(option Option) *Synchronizer {
 		option: option,
 		now:    time.Now,
 
-		forceSync:    make(map[string]bool),
-		nextFullSync: time.Now(),
+		forceSync:              make(map[string]bool),
+		nextFullSync:           time.Now(),
+		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
 }
 
@@ -614,7 +617,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		syncMethods["metrics"] = false
 	}
 
-	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
+	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
 		syncMethods["metrics"] = fullSync
 	}
 

@@ -491,14 +491,14 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 }
 
 func (c *Client) sendPoints() {
-	points := c.filterPoints(c.PopPoints(false))
+	points := c.PopPoints(false)
 
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if !c.connected() || c.isSendingSuspended() {
 		// store all new points as failed ones
-		c.addFailedPoints(points...)
+		c.addFailedPoints(c.filterPoints(points)...)
 
 		// Make sure that when connection is back we retry failed points as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
@@ -516,6 +516,7 @@ func (c *Client) sendPoints() {
 		c.failedPoints = nil
 	}
 
+	points = c.filterPoints(points)
 	payload := c.preparePoints(registreredMetricByKey, points)
 	nbPoints := 0
 
@@ -545,7 +546,15 @@ func (c *Client) sendPoints() {
 
 // addFailedPoints add given points to list of failed points.
 func (c *Client) addFailedPoints(points ...types.MetricPoint) {
-	c.failedPoints = append(c.failedPoints, points...)
+	for _, p := range points {
+		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+		if reg := c.option.Cache.MetricRegistrationsFailByKey()[key]; reg.FailCounter > 5 || reg.LastFailKind.IsPermanentFailure() {
+			continue
+		}
+
+		c.failedPoints = append(c.failedPoints, p)
+	}
+
 	if len(c.failedPoints) > maxPendingPoints {
 		c.maxPointCount++
 
@@ -598,7 +607,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 
 	for _, p := range points {
 		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
-		if m, ok := registreredMetricByKey[key]; ok {
+		if m, ok := registreredMetricByKey[key]; ok && m.DeactivatedAt.IsZero() {
 			value := metricPayload{
 				LabelsText:  m.LabelsText,
 				Timestamp:   p.Time.Unix(),

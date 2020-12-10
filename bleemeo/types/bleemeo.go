@@ -122,6 +122,47 @@ type Metric struct {
 	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
 }
 
+// FailureKind is the kind of failure to register a metric. Used to know if
+// we should (quickly) retry a failure.
+type FailureKind int
+
+// All possible value for FailureKind.
+const (
+	FailureUnknown FailureKind = iota
+	FailureAllowList
+	FailureTooManyMetric
+)
+
+// MetricRegistration contains information about a metric registration failure.
+type MetricRegistration struct {
+	LabelsText   string
+	LastFailAt   time.Time
+	FailCounter  int
+	LastFailKind FailureKind
+}
+
+// IsPermanentFailure tells whether the error is permanent and there is no need to quickly retry.
+func (kind FailureKind) IsPermanentFailure() bool {
+	switch kind {
+	case FailureAllowList, FailureTooManyMetric:
+		return true
+	default:
+		return false
+	}
+}
+
+// RetryAfter return the time after which the retry of the registration may be retried.
+func (mr MetricRegistration) RetryAfter() time.Time {
+	factor := math.Pow(2, float64(mr.FailCounter))
+	delay := 15 * time.Second * time.Duration(factor)
+
+	if delay > 45*time.Minute {
+		delay = 45 * time.Minute
+	}
+
+	return mr.LastFailAt.Add(delay)
+}
+
 // FillInspectHash fill the DockerInspectHash.
 func (c *Container) FillInspectHash() {
 	bin := sha256.Sum256([]byte(c.DockerInspect))

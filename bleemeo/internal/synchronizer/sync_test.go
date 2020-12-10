@@ -100,17 +100,18 @@ func getUUID(r *http.Request) (string, bool) {
 // mockAPI fake global /v1 API endpoints. Currently only v1/info & v1/jwt-auth
 // Use Handle to add additional endpoints.
 type mockAPI struct {
-	JWTUsername string
-	JWTPassword string
-	JWTToken    string
-	resources   map[string]mockResource
-	serveMux    *http.ServeMux
-	server      *httptest.Server
+	JWTUsername    string
+	JWTPassword    string
+	JWTToken       string
+	PreRequestHook func(*mockAPI, *http.Request) (interface{}, int, error)
+	resources      map[string]mockResource
+	serveMux       *http.ServeMux
 
-	RequestList  []mockRequest
-	ErrorCount   int
-	RequestCount int
-	LastError    error
+	RequestList      []mockRequest
+	ServerErrorCount int
+	ClientErrorCount int
+	RequestCount     int
+	LastServerError  error
 }
 
 type mockRequest struct {
@@ -121,6 +122,15 @@ type mockRequest struct {
 }
 
 type paginatedList []interface{}
+
+type errClient struct {
+	body       interface{}
+	statusCode int
+}
+
+func (e errClient) Error() string {
+	return fmt.Sprintf("client error %d: %v", e.statusCode, e.body)
+}
 
 type mockResource interface {
 	List(r *http.Request) ([]interface{}, error)
@@ -134,7 +144,8 @@ type mockResource interface {
 
 func newAPI() *mockAPI {
 	api := &mockAPI{
-		JWTToken: "random-value",
+		JWTToken:       "random-value",
+		PreRequestHook: nil,
 	}
 	api.AddResource("agent", &genericResource{
 		Type: bleemeoTypes.Agent{},
@@ -178,19 +189,44 @@ func (api *mockAPI) reply(w http.ResponseWriter, r *http.Request, h apiResponder
 		Method: r.Method,
 	}
 
-	response, status, err := h(r)
+	var (
+		response interface{}
+		status   int
+		err      error
+	)
+
+	if api.PreRequestHook != nil {
+		response, status, err = api.PreRequestHook(api, r)
+	}
+
+	if status == 0 && err == nil {
+		response, status, err = h(r)
+	}
+
+	var clientError errClient
+	if errors.As(err, &clientError) {
+		err = nil
+		response = clientError.body
+		status = clientError.statusCode
+	}
 
 	mr.Error = err
 	mr.ResponseCode = status
 	api.RequestList = append(api.RequestList, mr)
 
 	if err != nil {
-		api.ErrorCount++
-		api.LastError = err
+		if status < 500 {
+			status = http.StatusInternalServerError
+		}
 
-		http.Error(w, err.Error(), status)
+		api.LastServerError = err
+		response = err.Error()
+	}
 
-		return
+	if status >= 500 {
+		api.ServerErrorCount++
+	} else if status >= 400 {
+		api.ClientErrorCount++
 	}
 
 	w.WriteHeader(status)
@@ -214,8 +250,10 @@ func (api *mockAPI) reply(w http.ResponseWriter, r *http.Request, h apiResponder
 	}
 
 	if err != nil {
-		api.ErrorCount++
-		api.LastError = err
+		api.ServerErrorCount++
+		api.LastServerError = err
+
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 }
 
@@ -228,14 +266,8 @@ func (api *mockAPI) jwtHandler(r *http.Request) (interface{}, int, error) {
 			return nil, http.StatusInternalServerError, err
 		}
 
-		if values["username"] != api.JWTUsername {
-			err := fmt.Errorf("invalid username for JWT auth, got %v, want %v", values["username"], api.JWTUsername)
-			return nil, http.StatusUnauthorized, err
-		}
-
-		if values["password"] != api.JWTPassword {
-			err := fmt.Errorf("invalid password for JWT auth, got %v, want %v", values["password"], api.JWTPassword)
-			return nil, http.StatusUnauthorized, err
+		if values["username"] != api.JWTUsername || values["password"] != api.JWTPassword {
+			return `{"non_field_errors":["Unable to log in with provided credentials."]}`, http.StatusBadRequest, nil
 		}
 	}
 
@@ -244,8 +276,9 @@ func (api *mockAPI) jwtHandler(r *http.Request) (interface{}, int, error) {
 
 func (api *mockAPI) ResetCount() {
 	api.RequestCount = 0
-	api.ErrorCount = 0
-	api.LastError = nil
+	api.ServerErrorCount = 0
+	api.ClientErrorCount = 0
+	api.LastServerError = nil
 	api.RequestList = nil
 }
 
@@ -295,13 +328,7 @@ func (api *mockAPI) Handle(pattern string, h apiResponder) {
 func (api *mockAPI) Server() *httptest.Server {
 	api.init()
 
-	api.server = httptest.NewServer(api.serveMux)
-
-	return api.server
-}
-
-func (api *mockAPI) Close() {
-	api.server.Close()
+	return httptest.NewServer(api.serveMux)
 }
 
 func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
@@ -356,7 +383,8 @@ type genericResource struct {
 	store   map[string]interface{}
 	autoinc int
 
-	PatchHook func(r *http.Request, body []byte, valuePtr interface{}) error
+	PatchHook  func(r *http.Request, body []byte, valuePtr interface{}) error
+	CreateHook func(r *http.Request, body []byte, valuePtr interface{}) error
 }
 
 func (res *genericResource) SetStore(values ...interface{}) {
@@ -418,7 +446,12 @@ func (res *genericResource) List(r *http.Request) ([]interface{}, error) {
 }
 
 func (res *genericResource) Create(r *http.Request) (interface{}, error) {
-	decoder := json.NewDecoder(r.Body)
+	body, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	decoder := json.NewDecoder(bytes.NewReader(body))
 	valueReflect := reflect.New(reflect.ValueOf(res.Type).Type())
 	value := valueReflect.Interface()
 
@@ -433,6 +466,13 @@ func (res *genericResource) Create(r *http.Request) (interface{}, error) {
 
 	if res.store == nil {
 		res.store = make(map[string]interface{})
+	}
+
+	if res.CreateHook != nil {
+		err := res.CreateHook(r, body, valueReflect.Interface())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	res.store[id] = valueReflect.Elem().Interface()
@@ -641,8 +681,12 @@ func TestSync(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if api.ErrorCount > 0 {
-		t.Fatalf("Had %d error, last: %v", api.ErrorCount, api.LastError)
+	if api.ServerErrorCount > 0 {
+		t.Fatalf("Had %d server error, last: %v", api.ServerErrorCount, api.LastServerError)
+	}
+
+	if api.ClientErrorCount > 0 {
+		t.Fatalf("Had %d client error", api.ClientErrorCount)
 	}
 
 	// Did we store all the metrics ?

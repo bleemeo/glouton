@@ -34,16 +34,18 @@ type Cache struct {
 	dirty bool
 	state bleemeoTypes.State
 
-	cachedMetricLookup map[string]bleemeoTypes.Metric
+	cachedMetricLookup           map[string]bleemeoTypes.Metric
+	cachedFailRegistrationLookup map[string]bleemeoTypes.MetricRegistration
 }
 
 type data struct {
-	Version    int
-	AccountID  string
-	Facts      []bleemeoTypes.AgentFact
-	Containers []bleemeoTypes.Container
-	Metrics    []bleemeoTypes.Metric
-	Agent      bleemeoTypes.Agent
+	Version                 int
+	AccountID               string
+	Facts                   []bleemeoTypes.AgentFact
+	Containers              []bleemeoTypes.Container
+	Metrics                 []bleemeoTypes.Metric
+	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
+	Agent                   bleemeoTypes.Agent
 	// AccountConfig groups the configuration of other accounts, something we may need for probes.
 	// mapping config UUID -> Config
 	AccountConfigs map[string]bleemeoTypes.AccountConfig
@@ -300,6 +302,42 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 
 	return result
 }
+
+// SetMetricRegistrationsFail update the Metric list.
+func (c *Cache) SetMetricRegistrationsFail(registrations []bleemeoTypes.MetricRegistration) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.MetricRegistrationsFail = registrations
+	c.cachedFailRegistrationLookup = nil
+	c.dirty = true
+}
+
+// MetricRegistrationsFail returns the Metric registration list. You should not mutute it.
+func (c *Cache) MetricRegistrationsFail() (registrations []bleemeoTypes.MetricRegistration) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.data.MetricRegistrationsFail
+}
+
+// MetricRegistrationsFailByKey return a map with key being the labelsText.
+func (c *Cache) MetricRegistrationsFailByKey() map[string]bleemeoTypes.MetricRegistration {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.cachedFailRegistrationLookup == nil {
+		c.cachedFailRegistrationLookup = make(map[string]bleemeoTypes.MetricRegistration, len(c.data.MetricRegistrationsFail))
+
+		for _, v := range c.data.MetricRegistrationsFail {
+			c.cachedFailRegistrationLookup[v.LabelsText] = v
+		}
+	}
+
+	return c.cachedFailRegistrationLookup
+}
+
+//
 
 // SetMetrics update the Metric list.
 func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {

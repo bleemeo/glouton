@@ -83,6 +83,15 @@ func IsNotFound(err error) bool {
 	return false
 }
 
+// IsBadRequest return true if the error is an APIError due to 400.
+func IsBadRequest(err error) bool {
+	if apiError, ok := err.(APIError); ok {
+		return apiError.StatusCode == 400
+	}
+
+	return false
+}
+
 // IsServerError return true if the error is an APIError due to 5xx.
 func IsServerError(err error) bool {
 	if apiError, ok := err.(APIError); ok {
@@ -101,6 +110,16 @@ func IsThrottleError(err error) bool {
 	}
 
 	return false
+}
+
+// APIErrorContent return the API error response, if the error is an APIError.
+// Retrun the empty string if the error isn't an APIError.
+func APIErrorContent(err error) string {
+	if apiError, ok := err.(APIError); ok {
+		return apiError.Content
+	}
+
+	return ""
 }
 
 func (ae APIError) Error() string {
