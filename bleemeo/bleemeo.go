@@ -20,7 +20,9 @@ import (
 	"archive/zip"
 	"context"
 	"fmt"
+	"math/rand"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -431,6 +433,35 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 	if mqtt != nil {
 		if err := mqtt.DiagnosticZip(zipFile); err != nil {
 			return err
+		}
+	}
+
+	failed := c.cache.MetricRegistrationsFail()
+	if len(failed) > 0 {
+		file, err := zipFile.Create("metric-registration-failed.txt")
+		if err != nil {
+			return err
+		}
+
+		indices := make([]int, len(failed))
+		for i := range indices {
+			indices[i] = i
+		}
+
+		const maxSample = 50
+		if len(failed) > maxSample {
+			fmt.Fprintf(file, "%d metrics fail to register. The following is 50 randomly choose metrics that fail:\n", len(failed))
+			indices = rand.Perm(len(failed))[:maxSample]
+		} else {
+			fmt.Fprintf(file, "%d metrics fail to register. The following is the fill list\n", len(failed))
+			sort.Slice(indices, func(i, j int) bool {
+				return failed[indices[i]].LabelsText < failed[indices[j]].LabelsText
+			})
+		}
+
+		for _, i := range indices {
+			row := failed[i]
+			fmt.Fprintf(file, "count=%d nextRetryAt=%s failureKind=%v labels=%s\n", row.FailCounter, row.RetryAfter().Format(time.RFC3339), row.LastFailKind, row.LabelsText)
 		}
 	}
 

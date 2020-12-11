@@ -151,6 +151,17 @@ func (kind FailureKind) IsPermanentFailure() bool {
 	}
 }
 
+func (kind FailureKind) String() string {
+	switch kind {
+	case FailureAllowList:
+		return "not-allowed"
+	case FailureTooManyMetric:
+		return "too-many-metric"
+	default:
+		return "unknown"
+	}
+}
+
 // RetryAfter return the time after which the retry of the registration may be retried.
 func (mr MetricRegistration) RetryAfter() time.Time {
 	factor := math.Pow(2, float64(mr.FailCounter))
