@@ -1069,7 +1069,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			}
 		}
 
-		logger.V(2).Printf("Mark inactive the metric %v", key)
+		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
 		_, err := s.client.Do(
 			s.ctx,
