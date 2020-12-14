@@ -115,15 +115,15 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		if strings.HasPrefix(metricName, "commands_") {
 			commands := metricName[len("commands_"):]
 			switch commands {
-			case "analyze", "assign_to_keycache",
+			case "assign_to_keycache",
 				"begin", "binlog", "call_procedure", "change_master", "change_repl_filter",
 				"check", "checksum", "commit", "dealloc_sql", "delete", "delete_multi",
 				"do", "execute_sql", "flush", "group_replication_start",
 				"group_replication_stop", "ha_close", "ha_open", "ha_read", "insert", "insert_select",
 				"kill", "load", "lock_tables", "optimize", "preload_keys", "prepare_sql", "purge",
-				"purge_before_date", "release_savepoint", "rename_table", "rename_user", "repair", "replace",
+				"purge_before_date", "release_savepoint", "repair", "replace",
 				"replace_select", "reset", "resignal", "rollback", "rollback_to_savepoint",
-				"savepoint", "select", "set_option", "signal",
+				"savepoint", "select", "signal",
 				"slave_start", "slave_stop", "stmt_close", "stmt_execute", "stmt_fetch", "stmt_prepare", "stmt_reprepare",
 				"stmt_reset", "stmt_send_long_data", "truncate", "unlock_tables", "update", "update_multi",
 				"xa_commit", "xa_end", "xa_prepare", "xa_recover", "xa_rollback", "xa_start":
