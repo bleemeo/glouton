@@ -77,7 +77,9 @@ func (i Input) Gather(now time.Time) {
 		case "zombie":
 			status = "zombies"
 		case "?":
-			status = "unknown"
+			logger.V(2).Printf("Process %v has status unknown, assume sleeping", p)
+
+			status = "sleeping"
 		}
 
 		counts[status]++
