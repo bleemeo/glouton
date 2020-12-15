@@ -138,7 +138,7 @@ old_agent_not_present:
   # Create the service
   nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath= "$INSTDIR\glouton.exe" obj= "NT AUTHORITY\LocalService" type= own start= auto DisplayName= "${PRODUCT_NAME} by ${COMPANY_NAME} -- Monitoring Agent"'
   # Restart automatically in case of failure
-  nsExec::ExecToLog 'sc.exe failure "${AGENT_SERVICE_NAME}" actions= restart/1000 reset= 180'
+  nsExec::ExecToLog 'sc.exe failure "${AGENT_SERVICE_NAME}" actions= restart/30000 reset= 180'
 
   Pop $0
   ${If} $0 != 0
