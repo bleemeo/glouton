@@ -132,6 +132,9 @@ old_agent_not_present:
   WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${PRODUCT_NAME}" \
                    "EstimatedSize" "$0"
 
+  # Ensure permission are correct on state.json
+  nsExec::ExecToLog 'icacls.exe "${CONFIGDIR}\state.json" /grant "NT AUTHORITY\LocalService":D'
+
   # Create the service
   nsExec::ExecToLog 'sc.exe create "${AGENT_SERVICE_NAME}" binPath= "$INSTDIR\glouton.exe" obj= "NT AUTHORITY\LocalService" type= own start= auto DisplayName= "${PRODUCT_NAME} by ${COMPANY_NAME} -- Monitoring Agent"'
   # Restart automatically in case of failure
