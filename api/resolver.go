@@ -221,38 +221,39 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	}
 
 	sort.Slice(containers, func(i, j int) bool {
-		return strings.Compare(containers[i].Name(), containers[j].Name()) < 0
+		return strings.Compare(containers[i].ContainerName(), containers[j].ContainerName()) < 0
 	})
 
 	nbContainers := 0
 	nbCurrentContainers := 0
 
 	for _, container := range containers {
-		if allContainers || container.IsRunning() {
+		if allContainers || container.State().IsRunning() {
 			nbContainers++
 		}
 
-		if (allContainers || container.IsRunning()) && (strings.Contains(container.Name(), search) || strings.Contains(container.Image(), search) || strings.Contains(container.ID(), search) || strings.Contains(container.Command(), search)) {
+		cmdString := strings.Join(container.Command(), " ")
+		if (allContainers || container.State().IsRunning()) && (strings.Contains(container.ContainerName(), search) || strings.Contains(container.ImageName(), search) || strings.Contains(container.ID(), search) || strings.Contains(cmdString, search)) {
 			nbCurrentContainers++
 
 			createdAt := container.CreatedAt()
 			startedAt := container.StartedAt()
 			finishedAt := container.FinishedAt()
 			c := &Container{
-				Command:     container.Command(),
+				Command:     cmdString,
 				CreatedAt:   &createdAt,
 				ID:          container.ID(),
-				Image:       container.Image(),
-				InspectJSON: container.InspectJSON(),
-				Name:        container.Name(),
+				Image:       container.ImageName(),
+				InspectJSON: container.ContainerJSON(),
+				Name:        container.ContainerName(),
 				StartedAt:   &startedAt,
-				State:       container.State(),
+				State:       container.State().String(),
 				FinishedAt:  &finishedAt,
 			}
 
 			for _, m := range containerMetrics {
 				metricFilters := map[string]string{
-					types.LabelMetaContainerName: container.Name(),
+					types.LabelMetaContainerName: container.ContainerName(),
 					types.LabelName:              m,
 				}
 

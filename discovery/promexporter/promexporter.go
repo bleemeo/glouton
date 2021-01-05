@@ -19,6 +19,7 @@ package promexporter
 
 import (
 	"fmt"
+	"glouton/facts"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -30,24 +31,13 @@ import (
 	"sync"
 )
 
-// Container is the type used by exporter discovery.
-type Container interface {
-	// Labels return the Docker labels (or nil)
-	Labels() map[string]string
-	// Annotations return the Kubernetes POD annotations (or nil)
-	Annotations() map[string]string
-	PrimaryAddress() string
-	PodNamespaceName() (string, string)
-	Name() string
-}
-
 type target struct {
 	URL         string
 	ExtraLabels map[string]string
 }
 
 // listExporters return list of exporters based on containers labels/annotations.
-func (d *DynamicScrapper) listExporters(containers []Container) []target {
+func (d *DynamicScrapper) listExporters(containers []facts.Container) []target {
 	result := make([]target, 0)
 
 	for _, c := range containers {
@@ -61,11 +51,14 @@ func (d *DynamicScrapper) listExporters(containers []Container) []target {
 			types.LabelMetaScrapeJob: d.DynamicJobName,
 		}
 
-		if ns, podName := c.PodNamespaceName(); podName != "" {
+		ns := c.PodNamespace()
+		podName := c.PodName()
+
+		if podName != "" {
 			labels["kubernetes.pod.namespace"] = ns
 			labels["kubernetes.pod.name"] = podName
 		} else {
-			labels[types.LabelContainerName] = c.Name()
+			labels[types.LabelContainerName] = c.ContainerName()
 		}
 
 		if u != "" {
@@ -116,14 +109,14 @@ type DynamicScrapper struct {
 }
 
 // Update updates the scrappers targets using new containers informations.
-func (d *DynamicScrapper) Update(containers []Container) {
+func (d *DynamicScrapper) Update(containers []facts.Container) {
 	d.l.Lock()
 	defer d.l.Unlock()
 
 	d.update(containers)
 }
 
-func (d *DynamicScrapper) update(containers []Container) {
+func (d *DynamicScrapper) update(containers []facts.Container) {
 	dynamicTargets := d.listExporters(containers)
 
 	logger.V(3).Printf("Found the following dynamic Prometheus exporter: %v", dynamicTargets)

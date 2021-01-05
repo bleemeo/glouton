@@ -50,6 +50,7 @@ import (
 	"glouton/discovery"
 	"glouton/discovery/promexporter"
 	"glouton/facts"
+	dockerRuntime "glouton/facts/container-runtime/docker"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -83,7 +84,7 @@ type agent struct {
 
 	hostRootPath      string
 	discovery         *discovery.Discovery
-	dockerFact        *facts.DockerProvider
+	containerRuntime  *dockerRuntime.Docker
 	collector         *collector.Collector
 	factProvider      *facts.FactProvider
 	bleemeoConnector  *bleemeo.Connector
@@ -515,10 +516,10 @@ func (a *agent) run() { //nolint:gocyclo
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 
-	var kubernetesProvider *facts.KubernetesProvider
+	// var kubernetesProvider *facts.KubernetesProvider
 
 	if a.config.Bool("kubernetes.enabled") {
-		kubernetesProvider = &facts.KubernetesProvider{
+		/*kubernetesProvider = &facts.KubernetesProvider{
 			NodeName:   a.config.String("kubernetes.nodename"),
 			KubeConfig: a.config.String("kubernetes.kubeconfig"),
 		}
@@ -526,10 +527,13 @@ func (a *agent) run() { //nolint:gocyclo
 		_, err := kubernetesProvider.PODs(ctx, 0)
 		if err != nil {
 			logger.Printf("Kubernetes API unreachable, service detection may misbehave: %v", err)
-		}
+			}*/
+		logger.Printf("TODO")
 	}
 
-	a.dockerFact = facts.NewDocker(a.deletedContainersCallback, kubernetesProvider, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
+	a.containerRuntime = &dockerRuntime.Docker{
+		DeletedContainersCallback: a.deletedContainersCallback,
+	}
 
 	var (
 		psLister facts.ProcessLister
@@ -549,11 +553,11 @@ func (a *agent) run() { //nolint:gocyclo
 	psFact := facts.NewProcess(
 		psLister,
 		a.hostRootPath,
-		a.dockerFact,
+		a.containerRuntime,
 	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
 
-	a.factProvider.AddCallback(a.dockerFact.DockerFact)
+	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 
 	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
@@ -565,7 +569,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
 	}
 
-	a.gathererRegistry.AddPushPointsCallback(a.dockerFact.Gather)
+	a.gathererRegistry.AddPushPointsCallback(a.containerRuntime.GatherCallback(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))))
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -575,7 +579,7 @@ func (a *agent) run() { //nolint:gocyclo
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
-	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack"))
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack"))
 	a.discovery = discovery.New(
 		dynamicDiscovery,
 		a.collector,
@@ -583,7 +587,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.taskRegistry,
 		a.state,
 		acc,
-		a.dockerFact,
+		a.containerRuntime,
 		overrideServices,
 		isCheckIgnored,
 		isInputIgnored,
@@ -649,7 +653,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	api := &api.API{
 		DB:                 a.store,
-		DockerFact:         a.dockerFact,
+		DockerFact:         a.containerRuntime,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
 		BindAddress:        apiBindAddress,
@@ -668,7 +672,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.watchdog, "Agent Watchdog"},
 		{a.store.Run, "Metric store"},
 		{a.triggerHandler.Run, "Internal trigger handler"},
-		{a.dockerFact.Run, "Docker connector"},
+		{a.containerRuntime.Run, "Docker connector"},
 		{a.healthCheck, "Agent healthcheck"},
 		{a.hourlyDiscovery, "Service Discovery"},
 		{a.dailyFact, "Facts gatherer"},
@@ -707,7 +711,7 @@ func (a *agent) run() { //nolint:gocyclo
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,
-			Docker:                  a.dockerFact,
+			Docker:                  a.containerRuntime,
 			Store:                   a.store,
 			Acc:                     acc,
 			Discovery:               a.discovery,
@@ -903,7 +907,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 
 			switch srv.ServiceType {
 			case discovery.PostfixService:
-				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.dockerFact)
+				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
 					logger.V(1).Printf("Unabled to gather postfix queue size on %s: %v", srv, err)
 					continue
@@ -933,7 +937,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					},
 				})
 			case discovery.EximService:
-				n, err := eximQueueSize(ctx, srv, a.hostRootPath, a.dockerFact)
+				n, err := eximQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
 					logger.V(1).Printf("Unabled to gather exim queue size on %s: %v", srv, err)
 					continue
@@ -1135,19 +1139,19 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 
 	for {
 		select {
-		case ev := <-a.dockerFact.Events():
-			if ev.Action == "start" {
+		case ev := <-a.containerRuntime.Events():
+			if ev.Type == facts.EventTypeStart {
 				a.FireTrigger(true, false, false, true)
-			} else if ev.Action == "die" || ev.Action == "destroy" {
+			} else if ev.Type == facts.EventTypeStop || ev.Type == facts.EventTypeDelete {
 				a.FireTrigger(true, false, false, false)
 			}
 
-			if strings.HasPrefix(ev.Action, "health_status:") && ev.Container != nil {
+			if ev.Type == facts.EventTypeHealth && ev.Container != nil {
 				if a.bleemeoConnector != nil {
 					a.bleemeoConnector.UpdateContainers()
 				}
 
-				a.sendDockerContainerHealth(*ev.Container)
+				a.sendDockerContainerHealth(ev.Container)
 			}
 		case <-ctx.Done():
 			return nil
@@ -1164,17 +1168,12 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 		case <-ticker.C:
 			// It not needed to have fresh container information. When health event occur,
 			// DockerFact already update the container information
-			containers, err := a.dockerFact.Containers(ctx, 3600*time.Second, false)
+			containers, err := a.containerRuntime.Containers(ctx, 3600*time.Second, false)
 			if err != nil {
 				continue
 			}
 
 			for _, c := range containers {
-				inspect := c.Inspect()
-				if inspect.State == nil || inspect.State.Health == nil {
-					continue
-				}
-
 				a.sendDockerContainerHealth(c)
 			}
 		case <-ctx.Done():
@@ -1184,27 +1183,21 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 }
 
 func (a *agent) sendDockerContainerHealth(container facts.Container) {
-	inspect := container.Inspect()
-	if inspect.State == nil || inspect.State.Health == nil {
+	health, message := container.Health()
+	if health == facts.ContainerNoHealthCheck {
 		return
 	}
 
-	state := container.State()
-	healthStatus := inspect.State.Health.Status
 	status := types.StatusDescription{}
 
-	index := len(inspect.State.Health.Log) - 1
-	if len(inspect.State.Health.Log) > 0 && inspect.State.Health.Log[index] != nil {
-		status.StatusDescription = inspect.State.Health.Log[index].Output
-	}
-
 	switch {
-	case state != "running":
+	case !container.State().IsRunning():
 		status.CurrentStatus = types.StatusCritical
 		status.StatusDescription = "Container stopped"
-	case healthStatus == "healthy":
+	case health == facts.ContainerHealthy:
 		status.CurrentStatus = types.StatusOk
-	case healthStatus == "starting":
+		status.StatusDescription = message
+	case health == facts.ContainerStarting:
 		startedAt := container.StartedAt()
 		if time.Since(startedAt) < time.Minute || startedAt.IsZero() {
 			status.CurrentStatus = types.StatusOk
@@ -1212,23 +1205,24 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 			status.CurrentStatus = types.StatusWarning
 			status.StatusDescription = "Container is still starting"
 		}
-	case healthStatus == "unhealthy":
+	case health == facts.ContainerUnhealthy:
 		status.CurrentStatus = types.StatusCritical
+		status.StatusDescription = message
 	default:
 		status.CurrentStatus = types.StatusUnknown
-		status.StatusDescription = fmt.Sprintf("Unknown health status %#v", healthStatus)
+		status.StatusDescription = fmt.Sprintf("Unknown health status %s", message)
 	}
 
 	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
 				types.LabelName:              "docker_container_health_status",
-				types.LabelMetaContainerName: container.Name(),
+				types.LabelMetaContainerName: container.ContainerName(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
 				ContainerID: container.ID(),
-				BleemeoItem: container.Name(),
+				BleemeoItem: container.ContainerName(),
 			},
 			Point: types.Point{
 				Time:  time.Now(),
@@ -1318,19 +1312,13 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				}
 			}
 			if a.dynamicScrapper != nil {
-				if containers, err := a.dockerFact.Containers(ctx, time.Hour, false); err == nil {
-					containers2 := make([]promexporter.Container, len(containers))
-
-					for i, c := range containers {
-						containers2[i] = c
-					}
-
-					a.dynamicScrapper.Update(containers2)
+				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
+					a.dynamicScrapper.Update(containers)
 				}
 			}
 		}
 
-		hasConnection := a.dockerFact.HasConnection(ctx)
+		hasConnection := a.containerRuntime.IsRuntimeRunning(ctx)
 		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enabled") {
 			i, err := docker.New()
 			if err != nil {

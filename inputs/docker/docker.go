@@ -21,7 +21,6 @@ import (
 	"glouton/facts"
 	"glouton/inputs/internal"
 	"glouton/types"
-	"strings"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -70,20 +69,9 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		}
 	}
 
-	if enable, ok := originalContext.Tags[facts.EnableLabel]; ok {
-		enable = strings.ToLower(enable)
-		switch enable {
-		case "0", "off", "false", "no":
-			drop = true
-			return
-		}
-	} else if enable, ok := originalContext.Tags[facts.EnableLegacyLabel]; ok {
-		enable = strings.ToLower(enable)
-		switch enable {
-		case "0", "off", "false", "no":
-			drop = true
-			return
-		}
+	if facts.ContainerIgnoredFromLabels(originalContext.Tags) {
+		drop = true
+		return
 	}
 
 	switch originalContext.Measurement {

@@ -19,7 +19,6 @@ package discovery
 import (
 	"context"
 	"fmt"
-	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/task"
@@ -90,7 +89,7 @@ type GathererRegistry interface {
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -128,7 +127,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		coll:                  coll,
 		metricRegistry:        metricRegistry,
 		taskRegistry:          taskRegistry,
-		containerInfo:         (*dockerWrapper)(containerInfo),
+		containerInfo:         containerInfo,
 		acc:                   acc,
 		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
@@ -239,7 +238,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
-			if container, found := d.containerInfo.Container(service.ContainerID); !found {
+			if container, found := d.containerInfo.CachedContainer(service.ContainerID); !found {
 				service.Active = false
 			} else if container.StoppedAndReplaced() {
 				service.Active = false

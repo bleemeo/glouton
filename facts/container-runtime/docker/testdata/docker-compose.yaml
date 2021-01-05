@@ -13,3 +13,6 @@ services:
             glouton.check.ignore.port.5672: "false"
             glouton.check.ignore.port.4369: "true"
             glouton.check.ignore.port.25672: "TrUe"
+    notRunning:
+        image: rabbitmq
+        command: "true"

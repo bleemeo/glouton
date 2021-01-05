@@ -22,6 +22,7 @@ import (
 	"glouton/bleemeo/types"
 	"glouton/facts"
 	"glouton/logger"
+	"strings"
 	"time"
 )
 
@@ -113,7 +114,7 @@ func (s *Synchronizer) containerUpdateList() error {
 }
 
 func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Container) error {
-	facts, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
+	factsMap, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 	if err != nil {
 		return nil
 	}
@@ -134,14 +135,14 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 	for _, container := range localContainers {
 		if s.now().Sub(container.CreatedAt()) < delay {
-			enable, explicit := container.Enabled()
+			enable, explicit := facts.ContainerEnabled(container)
 			if !enable || !explicit {
 				newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
 				continue
 			}
 		}
 
-		name := container.Name()
+		name := container.ContainerName()
 		if len(name) > apiContainerNameLength {
 			name = name[:apiContainerNameLength]
 		}
@@ -157,7 +158,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		payloadContainer := types.Container{
 			Name:          name,
 			DockerID:      container.ID(),
-			DockerInspect: container.InspectJSON(),
+			DockerInspect: container.ContainerJSON(),
 		}
 
 		payloadContainer.FillInspectHash()
@@ -170,14 +171,14 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		payload := containerPayload{
 			Container:        payloadContainer,
 			Host:             s.agentID,
-			Command:          container.Command(),
-			DockerStatus:     container.State(),
+			Command:          strings.Join(container.Command(), " "),
+			DockerStatus:     container.State().String(),
 			DockerCreatedAt:  container.CreatedAt(),
 			DockerStartedAt:  container.StartedAt(),
 			DockerFinishedAt: container.FinishedAt(),
-			DockerAPIVersion: facts["docker_api_version"],
-			DockerImageID:    container.Inspect().Image,
-			DockerImageName:  container.Image(),
+			DockerAPIVersion: factsMap["docker_api_version"],
+			DockerImageID:    container.ImageID(),
+			DockerImageName:  container.ImageName(),
 		}
 
 		var result types.Container

@@ -482,7 +482,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 	}
 	mockDynamic := &MockDiscoverer{}
 	docker := mockContainerInfo{
-		containers: map[string]mockContainer{
+		containers: map[string]facts.FakeContainer{
 			"1234": {},
 		},
 	}
@@ -539,7 +539,7 @@ func TestUpdateMetricsAndCheck(t *testing.T) {
 		t.Error(err)
 	}
 
-	docker.containers = map[string]mockContainer{
+	docker.containers = map[string]facts.FakeContainer{
 		"1239": {},
 	}
 	mockDynamic.result = []Service{

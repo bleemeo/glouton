@@ -108,7 +108,7 @@ type Service struct {
 	MetricsIgnored  bool
 
 	HasNetstatInfo bool
-	container      container
+	container      facts.Container
 }
 
 func (s Service) String() string {
