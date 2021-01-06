@@ -441,9 +441,39 @@ func TestDocker_Run(t *testing.T) {
 		openConnection := func(_ context.Context) (dockerClient, error) {
 			cl, err := newDockerMock(tt.dir)
 			cl.EventChanMaker = func() <-chan events.Message {
-				ch := make(chan events.Message, 1)
+				ch := make(chan events.Message, 10)
+				ch <- events.Message{
+					Type:   "network",
+					Action: "connect",
+					Actor:  events.Actor{ID: "1235"},
+				}
+				ch <- events.Message{
+					Type:   "volume",
+					Action: "mount",
+					Actor:  events.Actor{ID: "5678"},
+				}
+				ch <- events.Message{
+					Type:   "container",
+					Action: "start",
+					Actor:  events.Actor{ID: cl.containers[0].ID},
+				}
 				ch <- events.Message{
 					Action: "health_status:test",
+					Actor:  events.Actor{ID: cl.containers[0].ID},
+				}
+				ch <- events.Message{
+					Type:   "container",
+					Action: "kill",
+					Actor:  events.Actor{ID: cl.containers[0].ID},
+				}
+				ch <- events.Message{
+					Type:   "container",
+					Action: "die",
+					Actor:  events.Actor{ID: cl.containers[0].ID},
+				}
+				ch <- events.Message{
+					Type:   "container",
+					Action: "destroy",
 					Actor:  events.Actor{ID: cl.containers[0].ID},
 				}
 
@@ -457,7 +487,7 @@ func TestDocker_Run(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			seeEvent := false
+			eventSeen := 0
 
 			d := &Docker{
 				openConnection: openConnection,
@@ -467,16 +497,22 @@ func TestDocker_Run(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				select {
-				case <-d.Events():
-					seeEvent = true
-				case <-ctx.Done():
+				for {
+					select {
+					case ev := <-d.Events():
+						eventSeen++
+						if ev.Type == facts.EventTypeDelete {
+							return
+						}
+					case <-ctx.Done():
+						return
+					}
 				}
-				cancel()
 			}()
 
 			err := d.Run(ctx)
 			wg.Wait()
+			cancel()
 
 			if err != nil {
 				t.Error(err)
@@ -486,8 +522,8 @@ func TestDocker_Run(t *testing.T) {
 				t.Errorf("IsRuntimeRunning = false, want true")
 			}
 
-			if !seeEvent {
-				t.Errorf("seeEvent = false, want true")
+			if eventSeen != 5 {
+				t.Errorf("eventSeen = %d, want 5", eventSeen)
 			}
 		})
 	}

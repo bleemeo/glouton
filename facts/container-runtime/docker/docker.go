@@ -308,7 +308,13 @@ func (d *Docker) ensureClient(ctx context.Context, openConnection bool) (cl dock
 
 func (d *Docker) run(ctx context.Context) error {
 	d.l.Lock()
+
 	cl, err := d.ensureClient(ctx, true)
+
+	if d.lastKill == nil {
+		d.lastKill = make(map[string]time.Time)
+	}
+
 	d.l.Unlock()
 
 	if err != nil {
