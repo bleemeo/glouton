@@ -2,13 +2,9 @@ package docker
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"glouton/facts"
 	"glouton/types"
-	"io/ioutil"
-	"path/filepath"
 	"reflect"
 	"sort"
 	"strings"
@@ -16,150 +12,10 @@ import (
 	"testing"
 	"time"
 
-	dockerTypes "github.com/docker/docker/api/types"
 	containerTypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/events"
 	"github.com/google/go-cmp/cmp"
 )
-
-type mockDockerClient struct {
-	EventChanMaker func() <-chan events.Message
-	containers     []dockerTypes.ContainerJSON
-	version        dockerTypes.Version
-	top            map[string]containerTypes.ContainerTopOKBody
-	topWaux        map[string]containerTypes.ContainerTopOKBody
-
-	topCallCount int
-}
-
-func (cl *mockDockerClient) ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error) {
-	return dockerTypes.HijackedResponse{}, errors.New("ContainerExecAttach not implemented")
-}
-func (cl *mockDockerClient) ContainerExecCreate(ctx context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error) {
-	return dockerTypes.IDResponse{}, errors.New("ContainerExecCreatenot implemented")
-}
-func (cl *mockDockerClient) ContainerInspect(ctx context.Context, container string) (dockerTypes.ContainerJSON, error) {
-	for _, c := range cl.containers {
-		if c.ID == container || c.Name == "/"+container {
-			return c, nil
-		}
-	}
-
-	return dockerTypes.ContainerJSON{}, errors.New("not found?")
-}
-
-func (cl *mockDockerClient) ContainerList(ctx context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error) {
-	if !reflect.DeepEqual(options, dockerTypes.ContainerListOptions{All: true}) {
-		return nil, errors.New("ContainerList not implemented with options other that all=True")
-	}
-
-	if cl.containers == nil {
-		return nil, errors.New("ContainerList not implemented")
-	}
-
-	result := make([]dockerTypes.Container, len(cl.containers))
-	for i, c := range cl.containers {
-		result[i] = dockerTypes.Container{
-			ID: c.ID,
-		}
-	}
-
-	return result, nil
-}
-func (cl *mockDockerClient) ContainerTop(ctx context.Context, container string, arguments []string) (containerTypes.ContainerTopOKBody, error) {
-	cl.topCallCount++
-
-	if len(arguments) == 0 {
-		return cl.top[container], nil
-	}
-
-	if len(arguments) == 1 && arguments[0] == "waux" {
-		return cl.topWaux[container], nil
-	}
-
-	return containerTypes.ContainerTopOKBody{}, errors.New("ContainerTop called without empty arg or waux")
-}
-
-func (cl *mockDockerClient) Events(ctx context.Context, options dockerTypes.EventsOptions) (<-chan events.Message, <-chan error) {
-	if cl.EventChanMaker != nil {
-		return cl.EventChanMaker(), nil
-	}
-
-	ch := make(chan error, 1)
-	ch <- errors.New("ContainerTop not implemented")
-
-	return nil, ch
-}
-
-func (cl *mockDockerClient) NetworkInspect(ctx context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error) {
-	return dockerTypes.NetworkResource{}, errors.New("NetworkInspect not implemented")
-}
-
-func (cl *mockDockerClient) NetworkList(ctx context.Context, options dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error) {
-	return nil, errors.New("NetworkList not implemented")
-}
-
-func (cl *mockDockerClient) Ping(ctx context.Context) (dockerTypes.Ping, error) {
-	return dockerTypes.Ping{}, nil
-}
-
-func (cl *mockDockerClient) ServerVersion(ctx context.Context) (dockerTypes.Version, error) {
-	if len(cl.version.Components) == 0 {
-		return dockerTypes.Version{}, errors.New("ServerVersion not implemented")
-	}
-
-	return cl.version, nil
-}
-
-func newDockerMock(dirname string) (*mockDockerClient, error) {
-	result := &mockDockerClient{}
-
-	data, err := ioutil.ReadFile(filepath.Join(dirname, "docker-version.json"))
-	if err == nil {
-		err = json.Unmarshal(data, &result.version)
-		if err != nil {
-			return result, err
-		}
-	}
-
-	data, err = ioutil.ReadFile(filepath.Join(dirname, "docker-containers.json"))
-	if err == nil {
-		err = json.Unmarshal(data, &result.containers)
-		if err != nil {
-			return result, err
-		}
-	}
-
-	return result, err
-}
-
-func newDockerMockFromFile(filename string) (*mockDockerClient, error) {
-	result := &mockDockerClient{}
-
-	data, err := ioutil.ReadFile(filename)
-	if err == nil {
-		err = json.Unmarshal(data, &result.containers)
-		if err != nil {
-			return result, err
-		}
-	}
-
-	return result, err
-}
-
-func containersToContainerNameMap(containers []facts.Container) (map[string]facts.Container, error) {
-	results := make(map[string]facts.Container, len(containers))
-
-	for _, c := range containers {
-		if results[c.ContainerName()] != nil {
-			return nil, fmt.Errorf("duplicated container name %v", c.ContainerName())
-		}
-
-		results[c.ContainerName()] = c
-	}
-
-	return results, nil
-}
 
 func TestDocker_RuntimeFact(t *testing.T) {
 	tests := []struct {
@@ -180,14 +36,16 @@ func TestDocker_RuntimeFact(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 
-		openConnection := func(_ context.Context) (dockerClient, error) {
-			return newDockerMock(tt.dir)
-		}
-
 		t.Run(tt.name, func(t *testing.T) {
-			d := &Docker{
-				openConnection: openConnection,
+			cl, err := NewDockerMock(tt.dir)
+			if err != nil {
+				t.Error(err)
+
+				return
 			}
+
+			d := FakeDocker(cl)
+
 			if got := d.RuntimeFact(context.Background(), nil); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Docker.RuntimeFact() = %v, want %v", got, tt.want)
 			}
@@ -263,16 +121,19 @@ func TestDocker_GatherCallback(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 
-		openConnection := func(_ context.Context) (dockerClient, error) {
-			return newDockerMock(tt.dir)
-		}
-		store := &mockStore{}
-
 		t.Run(tt.name, func(t *testing.T) {
-			d := &Docker{
-				openConnection: openConnection,
+			store := &mockStore{}
+
+			cl, err := NewDockerMock(tt.dir)
+			if err != nil {
+				t.Error(err)
+				return
 			}
+
+			d := FakeDocker(cl)
+
 			d.GatherCallback(store)(now)
+
 			if !reflect.DeepEqual(store.got, tt.want) {
 				t.Errorf("Docker.GatherCallback() = %v, want %v", store.got, tt.want)
 			}
@@ -363,14 +224,15 @@ func TestDocker_Containers(t *testing.T) {
 	}
 	for _, tt := range tests {
 		tt := tt
-		openConnection := func(_ context.Context) (dockerClient, error) {
-			return newDockerMock(tt.dir)
-		}
 
 		t.Run(tt.name, func(t *testing.T) {
-			d := &Docker{
-				openConnection: openConnection,
+			cl, err := NewDockerMock(tt.dir)
+			if err != nil {
+				t.Error(err)
+				return
 			}
+
+			d := FakeDocker(cl)
 
 			if d.IsRuntimeRunning(context.Background()) {
 				t.Errorf("IsRuntimeRunning = true, want false (because connection not yet established")
@@ -381,7 +243,7 @@ func TestDocker_Containers(t *testing.T) {
 				t.Error(err)
 			}
 
-			gotMap, err := containersToContainerNameMap(containers)
+			gotMap, err := facts.ContainersToContainerNameMap(containers)
 			if err != nil {
 				t.Error(err)
 			}
@@ -438,8 +300,17 @@ func TestDocker_Run(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 
-		openConnection := func(_ context.Context) (dockerClient, error) {
-			cl, err := newDockerMock(tt.dir)
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+
+			cl, err := NewDockerMock(tt.dir)
+			if err != nil {
+				t.Error(err)
+
+				return
+			}
+
 			cl.EventChanMaker = func() <-chan events.Message {
 				ch := make(chan events.Message, 10)
 				ch <- events.Message{
@@ -455,43 +326,34 @@ func TestDocker_Run(t *testing.T) {
 				ch <- events.Message{
 					Type:   "container",
 					Action: "start",
-					Actor:  events.Actor{ID: cl.containers[0].ID},
+					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
 				ch <- events.Message{
 					Action: "health_status:test",
-					Actor:  events.Actor{ID: cl.containers[0].ID},
+					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
 				ch <- events.Message{
 					Type:   "container",
 					Action: "kill",
-					Actor:  events.Actor{ID: cl.containers[0].ID},
+					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
 				ch <- events.Message{
 					Type:   "container",
 					Action: "die",
-					Actor:  events.Actor{ID: cl.containers[0].ID},
+					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
 				ch <- events.Message{
 					Type:   "container",
 					Action: "destroy",
-					Actor:  events.Actor{ID: cl.containers[0].ID},
+					Actor:  events.Actor{ID: cl.Containers[0].ID},
 				}
 
 				return ch
 			}
 
-			return cl, err
-		}
-
-		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-			defer cancel()
-
 			eventSeen := 0
 
-			d := &Docker{
-				openConnection: openConnection,
-			}
+			d := FakeDocker(cl)
 
 			wg := sync.WaitGroup{}
 			wg.Add(1)
@@ -510,7 +372,7 @@ func TestDocker_Run(t *testing.T) {
 				}
 			}()
 
-			err := d.Run(ctx)
+			err = d.Run(ctx)
 			wg.Wait()
 			cancel()
 
@@ -756,14 +618,15 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 	}
 	for _, tt := range tests {
 		tt := tt
-		openConnection := func(_ context.Context) (dockerClient, error) {
-			return newDockerMock(tt.dir)
-		}
 
 		t.Run(tt.name, func(t *testing.T) {
-			d := &Docker{
-				openConnection: openConnection,
+			cl, err := NewDockerMock(tt.dir)
+			if err != nil {
+				t.Error(err)
+				return
 			}
+
+			d := FakeDocker(cl)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
@@ -916,30 +779,26 @@ func TestDocker_Processes(t *testing.T) {
 	for _, tt := range tests {
 		tt := tt
 
-		openConnection := func(_ context.Context) (dockerClient, error) {
-			cl, err := newDockerMock(tt.dir)
+		t.Run(tt.name, func(t *testing.T) {
+			cl, err := NewDockerMock(tt.dir)
 			if err != nil {
-				return nil, err
+				t.Error(err)
+
+				return
 			}
 
-			cl.top = make(map[string]containerTypes.ContainerTopOKBody)
-			cl.topWaux = make(map[string]containerTypes.ContainerTopOKBody)
+			cl.Top = make(map[string]containerTypes.ContainerTopOKBody)
+			cl.TopWaux = make(map[string]containerTypes.ContainerTopOKBody)
 
 			for id, s := range tt.top {
-				cl.top[id] = string2TopBody(s)
+				cl.Top[id] = string2TopBody(s)
 			}
 
 			for id, s := range tt.topWaux {
-				cl.topWaux[id] = string2TopBody(s)
+				cl.TopWaux[id] = string2TopBody(s)
 			}
 
-			return cl, nil
-		}
-
-		t.Run(tt.name, func(t *testing.T) {
-			d := &Docker{
-				openConnection: openConnection,
-			}
+			d := FakeDocker(cl)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
 			defer cancel()
@@ -1013,19 +872,19 @@ func TestDocker_Processes(t *testing.T) {
 // docker run -d --name multiple-port2 rabbitmq
 // docker run -d --name non-standard-port -p 4242:4343 -p 1234:1234 rabbitmq.
 func TestContainer_ListenAddresses(t *testing.T) {
-	docker1_13_1, err := newDockerMockFromFile("testdata/docker-v1.13.1.json")
+	docker1_13_1, err := NewDockerMockFromFile("testdata/docker-v1.13.1.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	docker19_03, err := newDockerMockFromFile("testdata/docker-v19.03.5.json")
+	docker19_03, err := NewDockerMockFromFile("testdata/docker-v19.03.5.json")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	tests := []struct {
 		name          string
-		dockerClient  *mockDockerClient
+		dockerClient  *MockDockerClient
 		containerName string
 		want          []facts.ListenAddress
 		wantExplicit  bool
@@ -1101,11 +960,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 			defer cancel()
 
-			d := &Docker{
-				openConnection: func(ctx context.Context) (cl dockerClient, err error) {
-					return tt.dockerClient, nil
-				},
-			}
+			d := FakeDocker(tt.dockerClient)
 
 			containers, err := d.Containers(ctx, 0, false)
 			if err != nil {

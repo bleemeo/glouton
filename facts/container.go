@@ -3,6 +3,7 @@ package facts
 import (
 	"context"
 	"errors"
+	"fmt"
 	"glouton/logger"
 	"strconv"
 	"strings"
@@ -201,6 +202,22 @@ func ContainerIgnoredPorts(c Container) map[int]bool {
 	}
 
 	return ignoredPort
+}
+
+// ContainersToContainerNameMap convert a list of containers to a map of container with container name as key.
+// Return error if there is a name conflict.
+func ContainersToContainerNameMap(containers []Container) (map[string]Container, error) {
+	results := make(map[string]Container, len(containers))
+
+	for _, c := range containers {
+		if results[c.ContainerName()] != nil {
+			return nil, fmt.Errorf("duplicated container name %v", c.ContainerName())
+		}
+
+		results[c.ContainerName()] = c
+	}
+
+	return results, nil
 }
 
 type FakeContainer struct {

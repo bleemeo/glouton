@@ -51,6 +51,7 @@ import (
 	"glouton/discovery/promexporter"
 	"glouton/facts"
 	dockerRuntime "glouton/facts/container-runtime/docker"
+	"glouton/facts/container-runtime/kubernetes"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -84,7 +85,7 @@ type agent struct {
 
 	hostRootPath      string
 	discovery         *discovery.Discovery
-	containerRuntime  *dockerRuntime.Docker
+	containerRuntime  kubernetes.RuntimeInterface
 	collector         *collector.Collector
 	factProvider      *facts.FactProvider
 	bleemeoConnector  *bleemeo.Connector
@@ -516,23 +517,24 @@ func (a *agent) run() { //nolint:gocyclo
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 
-	// var kubernetesProvider *facts.KubernetesProvider
+	a.containerRuntime = &dockerRuntime.Docker{
+		DeletedContainersCallback: a.deletedContainersCallback,
+	}
 
 	if a.config.Bool("kubernetes.enabled") {
-		/*kubernetesProvider = &facts.KubernetesProvider{
+		kube := &kubernetes.Kubernetes{
+			Runtime:    a.containerRuntime,
 			NodeName:   a.config.String("kubernetes.nodename"),
 			KubeConfig: a.config.String("kubernetes.kubeconfig"),
 		}
+		a.containerRuntime = kube
 
-		_, err := kubernetesProvider.PODs(ctx, 0)
-		if err != nil {
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := kube.Test(ctx); err != nil {
 			logger.Printf("Kubernetes API unreachable, service detection may misbehave: %v", err)
-			}*/
-		logger.Printf("TODO")
-	}
+		}
 
-	a.containerRuntime = &dockerRuntime.Docker{
-		DeletedContainersCallback: a.deletedContainersCallback,
+		cancel()
 	}
 
 	var (

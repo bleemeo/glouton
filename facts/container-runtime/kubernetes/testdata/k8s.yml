@@ -1,0 +1,126 @@
+# containers used to generate testdata content
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq-container-port
+  labels:
+    app: rabbitmq-container-port
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq-container-port
+  template:
+    metadata:
+      labels:
+        app: rabbitmq-container-port
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:latest
+        ports:
+        - containerPort: 5672
+        readinessProbe:
+          tcpSocket:
+            port: 5672
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq-labels
+  labels:
+    app: rabbitmq-labels
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: rabbitmq-labels
+  template:
+    metadata:
+      annotations:
+        glouton.check.ignore.port.5671: "on"
+        glouton.check.ignore.port.4369: "TruE"
+      labels:
+        app: rabbitmq-labels
+    spec:
+      containers:
+      - name: rabbitmq
+        image: rabbitmq:latest
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-memcached
+  labels:
+    app: redis-memcached
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis-memcached
+  template:
+    metadata:
+      annotations:
+        glouton.enable: "off"
+      labels:
+        app: redis-memcached
+    spec:
+      containers:
+      - name: the-redis
+        image: redis:latest
+        ports:
+        - containerPort: 6363
+        readinessProbe:
+          tcpSocket:
+            port: 6379
+      - name: a-memcached
+        image: memcached:latest
+        readinessProbe:
+          tcpSocket:
+            port: 11211
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crash-loop
+  labels:
+    app: crash-loop
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: crash-loop
+  template:
+    metadata:
+      labels:
+        app: crash-loop
+    spec:
+      containers:
+      - name: "false"
+        image: busybox:latest
+        command:
+        - "false"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: delete-me-once
+  labels:
+    app: delete-me-once
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: delete-me-once
+  template:
+    metadata:
+      labels:
+        app: delete-me-once
+    spec:
+      containers:
+      - name: "true"
+        image: busybox:latest
+        command:
+        - "sleep"
+        - 9999d

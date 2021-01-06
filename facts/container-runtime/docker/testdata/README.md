@@ -14,7 +14,7 @@ minikube ssh -- docker system prune -f
 eval $(minikube docker-env)
 (cd facts/container-runtime/testdata && docker-compose up -d)
 
-_testdir="facts/container-runtime/testdata/docker-`docker info --format '{{ .ServerVersion}}'`"
+_testdir="facts/container-runtime/docker/testdata/docker-`docker info --format '{{ .ServerVersion}}'`"
 mkdir ${_testdir}
 docker version --format '{{ .Server|json}}' > ${_testdir}/docker-version.json
 docker inspect `docker ps -a --format '{{ .ID }}'` > ${_testdir}/docker-containers.json

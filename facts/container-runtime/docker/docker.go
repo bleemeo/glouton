@@ -807,10 +807,6 @@ func (c dockerContainer) Labels() map[string]string {
 	return c.inspect.Config.Labels
 }
 func (c dockerContainer) ListenAddresses() (addresses []facts.ListenAddress, explicit bool) {
-	if c.PrimaryAddress() == "" {
-		return nil, false
-	}
-
 	exposedPorts := make([]facts.ListenAddress, 0)
 
 	if len(exposedPorts) == 0 && c.inspect.NetworkSettings != nil && len(c.inspect.NetworkSettings.Ports) > 0 {
@@ -850,7 +846,7 @@ func (c dockerContainer) PodName() string {
 	// Get the POD namespace from Docker labels if k8s API not available
 	labels := c.Labels()
 
-	return labels["io.kuberntes.pod.name"]
+	return labels["io.kubernetes.pod.name"]
 }
 func (c dockerContainer) PodNamespace() string {
 	// Get the POD namespace from Docker labels if k8s API not available

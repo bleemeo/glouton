@@ -306,6 +306,8 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			service.ListenAddresses, explicit = service.container.ListenAddresses()
 			service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
 
+			service.ListenAddresses = excludeEmptyAddress(service.ListenAddresses)
+
 			if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && !explicit) {
 				service.ListenAddresses = netstat[pid]
 			}
@@ -539,4 +541,20 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	serviceName, ok := knownProcesses[name]
 
 	return serviceName, ok
+}
+
+// excludeEmptyAddress exlude entry with empty Address IP. It will modify input.
+func excludeEmptyAddress(addresses []facts.ListenAddress) []facts.ListenAddress {
+	n := 0
+
+	for _, x := range addresses {
+		if x.Address != "" {
+			addresses[n] = x
+			n++
+		}
+	}
+
+	addresses = addresses[:n]
+
+	return addresses
 }
