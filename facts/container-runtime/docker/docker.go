@@ -920,7 +920,12 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 		}
 
 		d.d.l.Lock()
-		d.containers = d.d.containers
+
+		d.containers = make(map[string]dockerContainer, len(d.d.containers))
+		for k, v := range d.d.containers {
+			d.containers[k] = v
+		}
+
 		d.d.l.Unlock()
 	}
 
