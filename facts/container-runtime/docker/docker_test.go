@@ -143,10 +143,11 @@ func TestDocker_GatherCallback(t *testing.T) {
 
 func TestDocker_Containers(t *testing.T) {
 	tests := []struct {
-		name string
-		dir  string
-		now  time.Time
-		want []facts.FakeContainer
+		name                 string
+		dir                  string
+		now                  time.Time
+		want                 []facts.FakeContainer
+		ignoredContainerName []string
 	}{
 		{
 			name: "docker-20.10",
@@ -219,6 +220,17 @@ func TestDocker_Containers(t *testing.T) {
 					FakeState:         facts.ContainerRunning,
 					FakeImageName:     "rabbitmq",
 				},
+				{
+					FakeContainerName: "testdata_gloutonIgnore_1",
+					FakeLabels: map[string]string{
+						"glouton.enable": "off",
+					},
+					FakeState:     facts.ContainerRunning,
+					FakeImageName: "rabbitmq",
+				},
+			},
+			ignoredContainerName: []string{
+				"testdata_gloutonIgnore_1",
 			},
 		},
 	}
@@ -243,7 +255,17 @@ func TestDocker_Containers(t *testing.T) {
 				t.Error(err)
 			}
 
+			containersWithoutExclude, err := d.Containers(context.Background(), 0, false)
+			if err != nil {
+				t.Error(err)
+			}
+
 			gotMap, err := facts.ContainersToContainerNameMap(containers)
+			if err != nil {
+				t.Error(err)
+			}
+
+			gotWithoutExcludeMap, err := facts.ContainersToContainerNameMap(containersWithoutExclude)
 			if err != nil {
 				t.Error(err)
 			}
@@ -274,6 +296,21 @@ func TestDocker_Containers(t *testing.T) {
 					if diff := want.Diff(got); diff != "" {
 						t.Errorf("Docker.Containers()[%v]: %s", want.ContainerName(), diff)
 					}
+				}
+			}
+
+			for _, name := range tt.ignoredContainerName {
+				got := gotMap[name]
+
+				if got == nil {
+					t.Errorf("container %s not found", name)
+				} else if !facts.ContainerIgnored(got) {
+					t.Errorf("ContainerIgnored(%s) = false, want true", name)
+				}
+
+				_, ok := gotWithoutExcludeMap[name]
+				if ok {
+					t.Errorf("container %s is listed by Containers()", name)
 				}
 			}
 

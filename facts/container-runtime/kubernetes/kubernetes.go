@@ -93,9 +93,9 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 
 	podsUpdated := false
 
-	response := make([]facts.Container, len(containers))
+	response := make([]facts.Container, 0, len(containers))
 
-	for i, c := range containers {
+	for _, c := range containers {
 		pod, ok := k.getPod(c)
 		uid := c.Labels()["io.kubernetes.pod.uid"]
 
@@ -111,10 +111,16 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 			pod, _ = k.getPod(c)
 		}
 
-		response[i] = wrappedContainer{
+		c = wrappedContainer{
 			Container: c,
 			pod:       pod,
 		}
+
+		if !includeIgnored && facts.ContainerIgnored(c) {
+			continue
+		}
+
+		response = append(response, c)
 	}
 
 	return response, nil

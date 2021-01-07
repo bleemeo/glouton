@@ -12,7 +12,7 @@ minikube ssh -- sudo systemctl restart docker
 minikube ssh -- docker system prune -f
 
 eval $(minikube docker-env)
-(cd facts/container-runtime/testdata && docker-compose up -d)
+(cd facts/container-runtime/docker/testdata && docker-compose up -d)
 
 _testdir="facts/container-runtime/docker/testdata/docker-`docker info --format '{{ .ServerVersion}}'`"
 mkdir ${_testdir}

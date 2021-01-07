@@ -212,7 +212,10 @@ func TestKubernetes_Containers(t *testing.T) {
 				},
 			},
 			ignoredContainerName: []string{
+				"k8s_POD_rabbitmq-labels-74cfb594d8-zfdmb_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
 				"k8s_POD_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
+				"k8s_a-memcached_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
+				"k8s_the-redis_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
 			},
 			wantFacts: map[string]string{
 				"kubernetes_version": "v1.20.0",
@@ -351,6 +354,13 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeListenAddressesExplicit: false,
 				},
 			},
+			ignoredContainerName: []string{
+				// Exclusion of POD container require labels on Docker
+				// "k8s_POD_rabbitmq-labels-74cfb594d8-zfdmb_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
+				// "k8s_POD_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
+				"k8s_a-memcached_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
+				"k8s_the-redis_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
+			},
 			wantFacts: map[string]string{
 				"kubernetes_version": "v1.20.0",
 				"kubelet_version":    "v1.20.0",
@@ -488,7 +498,10 @@ func TestKubernetes_Containers(t *testing.T) {
 				},
 			},
 			ignoredContainerName: []string{
+				"k8s_POD_rabbitmq-labels-7fbb75dcd7-h6t28_default_f071e8b4-0b84-4d02-bdb7-60a817874385_0",
 				"k8s_POD_redis-memcached-78f799c9c8-2gzks_default_f62b1b74-686e-43ae-9cf6-342b5bdbbda6_0",
+				"k8s_a-memcached_redis-memcached-78f799c9c8-2gzks_default_f62b1b74-686e-43ae-9cf6-342b5bdbbda6_0",
+				"k8s_the-redis_redis-memcached-78f799c9c8-2gzks_default_f62b1b74-686e-43ae-9cf6-342b5bdbbda6_0",
 			},
 			wantFacts: map[string]string{
 				"kubernetes_version": "v1.18.0",
@@ -527,7 +540,17 @@ func TestKubernetes_Containers(t *testing.T) {
 				t.Error(err)
 			}
 
+			containersWithoutExclude, err := k.Containers(context.Background(), 0, false)
+			if err != nil {
+				t.Error(err)
+			}
+
 			gotMap, err := facts.ContainersToContainerNameMap(containers)
+			if err != nil {
+				t.Error(err)
+			}
+
+			gotWithoutExcludeMap, err := facts.ContainersToContainerNameMap(containersWithoutExclude)
 			if err != nil {
 				t.Error(err)
 			}
@@ -559,6 +582,11 @@ func TestKubernetes_Containers(t *testing.T) {
 					t.Errorf("container %s not found", name)
 				} else if !facts.ContainerIgnored(got) {
 					t.Errorf("ContainerIgnored(%s) = false, want true", name)
+				}
+
+				_, ok := gotWithoutExcludeMap[name]
+				if ok {
+					t.Errorf("container %s is listed by Containers()", name)
 				}
 			}
 

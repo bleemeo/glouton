@@ -1030,5 +1030,262 @@
                 }
             }
         }
+    },
+    {
+        "Id": "54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997",
+        "Created": "2021-01-07T14:44:20.682068564Z",
+        "Path": "docker-entrypoint.sh",
+        "Args": [
+            "rabbitmq-server"
+        ],
+        "State": {
+            "Status": "running",
+            "Running": true,
+            "Paused": false,
+            "Restarting": false,
+            "OOMKilled": false,
+            "Dead": false,
+            "Pid": 3151,
+            "ExitCode": 0,
+            "Error": "",
+            "StartedAt": "2021-01-07T14:44:23.469436918Z",
+            "FinishedAt": "0001-01-01T00:00:00Z"
+        },
+        "Image": "sha256:30aac3e715ba24cacbcc2c8bb6529c04ace2a2fc823edbbe41dd1a4082f0c1a8",
+        "ResolvConfPath": "/var/lib/docker/containers/54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997/resolv.conf",
+        "HostnamePath": "/var/lib/docker/containers/54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997/hostname",
+        "HostsPath": "/var/lib/docker/containers/54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997/hosts",
+        "LogPath": "/var/lib/docker/containers/54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997/54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997-json.log",
+        "Name": "/testdata_gloutonIgnore_1",
+        "RestartCount": 0,
+        "Driver": "overlay2",
+        "Platform": "linux",
+        "MountLabel": "",
+        "ProcessLabel": "",
+        "AppArmorProfile": "",
+        "ExecIDs": null,
+        "HostConfig": {
+            "Binds": [],
+            "ContainerIDFile": "",
+            "LogConfig": {
+                "Type": "json-file",
+                "Config": {}
+            },
+            "NetworkMode": "testdata_default",
+            "PortBindings": {},
+            "RestartPolicy": {
+                "Name": "",
+                "MaximumRetryCount": 0
+            },
+            "AutoRemove": false,
+            "VolumeDriver": "",
+            "VolumesFrom": [],
+            "CapAdd": null,
+            "CapDrop": null,
+            "CgroupnsMode": "host",
+            "Dns": null,
+            "DnsOptions": null,
+            "DnsSearch": null,
+            "ExtraHosts": null,
+            "GroupAdd": null,
+            "IpcMode": "shareable",
+            "Cgroup": "",
+            "Links": null,
+            "OomScoreAdj": 0,
+            "PidMode": "",
+            "Privileged": false,
+            "PublishAllPorts": false,
+            "ReadonlyRootfs": false,
+            "SecurityOpt": null,
+            "UTSMode": "",
+            "UsernsMode": "",
+            "ShmSize": 67108864,
+            "Runtime": "runc",
+            "ConsoleSize": [
+                0,
+                0
+            ],
+            "Isolation": "",
+            "CpuShares": 0,
+            "Memory": 0,
+            "NanoCpus": 0,
+            "CgroupParent": "",
+            "BlkioWeight": 0,
+            "BlkioWeightDevice": null,
+            "BlkioDeviceReadBps": null,
+            "BlkioDeviceWriteBps": null,
+            "BlkioDeviceReadIOps": null,
+            "BlkioDeviceWriteIOps": null,
+            "CpuPeriod": 0,
+            "CpuQuota": 0,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "Devices": null,
+            "DeviceCgroupRules": null,
+            "DeviceRequests": null,
+            "KernelMemory": 0,
+            "KernelMemoryTCP": 0,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": null,
+            "OomKillDisable": false,
+            "PidsLimit": null,
+            "Ulimits": [
+                {
+                    "Name": "nofile",
+                    "Hard": 1048576,
+                    "Soft": 1048576
+                }
+            ],
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "MaskedPaths": [
+                "/proc/asound",
+                "/proc/acpi",
+                "/proc/kcore",
+                "/proc/keys",
+                "/proc/latency_stats",
+                "/proc/timer_list",
+                "/proc/timer_stats",
+                "/proc/sched_debug",
+                "/proc/scsi",
+                "/sys/firmware"
+            ],
+            "ReadonlyPaths": [
+                "/proc/bus",
+                "/proc/fs",
+                "/proc/irq",
+                "/proc/sys",
+                "/proc/sysrq-trigger"
+            ]
+        },
+        "GraphDriver": {
+            "Data": {
+                "LowerDir": "/var/lib/docker/overlay2/2f6c2516088223a21e0ab4012d0c89816c2da3d9d06ed55dbe4e98b43b4c6e39-init/diff:/var/lib/docker/overlay2/ffaba3f49feac8974d22de63049d39de599a6113b9ec3ec5dec13defe12eba72/diff:/var/lib/docker/overlay2/95156213ea1b3c83f8293ebf52dfdbe3aafe656cd5d217f9fd0240faa7ee1d2e/diff:/var/lib/docker/overlay2/f933a8b764cd35b9afe41ad35abdeca6ba2ae46998a1439ee24dceb5b839cebc/diff:/var/lib/docker/overlay2/10ddfdd3d76fb506222f7c8e3c1ff68ff35d649432bbd9a7f49aa74d695309a1/diff:/var/lib/docker/overlay2/fa9d3ac1950638498868d77fa197d998b265e454cbc80da1ac6f2773931790e2/diff:/var/lib/docker/overlay2/993b2b358106342b101dbd16d7e688867e64d0b9755b42253787675e4f68f57b/diff:/var/lib/docker/overlay2/c50f12cd8073d79ea887fb07b1728d4f1c233f0caaafa4182f83849707a36023/diff:/var/lib/docker/overlay2/8c79a864792aa1a6742278363ceaa192be3f9bc05baac58615914cf3be80b7da/diff:/var/lib/docker/overlay2/f4662431c3d688d053cd83e7b261aaac14cd76aea7e2520814b5998a2acbba05/diff:/var/lib/docker/overlay2/ece420af6aa221c46fa4398562b28836669e04f076c28f2e96c75a420b01166e/diff",
+                "MergedDir": "/var/lib/docker/overlay2/2f6c2516088223a21e0ab4012d0c89816c2da3d9d06ed55dbe4e98b43b4c6e39/merged",
+                "UpperDir": "/var/lib/docker/overlay2/2f6c2516088223a21e0ab4012d0c89816c2da3d9d06ed55dbe4e98b43b4c6e39/diff",
+                "WorkDir": "/var/lib/docker/overlay2/2f6c2516088223a21e0ab4012d0c89816c2da3d9d06ed55dbe4e98b43b4c6e39/work"
+            },
+            "Name": "overlay2"
+        },
+        "Mounts": [
+            {
+                "Type": "volume",
+                "Name": "3ffddd8185c9aeeb8d2aeeebc1973abf1625c2e8a7437f89f5e8a84c46018776",
+                "Source": "/var/lib/docker/volumes/3ffddd8185c9aeeb8d2aeeebc1973abf1625c2e8a7437f89f5e8a84c46018776/_data",
+                "Destination": "/var/lib/rabbitmq",
+                "Driver": "local",
+                "Mode": "",
+                "RW": true,
+                "Propagation": ""
+            }
+        ],
+        "Config": {
+            "Hostname": "54f7b691664e",
+            "Domainname": "",
+            "User": "",
+            "AttachStdin": false,
+            "AttachStdout": false,
+            "AttachStderr": false,
+            "ExposedPorts": {
+                "15691/tcp": {},
+                "15692/tcp": {},
+                "25672/tcp": {},
+                "4369/tcp": {},
+                "5671/tcp": {},
+                "5672/tcp": {}
+            },
+            "Tty": false,
+            "OpenStdin": false,
+            "StdinOnce": false,
+            "Env": [
+                "PATH=/opt/rabbitmq/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                "OPENSSL_VERSION=1.1.1i",
+                "OPENSSL_SOURCE_SHA256=e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242",
+                "OPENSSL_PGP_KEY_IDS=0x8657ABB260F056B1E5190839D9C4D26D0E604491 0x5B2545DAB21995F4088CEFAA36CEE4DEB00CFE33 0xED230BEC4D4F2518B9D7DF41F0DB4D21C1D35231 0xC1F33DD8CE1D4CC613AF14DA9195C48241FBF7DD 0x7953AC1FBC3DC8B3B292393ED5E9E43F7DF9EE8C 0xE5E52560DD91C556DDBDA5D02064C53641C25E5D",
+                "OTP_VERSION=23.2.1",
+                "OTP_SOURCE_SHA256=e7034e2cfe50d7570ac8f70ea7ba69ea013f10863043e25132f0a5d3d0d8d3a7",
+                "RABBITMQ_DATA_DIR=/var/lib/rabbitmq",
+                "RABBITMQ_VERSION=3.8.9",
+                "RABBITMQ_PGP_KEY_ID=0x0A9AF2115F4687BD29803A206B73A36E6026DFCA",
+                "RABBITMQ_HOME=/opt/rabbitmq",
+                "RABBITMQ_LOGS=-",
+                "HOME=/var/lib/rabbitmq",
+                "LANG=C.UTF-8",
+                "LANGUAGE=C.UTF-8",
+                "LC_ALL=C.UTF-8"
+            ],
+            "Cmd": [
+                "rabbitmq-server"
+            ],
+            "Image": "rabbitmq",
+            "Volumes": {
+                "/var/lib/rabbitmq": {}
+            },
+            "WorkingDir": "",
+            "Entrypoint": [
+                "docker-entrypoint.sh"
+            ],
+            "OnBuild": null,
+            "Labels": {
+                "com.docker.compose.config-hash": "1fcd49fedd6ce041b698a40160a61f9b18a288d942e76bbb2f66760699459864",
+                "com.docker.compose.container-number": "1",
+                "com.docker.compose.oneoff": "False",
+                "com.docker.compose.project": "testdata",
+                "com.docker.compose.service": "gloutonIgnore",
+                "com.docker.compose.version": "1.24.0",
+                "glouton.enable": "off"
+            }
+        },
+        "NetworkSettings": {
+            "Bridge": "",
+            "SandboxID": "caa459a127ed0b0ab97f0e11fc71d667b7ad36a219dc008cfef77ebf14cdab03",
+            "HairpinMode": false,
+            "LinkLocalIPv6Address": "",
+            "LinkLocalIPv6PrefixLen": 0,
+            "Ports": {
+                "15691/tcp": null,
+                "15692/tcp": null,
+                "25672/tcp": null,
+                "4369/tcp": null,
+                "5671/tcp": null,
+                "5672/tcp": null
+            },
+            "SandboxKey": "/var/run/docker/netns/caa459a127ed",
+            "SecondaryIPAddresses": null,
+            "SecondaryIPv6Addresses": null,
+            "EndpointID": "",
+            "Gateway": "",
+            "GlobalIPv6Address": "",
+            "GlobalIPv6PrefixLen": 0,
+            "IPAddress": "",
+            "IPPrefixLen": 0,
+            "IPv6Gateway": "",
+            "MacAddress": "",
+            "Networks": {
+                "testdata_default": {
+                    "IPAMConfig": null,
+                    "Links": null,
+                    "Aliases": [
+                        "gloutonIgnore",
+                        "54f7b691664e"
+                    ],
+                    "NetworkID": "23f3cba00441f618f45bb28f036f9de002f56952695a5ea3d4ea369db4d9139d",
+                    "EndpointID": "24f6cd4c98e018e726b4d8f8b3aae9b59a714186d4a566fb30ad55b591c6edc3",
+                    "Gateway": "172.18.0.1",
+                    "IPAddress": "172.18.0.5",
+                    "IPPrefixLen": 16,
+                    "IPv6Gateway": "",
+                    "GlobalIPv6Address": "",
+                    "GlobalIPv6PrefixLen": 0,
+                    "MacAddress": "02:42:ac:12:00:05",
+                    "DriverOpts": null
+                }
+            }
+        }
     }
 ]

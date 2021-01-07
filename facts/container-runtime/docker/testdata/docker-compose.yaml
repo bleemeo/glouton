@@ -7,6 +7,10 @@ services:
         image: rabbitmq
         ports:
         - 127.0.0.1:5671:5671
+    gloutonIgnore:
+        image: rabbitmq
+        labels:
+            glouton.enable: "off"
     rabbitLabels:
         image: rabbitmq
         labels:
