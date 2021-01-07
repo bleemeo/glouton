@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"glouton/facts"
-	"glouton/types"
 	"reflect"
 	"sort"
 	"strings"
@@ -53,14 +52,6 @@ func TestDocker_RuntimeFact(t *testing.T) {
 	}
 }
 
-type mockStore struct {
-	got []types.MetricPoint
-}
-
-func (s *mockStore) PushPoints(points []types.MetricPoint) {
-	s.got = append(s.got, points...)
-}
-
 func unindent(input string) string {
 	lines := strings.Split(input, "\n")
 	kept := make([]string, 0, len(lines))
@@ -93,52 +84,6 @@ func string2TopBody(input string) containerTypes.ContainerTopOKBody {
 	}
 
 	return procList
-}
-
-func TestDocker_GatherCallback(t *testing.T) {
-	now := time.Now()
-
-	tests := []struct {
-		name string
-		dir  string
-		now  time.Time
-		want []types.MetricPoint
-	}{
-		{
-			name: "docker-20.10",
-			dir:  "testdata/docker-20.10.0",
-			now:  now,
-			want: []types.MetricPoint{
-				{
-					Point: types.Point{Time: now, Value: float64(3)},
-					Labels: map[string]string{
-						"__name__": "docker_containers",
-					},
-				},
-			},
-		},
-	}
-	for _, tt := range tests {
-		tt := tt
-
-		t.Run(tt.name, func(t *testing.T) {
-			store := &mockStore{}
-
-			cl, err := NewDockerMock(tt.dir)
-			if err != nil {
-				t.Error(err)
-				return
-			}
-
-			d := FakeDocker(cl)
-
-			d.GatherCallback(store)(now)
-
-			if !reflect.DeepEqual(store.got, tt.want) {
-				t.Errorf("Docker.GatherCallback() = %v, want %v", store.got, tt.want)
-			}
-		})
-	}
 }
 
 func TestDocker_Containers(t *testing.T) {

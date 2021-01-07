@@ -571,7 +571,9 @@ func (a *agent) run() { //nolint:gocyclo
 		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
 	}
 
-	a.gathererRegistry.AddPushPointsCallback(a.containerRuntime.GatherCallback(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))))
+	a.gathererRegistry.AddPushPointsCallback(
+		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))),
+	)
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -886,6 +888,35 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 		IODiskBlacklist: blacklistRE,
 		DFPathBlacklist: pathBlacklistTrimed,
 	}, nil
+}
+
+func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
+	return func(t0 time.Time) {
+		// We don't really care about having up-to-date information because
+		// when containers are started/stopped, the information is updated anyway.
+		containers, err := a.containerRuntime.Containers(context.Background(), 2*time.Hour, false)
+		if err != nil {
+			logger.V(2).Printf("gather on DockerProvider failed: %v", err)
+			return
+		}
+
+		countRunning := 0
+
+		for _, c := range containers {
+			if c.State().IsRunning() {
+				countRunning++
+			}
+		}
+
+		pusher.PushPoints([]types.MetricPoint{
+			{
+				Point: types.Point{Time: t0, Value: float64(countRunning)},
+				Labels: map[string]string{
+					"__name__": "docker_containers",
+				},
+			},
+		})
+	}
 }
 
 func (a *agent) minuteMetric(ctx context.Context) error {

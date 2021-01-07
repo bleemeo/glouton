@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
-	"glouton/types"
 	"sort"
 	"strings"
 	"sync"
@@ -28,7 +27,6 @@ type RuntimeInterface interface {
 	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 	Events() <-chan facts.ContainerEvent
-	GatherCallback(pusher types.PointPusher) func(time.Time)
 	IsRuntimeRunning(ctx context.Context) bool
 	ProcessWithCache() facts.ContainerRuntimeProcessQuerier
 	Run(ctx context.Context) error
@@ -129,11 +127,6 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 // Events return container events.
 func (k *Kubernetes) Events() <-chan facts.ContainerEvent {
 	return k.Runtime.Events()
-}
-
-// GatherCallback emit some metrics.
-func (k *Kubernetes) GatherCallback(pusher types.PointPusher) func(time.Time) {
-	return k.Runtime.GatherCallback(pusher)
 }
 
 // IsRuntimeRunning tells if Glouton is connected to the container runtime.

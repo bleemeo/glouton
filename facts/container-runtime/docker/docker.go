@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
-	"glouton/types"
 	"math"
 	"path/filepath"
 	"regexp"
@@ -79,37 +78,6 @@ func (d *Docker) RuntimeFact(ctx context.Context, currentFact map[string]string)
 		"docker_version":     d.serverVersion,
 		"docker_api_version": d.apiVersion,
 		"container_runtime":  "Docker",
-	}
-}
-
-// GatherCallback return a gather callback to emit metrics related to Docker runtime.
-// Currently only the number of docker_containers is emitted.
-func (d *Docker) GatherCallback(pusher types.PointPusher) func(time.Time) {
-	return func(t0 time.Time) {
-		// We don't really care about having up-to-date information because
-		// when containers are started/stopped, the information is updated anyway.
-		containers, err := d.Containers(context.Background(), 2*time.Hour, false)
-		if err != nil {
-			logger.V(2).Printf("gather on DockerProvider failed: %v", err)
-			return
-		}
-
-		countRunning := 0
-
-		for _, c := range containers {
-			if c.State().IsRunning() {
-				countRunning++
-			}
-		}
-
-		pusher.PushPoints([]types.MetricPoint{
-			{
-				Point: types.Point{Time: t0, Value: float64(countRunning)},
-				Labels: map[string]string{
-					"__name__": "docker_containers",
-				},
-			},
-		})
 	}
 }
 
