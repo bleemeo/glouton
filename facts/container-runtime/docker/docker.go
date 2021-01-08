@@ -1220,7 +1220,12 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 		}
 
 		d.d.l.Lock()
-		d.containers = d.d.containers
+
+		d.containers = make(map[string]dockerContainer, len(d.d.containers))
+		for k, v := range d.d.containers {
+			d.containers[k] = v
+		}
+
 		d.d.l.Unlock()
 	}
 
