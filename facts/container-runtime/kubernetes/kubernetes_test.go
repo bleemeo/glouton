@@ -239,6 +239,7 @@ func TestKubernetes_Containers(t *testing.T) {
 			},
 			wantContainer: []facts.FakeContainer{
 				{
+					FakeID:             "035094872e87d77cc4a1ed894248c8cd3283457d6885108324f95c74649062f6",
 					FakeContainerName:  "k8s_rabbitmq_rabbitmq-labels-74cfb594d8-zfdmb_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
 					FakePrimaryAddress: "172.17.0.6",
 					FakeListenAddresses: []facts.ListenAddress{
@@ -282,6 +283,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodNamespace: "default",
 				},
 				{
+					FakeID:             "35de2017cb16bfd1423d9b9f567f647f687a3fdc0f855fe2535ff81de7adf04f",
 					FakeContainerName:  "k8s_rabbitmq_rabbitmq-container-port-66fdd44ccd-pk7rv_default_6d0e2a22-50ab-492f-a303-d477f3d8e3de_0",
 					FakePrimaryAddress: "172.17.0.2",
 					FakeListenAddresses: []facts.ListenAddress{
@@ -296,6 +298,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodNamespace:            "default",
 				},
 				{
+					FakeID:             "343a08aa54b463ed783a7b847902f70c0fca63f5d1f16f10cb4cee97904b4f84",
 					FakeContainerName:  "k8s_a-memcached_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
 					FakePrimaryAddress: "172.17.0.5",
 					FakeAnnotations: map[string]string{
@@ -379,6 +382,7 @@ func TestKubernetes_Containers(t *testing.T) {
 			},
 			wantContainer: []facts.FakeContainer{
 				{
+					FakeID:             "f51d48c545596c5e082f6a389b35a0118f4e8747082bdc8f6c8a59ec5b8aaeb7",
 					FakeContainerName:  "k8s_rabbitmq_rabbitmq-labels-7fbb75dcd7-h6t28_default_f071e8b4-0b84-4d02-bdb7-60a817874385_0",
 					FakePrimaryAddress: "10.88.0.6",
 					FakeListenAddresses: []facts.ListenAddress{
