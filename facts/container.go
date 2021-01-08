@@ -228,6 +228,7 @@ type FakeContainer struct {
 
 	// Test* flags are only used by tests
 	TestIgnored bool
+	TestHasPod  bool
 }
 
 func (c FakeContainer) Annotations() map[string]string {

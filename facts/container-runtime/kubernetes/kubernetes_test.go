@@ -72,7 +72,7 @@ func (k *mockKubernetesClient) GetServerVersion(ctx context.Context) (*version.I
 	return k.versions.ServerVersion, nil
 }
 
-func TestKubernetes_Containers(t *testing.T) {
+func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 	tests := []struct {
 		name          string
 		dir           string
@@ -135,6 +135,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					},
 					FakePodName:      "rabbitmq-labels-74cfb594d8-zfdmb",
 					FakePodNamespace: "default",
+					TestHasPod:       true,
 				},
 				{
 					FakeID:             "35de2017cb16bfd1423d9b9f567f647f687a3fdc0f855fe2535ff81de7adf04f",
@@ -150,6 +151,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeListenAddressesExplicit: true,
 					FakePodName:                 "rabbitmq-container-port-66fdd44ccd-pk7rv",
 					FakePodNamespace:            "default",
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:             "343a08aa54b463ed783a7b847902f70c0fca63f5d1f16f10cb4cee97904b4f84",
@@ -169,6 +171,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodName:                 "redis-memcached-56dfc4cbfc-2m2cq",
 					FakePodNamespace:            "default",
 					TestIgnored:                 true,
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:             "ffb768523fa85dd12cf0e35d11b764c5df747a243532ef29855137a52a849726",
@@ -188,6 +191,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodName:                 "redis-memcached-56dfc4cbfc-2m2cq",
 					FakePodNamespace:            "default",
 					TestIgnored:                 true,
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:                 "0518c93817b136b9a06b0c65649cde4901dcb0efdd5fac603cdb8a543bd54d04",
@@ -195,6 +199,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeStoppedAndReplaced: true,
 					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
 					FakePodNamespace:       "default",
+					TestHasPod:             true,
 				},
 				{
 					FakeID:                 "967b51dffe07684eeaa6dd8c93a572eb1562e9ac5d0ea020498fd4a6df0e59e4",
@@ -202,6 +207,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeStoppedAndReplaced: false,
 					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
 					FakePodNamespace:       "default",
+					TestHasPod:             true,
 				},
 				{
 					FakeID:            "5caa874de6b37554139e2a05fced71488b823256e0691b968b69679115407cb3",
@@ -218,17 +224,20 @@ func TestKubernetes_Containers(t *testing.T) {
 						},
 					},
 					FakeListenAddressesExplicit: false,
+					TestHasPod:                  false,
 				},
 				{
 					FakeID:            "403c412037a8ce9efb91f9ddcc91e522146df3b01aa42a6b928987ecc36e8cf0",
 					FakeContainerName: "k8s_POD_rabbitmq-labels-74cfb594d8-zfdmb_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
 					FakeImageName:     "k8s.gcr.io/pause:3.2",
 					TestIgnored:       true,
+					TestHasPod:        true,
 				},
 				{
 					FakeID:            "f7c72cd6533b6a873e8c0bec3c612216afb48777a6fe437421470b8a9aec6867",
 					FakeContainerName: "k8s_POD_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
 					TestIgnored:       true,
+					TestHasPod:        true,
 				},
 			},
 			wantFacts: map[string]string{
@@ -295,6 +304,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					},
 					FakePodName:      "rabbitmq-labels-74cfb594d8-zfdmb",
 					FakePodNamespace: "default",
+					TestHasPod:       true,
 				},
 				{
 					FakeID:             "35de2017cb16bfd1423d9b9f567f647f687a3fdc0f855fe2535ff81de7adf04f",
@@ -310,6 +320,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeListenAddressesExplicit: true,
 					FakePodName:                 "rabbitmq-container-port-66fdd44ccd-pk7rv",
 					FakePodNamespace:            "default",
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:             "343a08aa54b463ed783a7b847902f70c0fca63f5d1f16f10cb4cee97904b4f84",
@@ -329,6 +340,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodName:                 "redis-memcached-56dfc4cbfc-2m2cq",
 					FakePodNamespace:            "default",
 					TestIgnored:                 true,
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:             "ffb768523fa85dd12cf0e35d11b764c5df747a243532ef29855137a52a849726",
@@ -348,6 +360,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodName:                 "redis-memcached-56dfc4cbfc-2m2cq",
 					FakePodNamespace:            "default",
 					TestIgnored:                 true,
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:                 "0518c93817b136b9a06b0c65649cde4901dcb0efdd5fac603cdb8a543bd54d04",
@@ -355,6 +368,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeStoppedAndReplaced: true,
 					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
 					FakePodNamespace:       "default",
+					TestHasPod:             true,
 				},
 				{
 					FakeID:                 "967b51dffe07684eeaa6dd8c93a572eb1562e9ac5d0ea020498fd4a6df0e59e4",
@@ -362,6 +376,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeStoppedAndReplaced: false,
 					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
 					FakePodNamespace:       "default",
+					TestHasPod:             true,
 				},
 				{
 					FakeID:             "5caa874de6b37554139e2a05fced71488b823256e0691b968b69679115407cb3",
@@ -375,17 +390,20 @@ func TestKubernetes_Containers(t *testing.T) {
 						},
 					},
 					FakeListenAddressesExplicit: false,
+					TestHasPod:                  false,
 				},
 				{
 					FakeID:            "403c412037a8ce9efb91f9ddcc91e522146df3b01aa42a6b928987ecc36e8cf0",
 					FakeContainerName: "k8s_POD_rabbitmq-labels-74cfb594d8-zfdmb_default_173e7224-1fef-485d-bb72-30d45e46a551_0",
 					FakeImageName:     "k8s.gcr.io/pause:3.2",
 					TestIgnored:       false, // Exclusion of POD container require labels on Docker
+					TestHasPod:        false, // without labels, we don't known this a POD
 				},
 				{
 					FakeID:            "f7c72cd6533b6a873e8c0bec3c612216afb48777a6fe437421470b8a9aec6867",
 					FakeContainerName: "k8s_POD_redis-memcached-56dfc4cbfc-2m2cq_default_c5bced17-e72c-4668-8329-76fa19cda44e_0",
 					TestIgnored:       false, // Exclusion of POD container require labels on Docker
+					TestHasPod:        false, // without labels, we don't known this a POD
 				},
 			},
 			wantFacts: map[string]string{
@@ -448,6 +466,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					},
 					FakePodName:      "rabbitmq-labels-7fbb75dcd7-h6t28",
 					FakePodNamespace: "default",
+					TestHasPod:       true,
 				},
 				{
 					FakeID:             "8621fe83ccb9ad96da3b250d138c165d69ad3754053a61e99c980f4ce0dbc897",
@@ -463,6 +482,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeListenAddressesExplicit: true,
 					FakePodName:                 "rabbitmq-container-port-68c84fdd9-w5cdk",
 					FakePodNamespace:            "default",
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:             "d4a8b68f5f47a7388598e924981ac88d1489abbc8e4175bf4a5fd0f8ce02718a",
@@ -482,6 +502,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodName:                 "redis-memcached-78f799c9c8-2gzks",
 					FakePodNamespace:            "default",
 					TestIgnored:                 true,
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:             "d04d3b4d7eec381acd22ec697a066b8be0525089e6ebdf2b15529aa1f796e910",
@@ -501,6 +522,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakePodName:                 "redis-memcached-78f799c9c8-2gzks",
 					FakePodNamespace:            "default",
 					TestIgnored:                 true,
+					TestHasPod:                  true,
 				},
 				{
 					FakeID:                 "5dbe9891d1476b866897f90f3bf51f2e12f9484c431c3b8690936b0f7f0c7d97",
@@ -508,6 +530,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeStoppedAndReplaced: true,
 					FakePodName:            "delete-me-once-69c996b98d-rp9fl",
 					FakePodNamespace:       "default",
+					TestHasPod:             true,
 				},
 				{
 					FakeID:                 "40a2d7f07a4213e67c9039c17d359014476a2020296ebc5e1b47c4d4b4224610",
@@ -515,6 +538,7 @@ func TestKubernetes_Containers(t *testing.T) {
 					FakeStoppedAndReplaced: false,
 					FakePodName:            "delete-me-once-69c996b98d-rp9fl",
 					FakePodNamespace:       "default",
+					TestHasPod:             true,
 				},
 				{
 					FakeID:            "57383e9932591a13a201645eecd736e8308082eec945c8c774afc8b2b22872af",
@@ -531,16 +555,19 @@ func TestKubernetes_Containers(t *testing.T) {
 						},
 					},
 					FakeListenAddressesExplicit: false,
+					TestHasPod:                  false,
 				},
 				{
 					FakeID:            "9df176973888d8344f4da54cb87058ee88d6048558f447b3dee05a735d367d9e",
 					FakeContainerName: "k8s_POD_rabbitmq-labels-7fbb75dcd7-h6t28_default_f071e8b4-0b84-4d02-bdb7-60a817874385_0",
 					TestIgnored:       true,
+					TestHasPod:        true,
 				},
 				{
 					FakeID:            "564a21c5ed276140188d8e0726ba2c02996229c234a0aaf25cb6ddae84776608",
 					FakeContainerName: "k8s_POD_redis-memcached-78f799c9c8-2gzks_default_f62b1b74-686e-43ae-9cf6-342b5bdbbda6_0",
 					TestIgnored:       true,
+					TestHasPod:        true,
 				},
 			},
 			wantFacts: map[string]string{
@@ -628,6 +655,16 @@ func TestKubernetes_Containers(t *testing.T) {
 					if !ok {
 						t.Errorf("container %s is not listed by Containers()", want.FakeID)
 					}
+				}
+
+				gotWrapper, ok := got.(wrappedContainer)
+				switch {
+				case !ok && want.TestHasPod:
+					t.Errorf("got isn't a wrappedContainer, but it must be assocated to a POD")
+				case ok && want.TestHasPod && gotWrapper.pod.Name == "":
+					t.Errorf("got is a wrappedContainer but POD is empty, want a POD")
+				case ok && !want.TestHasPod && gotWrapper.pod.Name != "":
+					t.Errorf("got is a wrappedContainer with a POD is empty, want no POD")
 				}
 			}
 
