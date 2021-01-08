@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"glouton/facts"
+	"glouton/facts/container-runtime/internal/testutil"
 	"reflect"
 	"sort"
 	"strings"
@@ -88,11 +89,10 @@ func string2TopBody(input string) containerTypes.ContainerTopOKBody {
 
 func TestDocker_Containers(t *testing.T) {
 	tests := []struct {
-		name                 string
-		dir                  string
-		now                  time.Time
-		want                 []facts.FakeContainer
-		ignoredContainerName []string
+		name string
+		dir  string
+		now  time.Time
+		want []facts.FakeContainer
 	}{
 		{
 			name: "docker-20.10",
@@ -106,6 +106,7 @@ func TestDocker_Containers(t *testing.T) {
 					FakeImageName:     "rabbitmq",
 				},
 				{
+					FakeID:             "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
 					FakeContainerName:  "testdata_rabbitmqExposed_1",
 					FakeState:          facts.ContainerRunning,
 					FakeImageName:      "rabbitmq",
@@ -120,6 +121,7 @@ func TestDocker_Containers(t *testing.T) {
 					FakeListenAddressesExplicit: true,
 				},
 				{
+					FakeID:            "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
 					FakeContainerName: "testdata_rabbitLabels_1",
 					FakeState:         facts.ContainerRunning,
 					FakeImageName:     "rabbitmq",
@@ -169,11 +171,13 @@ func TestDocker_Containers(t *testing.T) {
 					FakeListenAddressesExplicit: false,
 				},
 				{
+					FakeID:            "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
 					FakeContainerName: "testdata_rabbitmqInternal_1",
 					FakeState:         facts.ContainerRunning,
 					FakeImageName:     "rabbitmq",
 				},
 				{
+					FakeID:            "54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997",
 					FakeContainerName: "testdata_gloutonIgnore_1",
 					FakeLabels: map[string]string{
 						"com.docker.compose.config-hash":      "1fcd49fedd6ce041b698a40160a61f9b18a288d942e76bbb2f66760699459864",
@@ -186,10 +190,8 @@ func TestDocker_Containers(t *testing.T) {
 					},
 					FakeState:     facts.ContainerRunning,
 					FakeImageName: "rabbitmq",
+					TestIgnored:   true,
 				},
-			},
-			ignoredContainerName: []string{
-				"testdata_gloutonIgnore_1",
 			},
 		},
 	}
@@ -219,48 +221,49 @@ func TestDocker_Containers(t *testing.T) {
 				t.Error(err)
 			}
 
-			gotMap, err := facts.ContainersToContainerNameMap(containers)
+			gotMap, err := testutil.ContainersToMap(containers)
 			if err != nil {
 				t.Error(err)
 			}
 
-			gotWithoutExcludeMap, err := facts.ContainersToContainerNameMap(containersWithoutExclude)
+			gotWithoutExcludeMap, err := testutil.ContainersToMap(containersWithoutExclude)
 			if err != nil {
 				t.Error(err)
 			}
 
 			for _, want := range tt.want {
-				got := gotMap[want.ContainerName()]
+				got := gotMap[want.ID()]
 				if got == nil {
-					t.Errorf("Docker.Containers() don't have container %v", want.ContainerName())
+					t.Errorf("Docker.Containers() don't have container %v", want.ID())
 
 					continue
 				}
 
 				if diff := want.Diff(got); diff != "" {
-					t.Errorf("Docker.Containers()[%v]: %s", want.ContainerName(), diff)
+					t.Errorf("Docker.Containers()[%v]: %s", want.ID(), diff)
 				}
 
-				got, ok := d.CachedContainer(got.ID())
+				got, ok := d.CachedContainer(want.ID())
 				if !ok {
-					t.Errorf("CachedContainer() don't have container %v", want.ContainerName())
+					t.Errorf("CachedContainer() don't have container %v", want.ID())
 				} else if diff := want.Diff(got); diff != "" {
-					t.Errorf("CachedContainer(%s): %s", want.ContainerName(), diff)
-				}
-			}
-
-			for _, name := range tt.ignoredContainerName {
-				got := gotMap[name]
-
-				if got == nil {
-					t.Errorf("container %s not found", name)
-				} else if !facts.ContainerIgnored(got) {
-					t.Errorf("ContainerIgnored(%s) = false, want true", name)
+					t.Errorf("CachedContainer(%s): %s", want.ID(), diff)
 				}
 
-				_, ok := gotWithoutExcludeMap[name]
-				if ok {
-					t.Errorf("container %s is listed by Containers()", name)
+				if want.TestIgnored {
+					_, ok := gotWithoutExcludeMap[want.FakeID]
+					if ok {
+						t.Errorf("container %s is listed by Containers()", want.FakeID)
+					}
+
+					if !facts.ContainerIgnored(got) {
+						t.Errorf("ContainerIgnored(%s) = false, want true", want.FakeID)
+					}
+				} else {
+					_, ok := gotWithoutExcludeMap[want.FakeID]
+					if !ok {
+						t.Errorf("container %s is not listed by Containers()", want.FakeID)
+					}
 				}
 			}
 
