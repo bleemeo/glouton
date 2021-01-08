@@ -273,6 +273,8 @@ func TestDocker_Containers(t *testing.T) {
 
 // TestDocker_Run do not test much, but at least it execute code to ensure it don't crash.
 func TestDocker_Run(t *testing.T) {
+	start := time.Now()
+
 	tests := []struct {
 		name string
 		dir  string
@@ -288,7 +290,7 @@ func TestDocker_Run(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 
 			cl, err := NewDockerMock(tt.dir)
@@ -342,37 +344,57 @@ func TestDocker_Run(t *testing.T) {
 
 			d := FakeDocker(cl)
 
-			wg := sync.WaitGroup{}
+			var (
+				wg     sync.WaitGroup
+				runErr error
+			)
+
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				for {
-					select {
-					case ev, ok := <-d.Events():
-						if !ok {
-							return
-						}
-
-						eventSeen++
-						if ev.Type == facts.EventTypeDelete {
-							return
-						}
-					case <-ctx.Done():
-						return
-					}
-				}
+				runErr = d.Run(ctx)
 			}()
 
-			err = d.Run(ctx)
-			wg.Wait()
-			cancel()
+			deadline := time.After(time.Second)
 
-			if err != nil {
-				t.Error(err)
+		outterloop:
+			for {
+				select {
+				case ev, ok := <-d.Events():
+					if !ok {
+						break outterloop
+					}
+
+					eventSeen++
+					if ev.Type == facts.EventTypeDelete {
+						break outterloop
+					}
+				case <-deadline:
+					break outterloop
+				}
 			}
 
 			if !d.IsRuntimeRunning(context.Background()) {
 				t.Errorf("IsRuntimeRunning = false, want true")
+			}
+
+			got := d.ContainerLastKill(cl.Containers[0].ID)
+			now := time.Now()
+
+			if got.Before(start) || got.After(now) {
+				t.Errorf(
+					"ContainerLastKill = %s, want between %s and %s",
+					got.Format(time.RFC3339Nano),
+					start.Format("15:04:05.999999999Z07:00"),
+					now.Format("15:04:05.999999999Z07:00"),
+				)
+			}
+
+			cancel()
+			wg.Wait()
+
+			if runErr != nil {
+				t.Error(err)
 			}
 
 			if eventSeen != 5 {
