@@ -313,7 +313,11 @@ func (d *Docker) run(ctx context.Context) error {
 		}
 
 		select {
-		case event := <-eventC:
+		case event, ok := <-eventC:
+			if !ok {
+				return ctx.Err()
+			}
+
 			d.lastEventAt = time.Unix(event.Time, event.TimeNano)
 
 			if event.Type == "" || event.Type == "container" {
@@ -383,7 +387,7 @@ func (d *Docker) run(ctx context.Context) error {
 		case err = <-errC:
 			return err
 		case <-ctx.Done():
-			return err
+			return ctx.Err()
 		}
 	}
 }

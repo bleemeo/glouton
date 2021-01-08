@@ -343,7 +343,11 @@ func TestDocker_Run(t *testing.T) {
 				defer wg.Done()
 				for {
 					select {
-					case ev := <-d.Events():
+					case ev, ok := <-d.Events():
+						if !ok {
+							return
+						}
+
 						eventSeen++
 						if ev.Type == facts.EventTypeDelete {
 							return
