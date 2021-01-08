@@ -1,6 +1,4 @@
-# Generate/update testdata
-
-Not everything is updatable. cgroup data & top output are manually done.
+# Generate testdata
 
 ## Docker
 

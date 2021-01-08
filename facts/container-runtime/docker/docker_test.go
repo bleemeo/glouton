@@ -99,18 +99,20 @@ func TestDocker_Containers(t *testing.T) {
 			dir:  "testdata/docker-20.10.0",
 			want: []facts.FakeContainer{
 				{
+					FakeID:            "3b252c3f4b6dc25f2a727dbe1c6b24ceaff577942251e183e2300db0de4a9860",
 					FakeContainerName: "testdata_notRunning_1",
 					FakeState:         facts.ContainerStopped,
 					FakeCommand:       []string{"true"},
 					FakeImageName:     "rabbitmq",
 				},
 				{
-					FakeContainerName: "testdata_rabbitmqExposed_1",
-					FakeState:         facts.ContainerRunning,
-					FakeImageName:     "rabbitmq",
+					FakeContainerName:  "testdata_rabbitmqExposed_1",
+					FakeState:          facts.ContainerRunning,
+					FakeImageName:      "rabbitmq",
+					FakePrimaryAddress: "172.18.0.2",
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "",
+							Address:       "172.18.0.2",
 							Port:          5671,
 							NetworkFamily: "tcp",
 						},
@@ -122,38 +124,44 @@ func TestDocker_Containers(t *testing.T) {
 					FakeState:         facts.ContainerRunning,
 					FakeImageName:     "rabbitmq",
 					FakeLabels: map[string]string{
-						"glouton.check.ignore.port.5672":  "false",
-						"glouton.check.ignore.port.4369":  "true",
-						"glouton.check.ignore.port.25672": "TrUe",
+						"com.docker.compose.config-hash":      "afc5fc62031297be2c22523c44960c2e3d0964cf58562864955781725b4e1d82",
+						"com.docker.compose.container-number": "1",
+						"com.docker.compose.oneoff":           "False",
+						"com.docker.compose.project":          "testdata",
+						"com.docker.compose.service":          "rabbitLabels",
+						"com.docker.compose.version":          "1.24.0",
+						"glouton.check.ignore.port.5672":      "false",
+						"glouton.check.ignore.port.4369":      "true",
+						"glouton.check.ignore.port.25672":     "TrUe",
 					},
 					FakeListenAddresses: []facts.ListenAddress{
 						{
-							Address:       "",
+							Address:       "172.18.0.4",
 							Port:          4369,
 							NetworkFamily: "tcp",
 						},
 						{
-							Address:       "",
+							Address:       "172.18.0.4",
 							Port:          5671,
 							NetworkFamily: "tcp",
 						},
 						{
-							Address:       "",
+							Address:       "172.18.0.4",
 							Port:          5672,
 							NetworkFamily: "tcp",
 						},
 						{
-							Address:       "",
+							Address:       "172.18.0.4",
 							Port:          15691,
 							NetworkFamily: "tcp",
 						},
 						{
-							Address:       "",
+							Address:       "172.18.0.4",
 							Port:          15692,
 							NetworkFamily: "tcp",
 						},
 						{
-							Address:       "",
+							Address:       "172.18.0.4",
 							Port:          25672,
 							NetworkFamily: "tcp",
 						},
@@ -168,7 +176,13 @@ func TestDocker_Containers(t *testing.T) {
 				{
 					FakeContainerName: "testdata_gloutonIgnore_1",
 					FakeLabels: map[string]string{
-						"glouton.enable": "off",
+						"com.docker.compose.config-hash":      "1fcd49fedd6ce041b698a40160a61f9b18a288d942e76bbb2f66760699459864",
+						"com.docker.compose.container-number": "1",
+						"com.docker.compose.oneoff":           "False",
+						"com.docker.compose.project":          "testdata",
+						"com.docker.compose.service":          "gloutonIgnore",
+						"com.docker.compose.version":          "1.24.0",
+						"glouton.enable":                      "off",
 					},
 					FakeState:     facts.ContainerRunning,
 					FakeImageName: "rabbitmq",
@@ -219,28 +233,19 @@ func TestDocker_Containers(t *testing.T) {
 				got := gotMap[want.ContainerName()]
 				if got == nil {
 					t.Errorf("Docker.Containers() don't have container %v", want.ContainerName())
-				} else {
-					if want.FakeLabels != nil {
-						// copy any com.docker.compose labels. We can't guess them and don't test them.
-						for k, v := range got.Labels() {
-							if strings.HasPrefix(k, "com.docker.compose") {
-								want.FakeLabels[k] = v
-							}
-						}
-					}
 
-					if want.FakeListenAddresses != nil {
-						// We can't guess container IP, so fill wanted Address now
-						for i, x := range want.FakeListenAddresses {
-							if x.Address == "" {
-								want.FakeListenAddresses[i].Address = got.PrimaryAddress()
-							}
-						}
-					}
+					continue
+				}
 
-					if diff := want.Diff(got); diff != "" {
-						t.Errorf("Docker.Containers()[%v]: %s", want.ContainerName(), diff)
-					}
+				if diff := want.Diff(got); diff != "" {
+					t.Errorf("Docker.Containers()[%v]: %s", want.ContainerName(), diff)
+				}
+
+				got, ok := d.CachedContainer(got.ID())
+				if !ok {
+					t.Errorf("CachedContainer() don't have container %v", want.ContainerName())
+				} else if diff := want.Diff(got); diff != "" {
+					t.Errorf("CachedContainer(%s): %s", want.ContainerName(), diff)
 				}
 			}
 
