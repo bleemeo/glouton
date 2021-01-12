@@ -198,10 +198,22 @@ func (r *Runtime) Run(ctx context.Context) error {
 			ch := cr.Events()
 
 			for ctx.Err() == nil {
+				if ch == nil {
+					select {
+					case <-ctx.Done():
+					case <-time.After(10 * time.Second):
+						ch = cr.Events()
+					}
+
+					continue
+				}
+
 				select {
 				case ev, ok := <-ch:
 					if !ok {
-						return
+						ch = nil
+
+						continue
 					}
 
 					r.l.Lock()

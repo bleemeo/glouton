@@ -373,10 +373,24 @@ func (c *Containerd) run(ctx context.Context) error {
 				continue
 			}
 
-			container, found := c.CachedContainer(gloutonEvent.ContainerID)
+			c.l.Lock()
+
+			container, found := c.containers[gloutonEvent.ContainerID]
 			if found {
 				gloutonEvent.Container = container
 			}
+
+			switch gloutonEvent.Type {
+			case facts.EventTypeDelete:
+				delete(c.containers, gloutonEvent.ContainerID)
+			case facts.EventTypeStop:
+				if found {
+					container.state = string(containerd.Stopped)
+					c.containers[gloutonEvent.ContainerID] = container
+				}
+			}
+
+			c.l.Unlock()
 
 			select {
 			case c.notifyC <- gloutonEvent:
@@ -521,6 +535,8 @@ func (c *Containerd) getClient(ctx context.Context) (containerdClient, error) {
 			_, err = cl.Version(ctx)
 			if err != nil {
 				if firstErr == nil {
+					logger.V(2).Printf("ContainerD openConnection on %s failed: %v", addr, err)
+
 					firstErr = err
 				}
 

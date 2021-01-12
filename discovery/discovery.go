@@ -219,6 +219,28 @@ func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
 
 			fmt.Fprintf(file, "PID %d with service %v on container %s\n", p.PID, serviceType, p.ContainerName)
 		}
+
+		fmt.Fprintf(file, "\n# Last dynamic discovery (count=%d, last update=%s)\n", len(dd.services), dd.lastDiscoveryUpdate.Format(time.RFC3339))
+
+		services := make([]Service, len(dd.services))
+
+		copy(services, dd.services)
+
+		sort.Slice(services, func(i, j int) bool {
+			if services[j].Active != services[i].Active && services[i].Active {
+				return true
+			}
+
+			if services[j].Active != services[i].Active && services[j].Active {
+				return false
+			}
+
+			return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].ContainerName < services[j].ContainerName)
+		})
+
+		for _, v := range services {
+			fmt.Fprintf(file, "%s on IP %s, active=%v, containerName=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.ContainerName, v.ListenAddresses)
+		}
 	}
 
 	return nil

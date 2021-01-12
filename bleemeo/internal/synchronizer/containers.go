@@ -47,7 +47,8 @@ func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 	if s.option.Cache.CurrentAccountConfig().DockerIntegration {
 		var err error
 
-		localContainers, err = s.option.Docker.Containers(s.ctx, 24*time.Second, false)
+		// We don't need very fresh information, we sync container after discovery which will update containers anyway.
+		localContainers, err = s.option.Docker.Containers(s.ctx, 2*time.Minute, false)
 		if err != nil {
 			logger.V(1).Printf("Unable to list containers: %v", err)
 			return nil

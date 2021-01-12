@@ -77,6 +77,8 @@ import (
 
 	"net/http"
 	"net/url"
+
+	"gopkg.in/yaml.v3"
 )
 
 type agent struct {
@@ -88,6 +90,7 @@ type agent struct {
 
 	hostRootPath      string
 	discovery         *discovery.Discovery
+	dockerRuntime     *dockerRuntime.Docker
 	containerRuntime  crTypes.RuntimeInterface
 	collector         *collector.Collector
 	factProvider      *facts.FactProvider
@@ -520,12 +523,13 @@ func (a *agent) run() { //nolint:gocyclo
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 
+	a.dockerRuntime = &dockerRuntime.Docker{
+		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
+		DeletedContainersCallback: a.deletedContainersCallback,
+	}
 	a.containerRuntime = &merge.Runtime{
 		Runtimes: []crTypes.RuntimeInterface{
-			&dockerRuntime.Docker{
-				DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
-				DeletedContainersCallback: a.deletedContainersCallback,
-			},
+			a.dockerRuntime,
 			&containerd.Containerd{
 				Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
 				DeletedContainersCallback: a.deletedContainersCallback,
@@ -1343,6 +1347,13 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
+		// force update of containers. This is important so that discovery correctly
+		// associate service with container or remove service when container is stopped.
+		_, err := a.containerRuntime.Containers(ctx, 0, false)
+		if err != nil {
+			logger.V(1).Printf("error while updating containers: %v", err)
+		}
+
 		services, err := a.discovery.Discovery(ctx, 0)
 		if err != nil {
 			logger.V(1).Printf("error during discovery: %v", err)
@@ -1363,9 +1374,9 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			}
 		}
 
-		hasConnection := a.containerRuntime.IsRuntimeRunning(ctx)
+		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
 		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enabled") {
-			i, err := docker.New()
+			i, err := docker.New(a.dockerRuntime.ServerAddress())
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
@@ -1580,6 +1591,26 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 			addr, _ := c.ListenAddresses()
 			fmt.Fprintf(file, "Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v\n", c.ContainerName(), c.ID(), facts.ContainerIgnored(c), c.PrimaryAddress(), addr)
 		}
+	}
+
+	file, err = zipFile.Create("config.yaml")
+	if err != nil {
+		return err
+	}
+
+	enc := yaml.NewEncoder(file)
+
+	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environement.")
+	enc.SetIndent(4)
+
+	err = enc.Encode(a.config.Dump())
+	if err != nil {
+		fmt.Fprintf(file, "# error: %v\n", err)
+	}
+
+	err = enc.Close()
+	if err != nil {
+		fmt.Fprintf(file, "# error: %v\n", err)
 	}
 
 	return nil

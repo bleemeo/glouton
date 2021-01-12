@@ -9,6 +9,7 @@ import (
 	"glouton/facts"
 	"glouton/logger"
 	"math"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -37,7 +38,7 @@ var (
 func DefaultAddresses(hostRoot string) []string {
 	list := []string{""}
 	if hostRoot != "" && hostRoot != "/" {
-		list = append(list, filepath.Join(hostRoot, "run/docker.sock"), filepath.Join(hostRoot, "var/run/docker.sock"))
+		list = append(list, "unix://"+filepath.Join(hostRoot, "run/docker.sock"), "unix://"+filepath.Join(hostRoot, "var/run/docker.sock"))
 	}
 
 	return list
@@ -52,6 +53,7 @@ type Docker struct {
 
 	l                sync.Mutex
 	openConnection   func(ctx context.Context, host string) (cl dockerClient, err error)
+	serverAddress    string
 	client           dockerClient
 	serverVersion    string
 	apiVersion       string
@@ -94,6 +96,15 @@ func (d *Docker) RuntimeFact(ctx context.Context, currentFact map[string]string)
 		"docker_api_version": d.apiVersion,
 		"container_runtime":  "Docker",
 	}
+}
+
+// ServerAddress will return the last server address for which connection sucessed.
+// Note that empty string could be "docker default" or no valid connection. You should use this after call to IsRuntimeRunning().
+func (d *Docker) ServerAddress() string {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	return d.serverAddress
 }
 
 // CachedContainer return a container without querying Docker, it use in-memory cache which must have been filled by a call to Continers().
@@ -384,7 +395,20 @@ func (d *Docker) run(ctx context.Context) error {
 				}
 
 				d.l.Lock()
+
 				event.Container = d.containers[actorID]
+
+				switch event.Type {
+				case facts.EventTypeDelete:
+					delete(d.containers, event.ContainerID)
+				case facts.EventTypeStop:
+					current, ok := d.containers[event.ContainerID]
+					if ok {
+						current.stopped = true
+						d.containers[event.ContainerID] = current
+					}
+				}
+
 				d.l.Unlock()
 
 				select {
@@ -579,6 +603,8 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 
 			v, err := cl.ServerVersion(ctx)
 			if err != nil {
+				logger.V(2).Printf("Docker openConnection on %s failed: %v", addr, err)
+
 				if firstErr == nil {
 					firstErr = err
 				}
@@ -589,6 +615,7 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 			d.apiVersion = v.APIVersion
 			d.serverVersion = v.Version
 			d.client = cl
+			d.serverAddress = addr
 
 			break
 		}
@@ -615,10 +642,12 @@ type dockerClient interface {
 }
 
 func openConnection(ctx context.Context, host string) (cl dockerClient, err error) {
-	if host != "" && (host[0] == '/' || host[0] == '\\') {
-		_, err := os.Stat(host)
-		if err != nil {
-			return nil, fmt.Errorf("unable to access socket %s: %w", host, err)
+	if host != "" {
+		if u, err := url.Parse(host); err == nil && u.Scheme == "unix://" {
+			_, err := os.Stat(u.Path)
+			if err != nil {
+				return nil, fmt.Errorf("unable to access socket %s: %w", host, err)
+			}
 		}
 	}
 
@@ -700,6 +729,7 @@ func sortInspect(inspect dockerTypes.ContainerJSON) {
 type dockerContainer struct {
 	primaryAddress string
 	inspect        dockerTypes.ContainerJSON
+	stopped        bool
 }
 
 func (c dockerContainer) Annotations() map[string]string {
@@ -891,6 +921,10 @@ func (c dockerContainer) StartedAt() time.Time {
 func (c dockerContainer) State() facts.ContainerState {
 	if c.inspect.State == nil {
 		return facts.ContainerUnknown
+	}
+
+	if c.stopped {
+		return facts.ContainerStopped
 	}
 
 	return dockerStatus2State(c.inspect.State.Status)

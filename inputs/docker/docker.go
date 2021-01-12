@@ -28,11 +28,15 @@ import (
 )
 
 // New initialise docker.Input.
-func New() (i telegraf.Input, err error) {
+func New(dockerAddress string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["docker"]
 	if ok {
 		dockerInput, ok := input().(*docker.Docker)
 		if ok {
+			if dockerAddress != "" {
+				dockerInput.Endpoint = dockerAddress
+			}
+
 			dockerInput.PerDevice = false
 			dockerInput.Total = true
 			dockerInput.Log = internal.Logger{}
