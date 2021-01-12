@@ -133,6 +133,10 @@ func containerEnabledFromLabels(labels map[string]string) (enabled bool, explici
 		return false, true
 	}
 
+	if label == "" && labels["io.cri-containerd.kind"] == "sandbox" {
+		return false, true
+	}
+
 	return string2Boolean(label, true)
 }
 

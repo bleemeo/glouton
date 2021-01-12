@@ -246,7 +246,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		}
 	}
 
-	if pp.containerRuntime != nil && len(newProcessesMap) < 5 {
+	if queryContainerRuntime != nil && len(newProcessesMap) < 5 {
 		// If we have too few processes listed by gopsutil, it probably means
 		// we don't have access to root PID namespace. In this case do a processes
 		// listing using containerRuntime. We avoid it if possible as it's rather slow.
@@ -288,7 +288,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 				continue
 			}
 
-			if p.ContainerID != "" {
+			if p.ContainerID != "" || queryContainerRuntime == nil {
 				continue
 			}
 

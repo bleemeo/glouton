@@ -281,11 +281,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 
 		if service.ContainerID != "" {
 			service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
-			if !ok {
-				continue
-			}
-
-			if facts.ContainerIgnored(service.container) {
+			if !ok || facts.ContainerIgnored(service.container) {
 				continue
 			}
 

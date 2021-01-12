@@ -49,7 +49,7 @@ const Routes = () => {
                   <SideNavBar />
                   <Switch>
                     <Route exact path="/dashboard" component={AgentSystemDashboard} />
-                    {facts.some(f => f.name === 'docker_version') ? (
+                    {facts.some(f => f.name === 'container_runtime') ? (
                       <Route exact path="/docker" component={AgentDockerListContainer} />
                     ) : null}
                     <Route exact path="/processes" component={AgentProcessesContainer} />

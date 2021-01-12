@@ -110,7 +110,9 @@ func (cl *MockDockerClient) Ping(ctx context.Context) (dockerTypes.Ping, error) 
 // ServerVersion do server version.
 func (cl *MockDockerClient) ServerVersion(ctx context.Context) (dockerTypes.Version, error) {
 	if len(cl.Version.Components) == 0 {
-		return dockerTypes.Version{}, errors.New("ServerVersion not implemented")
+		return dockerTypes.Version{
+			Version: "42",
+		}, nil
 	}
 
 	return cl.Version, nil
@@ -157,7 +159,7 @@ func NewDockerMockFromFile(filename string) (*MockDockerClient, error) {
 // FakeDocker return a Docker runtime connector that use a mock client.
 func FakeDocker(client *MockDockerClient) *Docker {
 	return &Docker{
-		openConnection: func(_ context.Context) (cl dockerClient, err error) {
+		openConnection: func(_ context.Context, _ string) (cl dockerClient, err error) {
 			return client, nil
 		},
 	}

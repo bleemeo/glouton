@@ -5,13 +5,14 @@ go 1.13
 require (
 	github.com/99designs/gqlgen v0.13.0
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
-	github.com/Microsoft/go-winio v0.4.15 // indirect
 	github.com/Microsoft/hcsshim v0.8.10 // indirect
+	github.com/Microsoft/hcsshim/test v0.0.0-20201222193524-bf55dadfbdf1 // indirect
 	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
 	github.com/agnivade/levenshtein v1.1.0 // indirect
 	github.com/alecthomas/units v0.0.0-20201120081800-1786d5ef83d4 // indirect
 	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327 // indirect
-	github.com/containerd/containerd v1.4.3 // indirect
+	github.com/containerd/containerd v1.4.3
+	github.com/containerd/typeurl v0.0.0-20180627222232-a93fcdb778cd
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.2.1-0.20200121105743-0d940dd29fd2
@@ -21,8 +22,8 @@ require (
 	github.com/go-kit/kit v0.10.0
 	github.com/go-logr/logr v0.3.0 // indirect
 	github.com/go-ole/go-ole v1.2.4
-	github.com/godbus/dbus v0.0.0-20190422162347-ade71ed3457e // indirect
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
+	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/gogo/protobuf v1.3.1
 	github.com/google/go-cmp v0.5.4
 	github.com/google/gofuzz v1.2.0 // indirect
@@ -40,6 +41,10 @@ require (
 	github.com/miekg/dns v1.1.35 // indirect
 	github.com/mitchellh/mapstructure v1.4.0 // indirect
 	github.com/ncabatoff/process-exporter v0.7.2
+	github.com/opencontainers/go-digest v1.0.0
+	github.com/opencontainers/image-spec v1.0.1
+	github.com/opencontainers/runtime-spec v1.0.2
+	github.com/opencontainers/selinux v1.8.0 // indirect
 	github.com/prometheus-community/windows_exporter v0.15.0
 	github.com/prometheus/blackbox_exporter v0.18.0
 	github.com/prometheus/client_golang v1.7.1
@@ -52,6 +57,7 @@ require (
 	github.com/shirou/gopsutil v3.20.11+incompatible
 	github.com/shopspring/decimal v1.2.0 // indirect
 	github.com/stretchr/objx v0.3.0 // indirect
+	github.com/syndtr/gocapability v0.0.0-20200815063812-42c35b437635 // indirect
 	github.com/tidwall/gjson v1.6.3 // indirect
 	github.com/tidwall/match v1.0.2 // indirect
 	github.com/vektah/gqlparser v1.3.1
@@ -73,6 +79,7 @@ require (
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
+	gotest.tools/v3 v3.0.3 // indirect
 	k8s.io/api v0.20.1
 	k8s.io/apimachinery v0.20.1
 	k8s.io/client-go v0.20.1

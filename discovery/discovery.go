@@ -17,13 +17,16 @@
 package discovery
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
+	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/task"
 	"glouton/types"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -167,6 +170,60 @@ func (d *Discovery) LastUpdate() time.Time {
 	return d.lastDiscoveryUpdate
 }
 
+// DiagnosticZip add to a zipfile useful diagnostic information.
+func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	file, err := zipFile.Create("discovery.txt")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "# Discovered service (count=%d, last update=%s)\n", len(d.servicesMap), d.lastDiscoveryUpdate.Format(time.RFC3339))
+	services := make([]Service, 0, len(d.servicesMap))
+
+	for _, v := range d.servicesMap {
+		services = append(services, v)
+	}
+
+	sort.Slice(services, func(i, j int) bool {
+		if services[j].Active != services[i].Active && services[i].Active {
+			return true
+		}
+
+		if services[j].Active != services[i].Active && services[j].Active {
+			return false
+		}
+
+		return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].ContainerName < services[j].ContainerName)
+	})
+
+	for _, v := range services {
+		fmt.Fprintf(file, "%s on IP %s, active=%v, containerName=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.ContainerName, v.ListenAddresses)
+	}
+
+	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
+		procs, err := dd.ps.Processes(context.Background(), time.Hour)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(file, "\n# Processes (filteted to only show ones associated with a service)\n")
+
+		for _, p := range procs {
+			serviceType, ok := serviceByCommand(p.CmdLineList)
+			if !ok {
+				continue
+			}
+
+			fmt.Fprintf(file, "PID %d with service %v on container %s\n", p.PID, serviceType, p.ContainerName)
+		}
+	}
+
+	return nil
+}
+
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
 		err := d.updateDiscovery(ctx, maxAge)
@@ -238,7 +295,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
-			if container, found := d.containerInfo.CachedContainer(service.ContainerID); !found {
+			if container, found := d.containerInfo.CachedContainer(service.ContainerID); !found || facts.ContainerIgnored(container) {
 				service.Active = false
 			} else if container.StoppedAndReplaced() {
 				service.Active = false

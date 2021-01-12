@@ -53,24 +53,10 @@ func TestDocker_RuntimeFact(t *testing.T) {
 	}
 }
 
-func unindent(input string) string {
-	lines := strings.Split(input, "\n")
-	kept := make([]string, 0, len(lines))
-
-	for _, l := range lines {
-		l := strings.TrimLeft(l, " \t")
-		if len(l) > 0 {
-			kept = append(kept, l)
-		}
-	}
-
-	return strings.Join(kept, "\n") + "\n"
-}
-
 func string2TopBody(input string) containerTypes.ContainerTopOKBody {
 	procList := containerTypes.ContainerTopOKBody{}
 
-	lines := strings.Split(unindent(input), "\n")
+	lines := strings.Split(testutil.Unindent(input), "\n")
 	procList.Titles = strings.Fields(lines[0])
 
 	for _, l := range lines[1:] {
@@ -206,10 +192,6 @@ func TestDocker_Containers(t *testing.T) {
 			}
 
 			d := FakeDocker(cl)
-
-			if d.IsRuntimeRunning(context.Background()) {
-				t.Errorf("IsRuntimeRunning = true, want false (because connection not yet established")
-			}
 
 			containers, err := d.Containers(context.Background(), 0, true)
 			if err != nil {
@@ -404,24 +386,6 @@ func TestDocker_Run(t *testing.T) {
 				t.Errorf("eventSeen = %d, want 5", eventSeen)
 			}
 		})
-	}
-}
-
-// TestDocker_unindent check that helper function unindent works as intended.
-func TestDocker_unindent(t *testing.T) {
-	indented := `
-		12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2
-		11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope
-		10:pids:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope`
-
-	want := `12:cpuset:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2
-11:memory:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope
-10:pids:/docker/72cf779c7429b33b04f296a98fc9be928c82c5537e333589bec734a884cbb2d2/init.scope
-`
-
-	got := unindent(indented)
-	if got != want {
-		t.Errorf("got = %#v, want %#v", got, want)
 	}
 }
 
@@ -652,7 +616,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 
 				t.Run(c.name, func(t *testing.T) {
 					querier := d.ProcessWithCache()
-					container, err := querier.ContainerFromCGroup(ctx, unindent(c.cgroupData))
+					container, err := querier.ContainerFromCGroup(ctx, testutil.Unindent(c.cgroupData))
 
 					if c.mustErrDoesNotExist && !errors.Is(err, facts.ErrContainerDoesNotExists) {
 						t.Errorf("err = %v want ErrContainerDoesNotExists", err)

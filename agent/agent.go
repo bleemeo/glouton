@@ -50,8 +50,11 @@ import (
 	"glouton/discovery"
 	"glouton/discovery/promexporter"
 	"glouton/facts"
+	"glouton/facts/container-runtime/containerd"
 	dockerRuntime "glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/kubernetes"
+	"glouton/facts/container-runtime/merge"
+	crTypes "glouton/facts/container-runtime/types"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -85,7 +88,7 @@ type agent struct {
 
 	hostRootPath      string
 	discovery         *discovery.Discovery
-	containerRuntime  kubernetes.RuntimeInterface
+	containerRuntime  crTypes.RuntimeInterface
 	collector         *collector.Collector
 	factProvider      *facts.FactProvider
 	bleemeoConnector  *bleemeo.Connector
@@ -517,8 +520,17 @@ func (a *agent) run() { //nolint:gocyclo
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 
-	a.containerRuntime = &dockerRuntime.Docker{
-		DeletedContainersCallback: a.deletedContainersCallback,
+	a.containerRuntime = &merge.Runtime{
+		Runtimes: []crTypes.RuntimeInterface{
+			&dockerRuntime.Docker{
+				DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
+				DeletedContainersCallback: a.deletedContainersCallback,
+			},
+			&containerd.Containerd{
+				Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
+				DeletedContainersCallback: a.deletedContainersCallback,
+			},
+		},
 	}
 
 	if a.config.Bool("kubernetes.enabled") {
@@ -1543,6 +1555,30 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		err = a.bleemeoConnector.DiagnosticZip(zipFile)
 		if err != nil {
 			return err
+		}
+	}
+
+	err = a.discovery.DiagnosticZip(zipFile)
+	if err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("containers.txt")
+	if err != nil {
+		return err
+	}
+
+	containers, err := a.containerRuntime.Containers(context.Background(), time.Hour, true)
+	if err != nil {
+		fmt.Fprintf(file, "can't list containers: %v", err)
+	} else {
+		sort.Slice(containers, func(i, j int) bool {
+			return containers[i].ContainerName() < containers[j].ContainerName()
+		})
+
+		for _, c := range containers {
+			addr, _ := c.ListenAddresses()
+			fmt.Fprintf(file, "Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v\n", c.ContainerName(), c.ID(), facts.ContainerIgnored(c), c.PrimaryAddress(), addr)
 		}
 	}
 

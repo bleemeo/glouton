@@ -9,6 +9,7 @@ import (
 	"glouton/facts"
 	"glouton/logger"
 	"math"
+	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -31,12 +32,26 @@ var (
 	ErrDockerUnexcepted = errors.New("unexcepted data")
 )
 
+// DefaultAddresses returns default address for the Docker socket. If hostroot is set (and not "/") ALSO add
+// socket path prefixed by hostRoot.
+func DefaultAddresses(hostRoot string) []string {
+	list := []string{""}
+	if hostRoot != "" && hostRoot != "/" {
+		list = append(list, filepath.Join(hostRoot, "run/docker.sock"), filepath.Join(hostRoot, "var/run/docker.sock"))
+	}
+
+	return list
+}
+
 // Docker implement a method to query Docker runtime.
+// It try to connect to the first valid DockerSockets. Empty string is a special
+// value: it means use default.
 type Docker struct {
+	DockerSockets             []string
 	DeletedContainersCallback func(containersID []string)
 
 	l                sync.Mutex
-	openConnection   func(ctx context.Context) (cl dockerClient, err error)
+	openConnection   func(ctx context.Context, host string) (cl dockerClient, err error)
 	client           dockerClient
 	serverVersion    string
 	apiVersion       string
@@ -65,7 +80,7 @@ func (d *Docker) RuntimeFact(ctx context.Context, currentFact map[string]string)
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	_, err := d.ensureClient(ctx, true)
+	_, err := d.ensureClient(ctx)
 	if err != nil {
 		return nil
 	}
@@ -231,39 +246,32 @@ func (d *Docker) Events() <-chan facts.ContainerEvent {
 
 // IsRuntimeRunning returns whether or not Docker is available
 //
-// It use the cached connection, no new connection are established. Use Containers() to establish new connection if needed.
-// The existing connection from the cache is tested. So IsRuntimeRunning may be used to validate that Docker is still available.
+// IsRuntimeRunning will try to open a new connection if it never tried. It will also check that connection is still working (do a ping).
 // Note: if Docker is running but Glouton can't access it, IsRuntimeRunning will return false.
 func (d *Docker) IsRuntimeRunning(ctx context.Context) bool {
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	_, err := d.ensureClient(ctx, false)
+	_, err := d.ensureClient(ctx)
 
 	return err == nil
 }
 
 // similar to getClient but also check that connection works.
-func (d *Docker) ensureClient(ctx context.Context, openConnection bool) (cl dockerClient, err error) {
+func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) {
 	cl = d.client
 
-	if openConnection && cl == nil {
+	if cl == nil {
 		cl, err = d.getClient(ctx)
 		if err != nil {
 			return nil, err
 		}
-	} else if cl == nil {
-		return nil, errors.New("no connection")
 	}
 
 	if _, err := cl.Ping(ctx); err != nil {
 		d.apiVersion = ""
 		d.serverVersion = ""
 		d.client = nil
-
-		if !openConnection {
-			return nil, err
-		}
 
 		cl, err = d.getClient(ctx)
 		if err != nil {
@@ -277,7 +285,7 @@ func (d *Docker) ensureClient(ctx context.Context, openConnection bool) (cl dock
 func (d *Docker) run(ctx context.Context) error {
 	d.l.Lock()
 
-	cl, err := d.ensureClient(ctx, true)
+	cl, err := d.ensureClient(ctx)
 
 	if d.lastKill == nil {
 		d.lastKill = make(map[string]time.Time)
@@ -551,18 +559,43 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 	}
 
 	if d.client == nil {
-		cl, err := d.openConnection(ctx)
-		if err != nil {
-			return nil, err
+		var firstErr error
+
+		if len(d.DockerSockets) == 0 {
+			d.DockerSockets = DefaultAddresses("")
 		}
 
-		v, err := cl.ServerVersion(ctx)
-		if err == nil {
+		for _, addr := range d.DockerSockets {
+			cl, err := d.openConnection(ctx, addr)
+			if err != nil {
+				logger.V(2).Printf("Docker openConnection on %s failed: %v", addr, err)
+
+				if firstErr == nil {
+					firstErr = err
+				}
+
+				continue
+			}
+
+			v, err := cl.ServerVersion(ctx)
+			if err != nil {
+				if firstErr == nil {
+					firstErr = err
+				}
+
+				continue
+			}
+
 			d.apiVersion = v.APIVersion
 			d.serverVersion = v.Version
+			d.client = cl
+
+			break
 		}
 
-		d.client = cl
+		if d.client == nil {
+			return nil, firstErr
+		}
 	}
 
 	return d.client, nil
@@ -581,8 +614,20 @@ type dockerClient interface {
 	ServerVersion(ctx context.Context) (dockerTypes.Version, error)
 }
 
-func openConnection(ctx context.Context) (cl dockerClient, err error) {
-	cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
+func openConnection(ctx context.Context, host string) (cl dockerClient, err error) {
+	if host != "" && (host[0] == '/' || host[0] == '\\') {
+		_, err := os.Stat(host)
+		if err != nil {
+			return nil, fmt.Errorf("unable to access socket %s: %w", host, err)
+		}
+	}
+
+	if host == "" {
+		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation(), docker.WithTimeout(10*time.Second))
+	} else {
+		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithHost(host), docker.WithAPIVersionNegotiation(), docker.WithTimeout(10*time.Second))
+	}
+
 	if err != nil {
 		return nil, err
 	}

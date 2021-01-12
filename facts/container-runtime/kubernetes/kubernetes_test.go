@@ -1,12 +1,13 @@
-// nolint: dupl
 package kubernetes
 
 import (
 	"context"
 	"errors"
 	"glouton/facts"
+	"glouton/facts/container-runtime/containerd"
 	"glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/internal/testutil"
+	crTypes "glouton/facts/container-runtime/types"
 	"io/ioutil"
 	"path/filepath"
 	"testing"
@@ -76,14 +77,14 @@ func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 	tests := []struct {
 		name          string
 		dir           string
-		createRuntime func(dirname string) (RuntimeInterface, error)
+		createRuntime func(dirname string) (crTypes.RuntimeInterface, error)
 		wantContainer []facts.FakeContainer
 		wantFacts     map[string]string
 	}{
 		{
 			name: "with-docker",
 			dir:  "testdata/with-docker-v1.20.0",
-			createRuntime: func(dirname string) (RuntimeInterface, error) {
+			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
 				dockerClient, err := docker.NewDockerMock(dirname)
 				if err != nil {
 					return nil, err
@@ -248,7 +249,7 @@ func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 		{
 			name: "with-docker-labels-stripped",
 			dir:  "testdata/with-docker-v1.20.0",
-			createRuntime: func(dirname string) (RuntimeInterface, error) {
+			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
 				dockerClient, err := docker.NewDockerMock(dirname)
 				if err != nil {
 					return nil, err
@@ -414,7 +415,7 @@ func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 		{
 			name: "In virtualbox",
 			dir:  "testdata/with-docker-in-vbox-v1.18.0",
-			createRuntime: func(dirname string) (RuntimeInterface, error) {
+			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
 				dockerClient, err := docker.NewDockerMock(dirname)
 				if err != nil {
 					return nil, err
@@ -573,6 +574,123 @@ func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 			wantFacts: map[string]string{
 				"kubernetes_version": "v1.18.0",
 				"kubelet_version":    "v1.18.0",
+			},
+		},
+		{
+			name: "with-containerd",
+			dir:  "testdata/containerd-in-vbox-v1.19.0",
+			createRuntime: func(dirname string) (crTypes.RuntimeInterface, error) {
+				client, err := containerd.NewMockFromFile(filepath.Join(dirname, "containerd.json"))
+				if err != nil {
+					return nil, err
+				}
+
+				return containerd.FakeContainerd(client), nil
+			},
+			wantContainer: []facts.FakeContainer{
+				{
+					FakeID:             "k8s.io/e00f87ac94cffd0bf7e79c2605e97ed2df3ad3bc65b3abfafbc7df57a218f6d9",
+					FakeContainerName:  "k8s_rabbitmq_rabbitmq-labels-74cfb594d8-cgbzn_default",
+					FakePrimaryAddress: "10.244.120.67",
+					FakeAnnotations: map[string]string{
+						"cni.projectcalico.org/podIP":    "10.244.120.67/32",
+						"cni.projectcalico.org/podIPs":   "10.244.120.67/32",
+						"glouton.check.ignore.port.5671": "on",
+						"glouton.check.ignore.port.4369": "TruE",
+					},
+					FakePodName:      "rabbitmq-labels-74cfb594d8-cgbzn",
+					FakePodNamespace: "default",
+					TestHasPod:       true,
+				},
+				{
+					FakeID:             "k8s.io/fd5a2a65a67f64ff30969e09037b3918bc5bc3bdd82f56758ebc440d76849d22",
+					FakeContainerName:  "k8s_rabbitmq_rabbitmq-container-port-66fdd44ccd-7hsqr_default",
+					FakePrimaryAddress: "10.244.120.69",
+					FakeListenAddresses: []facts.ListenAddress{
+						{
+							Address:       "10.244.120.69",
+							NetworkFamily: "tcp",
+							Port:          5672,
+						},
+					},
+					FakeListenAddressesExplicit: true,
+					FakePodName:                 "rabbitmq-container-port-66fdd44ccd-7hsqr",
+					FakePodNamespace:            "default",
+					TestHasPod:                  true,
+				},
+				{
+					FakeID:             "k8s.io/c901b6d5396a9a6eaf5699bfef5543f0279aa4e0e9548910013d9da6c04ec6b3",
+					FakeContainerName:  "k8s_a-memcached_redis-memcached-56dfc4cbfc-5qnh2_default",
+					FakePrimaryAddress: "10.244.120.66",
+					FakeAnnotations: map[string]string{
+						"cni.projectcalico.org/podIP":  "10.244.120.66/32",
+						"cni.projectcalico.org/podIPs": "10.244.120.66/32",
+						"glouton.enable":               "off",
+					},
+					FakePodName:      "redis-memcached-56dfc4cbfc-5qnh2",
+					FakePodNamespace: "default",
+					TestIgnored:      true,
+					TestHasPod:       true,
+				},
+				{
+					FakeID:             "k8s.io/d053d875c398a5c0bb1fe5bb7505c997c1b332c473f36096a2f4979a8a1dffc7",
+					FakeContainerName:  "k8s_the-redis_redis-memcached-56dfc4cbfc-5qnh2_default",
+					FakePrimaryAddress: "10.244.120.66",
+					FakeAnnotations: map[string]string{
+						"cni.projectcalico.org/podIP":  "10.244.120.66/32",
+						"cni.projectcalico.org/podIPs": "10.244.120.66/32",
+						"glouton.enable":               "off",
+					},
+					FakeListenAddresses: []facts.ListenAddress{
+						{
+							Address:       "10.244.120.66",
+							Port:          6363,
+							NetworkFamily: "tcp",
+						},
+					},
+					FakeListenAddressesExplicit: true,
+					FakePodName:                 "redis-memcached-56dfc4cbfc-5qnh2",
+					FakePodNamespace:            "default",
+					TestIgnored:                 true,
+					TestHasPod:                  true,
+				},
+				{
+					FakeID:                 "k8s.io/12ff76c454b4b7d16c41c951c296df261d9d9f2c5f375908256e1fc2dbe195e9",
+					FakeContainerName:      "k8s_true_delete-me-once-584c74ccf5-4278c_default",
+					FakeStoppedAndReplaced: false,
+					FakePodName:            "delete-me-once-584c74ccf5-4278c",
+					FakePodNamespace:       "default",
+					TestHasPod:             true,
+				},
+				{
+					FakeID:            "default/docker_default_without_k8s",
+					FakeContainerName: "docker_default_without_k8s",
+					FakeLabels: map[string]string{
+						"test":                                   "42",
+						"io.containerd.image.config.stop-signal": "SIGTERM",
+					},
+					FakePrimaryAddress: "",
+					FakeImageName:      "docker.io/library/redis:latest",
+					FakeImageID:        "sha256:0f724af268d0d3f5fb1d6b33fc22127ba5cbca2d58523b286ed3122db0dc5381",
+					TestHasPod:         false,
+				},
+				{
+					FakeID:            "k8s.io/fae6537013bc47cace5de8883c72a57e4c0a02f33680e9ed0f714c62b8c27b31",
+					FakeContainerName: "k8s_POD_rabbitmq-labels-74cfb594d8-cgbzn_default",
+					FakeImageName:     "k8s.gcr.io/pause:3.2",
+					TestIgnored:       true,
+					TestHasPod:        true,
+				},
+				{
+					FakeID:            "k8s.io/d3b4beb5ce3c53d08eacf7242f65311d5ac197040f5e75882982f5b6d12d34ba",
+					FakeContainerName: "k8s_POD_redis-memcached-56dfc4cbfc-5qnh2_default",
+					TestIgnored:       true,
+					TestHasPod:        true,
+				},
+			},
+			wantFacts: map[string]string{
+				"kubernetes_version": "v1.19.0",
+				"kubelet_version":    "v1.19.0",
 			},
 		},
 	}

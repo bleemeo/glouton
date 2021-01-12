@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"glouton/facts"
+	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"sort"
 	"strings"
@@ -20,23 +21,10 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// RuntimeInterface is the interface wrapped by Kubernetes.
-type RuntimeInterface interface {
-	CachedContainer(containerID string) (c facts.Container, found bool)
-	ContainerLastKill(containerID string) time.Time
-	Exec(ctx context.Context, containerID string, cmd []string) ([]byte, error)
-	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
-	Events() <-chan facts.ContainerEvent
-	IsRuntimeRunning(ctx context.Context) bool
-	ProcessWithCache() facts.ContainerRuntimeProcessQuerier
-	Run(ctx context.Context) error
-	RuntimeFact(ctx context.Context, currentFact map[string]string) map[string]string
-}
-
 // Kubernetes wraps a container runtime to add information from PODs.
 // It will add annotation, IP detection, flag "StoppedAndRestarted".
 type Kubernetes struct {
-	Runtime RuntimeInterface
+	Runtime crTypes.RuntimeInterface
 	// NodeName is the node Glouton is running on. Allow to fetch only relevant PODs (running on the same node) instead of all PODs.
 	NodeName string
 	// KubecConfig is a kubeconfig file to use for communication with Kubernetes. If not provided, use in-cluster auto-configuration.
@@ -156,6 +144,10 @@ func (k *Kubernetes) RuntimeFact(ctx context.Context, currentFact map[string]str
 		return facts
 	}
 
+	if facts == nil {
+		facts = make(map[string]string)
+	}
+
 	k.l.Lock()
 	defer k.l.Unlock()
 
@@ -259,6 +251,12 @@ func (k *Kubernetes) updatePods(ctx context.Context) error {
 func kuberIDtoRuntimeID(containerID string) string {
 	if strings.HasPrefix(containerID, "docker://") {
 		containerID = strings.TrimPrefix(containerID, "docker://")
+	}
+
+	if strings.HasPrefix(containerID, "containerd://") {
+		containerID = strings.TrimPrefix(containerID, "containerd://")
+		// Glouton add the namespace in the container ID
+		containerID = "k8s.io/" + containerID
 	}
 
 	return containerID
