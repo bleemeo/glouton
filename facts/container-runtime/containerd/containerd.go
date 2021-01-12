@@ -922,6 +922,8 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 }
 
 func (q *containerdProcessQuerier) listContainers(ctx context.Context) error {
+	q.containersToQueryPIDS = make([]namespaceContainer, 0)
+
 	cl, err := q.c.getClient(ctx)
 	if err != nil {
 		return err
@@ -931,8 +933,6 @@ func (q *containerdProcessQuerier) listContainers(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("listing namespace failed: %w", err)
 	}
-
-	q.containersToQueryPIDS = make([]namespaceContainer, 0)
 
 	for _, ns := range nsList {
 		if ns == ignoredNamespace {
