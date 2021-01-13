@@ -10,6 +10,7 @@ import (
 	"syscall"
 
 	"github.com/containerd/containerd"
+	"github.com/containerd/containerd/api/services/tasks/v1"
 	containerdTypes "github.com/containerd/containerd/api/types"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
@@ -279,6 +280,11 @@ func (m *MockClient) Version(ctx context.Context) (containerd.Version, error) {
 	}
 
 	return m.Data.Version, nil
+}
+
+// Metrics do metrics.
+func (m *MockClient) Metrics(ctx context.Context, filters []string) (*tasks.MetricsResponse, error) {
+	return nil, ErrMockNotImplemented
 }
 
 // Namespaces do namespaces.

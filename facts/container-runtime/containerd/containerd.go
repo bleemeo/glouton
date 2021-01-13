@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/types"
 	"math"
 	"os"
 	"path/filepath"
@@ -15,8 +16,10 @@ import (
 	"sync"
 	"time"
 
+	v1 "github.com/containerd/cgroups/stats/v1"
 	"github.com/containerd/containerd"
 	pbEvents "github.com/containerd/containerd/api/events"
+	"github.com/containerd/containerd/api/services/tasks/v1"
 	"github.com/containerd/containerd/cio"
 	"github.com/containerd/containerd/containers"
 	"github.com/containerd/containerd/events"
@@ -24,6 +27,7 @@ import (
 	"github.com/containerd/containerd/oci"
 	"github.com/containerd/typeurl"
 	"github.com/opencontainers/runtime-spec/specs-go"
+	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 )
 
@@ -43,13 +47,14 @@ type Containerd struct {
 	Addresses                 []string
 	DeletedContainersCallback func(containersID []string)
 
-	l              sync.Mutex
-	openConnection func(ctx context.Context, address string) (cl containerdClient, err error)
-	client         containerdClient
-	lastUpdate     time.Time
-	containers     map[string]containerObject
-	ignoredID      map[string]bool
-	notifyC        chan facts.ContainerEvent
+	l                sync.Mutex
+	openConnection   func(ctx context.Context, address string) (cl containerdClient, err error)
+	client           containerdClient
+	lastUpdate       time.Time
+	containers       map[string]containerObject
+	ignoredID        map[string]bool
+	notifyC          chan facts.ContainerEvent
+	pastMetricValues []metricValue
 }
 
 // ignore "moby" namespace. It contains container managed by Docker, for which
@@ -82,6 +87,117 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 		"containerd_version": version.Version,
 		"container_runtime":  "containerd",
 	}
+}
+
+// Metrics return metrics in a format similar to the one returned by Telegraf docker input.
+// Note that Metrics will never open the connection to ContainerD and will return empty points if not connected.
+func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+	now := time.Now()
+
+	c.l.Lock()
+
+	cl := c.client
+
+	c.l.Unlock()
+
+	if cl == nil {
+		return nil, nil
+	}
+
+	// ensure information isn't too much out-dated
+	_, err := c.Containers(ctx, 10*time.Minute, false)
+	if err != nil {
+		return nil, err
+	}
+
+	idPerNamespace := make(map[string][]string)
+	gloutonIDToName := make(map[string]string)
+
+	c.l.Lock()
+
+	for _, cont := range c.containers {
+		if !facts.ContainerIgnored(cont) {
+			idPerNamespace[cont.namespace] = append(idPerNamespace[cont.namespace], "id=="+cont.info.ID)
+
+			gloutonIDToName[cont.ID()] = cont.ContainerName()
+		}
+	}
+
+	c.l.Unlock()
+
+	newValues := make([]metricValue, 0, len(gloutonIDToName))
+
+	for ns, ids := range idPerNamespace {
+		ctx := namespaces.WithNamespace(ctx, ns)
+
+		r, err := cl.Metrics(ctx, ids)
+		if err != nil {
+			return nil, err
+		}
+
+		for _, metric := range r.Metrics {
+			if metric == nil || metric.Data == nil {
+				continue
+			}
+
+			data, err := typeurl.UnmarshalAny(metric.Data)
+			if err != nil {
+				logger.V(2).Printf("unable to unmarshal metrics value: %v", err)
+
+				continue
+			}
+
+			value, ok := data.(*v1.Metrics)
+			if !ok {
+				logger.V(2).Printf("unexpected type for metric: %s", metric.Data.TypeUrl)
+
+				continue
+			}
+
+			valueMap := make(map[string]uint64)
+
+			for _, row := range value.Network {
+				if row != nil {
+					valueMap["container_net_bits_sent"] += row.TxBytes * 8
+					valueMap["container_net_bits_recv"] += row.RxBytes * 8
+				}
+			}
+
+			if value.CPU != nil && value.CPU.Usage != nil {
+				valueMap["container_cpu_used"] = value.CPU.Usage.Total
+			}
+
+			if value.Blkio != nil {
+				for _, row := range value.Blkio.IoServiceBytesRecursive {
+					if row != nil && row.Op == "Read" {
+						valueMap["container_io_read_bytes"] += row.Value
+					} else if row != nil && row.Op == "Write" {
+						valueMap["container_io_write_bytes"] += row.Value
+					}
+				}
+			}
+
+			if value.Memory != nil && value.Memory.Usage != nil {
+				valueMap["container_mem_used"] = value.Memory.Usage.Usage
+				valueMap["container_mem_limit"] = value.Memory.Usage.Limit
+			}
+
+			newValues = append(newValues, metricValue{
+				ContainerNamespace: ns,
+				ContainerID:        metric.ID,
+				Time:               now,
+				values:             valueMap,
+			})
+		}
+	}
+
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	points := rateFromMetricValue(gloutonIDToName, c.pastMetricValues, newValues)
+	c.pastMetricValues = newValues
+
+	return points, nil
 }
 
 // CachedContainer return a container without querying ContainerD, it use in-memory cache which must have been filled by a call to Continers().
@@ -562,6 +678,7 @@ type containerdClient interface {
 	Version(ctx context.Context) (containerd.Version, error)
 	Namespaces(ctx context.Context) ([]string, error)
 	Events(ctx context.Context) (ch <-chan *events.Envelope, errs <-chan error)
+	Metrics(ctx context.Context, filters []string) (*tasks.MetricsResponse, error)
 	Close() error
 }
 
@@ -595,6 +712,13 @@ func (cl realClient) LoadContainer(ctx context.Context, id string) (containerd.C
 
 func (cl realClient) Version(ctx context.Context) (containerd.Version, error) {
 	return cl.client.Version(ctx)
+}
+
+func (cl realClient) Metrics(ctx context.Context, filters []string) (*tasks.MetricsResponse, error) {
+	return cl.client.TaskService().Metrics(
+		ctx,
+		&tasks.MetricsRequest{Filters: filters},
+	)
 }
 
 func (cl realClient) Namespaces(ctx context.Context) ([]string, error) {
@@ -955,4 +1079,111 @@ func (q *containerdProcessQuerier) listContainers(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+type metricValue struct {
+	ContainerNamespace string
+	ContainerID        string
+	Time               time.Time
+	values             map[string]uint64
+}
+
+func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricValue, newValues []metricValue) []types.MetricPoint {
+	memUsage, err := mem.VirtualMemory()
+	if err != nil {
+		logger.V(2).Printf("unable to get machine memory: %v", err)
+	}
+
+	gloutonIDToPast := make(map[string]metricValue, len(pastValues))
+
+	for _, v := range pastValues {
+		id := v.ContainerNamespace + "/" + v.ContainerID
+		gloutonIDToPast[id] = v
+	}
+
+	points := make([]types.MetricPoint, 0, len(newValues)*7)
+
+	for _, newV := range newValues {
+		id := newV.ContainerNamespace + "/" + newV.ContainerID
+
+		pastV, ok := gloutonIDToPast[id]
+		if !ok {
+			continue
+		}
+
+		name := gloutonIDToName[id]
+		if name == "" {
+			continue
+		}
+
+		deltaT := newV.Time.Sub(pastV.Time)
+		if deltaT < 0 {
+			continue
+		}
+
+		for k, v := range newV.values {
+			var floatValue float64
+
+			switch {
+			case k == "container_mem_limit":
+				// This metric isn't emitted
+				continue
+			case k == "container_mem_used":
+				// It's the only non-derivated value
+				floatValue = float64(v)
+			case pastV.values[k] <= v:
+				floatValue = float64(v-pastV.values[k]) / deltaT.Seconds()
+			default:
+				// assume reset of the counter
+				floatValue = float64(v) / deltaT.Seconds()
+			}
+
+			if k == "container_cpu_used" {
+				// value is in nano-seconds, convert to %
+				floatValue = floatValue / 1e9 * 100
+			}
+
+			points = append(points, types.MetricPoint{
+				Point: types.Point{Time: newV.Time, Value: floatValue},
+				Labels: map[string]string{
+					types.LabelName:              k,
+					types.LabelMetaContainerName: name,
+				},
+				Annotations: types.MetricAnnotations{
+					BleemeoItem: name,
+					ContainerID: id,
+				},
+			})
+
+			if k == "container_mem_used" {
+				limit := newV.values["container_mem_limit"]
+				if memUsage != nil && (limit > memUsage.Total || limit == 0) {
+					limit = memUsage.Total
+				} else if limit >= 9e18 {
+					limit = 0
+				}
+
+				if limit > 0 {
+					floatValue = floatValue / float64(limit) * 100
+					if floatValue > 100 {
+						floatValue = 100
+					}
+
+					points = append(points, types.MetricPoint{
+						Point: types.Point{Time: newV.Time, Value: floatValue},
+						Labels: map[string]string{
+							types.LabelName:              "container_mem_used_perc",
+							types.LabelMetaContainerName: name,
+						},
+						Annotations: types.MetricAnnotations{
+							BleemeoItem: name,
+							ContainerID: id,
+						},
+					})
+				}
+			}
+		}
+	}
+
+	return points
 }

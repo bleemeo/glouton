@@ -91,6 +91,7 @@ type agent struct {
 	hostRootPath      string
 	discovery         *discovery.Discovery
 	dockerRuntime     *dockerRuntime.Docker
+	containerdRuntime *containerd.Containerd
 	containerRuntime  crTypes.RuntimeInterface
 	collector         *collector.Collector
 	factProvider      *facts.FactProvider
@@ -527,13 +528,14 @@ func (a *agent) run() { //nolint:gocyclo
 		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
 		DeletedContainersCallback: a.deletedContainersCallback,
 	}
+	a.containerdRuntime = &containerd.Containerd{
+		Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
+		DeletedContainersCallback: a.deletedContainersCallback,
+	}
 	a.containerRuntime = &merge.Runtime{
 		Runtimes: []crTypes.RuntimeInterface{
 			a.dockerRuntime,
-			&containerd.Containerd{
-				Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
-				DeletedContainersCallback: a.deletedContainersCallback,
-			},
+			a.containerdRuntime,
 		},
 	}
 
@@ -908,6 +910,11 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 	return func(t0 time.Time) {
+		points, err := a.containerdRuntime.Metrics(context.Background())
+		if err != nil {
+			logger.V(2).Printf("containerd metrics gather failed: %v", err)
+		}
+
 		// We don't really care about having up-to-date information because
 		// when containers are started/stopped, the information is updated anyway.
 		containers, err := a.containerRuntime.Containers(context.Background(), 2*time.Hour, false)
@@ -924,14 +931,14 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 			}
 		}
 
-		pusher.PushPoints([]types.MetricPoint{
-			{
-				Point: types.Point{Time: t0, Value: float64(countRunning)},
-				Labels: map[string]string{
-					"__name__": "docker_containers",
-				},
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: t0, Value: float64(countRunning)},
+			Labels: map[string]string{
+				"__name__": "docker_containers",
 			},
 		})
+
+		pusher.PushPoints(points)
 	}
 }
 
