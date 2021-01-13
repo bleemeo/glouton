@@ -29,6 +29,7 @@ import (
 var (
 	// ErrMockNotImplemented is returned when a mock does not implement a method
 	ErrMockNotImplemented = errors.New("mock does not implement this method")
+	ErrWrongNamespace     = errors.New("missmatch namespace")
 )
 
 // MockClient is a fake containerd client.
@@ -55,6 +56,8 @@ type MockContainer struct {
 	MockInfo     ContainerOCISpec
 	MockImageOCI ocispec.Descriptor
 	MockTask     MockTask
+
+	namespace string
 }
 
 // MockImage is an implementation of containerd.Image.
@@ -69,6 +72,8 @@ type MockTask struct {
 	MockPID    uint32
 	MockStatus containerd.Status
 	MockPids   []containerd.ProcessInfo
+
+	namespace string
 }
 
 // DumpToJSON dump to a json all information required to build a MockClient.
@@ -185,6 +190,7 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 		}
 
 		mc := MockContainer{
+			namespace: j.MockNamespace,
 			MockInfo: ContainerOCISpec{
 				Container: info,
 				Spec:      &infoSpec,
@@ -239,6 +245,8 @@ func (m *MockClient) Containers(ctx context.Context) ([]containerd.Container, er
 			result := make([]containerd.Container, len(d.MockContainers))
 
 			for i, c := range d.MockContainers {
+				c.namespace = d.MockNamespace
+
 				result[i] = c
 			}
 
@@ -264,6 +272,8 @@ func (m *MockClient) LoadContainer(ctx context.Context, id string) (containerd.C
 		if d.MockNamespace == namespace {
 			for _, c := range d.MockContainers {
 				if c.MockInfo.ID == id {
+					c.namespace = d.MockNamespace
+
 					return c, nil
 				}
 			}
@@ -335,7 +345,16 @@ func (c MockContainer) ID() string {
 }
 
 // Info implement containerd.Container.
-func (c MockContainer) Info(context.Context, ...containerd.InfoOpts) (containers.Container, error) {
+func (c MockContainer) Info(ctx context.Context, opts ...containerd.InfoOpts) (containers.Container, error) {
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return containers.Container{}, err
+	}
+
+	if ns != c.namespace {
+		return containers.Container{}, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, c.namespace)
+	}
+
 	buffer, err := json.Marshal(c.MockInfo.Spec)
 	if err != nil {
 		return containers.Container{}, err
@@ -361,12 +380,32 @@ func (c MockContainer) NewTask(context.Context, cio.Creator, ...containerd.NewTa
 }
 
 // Spec implement containerd.Container.
-func (c MockContainer) Spec(context.Context) (*oci.Spec, error) {
+func (c MockContainer) Spec(ctx context.Context) (*oci.Spec, error) {
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ns != c.namespace {
+		return nil, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, c.namespace)
+	}
+
 	return c.MockInfo.Spec, nil
 }
 
 // Task implement containerd.Container.
-func (c MockContainer) Task(context.Context, cio.Attach) (containerd.Task, error) {
+func (c MockContainer) Task(ctx context.Context, io cio.Attach) (containerd.Task, error) {
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ns != c.namespace {
+		return nil, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, c.namespace)
+	}
+
+	c.MockTask.namespace = c.namespace
+
 	if c.MockTask.MockID == "" {
 		return nil, errors.New("not found")
 	}
@@ -375,12 +414,30 @@ func (c MockContainer) Task(context.Context, cio.Attach) (containerd.Task, error
 }
 
 // Image implement containerd.Container.
-func (c MockContainer) Image(context.Context) (containerd.Image, error) {
+func (c MockContainer) Image(ctx context.Context) (containerd.Image, error) {
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ns != c.namespace {
+		return nil, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, c.namespace)
+	}
+
 	return MockImage{MockName: c.MockInfo.Image, MockTarget: c.MockImageOCI}, nil
 }
 
 // Labels implement containerd.Container.
-func (c MockContainer) Labels(context.Context) (map[string]string, error) {
+func (c MockContainer) Labels(ctx context.Context) (map[string]string, error) {
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ns != c.namespace {
+		return nil, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, c.namespace)
+	}
+
 	return c.MockInfo.Labels, nil
 }
 
@@ -505,7 +562,16 @@ func (t MockTask) IO() cio.IO {
 }
 
 // Status implements containerd.Task.
-func (t MockTask) Status(context.Context) (containerd.Status, error) {
+func (t MockTask) Status(ctx context.Context) (containerd.Status, error) {
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return containerd.Status{}, err
+	}
+
+	if ns != t.namespace {
+		return containerd.Status{}, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, t.namespace)
+	}
+
 	return t.MockStatus, nil
 }
 
@@ -525,7 +591,16 @@ func (t MockTask) Exec(context.Context, string, *specs.Process, cio.Creator) (co
 }
 
 // Pids implements containerd.Task.
-func (t MockTask) Pids(context.Context) ([]containerd.ProcessInfo, error) {
+func (t MockTask) Pids(ctx context.Context) ([]containerd.ProcessInfo, error) {
+	ns, err := namespaces.NamespaceRequired(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if ns != t.namespace {
+		return nil, fmt.Errorf("%w: %s != %s", ErrWrongNamespace, ns, t.namespace)
+	}
+
 	return t.MockPids, nil
 }
 

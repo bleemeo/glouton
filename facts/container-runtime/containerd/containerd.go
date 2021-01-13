@@ -1023,7 +1023,7 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 			continue
 		}
 
-		// TODO: ctx need to have the namespace
+		ctx := namespaces.WithNamespace(ctx, cont.namespace)
 
 		task, err := obj.container.Task(ctx, nil)
 		if err != nil {
