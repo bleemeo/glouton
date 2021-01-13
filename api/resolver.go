@@ -200,11 +200,11 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 // These containers could be paginated and filtered by a search input or allContainers flag
 // If there is a search filter, it will check search is contained in container's name / Image name / ID / command.
 func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allContainers bool, search string) (*Containers, error) {
-	if r.api.DockerFact == nil {
+	if r.api.ContainerRuntime == nil {
 		return nil, gqlerror.Errorf("Can not retrieve containers at this moment. Please try later")
 	}
 
-	containers, err := r.api.DockerFact.Containers(ctx, time.Hour, false)
+	containers, err := r.api.ContainerRuntime.Containers(ctx, time.Hour, false)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve containers: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve containers")
@@ -212,12 +212,12 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 
 	containersRes := []*Container{}
 	containerMetrics := []string{
-		"docker_container_io_write_bytes",
-		"docker_container_io_read_bytes",
-		"docker_container_net_bits_recv",
-		"docker_container_net_bits_sent",
-		"docker_container_mem_used_perc",
-		"docker_container_cpu_used",
+		"container_io_write_bytes",
+		"container_io_read_bytes",
+		"container_net_bits_recv",
+		"container_net_bits_sent",
+		"container_mem_used_perc",
+		"container_cpu_used",
 	}
 
 	sort.Slice(containers, func(i, j int) bool {
@@ -277,17 +277,17 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 					}
 
 					switch m {
-					case "docker_container_io_write_bytes":
+					case "container_io_write_bytes":
 						c.IoWriteBytes = point
-					case "docker_container_io_read_bytes":
+					case "container_io_read_bytes":
 						c.IoReadBytes = point
-					case "docker_container_net_bits_recv":
+					case "container_net_bits_recv":
 						c.NetBitsRecv = point
-					case "docker_container_net_bits_sent":
+					case "container_net_bits_sent":
 						c.NetBitsSent = point
-					case "docker_container_mem_used_perc":
+					case "container_mem_used_perc":
 						c.MemUsedPerc = point
-					case "docker_container_cpu_used":
+					case "container_cpu_used":
 						c.CPUUsedPerc = point
 					}
 				}

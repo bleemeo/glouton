@@ -675,7 +675,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	api := &api.API{
 		DB:                 a.store,
-		DockerFact:         a.containerRuntime,
+		ContainerRuntime:   a.containerRuntime,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
 		BindAddress:        apiBindAddress,
@@ -934,7 +934,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 		points = append(points, types.MetricPoint{
 			Point: types.Point{Time: t0, Value: float64(countRunning)},
 			Labels: map[string]string{
-				"__name__": "docker_containers",
+				"__name__": "containers_count",
 			},
 		})
 
@@ -1272,7 +1272,7 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
-				types.LabelName:              "docker_container_health_status",
+				types.LabelName:              "container_health_status",
 				types.LabelMetaContainerName: container.ContainerName(),
 			},
 			Annotations: types.MetricAnnotations{

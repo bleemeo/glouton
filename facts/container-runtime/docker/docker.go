@@ -732,9 +732,14 @@ type dockerContainer struct {
 	stopped        bool
 }
 
+func (c dockerContainer) RuntimeName() string {
+	return "docker"
+}
+
 func (c dockerContainer) Annotations() map[string]string {
 	return nil
 }
+
 func (c dockerContainer) Command() []string {
 	if c.inspect.Config == nil {
 		return nil

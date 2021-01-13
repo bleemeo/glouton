@@ -24,7 +24,7 @@ import (
 	"sync"
 )
 
-const cacheVersion = 2
+const cacheVersion = 3
 const cacheKey = "CacheBleemeoConnector"
 
 // Cache store information about object registered in Bleemeo API.
@@ -283,7 +283,7 @@ func (c *Cache) ContainersByContainerID() map[string]bleemeoTypes.Container {
 	result := make(map[string]bleemeoTypes.Container)
 
 	for _, v := range c.data.Containers {
-		result[v.DockerID] = v
+		result[v.ContainerID] = v
 	}
 
 	return result
@@ -428,7 +428,7 @@ func Load(state bleemeoTypes.State) *Cache {
 
 		cache.data.Version = cacheVersion
 	case 1:
-		logger.V(1).Printf("Old version of the cache found, upgrading it.")
+		logger.V(1).Printf("Version 1 of the cache found, upgrading it.")
 
 		// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
 		// the addition of Monitors and AccountConfigs
@@ -438,10 +438,16 @@ func Load(state bleemeoTypes.State) *Cache {
 			newData.CurrentAccountConfig = oldCache.AccountConfig
 		}
 
-		newData.Version = cacheVersion
+		fallthrough
+	case 2:
+		logger.V(1).Printf("Version 2 of the cache found, upgrading it.")
 
-		cache.data = newData
+		// well... containers had multiple fields renamed... lets drop it
+		newData.Containers = nil
+
+		fallthrough
 	case cacheVersion:
+		newData.Version = cacheVersion
 		cache.data = newData
 	default:
 		logger.V(2).Printf("Bleemeo connector cache is too recent. Discarding content")

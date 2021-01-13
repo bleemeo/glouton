@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/types"
@@ -28,17 +29,69 @@ import (
 
 const apiContainerNameLength = 100
 
+type nullTime time.Time
+
+// MarshalJSON marshall the time.Time as usual BUT zero time is sent as "null".
+func (t nullTime) MarshalJSON() ([]byte, error) {
+	if time.Time(t).IsZero() {
+		return []byte("null"), nil
+	}
+
+	return json.Marshal(time.Time(t))
+}
+
+// UnmarshalJSON the time.Time as usual BUT zero time is read as "null".
+func (t *nullTime) UnmarshalJSON(b []byte) error {
+	if bytes.Equal(b, []byte("null")) {
+		*t = nullTime{}
+
+		return nil
+	}
+
+	return json.Unmarshal(b, (*time.Time)(t))
+}
+
 type containerPayload struct {
 	types.Container
-	Host             string    `json:"host"`
-	Command          string    `json:"command"`
-	DockerStatus     string    `json:"docker_status"`
-	DockerCreatedAt  time.Time `json:"docker_created_at"`
-	DockerStartedAt  time.Time `json:"docker_started_at"`
-	DockerFinishedAt time.Time `json:"docker_finished_at"`
-	DockerAPIVersion string    `json:"docker_api_version"`
-	DockerImageID    string    `json:"docker_image_id"`
-	DockerImageName  string    `json:"docker_image_name"`
+	Host             string   `json:"host"`
+	Command          string   `json:"command"`
+	StartedAt        nullTime `json:"container_started_at"`
+	FinishedAt       nullTime `json:"container_finished_at"`
+	ImageID          string   `json:"container_image_id"`
+	ImageName        string   `json:"container_image_name"`
+	DockerAPIVersion string   `json:"docker_api_version"`
+
+	// TODO: Older fields name, to remove when API is updated
+	DockerID         string   `json:"docker_id,omitempty"`
+	DockerInspect    string   `json:"docker_inspect,omitempty"`
+	DockerStatus     string   `json:"docker_status,omitempty"`
+	DockerCreatedAt  nullTime `json:"docker_created_at,omitempty"`
+	DockerStartedAt  nullTime `json:"docker_started_at,omitempty"`
+	DockerFinishedAt nullTime `json:"docker_finished_at,omitempty"`
+	DockerImageID    string   `json:"docker_image_id,omitempty"`
+	DockerImageName  string   `json:"docker_image_name,omitempty"`
+}
+
+// compatibilityContainer return a types.Container... applying compatibility with older
+// API. Once updated, this could just be "return c.Container".
+func (c containerPayload) compatibilityContainer() types.Container {
+	if c.ContainerID == "" {
+		c.ContainerID = c.DockerID
+	}
+
+	if c.ContainerInspect == "" {
+		c.ContainerInspect = c.DockerInspect
+	}
+
+	if c.CreatedAt.IsZero() {
+		c.CreatedAt = time.Time(c.DockerCreatedAt)
+	}
+
+	if c.Status == "" {
+		c.Status = c.DockerStatus
+	}
+
+	return c.Container
 }
 
 func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
@@ -87,7 +140,7 @@ func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 func (s *Synchronizer) containerUpdateList() error {
 	params := map[string]string{
 		"agent":  s.agentID,
-		"fields": "id,name,docker_id,docker_inspect",
+		"fields": "id,name,container_id,docker_id,docker_inspect,container_inspect,status,docker_status,docker_created_at,container_created_at",
 	}
 
 	result, err := s.client.Iter(s.ctx, "container", params)
@@ -98,15 +151,16 @@ func (s *Synchronizer) containerUpdateList() error {
 	containers := make([]types.Container, len(result))
 
 	for i, jsonMessage := range result {
-		var container types.Container
+		var container containerPayload
 
 		if err := json.Unmarshal(jsonMessage, &container); err != nil {
 			continue
 		}
+
 		// we don't need to keep the full inspect in memory
 		container.FillInspectHash()
-		container.DockerInspect = ""
-		containers[i] = container
+		container.ContainerInspect = ""
+		containers[i] = container.compatibilityContainer()
 	}
 
 	s.option.Cache.SetContainers(containers)
@@ -128,7 +182,9 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	}
 
 	params := map[string]string{
-		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at,docker_api_version,docker_image_id,docker_image_name",
+		"fields": "id,name,docker_id,docker_inspect,host,command,docker_status,docker_created_at,docker_started_at,docker_finished_at," +
+			"docker_api_version,docker_image_id,docker_image_name,container_id,container_inspect,container_status,container_created_at," +
+			"container_finished_at,container_image_id,container_image_name",
 	}
 
 	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
@@ -157,32 +213,44 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		}
 
 		payloadContainer := types.Container{
-			Name:          name,
-			DockerID:      container.ID(),
-			DockerInspect: container.ContainerJSON(),
+			Name:             name,
+			ContainerID:      container.ID(),
+			ContainerInspect: container.ContainerJSON(),
+			Status:           container.State().String(),
+			CreatedAt:        container.CreatedAt(),
+			Runtime:          container.RuntimeName(),
 		}
 
 		payloadContainer.FillInspectHash()
 
-		if remoteFound && payloadContainer.DockerInspectHash == remoteContainer.DockerInspectHash {
+		if remoteFound && payloadContainer.InspectHash == remoteContainer.InspectHash && payloadContainer.Status == remoteContainer.Status && payloadContainer.CreatedAt.Equal(remoteContainer.CreatedAt) {
 			continue
 		}
 
-		payloadContainer.DockerInspectHash = "" // we don't send inspect hash to API
+		payloadContainer.InspectHash = "" // we don't send inspect hash to API
 		payload := containerPayload{
 			Container:        payloadContainer,
 			Host:             s.agentID,
 			Command:          strings.Join(container.Command(), " "),
+			StartedAt:        nullTime(container.StartedAt()),
+			FinishedAt:       nullTime(container.FinishedAt()),
+			ImageID:          container.ImageID(),
+			ImageName:        container.ImageName(),
+			DockerID:         container.ID(),
+			DockerInspect:    container.ContainerJSON(),
 			DockerStatus:     container.State().String(),
-			DockerCreatedAt:  container.CreatedAt(),
-			DockerStartedAt:  container.StartedAt(),
-			DockerFinishedAt: container.FinishedAt(),
-			DockerAPIVersion: factsMap["docker_api_version"],
+			DockerCreatedAt:  nullTime(container.CreatedAt()),
+			DockerStartedAt:  nullTime(container.StartedAt()),
+			DockerFinishedAt: nullTime(container.FinishedAt()),
 			DockerImageID:    container.ImageID(),
 			DockerImageName:  container.ImageName(),
 		}
 
-		var result types.Container
+		if container.RuntimeName() == "docker" {
+			payload.DockerAPIVersion = factsMap["docker_api_version"]
+		}
+
+		var result containerPayload
 
 		if remoteFound {
 			_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
@@ -191,7 +259,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			}
 
 			logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
-			remoteContainers[remoteIndex] = result
+			remoteContainers[remoteIndex] = result.compatibilityContainer()
 		} else {
 			_, err := s.client.Do(s.ctx, "POST", "v1/container/", params, payload, &result)
 			if err != nil {
@@ -199,7 +267,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			}
 
 			logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
-			remoteContainers = append(remoteContainers, result)
+			remoteContainers = append(remoteContainers, result.compatibilityContainer())
 		}
 	}
 
@@ -220,8 +288,8 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 
 	registeredContainers := s.option.Cache.ContainersByUUID()
 	for k, v := range registeredContainers {
-		if _, ok := localByContainerID[v.DockerID]; ok && !duplicatedKey[v.DockerID] {
-			duplicatedKey[v.DockerID] = true
+		if _, ok := localByContainerID[v.ContainerID]; ok && !duplicatedKey[v.ContainerID] {
+			duplicatedKey[v.ContainerID] = true
 			continue
 		}
 

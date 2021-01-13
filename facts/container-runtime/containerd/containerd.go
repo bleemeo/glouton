@@ -751,6 +751,10 @@ type ContainerOCISpec struct {
 	Spec *oci.Spec `json:"Spec,omitempty"`
 }
 
+func (c containerObject) RuntimeName() string {
+	return "containerd"
+}
+
 func (c containerObject) Annotations() map[string]string {
 	return nil
 }
@@ -1018,6 +1022,8 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 		if !ok {
 			continue
 		}
+
+		// TODO: ctx need to have the namespace
 
 		task, err := obj.container.Task(ctx, nil)
 		if err != nil {

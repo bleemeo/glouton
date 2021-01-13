@@ -77,11 +77,15 @@ type Service struct {
 
 // Container is a Contaier object on Bleemeo API.
 type Container struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	DockerID          string `json:"docker_id"`
-	DockerInspect     string `json:"docker_inspect"`
-	DockerInspectHash string `json:",omitempty"`
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	ContainerID      string    `json:"container_id"`
+	ContainerInspect string    `json:"container_inspect"`
+	Status           string    `json:"container_status"`
+	CreatedAt        time.Time `json:"container_created_at"`
+	Runtime          string    `json:"container_runtime"`
+
+	InspectHash string `json:",omitempty"`
 }
 
 // Threshold is the threshold of a metrics. We use pointer to float to support
@@ -176,8 +180,8 @@ func (mr MetricRegistration) RetryAfter() time.Time {
 
 // FillInspectHash fill the DockerInspectHash.
 func (c *Container) FillInspectHash() {
-	bin := sha256.Sum256([]byte(c.DockerInspect))
-	c.DockerInspectHash = fmt.Sprintf("%x", bin)
+	bin := sha256.Sum256([]byte(c.ContainerInspect))
+	c.InspectHash = fmt.Sprintf("%x", bin)
 }
 
 // MetricsAgentWhitelistMap return a map with all whitelisted agent metrics.

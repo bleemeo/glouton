@@ -37,6 +37,7 @@ type Container interface {
 	StartedAt() time.Time
 	State() ContainerState
 	StoppedAndReplaced() bool
+	RuntimeName() string
 }
 
 type ContainerState int
@@ -208,6 +209,7 @@ func ContainerIgnoredPorts(c Container) map[int]bool {
 }
 
 type FakeContainer struct {
+	FakeRuntimeName             string
 	FakeAnnotations             map[string]string
 	FakeCommand                 []string
 	FakeContainerJSON           string
@@ -235,6 +237,13 @@ type FakeContainer struct {
 	TestHasPod  bool
 }
 
+func (c FakeContainer) RuntimeName() string {
+	if c.FakeRuntimeName == "" {
+		return "fake"
+	}
+
+	return c.FakeRuntimeName
+}
 func (c FakeContainer) Annotations() map[string]string {
 	return c.FakeAnnotations
 }
