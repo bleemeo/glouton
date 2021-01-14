@@ -88,22 +88,23 @@ type agent struct {
 	cancel       context.CancelFunc
 	context      context.Context
 
-	hostRootPath      string
-	discovery         *discovery.Discovery
-	dockerRuntime     *dockerRuntime.Docker
-	containerdRuntime *containerd.Containerd
-	containerRuntime  crTypes.RuntimeInterface
-	collector         *collector.Collector
-	factProvider      *facts.FactProvider
-	bleemeoConnector  *bleemeo.Connector
-	influxdbConnector *influxdb.Client
-	threshold         *threshold.Registry
-	jmx               *jmxtrans.JMX
-	store             *store.Store
-	gathererRegistry  *registry.Registry
-	metricFormat      types.MetricFormat
-	dynamicScrapper   *promexporter.DynamicScrapper
-	lastHealCheck     int64
+	hostRootPath           string
+	discovery              *discovery.Discovery
+	dockerRuntime          *dockerRuntime.Docker
+	containerdRuntime      *containerd.Containerd
+	containerRuntime       crTypes.RuntimeInterface
+	collector              *collector.Collector
+	factProvider           *facts.FactProvider
+	bleemeoConnector       *bleemeo.Connector
+	influxdbConnector      *influxdb.Client
+	threshold              *threshold.Registry
+	jmx                    *jmxtrans.JMX
+	store                  *store.Store
+	gathererRegistry       *registry.Registry
+	metricFormat           types.MetricFormat
+	dynamicScrapper        *promexporter.DynamicScrapper
+	lastHealCheck          int64
+	lastContainerEventTime time.Time
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -1196,6 +1197,10 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 	for {
 		select {
 		case ev := <-a.containerRuntime.Events():
+			a.l.Lock()
+			a.lastContainerEventTime = time.Now()
+			a.l.Unlock()
+
 			if ev.Type == facts.EventTypeStart {
 				a.FireTrigger(true, false, false, true)
 			} else if ev.Type == facts.EventTypeStop || ev.Type == facts.EventTypeDelete {
@@ -1593,6 +1598,12 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		sort.Slice(containers, func(i, j int) bool {
 			return containers[i].ContainerName() < containers[j].ContainerName()
 		})
+
+		a.l.Lock()
+		lastEvent := a.lastContainerEventTime
+		a.l.Unlock()
+
+		fmt.Fprintf(file, "# Containers (count=%d, last update=%s, last event=%s)\n", len(containers), a.containerRuntime.LastUpdate().Format(time.RFC3339), lastEvent.Format(time.RFC3339))
 
 		for _, c := range containers {
 			addr, _ := c.ListenAddresses()

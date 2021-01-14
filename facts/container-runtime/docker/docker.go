@@ -69,6 +69,14 @@ type Docker struct {
 	containerAddressOnDockerBridge map[string]string
 }
 
+// LastUpdate return the last time containers list was updated.
+func (d *Docker) LastUpdate() time.Time {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	return d.lastUpdate
+}
+
 // ProcessWithCache facts.containerRuntime.
 func (d *Docker) ProcessWithCache() facts.ContainerRuntimeProcessQuerier {
 	return &dockerProcessQuerier{
@@ -652,9 +660,9 @@ func openConnection(ctx context.Context, host string) (cl dockerClient, err erro
 	}
 
 	if host == "" {
-		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation(), docker.WithTimeout(10*time.Second))
+		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithAPIVersionNegotiation())
 	} else {
-		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithHost(host), docker.WithAPIVersionNegotiation(), docker.WithTimeout(10*time.Second))
+		cl, err = docker.NewClientWithOpts(docker.FromEnv, docker.WithHost(host), docker.WithAPIVersionNegotiation())
 	}
 
 	if err != nil {

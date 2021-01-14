@@ -62,6 +62,14 @@ type Containerd struct {
 // Thought containerd we will be missing important information like name and IP address.
 const ignoredNamespace = "moby"
 
+// LastUpdate return the last time containers list was updated.
+func (c *Containerd) LastUpdate() time.Time {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.lastUpdate
+}
+
 // RuntimeFact will return facts from the ContainerD runtime, like containerd_version.
 func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]string) map[string]string {
 	c.l.Lock()

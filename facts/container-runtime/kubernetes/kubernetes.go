@@ -42,6 +42,20 @@ type Kubernetes struct {
 	podID2Pod      map[string]corev1.Pod
 }
 
+// LastUpdate return the last time containers list was updated.
+func (k *Kubernetes) LastUpdate() time.Time {
+	t := k.Runtime.LastUpdate()
+
+	k.l.Lock()
+	defer k.l.Unlock()
+
+	if t.Before(k.lastPodsUpdate) {
+		return k.lastPodsUpdate
+	}
+
+	return t
+}
+
 // CachedContainer return the container for given ID.
 func (k *Kubernetes) CachedContainer(containerID string) (c facts.Container, found bool) {
 	c, found = k.Runtime.CachedContainer(containerID)
