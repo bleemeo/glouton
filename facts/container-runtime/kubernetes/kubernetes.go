@@ -85,7 +85,7 @@ func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, inclu
 		pod, ok := k.getPod(c)
 		uid := c.Labels()["io.kubernetes.pod.uid"]
 
-		if !ok && (time.Since(k.lastPodsUpdate) > maxAge || uid != "" && !podsUpdated) {
+		if (time.Since(k.lastPodsUpdate) > maxAge || (!ok && uid != "")) && !podsUpdated {
 			podsUpdated = true
 			k.lastPodsUpdate = time.Now()
 
