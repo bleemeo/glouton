@@ -813,16 +813,16 @@ func (c dockerContainer) FinishedAt() time.Time {
 	return result
 }
 func (c dockerContainer) Health() (facts.ContainerHealth, string) {
-	if !c.State().IsRunning() {
-		return facts.ContainerHealthUnknown, "container is stopped"
-	}
-
 	if c.inspect.State == nil {
 		return facts.ContainerHealthUnknown, "container don't have State"
 	}
 
 	if c.inspect.State.Health == nil {
 		return facts.ContainerNoHealthCheck, ""
+	}
+
+	if !c.State().IsRunning() {
+		return facts.ContainerHealthUnknown, "container is stopped"
 	}
 
 	msg := ""

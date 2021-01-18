@@ -90,6 +90,7 @@ func TestDocker_Containers(t *testing.T) {
 					FakeState:         facts.ContainerStopped,
 					FakeCommand:       []string{"true"},
 					FakeImageName:     "rabbitmq",
+					FakeHealth:        facts.ContainerNoHealthCheck,
 				},
 				{
 					FakeID:             "2faf78372d542468d4616d7cb85f03994a1d7ea60a42749e7114c506b8282882",
@@ -105,6 +106,7 @@ func TestDocker_Containers(t *testing.T) {
 						},
 					},
 					FakeListenAddressesExplicit: true,
+					FakeHealth:                  facts.ContainerNoHealthCheck,
 				},
 				{
 					FakeID:            "33600bb7b4d62f43e87839e514a4235bb72f66dcfca35a7df5c900361a2c4d6e",
@@ -155,12 +157,14 @@ func TestDocker_Containers(t *testing.T) {
 						},
 					},
 					FakeListenAddressesExplicit: false,
+					FakeHealth:                  facts.ContainerNoHealthCheck,
 				},
 				{
 					FakeID:            "b59746cf51fa8b08eb228e5f4fc4bc28446a6f7ca19cdc3c23016f932b56003f",
 					FakeContainerName: "testdata_rabbitmqInternal_1",
 					FakeState:         facts.ContainerRunning,
 					FakeImageName:     "rabbitmq",
+					FakeHealth:        facts.ContainerNoHealthCheck,
 				},
 				{
 					FakeID:            "54f7b691664eb41bb2ccef8f8f79c432621e1234522d88940075b07d8bbed997",
@@ -176,6 +180,7 @@ func TestDocker_Containers(t *testing.T) {
 					},
 					FakeState:     facts.ContainerRunning,
 					FakeImageName: "rabbitmq",
+					FakeHealth:    facts.ContainerNoHealthCheck,
 					TestIgnored:   true,
 				},
 			},
