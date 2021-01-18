@@ -121,6 +121,10 @@ func ContainerIgnored(c Container) bool {
 // ContainerEnabled returns true if this container should be monitored by Glouton.
 // Also return a 2nd boolean telling is this container is explicitly enabled or if it's the default.
 func ContainerEnabled(c Container) (enabled bool, explicit bool) {
+	if c.StoppedAndReplaced() {
+		return false, true
+	}
+
 	return containerEnabledFromLabels(LabelsAndAnnotations(c))
 }
 

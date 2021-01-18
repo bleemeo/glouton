@@ -201,6 +201,7 @@ func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
 					FakePodNamespace:       "default",
 					TestHasPod:             true,
+					TestIgnored:            true,
 				},
 				{
 					FakeID:                 "967b51dffe07684eeaa6dd8c93a572eb1562e9ac5d0ea020498fd4a6df0e59e4",
@@ -370,6 +371,7 @@ func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 					FakePodName:            "delete-me-once-584c74ccf5-hmb77",
 					FakePodNamespace:       "default",
 					TestHasPod:             true,
+					TestIgnored:            true,
 				},
 				{
 					FakeID:                 "967b51dffe07684eeaa6dd8c93a572eb1562e9ac5d0ea020498fd4a6df0e59e4",
@@ -532,6 +534,7 @@ func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
 					FakePodName:            "delete-me-once-69c996b98d-rp9fl",
 					FakePodNamespace:       "default",
 					TestHasPod:             true,
+					TestIgnored:            true,
 				},
 				{
 					FakeID:                 "40a2d7f07a4213e67c9039c17d359014476a2020296ebc5e1b47c4d4b4224610",
