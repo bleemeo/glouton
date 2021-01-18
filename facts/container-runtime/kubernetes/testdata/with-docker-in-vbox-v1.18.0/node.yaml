@@ -1,0 +1,310 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Node
+  metadata:
+    annotations:
+      kubeadm.alpha.kubernetes.io/cri-socket: /var/run/dockershim.sock
+      node.alpha.kubernetes.io/ttl: "0"
+      projectcalico.org/IPv4Address: 192.168.99.118/24
+      projectcalico.org/IPv4IPIPTunnelAddr: 10.244.120.64
+      volumes.kubernetes.io/controller-managed-attach-detach: "true"
+    creationTimestamp: "2021-01-06T16:02:02Z"
+    labels:
+      beta.kubernetes.io/arch: amd64
+      beta.kubernetes.io/os: linux
+      kubernetes.io/arch: amd64
+      kubernetes.io/hostname: minikube
+      kubernetes.io/os: linux
+      minikube.k8s.io/commit: 9f1e482427589ff8451c4723b6ba53bb9742fbb1
+      minikube.k8s.io/name: minikube
+      minikube.k8s.io/updated_at: 2021_01_06T17_02_07_0700
+      minikube.k8s.io/version: v1.16.0
+      node-role.kubernetes.io/master: ""
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:kubeadm.alpha.kubernetes.io/cri-socket: {}
+          f:labels:
+            f:node-role.kubernetes.io/master: {}
+      manager: kubeadm
+      operation: Update
+      time: "2021-01-06T16:02:05Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:labels:
+            f:minikube.k8s.io/commit: {}
+            f:minikube.k8s.io/name: {}
+            f:minikube.k8s.io/updated_at: {}
+            f:minikube.k8s.io/version: {}
+      manager: kubectl
+      operation: Update
+      time: "2021-01-06T16:02:08Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:node.alpha.kubernetes.io/ttl: {}
+        f:spec:
+          f:podCIDR: {}
+          f:podCIDRs:
+            .: {}
+            v:"10.244.0.0/24": {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2021-01-06T16:02:21Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:projectcalico.org/IPv4Address: {}
+            f:projectcalico.org/IPv4IPIPTunnelAddr: {}
+        f:status:
+          f:conditions:
+            k:{"type":"NetworkUnavailable"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+      manager: calico-node
+      operation: Update
+      time: "2021-01-06T16:03:43Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:volumes.kubernetes.io/controller-managed-attach-detach: {}
+          f:labels:
+            .: {}
+            f:beta.kubernetes.io/arch: {}
+            f:beta.kubernetes.io/os: {}
+            f:kubernetes.io/arch: {}
+            f:kubernetes.io/hostname: {}
+            f:kubernetes.io/os: {}
+        f:status:
+          f:addresses:
+            .: {}
+            k:{"type":"Hostname"}:
+              .: {}
+              f:address: {}
+              f:type: {}
+            k:{"type":"InternalIP"}:
+              .: {}
+              f:address: {}
+              f:type: {}
+          f:allocatable:
+            .: {}
+            f:cpu: {}
+            f:ephemeral-storage: {}
+            f:hugepages-2Mi: {}
+            f:memory: {}
+            f:pods: {}
+          f:capacity:
+            .: {}
+            f:cpu: {}
+            f:ephemeral-storage: {}
+            f:hugepages-2Mi: {}
+            f:memory: {}
+            f:pods: {}
+          f:conditions:
+            .: {}
+            k:{"type":"DiskPressure"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"MemoryPressure"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"PIDPressure"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+          f:daemonEndpoints:
+            f:kubeletEndpoint:
+              f:Port: {}
+          f:images: {}
+          f:nodeInfo:
+            f:architecture: {}
+            f:bootID: {}
+            f:containerRuntimeVersion: {}
+            f:kernelVersion: {}
+            f:kubeProxyVersion: {}
+            f:kubeletVersion: {}
+            f:machineID: {}
+            f:operatingSystem: {}
+            f:osImage: {}
+            f:systemUUID: {}
+      manager: kubelet
+      operation: Update
+      time: "2021-01-06T16:04:14Z"
+    name: minikube
+    resourceVersion: "742"
+    selfLink: /api/v1/nodes/minikube
+    uid: f496d43d-0ab7-4545-bbe2-e0d3aeb7bcfc
+  spec:
+    podCIDR: 10.244.0.0/24
+    podCIDRs:
+    - 10.244.0.0/24
+  status:
+    addresses:
+    - address: 192.168.99.118
+      type: InternalIP
+    - address: minikube
+      type: Hostname
+    allocatable:
+      cpu: "2"
+      ephemeral-storage: 17784752Ki
+      hugepages-2Mi: "0"
+      memory: 4033392Ki
+      pods: "110"
+    capacity:
+      cpu: "2"
+      ephemeral-storage: 17784752Ki
+      hugepages-2Mi: "0"
+      memory: 4033392Ki
+      pods: "110"
+    conditions:
+    - lastHeartbeatTime: "2021-01-06T16:03:42Z"
+      lastTransitionTime: "2021-01-06T16:03:42Z"
+      message: Calico is running on this node
+      reason: CalicoIsUp
+      status: "False"
+      type: NetworkUnavailable
+    - lastHeartbeatTime: "2021-01-06T16:04:14Z"
+      lastTransitionTime: "2021-01-06T16:01:54Z"
+      message: kubelet has sufficient memory available
+      reason: KubeletHasSufficientMemory
+      status: "False"
+      type: MemoryPressure
+    - lastHeartbeatTime: "2021-01-06T16:04:14Z"
+      lastTransitionTime: "2021-01-06T16:01:54Z"
+      message: kubelet has no disk pressure
+      reason: KubeletHasNoDiskPressure
+      status: "False"
+      type: DiskPressure
+    - lastHeartbeatTime: "2021-01-06T16:04:14Z"
+      lastTransitionTime: "2021-01-06T16:01:54Z"
+      message: kubelet has sufficient PID available
+      reason: KubeletHasSufficientPID
+      status: "False"
+      type: PIDPressure
+    - lastHeartbeatTime: "2021-01-06T16:04:14Z"
+      lastTransitionTime: "2021-01-06T16:02:21Z"
+      message: kubelet is posting ready status
+      reason: KubeletReady
+      status: "True"
+      type: Ready
+    daemonEndpoints:
+      kubeletEndpoint:
+        Port: 10250
+    images:
+    - names:
+      - k8s.gcr.io/etcd:3.4.3-0
+      sizeBytes: 288426917
+    - names:
+      - calico/node@sha256:dbebe7e01ae85af68673a8e0ce51200ab8ae2a1c69d48dff5b95969b17eca7c2
+      - calico/node:v3.14.1
+      sizeBytes: 263082460
+    - names:
+      - kubernetesui/dashboard:v2.1.0
+      sizeBytes: 225733746
+    - names:
+      - calico/cni@sha256:84113c174b979e686de32094e552933e35d8fc7e2d532efcb9ace5310b65088c
+      - calico/cni:v3.14.1
+      sizeBytes: 225067482
+    - names:
+      - k8s.gcr.io/kube-apiserver:v1.18.0
+      sizeBytes: 172964371
+    - names:
+      - rabbitmq@sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba
+      - rabbitmq:latest
+      sizeBytes: 167332379
+    - names:
+      - k8s.gcr.io/kube-controller-manager:v1.18.0
+      sizeBytes: 162368019
+    - names:
+      - k8s.gcr.io/kube-proxy:v1.18.0
+      sizeBytes: 116534263
+    - names:
+      - calico/pod2daemon-flexvol@sha256:d125b9f3c24133bdaf90eaf2bee1d506240d39a77bda712eda3991b6b5d443f0
+      - calico/pod2daemon-flexvol:v3.14.1
+      sizeBytes: 112413732
+    - names:
+      - redis@sha256:0f724af268d0d3f5fb1d6b33fc22127ba5cbca2d58523b286ed3122db0dc5381
+      - redis:latest
+      sizeBytes: 104252176
+    - names:
+      - k8s.gcr.io/kube-scheduler:v1.18.0
+      sizeBytes: 95275539
+    - names:
+      - memcached@sha256:944f6eb53be39dfcb895ab110d685e4f0320ffa00b8a1c0fe35aeb52f4f89d30
+      - memcached:latest
+      sizeBytes: 82355872
+    - names:
+      - calico/kube-controllers@sha256:dc3bc839994136c51d31b6c303bc9c0c4960f7ac1fc09268f484fa3eea1be4f2
+      - calico/kube-controllers:v3.14.1
+      sizeBytes: 52823823
+    - names:
+      - k8s.gcr.io/coredns:1.6.7
+      sizeBytes: 43794147
+    - names:
+      - kubernetesui/metrics-scraper:v1.0.4
+      sizeBytes: 36937728
+    - names:
+      - gcr.io/k8s-minikube/storage-provisioner:v4
+      sizeBytes: 29683712
+    - names:
+      - busybox@sha256:49dae530fd5fee674a6b0d3da89a380fc93746095e7eca0f1b70188a95fd5d71
+      - busybox:latest
+      sizeBytes: 1235829
+    - names:
+      - k8s.gcr.io/pause:3.2
+      sizeBytes: 682696
+    nodeInfo:
+      architecture: amd64
+      bootID: 9f715c4e-8700-4765-966f-232e3bed16d7
+      containerRuntimeVersion: docker://20.10.0
+      kernelVersion: 4.19.157
+      kubeProxyVersion: v1.18.0
+      kubeletVersion: v1.18.0
+      machineID: 2b86f7d040e347b893515e150657816d
+      operatingSystem: linux
+      osImage: Buildroot 2020.02.8
+      systemUUID: a805366a-84a5-5448-a51e-5747638c0f2f
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""

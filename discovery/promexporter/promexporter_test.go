@@ -18,6 +18,7 @@
 package promexporter
 
 import (
+	"glouton/facts"
 	"glouton/types"
 	"reflect"
 	"testing"
@@ -26,56 +27,24 @@ import (
 const fakeJobName = "jobname"
 const fakePodNamespace = "default"
 
-type mockContainers struct {
-	labels         map[string]string
-	annotations    map[string]string
-	primaryAddress string
-	name           string
-	podName        string
-}
-
-func (c mockContainers) Labels() map[string]string {
-	return c.labels
-}
-
-func (c mockContainers) Annotations() map[string]string {
-	return c.annotations
-}
-
-func (c mockContainers) PrimaryAddress() string {
-	return c.primaryAddress
-}
-
-func (c mockContainers) Name() string {
-	return c.name
-}
-
-func (c mockContainers) PodNamespaceName() (string, string) {
-	if c.podName == "" {
-		return "", ""
-	}
-
-	return fakePodNamespace, c.podName
-}
-
 func TestListExporters(t *testing.T) {
 	tests := []struct {
 		name       string
-		containers []Container
+		containers []facts.Container
 		want       []target
 	}{
 		{
 			name:       "empty",
-			containers: []Container{},
+			containers: []facts.Container{},
 			want:       []target{},
 		},
 		{
 			name: "docker",
-			containers: []Container{
-				mockContainers{
-					name:           "my_container",
-					primaryAddress: "sample",
-					labels: map[string]string{
+			containers: []facts.Container{
+				facts.FakeContainer{
+					FakeContainerName:  "my_container",
+					FakePrimaryAddress: "sample",
+					FakeLabels: map[string]string{
 						"prometheus.io/scrape": "true",
 					},
 				},
@@ -92,12 +61,13 @@ func TestListExporters(t *testing.T) {
 		},
 		{
 			name: "k8s",
-			containers: []Container{
-				mockContainers{
-					name:           "k8s_containername_podname_namespace",
-					podName:        "my_pod-1234",
-					primaryAddress: "sample",
-					annotations: map[string]string{
+			containers: []facts.Container{
+				facts.FakeContainer{
+					FakeContainerName:  "k8s_containername_podname_namespace",
+					FakePodName:        "my_pod-1234",
+					FakePodNamespace:   "default",
+					FakePrimaryAddress: "sample",
+					FakeAnnotations: map[string]string{
 						"prometheus.io/scrape": "true",
 					},
 				},
@@ -115,15 +85,15 @@ func TestListExporters(t *testing.T) {
 		},
 		{
 			name: "another labels",
-			containers: []Container{
-				mockContainers{
-					name:           "container",
-					primaryAddress: "sample",
-					labels: map[string]string{
+			containers: []facts.Container{
+				facts.FakeContainer{
+					FakeContainerName:  "container",
+					FakePrimaryAddress: "sample",
+					FakeLabels: map[string]string{
 						"glouton.enable": "true",
 						"my_label":       "value",
 					},
-					annotations: map[string]string{
+					FakeAnnotations: map[string]string{
 						"kubernetes.io/hello": "world",
 					},
 				},
@@ -132,19 +102,20 @@ func TestListExporters(t *testing.T) {
 		},
 		{
 			name: "two-with-alternate-port",
-			containers: []Container{
-				mockContainers{
-					name:           "sample1_1",
-					primaryAddress: "sample1",
-					labels: map[string]string{
+			containers: []facts.Container{
+				facts.FakeContainer{
+					FakeContainerName:  "sample1_1",
+					FakePrimaryAddress: "sample1",
+					FakeLabels: map[string]string{
 						"prometheus.io/scrape": "true",
 					},
 				},
-				mockContainers{
-					name:           "k8s_sample2_default",
-					podName:        "sample2-1234",
-					primaryAddress: "sample2",
-					labels: map[string]string{
+				facts.FakeContainer{
+					FakeContainerName:  "k8s_sample2_default",
+					FakePodName:        "sample2-1234",
+					FakePodNamespace:   "default",
+					FakePrimaryAddress: "sample2",
+					FakeLabels: map[string]string{
 						"prometheus.io/scrape": "true",
 						"prometheus.io/port":   "8080",
 					},
@@ -170,11 +141,11 @@ func TestListExporters(t *testing.T) {
 		},
 		{
 			name: "full-configured",
-			containers: []Container{
-				mockContainers{
-					name:           "testname",
-					primaryAddress: "sample",
-					annotations: map[string]string{
+			containers: []facts.Container{
+				facts.FakeContainer{
+					FakeContainerName:  "testname",
+					FakePrimaryAddress: "sample",
+					FakeAnnotations: map[string]string{
 						"prometheus.io/scrape": "true",
 						"prometheus.io/port":   "8080",
 						"prometheus.io/path":   "/metrics.txt",
@@ -193,11 +164,11 @@ func TestListExporters(t *testing.T) {
 		},
 		{
 			name: "path-without-slash",
-			containers: []Container{
-				mockContainers{
-					name:           "testname",
-					primaryAddress: "sample",
-					annotations: map[string]string{
+			containers: []facts.Container{
+				facts.FakeContainer{
+					FakeContainerName:  "testname",
+					FakePrimaryAddress: "sample",
+					FakeAnnotations: map[string]string{
 						"prometheus.io/scrape": "true",
 						"prometheus.io/path":   "metrics.txt",
 					},

@@ -1,0 +1,1730 @@
+{
+  "Namespaces": [
+    {
+      "MockNamespace": "default",
+      "MockContainers": [
+        {
+          "MockInfo": {
+            "ID": "gloutonIgnore",
+            "Labels": {
+              "glouton.enable": "off",
+              "io.containerd.image.config.stop-signal": "SIGTERM"
+            },
+            "Image": "docker.io/library/rabbitmq:latest",
+            "Runtime": {
+              "Name": "io.containerd.runc.v2",
+              "Options": {
+                "type_url": "containerd.runc.v1.Options"
+              }
+            },
+            "SnapshotKey": "gloutonIgnore",
+            "Snapshotter": "overlayfs",
+            "CreatedAt": "2021-01-07T19:08:58.48745465Z",
+            "UpdatedAt": "2021-01-07T19:08:58.48745465Z",
+            "Extensions": null,
+            "Spec": {
+              "ociVersion": "1.0.2-dev",
+              "process": {
+                "user": {
+                  "uid": 0,
+                  "gid": 0
+                },
+                "args": [
+                  "docker-entrypoint.sh",
+                  "rabbitmq-server"
+                ],
+                "env": [
+                  "PATH=/opt/rabbitmq/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                  "OPENSSL_VERSION=1.1.1i",
+                  "OPENSSL_SOURCE_SHA256=e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242",
+                  "OPENSSL_PGP_KEY_IDS=0x8657ABB260F056B1E5190839D9C4D26D0E604491 0x5B2545DAB21995F4088CEFAA36CEE4DEB00CFE33 0xED230BEC4D4F2518B9D7DF41F0DB4D21C1D35231 0xC1F33DD8CE1D4CC613AF14DA9195C48241FBF7DD 0x7953AC1FBC3DC8B3B292393ED5E9E43F7DF9EE8C 0xE5E52560DD91C556DDBDA5D02064C53641C25E5D",
+                  "OTP_VERSION=23.2.1",
+                  "OTP_SOURCE_SHA256=e7034e2cfe50d7570ac8f70ea7ba69ea013f10863043e25132f0a5d3d0d8d3a7",
+                  "RABBITMQ_DATA_DIR=/var/lib/rabbitmq",
+                  "RABBITMQ_VERSION=3.8.9",
+                  "RABBITMQ_PGP_KEY_ID=0x0A9AF2115F4687BD29803A206B73A36E6026DFCA",
+                  "RABBITMQ_HOME=/opt/rabbitmq",
+                  "RABBITMQ_LOGS=-",
+                  "HOME=/var/lib/rabbitmq",
+                  "LANG=C.UTF-8",
+                  "LANGUAGE=C.UTF-8",
+                  "LC_ALL=C.UTF-8"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                  "bounding": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "effective": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "inheritable": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "permitted": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ]
+                },
+                "rlimits": [
+                  {
+                    "type": "RLIMIT_NOFILE",
+                    "hard": 1024,
+                    "soft": 1024
+                  }
+                ],
+                "noNewPrivileges": true
+              },
+              "root": {
+                "path": "rootfs"
+              },
+              "mounts": [
+                {
+                  "destination": "/proc",
+                  "type": "proc",
+                  "source": "proc",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/dev",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/pts",
+                  "type": "devpts",
+                  "source": "devpts",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "newinstance",
+                    "ptmxmode=0666",
+                    "mode=0620",
+                    "gid=5"
+                  ]
+                },
+                {
+                  "destination": "/dev/shm",
+                  "type": "tmpfs",
+                  "source": "shm",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "mode=1777",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/mqueue",
+                  "type": "mqueue",
+                  "source": "mqueue",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/sys",
+                  "type": "sysfs",
+                  "source": "sysfs",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "ro"
+                  ]
+                },
+                {
+                  "destination": "/run",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                }
+              ],
+              "annotations": {
+                "glouton.enable": "off"
+              },
+              "linux": {
+                "resources": {
+                  "devices": [
+                    {
+                      "allow": false,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 3,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 8,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 7,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 0,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 5,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 9,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 1,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 136,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 2,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 10,
+                      "minor": 200,
+                      "access": "rwm"
+                    }
+                  ]
+                },
+                "cgroupsPath": "/default/gloutonIgnore",
+                "namespaces": [
+                  {
+                    "type": "pid"
+                  },
+                  {
+                    "type": "ipc"
+                  },
+                  {
+                    "type": "uts"
+                  },
+                  {
+                    "type": "mount"
+                  },
+                  {
+                    "type": "network"
+                  }
+                ],
+                "maskedPaths": [
+                  "/proc/acpi",
+                  "/proc/asound",
+                  "/proc/kcore",
+                  "/proc/keys",
+                  "/proc/latency_stats",
+                  "/proc/timer_list",
+                  "/proc/timer_stats",
+                  "/proc/sched_debug",
+                  "/sys/firmware",
+                  "/proc/scsi"
+                ],
+                "readonlyPaths": [
+                  "/proc/bus",
+                  "/proc/fs",
+                  "/proc/irq",
+                  "/proc/sys",
+                  "/proc/sysrq-trigger"
+                ]
+              }
+            }
+          },
+          "MockImageOCI": {
+            "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+            "digest": "sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba",
+            "size": 1418
+          },
+          "MockTask": {
+            "MockID": "gloutonIgnore",
+            "MockPID": 4133,
+            "MockStatus": {
+              "Status": "running",
+              "ExitStatus": 0,
+              "ExitTime": "0001-01-01T00:00:00Z"
+            },
+            "MockPids": [
+              {
+                "Pid": 4133,
+                "Info": null
+              },
+              {
+                "Pid": 4455,
+                "Info": null
+              },
+              {
+                "Pid": 4764,
+                "Info": null
+              },
+              {
+                "Pid": 4937,
+                "Info": null
+              },
+              {
+                "Pid": 5043,
+                "Info": null
+              },
+              {
+                "Pid": 5044,
+                "Info": null
+              }
+            ]
+          }
+        },
+        {
+          "MockInfo": {
+            "ID": "notRunning",
+            "Labels": {
+              "io.containerd.image.config.stop-signal": "SIGTERM"
+            },
+            "Image": "docker.io/library/rabbitmq:latest",
+            "Runtime": {
+              "Name": "io.containerd.runc.v2",
+              "Options": {
+                "type_url": "containerd.runc.v1.Options"
+              }
+            },
+            "SnapshotKey": "notRunning",
+            "Snapshotter": "overlayfs",
+            "CreatedAt": "2021-01-07T19:08:53.990885506Z",
+            "UpdatedAt": "2021-01-07T19:08:53.990885506Z",
+            "Extensions": null,
+            "Spec": {
+              "ociVersion": "1.0.2-dev",
+              "process": {
+                "user": {
+                  "uid": 0,
+                  "gid": 0
+                },
+                "args": [
+                  "true"
+                ],
+                "env": [
+                  "PATH=/opt/rabbitmq/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                  "OPENSSL_VERSION=1.1.1i",
+                  "OPENSSL_SOURCE_SHA256=e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242",
+                  "OPENSSL_PGP_KEY_IDS=0x8657ABB260F056B1E5190839D9C4D26D0E604491 0x5B2545DAB21995F4088CEFAA36CEE4DEB00CFE33 0xED230BEC4D4F2518B9D7DF41F0DB4D21C1D35231 0xC1F33DD8CE1D4CC613AF14DA9195C48241FBF7DD 0x7953AC1FBC3DC8B3B292393ED5E9E43F7DF9EE8C 0xE5E52560DD91C556DDBDA5D02064C53641C25E5D",
+                  "OTP_VERSION=23.2.1",
+                  "OTP_SOURCE_SHA256=e7034e2cfe50d7570ac8f70ea7ba69ea013f10863043e25132f0a5d3d0d8d3a7",
+                  "RABBITMQ_DATA_DIR=/var/lib/rabbitmq",
+                  "RABBITMQ_VERSION=3.8.9",
+                  "RABBITMQ_PGP_KEY_ID=0x0A9AF2115F4687BD29803A206B73A36E6026DFCA",
+                  "RABBITMQ_HOME=/opt/rabbitmq",
+                  "RABBITMQ_LOGS=-",
+                  "HOME=/var/lib/rabbitmq",
+                  "LANG=C.UTF-8",
+                  "LANGUAGE=C.UTF-8",
+                  "LC_ALL=C.UTF-8"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                  "bounding": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "effective": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "inheritable": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "permitted": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ]
+                },
+                "rlimits": [
+                  {
+                    "type": "RLIMIT_NOFILE",
+                    "hard": 1024,
+                    "soft": 1024
+                  }
+                ],
+                "noNewPrivileges": true
+              },
+              "root": {
+                "path": "rootfs"
+              },
+              "mounts": [
+                {
+                  "destination": "/proc",
+                  "type": "proc",
+                  "source": "proc",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/dev",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/pts",
+                  "type": "devpts",
+                  "source": "devpts",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "newinstance",
+                    "ptmxmode=0666",
+                    "mode=0620",
+                    "gid=5"
+                  ]
+                },
+                {
+                  "destination": "/dev/shm",
+                  "type": "tmpfs",
+                  "source": "shm",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "mode=1777",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/mqueue",
+                  "type": "mqueue",
+                  "source": "mqueue",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/sys",
+                  "type": "sysfs",
+                  "source": "sysfs",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "ro"
+                  ]
+                },
+                {
+                  "destination": "/run",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                }
+              ],
+              "linux": {
+                "resources": {
+                  "devices": [
+                    {
+                      "allow": false,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 3,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 8,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 7,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 0,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 5,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 9,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 1,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 136,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 2,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 10,
+                      "minor": 200,
+                      "access": "rwm"
+                    }
+                  ]
+                },
+                "cgroupsPath": "/default/notRunning",
+                "namespaces": [
+                  {
+                    "type": "pid"
+                  },
+                  {
+                    "type": "ipc"
+                  },
+                  {
+                    "type": "uts"
+                  },
+                  {
+                    "type": "mount"
+                  },
+                  {
+                    "type": "network"
+                  }
+                ],
+                "maskedPaths": [
+                  "/proc/acpi",
+                  "/proc/asound",
+                  "/proc/kcore",
+                  "/proc/keys",
+                  "/proc/latency_stats",
+                  "/proc/timer_list",
+                  "/proc/timer_stats",
+                  "/proc/sched_debug",
+                  "/sys/firmware",
+                  "/proc/scsi"
+                ],
+                "readonlyPaths": [
+                  "/proc/bus",
+                  "/proc/fs",
+                  "/proc/irq",
+                  "/proc/sys",
+                  "/proc/sysrq-trigger"
+                ]
+              }
+            }
+          },
+          "MockImageOCI": {
+            "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+            "digest": "sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba",
+            "size": 1418
+          },
+          "MockTask": {
+            "MockID": "notRunning",
+            "MockPID": 3905,
+            "MockStatus": {
+              "Status": "stopped",
+              "ExitStatus": 0,
+              "ExitTime": "2021-01-07T19:08:54.676875154Z"
+            },
+            "MockPids": null
+          }
+        },
+        {
+          "MockInfo": {
+            "ID": "rabbitLabels",
+            "Labels": {
+              "glouton.check.ignore.port.4369": "TrUe",
+              "glouton.check.ignore.port.5672": "false",
+              "io.containerd.image.config.stop-signal": "SIGTERM"
+            },
+            "Image": "docker.io/library/rabbitmq:latest",
+            "Runtime": {
+              "Name": "io.containerd.runc.v2",
+              "Options": {
+                "type_url": "containerd.runc.v1.Options"
+              }
+            },
+            "SnapshotKey": "rabbitLabels",
+            "Snapshotter": "overlayfs",
+            "CreatedAt": "2021-01-07T19:08:50.313695932Z",
+            "UpdatedAt": "2021-01-07T19:08:50.313695932Z",
+            "Extensions": null,
+            "Spec": {
+              "ociVersion": "1.0.2-dev",
+              "process": {
+                "user": {
+                  "uid": 0,
+                  "gid": 0
+                },
+                "args": [
+                  "docker-entrypoint.sh",
+                  "rabbitmq-server"
+                ],
+                "env": [
+                  "PATH=/opt/rabbitmq/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                  "OPENSSL_VERSION=1.1.1i",
+                  "OPENSSL_SOURCE_SHA256=e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242",
+                  "OPENSSL_PGP_KEY_IDS=0x8657ABB260F056B1E5190839D9C4D26D0E604491 0x5B2545DAB21995F4088CEFAA36CEE4DEB00CFE33 0xED230BEC4D4F2518B9D7DF41F0DB4D21C1D35231 0xC1F33DD8CE1D4CC613AF14DA9195C48241FBF7DD 0x7953AC1FBC3DC8B3B292393ED5E9E43F7DF9EE8C 0xE5E52560DD91C556DDBDA5D02064C53641C25E5D",
+                  "OTP_VERSION=23.2.1",
+                  "OTP_SOURCE_SHA256=e7034e2cfe50d7570ac8f70ea7ba69ea013f10863043e25132f0a5d3d0d8d3a7",
+                  "RABBITMQ_DATA_DIR=/var/lib/rabbitmq",
+                  "RABBITMQ_VERSION=3.8.9",
+                  "RABBITMQ_PGP_KEY_ID=0x0A9AF2115F4687BD29803A206B73A36E6026DFCA",
+                  "RABBITMQ_HOME=/opt/rabbitmq",
+                  "RABBITMQ_LOGS=-",
+                  "HOME=/var/lib/rabbitmq",
+                  "LANG=C.UTF-8",
+                  "LANGUAGE=C.UTF-8",
+                  "LC_ALL=C.UTF-8"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                  "bounding": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "effective": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "inheritable": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "permitted": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ]
+                },
+                "rlimits": [
+                  {
+                    "type": "RLIMIT_NOFILE",
+                    "hard": 1024,
+                    "soft": 1024
+                  }
+                ],
+                "noNewPrivileges": true
+              },
+              "root": {
+                "path": "rootfs"
+              },
+              "mounts": [
+                {
+                  "destination": "/proc",
+                  "type": "proc",
+                  "source": "proc",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/dev",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/pts",
+                  "type": "devpts",
+                  "source": "devpts",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "newinstance",
+                    "ptmxmode=0666",
+                    "mode=0620",
+                    "gid=5"
+                  ]
+                },
+                {
+                  "destination": "/dev/shm",
+                  "type": "tmpfs",
+                  "source": "shm",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "mode=1777",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/mqueue",
+                  "type": "mqueue",
+                  "source": "mqueue",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/sys",
+                  "type": "sysfs",
+                  "source": "sysfs",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "ro"
+                  ]
+                },
+                {
+                  "destination": "/run",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                }
+              ],
+              "annotations": {
+                "glouton.check.ignore.port.4369": "TrUe",
+                "glouton.check.ignore.port.5672": "false"
+              },
+              "linux": {
+                "resources": {
+                  "devices": [
+                    {
+                      "allow": false,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 3,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 8,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 7,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 0,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 5,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 9,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 1,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 136,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 2,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 10,
+                      "minor": 200,
+                      "access": "rwm"
+                    }
+                  ]
+                },
+                "cgroupsPath": "/default/rabbitLabels",
+                "namespaces": [
+                  {
+                    "type": "pid"
+                  },
+                  {
+                    "type": "ipc"
+                  },
+                  {
+                    "type": "uts"
+                  },
+                  {
+                    "type": "mount"
+                  },
+                  {
+                    "type": "network"
+                  }
+                ],
+                "maskedPaths": [
+                  "/proc/acpi",
+                  "/proc/asound",
+                  "/proc/kcore",
+                  "/proc/keys",
+                  "/proc/latency_stats",
+                  "/proc/timer_list",
+                  "/proc/timer_stats",
+                  "/proc/sched_debug",
+                  "/sys/firmware",
+                  "/proc/scsi"
+                ],
+                "readonlyPaths": [
+                  "/proc/bus",
+                  "/proc/fs",
+                  "/proc/irq",
+                  "/proc/sys",
+                  "/proc/sysrq-trigger"
+                ]
+              }
+            }
+          },
+          "MockImageOCI": {
+            "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+            "digest": "sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba",
+            "size": 1418
+          },
+          "MockTask": {
+            "MockID": "rabbitLabels",
+            "MockPID": 3634,
+            "MockStatus": {
+              "Status": "running",
+              "ExitStatus": 0,
+              "ExitTime": "0001-01-01T00:00:00Z"
+            },
+            "MockPids": [
+              {
+                "Pid": 3634,
+                "Info": null
+              },
+              {
+                "Pid": 3750,
+                "Info": null
+              },
+              {
+                "Pid": 4243,
+                "Info": null
+              },
+              {
+                "Pid": 4417,
+                "Info": null
+              },
+              {
+                "Pid": 4708,
+                "Info": null
+              },
+              {
+                "Pid": 4709,
+                "Info": null
+              }
+            ]
+          }
+        },
+        {
+          "MockInfo": {
+            "ID": "rabbitmqInternal",
+            "Labels": {
+              "io.containerd.image.config.stop-signal": "SIGTERM"
+            },
+            "Image": "docker.io/library/rabbitmq:latest",
+            "Runtime": {
+              "Name": "io.containerd.runc.v2",
+              "Options": {
+                "type_url": "containerd.runc.v1.Options"
+              }
+            },
+            "SnapshotKey": "rabbitmqInternal",
+            "Snapshotter": "overlayfs",
+            "CreatedAt": "2021-01-07T19:08:46.99875294Z",
+            "UpdatedAt": "2021-01-07T19:08:46.99875294Z",
+            "Extensions": null,
+            "Spec": {
+              "ociVersion": "1.0.2-dev",
+              "process": {
+                "user": {
+                  "uid": 0,
+                  "gid": 0
+                },
+                "args": [
+                  "docker-entrypoint.sh",
+                  "rabbitmq-server"
+                ],
+                "env": [
+                  "PATH=/opt/rabbitmq/sbin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                  "OPENSSL_VERSION=1.1.1i",
+                  "OPENSSL_SOURCE_SHA256=e8be6a35fe41d10603c3cc635e93289ed00bf34b79671a3a4de64fcee00d5242",
+                  "OPENSSL_PGP_KEY_IDS=0x8657ABB260F056B1E5190839D9C4D26D0E604491 0x5B2545DAB21995F4088CEFAA36CEE4DEB00CFE33 0xED230BEC4D4F2518B9D7DF41F0DB4D21C1D35231 0xC1F33DD8CE1D4CC613AF14DA9195C48241FBF7DD 0x7953AC1FBC3DC8B3B292393ED5E9E43F7DF9EE8C 0xE5E52560DD91C556DDBDA5D02064C53641C25E5D",
+                  "OTP_VERSION=23.2.1",
+                  "OTP_SOURCE_SHA256=e7034e2cfe50d7570ac8f70ea7ba69ea013f10863043e25132f0a5d3d0d8d3a7",
+                  "RABBITMQ_DATA_DIR=/var/lib/rabbitmq",
+                  "RABBITMQ_VERSION=3.8.9",
+                  "RABBITMQ_PGP_KEY_ID=0x0A9AF2115F4687BD29803A206B73A36E6026DFCA",
+                  "RABBITMQ_HOME=/opt/rabbitmq",
+                  "RABBITMQ_LOGS=-",
+                  "HOME=/var/lib/rabbitmq",
+                  "LANG=C.UTF-8",
+                  "LANGUAGE=C.UTF-8",
+                  "LC_ALL=C.UTF-8"
+                ],
+                "cwd": "/",
+                "capabilities": {
+                  "bounding": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "effective": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "inheritable": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "permitted": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ]
+                },
+                "rlimits": [
+                  {
+                    "type": "RLIMIT_NOFILE",
+                    "hard": 1024,
+                    "soft": 1024
+                  }
+                ],
+                "noNewPrivileges": true
+              },
+              "root": {
+                "path": "rootfs"
+              },
+              "mounts": [
+                {
+                  "destination": "/proc",
+                  "type": "proc",
+                  "source": "proc",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/dev",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/pts",
+                  "type": "devpts",
+                  "source": "devpts",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "newinstance",
+                    "ptmxmode=0666",
+                    "mode=0620",
+                    "gid=5"
+                  ]
+                },
+                {
+                  "destination": "/dev/shm",
+                  "type": "tmpfs",
+                  "source": "shm",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "mode=1777",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/mqueue",
+                  "type": "mqueue",
+                  "source": "mqueue",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/sys",
+                  "type": "sysfs",
+                  "source": "sysfs",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "ro"
+                  ]
+                },
+                {
+                  "destination": "/run",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                }
+              ],
+              "linux": {
+                "resources": {
+                  "devices": [
+                    {
+                      "allow": false,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 3,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 8,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 7,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 0,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 5,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 1,
+                      "minor": 9,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 1,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 136,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 5,
+                      "minor": 2,
+                      "access": "rwm"
+                    },
+                    {
+                      "allow": true,
+                      "type": "c",
+                      "major": 10,
+                      "minor": 200,
+                      "access": "rwm"
+                    }
+                  ]
+                },
+                "cgroupsPath": "/default/rabbitmqInternal",
+                "namespaces": [
+                  {
+                    "type": "pid"
+                  },
+                  {
+                    "type": "ipc"
+                  },
+                  {
+                    "type": "uts"
+                  },
+                  {
+                    "type": "mount"
+                  },
+                  {
+                    "type": "network"
+                  }
+                ],
+                "maskedPaths": [
+                  "/proc/acpi",
+                  "/proc/asound",
+                  "/proc/kcore",
+                  "/proc/keys",
+                  "/proc/latency_stats",
+                  "/proc/timer_list",
+                  "/proc/timer_stats",
+                  "/proc/sched_debug",
+                  "/sys/firmware",
+                  "/proc/scsi"
+                ],
+                "readonlyPaths": [
+                  "/proc/bus",
+                  "/proc/fs",
+                  "/proc/irq",
+                  "/proc/sys",
+                  "/proc/sysrq-trigger"
+                ]
+              }
+            }
+          },
+          "MockImageOCI": {
+            "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+            "digest": "sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba",
+            "size": 1418
+          },
+          "MockTask": {
+            "MockID": "rabbitmqInternal",
+            "MockPID": 3023,
+            "MockStatus": {
+              "Status": "running",
+              "ExitStatus": 0,
+              "ExitTime": "0001-01-01T00:00:00Z"
+            },
+            "MockPids": [
+              {
+                "Pid": 3023,
+                "Info": null
+              },
+              {
+                "Pid": 3127,
+                "Info": null
+              },
+              {
+                "Pid": 3386,
+                "Info": null
+              },
+              {
+                "Pid": 3558,
+                "Info": null
+              },
+              {
+                "Pid": 3815,
+                "Info": null
+              },
+              {
+                "Pid": 3816,
+                "Info": null
+              }
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "MockNamespace": "example",
+      "MockContainers": [
+        {
+          "MockInfo": {
+            "ID": "redis-server",
+            "Labels": null,
+            "Image": "docker.io/library/redis:alpine",
+            "Runtime": {
+              "Name": "io.containerd.runc.v2",
+              "Options": null
+            },
+            "SnapshotKey": "redis-server-snapshot",
+            "Snapshotter": "overlayfs",
+            "CreatedAt": "2021-01-07T19:09:23.87381252Z",
+            "UpdatedAt": "2021-01-07T19:09:23.87381252Z",
+            "Extensions": null,
+            "Spec": {
+              "ociVersion": "1.0.2",
+              "process": {
+                "user": {
+                  "uid": 0,
+                  "gid": 0,
+                  "additionalGids": [
+                    1,
+                    2,
+                    3,
+                    4,
+                    6,
+                    10,
+                    11,
+                    20,
+                    26,
+                    27
+                  ]
+                },
+                "args": [
+                  "docker-entrypoint.sh",
+                  "redis-server"
+                ],
+                "env": [
+                  "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+                  "REDIS_VERSION=6.0.9",
+                  "REDIS_DOWNLOAD_URL=http://download.redis.io/releases/redis-6.0.9.tar.gz",
+                  "REDIS_DOWNLOAD_SHA=dc2bdcf81c620e9f09cfd12e85d3bc631c897b2db7a55218fd8a65eaa37f86dd"
+                ],
+                "cwd": "/data",
+                "capabilities": {
+                  "bounding": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "effective": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "inheritable": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ],
+                  "permitted": [
+                    "CAP_CHOWN",
+                    "CAP_DAC_OVERRIDE",
+                    "CAP_FSETID",
+                    "CAP_FOWNER",
+                    "CAP_MKNOD",
+                    "CAP_NET_RAW",
+                    "CAP_SETGID",
+                    "CAP_SETUID",
+                    "CAP_SETFCAP",
+                    "CAP_SETPCAP",
+                    "CAP_NET_BIND_SERVICE",
+                    "CAP_SYS_CHROOT",
+                    "CAP_KILL",
+                    "CAP_AUDIT_WRITE"
+                  ]
+                },
+                "rlimits": [
+                  {
+                    "type": "RLIMIT_NOFILE",
+                    "hard": 1024,
+                    "soft": 1024
+                  }
+                ],
+                "noNewPrivileges": true
+              },
+              "root": {
+                "path": "rootfs"
+              },
+              "mounts": [
+                {
+                  "destination": "/proc",
+                  "type": "proc",
+                  "source": "proc",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/dev",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/pts",
+                  "type": "devpts",
+                  "source": "devpts",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "newinstance",
+                    "ptmxmode=0666",
+                    "mode=0620",
+                    "gid=5"
+                  ]
+                },
+                {
+                  "destination": "/dev/shm",
+                  "type": "tmpfs",
+                  "source": "shm",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "mode=1777",
+                    "size=65536k"
+                  ]
+                },
+                {
+                  "destination": "/dev/mqueue",
+                  "type": "mqueue",
+                  "source": "mqueue",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev"
+                  ]
+                },
+                {
+                  "destination": "/sys",
+                  "type": "sysfs",
+                  "source": "sysfs",
+                  "options": [
+                    "nosuid",
+                    "noexec",
+                    "nodev",
+                    "ro"
+                  ]
+                },
+                {
+                  "destination": "/run",
+                  "type": "tmpfs",
+                  "source": "tmpfs",
+                  "options": [
+                    "nosuid",
+                    "strictatime",
+                    "mode=755",
+                    "size=65536k"
+                  ]
+                }
+              ],
+              "linux": {
+                "resources": {
+                  "devices": [
+                    {
+                      "allow": false,
+                      "access": "rwm"
+                    }
+                  ]
+                },
+                "cgroupsPath": "/example/redis-server",
+                "namespaces": [
+                  {
+                    "type": "pid"
+                  },
+                  {
+                    "type": "ipc"
+                  },
+                  {
+                    "type": "uts"
+                  },
+                  {
+                    "type": "mount"
+                  },
+                  {
+                    "type": "network"
+                  }
+                ],
+                "maskedPaths": [
+                  "/proc/acpi",
+                  "/proc/asound",
+                  "/proc/kcore",
+                  "/proc/keys",
+                  "/proc/latency_stats",
+                  "/proc/timer_list",
+                  "/proc/timer_stats",
+                  "/proc/sched_debug",
+                  "/sys/firmware",
+                  "/proc/scsi"
+                ],
+                "readonlyPaths": [
+                  "/proc/bus",
+                  "/proc/fs",
+                  "/proc/irq",
+                  "/proc/sys",
+                  "/proc/sysrq-trigger"
+                ]
+              }
+            }
+          },
+          "MockImageOCI": {
+            "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+            "digest": "sha256:68d4030e07912c418332ba6fdab4ac69f0293d9b1daaed4f1f77bdeb0a5eb048",
+            "size": 1645
+          },
+          "MockTask": {
+            "MockID": "redis-server",
+            "MockPID": 5094,
+            "MockStatus": {
+              "Status": "running",
+              "ExitStatus": 0,
+              "ExitTime": "0001-01-01T00:00:00Z"
+            },
+            "MockPids": [
+              {
+                "Pid": 5094,
+                "Info": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "Version": {
+    "Version": "1.4.3",
+    "Revision": "269548fa27e0089a8b8278fc4fc781d7f65a939b"
+  }
+}

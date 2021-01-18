@@ -17,6 +17,7 @@
 package discovery
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
 	"glouton/facts"
@@ -25,6 +26,7 @@ import (
 	"glouton/task"
 	"glouton/types"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -90,7 +92,7 @@ type GathererRegistry interface {
 }
 
 // New returns a new Discovery.
-func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo *facts.DockerProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
+func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererRegistry, taskRegistry Registry, state State, acc inputs.AnnotationAccumulator, containerInfo containerInfoProvider, servicesOverride []map[string]string, isCheckIgnored func(NameContainer) bool, isInputIgnored func(NameContainer) bool, metricFormat types.MetricFormat) *Discovery {
 	initialServices := servicesFromState(state)
 	discoveredServicesMap := make(map[NameContainer]Service, len(initialServices))
 
@@ -128,7 +130,7 @@ func New(dynamicDiscovery Discoverer, coll Collector, metricRegistry GathererReg
 		coll:                  coll,
 		metricRegistry:        metricRegistry,
 		taskRegistry:          taskRegistry,
-		containerInfo:         (*dockerWrapper)(containerInfo),
+		containerInfo:         containerInfo,
 		acc:                   acc,
 		activeCollector:       make(map[NameContainer]collectorDetails),
 		activeCheck:           make(map[NameContainer]CheckDetails),
@@ -166,6 +168,82 @@ func (d *Discovery) LastUpdate() time.Time {
 	defer d.l.Unlock()
 
 	return d.lastDiscoveryUpdate
+}
+
+// DiagnosticZip add to a zipfile useful diagnostic information.
+func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
+	d.l.Lock()
+	defer d.l.Unlock()
+
+	file, err := zipFile.Create("discovery.txt")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "# Discovered service (count=%d, last update=%s)\n", len(d.servicesMap), d.lastDiscoveryUpdate.Format(time.RFC3339))
+	services := make([]Service, 0, len(d.servicesMap))
+
+	for _, v := range d.servicesMap {
+		services = append(services, v)
+	}
+
+	sort.Slice(services, func(i, j int) bool {
+		if services[j].Active != services[i].Active && services[i].Active {
+			return true
+		}
+
+		if services[j].Active != services[i].Active && services[j].Active {
+			return false
+		}
+
+		return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].ContainerName < services[j].ContainerName)
+	})
+
+	for _, v := range services {
+		fmt.Fprintf(file, "%s on IP %s, active=%v, containerName=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.ContainerName, v.ListenAddresses)
+	}
+
+	if dd, ok := d.dynamicDiscovery.(*DynamicDiscovery); ok {
+		procs, err := dd.ps.Processes(context.Background(), time.Hour)
+		if err != nil {
+			return err
+		}
+
+		fmt.Fprintf(file, "\n# Processes (filteted to only show ones associated with a service)\n")
+
+		for _, p := range procs {
+			serviceType, ok := serviceByCommand(p.CmdLineList)
+			if !ok {
+				continue
+			}
+
+			fmt.Fprintf(file, "PID %d with service %v on container %s\n", p.PID, serviceType, p.ContainerName)
+		}
+
+		fmt.Fprintf(file, "\n# Last dynamic discovery (count=%d, last update=%s)\n", len(dd.services), dd.lastDiscoveryUpdate.Format(time.RFC3339))
+
+		services := make([]Service, len(dd.services))
+
+		copy(services, dd.services)
+
+		sort.Slice(services, func(i, j int) bool {
+			if services[j].Active != services[i].Active && services[i].Active {
+				return true
+			}
+
+			if services[j].Active != services[i].Active && services[j].Active {
+				return false
+			}
+
+			return services[i].Name < services[j].Name || (services[i].Name == services[j].Name && services[i].ContainerName < services[j].ContainerName)
+		})
+
+		for _, v := range services {
+			fmt.Fprintf(file, "%s on IP %s, active=%v, containerName=%s, listenning on %v\n", v.Name, v.IPAddress, v.Active, v.ContainerName, v.ListenAddresses)
+		}
+	}
+
+	return nil
 }
 
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
@@ -239,7 +317,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
-			if container, found := d.containerInfo.Container(service.ContainerID); !found {
+			if container, found := d.containerInfo.CachedContainer(service.ContainerID); !found || facts.ContainerIgnored(container) {
 				service.Active = false
 			} else if container.StoppedAndReplaced() {
 				service.Active = false

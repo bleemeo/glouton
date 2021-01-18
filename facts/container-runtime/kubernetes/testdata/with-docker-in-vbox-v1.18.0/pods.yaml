@@ -3,7 +3,7 @@ items:
 - apiVersion: v1
   kind: Pod
   metadata:
-    creationTimestamp: "2020-06-26T15:53:46Z"
+    creationTimestamp: "2021-01-06T16:02:42Z"
     generateName: crash-loop-69d9bb77f9-
     labels:
       app: crash-loop
@@ -20,7 +20,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"af99ec93-c936-4282-b71c-a8afdd7993f8"}:
+            k:{"uid":"87c0877b-aa5e-404b-8cde-d9e0fd2a9186"}:
               .: {}
               f:apiVersion: {}
               f:blockOwnerDeletion: {}
@@ -47,7 +47,7 @@ items:
           f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2020-06-26T15:53:46Z"
+      time: "2021-01-06T16:02:42Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -81,14 +81,14 @@ items:
           f:podIP: {}
           f:podIPs:
             .: {}
-            k:{"ip":"172.18.0.7"}:
+            k:{"ip":"10.88.0.7"}:
               .: {}
               f:ip: {}
           f:startTime: {}
       manager: kubelet
       operation: Update
-      time: "2020-06-26T16:20:38Z"
-    name: crash-loop-69d9bb77f9-xvqws
+      time: "2021-01-06T16:04:15Z"
+    name: crash-loop-69d9bb77f9-5w47z
     namespace: default
     ownerReferences:
     - apiVersion: apps/v1
@@ -96,10 +96,10 @@ items:
       controller: true
       kind: ReplicaSet
       name: crash-loop-69d9bb77f9
-      uid: af99ec93-c936-4282-b71c-a8afdd7993f8
-    resourceVersion: "4370"
-    selfLink: /api/v1/namespaces/default/pods/crash-loop-69d9bb77f9-xvqws
-    uid: 540c2eb1-2cad-4a3d-9376-a076a96831b5
+      uid: 87c0877b-aa5e-404b-8cde-d9e0fd2a9186
+    resourceVersion: "744"
+    selfLink: /api/v1/namespaces/default/pods/crash-loop-69d9bb77f9-5w47z
+    uid: 6e6c7282-ce65-4231-a1d9-3e627c388c33
   spec:
     containers:
     - command:
@@ -112,7 +112,7 @@ items:
       terminationMessagePolicy: File
       volumeMounts:
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-        name: default-token-thxh6
+        name: default-token-5msb5
         readOnly: true
     dnsPolicy: ClusterFirst
     enableServiceLinks: true
@@ -134,62 +134,65 @@ items:
       operator: Exists
       tolerationSeconds: 300
     volumes:
-    - name: default-token-thxh6
+    - name: default-token-5msb5
       secret:
         defaultMode: 420
-        secretName: default-token-thxh6
+        secretName: default-token-5msb5
   status:
     conditions:
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:46Z"
+      lastTransitionTime: "2021-01-06T16:02:43Z"
       status: "True"
       type: Initialized
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:46Z"
+      lastTransitionTime: "2021-01-06T16:02:43Z"
       message: 'containers with unready status: [false]'
       reason: ContainersNotReady
       status: "False"
       type: Ready
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:46Z"
+      lastTransitionTime: "2021-01-06T16:02:43Z"
       message: 'containers with unready status: [false]'
       reason: ContainersNotReady
       status: "False"
       type: ContainersReady
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:46Z"
+      lastTransitionTime: "2021-01-06T16:02:42Z"
       status: "True"
       type: PodScheduled
     containerStatuses:
-    - containerID: docker://a0ee7c3288a490a5c029fd61c2c0116de3481685814e042aa7c7fcbcb5432a59
+    - containerID: docker://a71dcbca152324ca5efe0432c34edcd1058a5778185158983846421ea8914710
       image: busybox:latest
-      imageID: docker-pullable://busybox@sha256:95cf004f559831017cdf4628aaf1bb30133677be8702a8c5f2994629f637a209
+      imageID: docker-pullable://busybox@sha256:49dae530fd5fee674a6b0d3da89a380fc93746095e7eca0f1b70188a95fd5d71
       lastState:
         terminated:
-          containerID: docker://a0ee7c3288a490a5c029fd61c2c0116de3481685814e042aa7c7fcbcb5432a59
+          containerID: docker://a71dcbca152324ca5efe0432c34edcd1058a5778185158983846421ea8914710
           exitCode: 1
-          finishedAt: "2020-06-26T16:20:26Z"
+          finishedAt: "2021-01-06T16:04:01Z"
           reason: Error
-          startedAt: "2020-06-26T16:20:26Z"
+          startedAt: "2021-01-06T16:04:01Z"
       name: "false"
       ready: false
-      restartCount: 10
+      restartCount: 2
       started: false
       state:
         waiting:
-          message: back-off 5m0s restarting failed container=false pod=crash-loop-69d9bb77f9-xvqws_default(540c2eb1-2cad-4a3d-9376-a076a96831b5)
+          message: back-off 20s restarting failed container=false pod=crash-loop-69d9bb77f9-5w47z_default(6e6c7282-ce65-4231-a1d9-3e627c388c33)
           reason: CrashLoopBackOff
-    hostIP: 172.17.0.5
+    hostIP: 192.168.99.118
     phase: Running
-    podIP: 172.18.0.7
+    podIP: 10.88.0.7
     podIPs:
-    - ip: 172.18.0.7
+    - ip: 10.88.0.7
     qosClass: BestEffort
-    startTime: "2020-06-26T15:53:46Z"
+    startTime: "2021-01-06T16:02:43Z"
 - apiVersion: v1
   kind: Pod
   metadata:
-    creationTimestamp: "2020-06-26T16:12:00Z"
+    annotations:
+      cni.projectcalico.org/podIP: 10.244.120.65/32
+      cni.projectcalico.org/podIPs: 10.244.120.65/32
+    creationTimestamp: "2021-01-06T16:02:43Z"
     generateName: delete-me-once-69c996b98d-
     labels:
       app: delete-me-once
@@ -206,7 +209,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"d7fb7490-e732-4863-944e-4bf334057265"}:
+            k:{"uid":"d105a5c2-b2ed-400f-8e59-325ae5d72ecb"}:
               .: {}
               f:apiVersion: {}
               f:blockOwnerDeletion: {}
@@ -233,7 +236,18 @@ items:
           f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2020-06-26T16:12:00Z"
+      time: "2021-01-06T16:02:43Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:cni.projectcalico.org/podIP: {}
+            f:cni.projectcalico.org/podIPs: {}
+      manager: calico
+      operation: Update
+      time: "2021-01-06T16:03:46Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -263,14 +277,14 @@ items:
           f:podIP: {}
           f:podIPs:
             .: {}
-            k:{"ip":"172.18.0.8"}:
+            k:{"ip":"10.244.120.65"}:
               .: {}
               f:ip: {}
           f:startTime: {}
       manager: kubelet
       operation: Update
-      time: "2020-06-26T16:19:39Z"
-    name: delete-me-once-69c996b98d-6jt7k
+      time: "2021-01-06T16:03:50Z"
+    name: delete-me-once-69c996b98d-rp9fl
     namespace: default
     ownerReferences:
     - apiVersion: apps/v1
@@ -278,10 +292,10 @@ items:
       controller: true
       kind: ReplicaSet
       name: delete-me-once-69c996b98d
-      uid: d7fb7490-e732-4863-944e-4bf334057265
-    resourceVersion: "4237"
-    selfLink: /api/v1/namespaces/default/pods/delete-me-once-69c996b98d-6jt7k
-    uid: e0029847-f2f0-4f66-98c0-0fbae572b2b1
+      uid: d105a5c2-b2ed-400f-8e59-325ae5d72ecb
+    resourceVersion: "709"
+    selfLink: /api/v1/namespaces/default/pods/delete-me-once-69c996b98d-rp9fl
+    uid: f2d62dbb-708e-41b1-8ccc-7ed7ebed0326
   spec:
     containers:
     - command:
@@ -295,7 +309,7 @@ items:
       terminationMessagePolicy: File
       volumeMounts:
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-        name: default-token-thxh6
+        name: default-token-5msb5
         readOnly: true
     dnsPolicy: ClusterFirst
     enableServiceLinks: true
@@ -317,57 +331,57 @@ items:
       operator: Exists
       tolerationSeconds: 300
     volumes:
-    - name: default-token-thxh6
+    - name: default-token-5msb5
       secret:
         defaultMode: 420
-        secretName: default-token-thxh6
+        secretName: default-token-5msb5
   status:
     conditions:
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T16:12:00Z"
+      lastTransitionTime: "2021-01-06T16:02:43Z"
       status: "True"
       type: Initialized
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T16:19:39Z"
+      lastTransitionTime: "2021-01-06T16:03:50Z"
       status: "True"
       type: Ready
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T16:19:39Z"
+      lastTransitionTime: "2021-01-06T16:03:50Z"
       status: "True"
       type: ContainersReady
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T16:12:00Z"
+      lastTransitionTime: "2021-01-06T16:02:43Z"
       status: "True"
       type: PodScheduled
     containerStatuses:
-    - containerID: docker://7a094468b518751af4513735b0d1d2fc2f0cd4562c6c14c35f59a8e6fa26b9e9
+    - containerID: docker://40a2d7f07a4213e67c9039c17d359014476a2020296ebc5e1b47c4d4b4224610
       image: busybox:latest
-      imageID: docker-pullable://busybox@sha256:95cf004f559831017cdf4628aaf1bb30133677be8702a8c5f2994629f637a209
+      imageID: docker-pullable://busybox@sha256:49dae530fd5fee674a6b0d3da89a380fc93746095e7eca0f1b70188a95fd5d71
       lastState:
         terminated:
-          containerID: docker://07c3974ef59c9995c5af96727117414fc8f7ed71e86eaf9d104b045e94963332
+          containerID: docker://5dbe9891d1476b866897f90f3bf51f2e12f9484c431c3b8690936b0f7f0c7d97
           exitCode: 137
-          finishedAt: "2020-06-26T16:19:35Z"
+          finishedAt: "2021-01-06T16:03:44Z"
           reason: Error
-          startedAt: "2020-06-26T16:19:15Z"
+          startedAt: "2021-01-06T16:03:20Z"
       name: "true"
       ready: true
       restartCount: 1
       started: true
       state:
         running:
-          startedAt: "2020-06-26T16:19:39Z"
-    hostIP: 172.17.0.5
+          startedAt: "2021-01-06T16:03:50Z"
+    hostIP: 192.168.99.118
     phase: Running
-    podIP: 172.18.0.8
+    podIP: 10.244.120.65
     podIPs:
-    - ip: 172.18.0.8
+    - ip: 10.244.120.65
     qosClass: BestEffort
-    startTime: "2020-06-26T16:12:00Z"
+    startTime: "2021-01-06T16:02:43Z"
 - apiVersion: v1
   kind: Pod
   metadata:
-    creationTimestamp: "2020-06-26T15:53:20Z"
+    creationTimestamp: "2021-01-06T16:02:42Z"
     generateName: rabbitmq-container-port-68c84fdd9-
     labels:
       app: rabbitmq-container-port
@@ -384,7 +398,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"aadd77b3-a5cc-4b46-8256-80f27688dc7e"}:
+            k:{"uid":"5fd64d74-131b-471e-9e9e-7f9b0ed89190"}:
               .: {}
               f:apiVersion: {}
               f:blockOwnerDeletion: {}
@@ -425,7 +439,7 @@ items:
           f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2020-06-26T15:53:20Z"
+      time: "2021-01-06T16:02:42Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -455,14 +469,14 @@ items:
           f:podIP: {}
           f:podIPs:
             .: {}
-            k:{"ip":"172.18.0.4"}:
+            k:{"ip":"10.88.0.4"}:
               .: {}
               f:ip: {}
           f:startTime: {}
       manager: kubelet
       operation: Update
-      time: "2020-06-26T15:53:48Z"
-    name: rabbitmq-container-port-68c84fdd9-wnmf7
+      time: "2021-01-06T16:03:52Z"
+    name: rabbitmq-container-port-68c84fdd9-w5cdk
     namespace: default
     ownerReferences:
     - apiVersion: apps/v1
@@ -470,10 +484,10 @@ items:
       controller: true
       kind: ReplicaSet
       name: rabbitmq-container-port-68c84fdd9
-      uid: aadd77b3-a5cc-4b46-8256-80f27688dc7e
-    resourceVersion: "679"
-    selfLink: /api/v1/namespaces/default/pods/rabbitmq-container-port-68c84fdd9-wnmf7
-    uid: 9bdedf17-065f-43a4-a36e-fca490746fd3
+      uid: 5fd64d74-131b-471e-9e9e-7f9b0ed89190
+    resourceVersion: "716"
+    selfLink: /api/v1/namespaces/default/pods/rabbitmq-container-port-68c84fdd9-w5cdk
+    uid: 22b46f0b-ce48-4c0a-a70e-8b4596ef83fc
   spec:
     containers:
     - image: rabbitmq:latest
@@ -494,7 +508,7 @@ items:
       terminationMessagePolicy: File
       volumeMounts:
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-        name: default-token-thxh6
+        name: default-token-5msb5
         readOnly: true
     dnsPolicy: ClusterFirst
     enableServiceLinks: true
@@ -516,32 +530,32 @@ items:
       operator: Exists
       tolerationSeconds: 300
     volumes:
-    - name: default-token-thxh6
+    - name: default-token-5msb5
       secret:
         defaultMode: 420
-        secretName: default-token-thxh6
+        secretName: default-token-5msb5
   status:
     conditions:
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:20Z"
+      lastTransitionTime: "2021-01-06T16:02:42Z"
       status: "True"
       type: Initialized
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:47Z"
+      lastTransitionTime: "2021-01-06T16:03:52Z"
       status: "True"
       type: Ready
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:47Z"
+      lastTransitionTime: "2021-01-06T16:03:52Z"
       status: "True"
       type: ContainersReady
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:20Z"
+      lastTransitionTime: "2021-01-06T16:02:42Z"
       status: "True"
       type: PodScheduled
     containerStatuses:
-    - containerID: docker://1d94d1d7aec230c7f889b92ebf57396d11200a11afef561080b568c8027532af
+    - containerID: docker://8621fe83ccb9ad96da3b250d138c165d69ad3754053a61e99c980f4ce0dbc897
       image: rabbitmq:latest
-      imageID: docker-pullable://rabbitmq@sha256:a46973a167e6d8fa1cf4113a11c1da22f1f1898bb644776fa5969cac4e5293b3
+      imageID: docker-pullable://rabbitmq@sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba
       lastState: {}
       name: rabbitmq
       ready: true
@@ -549,21 +563,21 @@ items:
       started: true
       state:
         running:
-          startedAt: "2020-06-26T15:53:30Z"
-    hostIP: 172.17.0.5
+          startedAt: "2021-01-06T16:03:17Z"
+    hostIP: 192.168.99.118
     phase: Running
-    podIP: 172.18.0.4
+    podIP: 10.88.0.4
     podIPs:
-    - ip: 172.18.0.4
+    - ip: 10.88.0.4
     qosClass: BestEffort
-    startTime: "2020-06-26T15:53:20Z"
+    startTime: "2021-01-06T16:02:42Z"
 - apiVersion: v1
   kind: Pod
   metadata:
     annotations:
       glouton.check.ignore.port.4369: TruE
       glouton.check.ignore.port.5671: "on"
-    creationTimestamp: "2020-06-26T15:53:20Z"
+    creationTimestamp: "2021-01-06T16:02:42Z"
     generateName: rabbitmq-labels-7fbb75dcd7-
     labels:
       app: rabbitmq-labels
@@ -584,7 +598,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"8c680f76-b102-41ec-8414-efa950c12486"}:
+            k:{"uid":"e58e31d7-963c-40f1-8bf3-1d50dc2e0d71"}:
               .: {}
               f:apiVersion: {}
               f:blockOwnerDeletion: {}
@@ -610,7 +624,7 @@ items:
           f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2020-06-26T15:53:20Z"
+      time: "2021-01-06T16:02:42Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -640,14 +654,14 @@ items:
           f:podIP: {}
           f:podIPs:
             .: {}
-            k:{"ip":"172.18.0.6"}:
+            k:{"ip":"10.88.0.6"}:
               .: {}
               f:ip: {}
           f:startTime: {}
       manager: kubelet
       operation: Update
-      time: "2020-06-26T15:53:42Z"
-    name: rabbitmq-labels-7fbb75dcd7-kmxfv
+      time: "2021-01-06T16:03:22Z"
+    name: rabbitmq-labels-7fbb75dcd7-h6t28
     namespace: default
     ownerReferences:
     - apiVersion: apps/v1
@@ -655,10 +669,10 @@ items:
       controller: true
       kind: ReplicaSet
       name: rabbitmq-labels-7fbb75dcd7
-      uid: 8c680f76-b102-41ec-8414-efa950c12486
-    resourceVersion: "639"
-    selfLink: /api/v1/namespaces/default/pods/rabbitmq-labels-7fbb75dcd7-kmxfv
-    uid: 08f7ac5c-cc0e-4ac4-9ec9-d3346a377401
+      uid: e58e31d7-963c-40f1-8bf3-1d50dc2e0d71
+    resourceVersion: "632"
+    selfLink: /api/v1/namespaces/default/pods/rabbitmq-labels-7fbb75dcd7-h6t28
+    uid: f071e8b4-0b84-4d02-bdb7-60a817874385
   spec:
     containers:
     - image: rabbitmq:latest
@@ -669,7 +683,7 @@ items:
       terminationMessagePolicy: File
       volumeMounts:
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-        name: default-token-thxh6
+        name: default-token-5msb5
         readOnly: true
     dnsPolicy: ClusterFirst
     enableServiceLinks: true
@@ -691,32 +705,32 @@ items:
       operator: Exists
       tolerationSeconds: 300
     volumes:
-    - name: default-token-thxh6
+    - name: default-token-5msb5
       secret:
         defaultMode: 420
-        secretName: default-token-thxh6
+        secretName: default-token-5msb5
   status:
     conditions:
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:20Z"
+      lastTransitionTime: "2021-01-06T16:02:42Z"
       status: "True"
       type: Initialized
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:42Z"
+      lastTransitionTime: "2021-01-06T16:03:22Z"
       status: "True"
       type: Ready
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:42Z"
+      lastTransitionTime: "2021-01-06T16:03:22Z"
       status: "True"
       type: ContainersReady
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:20Z"
+      lastTransitionTime: "2021-01-06T16:02:42Z"
       status: "True"
       type: PodScheduled
     containerStatuses:
-    - containerID: docker://acf58977587018b823a4d94e38964281e8af6dfa9276bc6d17278e3b17a57f9f
+    - containerID: docker://f51d48c545596c5e082f6a389b35a0118f4e8747082bdc8f6c8a59ec5b8aaeb7
       image: rabbitmq:latest
-      imageID: docker-pullable://rabbitmq@sha256:a46973a167e6d8fa1cf4113a11c1da22f1f1898bb644776fa5969cac4e5293b3
+      imageID: docker-pullable://rabbitmq@sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba
       lastState: {}
       name: rabbitmq
       ready: true
@@ -724,20 +738,20 @@ items:
       started: true
       state:
         running:
-          startedAt: "2020-06-26T15:53:41Z"
-    hostIP: 172.17.0.5
+          startedAt: "2021-01-06T16:03:22Z"
+    hostIP: 192.168.99.118
     phase: Running
-    podIP: 172.18.0.6
+    podIP: 10.88.0.6
     podIPs:
-    - ip: 172.18.0.6
+    - ip: 10.88.0.6
     qosClass: BestEffort
-    startTime: "2020-06-26T15:53:20Z"
+    startTime: "2021-01-06T16:02:42Z"
 - apiVersion: v1
   kind: Pod
   metadata:
     annotations:
       glouton.enable: "off"
-    creationTimestamp: "2020-06-26T15:53:20Z"
+    creationTimestamp: "2021-01-06T16:02:42Z"
     generateName: redis-memcached-78f799c9c8-
     labels:
       app: redis-memcached
@@ -757,7 +771,7 @@ items:
             f:pod-template-hash: {}
           f:ownerReferences:
             .: {}
-            k:{"uid":"b67f26c5-6db9-4d96-8ac0-b55d770dc256"}:
+            k:{"uid":"20305a67-208b-492f-bba0-228fdfeffc62"}:
               .: {}
               f:apiVersion: {}
               f:blockOwnerDeletion: {}
@@ -815,7 +829,7 @@ items:
           f:terminationGracePeriodSeconds: {}
       manager: kube-controller-manager
       operation: Update
-      time: "2020-06-26T15:53:20Z"
+      time: "2021-01-06T16:02:42Z"
     - apiVersion: v1
       fieldsType: FieldsV1
       fieldsV1:
@@ -845,14 +859,14 @@ items:
           f:podIP: {}
           f:podIPs:
             .: {}
-            k:{"ip":"172.18.0.5"}:
+            k:{"ip":"10.88.0.8"}:
               .: {}
               f:ip: {}
           f:startTime: {}
       manager: kubelet
       operation: Update
-      time: "2020-06-26T15:53:52Z"
-    name: redis-memcached-78f799c9c8-xfg7m
+      time: "2021-01-06T16:03:50Z"
+    name: redis-memcached-78f799c9c8-2gzks
     namespace: default
     ownerReferences:
     - apiVersion: apps/v1
@@ -860,10 +874,10 @@ items:
       controller: true
       kind: ReplicaSet
       name: redis-memcached-78f799c9c8
-      uid: b67f26c5-6db9-4d96-8ac0-b55d770dc256
-    resourceVersion: "699"
-    selfLink: /api/v1/namespaces/default/pods/redis-memcached-78f799c9c8-xfg7m
-    uid: 31125edb-c4d6-4631-a902-c02414f522ea
+      uid: 20305a67-208b-492f-bba0-228fdfeffc62
+    resourceVersion: "711"
+    selfLink: /api/v1/namespaces/default/pods/redis-memcached-78f799c9c8-2gzks
+    uid: f62b1b74-686e-43ae-9cf6-342b5bdbbda6
   spec:
     containers:
     - image: redis:latest
@@ -884,7 +898,7 @@ items:
       terminationMessagePolicy: File
       volumeMounts:
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-        name: default-token-thxh6
+        name: default-token-5msb5
         readOnly: true
     - image: memcached:latest
       imagePullPolicy: Always
@@ -901,7 +915,7 @@ items:
       terminationMessagePolicy: File
       volumeMounts:
       - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
-        name: default-token-thxh6
+        name: default-token-5msb5
         readOnly: true
     dnsPolicy: ClusterFirst
     enableServiceLinks: true
@@ -923,32 +937,32 @@ items:
       operator: Exists
       tolerationSeconds: 300
     volumes:
-    - name: default-token-thxh6
+    - name: default-token-5msb5
       secret:
         defaultMode: 420
-        secretName: default-token-thxh6
+        secretName: default-token-5msb5
   status:
     conditions:
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:20Z"
+      lastTransitionTime: "2021-01-06T16:02:43Z"
       status: "True"
       type: Initialized
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:52Z"
+      lastTransitionTime: "2021-01-06T16:03:50Z"
       status: "True"
       type: Ready
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:52Z"
+      lastTransitionTime: "2021-01-06T16:03:50Z"
       status: "True"
       type: ContainersReady
     - lastProbeTime: null
-      lastTransitionTime: "2020-06-26T15:53:20Z"
+      lastTransitionTime: "2021-01-06T16:02:42Z"
       status: "True"
       type: PodScheduled
     containerStatuses:
-    - containerID: docker://4028587eec449110abde669dbe6204e2b4f38d47f6a2a5a2c17f7f56bf79bef4
+    - containerID: docker://d4a8b68f5f47a7388598e924981ac88d1489abbc8e4175bf4a5fd0f8ce02718a
       image: memcached:latest
-      imageID: docker-pullable://memcached@sha256:e14de39970129e4a5712488a4bce55db49827da3cd2bc54c0ace02b3d6b26b13
+      imageID: docker-pullable://memcached@sha256:944f6eb53be39dfcb895ab110d685e4f0320ffa00b8a1c0fe35aeb52f4f89d30
       lastState: {}
       name: a-memcached
       ready: true
@@ -956,10 +970,10 @@ items:
       started: true
       state:
         running:
-          startedAt: "2020-06-26T15:53:45Z"
-    - containerID: docker://f9dcf7392757af1a1a312a867610e0bda3e177903742b45b9a5245bdf4a875db
+          startedAt: "2021-01-06T16:03:49Z"
+    - containerID: docker://d04d3b4d7eec381acd22ec697a066b8be0525089e6ebdf2b15529aa1f796e910
       image: redis:latest
-      imageID: docker-pullable://redis@sha256:800f2587bf3376cb01e6307afe599ddce9439deafbd4fb8562829da96085c9c5
+      imageID: docker-pullable://redis@sha256:0f724af268d0d3f5fb1d6b33fc22127ba5cbca2d58523b286ed3122db0dc5381
       lastState: {}
       name: the-redis
       ready: true
@@ -967,14 +981,14 @@ items:
       started: true
       state:
         running:
-          startedAt: "2020-06-26T15:53:39Z"
-    hostIP: 172.17.0.5
+          startedAt: "2021-01-06T16:03:25Z"
+    hostIP: 192.168.99.118
     phase: Running
-    podIP: 172.18.0.5
+    podIP: 10.88.0.8
     podIPs:
-    - ip: 172.18.0.5
+    - ip: 10.88.0.8
     qosClass: BestEffort
-    startTime: "2020-06-26T15:53:20Z"
+    startTime: "2021-01-06T16:02:43Z"
 kind: List
 metadata:
   resourceVersion: ""
