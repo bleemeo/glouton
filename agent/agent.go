@@ -36,7 +36,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -103,7 +102,7 @@ type agent struct {
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
 	dynamicScrapper        *promexporter.DynamicScrapper
-	lastHealCheck          int64
+	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
 
 	triggerHandler            *debouncer.Debouncer
@@ -139,7 +138,9 @@ type taskInfo struct {
 }
 
 func (a *agent) init(configFiles []string) (ok bool) {
-	atomic.StoreInt64(&a.lastHealCheck, time.Now().Unix())
+	a.l.Lock()
+	a.lastHealCheck = time.Now()
+	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(context.Background())
 	cfg, warnings, err := a.loadConfiguration(configFiles)
@@ -1073,8 +1074,11 @@ func (a *agent) watchdog(ctx context.Context) error {
 			return nil
 		}
 
-		timestamp := atomic.LoadInt64(&a.lastHealCheck)
-		lastHealCheck := time.Unix(timestamp, 0)
+		a.l.Lock()
+
+		lastHealCheck := a.lastHealCheck
+
+		a.l.Unlock()
 
 		switch {
 		case time.Since(lastHealCheck) > 15*time.Minute && !failing:
@@ -1125,7 +1129,9 @@ func (a *agent) healthCheck(ctx context.Context) error {
 			a.influxdbConnector.HealthCheck()
 		}
 
-		atomic.StoreInt64(&a.lastHealCheck, time.Now().Unix())
+		a.l.Lock()
+		a.lastHealCheck = time.Now()
+		a.l.Unlock()
 	}
 }
 
