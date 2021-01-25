@@ -1394,7 +1394,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
 		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enabled") {
-			i, err := docker.New(a.dockerRuntime.ServerAddress())
+			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime)
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {

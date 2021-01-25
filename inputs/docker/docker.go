@@ -19,6 +19,7 @@ package docker
 import (
 	"errors"
 	"glouton/facts"
+	crTypes "glouton/facts/container-runtime/types"
 	"glouton/inputs/internal"
 	"glouton/types"
 	"strings"
@@ -29,7 +30,7 @@ import (
 )
 
 // New initialise docker.Input.
-func New(dockerAddress string) (i telegraf.Input, err error) {
+func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["docker"]
 	if ok {
 		dockerInput, ok := input().(*docker.Docker)
@@ -38,13 +39,15 @@ func New(dockerAddress string) (i telegraf.Input, err error) {
 				dockerInput.Endpoint = dockerAddress
 			}
 
+			r := renamer{dockerRuntime: dockerRuntime}
+
 			dockerInput.PerDevice = false
 			dockerInput.Total = true
 			dockerInput.Log = internal.Logger{}
 			i = &internal.Input{
 				Input: dockerInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:     renameGlobal,
+					RenameGlobal:     r.renameGlobal,
 					DerivatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
 					TransformMetrics: transformMetrics,
 				},
@@ -59,7 +62,11 @@ func New(dockerAddress string) (i telegraf.Input, err error) {
 	return
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+type renamer struct {
+	dockerRuntime crTypes.RuntimeInterface
+}
+
+func (r renamer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
 	newContext.Measurement = strings.TrimPrefix(originalContext.Measurement, "docker_")
 	newContext.Tags = make(map[string]string)
 
@@ -74,7 +81,8 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		}
 	}
 
-	if facts.ContainerIgnoredFromLabels(originalContext.Tags) {
+	c, ok := r.dockerRuntime.CachedContainer(newContext.Annotations.ContainerID)
+	if !ok || facts.ContainerIgnored(c) {
 		drop = true
 		return
 	}
