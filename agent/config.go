@@ -94,6 +94,7 @@ var defaultConfig = map[string]interface{}{
 		"/var/lib/docker/zfs",
 		"/var/lib/docker/plugins",
 		"/snap",
+		"/run/docker/runtime-runc",
 	},
 	"disk_ignore": []string{},
 	"disk_monitor": []string{
