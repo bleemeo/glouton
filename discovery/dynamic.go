@@ -334,7 +334,13 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		dd.fillExtraAttributes(&service)
 		dd.guessJMX(&service, process.CmdLineList)
 
-		logger.V(2).Printf("Discovered service %v", service)
+		logger.V(2).Printf(
+			"Discovered service %v from PID %d (%s) with IP %s",
+			service,
+			pid,
+			process.Name,
+			service.IPAddress,
+		)
 
 		servicesMap[key] = service
 	}
