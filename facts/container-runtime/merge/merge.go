@@ -88,7 +88,7 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([
 
 // Containers call function on container runtimes.
 func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, globalErr error) {
-	var firstErr error
+	var errs multiError
 
 	idToRuntime := make(map[string]int)
 
@@ -96,11 +96,7 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 		list, err := cr.Containers(ctx, maxAge, true)
 
 		if err != nil {
-			logger.V(2).Printf("Containers: runtime %d: %v", i, err)
-
-			if firstErr == nil {
-				firstErr = err
-			}
+			errs = append(errs, err)
 
 			continue
 		}
@@ -115,7 +111,11 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 	}
 
 	if len(containers) == 0 {
-		return nil, firstErr
+		if errs != nil {
+			return nil, errs
+		}
+
+		return nil, nil
 	}
 
 	r.l.Lock()
@@ -305,16 +305,12 @@ func (m mergeProcessQuerier) Processes(ctx context.Context) (result []facts.Proc
 }
 
 func (m mergeProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData string) (facts.Container, error) {
-	var firstErr error
+	var errs multiError
 
 	for i, q := range m.queriers {
 		cont, err := q.ContainerFromCGroup(ctx, cgroupData)
 		if err != nil {
-			logger.V(2).Printf("ContainerFromCGroup: runtime %d: %v", i, err)
-
-			if firstErr == nil {
-				firstErr = err
-			}
+			errs = append(errs, err)
 
 			continue
 		}
@@ -333,20 +329,20 @@ func (m mergeProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData
 		}
 	}
 
-	return nil, firstErr
+	if errs != nil {
+		return nil, errs
+	}
+
+	return nil, nil
 }
 
 func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
-	var firstErr error
+	var errs multiError
 
 	for i, q := range m.queriers {
 		cont, err := q.ContainerFromPID(ctx, parentContainerID, pid)
 		if err != nil {
-			logger.V(2).Printf("ContainerFromPID: runtime %d: %v", i, err)
-
-			if firstErr == nil {
-				firstErr = err
-			}
+			errs = append(errs, err)
 
 			continue
 		}
@@ -365,5 +361,31 @@ func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContain
 		}
 	}
 
-	return nil, firstErr
+	if errs != nil {
+		return nil, errs
+	}
+
+	return nil, nil
+}
+
+type multiError []error
+
+func (errs multiError) Error() string {
+	list := make([]string, len(errs))
+
+	for i, err := range errs {
+		list[i] = err.Error()
+	}
+
+	return strings.Join(list, ", ")
+}
+
+func (errs multiError) Is(target error) bool {
+	for _, err := range errs {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+
+	return false
 }
