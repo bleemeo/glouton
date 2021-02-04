@@ -256,6 +256,10 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 
+		if process.Status == "zombie" {
+			continue
+		}
+
 		serviceType, ok := serviceByCommand(process.CmdLineList)
 		if !ok {
 			continue
