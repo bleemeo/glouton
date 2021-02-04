@@ -238,7 +238,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		}
 
 		for _, p := range psProcesses {
-			if p.CreateTime.After(onlyStartedBefore) {
+			if !p.CreateTime.Before(onlyStartedBefore) {
 				continue
 			}
 
@@ -360,17 +360,18 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 				container, err := queryContainerRuntime.ContainerFromPID(ctx, newProcessesMap[p.PPID].ContainerID, p.PID)
 
 				switch {
-				case err != nil:
-					logger.V(2).Printf("Error when querying container runtime for process %d (%s): %v", p.PID, p.Name, err)
 				case container != nil:
 					p.ContainerID = container.ID()
 					p.ContainerName = container.ContainerName()
 
 					newProcessesMap[p.PID] = p
+				case err != nil:
+					logger.V(2).Printf("Error when querying container runtime for process %d (%s): %v", p.PID, p.Name, err)
+					fallthrough
 				default:
 					// Check another time because the process may have terminated while findContainerOfProcess is running
 					if exists, _ := pp.ps.PidExists(int32(p.PID)); !exists {
-						logger.V(2).Printf("Skipping process %d (%s) terminated very recently", p.PID, p.Name)
+						logger.V(2).Printf("Skipping process %d (%s) terminated very recently (2nd check)", p.PID, p.Name)
 						delete(newProcessesMap, p.PID)
 
 						continue
