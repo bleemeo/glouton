@@ -690,6 +690,8 @@ func dockerStatus2State(status string) facts.ContainerState {
 		return facts.ContainerRunning
 	case "dead":
 		return facts.ContainerStopped
+	case "created":
+		return facts.ContainerCreated
 	default:
 		return facts.ContainerUnknown
 	}
