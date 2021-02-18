@@ -1200,6 +1200,13 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 
 	defer wg.Wait()
 
+	pendingTimer := time.NewTimer(0 * time.Second)
+	// drain (expire) the timer, so the invariant "pendingTimer is expired when pendingDiscovery == false" hold.
+	<-pendingTimer.C
+
+	pendingDiscovery := false
+	pendingSecondDiscovery := false
+
 	for {
 		select {
 		case ev := <-a.containerRuntime.Events():
@@ -1208,9 +1215,13 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 			a.l.Unlock()
 
 			if ev.Type == facts.EventTypeStart {
-				a.FireTrigger(true, false, false, true)
-			} else if ev.Type == facts.EventTypeStop || ev.Type == facts.EventTypeDelete {
-				a.FireTrigger(true, false, false, false)
+				pendingSecondDiscovery = true
+			}
+
+			if !pendingDiscovery && (ev.Type == facts.EventTypeStart || ev.Type == facts.EventTypeStop || ev.Type == facts.EventTypeDelete) {
+				pendingDiscovery = true
+
+				pendingTimer.Reset(5 * time.Second)
 			}
 
 			if ev.Type == facts.EventTypeHealth && ev.Container != nil {
@@ -1219,6 +1230,12 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 				}
 
 				a.sendDockerContainerHealth(ev.Container)
+			}
+		case <-pendingTimer.C:
+			if pendingDiscovery {
+				a.FireTrigger(pendingDiscovery, false, false, pendingSecondDiscovery)
+				pendingDiscovery = false
+				pendingSecondDiscovery = false
 			}
 		case <-ctx.Done():
 			return nil
