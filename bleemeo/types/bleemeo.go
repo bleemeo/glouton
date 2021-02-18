@@ -85,7 +85,8 @@ type Container struct {
 	CreatedAt        time.Time `json:"container_created_at"`
 	Runtime          string    `json:"container_runtime"`
 
-	InspectHash string `json:",omitempty"`
+	InspectHash          string    `json:",omitempty"`
+	GloutonLastUpdatedAt time.Time `json:",omitempty"`
 }
 
 // Threshold is the threshold of a metrics. We use pointer to float to support

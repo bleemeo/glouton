@@ -29,6 +29,10 @@ import (
 
 const apiContainerNameLength = 100
 
+// containerUpdateDelay is minimal the delay between container update for change
+// other that status (likely healthcheck log).
+const containerUpdateDelay = 30 * time.Minute
+
 type nullTime time.Time
 
 // MarshalJSON marshall the time.Time as usual BUT zero time is sent as "null".
@@ -148,6 +152,7 @@ func (s *Synchronizer) containerUpdateList() error {
 		return err
 	}
 
+	containersByUUID := s.option.Cache.ContainersByUUID()
 	containers := make([]types.Container, len(result))
 
 	for i, jsonMessage := range result {
@@ -160,6 +165,7 @@ func (s *Synchronizer) containerUpdateList() error {
 		// we don't need to keep the full inspect in memory
 		container.FillInspectHash()
 		container.ContainerInspect = ""
+		container.GloutonLastUpdatedAt = containersByUUID[container.ID].GloutonLastUpdatedAt
 		containers[i] = container.compatibilityContainer()
 	}
 
@@ -223,11 +229,18 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 		payloadContainer.FillInspectHash()
 
-		if remoteFound && payloadContainer.InspectHash == remoteContainer.InspectHash && payloadContainer.Status == remoteContainer.Status && payloadContainer.CreatedAt.Truncate(time.Second).Equal(remoteContainer.CreatedAt.Truncate(time.Second)) {
-			continue
+		if remoteFound && payloadContainer.Status == remoteContainer.Status && payloadContainer.CreatedAt.Truncate(time.Second).Equal(remoteContainer.CreatedAt.Truncate(time.Second)) {
+			if payloadContainer.InspectHash == remoteContainer.InspectHash {
+				continue
+			}
+
+			if time.Since(remoteContainer.GloutonLastUpdatedAt) < containerUpdateDelay {
+				continue
+			}
 		}
 
-		payloadContainer.InspectHash = "" // we don't send inspect hash to API
+		payloadContainer.InspectHash = ""                   // we don't send inspect hash to API
+		payloadContainer.GloutonLastUpdatedAt = time.Time{} // we don't send this time, only used internally
 		payload := containerPayload{
 			Container:        payloadContainer,
 			Host:             s.agentID,
@@ -259,6 +272,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			}
 
 			result.FillInspectHash()
+			result.GloutonLastUpdatedAt = time.Now()
 			logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 			remoteContainers[remoteIndex] = result.compatibilityContainer()
 		} else {
@@ -268,6 +282,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			}
 
 			result.FillInspectHash()
+			result.GloutonLastUpdatedAt = time.Now()
 			logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
 			remoteContainers = append(remoteContainers, result.compatibilityContainer())
 		}
