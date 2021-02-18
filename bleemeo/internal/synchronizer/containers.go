@@ -223,7 +223,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 
 		payloadContainer.FillInspectHash()
 
-		if remoteFound && payloadContainer.InspectHash == remoteContainer.InspectHash && payloadContainer.Status == remoteContainer.Status && payloadContainer.CreatedAt.Equal(remoteContainer.CreatedAt) {
+		if remoteFound && payloadContainer.InspectHash == remoteContainer.InspectHash && payloadContainer.Status == remoteContainer.Status && payloadContainer.CreatedAt.Truncate(time.Second).Equal(remoteContainer.CreatedAt.Truncate(time.Second)) {
 			continue
 		}
 
@@ -258,6 +258,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 				return err
 			}
 
+			result.FillInspectHash()
 			logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
 			remoteContainers[remoteIndex] = result.compatibilityContainer()
 		} else {
@@ -266,6 +267,7 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 				return err
 			}
 
+			result.FillInspectHash()
 			logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
 			remoteContainers = append(remoteContainers, result.compatibilityContainer())
 		}
