@@ -114,7 +114,14 @@ type ContainerRuntimeProcessQuerier interface {
 
 // ContainerIgnored return true if a container is ignored by Glouton.
 func ContainerIgnored(c Container) bool {
+	// created container are ignored because there should not stay in this state
+	// a long time. So wait for this container to because started or be deleted.
+	if c.State() == ContainerCreated {
+		return true
+	}
+
 	e, _ := ContainerEnabled(c)
+
 	return !e
 }
 
