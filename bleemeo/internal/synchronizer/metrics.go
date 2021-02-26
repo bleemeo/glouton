@@ -485,8 +485,7 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 			"fields":    "id",
 			"active":    "False",
 			"agent":     s.agentID,
-			"page_size": "1",
-			"page":      "1", // force using page number paginator which return count
+			"page_size": "0",
 		},
 		nil,
 		&result,
