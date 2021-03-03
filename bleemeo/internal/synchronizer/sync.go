@@ -252,7 +252,6 @@ func (s *Synchronizer) DiagnosticPage() string {
 	var tlsConfig *tls.Config
 
 	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
-
 	if err != nil {
 		fmt.Fprintf(builder, "Bad URL %#v: %v\n", s.option.Config.String("bleemeo.api_base"), err)
 		return builder.String()
@@ -658,7 +657,7 @@ func (s *Synchronizer) checkDuplicated() error {
 			continue
 		}
 
-		if old == new {
+		if old.Value == new.Value {
 			continue
 		}
 
