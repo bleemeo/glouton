@@ -2,6 +2,12 @@
 
 ![Glouton Logo](logo_glouton.svg)
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/bleemeo/glouton)](https://goreportcard.com/report/github.com/bleemeo/glouton)
+![Docker Image Version (latest by date)](https://img.shields.io/docker/v/bleemeo/glouton)
+![Docker Image Size (latest by date)](https://img.shields.io/docker/image-size/bleemeo/glouton)
+[![Open Source? Yes!](https://badgen.net/badge/Open%20Source%20%3F/Yes%21/blue?icon=github)](https://github.com/bleemeo/glouton/)
+
+
 Glouton have been designed to be a central piece of
 a monitoring infrastructure. It gather all information and
 send it to... something. We provide drivers for storing in
