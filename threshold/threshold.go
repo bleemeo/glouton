@@ -223,7 +223,7 @@ type Unit struct {
 	UnitText string `json:"unit_text,omitempty"`
 }
 
-// Possible value for UnitType. It must match value in Bleemeo API
+// Possible value for UnitType. It must match value in Bleemeo API.
 const (
 	UnitTypeUnit   = 0
 	UnitTypeByte   = 2
@@ -420,7 +420,7 @@ func formatDuration(period time.Duration) string {
 	currentScale := 1
 
 	for i, unit := range units {
-		currentScale = currentScale * unit.Scale
+		currentScale *= unit.Scale
 		value := math.Round(period.Seconds() / float64(currentScale))
 		remainder := period.Seconds() - value*float64(currentScale)
 
@@ -430,6 +430,7 @@ func formatDuration(period time.Duration) string {
 
 		if remainder < -0.1*value*float64(currentScale) {
 			value--
+
 			remainder += float64(currentScale)
 		}
 
