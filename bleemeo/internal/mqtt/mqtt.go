@@ -482,6 +482,10 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 		return
 	}
 
+	if time.Now().Before(c.disabledUntil) && c.disableReason == bleemeoTypes.DisableTimeDrift {
+		return
+	}
+
 	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
