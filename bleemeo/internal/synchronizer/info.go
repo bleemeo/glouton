@@ -54,7 +54,9 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 			s.option.DisableCallback(bleemeoTypes.DisableAgentTooOld, s.now().Add(24*time.Hour))
 
 			// force syncing the version again when the synchronizer runs again
+			s.l.Lock()
 			s.forceSync["info"] = true
+			s.l.Unlock()
 		}
 	}
 
