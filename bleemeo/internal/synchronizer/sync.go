@@ -71,6 +71,7 @@ type Synchronizer struct {
 	delayedContainer       map[string]time.Time
 	retryableMetricFailure map[bleemeoTypes.FailureKind]bool
 	metricRetryAt          time.Time
+	lastInfo               bleemeoTypes.GlobalInfo
 }
 
 // Option are parameters for the synchronizer.
@@ -130,19 +131,10 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
 	}
 
-	// We sync 'info' before running the main loop.
-	// That way, we can detect if our agent is outdated or in maintenance mode quickly after start.
-	// This happens prior to enabling MQTT, so that we can decide whether to
-	// start the various components of the connector. That way, we won't start sending metrics
-	// over MQTT, only to realise we shouldn't send any metric at all because the agent is deprecated.
-	// We also don't need to store this information in our state file, with the complexity and risks of
-	// desync that this method implieds. And finally, we can refrain ourselves from sendin a message on
-	// the '/connect' MQTT endpoint, thus not impacting our connectivity status on the API side (even though
-	// the backend also try to ensures that we do not alter connection statuses of agents when the maintenance
-	// is enabled, so this last point is not strictly necesseary). And there is probably some other advantages
-	// I forgot to mention !
-	// When this is done, we can signal that we are initialized, that in turn will allow the MQTT connector start.
-	err := s.syncInfo(false, false)
+	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
+	// syncInfo also disable if time drift is too big. We don't do this disable now for a new agent, because
+	// we want it to perform registration and creation of agent_status in order to mark this agent as "bad time" on Bleemeo.
+	err := s.syncInfoReal(!firstSync)
 	if err != nil {
 		logger.V(1).Printf("bleemeo: pre-run checks: couldn't sync the global config: %v", err)
 	}
@@ -290,6 +282,19 @@ func (s *Synchronizer) DiagnosticPage() string {
 	builder.WriteString(<-tcpMessage)
 	builder.WriteString(<-httpMessage)
 
+	s.l.Lock()
+	if !s.lastInfo.FetchedAt.IsZero() {
+		bleemeoTime := s.lastInfo.BleemeoTime()
+		delta := s.lastInfo.TimeDrift()
+		builder.WriteString(fmt.Sprintf(
+			"Bleemeo /v1/info/ fetched at %v. At this moment, time_dift was %v (time expected was %v)\n",
+			s.lastInfo.FetchedAt.Format(time.RFC3339),
+			delta.Truncate(time.Second),
+			bleemeoTime.Format(time.RFC3339),
+		))
+	}
+	s.l.Unlock()
+
 	return builder.String()
 }
 
@@ -335,6 +340,14 @@ func (s *Synchronizer) UpdateContainers() {
 	defer s.l.Unlock()
 
 	s.forceSync["containers"] = false
+}
+
+// UpdateInfo request to update a info, which include the time_drift.
+func (s *Synchronizer) UpdateInfo() {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	s.forceSync["info"] = false
 }
 
 // UpdateMonitors requests to update all the monitors.
@@ -405,7 +418,7 @@ func (s *Synchronizer) getDisabledUntil() (time.Time, bleemeoTypes.DisableReason
 }
 
 // Disable will disable (or re-enable) the Synchronized until given time.
-// To re-enable, use Enable().
+// To re-enable, use ClearDisable().
 func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -413,6 +426,16 @@ func (s *Synchronizer) Disable(until time.Time, reason bleemeoTypes.DisableReaso
 	if s.disabledUntil.Before(until) {
 		s.disabledUntil = until
 		s.disableReason = reason
+	}
+}
+
+// ClearDisable remove disabling if reason match reasonToClear. It remove the disabling only after delay.
+func (s *Synchronizer) ClearDisable(reasonToClear bleemeoTypes.DisableReason, delay time.Duration) {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if time.Now().Before(s.disabledUntil) && s.disableReason == reasonToClear {
+		s.disabledUntil = time.Now().Add(delay)
 	}
 }
 

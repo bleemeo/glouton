@@ -343,6 +343,25 @@ func (c *Connector) UpdateContainers() {
 	c.sync.UpdateContainers()
 }
 
+// UpdateInfo request to update a info, which include the time_drift.
+func (c *Connector) UpdateInfo() {
+	// It's updateInfo which disable for time drift. Temporary re-enable to
+	// run it.
+	c.clearDisable(types.DisableTimeDrift)
+
+	c.l.RLock()
+
+	disabled := time.Now().Before(c.disabledUntil)
+
+	c.l.RUnlock()
+
+	if disabled {
+		return
+	}
+
+	c.sync.UpdateInfo()
+}
+
 // UpdateMonitors trigger a reload of the monitors.
 func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
@@ -617,6 +636,35 @@ func (c *Connector) updateConfig() {
 	}
 }
 
+func (c *Connector) clearDisable(reasonToClear types.DisableReason) {
+	c.l.Lock()
+
+	if time.Now().Before(c.disabledUntil) && c.disableReason == reasonToClear {
+		c.disabledUntil = time.Now()
+	}
+
+	mqtt := c.mqtt
+
+	c.l.Unlock()
+	c.sync.ClearDisable(reasonToClear, 0)
+
+	if mqtt != nil {
+		mqttDisableDelay := time.Duration(0)
+
+		switch reasonToClear {
+		case types.DisableTooManyErrors:
+			mqttDisableDelay = 20 * time.Second
+		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
+			// give time to the synchronizer check if the error is solved
+			mqttDisableDelay = 80 * time.Second
+		default:
+			mqttDisableDelay = 20 * time.Second
+		}
+
+		mqtt.ClearDisable(reasonToClear, mqttDisableDelay)
+	}
+}
+
 func (c *Connector) disableCallback(reason types.DisableReason, until time.Time) {
 	c.l.Lock()
 
@@ -648,9 +696,11 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 		switch reason {
 		case types.DisableTooManyErrors:
 			mqttDisableDelay = 20 * time.Second
-		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError:
-			// let the synchronizer check if the error is solved
+		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
+			// give time to the synchronizer check if the error is solved
 			mqttDisableDelay = 80 * time.Second
+		default:
+			mqttDisableDelay = 20 * time.Second
 		}
 
 		mqtt.Disable(until.Add(mqttDisableDelay), reason)

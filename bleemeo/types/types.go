@@ -107,6 +107,7 @@ const (
 	DisableTooManyRequests
 	DisableAgentTooOld
 	DisableAuthenticationError
+	DisableTimeDrift
 )
 
 func (r DisableReason) String() string {
@@ -121,6 +122,8 @@ func (r DisableReason) String() string {
 		return "this agent is too old, and cannot be connected to our managed service"
 	case DisableAuthenticationError:
 		return "authentication error with Bleemeo API"
+	case DisableTimeDrift:
+		return "local time is too different from actual time"
 	default:
 		return "unspecified reason"
 	}

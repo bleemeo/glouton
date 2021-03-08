@@ -240,4 +240,30 @@ type GlobalInfoAgents struct {
 type GlobalInfo struct {
 	MaintenanceEnabled bool             `json:"maintenance"`
 	Agents             GlobalInfoAgents `json:"agents"`
+	CurrentTime        float64          `json:"current_time"`
+	MaxTimeDrift       float64          `json:"max_time_drift"`
+	FetchedAt          time.Time        `json:"-"`
+}
+
+// BleemeoTime return the time according to Bleemeo API.
+func (i GlobalInfo) BleemeoTime() time.Time {
+	return time.Unix(int64(i.CurrentTime), int64(i.CurrentTime*1e9)%1e9)
+}
+
+// TimeDrift return the time difference between local clock and Bleemeo API.
+func (i GlobalInfo) TimeDrift() time.Duration {
+	if i.FetchedAt.IsZero() || i.CurrentTime == 0 {
+		return 0
+	}
+
+	return i.FetchedAt.Sub(i.BleemeoTime())
+}
+
+// IsTimeDriftTooLarge returns whether the local time it too wrong.
+func (i GlobalInfo) IsTimeDriftTooLarge() bool {
+	if i.FetchedAt.IsZero() || i.CurrentTime == 0 {
+		return false
+	}
+
+	return math.Abs(i.TimeDrift().Seconds()) >= i.MaxTimeDrift
 }

@@ -17,15 +17,23 @@
 package synchronizer
 
 import (
-	"glouton/bleemeo/types"
+	"fmt"
+	"glouton/bleemeo/internal/common"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/types"
 	"glouton/version"
 	"time"
 )
 
 // syncInfo retrieves the minimum supported glouton version the API supports.
-func (s *Synchronizer) syncInfo(fullSync bool, onlyEssential bool) error {
-	var globalInfo types.GlobalInfo
+func (s *Synchronizer) syncInfo(full bool, onlyEssential bool) error {
+	return s.syncInfoReal(true)
+}
+
+// syncInfoReal retrieves the minimum supported glouton version the API supports.
+func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
+	var globalInfo bleemeoTypes.GlobalInfo
 
 	statusCode, err := s.client.DoUnauthenticated(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	if err != nil {
@@ -38,10 +46,12 @@ func (s *Synchronizer) syncInfo(fullSync bool, onlyEssential bool) error {
 		return nil
 	}
 
+	globalInfo.FetchedAt = time.Now()
+
 	if globalInfo.Agents.MinVersions.Glouton != "" {
 		if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
 			logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
-			s.option.DisableCallback(types.DisableAgentTooOld, s.now().Add(24*time.Hour))
+			s.option.DisableCallback(bleemeoTypes.DisableAgentTooOld, s.now().Add(24*time.Hour))
 
 			// force syncing the version again when the synchronizer runs again
 			s.forceSync["info"] = true
@@ -52,6 +62,51 @@ func (s *Synchronizer) syncInfo(fullSync bool, onlyEssential bool) error {
 		s.option.SetBleemeoInMaintenanceMode(globalInfo.MaintenanceEnabled)
 	}
 
+	if globalInfo.CurrentTime != 0 {
+		delta := globalInfo.TimeDrift()
+
+		s.option.Acc.AddFields("", map[string]interface{}{"time_drift": delta.Seconds()}, nil, time.Now().Truncate(time.Second))
+
+		if disableOnTimeDrift && globalInfo.IsTimeDriftTooLarge() {
+			s.option.DisableCallback(bleemeoTypes.DisableTimeDrift, time.Now().Add(30*time.Minute))
+		}
+	}
+
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	if globalInfo.IsTimeDriftTooLarge() && !s.lastInfo.IsTimeDriftTooLarge() {
+		// Mark the agent_status as disconnecte with reason being the time drift
+		metricKey := common.LabelsToText(
+			map[string]string{types.LabelName: "agent_status"},
+			types.MetricAnnotations{},
+			s.option.MetricFormat == types.MetricFormatBleemeo,
+		)
+		if metric, ok := s.option.Cache.MetricLookupFromList()[metricKey]; ok {
+			type payloadType struct {
+				CurrentStatus     int      `json:"current_status"`
+				StatusDescription []string `json:"status_descriptions"`
+			}
+
+			_, err := s.client.Do(
+				s.ctx,
+				"PATCH",
+				fmt.Sprintf("v1/metric/%s/", metric.ID),
+				map[string]string{"fields": "current_status,status_descriptions"},
+				payloadType{
+					CurrentStatus:     2, // critical
+					StatusDescription: []string{"Agent local time too different from actual time"},
+				},
+				nil,
+			)
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	s.lastInfo = globalInfo
+
 	return nil
 }
 
@@ -61,6 +116,14 @@ func (s *Synchronizer) IsMaintenance() bool {
 	defer s.l.Unlock()
 
 	return s.maintenanceMode
+}
+
+// IsTimeDriftTooLarge returns whether the local time it too wrong and Bleemeo connection should be disabled.
+func (s *Synchronizer) IsTimeDriftTooLarge() bool {
+	s.l.Lock()
+	defer s.l.Unlock()
+
+	return s.lastInfo.IsTimeDriftTooLarge()
 }
 
 // SetMaintenance allows to trigger the maintenance mode for the synchronize.
