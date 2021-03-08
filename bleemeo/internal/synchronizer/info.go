@@ -69,7 +69,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 	if globalInfo.CurrentTime != 0 {
 		delta := globalInfo.TimeDrift()
 
-		s.option.Acc.AddFields("", map[string]interface{}{"time_drift": delta.Seconds()}, nil, s.now().Truncate(time.Second))
+		s.option.Acc.AddFields("", map[string]interface{}{"time_drift": delta.Seconds()}, nil, globalInfo.BleemeoTime().Truncate(time.Second))
 
 		if disableOnTimeDrift && globalInfo.IsTimeDriftTooLarge() {
 			delay := common.JitterDelay(30*time.Minute.Seconds(), 0.1, 30*time.Minute.Seconds())
