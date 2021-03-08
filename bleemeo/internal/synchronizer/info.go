@@ -46,12 +46,14 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 		return nil
 	}
 
-	globalInfo.FetchedAt = time.Now()
+	globalInfo.FetchedAt = s.now()
 
 	if globalInfo.Agents.MinVersions.Glouton != "" {
 		if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
+			delay := common.JitterDelay(24*time.Hour.Seconds(), 0.1, 24*time.Hour.Seconds())
+
 			logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
-			s.option.DisableCallback(bleemeoTypes.DisableAgentTooOld, s.now().Add(24*time.Hour))
+			s.option.DisableCallback(bleemeoTypes.DisableAgentTooOld, s.now().Add(delay))
 
 			// force syncing the version again when the synchronizer runs again
 			s.l.Lock()
@@ -67,10 +69,16 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 	if globalInfo.CurrentTime != 0 {
 		delta := globalInfo.TimeDrift()
 
-		s.option.Acc.AddFields("", map[string]interface{}{"time_drift": delta.Seconds()}, nil, time.Now().Truncate(time.Second))
+		s.option.Acc.AddFields("", map[string]interface{}{"time_drift": delta.Seconds()}, nil, s.now().Truncate(time.Second))
 
 		if disableOnTimeDrift && globalInfo.IsTimeDriftTooLarge() {
-			s.option.DisableCallback(bleemeoTypes.DisableTimeDrift, time.Now().Add(30*time.Minute))
+			delay := common.JitterDelay(30*time.Minute.Seconds(), 0.1, 30*time.Minute.Seconds())
+			s.option.DisableCallback(bleemeoTypes.DisableTimeDrift, s.now().Add(delay))
+
+			// force syncing the version again when the synchronizer runs again
+			s.l.Lock()
+			s.forceSync["info"] = true
+			s.l.Unlock()
 		}
 	}
 
