@@ -187,6 +187,16 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	}
 }
 
+// ClearDisable remove disabling if reason match reasonToClear. It remove the disabling only after delay.
+func (c *Client) ClearDisable(reasonToClear bleemeoTypes.DisableReason, delay time.Duration) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if time.Now().Before(c.disabledUntil) && c.disableReason == reasonToClear {
+		c.disabledUntil = time.Now().Add(delay)
+	}
+}
+
 // Run connect and transmit information to Bleemeo Cloud platform.
 func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
@@ -361,6 +371,11 @@ func (c *Client) shutdown() error {
 			cause = "Upgrade"
 		}
 
+		disableUntil, disableReason := c.getDisableUntil()
+		if time.Now().Before(disableUntil) && disableReason == bleemeoTypes.DisableTimeDrift {
+			cause = "Clean shutdown, time drift"
+		}
+
 		payload, err := json.Marshal(map[string]string{"disconnect-cause": cause})
 		if err != nil {
 			return err
@@ -464,6 +479,10 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 	defer c.l.Unlock()
 
 	if time.Now().Before(c.disabledUntil) && c.disableReason == bleemeoTypes.DisableDuplicatedAgent {
+		return
+	}
+
+	if time.Now().Before(c.disabledUntil) && c.disableReason == bleemeoTypes.DisableTimeDrift {
 		return
 	}
 
@@ -898,7 +917,7 @@ func (c *Client) ready() bool {
 	return false
 }
 
-func (c *Client) connectionManager(ctx context.Context) {
+func (c *Client) connectionManager(ctx context.Context) { // nolint: gocyclo
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -915,6 +934,9 @@ mainLoop:
 		disableUntil, disableReason := c.getDisableUntil()
 		switch {
 		case time.Now().Before(disableUntil):
+			if disableReason == bleemeoTypes.DisableTimeDrift {
+				_ = c.shutdown()
+			}
 			if c.mqttClient != nil {
 				logger.V(2).Printf("Disconnecting from MQTT due to '%v'", disableReason)
 				c.mqttClient.Disconnect(0)
