@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import d3 from 'd3'
 import PropTypes from 'prop-types'
 
 import FaIcon from '../UI/FaIcon'

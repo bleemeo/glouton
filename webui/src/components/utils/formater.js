@@ -1,4 +1,3 @@
-import d3 from 'd3'
 import { isNullOrUndefined } from '.'
 
 let dayFormater,
@@ -40,14 +39,14 @@ if (window.Intl) {
     second: '2-digit'
   }).format
 } else {
-  dayFormater = d3.time.format('%d')
-  monthFormater = d3.time.format('%b')
-  monthFormater2Digit = d3.time.format('%m')
-  fullMonthFormater = d3.time.format('%B')
-  yearFormater = d3.time.format('%y')
-  yearFormater4Digit = d3.time.format('%Y')
-  hoursMinutesFormater = d3.time.format('%I:%M%p')
-  hoursMinutesSecondsFormater = d3.time.format('%I:%M:%S%p')
+  dayFormater = d3.timeFormat('%d')
+  monthFormater = d3.timeFormat('%b')
+  monthFormater2Digit = d3.timeFormat('%m')
+  fullMonthFormater = d3.timeFormat('%B')
+  yearFormater = d3.timeFormat('%y')
+  yearFormater4Digit = d3.timeFormat('%Y')
+  hoursMinutesFormater = d3.timeFormat('%I:%M%p')
+  hoursMinutesSecondsFormater = d3.timeFormat('%I:%M:%S%p')
 }
 
 export const formatDate = date => {

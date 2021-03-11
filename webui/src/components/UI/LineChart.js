@@ -1,8 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
 import { Card } from 'tabler-react'
-import d3 from 'd3'
-import echarts from 'echarts'
+import { init } from 'echarts'
 import cn from 'classnames'
 import {
   formatToFrenchTime,
@@ -79,7 +78,7 @@ const LineChart = ({
           stack: stacked ? 'stack' : null
         })
       })
-      const svg = echarts.init(svgChart.current)
+      const svg = init(svgChart.current)
       setSeries(series)
       svg.setOption(getOptions(series, stacked, selectUnitConverter(unit), unit))
     }
@@ -87,7 +86,7 @@ const LineChart = ({
 
   useEffect(() => {
     if (svgChart.current) {
-      const svg = echarts.init(svgChart.current)
+      const svg = init(svgChart.current)
       svg.resize()
     }
   }, [windowWidth])

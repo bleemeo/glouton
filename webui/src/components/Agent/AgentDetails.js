@@ -1,5 +1,4 @@
 /* eslint-disable camelcase */
-import d3 from 'd3'
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
 import { Grid } from 'tabler-react'
@@ -31,10 +30,10 @@ const AgentDetails = ({ facts }) => {
     const expDate = new Date()
     expDate.setDate(expDate.getDate() - 60)
     // First try new format (e.g. 18.03.21.134432)
-    agentDate = d3.time.format('%y.%m.%d.%H%M%S').parse(agentVersion.slice(0, 15))
+    agentDate = d3.timeFormat('%y.%m.%d.%H%M%S').parse(agentVersion.slice(0, 15))
     if (!agentDate) {
       // then old format (0.20180321.134432)
-      agentDate = d3.time.format('0.%Y%m%d.%H%M%S').parse(agentVersion.slice(0, 17))
+      agentDate = d3.timeFormat('0.%Y%m%d.%H%M%S').parse(agentVersion.slice(0, 17))
     }
     if (agentDate && agentDate < expDate) {
       expireAgentBanner = (
