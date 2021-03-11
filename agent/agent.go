@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -411,11 +412,9 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		configThreshold[k] = t
 	}
 
-	oldThresholds := map[string]threshold.Threshold{
-		"system_pending_updates":          {},
-		"system_pending_security_updates": {},
-	}
-	for name := range oldThresholds {
+	oldThresholds := map[string]threshold.Threshold{}
+
+	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
 		key := threshold.MetricNameItem{
 			Name: name,
 			Item: "",
@@ -425,7 +424,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
-	for name := range oldThresholds {
+	for _, name := range []string{"system_pending_updates", "system_pending_security_updates"} {
 		key := threshold.MetricNameItem{
 			Name: name,
 			Item: "",
@@ -435,6 +434,16 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
 			a.FireTrigger(false, false, true, false)
 		}
+	}
+
+	key := threshold.MetricNameItem{
+		Name: "time_drift",
+		Item: "",
+	}
+	newThreshold := a.threshold.GetThreshold(key)
+
+	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
+		a.bleemeoConnector.UpdateInfo()
 	}
 }
 
@@ -1030,12 +1039,29 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {
+	lastTime := time.Now()
+
 	for {
 		select {
 		case <-time.After(30 * time.Second):
 		case <-ctx.Done():
 			return nil
 		}
+
+		now := time.Now()
+
+		jump := math.Abs(30 - float64(now.Unix()-lastTime.Unix()))
+		if jump > 60 {
+			// It looks like time jumped. This could be either:
+			// * suspending
+			// * or time changed (ntp fixed the time ?)
+			// Trigger a UpdateInfo to check time_drift
+			if a.bleemeoConnector != nil {
+				a.bleemeoConnector.UpdateInfo()
+			}
+		}
+
+		lastTime = now
 
 		a.triggerLock.Lock()
 		if !a.triggerDiscAt.IsZero() && time.Now().After(a.triggerDiscAt) {

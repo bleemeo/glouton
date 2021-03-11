@@ -180,10 +180,10 @@ func (c *HTTPClient) Do(ctx context.Context, method string, path string, params 
 		return 0, err
 	}
 
-	return c.do(ctx, req, result, true, true)
+	return c.do(ctx, req, result, true, true, false)
 }
 
-// DoUnauthenticated perform the specified request, but without the JWT token used in `Do`. It is otherwise exactly similar to `Do.
+// DoUnauthenticated perform the specified request, but without the JWT token used in `Do`. It is otherwise exactly similar to `Do`.
 func (c *HTTPClient) DoUnauthenticated(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -193,7 +193,21 @@ func (c *HTTPClient) DoUnauthenticated(ctx context.Context, method string, path 
 		return 0, err
 	}
 
-	return c.do(ctx, req, result, true, false)
+	return c.do(ctx, req, result, true, false, false)
+}
+
+// DoTLSInsecure perform the specified request, but without TLS verification. It is otherwise exactly similar to `DoUnauthenticated`.
+// This method will NOT use authentication (since credentials should not be sent insecurely).
+func (c *HTTPClient) DoTLSInsecure(ctx context.Context, method string, path string, params map[string]string, data interface{}, result interface{}) (statusCode int, err error) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	req, err := c.prepareRequest(method, path, params, data)
+	if err != nil {
+		return 0, err
+	}
+
+	return c.do(ctx, req, result, true, false, true)
 }
 
 func (c *HTTPClient) prepareRequest(method string, path string, params map[string]string, data interface{}) (*http.Request, error) {
@@ -243,7 +257,7 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 
 	req.SetBasicAuth(username, password)
 
-	return c.sendRequest(req, result)
+	return c.sendRequest(req, result, false)
 }
 
 // Iter read all page for given resource.
@@ -294,7 +308,11 @@ func (c *HTTPClient) Iter(ctx context.Context, resource string, params map[strin
 	return result, ctx.Err()
 }
 
-func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface{}, firstCall bool, withAuth bool) (int, error) {
+func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface{}, firstCall bool, withAuth bool, forceInsecure bool) (int, error) {
+	if forceInsecure {
+		withAuth = false
+	}
+
 	if withAuth {
 		if c.jwtToken == "" {
 			newToken, err := c.GetJWT()
@@ -309,14 +327,14 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 	}
 
 	for {
-		statusCode, err := c.sendRequest(req, result)
+		statusCode, err := c.sendRequest(req, result, forceInsecure)
 
 		// reset the JWT token if the call wasn't authorized, the JWT token may have expired
 		if withAuth && firstCall && err != nil {
 			if apiError, ok := err.(APIError); ok {
 				if apiError.StatusCode == 401 {
 					c.jwtToken = ""
-					return c.do(ctx, req, result, false, withAuth)
+					return c.do(ctx, req, result, false, withAuth, forceInsecure)
 				}
 			}
 		}
@@ -362,7 +380,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 		Token string
 	}
 
-	statusCode, err := c.sendRequest(req, &token)
+	statusCode, err := c.sendRequest(req, &token, false)
 	if err != nil {
 		if apiError, ok := err.(APIError); ok {
 			if apiError.StatusCode < 500 && apiError.StatusCode != 429 {
@@ -392,7 +410,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	return token.Token, nil
 }
 
-func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, error) {
+func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceInsecure bool) (int, error) {
 	if time.Until(c.throttleDeadline) > 0 {
 		return 0, APIError{
 			StatusCode: 429,
@@ -407,7 +425,20 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}) (int, er
 	defer cancel()
 
 	req = req.WithContext(ctx)
-	resp, err := c.cl.Do(req)
+	client := c.cl
+
+	if forceInsecure {
+		client = &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true, //nolint: gosec
+				},
+			},
+		}
+	}
+
+	resp, err := client.Do(req)
 
 	if err != nil {
 		return 0, err
