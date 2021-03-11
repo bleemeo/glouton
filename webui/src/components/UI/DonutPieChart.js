@@ -1,3 +1,4 @@
+import * as d3 from 'd3'
 import React from 'react'
 import PropTypes from 'prop-types'
 
@@ -9,10 +10,10 @@ const innerRadius = radius - radius / 2
 const strokeWidth = radius / 3
 const outerRadius = radius - strokeWidth
 
-const backgroundArc = d3.svg.arc().innerRadius(innerRadius).outerRadius(outerRadius).startAngle(0).endAngle(tau)
+const backgroundArc = d3.arc().innerRadius(innerRadius).outerRadius(outerRadius).startAngle(0).endAngle(tau)
 
 const createArcPath = (x, total) => {
-  return d3.svg
+  return d3
     .arc()
     .innerRadius(innerRadius)
     .outerRadius(outerRadius)
@@ -35,13 +36,25 @@ const DonutPieChart = ({ value, segmentsColor, segmentsStep, fontSize, formatted
       if (value > previousStep) {
         if (value < item) {
           // We have to build two paths if the value is between two steps
-          tauValues.push({ value: ((value - previousStep) * tau) / 100, isTransparent: false })
-          tauValues.push({ value: ((item - value) * tau) / 100, isTransparent: true })
+          tauValues.push({
+            value: ((value - previousStep) * tau) / 100,
+            isTransparent: false
+          })
+          tauValues.push({
+            value: ((item - value) * tau) / 100,
+            isTransparent: true
+          })
         } else {
-          tauValues.push({ value: ((item - previousStep) * tau) / 100, isTransparent: false })
+          tauValues.push({
+            value: ((item - previousStep) * tau) / 100,
+            isTransparent: false
+          })
         }
       } else {
-        tauValues.push({ value: ((item - previousStep) * tau) / 100, isTransparent: true })
+        tauValues.push({
+          value: ((item - previousStep) * tau) / 100,
+          isTransparent: true
+        })
       }
       tauValues.forEach((tauValue, idxTau) => {
         const arc = createArcPath(tauValue.value, totalValuesTau)
@@ -54,13 +67,16 @@ const DonutPieChart = ({ value, segmentsColor, segmentsStep, fontSize, formatted
       previousStep = item
     }
   })
-
   if (typeof value === 'number' && !isNaN(value)) {
     textCmpt = (
       <text
         fontSize={`${typeof InstallTrigger !== 'undefined' ? fontSize - 3 : fontSize}`}
         textAnchor="middle"
-        style={{ dominantBaseline: 'middle', fontWeight: 'bold', fill: '#000' }}
+        style={{
+          dominantBaseline: 'middle',
+          fontWeight: 'bold',
+          fill: '#000'
+        }}
         transform="rotate(144)"
       >
         {formattedValue}
@@ -72,12 +88,12 @@ const DonutPieChart = ({ value, segmentsColor, segmentsStep, fontSize, formatted
     <div className="block-fullsize d-flex justify-content-center">
       <svg
         className="opacityTransition"
-        viewBox={`0 0 ${size} ${size - 10}`}
-        width="60%"
-        height="60%"
+        viewBox={`0 0 ${size} ${size}`}
+        width="100%"
+        height="100%"
         style={{ display: 'block' }}
       >
-        <g transform={`translate(${radius},${radius}) scale(1.5) rotate(216)`}>
+        <g transform={`translate(${radius},${radius}) rotate(216)`}>
           <path className="gaugeBg" d={backgroundArc()} />
           {arcCmpts.map(arcCmpt => arcCmpt)}
           {textCmpt}
@@ -96,7 +112,7 @@ DonutPieChart.propTypes = {
 }
 
 DonutPieChart.defaultProps = {
-  color: '1F77B4',
+  color: '#467FCF',
   fontSize: 19.5
 }
 

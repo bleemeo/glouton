@@ -13,7 +13,7 @@ const gaugesBar = [
   { title: 'CPU', metrics: [{ [LabelName]: 'cpu_used' }], unit: UNIT_PERCENTAGE },
   { title: 'Memory', metrics: [{ [LabelName]: 'mem_used_perc' }], unit: UNIT_PERCENTAGE },
   { title: 'IO', metrics: [{ [LabelName]: 'io_utilization' }], unit: UNIT_PERCENTAGE },
-  { title: '/', metrics: [{ [LabelName]: 'disk_used_perc', 'mountpoint': '/' }], unit: UNIT_PERCENTAGE }
+  { title: '/', metrics: [{ [LabelName]: 'disk_used_perc', mountpoint: '/' }], unit: UNIT_PERCENTAGE }
 ]
 
 const widgets = [

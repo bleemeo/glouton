@@ -1,4 +1,5 @@
 /* eslint-disable camelcase */
+import * as d3 from 'd3'
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
 import { Grid } from 'tabler-react'
@@ -30,10 +31,10 @@ const AgentDetails = ({ facts }) => {
     const expDate = new Date()
     expDate.setDate(expDate.getDate() - 60)
     // First try new format (e.g. 18.03.21.134432)
-    agentDate = d3.timeFormat('%y.%m.%d.%H%M%S').parse(agentVersion.slice(0, 15))
+    agentDate = d3.timeParse(agentVersion.slice(0, 15))
     if (!agentDate) {
       // then old format (0.20180321.134432)
-      agentDate = d3.timeFormat('0.%Y%m%d.%H%M%S').parse(agentVersion.slice(0, 17))
+      agentDate = d3timeParse(agentVersion.slice(0, 17))
     }
     if (agentDate && agentDate < expDate) {
       expireAgentBanner = (
@@ -165,7 +166,9 @@ const AgentDetails = ({ facts }) => {
                   </li>
                   <li>
                     <div className="d-flex flex-row align-items-center">
-                      <b>Need to troubleshoot ? <a href="/diagnostic">/diagnostic</a> may help you.</b>
+                      <b>
+                        Need to troubleshoot ? <a href="/diagnostic">/diagnostic</a> may help you.
+                      </b>
                     </div>
                   </li>
                 </ul>
@@ -198,8 +201,8 @@ const AgentDetails = ({ facts }) => {
                       ))}
                     </ul>
                   ) : (
-                      <h4>There is no tag to display</h4>
-                    )}
+                    <h4>There is no tag to display</h4>
+                  )}
                 </div>
               </Panel>
             )}

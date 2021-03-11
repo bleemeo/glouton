@@ -20,7 +20,7 @@ module.exports = (env, argv) => {
 
   plugins.push(
     new MiniCssExtractPlugin({
-      chunkFilename: `css/app.css?ts=${buildTimestamp}`,
+      chunkFilename: `css/panel-main.css?ts=${buildTimestamp}`,
     }),
     new webpack.DefinePlugin({
       __DEV__: isDev,
@@ -33,7 +33,15 @@ module.exports = (env, argv) => {
     // (that is when webpack-dev-server 4.0 is release).
     target: isDev ? "web" : "browserslist",
     entry: {
-      "app": ["./src/index.js"],
+      "panel-glouton-main": ["./src/index.js"],
+    },
+    output: {
+      // hack. publicPath is used to generate URL in CSS & JS.
+      // Since both js & css are generated in a folder ("css" and "js"), then
+      // "../" will be the root output of webpack.
+      publicPath: "../",
+      filename: `js/[name].js?ts=${buildTimestamp}`,
+      chunkFilename: `js/[name].${buildTimestamp}.js`,
     },
     devServer: {
       port: 3015,

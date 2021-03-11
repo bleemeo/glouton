@@ -29,8 +29,8 @@ const WidgetDashboardItem = ({
     switch (type) {
       case chartTypes[0]: {
         const resultGauge = points.sort((a, b) => {
-          aString = a.labels.map(l => "${l.key}=${l.value}").join(",")
-          bString = b.labels.map(l => "${l.key}=${l.value}").join(",")
+          aString = a.labels.map(l => '${l.key}=${l.value}').join(',')
+          bString = b.labels.map(l => '${l.key}=${l.value}').join(',')
           return a.String.localeCompare(bString)
         })[0]
         const end = computeEnd(type, period)
@@ -133,8 +133,8 @@ const WidgetDashboardItem = ({
           type === chartTypes[0] ? (
             <MetricGaugeItem hasError={hasError} name={title} />
           ) : (
-              <LineChart title={title} hasError={hasError} />
-            ) /* eslint-disable-line react/jsx-indent */
+            <LineChart title={title} hasError={hasError} />
+          ) /* eslint-disable-line react/jsx-indent */
         }
         points={points}
       >

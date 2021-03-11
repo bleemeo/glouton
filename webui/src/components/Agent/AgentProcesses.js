@@ -1,3 +1,4 @@
+import * as d3 from 'd3'
 import React from 'react'
 import PropTypes from 'prop-types'
 import { Form } from 'tabler-react'
@@ -7,7 +8,7 @@ import { bytesToString, _formatCpuTime, formatToBytes, formatDateTimeWithSeconds
 import ProcessesTable, { formatCmdLine, GraphCell } from '../UI/ProcessesTable'
 import FaIcon from '../UI/FaIcon'
 
-const colorScale = d3.scaleOrdinal(d3.schemeCategory20)
+const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
 
 // taken from the Agent code
 const formatUptime = uptimeSeconds => {

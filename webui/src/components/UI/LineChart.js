@@ -1,7 +1,8 @@
+import * as d3 from 'd3'
 import React, { useRef, useEffect, useState } from 'react'
 import PropTypes from 'prop-types'
 import { Card } from 'tabler-react'
-import { init } from 'echarts'
+import * as echarts from 'echarts'
 import cn from 'classnames'
 import {
   formatToFrenchTime,
@@ -19,7 +20,7 @@ import QueryError from './QueryError'
 const CPU = ['#C49C94', '#F7B6D2', '#C5B0D5', '#FF7F0D', '#BDD1EC', '#9DD9E5', '#D62728', '#98DF89']
 const MEMORY = ['#AEC7E8', '#C7C7C7', '#E1E1A2', '#98DF8A']
 
-const colorScale = d3.scale.category20()
+const colorScale = d3.scaleOrdinal(d3.schemeCategory10)
 
 const LineChart = ({
   stacked,
@@ -49,10 +50,9 @@ const LineChart = ({
       const skipMetricName =
         metrics.length > 1
           ? metrics.every(
-            m =>
-              m.labels.find(l => l.key === LabelName).value ===
-              metrics[0].labels.find(l => l.key === LabelName).value
-          )
+              m =>
+                m.labels.find(l => l.key === LabelName).value === metrics[0].labels.find(l => l.key === LabelName).value
+            )
           : false
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
@@ -78,7 +78,7 @@ const LineChart = ({
           stack: stacked ? 'stack' : null
         })
       })
-      const svg = init(svgChart.current)
+      const svg = echarts.init(svgChart.current)
       setSeries(series)
       svg.setOption(getOptions(series, stacked, selectUnitConverter(unit), unit))
     }
@@ -86,7 +86,7 @@ const LineChart = ({
 
   useEffect(() => {
     if (svgChart.current) {
-      const svg = init(svgChart.current)
+      const svg = echarts.init(svgChart.current)
       svg.resize()
     }
   }, [windowWidth])

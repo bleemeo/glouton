@@ -64,13 +64,13 @@ export const MetricStatusLabel = ({ metric }) => {
     <span data-tip data-for={`metricStatusLabel${metric.id}`} className={`badge badge-${cssClassForStatus(status)}`}>
       {textForStatus(status)}
       {typeof metric.current_status_changed_at === 'string' ||
-        (metric.status_descriptions && metric.status_descriptions.length > 0) ? (
-          <ReactTooltip id={`metricStatusLabel${metric.id}`} place="bottom" type={tooltipColor(status)} effect="solid">
-            <div style={{ marginBottom: '0rem' }}>{tooltipContent(metric)}</div>
-          </ReactTooltip>
-        ) : (
-          <noscript />
-        )}
+      (metric.status_descriptions && metric.status_descriptions.length > 0) ? (
+        <ReactTooltip id={`metricStatusLabel${metric.id}`} place="bottom" type={tooltipColor(status)} effect="solid">
+          <div style={{ marginBottom: '0rem' }}>{tooltipContent(metric)}</div>
+        </ReactTooltip>
+      ) : (
+        <noscript />
+      )}
     </span>
   )
 }
@@ -85,8 +85,8 @@ const tooltipContent = metric => {
       {typeof metric.current_status_changed_at === 'string' ? (
         <span>Since {formatDateTime(metric.current_status_changed_at)}</span>
       ) : (
-          <noscript />
-        )}
+        <noscript />
+      )}
       <MetricDescription description={metric.status_descriptions[0]} />
     </div>
   )
@@ -200,13 +200,10 @@ export function composeMetricName(metric, skipMetricName = false) {
     keys = keys.filter(l => l !== LabelName)
   }
 
-  const labelsMap = metric.labels.reduce(
-    (acc, l) => {
-      acc[l.key] = l.value
-      return acc
-    },
-    {},
-  )
+  const labelsMap = metric.labels.reduce((acc, l) => {
+    acc[l.key] = l.value
+    return acc
+  }, {})
   const nameDisplay = keys.map(key => labelsMap[key]).join(' ')
   return nameDisplay
 }

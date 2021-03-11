@@ -1,3 +1,4 @@
+import * as d3 from 'd3'
 import React, { useState } from 'react'
 import PropTypes from 'prop-types'
 
@@ -59,10 +60,10 @@ const Docker = ({ container, date }) => {
                     <FaIcon icon="fa fa-caret-down" /> Close Processes
                   </>
                 ) : (
-                    <>
-                      <FaIcon icon="fa fa-caret-right" /> Show Processes
+                  <>
+                    <FaIcon icon="fa fa-caret-right" /> Show Processes
                   </>
-                  )}
+                )}
               </a>
             </small>
           </div>

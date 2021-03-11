@@ -1,3 +1,4 @@
+import * as d3 from 'd3'
 import { isNullOrUndefined } from '.'
 
 let dayFormater,
@@ -152,39 +153,25 @@ export const formatDateWithSecond = date => {
   return `${day}/${month}/${year} ${hoursMinutesSeconds}`
 }
 
-export const tickFormatDate = d3.time.format.multi([
-  [
-    '%H:%M',
-    function (d) {
-      return d.getMinutes() || d.getHours()
-    }
-  ],
-  [
-    '%a %d %b',
-    function (d) {
-      return true
-    }
-  ] // %a - abbreviated weekday name
-  // ["%a %d", function(d) { return d.getDay() && d.getDate() !== 1; }], // not sunday and not the first of the month
-  // ["%b %d", function(d) { return d.getDate() !== 1; }],
-  // ["%B", function(d) { return d.getMonth(); }],
-  // ["%Y", function() { return true; }],
-])
+const formatTimeHMS = d3.timeFormat('%H:%M:%S')
+const formatTimeHM = d3.timeFormat('%H:%M')
+const formatTimeFull = d3.timeFormat('%a %d %b')
 
-export const tooltipFormatDate = d3.time.format.multi([
-  [
-    '%H:%M:%S',
-    function (d) {
-      return d.getSeconds() || d.getMinutes() || d.getHours()
-    }
-  ],
-  [
-    '%a %d',
-    function (d) {
-      return true
-    }
-  ]
-])
+export const tickFormatDate = d => {
+  if (d.getMinutes() || d.getHours()) {
+    return formatTimeHM(d)
+  }
+
+  return formatTimeFull(d)
+}
+
+export const tooltipFormatDate = d => {
+  if (d.getSeconds() || d.getMinutes() || d.getHours()) {
+    return formatTimeHMS(d)
+  }
+
+  return formatTimeFull(d)
+}
 
 const d3FormaterHandlingNull = (formatter, suffix = '') => {
   const fmt = d3.format(formatter)
@@ -250,7 +237,7 @@ export const iopsToString = function (iops) {
 }
 
 export const defaultToString = function (value) {
-  return value === null ? 'N/A' : d3.round(value, 3).toString()
+  return value === null ? 'N/A' : d3.format('.3')(value)
 }
 
 export const twoDigitsWithMetricPrefix = value => {
