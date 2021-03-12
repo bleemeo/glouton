@@ -1,4 +1,3 @@
-import * as d3 from "d3";
 import React, { useRef, useEffect, useState } from "react";
 import PropTypes from "prop-types";
 import { Card } from "tabler-react";
@@ -21,7 +20,7 @@ import {
 } from "../utils";
 import FaIcon from "./FaIcon";
 import QueryError from "./QueryError";
-import { chartColorMap } from "../../utils/colors";
+import { chartColorMap } from "../utils/colors";
 
 const CPU = [
   "#C49C94",

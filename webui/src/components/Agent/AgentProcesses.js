@@ -12,7 +12,7 @@ import {
 } from "../utils/formater";
 import ProcessesTable, { formatCmdLine, GraphCell } from "../UI/ProcessesTable";
 import FaIcon from "../UI/FaIcon";
-import { chartColorMap } from "../../utils/colors";
+import { chartColorMap } from "../utils/colors";
 
 // taken from the Agent code
 const formatUptime = (uptimeSeconds) => {

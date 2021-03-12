@@ -1,8 +1,12 @@
-import React from 'react'
-import { unitFormatCallback, formatToBits, formatToBytes } from '../utils/formater'
-import { UNIT_PERCENTAGE } from '../utils'
-import DonutPieChart from './DonutPieChart'
-import { colorForStatus } from '../utils/converter'
+import React from "react";
+import {
+  unitFormatCallback,
+  formatToBits,
+  formatToBytes,
+} from "../utils/formater";
+import { UNIT_PERCENTAGE } from "../utils";
+import DonutPieChart from "./DonutPieChart";
+import { colorForStatus } from "../utils/converter";
 
 export const renderDonutDocker = (name, value) => (
   <div className="small-widget">

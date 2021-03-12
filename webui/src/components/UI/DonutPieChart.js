@@ -106,31 +106,31 @@ const DonutPieChart = ({
       <svg
         className="opacityTransition"
         viewBox={`0 0 ${size} ${size - 10}`}
-        width="100%"
-        height="100%"
-        style={{ display: 'block' }}
+        width="60%"
+        height="60%"
+        style={{ display: "block" }}
       >
         <g transform={`translate(${radius},${radius}) scale(1.5) rotate(216)`}>
           <path className="gaugeBg" d={backgroundArc()} />
-          {arcCmpts.map(arcCmpt => arcCmpt)}
+          {arcCmpts.map((arcCmpt) => arcCmpt)}
           {textCmpt}
         </g>
       </svg>
     </div>
-  )
-}
+  );
+};
 
 DonutPieChart.propTypes = {
   value: PropTypes.number,
   segmentsColor: PropTypes.array.isRequired,
   segmentsStep: PropTypes.array.isRequired,
   fontSize: PropTypes.number.isRequired,
-  formattedValue: PropTypes.string.isRequired
-}
+  formattedValue: PropTypes.string.isRequired,
+};
 
 DonutPieChart.defaultProps = {
-  color: '#467FCF',
-  fontSize: 19.5
-}
+  color: "#467FCF",
+  fontSize: 19.5,
+};
 
-export default DonutPieChart
+export default DonutPieChart;

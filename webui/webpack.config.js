@@ -20,7 +20,7 @@ module.exports = (env, argv) => {
 
   plugins.push(
     new MiniCssExtractPlugin({
-      chunkFilename: `css/panel-main.css?ts=${buildTimestamp}`,
+      chunkFilename: `css/panel-glouton-main.css?ts=${buildTimestamp}`,
     }),
     new webpack.DefinePlugin({
       __DEV__: isDev,

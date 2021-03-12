@@ -25,34 +25,34 @@ const MetricGaugeItem = ({
           <Loading size="xl" />
         </div>
       </div>
-    )
+    );
   } else if (hasError) {
     return (
       <div className="card card-body widgetError" style={style}>
         <div className="d-flex flex-column flex-nowrap justify-content-center align-items-center">
-          <QueryError noBorder style={{ textAlign: 'center' }} />
+          <QueryError noBorder style={{ textAlign: "center" }} />
         </div>
       </div>
-    )
+    );
   }
-  const segmentsStep = []
-  const segmentsColor = ['#' + colorForStatus(0)]
+  const segmentsStep = [];
+  const segmentsColor = ["#" + colorForStatus(0)];
   if (thresholds) {
     if (thresholds.highWarning) {
-      segmentsStep.push(thresholds.highWarning)
-      segmentsColor.push('#' + colorForStatus(1))
+      segmentsStep.push(thresholds.highWarning);
+      segmentsColor.push("#" + colorForStatus(1));
     }
     if (thresholds.highCritical) {
-      segmentsStep.push(thresholds.highCritical)
-      segmentsColor.push('#' + colorForStatus(2))
+      segmentsStep.push(thresholds.highCritical);
+      segmentsColor.push("#" + colorForStatus(2));
     }
   }
-  segmentsStep.push(100)
+  segmentsStep.push(100);
   return (
     <div className="card card-body widget" style={style}>
       <div
         className="d-flex flex-column flex-nowrap justify-content-center align-items-center"
-        style={{ height: '100%' }}
+        style={{ height: "100%" }}
       >
         <DonutPieChart
           value={value}
