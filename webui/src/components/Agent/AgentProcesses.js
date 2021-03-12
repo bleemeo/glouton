@@ -36,6 +36,21 @@ const formatUptime = (uptimeSeconds) => {
   return uptimeString;
 };
 
+const PercentBar = ({ color, title, percent }) => (
+  <div
+    className="percent-bar"
+    title={title}
+    data-toggle="tooltip"
+    style={{ backgroundColor: color, width: percent + "%" }}
+  />
+);
+
+PercentBar.propTypes = {
+  color: PropTypes.string.isRequired,
+  title: PropTypes.string.isRequired,
+  percent: PropTypes.number.isRequired,
+};
+
 export default class AgentProcesses extends React.Component {
   static propTypes = {
     processes: PropTypes.instanceOf(Array).isRequired,
@@ -118,7 +133,7 @@ export default class AgentProcesses extends React.Component {
           className="borderless"
         >
           <tbody>
-            {processesWithSamePPID.map((process, idx) => (
+            {processesWithSamePPID.map((process) => (
               <tr key={process.pid}>
                 <td style={{ width: "2rem" }}>
                   <FaIcon icon="fa fa-level-up-alt fa-rotate-90" />
@@ -214,7 +229,7 @@ export default class AgentProcesses extends React.Component {
       uptime,
       usersLogged,
     } = this.props;
-    const { filter, usernamesFilter } = this.state;
+    const { filter } = this.state;
 
     let info = null;
     let filterInput = null;
@@ -658,18 +673,3 @@ export default class AgentProcesses extends React.Component {
     );
   }
 }
-
-const PercentBar = ({ color, title, percent }) => (
-  <div
-    className="percent-bar"
-    title={title}
-    data-toggle="tooltip"
-    style={{ backgroundColor: color, width: percent + "%" }}
-  />
-);
-
-PercentBar.propTypes = {
-  color: PropTypes.string.isRequired,
-  title: PropTypes.string.isRequired,
-  percent: PropTypes.number.isRequired,
-};

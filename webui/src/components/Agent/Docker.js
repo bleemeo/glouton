@@ -14,6 +14,71 @@ import { useFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
 import { CONTAINER_PROCESSES } from "../utils/gqlRequests";
 
+const DockerProcesses = ({ containerId, name }) => {
+  const { isLoading, error, processes, points } = useFetch(
+    CONTAINER_PROCESSES,
+    { containerId },
+    10000
+  );
+  return (
+    <div
+      className="d-flex flex-column align-items-center mt-3"
+      style={{ minHeight: "10rem" }}
+    >
+      <h3>Processes</h3>
+      <FetchSuspense
+        isLoading={isLoading}
+        error={error}
+        processes={processes}
+        points={points}
+      >
+        {({ processes, points }) => {
+          const result = processes;
+          const dockerProcesses =
+            result && result.processes ? result.processes : [];
+          const metrics = points;
+          const memRegexp = /^mem_/;
+          if (!dockerProcesses || dockerProcesses.length === 0) {
+            return <h4>There are no processes related to {name}</h4>;
+          } else {
+            let memTotal = 0;
+            metrics.forEach((m) => {
+              if (
+                m.points &&
+                memRegexp.test(m.labels.find((l) => l.key === LabelName).value)
+              ) {
+                memTotal += m.points[m.points.length - 1].value;
+              }
+            });
+            dockerProcesses.map((process) => {
+              process.mem_percent = d3.format(".2r")(
+                ((process.memory_rss * 1024) / memTotal) * 100
+              );
+              process.new_cpu_times = _formatCpuTime(process.cpu_time);
+              return process;
+            });
+            return (
+              <div style={{ overflow: "auto" }}>
+                <ProcessesTable
+                  data={dockerProcesses}
+                  sizePage={10}
+                  classNames="dockerTable"
+                  widthLastColumn={40}
+                />
+              </div>
+            );
+          }
+        }}
+      </FetchSuspense>
+    </div>
+  );
+};
+
+DockerProcesses.propTypes = {
+  containerId: PropTypes.string.isRequired,
+  name: PropTypes.string.isRequired,
+};
+
 const Docker = ({ container, date }) => {
   const [dockerInspect, setDockerInspect] = useState(null);
   const [showProcesses, setShowProcesses] = useState(false);
@@ -149,68 +214,3 @@ Docker.propTypes = {
 };
 
 export default Docker;
-
-const DockerProcesses = ({ containerId, name }) => {
-  const { isLoading, error, processes, points } = useFetch(
-    CONTAINER_PROCESSES,
-    { containerId },
-    10000
-  );
-  return (
-    <div
-      className="d-flex flex-column align-items-center mt-3"
-      style={{ minHeight: "10rem" }}
-    >
-      <h3>Processes</h3>
-      <FetchSuspense
-        isLoading={isLoading}
-        error={error}
-        processes={processes}
-        points={points}
-      >
-        {({ processes, points }) => {
-          const result = processes;
-          const dockerProcesses =
-            result && result.processes ? result.processes : [];
-          const metrics = points;
-          const memRegexp = /^mem_/;
-          if (!dockerProcesses || dockerProcesses.length === 0) {
-            return <h4>There are no processes related to {name}</h4>;
-          } else {
-            let memTotal = 0;
-            metrics.forEach((m) => {
-              if (
-                m.points &&
-                memRegexp.test(m.labels.find((l) => l.key === LabelName).value)
-              ) {
-                memTotal += m.points[m.points.length - 1].value;
-              }
-            });
-            dockerProcesses.map((process) => {
-              process.mem_percent = d3.format(".2r")(
-                ((process.memory_rss * 1024) / memTotal) * 100
-              );
-              process.new_cpu_times = _formatCpuTime(process.cpu_time);
-              return process;
-            });
-            return (
-              <div style={{ overflow: "auto" }}>
-                <ProcessesTable
-                  data={dockerProcesses}
-                  sizePage={10}
-                  classNames="dockerTable"
-                  widthLastColumn={40}
-                />
-              </div>
-            );
-          }
-        }}
-      </FetchSuspense>
-    </div>
-  );
-};
-
-DockerProcesses.propTypes = {
-  containerId: PropTypes.string.isRequired,
-  name: PropTypes.string.isRequired,
-};

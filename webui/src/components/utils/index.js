@@ -1,5 +1,6 @@
 /* eslint-disable indent */
 import React from "react";
+import ReactTooltip from "react-tooltip";
 import PropTypes from "prop-types";
 
 import { cssClassForStatus, textForStatus } from "./converter";
@@ -59,6 +60,32 @@ MetricDescription.propTypes = {
   description: PropTypes.string.isRequired,
 };
 
+export const tooltipColor = (status) => {
+  switch (status) {
+    case 0:
+      return "success";
+    case 1:
+      return "warning";
+    case 2:
+      return "error";
+    default:
+      return "info";
+  }
+};
+
+const tooltipContent = (metric) => {
+  return (
+    <div>
+      {typeof metric.current_status_changed_at === "string" ? (
+        <span>Since {formatDateTime(metric.current_status_changed_at)}</span>
+      ) : (
+        <noscript />
+      )}
+      <MetricDescription description={metric.status_descriptions[0]} />
+    </div>
+  );
+};
+
 export const MetricStatusLabel = ({ metric }) => {
   const status = metric ? metric.current_status : null;
   if (!metric || status === null) {
@@ -90,32 +117,6 @@ export const MetricStatusLabel = ({ metric }) => {
 
 MetricStatusLabel.propTypes = {
   metric: PropTypes.object,
-};
-
-const tooltipContent = (metric) => {
-  return (
-    <div>
-      {typeof metric.current_status_changed_at === "string" ? (
-        <span>Since {formatDateTime(metric.current_status_changed_at)}</span>
-      ) : (
-        <noscript />
-      )}
-      <MetricDescription description={metric.status_descriptions[0]} />
-    </div>
-  );
-};
-
-export const tooltipColor = (status) => {
-  switch (status) {
-    case 0:
-      return "success";
-    case 1:
-      return "warning";
-    case 2:
-      return "error";
-    default:
-      return "info";
-  }
 };
 
 export const copyToClipboard = (cmd) => {

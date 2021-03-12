@@ -1,10 +1,5 @@
 import React, { Suspense } from "react";
-import {
-  BrowserRouter as Router,
-  Redirect,
-  withRouter,
-  Link,
-} from "react-router-dom";
+import { Link } from "react-router-dom";
 import Fallback from "../UI/Fallback";
 import PanelErrorBoundary from "../UI/PanelErrorBoundary";
 

@@ -7,31 +7,28 @@ import { useFetch } from "../utils/hooks";
 import FetchSuspense from "../UI/FetchSuspense";
 import { CONTAINER_SERVICE } from "../utils/gqlRequests";
 
-export default class ServiceDetailsModal extends React.PureComponent {
-  static propTypes = {
-    actions: PropTypes.object,
-    service: PropTypes.object.isRequired,
-    closeAction: PropTypes.func.isRequired,
-  };
+const ServiceContainer = ({ containerId }) => {
+  const { isLoading, error, containers } = useFetch(CONTAINER_SERVICE, {
+    containerId,
+  });
+  return (
+    <FetchSuspense isLoading={isLoading} error={error} containers={containers}>
+      {({ containers }) => {
+        if (containers.containers[0]) {
+          return (
+            <li>
+              <strong>Docker:</strong> {containers.containers[0].name}
+            </li>
+          );
+        } else return null;
+      }}
+    </FetchSuspense>
+  );
+};
 
-  render() {
-    const { service, closeAction } = this.props;
-
-    if (!service) {
-      return null;
-    }
-
-    return (
-      <Modal
-        title={`${service.name}`}
-        closeAction={closeAction}
-        closeOnBackdropClick
-      >
-        <ServiceDetails {...this.props} />
-      </Modal>
-    );
-  }
-}
+ServiceContainer.propTypes = {
+  containerId: PropTypes.string.isRequired,
+};
 
 /* eslint-disable react/no-multi-comp */
 const ServiceDetails = ({ service }) => {
@@ -85,25 +82,29 @@ const ServiceDetails = ({ service }) => {
 ServiceDetails.propTypes = {
   service: PropTypes.object.isRequired,
 };
-const ServiceContainer = ({ containerId }) => {
-  const { isLoading, error, containers } = useFetch(CONTAINER_SERVICE, {
-    containerId,
-  });
-  return (
-    <FetchSuspense isLoading={isLoading} error={error} containers={containers}>
-      {({ containers }) => {
-        if (containers.containers[0]) {
-          return (
-            <li>
-              <strong>Docker:</strong> {containers.containers[0].name}
-            </li>
-          );
-        } else return null;
-      }}
-    </FetchSuspense>
-  );
-};
 
-ServiceContainer.propTypes = {
-  containerId: PropTypes.string.isRequired,
-};
+export default class ServiceDetailsModal extends React.PureComponent {
+  static propTypes = {
+    actions: PropTypes.object,
+    service: PropTypes.object.isRequired,
+    closeAction: PropTypes.func.isRequired,
+  };
+
+  render() {
+    const { service, closeAction } = this.props;
+
+    if (!service) {
+      return null;
+    }
+
+    return (
+      <Modal
+        title={`${service.name}`}
+        closeAction={closeAction}
+        closeOnBackdropClick
+      >
+        <ServiceDetails {...this.props} />
+      </Modal>
+    );
+  }
+}

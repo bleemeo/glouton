@@ -9,7 +9,6 @@ import { colorForStatus } from "../utils/converter";
 const MetricGaugeItem = ({
   unit,
   value,
-  status = 0,
   name,
   style = null,
   fontSize = 15,

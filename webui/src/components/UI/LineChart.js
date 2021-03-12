@@ -34,6 +34,178 @@ const CPU = [
 ];
 const MEMORY = ["#AEC7E8", "#C7C7C7", "#E1E1A2", "#98DF8A"];
 
+export const getOptions = (series, stacked, funcConverter, unit) => ({
+  colors: series.map((serie) => serie.color),
+  animation: false,
+  grid: {
+    top: "3%",
+    left: "1%",
+    right: "1%",
+    bottom: "8%",
+    containLabel: true,
+  },
+  xAxis: [
+    {
+      type: "time",
+      boundaryGap: false,
+      splitNumber: 10,
+      axisLabel: {
+        formatter: function (value) {
+          // Formatted to be month/day; display year only in the first label
+          var date = new Date(value);
+          return tickFormatDate(date);
+        },
+        color: "#000",
+      },
+      axisTick: {
+        lineStyle: {
+          color: "#000",
+        },
+      },
+      axisLine: {
+        lineStyle: {
+          color: "#000",
+        },
+      },
+    },
+  ],
+  yAxis: [
+    {
+      type: "value",
+      show: true,
+      min: 0,
+      max: unit === UNIT_PERCENTAGE ? 100 : null,
+      axisLabel: {
+        formatter: function (value) {
+          // Formatted to be month/day; display year only in the first label
+          return funcConverter(value);
+        },
+        color: "#000",
+      },
+      axisTick: {
+        lineStyle: {
+          color: "#000",
+        },
+      },
+      axisLine: {
+        lineStyle: {
+          color: "#000",
+        },
+      },
+    },
+  ],
+  series: series,
+  tooltip: {
+    trigger: "axis",
+    transitionDuration: 0.2,
+    hideDelay: 0,
+    backgroundColor: "#ffffff",
+    borderWidth: 1,
+    textStyle: {
+      color: "#000",
+    },
+    axisPointer: {
+      type: "line",
+    },
+    formatter: function (params) {
+      let total = -1;
+      if (stacked) {
+        total = 0;
+        params.map((p) => {
+          total += p.data[1];
+          return params;
+        });
+      }
+      let html = `<div">${formatToFrenchTime(params[0].data[0])}</div>`;
+      html += "<table><tbody>";
+      params.map(
+        (p) =>
+          (html += `<tr>
+                <td>
+                  <div style="width: 12px; height: 12px; border-radius: 6px; background-color: ${
+                    p.color
+                  }"/>
+                </td>
+                <td>
+                  ${p.seriesName}
+                </td>
+                <td>
+                  <b>${
+                    p.data[1] !== null && p.data[1] !== undefined
+                      ? funcConverter(p.data[1])
+                      : "N/A"
+                  }</b>
+                </td>
+              </tr>
+            `)
+      );
+      html +=
+        total > -1
+          ? `
+                    <tr>
+                      <td/>
+                      <td><b>TOTAL</b></td>
+                      <td><b>${funcConverter(total)}</b></td>
+                    </tr>
+                  `
+          : "";
+      html += "</tbody></table>";
+      return html;
+    },
+  },
+});
+
+const selectUnitConverter = (unit) => {
+  switch (unit) {
+    case 1:
+      return function (value) {
+        return percentToString(value);
+      };
+    case 2:
+      return function (value) {
+        return bytesToString(value);
+      };
+    case 3:
+      return function (value) {
+        return bitsToString(value);
+      };
+    case 4:
+      return function (value) {
+        return iopsToString(value);
+      };
+    default:
+      return function (value) {
+        return value.toFixed(2);
+      };
+  }
+};
+
+export const renderLegend = (series, noPointer = true) => {
+  let legend = null;
+  if (series.length > 0) {
+    legend = (
+      <div className="chart-legend">
+        {series.map((s, idx) => (
+          <span
+            key={idx}
+            className={cn("legend-label", { "no-pointer": noPointer })}
+          >
+            <div
+              className="legend-pill no-selection"
+              style={{
+                backgroundColor: s.color,
+                borderColor: s.color,
+              }}
+            />
+            {s.seriesName}
+          </span>
+        ))}
+      </div>
+    );
+  }
+  return legend;
+};
+
 const LineChart = ({
   stacked,
   metrics,
@@ -299,175 +471,3 @@ LineChart.propTypes = {
 };
 
 export default LineChart;
-
-export const getOptions = (series, stacked, funcConverter, unit) => ({
-  colors: series.map((serie) => serie.color),
-  animation: false,
-  grid: {
-    top: "3%",
-    left: "1%",
-    right: "1%",
-    bottom: "8%",
-    containLabel: true,
-  },
-  xAxis: [
-    {
-      type: "time",
-      boundaryGap: false,
-      splitNumber: 10,
-      axisLabel: {
-        formatter: function (value, index) {
-          // Formatted to be month/day; display year only in the first label
-          var date = new Date(value);
-          return tickFormatDate(date);
-        },
-        color: "#000",
-      },
-      axisTick: {
-        lineStyle: {
-          color: "#000",
-        },
-      },
-      axisLine: {
-        lineStyle: {
-          color: "#000",
-        },
-      },
-    },
-  ],
-  yAxis: [
-    {
-      type: "value",
-      show: true,
-      min: 0,
-      max: unit === UNIT_PERCENTAGE ? 100 : null,
-      axisLabel: {
-        formatter: function (value) {
-          // Formatted to be month/day; display year only in the first label
-          return funcConverter(value);
-        },
-        color: "#000",
-      },
-      axisTick: {
-        lineStyle: {
-          color: "#000",
-        },
-      },
-      axisLine: {
-        lineStyle: {
-          color: "#000",
-        },
-      },
-    },
-  ],
-  series: series,
-  tooltip: {
-    trigger: "axis",
-    transitionDuration: 0.2,
-    hideDelay: 0,
-    backgroundColor: "#ffffff",
-    borderWidth: 1,
-    textStyle: {
-      color: "#000",
-    },
-    axisPointer: {
-      type: "line",
-    },
-    formatter: function (params, ticket) {
-      let total = -1;
-      if (stacked) {
-        total = 0;
-        params.map((p) => {
-          total += p.data[1];
-          return params;
-        });
-      }
-      let html = `<div">${formatToFrenchTime(params[0].data[0])}</div>`;
-      html += "<table><tbody>";
-      params.map(
-        (p) =>
-          (html += `<tr>
-                <td>
-                  <div style="width: 12px; height: 12px; border-radius: 6px; background-color: ${
-                    p.color
-                  }"/>
-                </td>
-                <td>
-                  ${p.seriesName}
-                </td>
-                <td>
-                  <b>${
-                    p.data[1] !== null && p.data[1] !== undefined
-                      ? funcConverter(p.data[1])
-                      : "N/A"
-                  }</b>
-                </td>
-              </tr>
-            `)
-      );
-      html +=
-        total > -1
-          ? `
-                    <tr>
-                      <td/>
-                      <td><b>TOTAL</b></td>
-                      <td><b>${funcConverter(total)}</b></td>
-                    </tr>
-                  `
-          : "";
-      html += "</tbody></table>";
-      return html;
-    },
-  },
-});
-
-const selectUnitConverter = (unit) => {
-  switch (unit) {
-    case 1:
-      return function (value) {
-        return percentToString(value);
-      };
-    case 2:
-      return function (value) {
-        return bytesToString(value);
-      };
-    case 3:
-      return function (value) {
-        return bitsToString(value);
-      };
-    case 4:
-      return function (value) {
-        return iopsToString(value);
-      };
-    default:
-      return function (value) {
-        return value.toFixed(2);
-      };
-  }
-};
-
-export const renderLegend = (series, noPointer = true) => {
-  let legend = null;
-  if (series.length > 0) {
-    legend = (
-      <div className="chart-legend">
-        {series.map((s, idx) => (
-          <span
-            key={idx}
-            className={cn("legend-label", { "no-pointer": noPointer })}
-          >
-            <div
-              className="legend-pill no-selection"
-              style={{
-                backgroundColor: s.color,
-                borderColor: s.color,
-              }}
-            />
-            {s.seriesName}
-          </span>
-        ))}
-      </div>
-    );
-  }
-  return legend;
-};

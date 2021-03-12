@@ -23,15 +23,15 @@ export const useFetch = (query, variables = null, pollInterval = 0) => {
 export const useWindowWidth = () => {
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
 
+  const onWindowResize = () => {
+    setWindowWidth(window.innerWidth);
+  };
   useEffect(() => {
     window.addEventListener("resize", onWindowResize);
     return () => {
       window.removeEventListener("resize", onWindowResize);
     };
   }, []);
-  const onWindowResize = () => {
-    setWindowWidth(window.innerWidth);
-  };
 
   return windowWidth;
 };

@@ -17,7 +17,7 @@ class PanelErrorBoundary extends React.Component {
   }
 
   /* eslint-disable handle-callback-err */
-  static getDerivedStateFromError(error) {
+  static getDerivedStateFromError() {
     return { hasError: true };
   }
   /* eslint-enable handle-callback-err */

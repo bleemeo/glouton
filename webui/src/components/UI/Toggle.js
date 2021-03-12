@@ -14,6 +14,11 @@ const Toggle = ({
   const secondSpan = useRef(null);
   const flap = useRef(null);
 
+  const navFlipStyle = (firstSpanOpacity, secondSpanOpacity) => {
+    firstSpan.current.style.opacity = firstSpanOpacity;
+    secondSpan.current.style.opacity = secondSpanOpacity;
+  };
+
   useEffect(() => {
     if (defaultOption === 0) navFlipStyle(1, 0);
     else {
@@ -37,10 +42,6 @@ const Toggle = ({
     }
   }, [option]);
 
-  const navFlipStyle = (firstSpanOpacity, secondSpanOpacity) => {
-    firstSpan.current.style.opacity = firstSpanOpacity;
-    secondSpan.current.style.opacity = secondSpanOpacity;
-  };
   const liStyle = {};
 
   switch (type) {

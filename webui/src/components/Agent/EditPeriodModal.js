@@ -38,6 +38,117 @@ export const lastQuickRanges = [
 
 const relativeQuickRanges = [{ value: "yesterday", label: "Yesterday" }];
 
+class DateTimeColumn extends React.PureComponent {
+  state = {};
+  render() {
+    const {
+      label,
+      value,
+      timeValue,
+      hasError,
+      onDayClick,
+      selectedDays,
+      onTimeChange,
+    } = this.props;
+
+    return (
+      <div className="col-sm-6">
+        <div className="mx-3">{label}:</div>
+        <DayPicker
+          selectedDays={selectedDays}
+          onDayClick={onDayClick}
+          month={value}
+        />
+        <div
+          className={classnames("blee-row form-group mx-3", {
+            "has-danger": hasError,
+          })}
+        >
+          <span
+            style={{
+              float: "left",
+              marginTop: "0.5rem",
+              marginRight: "0.5rem",
+            }}
+          >
+            {formatDate(value)}
+          </span>
+          <Form.MaskedInput
+            style={{ width: "4.5rem", float: "left", marginRight: "0.5rem" }}
+            value={timeValue}
+            placeholder="00:00"
+            onChange={(e) => onTimeChange(e.target.value)}
+            mask={[/\d/, /\d/, ":", /\d/, /\d/]}
+          />
+          <Dropdown
+            isOpen={this.state.dropdownOpen}
+            toggle={() => {
+              this.setState((prevState) => ({
+                dropdownOpen: !prevState.dropdownOpen,
+              }));
+            }}
+          >
+            <DropdownToggle tag="a">
+              <FaIcon icon="far fa-clock fa-2x" />
+            </DropdownToggle>
+            <DropdownMenu className="dropdownMenuSmall">
+              <DropdownItem
+                className="btn-outline-dark"
+                onClick={() => {
+                  const now = new Date();
+                  onTimeChange(now.getHours() + ":" + now.getMinutes());
+                }}
+              >
+                Current Time
+              </DropdownItem>
+              <DropdownItem
+                className="btn-outline-dark"
+                onClick={() => onTimeChange("00:00")}
+              >
+                Midnight
+              </DropdownItem>
+              <DropdownItem
+                className="btn-outline-dark"
+                onClick={() => onTimeChange("06:00")}
+              >
+                6 AM
+              </DropdownItem>
+              <DropdownItem
+                className="btn-outline-dark"
+                onClick={() => onTimeChange("12:00")}
+              >
+                Midday
+              </DropdownItem>
+              <DropdownItem
+                className="btn-outline-dark"
+                onClick={() => onTimeChange("18:00")}
+              >
+                6 PM
+              </DropdownItem>
+              <DropdownItem
+                className="btn-outline-dark"
+                onClick={() => onTimeChange("23:59")}
+              >
+                Endday
+              </DropdownItem>
+            </DropdownMenu>
+          </Dropdown>
+        </div>
+      </div>
+    );
+  }
+}
+
+DateTimeColumn.propTypes = {
+  label: PropTypes.string.isRequired,
+  value: PropTypes.instanceOf(Date).isRequired,
+  timeValue: PropTypes.string.isRequired,
+  hasError: PropTypes.bool,
+  onDayClick: PropTypes.func.isRequired,
+  selectedDays: PropTypes.func.isRequired,
+  onTimeChange: PropTypes.func.isRequired,
+};
+
 /* eslint-disable react/jsx-no-bind */
 export default class EditPeriodModal extends React.Component {
   static propTypes = {
@@ -299,114 +410,3 @@ export default class EditPeriodModal extends React.Component {
     );
   }
 }
-
-class DateTimeColumn extends React.PureComponent {
-  state = {};
-  render() {
-    const {
-      label,
-      value,
-      timeValue,
-      hasError,
-      onDayClick,
-      selectedDays,
-      onTimeChange,
-    } = this.props;
-
-    return (
-      <div className="col-sm-6">
-        <div className="mx-3">{label}:</div>
-        <DayPicker
-          selectedDays={selectedDays}
-          onDayClick={onDayClick}
-          month={value}
-        />
-        <div
-          className={classnames("blee-row form-group mx-3", {
-            "has-danger": hasError,
-          })}
-        >
-          <span
-            style={{
-              float: "left",
-              marginTop: "0.5rem",
-              marginRight: "0.5rem",
-            }}
-          >
-            {formatDate(value)}
-          </span>
-          <Form.MaskedInput
-            style={{ width: "4.5rem", float: "left", marginRight: "0.5rem" }}
-            value={timeValue}
-            placeholder="00:00"
-            onChange={(e) => onTimeChange(e.target.value)}
-            mask={[/\d/, /\d/, ":", /\d/, /\d/]}
-          />
-          <Dropdown
-            isOpen={this.state.dropdownOpen}
-            toggle={() => {
-              this.setState((prevState) => ({
-                dropdownOpen: !prevState.dropdownOpen,
-              }));
-            }}
-          >
-            <DropdownToggle tag="a">
-              <FaIcon icon="far fa-clock fa-2x" />
-            </DropdownToggle>
-            <DropdownMenu className="dropdownMenuSmall">
-              <DropdownItem
-                className="btn-outline-dark"
-                onClick={() => {
-                  const now = new Date();
-                  onTimeChange(now.getHours() + ":" + now.getMinutes());
-                }}
-              >
-                Current Time
-              </DropdownItem>
-              <DropdownItem
-                className="btn-outline-dark"
-                onClick={() => onTimeChange("00:00")}
-              >
-                Midnight
-              </DropdownItem>
-              <DropdownItem
-                className="btn-outline-dark"
-                onClick={() => onTimeChange("06:00")}
-              >
-                6 AM
-              </DropdownItem>
-              <DropdownItem
-                className="btn-outline-dark"
-                onClick={() => onTimeChange("12:00")}
-              >
-                Midday
-              </DropdownItem>
-              <DropdownItem
-                className="btn-outline-dark"
-                onClick={() => onTimeChange("18:00")}
-              >
-                6 PM
-              </DropdownItem>
-              <DropdownItem
-                className="btn-outline-dark"
-                onClick={() => onTimeChange("23:59")}
-              >
-                Endday
-              </DropdownItem>
-            </DropdownMenu>
-          </Dropdown>
-        </div>
-      </div>
-    );
-  }
-}
-
-DateTimeColumn.propTypes = {
-  label: PropTypes.string.isRequired,
-  value: PropTypes.instanceOf(Date).isRequired,
-  timeValue: PropTypes.string.isRequired,
-  hasError: PropTypes.bool,
-  onDayClick: PropTypes.func.isRequired,
-  selectedDays: PropTypes.func.isRequired,
-  onTimeChange: PropTypes.func.isRequired,
-};

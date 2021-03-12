@@ -37,14 +37,6 @@ const AgentProcessesContainer = lazy(() =>
 );
 const AgentDetails = lazy(() => import("./Agent/AgentDetails"));
 
-const menuEntries = [
-  { key: "dashboard", label: "Dashboard" },
-  // { key: 'services', label: 'Services' },
-  { key: "docker", label: "Docker" },
-  { key: "processes", label: "Processes" },
-  { key: "informations", label: "Informations" },
-];
-
 const Routes = () => {
   const { isLoading, error, facts } = useFetch(FACTS);
   return (

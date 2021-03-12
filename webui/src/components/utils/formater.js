@@ -104,6 +104,10 @@ export const formatDateFullYear = (date) => {
   return `${day}/${month}/${year}`;
 };
 
+const convertToUTC = (d) => {
+  return new Date(d.getTime() + d.getTimezoneOffset() * 60000);
+};
+
 export const formathYearMonth = (date) => {
   const d = date instanceof Date ? date : new Date(date);
   const utc = convertToUTC(d);
@@ -118,10 +122,6 @@ export const formatToFullMonthYear = (date) => {
   const month = fullMonthFormater(utc);
   const year = yearFormater4Digit(utc);
   return `${month} ${year}`;
-};
-
-const convertToUTC = (d) => {
-  return new Date(d.getTime() + d.getTimezoneOffset() * 60000);
 };
 
 export const formatDateTime = (date) => {

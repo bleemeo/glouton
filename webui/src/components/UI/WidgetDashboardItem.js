@@ -44,8 +44,8 @@ const WidgetDashboardItem = ({
     switch (type) {
       case chartTypes[0]: {
         const resultGauge = points.sort((a, b) => {
-          aString = a.labels.map((l) => "${l.key}=${l.value}").join(",");
-          bString = b.labels.map((l) => "${l.key}=${l.value}").join(",");
+          var bString = "";
+          bString = b.labels.map(() => "${l.key}=${l.value}").join(",");
           return a.String.localeCompare(bString);
         })[0];
         const end = computeEnd(type, period);
@@ -195,6 +195,7 @@ const WidgetDashboardItem = ({
 WidgetDashboardItem.propTypes = {
   type: PropTypes.string.isRequired,
   title: PropTypes.string.isRequired,
+  metrics: PropTypes.any,
   labels: PropTypes.instanceOf(Array),
   unit: PropTypes.number,
   refetchTime: PropTypes.number.isRequired,

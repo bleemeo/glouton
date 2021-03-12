@@ -32,6 +32,7 @@
   },
   "globals": {
       "__DEV__"    : false,
+      "process": true,
       "__DEBUG__"  : false
   }
 }

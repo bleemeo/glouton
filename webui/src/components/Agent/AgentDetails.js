@@ -34,7 +34,7 @@ const AgentDetails = ({ facts }) => {
     agentDate = d3.timeParse(agentVersion.slice(0, 15));
     if (!agentDate) {
       // then old format (0.20180321.134432)
-      agentDate = d3timeParse(agentVersion.slice(0, 17));
+      agentDate = d3.timeParse(agentVersion.slice(0, 17));
     }
     if (agentDate && agentDate < expDate) {
       expireAgentBanner = (
