@@ -1,8 +1,8 @@
-import React from 'react'
-import { ApolloProvider } from '@apollo/react-hooks'
-import Routes from './Routes'
-import TopNavBar from './App/TopNavBar'
-import client from '../utils/API'
+import React from "react";
+import { ApolloProvider } from "@apollo/react-hooks";
+import Routes from "./Routes";
+import TopNavBar from "./App/TopNavBar";
+import client from "../utils/API";
 
 const Root = () => {
   return (
@@ -14,7 +14,7 @@ const Root = () => {
         </div>
       </div>
     </ApolloProvider>
-  )
-}
+  );
+};
 
-export default Root
+export default Root;

@@ -10,29 +10,31 @@ export const renderDonutDocker = (name, value) => (
       <DonutPieChart
         value={value}
         fontSize={15}
-        segmentsColor={['#' + colorForStatus(0)]}
+        segmentsColor={["#" + colorForStatus(0)]}
         segmentsStep={[100]}
         formattedValue={unitFormatCallback(UNIT_PERCENTAGE)(value)}
       />
     </div>
     <div className="title">{name}</div>
   </div>
-)
+);
 
 export const renderNetwork = (name, sentValue, recvValue) => {
-  const formattedSentValue = sentValue !== null ? formatToBits(sentValue) : null
-  const formattedRecvValue = recvValue !== null ? formatToBits(recvValue) : null
+  const formattedSentValue =
+    sentValue !== null ? formatToBits(sentValue) : null;
+  const formattedRecvValue =
+    recvValue !== null ? formatToBits(recvValue) : null;
   if (!formattedSentValue && !formattedRecvValue) {
     return (
       <div className="small-widget">
         <div className="content wide">
           <div className="content-row">
-            <p style={{ fontSize: '80%', paddingTop: '15%' }}>N/A</p>
+            <p style={{ fontSize: "80%", paddingTop: "15%" }}>N/A</p>
           </div>
         </div>
         <div className="title">{name}</div>
       </div>
-    )
+    );
   } else {
     return (
       <div className="small-widget">
@@ -64,24 +66,26 @@ export const renderNetwork = (name, sentValue, recvValue) => {
         </div>
         <div className="title">{name}</div>
       </div>
-    )
+    );
   }
-}
+};
 
 export const renderDisk = (name, writeValue, readValue) => {
-  const formattedWriteValue = writeValue !== null ? formatToBytes(writeValue) : null
-  const formattedReadValue = readValue !== null ? formatToBytes(readValue) : null
+  const formattedWriteValue =
+    writeValue !== null ? formatToBytes(writeValue) : null;
+  const formattedReadValue =
+    readValue !== null ? formatToBytes(readValue) : null;
   if (!formattedReadValue && !formattedWriteValue) {
     return (
       <div className="small-widget">
         <div className="content wide">
           <div className="content-row">
-            <p style={{ fontSize: '80%', paddingTop: '15%' }}>N/A</p>
+            <p style={{ fontSize: "80%", paddingTop: "15%" }}>N/A</p>
           </div>
         </div>
         <div className="title">{name}</div>
       </div>
-    )
+    );
   } else {
     return (
       <div className="small-widget">
@@ -113,6 +117,6 @@ export const renderDisk = (name, writeValue, readValue) => {
         </div>
         <div className="title">{name}</div>
       </div>
-    )
+    );
   }
-}
+};

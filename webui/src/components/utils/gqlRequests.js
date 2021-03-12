@@ -1,5 +1,5 @@
-import { gql } from 'apollo-boost'
-import { LabelName } from '.'
+import { gql } from "apollo-boost";
+import { LabelName } from ".";
 
 // FACTS AND DETAILS
 
@@ -10,7 +10,7 @@ export const FACTS = gql`
       value
     }
   }
-`
+`;
 
 export const AGENT_DETAILS = gql`
   query agent_details {
@@ -37,13 +37,22 @@ export const AGENT_DETAILS = gql`
       statusDescription
     }
   }
-`
+`;
 
 // CONTAINERS
 
 export const CONTAINERS_DETAILS = gql`
-  query containersDetails($offset: Int!, $limit: Int!, $allContainers: Boolean!, $search: String!) {
-    containers(input: { offset: $offset, limit: $limit }, allContainers: $allContainers, search: $search) {
+  query containersDetails(
+    $offset: Int!
+    $limit: Int!
+    $allContainers: Boolean!
+    $search: String!
+  ) {
+    containers(
+      input: { offset: $offset, limit: $limit }
+      allContainers: $allContainers
+      search: $search
+    ) {
       count
       currentCount
       containers {
@@ -65,7 +74,7 @@ export const CONTAINERS_DETAILS = gql`
       }
     }
   }
-`
+`;
 
 export const CONTAINER_PROCESSES = gql`
   query containerProcesses($containerId: String!) {
@@ -102,7 +111,7 @@ export const CONTAINER_PROCESSES = gql`
       }
     }
   }
-`
+`;
 
 export const CONTAINER_SERVICE = gql`
   query containerService($containerId: String!) {
@@ -112,7 +121,7 @@ export const CONTAINER_SERVICE = gql`
       }
     }
   }
-`
+`;
 
 // PROCESSES
 
@@ -166,13 +175,23 @@ export const PROCESSES = gql`
       }
     }
   }
-`
+`;
 
 // GRAPHS
 
 export const GET_POINTS = gql`
-  query Points($metricsFilter: [MetricInput!]!, $start: String!, $end: String!, $minutes: Int!) {
-    points(metricsFilter: $metricsFilter, start: $start, end: $end, minutes: $minutes) {
+  query Points(
+    $metricsFilter: [MetricInput!]!
+    $start: String!
+    $end: String!
+    $minutes: Int!
+  ) {
+    points(
+      metricsFilter: $metricsFilter
+      start: $start
+      end: $end
+      minutes: $minutes
+    ) {
       labels {
         key
         value
@@ -187,4 +206,4 @@ export const GET_POINTS = gql`
       }
     }
   }
-`
+`;

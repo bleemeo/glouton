@@ -1,10 +1,10 @@
-import React from 'react'
-import PropTypes from 'prop-types'
-import DonutPieChart from '../UI/DonutPieChart'
-import { unitFormatCallback } from '../utils/formater'
-import Loading from '../UI/Loading'
-import QueryError from '../UI/QueryError'
-import { colorForStatus } from '../utils/converter'
+import React from "react";
+import PropTypes from "prop-types";
+import DonutPieChart from "../UI/DonutPieChart";
+import { unitFormatCallback } from "../utils/formater";
+import Loading from "../UI/Loading";
+import QueryError from "../UI/QueryError";
+import { colorForStatus } from "../utils/converter";
 
 const MetricGaugeItem = ({
   unit,
@@ -16,7 +16,7 @@ const MetricGaugeItem = ({
   titleFontSize = 30,
   loading,
   hasError,
-  thresholds
+  thresholds,
 }) => {
   if (loading) {
     return (
@@ -62,12 +62,14 @@ const MetricGaugeItem = ({
           formattedValue={unitFormatCallback(unit)(value)}
         />
         <div>
-          <b style={{ fontSize: titleFontSize, textOverflow: 'ellipsis' }}>{name}</b>
+          <b style={{ fontSize: titleFontSize, textOverflow: "ellipsis" }}>
+            {name}
+          </b>
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
 MetricGaugeItem.propTypes = {
   unit: PropTypes.number,
@@ -79,7 +81,7 @@ MetricGaugeItem.propTypes = {
   loading: PropTypes.bool,
   hasError: PropTypes.object,
   status: PropTypes.number,
-  thresholds: PropTypes.object
-}
+  thresholds: PropTypes.object,
+};
 
-export default MetricGaugeItem
+export default MetricGaugeItem;

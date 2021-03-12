@@ -1,14 +1,29 @@
-import React, { useRef } from 'react'
-import PropTypes from 'prop-types'
-import MetricGaugeItem from '../Metric/MetricGaugeItem'
-import { chartTypes, computeEnd, composeMetricName, isShallowEqual, LabelName } from '../utils'
-import LineChart from './LineChart'
-import { useFetch, POLL } from '../utils/hooks'
-import FetchSuspense from './FetchSuspense'
-import { GET_POINTS } from '../utils/gqlRequests'
+import React, { useRef } from "react";
+import PropTypes from "prop-types";
+import MetricGaugeItem from "../Metric/MetricGaugeItem";
+import {
+  chartTypes,
+  computeEnd,
+  composeMetricName,
+  isShallowEqual,
+  LabelName,
+} from "../utils";
+import LineChart from "./LineChart";
+import { useFetch, POLL } from "../utils/hooks";
+import FetchSuspense from "./FetchSuspense";
+import { GET_POINTS } from "../utils/gqlRequests";
 
-const CPU = ['cpu_steal', 'cpu_softirq', 'cpu_interrupt', 'cpu_system', 'cpu_user', 'cpu_nice', 'cpu_wait', 'cpu_idle']
-const MEMORY = ['mem_used', 'mem_buffered', 'mem_cached', 'mem_free']
+const CPU = [
+  "cpu_steal",
+  "cpu_softirq",
+  "cpu_interrupt",
+  "cpu_system",
+  "cpu_user",
+  "cpu_nice",
+  "cpu_wait",
+  "cpu_idle",
+];
+const MEMORY = ["mem_used", "mem_buffered", "mem_cached", "mem_free"];
 
 const WidgetDashboardItem = ({
   type,
@@ -18,36 +33,44 @@ const WidgetDashboardItem = ({
   period,
   refetchTime,
   handleBackwardForward,
-  windowWidth
+  windowWidth,
 }) => {
-  const previousError = useRef(null)
+  const previousError = useRef(null);
   const handleBackwardForwardFunc = (isForward = false) => {
-    handleBackwardForward(isForward)
-  }
+    handleBackwardForward(isForward);
+  };
 
-  const displayWidget = points => {
+  const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
         const resultGauge = points.sort((a, b) => {
-          aString = a.labels.map(l => '${l.key}=${l.value}').join(',')
-          bString = b.labels.map(l => '${l.key}=${l.value}').join(',')
-          return a.String.localeCompare(bString)
-        })[0]
-        const end = computeEnd(type, period)
-        let lastPoint = null
-        let thresholds = null
+          aString = a.labels.map((l) => "${l.key}=${l.value}").join(",");
+          bString = b.labels.map((l) => "${l.key}=${l.value}").join(",");
+          return a.String.localeCompare(bString);
+        })[0];
+        const end = computeEnd(type, period);
+        let lastPoint = null;
+        let thresholds = null;
         if (
           resultGauge &&
           resultGauge.points &&
-          new Date(resultGauge.points[resultGauge.points.length - 1].time) <= new Date(end)
+          new Date(resultGauge.points[resultGauge.points.length - 1].time) <=
+            new Date(end)
         ) {
-          lastPoint = resultGauge.points[resultGauge.points.length - 1].value
-          thresholds = resultGauge.thresholds
+          lastPoint = resultGauge.points[resultGauge.points.length - 1].value;
+          thresholds = resultGauge.thresholds;
         }
-        return <MetricGaugeItem unit={unit} value={lastPoint} thresholds={thresholds} name={title} />
+        return (
+          <MetricGaugeItem
+            unit={unit}
+            value={lastPoint}
+            thresholds={thresholds}
+            name={title}
+          />
+        );
       }
       case chartTypes[1]: {
-        const resultStacked = points
+        const resultStacked = points;
         return (
           <LineChart
             stacked
@@ -59,15 +82,15 @@ const WidgetDashboardItem = ({
             handleBackwardForward={handleBackwardForwardFunc}
             windowWidth={windowWidth}
           />
-        )
+        );
       }
       case chartTypes[2]: {
-        const resultsLines = points
+        const resultsLines = points;
         resultsLines.sort((a, b) => {
-          const aLabel = composeMetricName(a)
-          const bLabel = composeMetricName(b)
-          return aLabel.localeCompare(bLabel)
-        })
+          const aLabel = composeMetricName(a);
+          const bLabel = composeMetricName(b);
+          return aLabel.localeCompare(bLabel);
+        });
         return (
           <LineChart
             metrics={resultsLines}
@@ -78,48 +101,48 @@ const WidgetDashboardItem = ({
             handleBackwardForward={handleBackwardForwardFunc}
             windowWidth={windowWidth}
           />
-        )
+        );
       }
     }
-  }
+  };
 
-  const metricsFilter = []
+  const metricsFilter = [];
   switch (type) {
     case chartTypes[1]:
-      if (title === 'Processor Usage') {
-        CPU.forEach(name => {
-          metricsFilter.push({ labels: [{ key: LabelName, value: name }] })
-        })
-      } else if (title === 'Memory Usage') {
-        MEMORY.forEach(name => {
-          metricsFilter.push({ labels: [{ key: LabelName, value: name }] })
-        })
+      if (title === "Processor Usage") {
+        CPU.forEach((name) => {
+          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
+        });
+      } else if (title === "Memory Usage") {
+        MEMORY.forEach((name) => {
+          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
+        });
       }
-      break
+      break;
     default:
-      metrics.forEach(metric => {
-        let labels = []
+      metrics.forEach((metric) => {
+        let labels = [];
         for (let [key, value] of Object.entries(metric)) {
-          labels.push({ key: key, value: value })
+          labels.push({ key: key, value: value });
         }
-        metricsFilter.push({ labels: labels })
-      })
+        metricsFilter.push({ labels: labels });
+      });
   }
   const { isLoading, error, points, networkStatus } = useFetch(
     GET_POINTS,
     {
       metricsFilter,
-      start: period.from ? new Date(period.from).toISOString() : '',
-      end: period.to ? new Date(period.to).toISOString() : '',
-      minutes: period.minutes ? period.minutes : 0
+      start: period.from ? new Date(period.from).toISOString() : "",
+      end: period.to ? new Date(period.to).toISOString() : "",
+      minutes: period.minutes ? period.minutes : 0,
     },
     refetchTime * 1000
-  )
-  let hasError = error
+  );
+  let hasError = error;
   if (previousError.current && !error && networkStatus === POLL) {
-    hasError = previousError.current
+    hasError = previousError.current;
   }
-  previousError.current = error
+  previousError.current = error;
   return (
     <div>
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
@@ -127,7 +150,11 @@ const WidgetDashboardItem = ({
         isLoading={isLoading || !points}
         error={hasError}
         loadingComponent={
-          type === chartTypes[0] ? <MetricGaugeItem loading name={title} /> : <LineChart title={title} loading />
+          type === chartTypes[0] ? (
+            <MetricGaugeItem loading name={title} />
+          ) : (
+            <LineChart title={title} loading />
+          )
         }
         fallbackComponent={
           type === chartTypes[0] ? (
@@ -141,7 +168,7 @@ const WidgetDashboardItem = ({
         {({ points }) => displayWidget(points)}
       </FetchSuspense>
     </div>
-  )
+  );
   /* let displayWidgetItem
   if (isLoading || !points) {
     switch (type) {
@@ -163,7 +190,7 @@ const WidgetDashboardItem = ({
     }
   } else {
   } */
-}
+};
 
 WidgetDashboardItem.propTypes = {
   type: PropTypes.string.isRequired,
@@ -173,8 +200,8 @@ WidgetDashboardItem.propTypes = {
   refetchTime: PropTypes.number.isRequired,
   period: PropTypes.object.isRequired,
   handleBackwardForward: PropTypes.func,
-  windowWidth: PropTypes.number
-}
+  windowWidth: PropTypes.number,
+};
 
 export default React.memo(
   WidgetDashboardItem,
@@ -182,4 +209,4 @@ export default React.memo(
     isShallowEqual(nextProps.period, prevProps.period) &&
     prevProps.isVisible === nextProps.isVisible &&
     prevProps.windowWidth === nextProps.windowWidth
-)
+);
