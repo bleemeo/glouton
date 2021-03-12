@@ -131,12 +131,12 @@ docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
 
 Glouton use eslint as linter. You may run it with:
 ```
-cd webui; npm run lint
+(cd webui; npm run lint)
 ```
 
 Glouton use prettier too. You may run it with:
 ```
-cd webui; npm run pretify
+(cd webui; npm run pretify)
 ```
 
 Then tell Glouton to use JavaScript file from webpack-dev-server:
