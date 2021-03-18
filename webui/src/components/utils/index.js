@@ -206,11 +206,11 @@ export const fillEmptyPoints = (data, period) => {
 };
 
 export const computeBackwardForward = (
-  nbMinutes: number,
-  startDate: Date,
-  endDate: Date,
-  isForward: boolean = false
-): Object => {
+  nbMinutes,
+  startDate,
+  endDate,
+  isForward = false
+) => {
   const applyBackwardOrForward = isForward
     ? nbMinutes * 0.9
     : 0 - nbMinutes * 0.9;
