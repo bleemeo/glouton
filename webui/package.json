@@ -10,11 +10,11 @@
   "scripts": {
     "start": "webpack serve --mode development",
     "build": "npm run clean && webpack build --mode production && rm dist/*.svg",
-    "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && mkdir -p ../api/static/assets/css && for f in $(find ./dist/js -name '*.js'); do cat $f | gzip > ../api/static/assets/js/$(basename $f); done && cp -r ./dist/css/ ../api/static/assets/",
+    "deploy": "npm run build && npm run cleanOldJsFiles && mkdir -p ../api/static/assets/js && mkdir -p ../api/static/assets/css && for f in $(find ./dist/js -name '*.js' || find ./dist/js -name '*.ts'); do cat $f | gzip > ../api/static/assets/js/$(basename $f); done && cp -r ./dist/css/ ../api/static/assets/",
     "cleanOldJsFiles": "rm -rf ../api/static/assets/js && rm -rf ../api/static/assets/css",
     "clean": "rm -rf dist",
     "lint": "eslint src",
-    "pretify": "prettier --write 'src/**/*.js'"
+    "pretify": "prettier --write 'src/**/*.js' && prettier --write 'src/**/*.ts'"
   },
   "author": "Tom Darneix",
   "license": "ISC",
@@ -89,6 +89,8 @@
     "sass": "^1.32.8",
     "sass-loader": "^11.0.1",
     "style-loader": "^2.0.0",
+    "ts-jest": "^26.5.0",
+    "ts-loader": "^8.0.14",
     "typescript": "^4.2.3",
     "url-loader": "^4.1.1",
     "webpack": "^5.25.0",

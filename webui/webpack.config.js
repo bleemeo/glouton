@@ -47,9 +47,17 @@ module.exports = (env, argv) => {
       port: 3015,
       publicPath: "/",
     },
+    resolve: {
+      extensions: [ '.tsx', '.ts', '.js' ],
+    },
     plugins: plugins,
     module: {
       rules: [
+        {
+          test: /\.tsx?$/,
+          use: 'ts-loader',
+          exclude: /node_modules/,
+        },
         {
           test: /\.(js|jsx)$/,
           include: [

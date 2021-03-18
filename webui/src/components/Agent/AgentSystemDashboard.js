@@ -6,9 +6,9 @@ import {
   UNIT_PERCENTAGE,
   UNIT_BYTE,
   UNIT_NUMBER,
-  computeBackwardForward,
   LabelName,
 } from "../utils";
+import { computeBackwardForward } from "../utils/ComputeBackwarForward";
 import { formatDateTime } from "../utils/formater";
 import EditPeriodModal, { lastQuickRanges } from "./EditPeriodModal";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";

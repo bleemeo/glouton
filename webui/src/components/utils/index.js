@@ -205,20 +205,6 @@ export const fillEmptyPoints = (data, period) => {
   );
 };
 
-export const computeBackwardForward = (
-  nbMinutes,
-  startDate,
-  endDate,
-  isForward = false
-) => {
-  const applyBackwardOrForward = isForward
-    ? nbMinutes * 0.9
-    : 0 - nbMinutes * 0.9;
-  startDate.setUTCMinutes(startDate.getUTCMinutes() + applyBackwardOrForward);
-  endDate.setUTCMinutes(endDate.getUTCMinutes() + applyBackwardOrForward);
-  return { startDate, endDate };
-};
-
 export const isEmpty = (obj) => {
   for (const key in obj) {
     if (Object.prototype.hasOwnProperty.call(obj, key)) return false;
