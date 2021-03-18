@@ -44,9 +44,9 @@ const WidgetDashboardItem = ({
     switch (type) {
       case chartTypes[0]: {
         const resultGauge = points.sort((a, b) => {
-          var bString = "";
-          bString = b.labels.map(() => "${l.key}=${l.value}").join(",");
-          return a.String.localeCompare(bString);
+          const aString = b.labels.map(() => "${l.key}=${l.value}").join(",");
+          const bString = b.labels.map(() => "${l.key}=${l.value}").join(",");
+          return aString.localeCompare(bString);
         })[0];
         const end = computeEnd(type, period);
         let lastPoint = null;
