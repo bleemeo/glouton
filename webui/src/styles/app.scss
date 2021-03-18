@@ -169,19 +169,19 @@ $left-side-navbar-background-color: #2a3f54;
 // ---Reactable style---
 .reactable-header-sortable {
   &:after {
-    content: '\00a0\f0dc';
+    content: "\00a0\f0dc";
     @include fa-mixin();
   }
 }
 
 .reactable-header-sort-desc {
   &:after {
-    content: '\00a0\f0dd';
+    content: "\00a0\f0dd";
   }
 }
 .reactable-header-sort-asc {
   &:after {
-    content: '\00a0\f0de';
+    content: "\00a0\f0de";
   }
 }
 
