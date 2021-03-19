@@ -1,0 +1,19 @@
+{
+    "compilerOptions": {
+      "outDir": "./dist/",
+      "target": "es6",
+      "module": "es6",
+      "jsx": "react",
+      "allowJs": true,
+      "allowSyntheticDefaultImports": true,
+      "moduleResolution": "node",
+      "lib": ["es2017", "es2019", "dom"],
+      "strictNullChecks": true,
+      // "strict": true,
+      // "noImplicitAny": true,
+  
+      // "skipLibCheck": true,                     /* Skip type checking of declaration files. */
+      // "forceConsistentCasingInFileNames": true  /* Disallow inconsistently-cased references to the same file. */
+    }
+  }
+  

@@ -129,6 +129,16 @@ docker run --net host --rm -ti -u $UID -e HOME=/tmp/home \
    sh -c 'npm install && npm start'
 ```
 
+Glouton use eslint as linter. You may run it with:
+```
+(cd webui; npm run lint)
+```
+
+Glouton use prettier too. You may run it with:
+```
+(cd webui; npm run pretify)
+```
+
 Then tell Glouton to use JavaScript file from webpack-dev-server:
 ```
 export GLOUTON_WEB_STATIC_CDN_URL=http://localhost:3015

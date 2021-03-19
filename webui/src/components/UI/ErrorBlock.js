@@ -1,19 +1,19 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React from "react";
+import PropTypes from "prop-types";
 
 const ErrorBlock = ({ error }) => {
   if (!error) {
-    return null
+    return null;
   }
   if (error[0] === undefined) {
-    return null
+    return null;
   }
 
   return (
     <div className="card card-inverse card-danger text-center">
       <div className="card-block">
         <blockquote className="card-blockquote">
-          {error.map(err => (
+          {error.map((err) => (
             <p key={err} className="mb-0">
               {err.toString()}
             </p>
@@ -21,11 +21,11 @@ const ErrorBlock = ({ error }) => {
         </blockquote>
       </div>
     </div>
-  )
-}
+  );
+};
 
 ErrorBlock.propTypes = {
-  error: PropTypes.instanceOf(Array)
-}
+  error: PropTypes.instanceOf(Array),
+};
 
-export default ErrorBlock
+export default ErrorBlock;

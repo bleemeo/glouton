@@ -1,41 +1,38 @@
 {
-  "parser" : "babel-eslint",
+  "parser": "@typescript-eslint/parser",
   "env": {
-    "browser" : true,
-    "es6": true
+      "browser": true,
+      "es2021": true
   },
-  "parserOptions": {
-    "ecmaVersion": 6,
-    "sourceType": "module",
-    "ecmaFeatures": {
-      "jsx": true
-    }
-  },
-  "globals": {
-    "__DEV__"    : false,
-    "__DEBUG__"  : false
-  },
-  "plugins": [
-    "react",
-    "babel",
-    "import",
-    "prettier"
-  ],
   "extends": [
-    "prettier",
-    "standard",
-    "standard-react"
+      "eslint:recommended",
+      "plugin:react/recommended",
+      "plugin:prettier/recommended",
   ],
-  "settings": {
-    "import/ignore": [".png$", ".scss$"]
+  "overrides": [
+      {
+          "files": ["*.ts", "*.tsx"],
+          "extends": [
+              "plugin:@typescript-eslint/recommended"
+          ],
+          "rules": {
+              "react/prop-types": "off"
+          }
+        }
+  ],
+  "parserOptions": {
+      "ecmaFeatures": {
+          "jsx": true
+      },
+      "ecmaVersion": 12,
+      "sourceType": "module"
   },
   "rules": {
-    "space-before-function-paren": "off",
-    "generator-star-spacing": ["error", {
-      "before": false,
-      "after": true
-    }],
-    "jsx-quotes": "off",
-    "no-unneeded-ternary": "off"
+      "@typescript-eslint/no-use-before-define": ["error", { "functions": true, "classes": true }]
+  },
+  "globals": {
+      "__DEV__"    : false,
+      "process": true,
+      "__DEBUG__"  : false
   }
 }

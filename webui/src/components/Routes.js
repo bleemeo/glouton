@@ -1,43 +1,44 @@
-import React, { lazy, Suspense, useEffect } from 'react'
-import { BrowserRouter as Router, Route, Switch, Redirect } from 'react-router-dom'
-import { withRouter } from 'react-router'
+import React, { lazy, Suspense, useEffect } from "react";
+import {
+  BrowserRouter as Router,
+  Route,
+  Switch,
+  Redirect,
+} from "react-router-dom";
+import { withRouter } from "react-router";
 
-import PanelErrorBoundary from './UI/PanelErrorBoundary'
-import 'rc-switch/assets/index.css'
-import Fallback from './UI/Fallback'
-import FetchSuspense from './UI/FetchSuspense'
-import { useFetch } from './utils/hooks'
-import { FACTS } from './utils/gqlRequests'
-import SideNavBar from './App/SideNavbar'
+import PanelErrorBoundary from "./UI/PanelErrorBoundary";
+import "rc-switch/assets/index.css";
+import Fallback from "./UI/Fallback";
+import FetchSuspense from "./UI/FetchSuspense";
+import { useFetch } from "./utils/hooks";
+import { FACTS } from "./utils/gqlRequests";
+import SideNavBar from "./App/SideNavbar";
 
-const ScrollToTopComponent = props => {
+const ScrollToTopComponent = (props) => {
   useEffect(() => {
     window.scroll({
       top: 0,
-      left: 0
-    })
-  }, [props.location.pathname])
+      left: 0,
+    });
+  }, [props.location.pathname]);
 
-  return props.children
-}
+  return props.children;
+};
 
-const ScrollToTop = withRouter(ScrollToTopComponent)
+const ScrollToTop = withRouter(ScrollToTopComponent);
 
-const AgentSystemDashboard = lazy(() => import('./Agent/AgentSystemDashboard'))
-const AgentDockerListContainer = lazy(() => import('./Agent/AgentDockerListContainer'))
-const AgentProcessesContainer = lazy(() => import('./Agent/AgentProcessesContainer'))
-const AgentDetails = lazy(() => import('./Agent/AgentDetails'))
-
-const menuEntries = [
-  { key: 'dashboard', label: 'Dashboard' },
-  // { key: 'services', label: 'Services' },
-  { key: 'docker', label: 'Docker' },
-  { key: 'processes', label: 'Processes' },
-  { key: 'informations', label: 'Informations' }
-]
+const AgentSystemDashboard = lazy(() => import("./Agent/AgentSystemDashboard"));
+const AgentDockerListContainer = lazy(() =>
+  import("./Agent/AgentDockerListContainer")
+);
+const AgentProcessesContainer = lazy(() =>
+  import("./Agent/AgentProcessesContainer")
+);
+const AgentDetails = lazy(() => import("./Agent/AgentDetails"));
 
 const Routes = () => {
-  const { isLoading, error, facts } = useFetch(FACTS)
+  const { isLoading, error, facts } = useFetch(FACTS);
   return (
     <Router>
       <ScrollToTop>
@@ -48,12 +49,28 @@ const Routes = () => {
                 <>
                   <SideNavBar />
                   <Switch>
-                    <Route exact path="/dashboard" component={AgentSystemDashboard} />
-                    {facts.some(f => f.name === 'container_runtime') ? (
-                      <Route exact path="/docker" component={AgentDockerListContainer} />
+                    <Route
+                      exact
+                      path="/dashboard"
+                      component={AgentSystemDashboard}
+                    />
+                    {facts.some((f) => f.name === "container_runtime") ? (
+                      <Route
+                        exact
+                        path="/docker"
+                        component={AgentDockerListContainer}
+                      />
                     ) : null}
-                    <Route exact path="/processes" component={AgentProcessesContainer} />
-                    <Route exact path="/informations" render={() => <AgentDetails facts={facts} />} />
+                    <Route
+                      exact
+                      path="/processes"
+                      component={AgentProcessesContainer}
+                    />
+                    <Route
+                      exact
+                      path="/informations"
+                      render={() => <AgentDetails facts={facts} />}
+                    />
                     <Redirect to="/dashboard" />
                   </Switch>
                 </>
@@ -63,7 +80,7 @@ const Routes = () => {
         </PanelErrorBoundary>
       </ScrollToTop>
     </Router>
-  )
-}
+  );
+};
 
-export default Routes
+export default Routes;

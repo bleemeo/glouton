@@ -1,5 +1,5 @@
-import React from 'react'
-import PropTypes from 'prop-types'
+import React from "react";
+import PropTypes from "prop-types";
 
 /*
   Several articles said that <a> should only be used to link to another page
@@ -13,31 +13,31 @@ import PropTypes from 'prop-types'
 const handleKeyPress = (event, onClick) => {
   // simulate a click when the user press Enter or Space with the focus on the link
   if (event.charCode === 13 || event.charCode === 32) {
-    onClick(event)
+    onClick(event);
   }
   // TODO should we do smth here
-}
+};
 
-const A = props => {
-  const { className, onClick, children, ...btnProps } = props
-  const onKeyPress = handleKeyPress
+const A = (props) => {
+  const { className, onClick, children, ...btnProps } = props;
+  const onKeyPress = handleKeyPress;
   return (
     <a
       tabIndex="0"
-      className={`${className ? className : ''}`}
+      className={`${className ? className : ""}`}
       onClick={onClick}
-      onKeyPress={e => onKeyPress(e, onClick)}
+      onKeyPress={(e) => onKeyPress(e, onClick)}
       {...btnProps}
     >
       {children}
     </a>
-  )
-}
+  );
+};
 
 A.propTypes = {
   className: PropTypes.string,
   onClick: PropTypes.func,
-  children: PropTypes.object
-}
+  children: PropTypes.object,
+};
 
-export default A
+export default A;
