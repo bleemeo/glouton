@@ -1,0 +1,281 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Node
+  metadata:
+    annotations:
+      kubeadm.alpha.kubernetes.io/cri-socket: /var/run/dockershim.sock
+      node.alpha.kubernetes.io/ttl: "0"
+      volumes.kubernetes.io/controller-managed-attach-detach: "true"
+    creationTimestamp: "2021-01-06T13:07:16Z"
+    labels:
+      beta.kubernetes.io/arch: amd64
+      beta.kubernetes.io/os: linux
+      kubernetes.io/arch: amd64
+      kubernetes.io/hostname: minikube
+      kubernetes.io/os: linux
+      minikube.k8s.io/commit: 9f1e482427589ff8451c4723b6ba53bb9742fbb1
+      minikube.k8s.io/name: minikube
+      minikube.k8s.io/updated_at: 2021_01_06T14_07_18_0700
+      minikube.k8s.io/version: v1.16.0
+      node-role.kubernetes.io/control-plane: ""
+      node-role.kubernetes.io/master: ""
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:volumes.kubernetes.io/controller-managed-attach-detach: {}
+          f:labels:
+            .: {}
+            f:beta.kubernetes.io/arch: {}
+            f:beta.kubernetes.io/os: {}
+            f:kubernetes.io/arch: {}
+            f:kubernetes.io/hostname: {}
+            f:kubernetes.io/os: {}
+        f:status:
+          f:addresses:
+            .: {}
+            k:{"type":"Hostname"}:
+              .: {}
+              f:address: {}
+              f:type: {}
+            k:{"type":"InternalIP"}:
+              .: {}
+              f:address: {}
+              f:type: {}
+          f:allocatable:
+            .: {}
+            f:cpu: {}
+            f:ephemeral-storage: {}
+            f:hugepages-1Gi: {}
+            f:hugepages-2Mi: {}
+            f:memory: {}
+            f:pods: {}
+          f:capacity:
+            .: {}
+            f:cpu: {}
+            f:ephemeral-storage: {}
+            f:hugepages-1Gi: {}
+            f:hugepages-2Mi: {}
+            f:memory: {}
+            f:pods: {}
+          f:conditions:
+            .: {}
+            k:{"type":"DiskPressure"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"MemoryPressure"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"PIDPressure"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastHeartbeatTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+          f:daemonEndpoints:
+            f:kubeletEndpoint:
+              f:Port: {}
+          f:images: {}
+          f:nodeInfo:
+            f:architecture: {}
+            f:bootID: {}
+            f:containerRuntimeVersion: {}
+            f:kernelVersion: {}
+            f:kubeProxyVersion: {}
+            f:kubeletVersion: {}
+            f:machineID: {}
+            f:operatingSystem: {}
+            f:osImage: {}
+            f:systemUUID: {}
+      manager: kubelet
+      operation: Update
+      time: "2021-01-06T13:07:15Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:kubeadm.alpha.kubernetes.io/cri-socket: {}
+          f:labels:
+            f:node-role.kubernetes.io/control-plane: {}
+            f:node-role.kubernetes.io/master: {}
+      manager: kubeadm
+      operation: Update
+      time: "2021-01-06T13:07:18Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:labels:
+            f:minikube.k8s.io/commit: {}
+            f:minikube.k8s.io/name: {}
+            f:minikube.k8s.io/updated_at: {}
+            f:minikube.k8s.io/version: {}
+      manager: kubectl-label
+      operation: Update
+      time: "2021-01-06T13:07:19Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:node.alpha.kubernetes.io/ttl: {}
+        f:spec:
+          f:podCIDR: {}
+          f:podCIDRs:
+            .: {}
+            v:"10.244.0.0/24": {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2021-01-06T13:07:35Z"
+    name: minikube
+    resourceVersion: "7525"
+    uid: 882a3268-5b18-4ec3-b536-b5c91b1c4b98
+  spec:
+    podCIDR: 10.244.0.0/24
+    podCIDRs:
+    - 10.244.0.0/24
+  status:
+    addresses:
+    - address: 192.168.49.2
+      type: InternalIP
+    - address: minikube
+      type: Hostname
+    allocatable:
+      cpu: "8"
+      ephemeral-storage: 373145868Ki
+      hugepages-1Gi: "0"
+      hugepages-2Mi: "0"
+      memory: 16089600Ki
+      pods: "110"
+    capacity:
+      cpu: "8"
+      ephemeral-storage: 373145868Ki
+      hugepages-1Gi: "0"
+      hugepages-2Mi: "0"
+      memory: 16089600Ki
+      pods: "110"
+    conditions:
+    - lastHeartbeatTime: "2021-01-06T15:45:12Z"
+      lastTransitionTime: "2021-01-06T13:07:12Z"
+      message: kubelet has sufficient memory available
+      reason: KubeletHasSufficientMemory
+      status: "False"
+      type: MemoryPressure
+    - lastHeartbeatTime: "2021-01-06T15:45:12Z"
+      lastTransitionTime: "2021-01-06T13:07:12Z"
+      message: kubelet has no disk pressure
+      reason: KubeletHasNoDiskPressure
+      status: "False"
+      type: DiskPressure
+    - lastHeartbeatTime: "2021-01-06T15:45:12Z"
+      lastTransitionTime: "2021-01-06T13:07:12Z"
+      message: kubelet has sufficient PID available
+      reason: KubeletHasSufficientPID
+      status: "False"
+      type: PIDPressure
+    - lastHeartbeatTime: "2021-01-06T15:45:12Z"
+      lastTransitionTime: "2021-01-06T13:07:36Z"
+      message: kubelet is posting ready status
+      reason: KubeletReady
+      status: "True"
+      type: Ready
+    daemonEndpoints:
+      kubeletEndpoint:
+        Port: 10250
+    images:
+    - names:
+      - k8s.gcr.io/etcd@sha256:4ad90a11b55313b182afc186b9876c8e891531b8db4c9bf1541953021618d0e2
+      - k8s.gcr.io/etcd:3.4.13-0
+      sizeBytes: 253392289
+    - names:
+      - kubernetesui/dashboard@sha256:7f80b5ba141bead69c4fee8661464857af300d7d7ed0274cf7beecedc00322e6
+      - kubernetesui/dashboard:v2.1.0
+      sizeBytes: 225733746
+    - names:
+      - rabbitmq@sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba
+      - rabbitmq:latest
+      sizeBytes: 167332379
+    - names:
+      - k8s.gcr.io/kube-apiserver@sha256:8b8125d7a6e4225b08f04f65ca947b27d0cc86380bf09fab890cc80408230114
+      - k8s.gcr.io/kube-apiserver:v1.20.0
+      sizeBytes: 121665018
+    - names:
+      - k8s.gcr.io/kube-proxy@sha256:40423415eebbd598d1c2660a0a38606ad1d949ea9404c405eaf25929163b479d
+      - k8s.gcr.io/kube-proxy:v1.20.0
+      sizeBytes: 118400203
+    - names:
+      - k8s.gcr.io/kube-controller-manager@sha256:00ccc3a5735e82d53bc26054d594a942fae64620a6f84018c057a519ba7ed1dc
+      - k8s.gcr.io/kube-controller-manager:v1.20.0
+      sizeBytes: 115844602
+    - names:
+      - redis@sha256:0f724af268d0d3f5fb1d6b33fc22127ba5cbca2d58523b286ed3122db0dc5381
+      - redis:latest
+      sizeBytes: 104252176
+    - names:
+      - memcached@sha256:944f6eb53be39dfcb895ab110d685e4f0320ffa00b8a1c0fe35aeb52f4f89d30
+      - memcached:latest
+      sizeBytes: 82355872
+    - names:
+      - k8s.gcr.io/kube-scheduler@sha256:beaa710325047fa9c867eff4ab9af38d9c2acec05ac5b416c708c304f76bdbef
+      - k8s.gcr.io/kube-scheduler:v1.20.0
+      sizeBytes: 46384634
+    - names:
+      - k8s.gcr.io/coredns@sha256:73ca82b4ce829766d4f1f10947c3a338888f876fbed0540dc849c89ff256e90c
+      - k8s.gcr.io/coredns:1.7.0
+      sizeBytes: 45227747
+    - names:
+      - kubernetesui/metrics-scraper@sha256:555981a24f184420f3be0c79d4efb6c948a85cfce84034f85a563f4151a81cbf
+      - kubernetesui/metrics-scraper:v1.0.4
+      sizeBytes: 36937728
+    - names:
+      - gcr.io/k8s-minikube/storage-provisioner@sha256:06f83c679a723d938b8776510d979c69549ad7df516279981e23554b3e68572f
+      - gcr.io/k8s-minikube/storage-provisioner:v4
+      sizeBytes: 29683712
+    - names:
+      - busybox@sha256:49dae530fd5fee674a6b0d3da89a380fc93746095e7eca0f1b70188a95fd5d71
+      - busybox:latest
+      sizeBytes: 1235829
+    - names:
+      - k8s.gcr.io/pause@sha256:927d98197ec1141a368550822d18fa1c60bdae27b78b0c004f705f548c07814f
+      - k8s.gcr.io/pause:3.2
+      sizeBytes: 682696
+    nodeInfo:
+      architecture: amd64
+      bootID: 0344d468-259e-4ea4-9f26-387ec222f839
+      containerRuntimeVersion: docker://20.10.0
+      kernelVersion: 5.4.0-59-generic
+      kubeProxyVersion: v1.20.0
+      kubeletVersion: v1.20.0
+      machineID: 7bc51fc5d3134ee49bddd992baa3aca7
+      operatingSystem: linux
+      osImage: Ubuntu 20.04.1 LTS
+      systemUUID: 4a22fab6-6f9c-4282-9f68-b9bc5394e5b8
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""

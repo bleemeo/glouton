@@ -187,6 +187,16 @@ func (c *Client) Disable(until time.Time, reason bleemeoTypes.DisableReason) {
 	}
 }
 
+// ClearDisable remove disabling if reason match reasonToClear. It remove the disabling only after delay.
+func (c *Client) ClearDisable(reasonToClear bleemeoTypes.DisableReason, delay time.Duration) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if time.Now().Before(c.disabledUntil) && c.disableReason == reasonToClear {
+		c.disabledUntil = time.Now().Add(delay)
+	}
+}
+
 // Run connect and transmit information to Bleemeo Cloud platform.
 func (c *Client) Run(ctx context.Context) error {
 	c.ctx = ctx
@@ -361,6 +371,11 @@ func (c *Client) shutdown() error {
 			cause = "Upgrade"
 		}
 
+		disableUntil, disableReason := c.getDisableUntil()
+		if time.Now().Before(disableUntil) && disableReason == bleemeoTypes.DisableTimeDrift {
+			cause = "Clean shutdown, time drift"
+		}
+
 		payload, err := json.Marshal(map[string]string{"disconnect-cause": cause})
 		if err != nil {
 			return err
@@ -467,6 +482,10 @@ func (c *Client) addPoints(points []types.MetricPoint) {
 		return
 	}
 
+	if time.Now().Before(c.disabledUntil) && c.disableReason == bleemeoTypes.DisableTimeDrift {
+		return
+	}
+
 	c.pendingPoints = append(c.pendingPoints, points...)
 }
 
@@ -491,14 +510,14 @@ func (c *Client) PopPoints(includeFailedPoints bool) []types.MetricPoint {
 }
 
 func (c *Client) sendPoints() {
-	points := c.filterPoints(c.PopPoints(false))
+	points := c.PopPoints(false)
 
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	if !c.connected() || c.isSendingSuspended() {
 		// store all new points as failed ones
-		c.addFailedPoints(points...)
+		c.addFailedPoints(c.filterPoints(points)...)
 
 		// Make sure that when connection is back we retry failed points as soon as possible
 		c.lastFailedPointsRetry = time.Time{}
@@ -516,6 +535,7 @@ func (c *Client) sendPoints() {
 		c.failedPoints = nil
 	}
 
+	points = c.filterPoints(points)
 	payload := c.preparePoints(registreredMetricByKey, points)
 	nbPoints := 0
 
@@ -545,7 +565,15 @@ func (c *Client) sendPoints() {
 
 // addFailedPoints add given points to list of failed points.
 func (c *Client) addFailedPoints(points ...types.MetricPoint) {
-	c.failedPoints = append(c.failedPoints, points...)
+	for _, p := range points {
+		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
+		if reg := c.option.Cache.MetricRegistrationsFailByKey()[key]; reg.FailCounter > 5 || reg.LastFailKind.IsPermanentFailure() {
+			continue
+		}
+
+		c.failedPoints = append(c.failedPoints, p)
+	}
+
 	if len(c.failedPoints) > maxPendingPoints {
 		c.maxPointCount++
 
@@ -598,7 +626,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 
 	for _, p := range points {
 		key := common.LabelsToText(p.Labels, p.Annotations, c.option.MetricFormat == types.MetricFormatBleemeo)
-		if m, ok := registreredMetricByKey[key]; ok {
+		if m, ok := registreredMetricByKey[key]; ok && m.DeactivatedAt.IsZero() {
 			value := metricPayload{
 				LabelsText:  m.LabelsText,
 				Timestamp:   p.Time.Unix(),
@@ -889,7 +917,7 @@ func (c *Client) ready() bool {
 	return false
 }
 
-func (c *Client) connectionManager(ctx context.Context) {
+func (c *Client) connectionManager(ctx context.Context) { // nolint: gocyclo
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -906,6 +934,9 @@ mainLoop:
 		disableUntil, disableReason := c.getDisableUntil()
 		switch {
 		case time.Now().Before(disableUntil):
+			if disableReason == bleemeoTypes.DisableTimeDrift {
+				_ = c.shutdown()
+			}
 			if c.mqttClient != nil {
 				logger.V(2).Printf("Disconnecting from MQTT due to '%v'", disableReason)
 				c.mqttClient.Disconnect(0)

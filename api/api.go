@@ -45,7 +45,7 @@ type storeInterface interface {
 	Metrics(filters map[string]string) (result []types.Metric, err error)
 }
 
-type dockerInterface interface {
+type containerInterface interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 }
 
@@ -61,7 +61,7 @@ type API struct {
 	BindAddress        string
 	StaticCDNURL       string
 	DB                 storeInterface
-	DockerFact         dockerInterface
+	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider
 	FactProvider       *facts.FactProvider
 	Disccovery         *discovery.Discovery

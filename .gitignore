@@ -13,7 +13,8 @@
 /agent-go
 /agentgo*
 /glouton*
-/dist
+/dist*
 api/static/assets/js
+api/static/assets/css
 *-bindata.go
 .build-cache

@@ -77,11 +77,16 @@ type Service struct {
 
 // Container is a Contaier object on Bleemeo API.
 type Container struct {
-	ID                string `json:"id"`
-	Name              string `json:"name"`
-	DockerID          string `json:"docker_id"`
-	DockerInspect     string `json:"docker_inspect"`
-	DockerInspectHash string `json:",omitempty"`
+	ID               string    `json:"id"`
+	Name             string    `json:"name"`
+	ContainerID      string    `json:"container_id"`
+	ContainerInspect string    `json:"container_inspect"`
+	Status           string    `json:"container_status"`
+	CreatedAt        time.Time `json:"container_created_at"`
+	Runtime          string    `json:"container_runtime"`
+
+	InspectHash          string    `json:",omitempty"`
+	GloutonLastUpdatedAt time.Time `json:",omitempty"`
 }
 
 // Threshold is the threshold of a metrics. We use pointer to float to support
@@ -121,10 +126,62 @@ type Metric struct {
 	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
 }
 
+// FailureKind is the kind of failure to register a metric. Used to know if
+// we should (quickly) retry a failure.
+type FailureKind int
+
+// All possible value for FailureKind.
+const (
+	FailureUnknown FailureKind = iota
+	FailureAllowList
+	FailureTooManyMetric
+)
+
+// MetricRegistration contains information about a metric registration failure.
+type MetricRegistration struct {
+	LabelsText   string
+	LastFailAt   time.Time
+	FailCounter  int
+	LastFailKind FailureKind
+}
+
+// IsPermanentFailure tells whether the error is permanent and there is no need to quickly retry.
+func (kind FailureKind) IsPermanentFailure() bool {
+	switch kind {
+	case FailureAllowList, FailureTooManyMetric:
+		return true
+	default:
+		return false
+	}
+}
+
+func (kind FailureKind) String() string {
+	switch kind {
+	case FailureAllowList:
+		return "not-allowed"
+	case FailureTooManyMetric:
+		return "too-many-metric"
+	default:
+		return "unknown"
+	}
+}
+
+// RetryAfter return the time after which the retry of the registration may be retried.
+func (mr MetricRegistration) RetryAfter() time.Time {
+	factor := math.Pow(2, float64(mr.FailCounter))
+	delay := 15 * time.Second * time.Duration(factor)
+
+	if delay > 45*time.Minute {
+		delay = 45 * time.Minute
+	}
+
+	return mr.LastFailAt.Add(delay)
+}
+
 // FillInspectHash fill the DockerInspectHash.
 func (c *Container) FillInspectHash() {
-	bin := sha256.Sum256([]byte(c.DockerInspect))
-	c.DockerInspectHash = fmt.Sprintf("%x", bin)
+	bin := sha256.Sum256([]byte(c.ContainerInspect))
+	c.InspectHash = fmt.Sprintf("%x", bin)
 }
 
 // MetricsAgentWhitelistMap return a map with all whitelisted agent metrics.
@@ -182,4 +239,30 @@ type GlobalInfoAgents struct {
 type GlobalInfo struct {
 	MaintenanceEnabled bool             `json:"maintenance"`
 	Agents             GlobalInfoAgents `json:"agents"`
+	CurrentTime        float64          `json:"current_time"`
+	MaxTimeDrift       float64          `json:"max_time_drift"`
+	FetchedAt          time.Time        `json:"-"`
+}
+
+// BleemeoTime return the time according to Bleemeo API.
+func (i GlobalInfo) BleemeoTime() time.Time {
+	return time.Unix(int64(i.CurrentTime), int64(i.CurrentTime*1e9)%1e9)
+}
+
+// TimeDrift return the time difference between local clock and Bleemeo API.
+func (i GlobalInfo) TimeDrift() time.Duration {
+	if i.FetchedAt.IsZero() || i.CurrentTime == 0 {
+		return 0
+	}
+
+	return i.FetchedAt.Sub(i.BleemeoTime())
+}
+
+// IsTimeDriftTooLarge returns whether the local time it too wrong.
+func (i GlobalInfo) IsTimeDriftTooLarge() bool {
+	if i.FetchedAt.IsZero() || i.CurrentTime == 0 {
+		return false
+	}
+
+	return math.Abs(i.TimeDrift().Seconds()) >= i.MaxTimeDrift
 }

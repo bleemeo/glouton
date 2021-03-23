@@ -305,6 +305,63 @@ func (c *Configuration) Get(key string) (result interface{}, found bool) {
 	return get(c.rawValues, keyPart)
 }
 
+// Dump return a copy of the whole configuration, with "secret" retracted.
+// secret is any key containing "key", "secret", "password" or "passwd".
+func (c *Configuration) Dump() (result map[string]interface{}) {
+	return dump(c.rawValues)
+}
+
+func dump(root map[string]interface{}) map[string]interface{} {
+	secretKey := []string{"key", "secret", "password", "passwd"}
+	result := make(map[string]interface{}, len(root))
+
+	for k, v := range root {
+		isSecret := false
+
+		for _, name := range secretKey {
+			if strings.Contains(k, name) {
+				isSecret = true
+
+				break
+			}
+		}
+
+		if isSecret {
+			result[k] = "*****"
+
+			continue
+		}
+
+		switch v := v.(type) {
+		case map[string]interface{}:
+			result[k] = dump(v)
+		case []interface{}:
+			result[k] = dumpList(v)
+		default:
+			result[k] = v
+		}
+	}
+
+	return result
+}
+
+func dumpList(root []interface{}) []interface{} {
+	result := make([]interface{}, len(root))
+
+	for i, v := range root {
+		switch v := v.(type) {
+		case map[string]interface{}:
+			result[i] = dump(v)
+		case []interface{}:
+			result[i] = dumpList(v)
+		default:
+			result[i] = v
+		}
+	}
+
+	return result
+}
+
 func get(root interface{}, keyPart []string) (result interface{}, found bool) {
 	if len(keyPart) == 0 {
 		return root, true

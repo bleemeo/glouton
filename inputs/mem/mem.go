@@ -58,6 +58,12 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		case "used_percent":
 			delete(fields, metricName)
 			fields["used_perc"] = value
+		case "sreclaimable":
+			delete(fields, "sreclaimable")
+			fields["slab_recl"] = value
+		case "sunreclaim":
+			delete(fields, "sunreclaim")
+			fields["slab_unrecl"] = value
 		// All next cases are metric ignored. They are on different case to
 		// avoid very long line.
 		case "active", "inactive", "wired", "commit_limit", "committed_as", "dirty", "high_free", "high_total":
@@ -66,7 +72,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			delete(fields, metricName)
 		case "shared", "swap_cached", "swap_free", "swap_total", "vmalloc_chunk", "vmalloc_total", "vmalloc_used":
 			delete(fields, metricName)
-		case "write_back", "write_back_tmp":
+		case "write_back", "write_back_tmp", "slab":
 			delete(fields, metricName)
 		}
 	}

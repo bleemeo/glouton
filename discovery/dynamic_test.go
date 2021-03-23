@@ -54,49 +54,12 @@ func (mn mockNetstat) Netstat(ctx context.Context) (netstat map[int][]facts.List
 }
 
 type mockContainerInfo struct {
-	containers map[string]mockContainer
+	containers map[string]facts.FakeContainer
 }
 
-type mockContainer struct {
-	ipAddress          string
-	listenAddresses    []facts.ListenAddress
-	env                []string
-	labels             map[string]string
-	ignoredPorts       map[int]bool
-	stoppedAndReplaced bool
-}
-
-func (mci mockContainerInfo) Container(containerID string) (container container, found bool) {
+func (mci mockContainerInfo) CachedContainer(containerID string) (container facts.Container, found bool) {
 	c, ok := mci.containers[containerID]
 	return c, ok
-}
-
-func (mc mockContainer) ListenAddressesEx() ([]facts.ListenAddress, facts.ConfidenceLevel) {
-	return mc.listenAddresses, facts.ConfidenceMedium
-}
-
-func (mc mockContainer) Env() []string {
-	return mc.env
-}
-
-func (mc mockContainer) Labels() map[string]string {
-	return mc.labels
-}
-
-func (mc mockContainer) PrimaryAddress() string {
-	return mc.ipAddress
-}
-
-func (mc mockContainer) Ignored() bool {
-	return false
-}
-
-func (mc mockContainer) IgnoredPorts() map[int]bool {
-	return mc.ignoredPorts
-}
-
-func (mc mockContainer) StoppedAndReplaced() bool {
-	return mc.stoppedAndReplaced
 }
 
 type mockFileReader struct {
@@ -189,17 +152,17 @@ func TestDynamicDiscoverySimple(t *testing.T) {
 // Less will show the NUL character used to split args.
 func TestDynamicDiscoverySingle(t *testing.T) {
 	cases := []struct {
-		testName              string
-		cmdLine               []string
-		filesContent          map[string]string
-		containerID           string
-		netstatAddresses      []facts.ListenAddress
-		containerAddresses    []facts.ListenAddress
-		containerIP           string
-		containerEnv          []string
-		containerIgnoredPorts map[int]bool
-		want                  Service
-		noMatch               bool
+		testName           string
+		cmdLine            []string
+		filesContent       map[string]string
+		containerID        string
+		netstatAddresses   []facts.ListenAddress
+		containerAddresses []facts.ListenAddress
+		containerIP        string
+		containerEnv       map[string]string
+		containerLabels    map[string]string
+		want               Service
+		noMatch            bool
 	}{
 		{
 			testName:         "simple-bind-all",
@@ -266,6 +229,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				ContainerID:     "5b8f83412931055bcc5da35e41ada85fd70015673163d56911cac4fe6693273f",
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 6379}},
 				IPAddress:       "172.17.0.49",
+				IgnoredPorts:    map[int]bool{},
 			},
 		},
 		{
@@ -283,7 +247,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			containerID:  "1234",
 			containerIP:  "172.17.0.49",
 			cmdLine:      []string{"mysqld"},
-			containerEnv: []string{"MYSQL_ROOT_PASSWORD=secret"},
+			containerEnv: map[string]string{"MYSQL_ROOT_PASSWORD": "secret"},
 			want: Service{
 				Name:            "mysql",
 				ServiceType:     MySQLService,
@@ -291,6 +255,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "172.17.0.49", Port: 3306}},
 				IPAddress:       "172.17.0.49",
 				ExtraAttributes: map[string]string{"username": "root", "password": "secret"},
+				IgnoredPorts:    map[int]bool{},
 			},
 		},
 		{
@@ -720,6 +685,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 80}},
 				IPAddress:       "127.0.0.1",
 				ContainerID:     "817ec63d4b4f9e28947a323f9fbfc4596500b42c842bf07bd6ad9641e6805cb5",
+				IgnoredPorts:    map[int]bool{},
 			},
 		},
 		{
@@ -753,8 +719,8 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 			containerID: "1234",
 			containerIP: "127.0.0.1",
-			containerIgnoredPorts: map[int]bool{
-				8080: true,
+			containerLabels: map[string]string{
+				"glouton.check.ignore.port.8080": "true",
 			},
 			netstatAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 7990}},
 			want: Service{
@@ -788,12 +754,12 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 				42: c.netstatAddresses,
 			}},
 			containerInfo: mockContainerInfo{
-				containers: map[string]mockContainer{
+				containers: map[string]facts.FakeContainer{
 					c.containerID: {
-						ipAddress:       c.containerIP,
-						listenAddresses: c.containerAddresses,
-						env:             c.containerEnv,
-						ignoredPorts:    c.containerIgnoredPorts,
+						FakePrimaryAddress:  c.containerIP,
+						FakeListenAddresses: c.containerAddresses,
+						FakeEnvironment:     c.containerEnv,
+						FakeLabels:          c.containerLabels,
 					},
 				},
 			},

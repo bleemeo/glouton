@@ -52,7 +52,7 @@ func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Inp
 			Input: diskioInput,
 			Accumulator: internal.Accumulator{
 				RenameGlobal:     dt.renameGlobal,
-				DerivatedMetrics: []string{"read_bytes", "read_time", "reads", "write_bytes", "writes", "write_time", "io_time"},
+				DerivatedMetrics: []string{"merged_reads", "read_bytes", "read_time", "reads", "merged_writes", "write_bytes", "writes", "write_time", "io_time"},
 				TransformMetrics: dt.transformMetrics,
 			},
 		}
@@ -109,6 +109,18 @@ func (dt diskIOTransformer) transformMetrics(originalContext internal.GatherCont
 		fields["time"] = ioTime
 		// io_time is millisecond per second.
 		fields["utilization"] = ioTime / 1000. * 100.
+	}
+
+	if rmerged, ok := fields["merged_reads"]; ok {
+		delete(fields, "merged_reads")
+
+		fields["read_merged"] = rmerged
+	}
+
+	if wmerged, ok := fields["merged_writes"]; ok {
+		delete(fields, "merged_writes")
+
+		fields["write_merged"] = wmerged
 	}
 
 	// win_perf_counters will report io_time and io_utilization on windows

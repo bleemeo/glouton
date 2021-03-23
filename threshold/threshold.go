@@ -223,11 +223,12 @@ type Unit struct {
 	UnitText string `json:"unit_text,omitempty"`
 }
 
-// Possible value for UnitType.
+// Possible value for UnitType. It must match value in Bleemeo API.
 const (
-	UnitTypeUnit = 0
-	UnitTypeByte = 2
-	UnitTypeBit  = 3
+	UnitTypeUnit   = 0
+	UnitTypeByte   = 2
+	UnitTypeBit    = 3
+	UnitTypeSecond = 6
 )
 
 // FromInterfaceMap convert a map[string]interface{} to Threshold.
@@ -391,18 +392,22 @@ func formatValue(value float64, unit Unit) string {
 		}
 
 		return fmt.Sprintf("%.2f %s%ss", value, scales[i], unit.UnitText)
+	case UnitTypeSecond:
+		return formatDuration(time.Duration(value) * time.Second)
 	default:
 		return fmt.Sprintf("%.2f %s", value, unit.UnitText)
 	}
 }
 
 func formatDuration(period time.Duration) string {
-	if period <= 0 {
-		return ""
+	sign := ""
+	if period < 0 {
+		sign = "-"
+		period = -period
 	}
 
 	units := []struct {
-		Scale float64
+		Scale int
 		Name  string
 	}{
 		{1, "second"},
@@ -411,24 +416,41 @@ func formatDuration(period time.Duration) string {
 		{24, "day"},
 	}
 
-	currentUnit := ""
-	value := period.Seconds()
+	result := "0 second"
+	currentScale := 1
 
-	for _, unit := range units {
-		if math.Round(value/unit.Scale) >= 1 {
-			value /= unit.Scale
-			currentUnit = unit.Name
-		} else {
+	for i, unit := range units {
+		currentScale *= unit.Scale
+		value := math.Round(period.Seconds() / float64(currentScale))
+		remainder := period.Seconds() - value*float64(currentScale)
+
+		if value < 1 || (value == 1 && remainder < -0.1*value*float64(currentScale)) {
 			break
+		}
+
+		if remainder < -0.1*value*float64(currentScale) {
+			value--
+
+			remainder += float64(currentScale)
+		}
+
+		result = fmt.Sprintf("%s%.0f %s", sign, value, unit.Name)
+		if value > 1 {
+			result += "s"
+		}
+
+		if math.Abs(remainder) >= 0.1*value*float64(currentScale) && i > 0 {
+			previousScale := currentScale / unit.Scale
+			valueRemainder := math.Round(remainder / float64(previousScale))
+
+			result += fmt.Sprintf(" %.0f %s", valueRemainder, units[i-1].Name)
+			if valueRemainder > 1 {
+				result += "s"
+			}
 		}
 	}
 
-	value = math.Round(value)
-	if value > 1 {
-		currentUnit += "s"
-	}
-
-	return fmt.Sprintf("%.0f %s", value, currentUnit)
+	return result
 }
 
 type pusher struct {

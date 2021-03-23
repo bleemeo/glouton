@@ -213,17 +213,41 @@ func TestFormatDuration(t *testing.T) {
 			value: 24*time.Hour - 100*time.Second,
 			want:  "1 day",
 		},
+		// less than 10% from 1 day is ignored
+		{
+			value: 26 * time.Hour,
+			want:  "1 day",
+		},
+		// but more than 10% is counted and rounded
+		{
+			value: 26*time.Hour + 31*time.Minute,
+			want:  "1 day 3 hours",
+		},
+		// Same apply for 1 day minus less than 10%
+		{
+			value: 22 * time.Hour,
+			want:  "1 day",
+		},
+		// Same apply for 1 day minus more than 10%
+		{
+			value: 22*time.Hour - 25*time.Minute,
+			want:  "22 hours",
+		},
 		{
 			value: 89 * time.Second,
-			want:  "1 minute",
+			want:  "1 minute 29 seconds",
 		},
 		{
 			value: 91 * time.Second,
-			want:  "2 minutes",
+			want:  "1 minute 31 seconds",
+		},
+		{
+			value: 12 * time.Second,
+			want:  "12 seconds",
 		},
 		{
 			value: 0,
-			want:  "",
+			want:  "0 second",
 		},
 	}
 	for _, c := range cases {

@@ -94,6 +94,7 @@ var defaultConfig = map[string]interface{}{
 		"/var/lib/docker/zfs",
 		"/var/lib/docker/plugins",
 		"/snap",
+		"/run/docker/runtime-runc",
 	},
 	"disk_ignore": []string{},
 	"disk_monitor": []string{
@@ -134,6 +135,7 @@ var defaultConfig = map[string]interface{}{
 		"system_pending_updates":          86400,
 		"system_pending_security_updates": 86400,
 		"time_elapsed_since_last_data":    0,
+		"time_drift":                      0,
 	},
 	"network_interface_blacklist":     []interface{}{"docker", "lo", "veth", "virbr", "vnet", "isatap"},
 	"nrpe.enabled":                    false,

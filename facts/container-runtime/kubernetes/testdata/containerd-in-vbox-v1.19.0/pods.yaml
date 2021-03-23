@@ -1,0 +1,1046 @@
+apiVersion: v1
+items:
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      cni.projectcalico.org/podIP: 10.244.120.68/32
+      cni.projectcalico.org/podIPs: 10.244.120.68/32
+    creationTimestamp: "2021-01-08T11:24:10Z"
+    generateName: crash-loop-7665f6d468-
+    labels:
+      app: crash-loop
+      pod-template-hash: 7665f6d468
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"a06c9147-0156-4a6b-ae03-c255195b9cd8"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"false"}:
+              .: {}
+              f:command: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2021-01-08T11:24:10Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:cni.projectcalico.org/podIP: {}
+            f:cni.projectcalico.org/podIPs: {}
+      manager: calico
+      operation: Update
+      time: "2021-01-08T11:24:52Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:message: {}
+              f:reason: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"10.244.120.68"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2021-01-08T11:28:50Z"
+    name: crash-loop-7665f6d468-2fv75
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: crash-loop-7665f6d468
+      uid: a06c9147-0156-4a6b-ae03-c255195b9cd8
+    resourceVersion: "929"
+    selfLink: /api/v1/namespaces/default/pods/crash-loop-7665f6d468-2fv75
+    uid: 31832b2a-6d95-4008-8262-192ae47ca7ce
+  spec:
+    containers:
+    - command:
+      - "false"
+      image: busybox:latest
+      imagePullPolicy: Always
+      name: "false"
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-gzv84
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-gzv84
+      secret:
+        defaultMode: 420
+        secretName: default-token-gzv84
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:56Z"
+      message: 'containers with unready status: [false]'
+      reason: ContainersNotReady
+      status: "False"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:56Z"
+      message: 'containers with unready status: [false]'
+      reason: ContainersNotReady
+      status: "False"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://cb57165aa796bd140ecdf4830d8d7e2d1964176f0ae03eea1084011a24accae3
+      image: docker.io/library/busybox:latest
+      imageID: docker.io/library/busybox@sha256:49dae530fd5fee674a6b0d3da89a380fc93746095e7eca0f1b70188a95fd5d71
+      lastState:
+        terminated:
+          containerID: containerd://cb57165aa796bd140ecdf4830d8d7e2d1964176f0ae03eea1084011a24accae3
+          exitCode: 1
+          finishedAt: "2021-01-08T11:28:33Z"
+          reason: Error
+          startedAt: "2021-01-08T11:28:33Z"
+      name: "false"
+      ready: false
+      restartCount: 5
+      started: false
+      state:
+        waiting:
+          message: back-off 2m40s restarting failed container=false pod=crash-loop-7665f6d468-2fv75_default(31832b2a-6d95-4008-8262-192ae47ca7ce)
+          reason: CrashLoopBackOff
+    hostIP: 192.168.99.119
+    phase: Running
+    podIP: 10.244.120.68
+    podIPs:
+    - ip: 10.244.120.68
+    qosClass: BestEffort
+    startTime: "2021-01-08T11:24:10Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      cni.projectcalico.org/podIP: 10.244.120.65/32
+      cni.projectcalico.org/podIPs: 10.244.120.65/32
+    creationTimestamp: "2021-01-08T11:24:10Z"
+    generateName: delete-me-once-584c74ccf5-
+    labels:
+      app: delete-me-once
+      pod-template-hash: 584c74ccf5
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"8588a509-5a20-4361-ab95-cbe19b3a41b1"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"true"}:
+              .: {}
+              f:command: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2021-01-08T11:24:10Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:cni.projectcalico.org/podIP: {}
+            f:cni.projectcalico.org/podIPs: {}
+      manager: calico
+      operation: Update
+      time: "2021-01-08T11:24:41Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"10.244.120.65"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2021-01-08T11:24:48Z"
+    name: delete-me-once-584c74ccf5-4278c
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: delete-me-once-584c74ccf5
+      uid: 8588a509-5a20-4361-ab95-cbe19b3a41b1
+    resourceVersion: "676"
+    selfLink: /api/v1/namespaces/default/pods/delete-me-once-584c74ccf5-4278c
+    uid: 709acfe0-9270-4e62-8030-32be619d4b25
+  spec:
+    containers:
+    - command:
+      - sleep
+      - 9999d
+      image: busybox:latest
+      imagePullPolicy: Always
+      name: "true"
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-gzv84
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-gzv84
+      secret:
+        defaultMode: 420
+        secretName: default-token-gzv84
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:48Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:48Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://12ff76c454b4b7d16c41c951c296df261d9d9f2c5f375908256e1fc2dbe195e9
+      image: docker.io/library/busybox:latest
+      imageID: docker.io/library/busybox@sha256:49dae530fd5fee674a6b0d3da89a380fc93746095e7eca0f1b70188a95fd5d71
+      lastState: {}
+      name: "true"
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2021-01-08T11:24:47Z"
+    hostIP: 192.168.99.119
+    phase: Running
+    podIP: 10.244.120.65
+    podIPs:
+    - ip: 10.244.120.65
+    qosClass: BestEffort
+    startTime: "2021-01-08T11:24:10Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      cni.projectcalico.org/podIP: 10.244.120.69/32
+      cni.projectcalico.org/podIPs: 10.244.120.69/32
+    creationTimestamp: "2021-01-08T11:24:10Z"
+    generateName: rabbitmq-container-port-66fdd44ccd-
+    labels:
+      app: rabbitmq-container-port
+      pod-template-hash: 66fdd44ccd
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"8a3ec625-8da4-45d7-bcf7-84339fc27c56"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"rabbitmq"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:ports:
+                .: {}
+                k:{"containerPort":5672,"protocol":"TCP"}:
+                  .: {}
+                  f:containerPort: {}
+                  f:protocol: {}
+              f:readinessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:tcpSocket:
+                  .: {}
+                  f:port: {}
+                f:timeoutSeconds: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2021-01-08T11:24:10Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:cni.projectcalico.org/podIP: {}
+            f:cni.projectcalico.org/podIPs: {}
+      manager: calico
+      operation: Update
+      time: "2021-01-08T11:24:52Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"10.244.120.69"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2021-01-08T11:25:49Z"
+    name: rabbitmq-container-port-66fdd44ccd-7hsqr
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: rabbitmq-container-port-66fdd44ccd
+      uid: 8a3ec625-8da4-45d7-bcf7-84339fc27c56
+    resourceVersion: "774"
+    selfLink: /api/v1/namespaces/default/pods/rabbitmq-container-port-66fdd44ccd-7hsqr
+    uid: 1aafd548-b1fa-492a-a0b5-c19fe12b05b0
+  spec:
+    containers:
+    - image: rabbitmq:latest
+      imagePullPolicy: Always
+      name: rabbitmq
+      ports:
+      - containerPort: 5672
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 5672
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-gzv84
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-gzv84
+      secret:
+        defaultMode: 420
+        secretName: default-token-gzv84
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:49Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:49Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://fd5a2a65a67f64ff30969e09037b3918bc5bc3bdd82f56758ebc440d76849d22
+      image: docker.io/library/rabbitmq:latest
+      imageID: docker.io/library/rabbitmq@sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba
+      lastState: {}
+      name: rabbitmq
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2021-01-08T11:25:34Z"
+    hostIP: 192.168.99.119
+    phase: Running
+    podIP: 10.244.120.69
+    podIPs:
+    - ip: 10.244.120.69
+    qosClass: BestEffort
+    startTime: "2021-01-08T11:24:10Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      cni.projectcalico.org/podIP: 10.244.120.67/32
+      cni.projectcalico.org/podIPs: 10.244.120.67/32
+      glouton.check.ignore.port.4369: TruE
+      glouton.check.ignore.port.5671: "on"
+    creationTimestamp: "2021-01-08T11:24:10Z"
+    generateName: rabbitmq-labels-74cfb594d8-
+    labels:
+      app: rabbitmq-labels
+      pod-template-hash: 74cfb594d8
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:glouton.check.ignore.port.4369: {}
+            f:glouton.check.ignore.port.5671: {}
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"e0d3e25e-3b2c-4bfe-a16e-1ad364ace685"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"rabbitmq"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2021-01-08T11:24:10Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:cni.projectcalico.org/podIP: {}
+            f:cni.projectcalico.org/podIPs: {}
+      manager: calico
+      operation: Update
+      time: "2021-01-08T11:24:46Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"10.244.120.67"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2021-01-08T11:25:32Z"
+    name: rabbitmq-labels-74cfb594d8-cgbzn
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: rabbitmq-labels-74cfb594d8
+      uid: e0d3e25e-3b2c-4bfe-a16e-1ad364ace685
+    resourceVersion: "736"
+    selfLink: /api/v1/namespaces/default/pods/rabbitmq-labels-74cfb594d8-cgbzn
+    uid: f547ef7b-3c1c-4fb9-b01b-f44d74bfe92a
+  spec:
+    containers:
+    - image: rabbitmq:latest
+      imagePullPolicy: Always
+      name: rabbitmq
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-gzv84
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-gzv84
+      secret:
+        defaultMode: 420
+        secretName: default-token-gzv84
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:32Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:32Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://e00f87ac94cffd0bf7e79c2605e97ed2df3ad3bc65b3abfafbc7df57a218f6d9
+      image: docker.io/library/rabbitmq:latest
+      imageID: docker.io/library/rabbitmq@sha256:1fc999fbdd8054b0c34c285901474f136792ad4a42d39186f3793ac40de04dba
+      lastState: {}
+      name: rabbitmq
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2021-01-08T11:25:31Z"
+    hostIP: 192.168.99.119
+    phase: Running
+    podIP: 10.244.120.67
+    podIPs:
+    - ip: 10.244.120.67
+    qosClass: BestEffort
+    startTime: "2021-01-08T11:24:10Z"
+- apiVersion: v1
+  kind: Pod
+  metadata:
+    annotations:
+      cni.projectcalico.org/podIP: 10.244.120.66/32
+      cni.projectcalico.org/podIPs: 10.244.120.66/32
+      glouton.enable: "off"
+    creationTimestamp: "2021-01-08T11:24:10Z"
+    generateName: redis-memcached-56dfc4cbfc-
+    labels:
+      app: redis-memcached
+      pod-template-hash: 56dfc4cbfc
+    managedFields:
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            .: {}
+            f:glouton.enable: {}
+          f:generateName: {}
+          f:labels:
+            .: {}
+            f:app: {}
+            f:pod-template-hash: {}
+          f:ownerReferences:
+            .: {}
+            k:{"uid":"1f62131f-37cd-4566-a58a-a709bd6a60c9"}:
+              .: {}
+              f:apiVersion: {}
+              f:blockOwnerDeletion: {}
+              f:controller: {}
+              f:kind: {}
+              f:name: {}
+              f:uid: {}
+        f:spec:
+          f:containers:
+            k:{"name":"a-memcached"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:readinessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:tcpSocket:
+                  .: {}
+                  f:port: {}
+                f:timeoutSeconds: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+            k:{"name":"the-redis"}:
+              .: {}
+              f:image: {}
+              f:imagePullPolicy: {}
+              f:name: {}
+              f:ports:
+                .: {}
+                k:{"containerPort":6363,"protocol":"TCP"}:
+                  .: {}
+                  f:containerPort: {}
+                  f:protocol: {}
+              f:readinessProbe:
+                .: {}
+                f:failureThreshold: {}
+                f:periodSeconds: {}
+                f:successThreshold: {}
+                f:tcpSocket:
+                  .: {}
+                  f:port: {}
+                f:timeoutSeconds: {}
+              f:resources: {}
+              f:terminationMessagePath: {}
+              f:terminationMessagePolicy: {}
+          f:dnsPolicy: {}
+          f:enableServiceLinks: {}
+          f:restartPolicy: {}
+          f:schedulerName: {}
+          f:securityContext: {}
+          f:terminationGracePeriodSeconds: {}
+      manager: kube-controller-manager
+      operation: Update
+      time: "2021-01-08T11:24:10Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:metadata:
+          f:annotations:
+            f:cni.projectcalico.org/podIP: {}
+            f:cni.projectcalico.org/podIPs: {}
+      manager: calico
+      operation: Update
+      time: "2021-01-08T11:24:44Z"
+    - apiVersion: v1
+      fieldsType: FieldsV1
+      fieldsV1:
+        f:status:
+          f:conditions:
+            k:{"type":"ContainersReady"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Initialized"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+            k:{"type":"Ready"}:
+              .: {}
+              f:lastProbeTime: {}
+              f:lastTransitionTime: {}
+              f:status: {}
+              f:type: {}
+          f:containerStatuses: {}
+          f:hostIP: {}
+          f:phase: {}
+          f:podIP: {}
+          f:podIPs:
+            .: {}
+            k:{"ip":"10.244.120.66"}:
+              .: {}
+              f:ip: {}
+          f:startTime: {}
+      manager: kubelet
+      operation: Update
+      time: "2021-01-08T11:25:46Z"
+    name: redis-memcached-56dfc4cbfc-5qnh2
+    namespace: default
+    ownerReferences:
+    - apiVersion: apps/v1
+      blockOwnerDeletion: true
+      controller: true
+      kind: ReplicaSet
+      name: redis-memcached-56dfc4cbfc
+      uid: 1f62131f-37cd-4566-a58a-a709bd6a60c9
+    resourceVersion: "770"
+    selfLink: /api/v1/namespaces/default/pods/redis-memcached-56dfc4cbfc-5qnh2
+    uid: d036a8d4-dcd0-4fba-9558-17633aa997e8
+  spec:
+    containers:
+    - image: redis:latest
+      imagePullPolicy: Always
+      name: the-redis
+      ports:
+      - containerPort: 6363
+        protocol: TCP
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 6379
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-gzv84
+        readOnly: true
+    - image: memcached:latest
+      imagePullPolicy: Always
+      name: a-memcached
+      readinessProbe:
+        failureThreshold: 3
+        periodSeconds: 10
+        successThreshold: 1
+        tcpSocket:
+          port: 11211
+        timeoutSeconds: 1
+      resources: {}
+      terminationMessagePath: /dev/termination-log
+      terminationMessagePolicy: File
+      volumeMounts:
+      - mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+        name: default-token-gzv84
+        readOnly: true
+    dnsPolicy: ClusterFirst
+    enableServiceLinks: true
+    nodeName: minikube
+    preemptionPolicy: PreemptLowerPriority
+    priority: 0
+    restartPolicy: Always
+    schedulerName: default-scheduler
+    securityContext: {}
+    serviceAccount: default
+    serviceAccountName: default
+    terminationGracePeriodSeconds: 30
+    tolerations:
+    - effect: NoExecute
+      key: node.kubernetes.io/not-ready
+      operator: Exists
+      tolerationSeconds: 300
+    - effect: NoExecute
+      key: node.kubernetes.io/unreachable
+      operator: Exists
+      tolerationSeconds: 300
+    volumes:
+    - name: default-token-gzv84
+      secret:
+        defaultMode: 420
+        secretName: default-token-gzv84
+  status:
+    conditions:
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: Initialized
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:46Z"
+      status: "True"
+      type: Ready
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:25:46Z"
+      status: "True"
+      type: ContainersReady
+    - lastProbeTime: null
+      lastTransitionTime: "2021-01-08T11:24:10Z"
+      status: "True"
+      type: PodScheduled
+    containerStatuses:
+    - containerID: containerd://c901b6d5396a9a6eaf5699bfef5543f0279aa4e0e9548910013d9da6c04ec6b3
+      image: docker.io/library/memcached:latest
+      imageID: docker.io/library/memcached@sha256:944f6eb53be39dfcb895ab110d685e4f0320ffa00b8a1c0fe35aeb52f4f89d30
+      lastState: {}
+      name: a-memcached
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2021-01-08T11:25:39Z"
+    - containerID: containerd://d053d875c398a5c0bb1fe5bb7505c997c1b332c473f36096a2f4979a8a1dffc7
+      image: docker.io/library/redis:latest
+      imageID: docker.io/library/redis@sha256:0f724af268d0d3f5fb1d6b33fc22127ba5cbca2d58523b286ed3122db0dc5381
+      lastState: {}
+      name: the-redis
+      ready: true
+      restartCount: 0
+      started: true
+      state:
+        running:
+          startedAt: "2021-01-08T11:25:07Z"
+    hostIP: 192.168.99.119
+    phase: Running
+    podIP: 10.244.120.66
+    podIPs:
+    - ip: 10.244.120.66
+    qosClass: BestEffort
+    startTime: "2021-01-08T11:24:10Z"
+kind: List
+metadata:
+  resourceVersion: ""
+  selfLink: ""

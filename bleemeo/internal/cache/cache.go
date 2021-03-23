@@ -24,7 +24,7 @@ import (
 	"sync"
 )
 
-const cacheVersion = 3
+const cacheVersion = 4
 const cacheKey = "CacheBleemeoConnector"
 
 // Cache store information about object registered in Bleemeo API.
@@ -34,16 +34,18 @@ type Cache struct {
 	dirty bool
 	state bleemeoTypes.State
 
-	cachedMetricLookup map[string]bleemeoTypes.Metric
+	cachedMetricLookup           map[string]bleemeoTypes.Metric
+	cachedFailRegistrationLookup map[string]bleemeoTypes.MetricRegistration
 }
 
 type data struct {
-	Version    int
-	AccountID  string
-	Facts      []bleemeoTypes.AgentFact
-	Containers []bleemeoTypes.Container
-	Metrics    []bleemeoTypes.Metric
-	Agent      bleemeoTypes.Agent
+	Version                 int
+	AccountID               string
+	Facts                   []bleemeoTypes.AgentFact
+	Containers              []bleemeoTypes.Container
+	Metrics                 []bleemeoTypes.Metric
+	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
+	Agent                   bleemeoTypes.Agent
 	// AccountConfig groups the configuration of other accounts, something we may need for probes.
 	// mapping config UUID -> Config
 	AccountConfigs map[string]bleemeoTypes.AccountConfig
@@ -281,7 +283,7 @@ func (c *Cache) ContainersByContainerID() map[string]bleemeoTypes.Container {
 	result := make(map[string]bleemeoTypes.Container)
 
 	for _, v := range c.data.Containers {
-		result[v.DockerID] = v
+		result[v.ContainerID] = v
 	}
 
 	return result
@@ -300,6 +302,42 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 
 	return result
 }
+
+// SetMetricRegistrationsFail update the Metric list.
+func (c *Cache) SetMetricRegistrationsFail(registrations []bleemeoTypes.MetricRegistration) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.MetricRegistrationsFail = registrations
+	c.cachedFailRegistrationLookup = nil
+	c.dirty = true
+}
+
+// MetricRegistrationsFail returns the Metric registration list. You should not mutute it.
+func (c *Cache) MetricRegistrationsFail() (registrations []bleemeoTypes.MetricRegistration) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.data.MetricRegistrationsFail
+}
+
+// MetricRegistrationsFailByKey return a map with key being the labelsText.
+func (c *Cache) MetricRegistrationsFailByKey() map[string]bleemeoTypes.MetricRegistration {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	if c.cachedFailRegistrationLookup == nil {
+		c.cachedFailRegistrationLookup = make(map[string]bleemeoTypes.MetricRegistration, len(c.data.MetricRegistrationsFail))
+
+		for _, v := range c.data.MetricRegistrationsFail {
+			c.cachedFailRegistrationLookup[v.LabelsText] = v
+		}
+	}
+
+	return c.cachedFailRegistrationLookup
+}
+
+//
 
 // SetMetrics update the Metric list.
 func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {
@@ -400,13 +438,18 @@ func Load(state bleemeoTypes.State) *Cache {
 			newData.CurrentAccountConfig = oldCache.AccountConfig
 		}
 
-		newData.Version = 2
-
 		fallthrough
 	case 2:
 		logger.V(1).Printf("Version 2 of the cache found, upgrading it.")
 
-		// Version 3 stopped using "_item" to store Bleemeo item and use "item"
+		// well... containers had multiple fields renamed... lets drop it
+		newData.Containers = nil
+
+		fallthrough
+	case 3:
+		logger.V(1).Printf("Version 3 of cache found, upgrading it.")
+
+		// Version 4 stopped using "_item" to store Bleemeo item and use "item"
 		for i, m := range newData.Metrics {
 			labels := types.TextToLabels(m.LabelsText)
 			if v, ok := labels["_item"]; ok {
@@ -416,10 +459,9 @@ func Load(state bleemeoTypes.State) *Cache {
 			}
 		}
 
-		newData.Version = 3
-
 		fallthrough
 	case cacheVersion:
+		newData.Version = cacheVersion
 		cache.data = newData
 	default:
 		logger.V(2).Printf("Bleemeo connector cache is too recent. Discarding content")

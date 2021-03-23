@@ -48,18 +48,8 @@ type DynamicDiscovery struct {
 	services            []Service
 }
 
-type container interface {
-	Env() []string
-	PrimaryAddress() string
-	ListenAddressesEx() ([]facts.ListenAddress, facts.ConfidenceLevel)
-	Labels() map[string]string
-	Ignored() bool
-	IgnoredPorts() map[int]bool
-	StoppedAndReplaced() bool
-}
-
 type containerInfoProvider interface {
-	Container(containerID string) (c container, found bool)
+	CachedContainer(containerID string) (c facts.Container, found bool)
 }
 
 type fileReader interface {
@@ -68,11 +58,11 @@ type fileReader interface {
 
 // NewDynamic create a new dynamic service discovery which use information from
 // processess and netstat to discovery services.
-func NewDynamic(ps processFact, netstat netstatProvider, containerInfo *facts.DockerProvider, fileReader fileReader, defaultStack string) *DynamicDiscovery {
+func NewDynamic(ps processFact, netstat netstatProvider, containerInfo containerInfoProvider, fileReader fileReader, defaultStack string) *DynamicDiscovery {
 	return &DynamicDiscovery{
 		ps:            ps,
 		netstat:       netstat,
-		containerInfo: (*dockerWrapper)(containerInfo),
+		containerInfo: containerInfo,
 		fileReader:    fileReader,
 		defaultStack:  defaultStack,
 	}
@@ -123,8 +113,8 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 	for _, p := range processes {
 		if p.PID == pid && p.CreateTime.Truncate(time.Second).Equal(createTime) {
 			if p.ContainerID != "" {
-				container, ok := dd.containerInfo.Container(p.ContainerID)
-				if ok && container.Ignored() {
+				container, ok := dd.containerInfo.CachedContainer(p.ContainerID)
+				if !ok || facts.ContainerIgnored(container) {
 					return "", ""
 				}
 			}
@@ -234,13 +224,6 @@ type netstatProvider interface {
 	Netstat(ctx context.Context) (netstat map[int][]facts.ListenAddress, err error)
 }
 
-type dockerWrapper facts.DockerProvider
-
-func (dw *dockerWrapper) Container(containerID string) (c container, found bool) {
-	c, found = (*facts.DockerProvider)(dw).Container(containerID)
-	return
-}
-
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
 	processes, err := dd.ps.Processes(ctx, maxAge)
 	if err != nil {
@@ -273,6 +256,10 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			continue
 		}
 
+		if process.Status == "zombie" {
+			continue
+		}
+
 		serviceType, ok := serviceByCommand(process.CmdLineList)
 		if !ok {
 			continue
@@ -297,20 +284,16 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		}
 
 		if service.ContainerID != "" {
-			service.container, ok = dd.containerInfo.Container(service.ContainerID)
-			if !ok {
+			service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
+			if !ok || facts.ContainerIgnored(service.container) {
 				continue
 			}
 
-			if service.container.Ignored() {
-				continue
-			}
-
-			if stack, ok := service.container.Labels()["bleemeo.stack"]; ok {
+			if stack, ok := facts.LabelsAndAnnotations(service.container)["bleemeo.stack"]; ok {
 				service.Stack = stack
 			}
 
-			if stack, ok := service.container.Labels()["glouton.stack"]; ok {
+			if stack, ok := facts.LabelsAndAnnotations(service.container)["glouton.stack"]; ok {
 				service.Stack = stack
 			}
 		}
@@ -318,12 +301,14 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if service.ContainerID == "" {
 			service.ListenAddresses = netstat[pid]
 		} else {
-			var confidence facts.ConfidenceLevel
+			var explicit bool
 
-			service.ListenAddresses, confidence = service.container.ListenAddressesEx()
-			service.IgnoredPorts = service.container.IgnoredPorts()
+			service.ListenAddresses, explicit = service.container.ListenAddresses()
+			service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
 
-			if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && confidence == facts.ConfidenceLow) {
+			service.ListenAddresses = excludeEmptyAddress(service.ListenAddresses)
+
+			if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && !explicit) {
 				service.ListenAddresses = netstat[pid]
 			}
 		}
@@ -353,7 +338,13 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		dd.fillExtraAttributes(&service)
 		dd.guessJMX(&service, process.CmdLineList)
 
-		logger.V(2).Printf("Discovered service %v", service)
+		logger.V(2).Printf(
+			"Discovered service %v from PID %d (%s) with IP %s",
+			service,
+			pid,
+			process.Name,
+			service.IPAddress,
+		)
 
 		servicesMap[key] = service
 	}
@@ -427,10 +418,10 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 
 	if service.ServiceType == MySQLService {
 		if service.container != nil {
-			for _, e := range service.container.Env() {
-				if strings.HasPrefix(e, "MYSQL_ROOT_PASSWORD=") {
+			for k, v := range service.container.Environment() {
+				if k == "MYSQL_ROOT_PASSWORD" {
 					service.ExtraAttributes["username"] = "root"
-					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "MYSQL_ROOT_PASSWORD=")
+					service.ExtraAttributes["password"] = v
 				}
 			}
 		} else if dd.fileReader != nil {
@@ -445,13 +436,13 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 
 	if service.ServiceType == PostgreSQLService {
 		if service.container != nil {
-			for _, e := range service.container.Env() {
-				if strings.HasPrefix(e, "POSTGRES_PASSWORD=") {
-					service.ExtraAttributes["password"] = strings.TrimPrefix(e, "POSTGRES_PASSWORD=")
+			for k, v := range service.container.Environment() {
+				if k == "POSTGRES_PASSWORD" {
+					service.ExtraAttributes["password"] = v
 				}
 
-				if strings.HasPrefix(e, "POSTGRES_USER=") {
-					service.ExtraAttributes["username"] = strings.TrimPrefix(e, "POSTGRES_USER=")
+				if k == "POSTGRES_USER" {
+					service.ExtraAttributes["username"] = v
 				}
 			}
 		}
@@ -556,4 +547,20 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	serviceName, ok := knownProcesses[name]
 
 	return serviceName, ok
+}
+
+// excludeEmptyAddress exlude entry with empty Address IP. It will modify input.
+func excludeEmptyAddress(addresses []facts.ListenAddress) []facts.ListenAddress {
+	n := 0
+
+	for _, x := range addresses {
+		if x.Address != "" {
+			addresses[n] = x
+			n++
+		}
+	}
+
+	addresses = addresses[:n]
+
+	return addresses
 }

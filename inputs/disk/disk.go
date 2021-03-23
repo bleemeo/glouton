@@ -47,12 +47,17 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 		diskInput.IgnoreFS = []string{
 			"tmpfs", "devtmpfs", "devfs", "overlay", "aufs", "squashfs",
 		}
+
+		diskDeduplicateInput := deduplicator{
+			Input: diskInput,
+		}
+
 		dt := diskTransformer{
 			strings.TrimRight(mountPoint, "/"),
 			blacklist,
 		}
 		i = &internal.Input{
-			Input: diskInput,
+			Input: diskDeduplicateInput,
 			Accumulator: internal.Accumulator{
 				RenameGlobal:     dt.renameGlobal,
 				TransformMetrics: dt.transformMetrics,

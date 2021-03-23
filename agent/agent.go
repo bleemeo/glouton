@@ -25,6 +25,7 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"math"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -36,7 +37,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -50,6 +50,11 @@ import (
 	"glouton/discovery"
 	"glouton/discovery/promexporter"
 	"glouton/facts"
+	"glouton/facts/container-runtime/containerd"
+	dockerRuntime "glouton/facts/container-runtime/docker"
+	"glouton/facts/container-runtime/kubernetes"
+	"glouton/facts/container-runtime/merge"
+	crTypes "glouton/facts/container-runtime/types"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
@@ -72,6 +77,8 @@ import (
 
 	"net/http"
 	"net/url"
+
+	"gopkg.in/yaml.v3"
 )
 
 type agent struct {
@@ -81,20 +88,23 @@ type agent struct {
 	cancel       context.CancelFunc
 	context      context.Context
 
-	hostRootPath      string
-	discovery         *discovery.Discovery
-	dockerFact        *facts.DockerProvider
-	collector         *collector.Collector
-	factProvider      *facts.FactProvider
-	bleemeoConnector  *bleemeo.Connector
-	influxdbConnector *influxdb.Client
-	threshold         *threshold.Registry
-	jmx               *jmxtrans.JMX
-	store             *store.Store
-	gathererRegistry  *registry.Registry
-	metricFormat      types.MetricFormat
-	dynamicScrapper   *promexporter.DynamicScrapper
-	lastHealCheck     int64
+	hostRootPath           string
+	discovery              *discovery.Discovery
+	dockerRuntime          *dockerRuntime.Docker
+	containerdRuntime      *containerd.Containerd
+	containerRuntime       crTypes.RuntimeInterface
+	collector              *collector.Collector
+	factProvider           *facts.FactProvider
+	bleemeoConnector       *bleemeo.Connector
+	influxdbConnector      *influxdb.Client
+	threshold              *threshold.Registry
+	jmx                    *jmxtrans.JMX
+	store                  *store.Store
+	gathererRegistry       *registry.Registry
+	metricFormat           types.MetricFormat
+	dynamicScrapper        *promexporter.DynamicScrapper
+	lastHealCheck          time.Time
+	lastContainerEventTime time.Time
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -129,7 +139,9 @@ type taskInfo struct {
 }
 
 func (a *agent) init(configFiles []string) (ok bool) {
-	atomic.StoreInt64(&a.lastHealCheck, time.Now().Unix())
+	a.l.Lock()
+	a.lastHealCheck = time.Now()
+	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(context.Background())
 	cfg, warnings, err := a.loadConfiguration(configFiles)
@@ -400,11 +412,9 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		configThreshold[k] = t
 	}
 
-	oldThresholds := map[string]threshold.Threshold{
-		"system_pending_updates":          {},
-		"system_pending_security_updates": {},
-	}
-	for name := range oldThresholds {
+	oldThresholds := map[string]threshold.Threshold{}
+
+	for _, name := range []string{"system_pending_updates", "system_pending_security_updates", "time_drift"} {
 		key := threshold.MetricNameItem{
 			Name: name,
 			Item: "",
@@ -414,7 +424,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
-	for name := range oldThresholds {
+	for _, name := range []string{"system_pending_updates", "system_pending_security_updates"} {
 		key := threshold.MetricNameItem{
 			Name: name,
 			Item: "",
@@ -424,6 +434,16 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) {
 			a.FireTrigger(false, false, true, false)
 		}
+	}
+
+	key := threshold.MetricNameItem{
+		Name: "time_drift",
+		Item: "",
+	}
+	newThreshold := a.threshold.GetThreshold(key)
+
+	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
+		a.bleemeoConnector.UpdateInfo()
 	}
 }
 
@@ -515,21 +535,36 @@ func (a *agent) run() { //nolint:gocyclo
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 
-	var kubernetesProvider *facts.KubernetesProvider
+	a.dockerRuntime = &dockerRuntime.Docker{
+		DockerSockets:             dockerRuntime.DefaultAddresses(a.hostRootPath),
+		DeletedContainersCallback: a.deletedContainersCallback,
+	}
+	a.containerdRuntime = &containerd.Containerd{
+		Addresses:                 containerd.DefaultAddresses(a.hostRootPath),
+		DeletedContainersCallback: a.deletedContainersCallback,
+	}
+	a.containerRuntime = &merge.Runtime{
+		Runtimes: []crTypes.RuntimeInterface{
+			a.dockerRuntime,
+			a.containerdRuntime,
+		},
+	}
 
 	if a.config.Bool("kubernetes.enabled") {
-		kubernetesProvider = &facts.KubernetesProvider{
+		kube := &kubernetes.Kubernetes{
+			Runtime:    a.containerRuntime,
 			NodeName:   a.config.String("kubernetes.nodename"),
 			KubeConfig: a.config.String("kubernetes.kubeconfig"),
 		}
+		a.containerRuntime = kube
 
-		_, err := kubernetesProvider.PODs(ctx, 0)
-		if err != nil {
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		if err := kube.Test(ctx); err != nil {
 			logger.Printf("Kubernetes API unreachable, service detection may misbehave: %v", err)
 		}
-	}
 
-	a.dockerFact = facts.NewDocker(a.deletedContainersCallback, kubernetesProvider)
+		cancel()
+	}
 
 	var (
 		psLister facts.ProcessLister
@@ -549,11 +584,11 @@ func (a *agent) run() { //nolint:gocyclo
 	psFact := facts.NewProcess(
 		psLister,
 		a.hostRootPath,
-		a.dockerFact,
+		a.containerRuntime,
 	)
 	netstat := &facts.NetstatProvider{FilePath: a.config.String("agent.netstat_file")}
 
-	a.factProvider.AddCallback(a.dockerFact.DockerFact)
+	a.factProvider.AddCallback(a.containerRuntime.RuntimeFact)
 	a.factProvider.SetFact("installation_format", a.config.String("agent.installation_format"))
 
 	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
@@ -565,6 +600,10 @@ func (a *agent) run() { //nolint:gocyclo
 		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
 	}
 
+	a.gathererRegistry.AddPushPointsCallback(
+		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))),
+	)
+
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
 	servicesIgnoreMetrics, _ := a.config.Get("service_ignore_metrics")
@@ -573,7 +612,7 @@ func (a *agent) run() { //nolint:gocyclo
 	serviceIgnoreMetrics := confFieldToSliceMap(servicesIgnoreMetrics, "service ignore metrics")
 	isCheckIgnored := discovery.NewIgnoredService(serviceIgnoreCheck).IsServiceIgnored
 	isInputIgnored := discovery.NewIgnoredService(serviceIgnoreMetrics).IsServiceIgnored
-	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.dockerFact, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack"))
+	dynamicDiscovery := discovery.NewDynamic(psFact, netstat, a.containerRuntime, discovery.SudoFileReader{HostRootPath: a.hostRootPath}, a.config.String("stack"))
 	a.discovery = discovery.New(
 		dynamicDiscovery,
 		a.collector,
@@ -581,7 +620,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.taskRegistry,
 		a.state,
 		acc,
-		a.dockerFact,
+		a.containerRuntime,
 		overrideServices,
 		isCheckIgnored,
 		isInputIgnored,
@@ -640,7 +679,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	api := &api.API{
 		DB:                 a.store,
-		DockerFact:         a.dockerFact,
+		ContainerRuntime:   a.containerRuntime,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
 		BindAddress:        apiBindAddress,
@@ -659,7 +698,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.watchdog, "Agent Watchdog"},
 		{a.store.Run, "Metric store"},
 		{a.triggerHandler.Run, "Internal trigger handler"},
-		{a.dockerFact.Run, "Docker connector"},
+		{a.containerRuntime.Run, "Docker connector"},
 		{a.healthCheck, "Agent healthcheck"},
 		{a.hourlyDiscovery, "Service Discovery"},
 		{a.dailyFact, "Facts gatherer"},
@@ -698,7 +737,7 @@ func (a *agent) run() { //nolint:gocyclo
 			State:                   a.state,
 			Facts:                   a.factProvider,
 			Process:                 psFact,
-			Docker:                  a.dockerFact,
+			Docker:                  a.containerRuntime,
 			Store:                   a.store,
 			Acc:                     acc,
 			Discovery:               a.discovery,
@@ -873,6 +912,40 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 	}, nil
 }
 
+func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
+	return func(t0 time.Time) {
+		points, err := a.containerdRuntime.Metrics(context.Background())
+		if err != nil {
+			logger.V(2).Printf("containerd metrics gather failed: %v", err)
+		}
+
+		// We don't really care about having up-to-date information because
+		// when containers are started/stopped, the information is updated anyway.
+		containers, err := a.containerRuntime.Containers(context.Background(), 2*time.Hour, false)
+		if err != nil {
+			logger.V(2).Printf("gather on DockerProvider failed: %v", err)
+			return
+		}
+
+		countRunning := 0
+
+		for _, c := range containers {
+			if c.State().IsRunning() {
+				countRunning++
+			}
+		}
+
+		points = append(points, types.MetricPoint{
+			Point: types.Point{Time: t0, Value: float64(countRunning)},
+			Labels: map[string]string{
+				"__name__": "containers_count",
+			},
+		})
+
+		pusher.PushPoints(points)
+	}
+}
+
 func (a *agent) minuteMetric(ctx context.Context) error {
 	for {
 		select {
@@ -894,7 +967,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 
 			switch srv.ServiceType {
 			case discovery.PostfixService:
-				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.dockerFact)
+				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
 					logger.V(1).Printf("Unabled to gather postfix queue size on %s: %v", srv, err)
 					continue
@@ -924,7 +997,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					},
 				})
 			case discovery.EximService:
-				n, err := eximQueueSize(ctx, srv, a.hostRootPath, a.dockerFact)
+				n, err := eximQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
 					logger.V(1).Printf("Unabled to gather exim queue size on %s: %v", srv, err)
 					continue
@@ -959,12 +1032,29 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {
+	lastTime := time.Now()
+
 	for {
 		select {
 		case <-time.After(30 * time.Second):
 		case <-ctx.Done():
 			return nil
 		}
+
+		now := time.Now()
+
+		jump := math.Abs(30 - float64(now.Unix()-lastTime.Unix()))
+		if jump > 60 {
+			// It looks like time jumped. This could be either:
+			// * suspending
+			// * or time changed (ntp fixed the time ?)
+			// Trigger a UpdateInfo to check time_drift
+			if a.bleemeoConnector != nil {
+				a.bleemeoConnector.UpdateInfo()
+			}
+		}
+
+		lastTime = now
 
 		a.triggerLock.Lock()
 		if !a.triggerDiscAt.IsZero() && time.Now().After(a.triggerDiscAt) {
@@ -1003,8 +1093,11 @@ func (a *agent) watchdog(ctx context.Context) error {
 			return nil
 		}
 
-		timestamp := atomic.LoadInt64(&a.lastHealCheck)
-		lastHealCheck := time.Unix(timestamp, 0)
+		a.l.Lock()
+
+		lastHealCheck := a.lastHealCheck
+
+		a.l.Unlock()
 
 		switch {
 		case time.Since(lastHealCheck) > 15*time.Minute && !failing:
@@ -1055,7 +1148,9 @@ func (a *agent) healthCheck(ctx context.Context) error {
 			a.influxdbConnector.HealthCheck()
 		}
 
-		atomic.StoreInt64(&a.lastHealCheck, time.Now().Unix())
+		a.l.Lock()
+		a.lastHealCheck = time.Now()
+		a.l.Unlock()
 	}
 }
 
@@ -1124,21 +1219,42 @@ func (a *agent) dockerWatcher(ctx context.Context) error {
 
 	defer wg.Wait()
 
+	pendingTimer := time.NewTimer(0 * time.Second)
+	// drain (expire) the timer, so the invariant "pendingTimer is expired when pendingDiscovery == false" hold.
+	<-pendingTimer.C
+
+	pendingDiscovery := false
+	pendingSecondDiscovery := false
+
 	for {
 		select {
-		case ev := <-a.dockerFact.Events():
-			if ev.Action == "start" {
-				a.FireTrigger(true, false, false, true)
-			} else if ev.Action == "die" || ev.Action == "destroy" {
-				a.FireTrigger(true, false, false, false)
+		case ev := <-a.containerRuntime.Events():
+			a.l.Lock()
+			a.lastContainerEventTime = time.Now()
+			a.l.Unlock()
+
+			if ev.Type == facts.EventTypeStart {
+				pendingSecondDiscovery = true
 			}
 
-			if strings.HasPrefix(ev.Action, "health_status:") && ev.Container != nil {
+			if !pendingDiscovery && (ev.Type == facts.EventTypeStart || ev.Type == facts.EventTypeStop || ev.Type == facts.EventTypeDelete) {
+				pendingDiscovery = true
+
+				pendingTimer.Reset(5 * time.Second)
+			}
+
+			if ev.Type == facts.EventTypeHealth && ev.Container != nil {
 				if a.bleemeoConnector != nil {
 					a.bleemeoConnector.UpdateContainers()
 				}
 
-				a.sendDockerContainerHealth(*ev.Container)
+				a.sendDockerContainerHealth(ev.Container)
+			}
+		case <-pendingTimer.C:
+			if pendingDiscovery {
+				a.FireTrigger(pendingDiscovery, false, false, pendingSecondDiscovery)
+				pendingDiscovery = false
+				pendingSecondDiscovery = false
 			}
 		case <-ctx.Done():
 			return nil
@@ -1155,17 +1271,12 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 		case <-ticker.C:
 			// It not needed to have fresh container information. When health event occur,
 			// DockerFact already update the container information
-			containers, err := a.dockerFact.Containers(ctx, 3600*time.Second, false)
+			containers, err := a.containerRuntime.Containers(ctx, 3600*time.Second, false)
 			if err != nil {
 				continue
 			}
 
 			for _, c := range containers {
-				inspect := c.Inspect()
-				if inspect.State == nil || inspect.State.Health == nil {
-					continue
-				}
-
 				a.sendDockerContainerHealth(c)
 			}
 		case <-ctx.Done():
@@ -1175,27 +1286,21 @@ func (a *agent) dockerWatcherContainerHealth(ctx context.Context) {
 }
 
 func (a *agent) sendDockerContainerHealth(container facts.Container) {
-	inspect := container.Inspect()
-	if inspect.State == nil || inspect.State.Health == nil {
+	health, message := container.Health()
+	if health == facts.ContainerNoHealthCheck {
 		return
 	}
 
-	state := container.State()
-	healthStatus := inspect.State.Health.Status
 	status := types.StatusDescription{}
 
-	index := len(inspect.State.Health.Log) - 1
-	if len(inspect.State.Health.Log) > 0 && inspect.State.Health.Log[index] != nil {
-		status.StatusDescription = inspect.State.Health.Log[index].Output
-	}
-
 	switch {
-	case state != "running":
+	case !container.State().IsRunning():
 		status.CurrentStatus = types.StatusCritical
 		status.StatusDescription = "Container stopped"
-	case healthStatus == "healthy":
+	case health == facts.ContainerHealthy:
 		status.CurrentStatus = types.StatusOk
-	case healthStatus == "starting":
+		status.StatusDescription = message
+	case health == facts.ContainerStarting:
 		startedAt := container.StartedAt()
 		if time.Since(startedAt) < time.Minute || startedAt.IsZero() {
 			status.CurrentStatus = types.StatusOk
@@ -1203,23 +1308,24 @@ func (a *agent) sendDockerContainerHealth(container facts.Container) {
 			status.CurrentStatus = types.StatusWarning
 			status.StatusDescription = "Container is still starting"
 		}
-	case healthStatus == "unhealthy":
+	case health == facts.ContainerUnhealthy:
 		status.CurrentStatus = types.StatusCritical
+		status.StatusDescription = message
 	default:
 		status.CurrentStatus = types.StatusUnknown
-		status.StatusDescription = fmt.Sprintf("Unknown health status %#v", healthStatus)
+		status.StatusDescription = fmt.Sprintf("Unknown health status %s", message)
 	}
 
 	a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 		{
 			Labels: map[string]string{
-				types.LabelName:              "docker_container_health_status",
-				types.LabelMetaContainerName: container.Name(),
+				types.LabelName:              "container_health_status",
+				types.LabelMetaContainerName: container.ContainerName(),
 			},
 			Annotations: types.MetricAnnotations{
 				Status:      status,
 				ContainerID: container.ID(),
-				BleemeoItem: container.Name(),
+				BleemeoItem: container.ContainerName(),
 			},
 			Point: types.Point{
 				Time:  time.Now(),
@@ -1295,6 +1401,13 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
+		// force update of containers. This is important so that discovery correctly
+		// associate service with container or remove service when container is stopped.
+		_, err := a.containerRuntime.Containers(ctx, 0, false)
+		if err != nil {
+			logger.V(1).Printf("error while updating containers: %v", err)
+		}
+
 		services, err := a.discovery.Discovery(ctx, 0)
 		if err != nil {
 			logger.V(1).Printf("error during discovery: %v", err)
@@ -1309,21 +1422,15 @@ func (a *agent) handleTrigger(ctx context.Context) {
 				}
 			}
 			if a.dynamicScrapper != nil {
-				if containers, err := a.dockerFact.Containers(ctx, time.Hour, false); err == nil {
-					containers2 := make([]promexporter.Container, len(containers))
-
-					for i, c := range containers {
-						containers2[i] = c
-					}
-
-					a.dynamicScrapper.Update(containers2)
+				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
+					a.dynamicScrapper.Update(containers)
 				}
 			}
 		}
 
-		hasConnection := a.dockerFact.HasConnection(ctx)
+		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
 		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enabled") {
-			i, err := docker.New()
+			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime)
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
 			} else {
@@ -1514,6 +1621,56 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		if err != nil {
 			return err
 		}
+	}
+
+	err = a.discovery.DiagnosticZip(zipFile)
+	if err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("containers.txt")
+	if err != nil {
+		return err
+	}
+
+	containers, err := a.containerRuntime.Containers(context.Background(), time.Hour, true)
+	if err != nil {
+		fmt.Fprintf(file, "can't list containers: %v", err)
+	} else {
+		sort.Slice(containers, func(i, j int) bool {
+			return containers[i].ContainerName() < containers[j].ContainerName()
+		})
+
+		a.l.Lock()
+		lastEvent := a.lastContainerEventTime
+		a.l.Unlock()
+
+		fmt.Fprintf(file, "# Containers (count=%d, last update=%s, last event=%s)\n", len(containers), a.containerRuntime.LastUpdate().Format(time.RFC3339), lastEvent.Format(time.RFC3339))
+
+		for _, c := range containers {
+			addr, _ := c.ListenAddresses()
+			fmt.Fprintf(file, "Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v\n", c.ContainerName(), c.ID(), facts.ContainerIgnored(c), c.PrimaryAddress(), addr)
+		}
+	}
+
+	file, err = zipFile.Create("config.yaml")
+	if err != nil {
+		return err
+	}
+
+	enc := yaml.NewEncoder(file)
+
+	fmt.Fprintln(file, "# This file contains in-memory configuration used by Glouton. Value from from default, files and environement.")
+	enc.SetIndent(4)
+
+	err = enc.Encode(a.config.Dump())
+	if err != nil {
+		fmt.Fprintf(file, "# error: %v\n", err)
+	}
+
+	err = enc.Close()
+	if err != nil {
+		fmt.Fprintf(file, "# error: %v\n", err)
 	}
 
 	return nil

@@ -1,17 +1,4 @@
 # containers used to generate testdata content
-apiVersion: v1
-kind: Service
-metadata:
-  name: rabbitmq-container-port
-  labels:
-    app: rabbitmq-container-port
-spec:
-  ports:
-  - name: rabbitmq
-    port: 5672
-    targetPort: 5672
-  selector:
-    app: rabbitmq-container-port
 ---
 apiVersion: apps/v1
 kind: Deployment

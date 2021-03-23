@@ -20,7 +20,9 @@ import (
 	"archive/zip"
 	"context"
 	"fmt"
+	"math/rand"
 	"runtime"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -341,6 +343,25 @@ func (c *Connector) UpdateContainers() {
 	c.sync.UpdateContainers()
 }
 
+// UpdateInfo request to update a info, which include the time_drift.
+func (c *Connector) UpdateInfo() {
+	// It's updateInfo which disable for time drift. Temporary re-enable to
+	// run it.
+	c.clearDisable(types.DisableTimeDrift)
+
+	c.l.RLock()
+
+	disabled := time.Now().Before(c.disabledUntil)
+
+	c.l.RUnlock()
+
+	if disabled {
+		return
+	}
+
+	c.sync.UpdateInfo()
+}
+
 // UpdateMonitors trigger a reload of the monitors.
 func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
@@ -431,6 +452,35 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 	if mqtt != nil {
 		if err := mqtt.DiagnosticZip(zipFile); err != nil {
 			return err
+		}
+	}
+
+	failed := c.cache.MetricRegistrationsFail()
+	if len(failed) > 0 {
+		file, err := zipFile.Create("metric-registration-failed.txt")
+		if err != nil {
+			return err
+		}
+
+		indices := make([]int, len(failed))
+		for i := range indices {
+			indices[i] = i
+		}
+
+		const maxSample = 50
+		if len(failed) > maxSample {
+			fmt.Fprintf(file, "%d metrics fail to register. The following is 50 randomly choose metrics that fail:\n", len(failed))
+			indices = rand.Perm(len(failed))[:maxSample]
+		} else {
+			fmt.Fprintf(file, "%d metrics fail to register. The following is the fill list\n", len(failed))
+			sort.Slice(indices, func(i, j int) bool {
+				return failed[indices[i]].LabelsText < failed[indices[j]].LabelsText
+			})
+		}
+
+		for _, i := range indices {
+			row := failed[i]
+			fmt.Fprintf(file, "count=%d nextRetryAt=%s failureKind=%v labels=%s\n", row.FailCounter, row.RetryAfter().Format(time.RFC3339), row.LastFailKind, row.LabelsText)
 		}
 	}
 
@@ -586,6 +636,35 @@ func (c *Connector) updateConfig() {
 	}
 }
 
+func (c *Connector) clearDisable(reasonToClear types.DisableReason) {
+	c.l.Lock()
+
+	if time.Now().Before(c.disabledUntil) && c.disableReason == reasonToClear {
+		c.disabledUntil = time.Now()
+	}
+
+	mqtt := c.mqtt
+
+	c.l.Unlock()
+	c.sync.ClearDisable(reasonToClear, 0)
+
+	if mqtt != nil {
+		mqttDisableDelay := time.Duration(0)
+
+		switch reasonToClear {
+		case types.DisableTooManyErrors:
+			mqttDisableDelay = 20 * time.Second
+		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
+			// give time to the synchronizer check if the error is solved
+			mqttDisableDelay = 80 * time.Second
+		default:
+			mqttDisableDelay = 20 * time.Second
+		}
+
+		mqtt.ClearDisable(reasonToClear, mqttDisableDelay)
+	}
+}
+
 func (c *Connector) disableCallback(reason types.DisableReason, until time.Time) {
 	c.l.Lock()
 
@@ -617,9 +696,11 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 		switch reason {
 		case types.DisableTooManyErrors:
 			mqttDisableDelay = 20 * time.Second
-		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError:
-			// let the synchronizer check if the error is solved
+		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
+			// give time to the synchronizer check if the error is solved
 			mqttDisableDelay = 80 * time.Second
+		default:
+			mqttDisableDelay = 20 * time.Second
 		}
 
 		mqtt.Disable(until.Add(mqttDisableDelay), reason)

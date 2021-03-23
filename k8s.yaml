@@ -94,8 +94,6 @@ spec:
         securityContext:
           privileged: true
         volumeMounts:
-        - name: docker-socket
-          mountPath: /var/run/docker.sock
         - name: lib-glouton
           mountPath: /var/lib/glouton
         - name: hostroot
@@ -118,12 +116,10 @@ spec:
         - secretRef:
             name: glouton-credentials
       volumes:
-      - name: docker-socket
-        hostPath:
-          path: /var/run/docker.sock
       - name: lib-glouton
         hostPath:
           path: /var/lib/glouton
+      # Note: glouton will use this hostPath to access Docker or containerd socket
       - name: hostroot
         hostPath:
           path: /

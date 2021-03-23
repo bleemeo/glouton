@@ -31,6 +31,9 @@ import (
 	"time"
 )
 
+// agentStatusName is the name of the special metrics used to store the agent connection status.
+const agentStatusName = "agent_status"
+
 var (
 	errRetryLater = errors.New("metric registration should be retried laster")
 )
@@ -133,7 +136,7 @@ func prioritizeAndFilterMetrics(metrics []types.Metric, onlyEssential bool) []ty
 			"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
 			"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
 			"swap_used_perc", "cpu_used", "mem_used_perc",
-			"agent_status":
+			agentStatusName:
 			if onlyEssential {
 				results = append(results, m)
 			} else {
@@ -144,6 +147,19 @@ func prioritizeAndFilterMetrics(metrics []types.Metric, onlyEssential bool) []ty
 	}
 
 	return results
+}
+
+func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
+	switch {
+	case strings.Contains(content, "metric is not whitelisted"):
+		return bleemeoTypes.FailureAllowList
+	case strings.Contains(content, "metric is not in allow-list"):
+		return bleemeoTypes.FailureAllowList
+	case strings.Contains(content, "Too many non standard metrics"):
+		return bleemeoTypes.FailureTooManyMetric
+	default:
+		return bleemeoTypes.FailureUnknown
+	}
 }
 
 // nearly a duplicate of mqtt.filterPoint, but not quite. Alas we cannot easily generalize this as go doesn't have generics (yet).
@@ -265,6 +281,12 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 		}
 	}
 
+	if fullSync {
+		s.retryableMetricFailure[bleemeoTypes.FailureUnknown] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureAllowList] = true
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyMetric] = true
+	}
+
 	pendingMetricsUpdate := s.popPendingMetricsUpdate()
 	if len(pendingMetricsUpdate) > activeMetricsCount*3/100 {
 		// If more than 3% of known active metrics needs update, do a full
@@ -339,7 +361,7 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 		return err
 	}
 
-	if time.Since(s.startedAt) > 5*time.Minute {
+	if s.now().Sub(s.startedAt) > 5*time.Minute {
 		if err := s.metricDeactivate(filteredMetrics); err != nil {
 			return err
 		}
@@ -468,8 +490,7 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 			"fields":    "id",
 			"active":    "False",
 			"agent":     s.agentID,
-			"page_size": "1",
-			"page":      "1", // force using page number paginator which return count
+			"page_size": "0",
 		},
 		nil,
 		&result,
@@ -617,13 +638,18 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	return nil
 }
 
-func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error {
+func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error { // nolint: gocyclo
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
 	containersByContainerID := s.option.Cache.ContainersByContainerID()
 	services := s.option.Cache.Services()
 	servicesByKey := make(map[serviceNameInstance]bleemeoTypes.Service, len(services))
+	failedRegistrationByKey := make(map[string]bleemeoTypes.MetricRegistration)
+
+	for _, v := range s.option.Cache.MetricRegistrationsFail() {
+		failedRegistrationByKey[v.LabelsText] = v
+	}
 
 	for _, v := range services {
 		k := serviceNameInstance{name: v.Label, instance: v.Instance}
@@ -649,7 +675,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 		switch state {
 		case metricPassAgentStatus:
 			currentList = []types.Metric{
-				fakeMetric{label: "agent_status"},
+				fakeMetric{label: agentStatusName},
 			}
 		case metricPassMain:
 			currentList = localMetrics
@@ -684,6 +710,21 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 				break
 			}
 
+			labels := metric.Labels()
+			annotations := metric.Annotations()
+			key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+
+			registration, hadPreviousFailure := failedRegistrationByKey[key]
+			if hadPreviousFailure {
+				if registration.LastFailKind.IsPermanentFailure() && !s.retryableMetricFailure[registration.LastFailKind] {
+					continue
+				}
+
+				if s.now().Before(registration.RetryAfter()) {
+					continue
+				}
+			}
+
 			err := s.metricRegisterAndUpdateOne(metric, registeredMetricsByUUID, registeredMetricsByKey, containersByContainerID, servicesByKey, params, monitors)
 			if err != nil && err == errRetryLater && state < metricPassRetry {
 				retryMetrics = append(retryMetrics, metric)
@@ -704,6 +745,19 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 					return err
 				}
 
+				if client.IsBadRequest(err) {
+					content := client.APIErrorContent(err)
+					registration.LastFailKind = httpResponseToMetricFailureKind(content)
+					registration.LastFailAt = s.now()
+					registration.FailCounter++
+					registration.LabelsText = key
+
+					failedRegistrationByKey[key] = registration
+					s.retryableMetricFailure[registration.LastFailKind] = false
+
+					continue
+				}
+
 				if firstErr == nil {
 					firstErr = err
 				}
@@ -718,6 +772,8 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 				continue metricLoop
 			}
 
+			delete(failedRegistrationByKey, key)
+
 			regCountBeforeUpdate--
 			if regCountBeforeUpdate == 0 {
 				regCountBeforeUpdate = 60
@@ -729,6 +785,13 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 				}
 
 				s.option.Cache.SetMetrics(metrics)
+
+				registrations := make([]bleemeoTypes.MetricRegistration, 0, len(failedRegistrationByKey))
+				for _, v := range failedRegistrationByKey {
+					registrations = append(registrations, v)
+				}
+
+				s.option.Cache.SetMetricRegistrationsFail(registrations)
 			}
 		}
 	}
@@ -740,6 +803,21 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 	}
 
 	s.option.Cache.SetMetrics(metrics)
+
+	minRetryAt := s.now().Add(time.Hour)
+
+	registrations := make([]bleemeoTypes.MetricRegistration, 0, len(failedRegistrationByKey))
+
+	for _, v := range failedRegistrationByKey {
+		if !v.LastFailKind.IsPermanentFailure() && minRetryAt.After(v.RetryAfter()) {
+			minRetryAt = v.RetryAfter()
+		}
+
+		registrations = append(registrations, v)
+	}
+
+	s.metricRetryAt = minRetryAt
+	s.option.Cache.SetMetricRegistrationsFail(registrations)
 
 	return firstErr
 }
@@ -873,7 +951,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 	updates := make(map[string]string)
 
 	if !remoteMetric.DeactivatedAt.IsZero() {
-		points, err := metric.Points(time.Now().Add(-10*time.Minute), time.Now())
+		points, err := metric.Points(s.now().Add(-10*time.Minute), s.now())
 		if err != nil {
 			return remoteMetric, nil // assume not seen, we don't re-activate this metric
 		}
@@ -984,14 +1062,14 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	for k, v := range registeredMetrics {
 		if !v.DeactivatedAt.IsZero() {
-			if time.Since(v.DeactivatedAt) > 200*24*time.Hour {
+			if s.now().Sub(v.DeactivatedAt) > 200*24*time.Hour {
 				delete(registeredMetrics, k)
 			}
 
 			continue
 		}
 
-		if v.Labels[types.LabelName] == "agent_sent_message" || v.Labels[types.LabelName] == "agent_status" {
+		if v.Labels[types.LabelName] == "agent_sent_message" || v.Labels[types.LabelName] == agentStatusName {
 			continue
 		}
 
@@ -1001,13 +1079,13 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		if ok && !duplicatedKey[key] {
 			duplicatedKey[key] = true
 
-			points, _ := metric.Points(time.Now().Add(-70*time.Minute), time.Now())
+			points, _ := metric.Points(s.now().Add(-70*time.Minute), s.now())
 			if len(points) > 0 {
 				continue
 			}
 		}
 
-		logger.V(2).Printf("Mark inactive the metric %v", key)
+		logger.V(2).Printf("Mark inactive the metric %v (uuid %s)", key, v.ID)
 
 		_, err := s.client.Do(
 			s.ctx,
@@ -1017,12 +1095,22 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			map[string]string{"active": "False"},
 			nil,
 		)
+		if err != nil && client.IsNotFound(err) {
+			delete(registeredMetrics, k)
+			continue
+		}
+
 		if err != nil {
 			return err
 		}
 
-		v.DeactivatedAt = time.Now()
+		v.DeactivatedAt = s.now()
 		registeredMetrics[k] = v
+		s.retryableMetricFailure[bleemeoTypes.FailureTooManyMetric] = true
+
+		if len(s.option.Cache.MetricRegistrationsFail()) > 0 {
+			s.metricRetryAt = s.now()
+		}
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(registeredMetrics))

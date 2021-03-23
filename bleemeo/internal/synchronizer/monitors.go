@@ -194,7 +194,11 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorU
 
 	currentMonitors := s.option.Cache.Monitors()
 
+	s.l.Lock()
+
 	_, forceSync := s.forceSync["metrics"]
+
+	s.l.Unlock()
 
 OuterBreak:
 	for _, m := range pendingMonitorsUpdate {

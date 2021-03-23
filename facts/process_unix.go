@@ -28,7 +28,7 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
+func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	psutilProcesses, err := process.Processes()
 	if err != nil {
 		return nil, err
@@ -61,8 +61,8 @@ func (z psutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 				if err == nil && len(uids) > 0 {
 					res.Username = fmt.Sprintf("%d", uids[0])
 
-					if z.PwdCache != nil {
-						entry, found := z.PwdCache.LookupUserByUid(int(uids[0]))
+					if z.pwdCache != nil {
+						entry, found := z.pwdCache.LookupUserByUid(int(uids[0]))
 						if found {
 							res.Username = entry.Username()
 						}

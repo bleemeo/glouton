@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
-	"strings"
 	"time"
 )
 
@@ -53,18 +52,6 @@ func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 
 		for k, v := range localFacts {
 			if essentialFacts[k] {
-				copyFacts[k] = v
-			}
-		}
-
-		localFacts = copyFacts
-	}
-
-	if !s.option.Cache.CurrentAccountConfig().DockerIntegration {
-		copyFacts := make(map[string]string)
-
-		for k, v := range localFacts {
-			if !strings.HasPrefix(k, "docker_") {
 				copyFacts[k] = v
 			}
 		}
@@ -121,16 +108,10 @@ func (s *Synchronizer) factsUpdateList() error {
 }
 
 func (s *Synchronizer) factRegister(localFacts map[string]string) error {
-	currentConfig := s.option.Cache.CurrentAccountConfig()
-
 	registeredFacts := s.option.Cache.FactsByKey()
 	facts := s.option.Cache.Facts()
 
 	for key, value := range localFacts {
-		if !currentConfig.DockerIntegration && strings.HasPrefix(key, "docker_") {
-			continue
-		}
-
 		remoteValue := registeredFacts[key]
 		if value == remoteValue.Value {
 			continue

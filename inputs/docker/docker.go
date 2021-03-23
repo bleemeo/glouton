@@ -19,6 +19,7 @@ package docker
 import (
 	"errors"
 	"glouton/facts"
+	crTypes "glouton/facts/container-runtime/types"
 	"glouton/inputs/internal"
 	"glouton/types"
 	"strings"
@@ -29,18 +30,24 @@ import (
 )
 
 // New initialise docker.Input.
-func New() (i telegraf.Input, err error) {
+func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["docker"]
 	if ok {
 		dockerInput, ok := input().(*docker.Docker)
 		if ok {
+			if dockerAddress != "" {
+				dockerInput.Endpoint = dockerAddress
+			}
+
+			r := renamer{dockerRuntime: dockerRuntime}
+
 			dockerInput.PerDevice = false
 			dockerInput.Total = true
 			dockerInput.Log = internal.Logger{}
 			i = &internal.Input{
 				Input: dockerInput,
 				Accumulator: internal.Accumulator{
-					RenameGlobal:     renameGlobal,
+					RenameGlobal:     r.renameGlobal,
 					DerivatedMetrics: []string{"usage_total", "rx_bytes", "tx_bytes", "io_service_bytes_recursive_read", "io_service_bytes_recursive_write"},
 					TransformMetrics: transformMetrics,
 				},
@@ -55,8 +62,12 @@ func New() (i telegraf.Input, err error) {
 	return
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext.Measurement = originalContext.Measurement
+type renamer struct {
+	dockerRuntime crTypes.RuntimeInterface
+}
+
+func (r renamer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
+	newContext.Measurement = strings.TrimPrefix(originalContext.Measurement, "docker_")
 	newContext.Tags = make(map[string]string)
 
 	if name, ok := originalContext.Tags["container_name"]; ok {
@@ -70,37 +81,27 @@ func renameGlobal(originalContext internal.GatherContext) (newContext internal.G
 		}
 	}
 
-	if enable, ok := originalContext.Tags[facts.EnableLabel]; ok {
-		enable = strings.ToLower(enable)
-		switch enable {
-		case "0", "off", "false", "no":
-			drop = true
-			return
-		}
-	} else if enable, ok := originalContext.Tags[facts.EnableLegacyLabel]; ok {
-		enable = strings.ToLower(enable)
-		switch enable {
-		case "0", "off", "false", "no":
-			drop = true
-			return
-		}
+	c, ok := r.dockerRuntime.CachedContainer(newContext.Annotations.ContainerID)
+	if !ok || facts.ContainerIgnored(c) {
+		drop = true
+		return
 	}
 
-	switch originalContext.Measurement {
-	case "docker_container_cpu":
+	switch newContext.Measurement {
+	case "container_cpu":
 		if originalContext.Tags["cpu"] != "cpu-total" {
 			drop = true
 		}
-	case "docker_container_net":
+	case "container_net":
 		if originalContext.Tags["network"] != "total" {
 			drop = true
 		}
-	case "docker_container_blkio":
+	case "container_blkio":
 		if originalContext.Tags["device"] != "total" {
 			drop = true
 		}
 
-		newContext.Measurement = "docker_container_io"
+		newContext.Measurement = "container_io"
 	}
 
 	return newContext, drop
@@ -110,17 +111,13 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 	newFields := make(map[string]float64)
 
 	switch currentContext.Measurement {
-	case "docker":
-		if value, ok := fields["n_containers"]; ok {
-			newFields["containers"] = value
-		}
-	case "docker_container_cpu":
+	case "container_cpu":
 		if value, ok := fields["usage_total"]; ok {
 			// Docker sends the total usage in nanosecond.
 			// Convert it to Second, then percent
 			newFields["used"] = value / 10000000
 		}
-	case "docker_container_mem":
+	case "container_mem":
 		if value, ok := fields["usage_percent"]; ok {
 			newFields["used_perc"] = value
 		}
@@ -128,7 +125,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		if value, ok := fields["usage"]; ok {
 			newFields["used"] = value
 		}
-	case "docker_container_net":
+	case "container_net":
 		if value, ok := fields["rx_bytes"]; ok {
 			newFields["bits_recv"] = value * 8
 		}
@@ -136,7 +133,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 		if value, ok := fields["tx_bytes"]; ok {
 			newFields["bits_sent"] = value * 8
 		}
-	case "docker_container_io":
+	case "container_io":
 		if value, ok := fields["io_service_bytes_recursive_read"]; ok {
 			newFields["read_bytes"] = value
 		}

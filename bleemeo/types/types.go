@@ -80,6 +80,7 @@ type ProcessProvider interface {
 type DockerProvider interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 	ContainerLastKill(containerID string) time.Time
+	LastUpdate() time.Time
 }
 
 // Store is the interface used by Bleemeo to access Metric Store.
@@ -106,6 +107,7 @@ const (
 	DisableTooManyRequests
 	DisableAgentTooOld
 	DisableAuthenticationError
+	DisableTimeDrift
 )
 
 func (r DisableReason) String() string {
@@ -120,6 +122,8 @@ func (r DisableReason) String() string {
 		return "this agent is too old, and cannot be connected to our managed service"
 	case DisableAuthenticationError:
 		return "authentication error with Bleemeo API"
+	case DisableTimeDrift:
+		return "local time is too different from actual time"
 	default:
 		return "unspecified reason"
 	}
