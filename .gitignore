@@ -18,3 +18,5 @@ api/static/assets/js
 api/static/assets/css
 *-bindata.go
 .build-cache
+coverage.html
+coverage.out
