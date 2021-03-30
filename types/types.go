@@ -258,6 +258,7 @@ func TextToLabels(text string) map[string]string {
 	return results
 }
 
+//Monitor represents a monitor instance.
 type Monitor struct {
 	ID                      string
 	MetricMonitorResolution int

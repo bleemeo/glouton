@@ -9,7 +9,7 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-// Specific gatherer that wraps probes, choose when to Gather() depending on the GatherState argument.
+// ProbeGatherer is a specific gatherer that wraps probes, choose when to Gather() depending on the GatherState argument.
 type ProbeGatherer struct {
 	g prometheus.Gatherer
 
@@ -20,19 +20,22 @@ type ProbeGatherer struct {
 	lastFailedTime time.Time
 }
 
+// NewProbeGatherer creates a new ProbeGatherer with the prometheus gatherer specified.
 func NewProbeGatherer(gatherer prometheus.Gatherer) *ProbeGatherer {
 	return &ProbeGatherer{
 		g: gatherer,
 	}
 }
 
+// Gather some metrics with with an empty gatherer state.
+// While not a critical error, this function should never be called, as callers should know about
+// GatherWithState().
 func (p *ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
-	// While not a critical error, this function should never be called, as callers should know about
-	// GatherWithState().
 	logger.V(2).Println("Gather() called directly on a ProbeGatherer, this is a bug !")
 	return p.GatherWithState(GatherState{})
 }
 
+// GatherWithState uses the specified gather state along the gatherer to retrieve a set of metrics.
 func (p *ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	if state.QueryType == NoProbe {
 		return nil, nil
@@ -78,20 +81,22 @@ func (p *ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily,
 	return mfs, err
 }
 
-// Gatherer that wraps gatherers that aren't probe and that are not themselves wrapped by labeledGatherer
+// NonProbeGatherer Gatherer that wraps gatherers that aren't probe and that are not themselves wrapped by labeledGatherer
 // (labeledGatherer perform roughly the same job w.r.t. probes and and it is thus not necessary to wrap all
 // non-probes gatherers inside this struct).
 type NonProbeGatherer struct {
 	G prometheus.Gatherer
 }
 
+// Gather a set of metrics from a Gatherer that is not probe.
+// While not a critical error, this function should never be called, as callers should know about
+// GatherWithState().
 func (p NonProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
-	// While not a critical error, this function should never be called, as callers should know about
-	// GatherWithState().
 	logger.V(2).Println("Gather() called directly on a NonProbeGatherer, this is a bug !")
 	return p.GatherWithState(GatherState{})
 }
 
+// GatherWithState uses the specified gather state along the gatherer to retrieve a set of metrics.
 func (p NonProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
 	if state.QueryType == OnlyProbes {
 		return nil, nil

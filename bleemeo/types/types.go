@@ -46,6 +46,7 @@ type GlobalOption struct {
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 }
 
+//MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.
 type MonitorManager interface {
 	// UpdateDynamicTargets updates the list of dynamic monitors to watch.
 	UpdateDynamicTargets(monitors []types.Monitor) error
@@ -59,7 +60,7 @@ type Config interface {
 	Bool(string) bool
 }
 
-// State is the interaface used by Bleemeo to access State.
+// State is the interface used by Bleemeo to access State.
 type State interface {
 	Set(key string, object interface{}) error
 	Get(key string, result interface{}) error
