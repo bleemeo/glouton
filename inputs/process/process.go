@@ -30,12 +30,13 @@ type processProvider interface {
 	Processes(ctx context.Context, maxAge time.Duration) (processes map[int]facts.Process, err error)
 }
 
+// Input represents an input tied with a process.
 type Input struct {
 	ps     processProvider
 	pusher types.PointPusher
 }
 
-// New initialise process.Input.
+// New initialize process.Input.
 func New(ps processProvider, pusher types.PointPusher) Input {
 	return Input{
 		ps:     ps,

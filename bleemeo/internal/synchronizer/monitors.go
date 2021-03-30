@@ -25,18 +25,20 @@ import (
 	"glouton/types"
 )
 
-type MonitorOperation int
+type monitorOperation int
 
 const (
 	// Change allows to add or update a monitor
-	Change MonitorOperation = iota
+	Change monitorOperation = iota
+	// Delete specifies the monitor should be deleted
 	Delete
 )
 
 const fieldList string = "id,account_config,agent,created_at,monitor_url,monitor_expected_content,monitor_expected_response_code,monitor_unexpected_content"
 
+// MonitorUpdate represents an operation to execute on a monitor.
 type MonitorUpdate struct {
-	op   MonitorOperation
+	op   monitorOperation
 	uuid string
 }
 

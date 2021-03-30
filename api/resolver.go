@@ -32,10 +32,12 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
+// Resolver is the api resolver.
 type Resolver struct {
 	api *API
 }
 
+// Query queries the resolver.
 func (r *Resolver) Query() QueryResolver {
 	return &queryResolver{r}
 }

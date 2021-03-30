@@ -29,6 +29,7 @@ var (
 	runAsRoot = flag.Bool("yes-run-as-root", false, "Allows Glouton to run as root")
 )
 
+// OSDependentMain is the function used as a main when glouton is used on an unix Os.
 func OSDependentMain() {
 	if os.Getuid() == 0 && !*runAsRoot {
 		fmt.Println("Error: trying to run Glouton as root without \"--yes-run-as-root\" option.")

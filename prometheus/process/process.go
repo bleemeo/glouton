@@ -31,6 +31,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
+// RegisterExporter will create a new prometheus exporter using the specified parameters and adds it to the registry.
 func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDiscovery *discovery.DynamicDiscovery, bleemeoFormat bool) {
 	if processExporter := NewExporter(psLister, dynamicDiscovery); processExporter != nil {
 		processGatherer := prometheus.NewRegistry()
@@ -53,6 +54,7 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 	}
 }
 
+// NewExporter creates a new Prometheus exporter using the specified parameters.
 func NewExporter(psLister interface{}, processQuerier *discovery.DynamicDiscovery) *Exporter {
 	if source, ok := psLister.(*Processes); ok {
 		return &Exporter{
