@@ -40,6 +40,6 @@ if [ "${GEN_COVERFILE}" != "1" ]; then
 else
     docker run --rm -v "$(pwd)":/app -u "$USER_UID" ${GO_MOUNT_CACHE} -e HOME=/go/pkg \
         -w /app golangci/golangci-lint:${LINTER_VERSION} \
-        sh -c 'go test ./... --coverprofile=coverage.out && go test -race ./... && go tool cover -html=coverage.out -o coverage.html'
+        sh -c 'go test ./... --coverprofile=coverage.out && go tool cover -html=coverage.out -o coverage.html'
 fi
 echo "Success"
