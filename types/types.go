@@ -101,12 +101,13 @@ const (
 	LabelMetaProbeAgentUUID   = "__meta_probe_agent_uuid"
 	LabelMetaProbeScraperName = "__meta_probe_scraper_name"
 	LabelInstanceUUID         = "instance_uuid"
+	LabelItem                 = "item"
 	LabelScraperUUID          = "scraper_uuid"
 	LabelScraper              = "scraper"
 	LabelInstance             = "instance"
-	LabelJob                  = "job"
 	LabelContainerName        = "container_name"
-	LabelGloutonJob           = "glouton_job"
+	LabelScrapeJob            = "scrape_job"
+	LabelScrapeInstance       = "scrape_instance"
 )
 
 // IsSet return true if the status is set.

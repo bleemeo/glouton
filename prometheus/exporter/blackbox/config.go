@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
-	gloutonTypes "glouton/types"
+	"glouton/types"
 	"net/url"
 	"time"
 
@@ -70,7 +70,7 @@ func defaultModule() bbConf.Module {
 	}
 }
 
-func genCollectorFromDynamicTarget(monitor gloutonTypes.Monitor) (*collectorWithLabels, error) {
+func genCollectorFromDynamicTarget(monitor types.Monitor) (*collectorWithLabels, error) {
 	mod := defaultModule()
 
 	url, err := url.Parse(monitor.URL)
@@ -131,9 +131,9 @@ func genCollectorFromDynamicTarget(monitor gloutonTypes.Monitor) (*collectorWith
 	return &collectorWithLabels{
 		collector: confTarget,
 		labels: map[string]string{
-			gloutonTypes.LabelMetaProbeTarget:      confTarget.Name,
-			gloutonTypes.LabelMetaProbeServiceUUID: monitor.ID,
-			gloutonTypes.LabelMetaProbeAgentUUID:   monitor.BleemeoAgentID,
+			types.LabelMetaProbeTarget:      confTarget.Name,
+			types.LabelMetaProbeServiceUUID: monitor.ID,
+			types.LabelMetaProbeAgentUUID:   monitor.BleemeoAgentID,
 		},
 	}, nil
 }
@@ -147,15 +147,15 @@ func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
 	return collectorWithLabels{
 		collector: ct,
 		labels: map[string]string{
-			gloutonTypes.LabelMetaProbeTarget: ct.Name,
-			"module":                          ct.ModuleName,
+			types.LabelMetaProbeTarget: ct.Name,
+			"module":                   ct.ModuleName,
 		},
 	}
 }
 
 // New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func New(registry *registry.Registry, externalConf interface{}) (*RegisterManager, error) {
+func New(registry *registry.Registry, externalConf interface{}, metricFormat types.MetricFormat) (*RegisterManager, error) {
 	conf := yamlConfig{}
 
 	// read static config
@@ -206,6 +206,7 @@ func New(registry *registry.Registry, externalConf interface{}) (*RegisterManage
 		registrations: make(map[int]gathererWithConfigTarget, len(conf.Targets)),
 		registry:      registry,
 		scraperName:   conf.ScraperName,
+		metricFormat:  metricFormat,
 	}
 
 	if err := manager.updateRegistrations(); err != nil {
@@ -216,7 +217,7 @@ func New(registry *registry.Registry, externalConf interface{}) (*RegisterManage
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
-func (m *RegisterManager) UpdateDynamicTargets(monitors []gloutonTypes.Monitor) error {
+func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
 	// than to compute the difference between the new and the old configuration.
 	// This is simple because calling UpdateDynamicTargets with the same argument should be idempotent.
@@ -240,7 +241,7 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []gloutonTypes.Monitor) 
 
 	if m.scraperName != "" {
 		for idx := range newTargets {
-			newTargets[idx].labels[gloutonTypes.LabelMetaProbeScraperName] = m.scraperName
+			newTargets[idx].labels[types.LabelMetaProbeScraperName] = m.scraperName
 		}
 	}
 

@@ -25,10 +25,12 @@ import (
 	"context"
 	"glouton/types"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/google/go-cmp/cmp"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
@@ -100,7 +102,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 	gather2.fillResponse()
 
-	if id1, err = reg.RegisterGatherer(gather1, nil, nil); err != nil {
+	if id1, err = reg.RegisterGatherer(gather1, nil, nil, false); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
@@ -120,11 +122,11 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if id1, err = reg.RegisterGatherer(gather1, nil, map[string]string{"name": "value"}); err != nil {
+	if id1, err = reg.RegisterGatherer(gather1, nil, map[string]string{"name": "value"}, false); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if id2, err = reg.RegisterGatherer(gather2, nil, nil); err != nil {
+	if id2, err = reg.RegisterGatherer(gather2, nil, nil, false); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -158,11 +160,11 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer(gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value"}); err != nil {
+	if id1, err = reg.RegisterGatherer(gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value"}, false); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if _, err = reg.RegisterGatherer(gather2, nil, nil); err != nil {
+	if _, err = reg.RegisterGatherer(gather2, nil, nil, false); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -174,8 +176,6 @@ func TestRegistry_Register(t *testing.T) {
 	}
 
 	helpText := "fake metric"
-	jobName := "job"
-	jobValue := "glouton"
 	dummyName := "dummy"
 	dummyValue := "value"
 	instanceIDName := types.LabelInstanceUUID
@@ -191,7 +191,6 @@ func TestRegistry_Register(t *testing.T) {
 					Label: []*dto.LabelPair{
 						{Name: &dummyName, Value: &dummyValue},
 						{Name: &instanceIDName, Value: &instanceIDValue},
-						{Name: &jobName, Value: &jobValue},
 					},
 					Gauge: &dto.Gauge{
 						Value: &value,
@@ -207,7 +206,6 @@ func TestRegistry_Register(t *testing.T) {
 				{
 					Label: []*dto.LabelPair{
 						{Name: &instanceIDName, Value: &instanceIDValue},
-						{Name: &jobName, Value: &jobValue},
 					},
 					Gauge: &dto.Gauge{
 						Value: &value,
@@ -254,8 +252,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 
 	metricName := "point1"
 	helpText := ""
-	jobName := "job"
-	jobValue := "glouton"
 	dummyName := "dummy"
 	dummyValue := "value"
 	instanceIDName := types.LabelInstanceUUID
@@ -270,7 +266,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 				{
 					Label: []*dto.LabelPair{
 						{Name: &dummyName, Value: &dummyValue},
-						{Name: &jobName, Value: &jobValue},
 					},
 					Untyped: &dto.Untyped{
 						Value: &value,
@@ -323,7 +318,6 @@ func TestRegistry_pushPoint(t *testing.T) {
 					Label: []*dto.LabelPair{
 						{Name: &dummyName, Value: &dummyValue},
 						{Name: &instanceIDName, Value: &instanceIDValue},
-						{Name: &jobName, Value: &jobValue},
 					},
 					Untyped: &dto.Untyped{
 						Value: &value,
@@ -365,7 +359,6 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance: "hostname:8015",
-				types.LabelJob:      "glouton",
 			}),
 			wantAnnotations: types.MetricAnnotations{},
 		},
@@ -384,7 +377,6 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			want: labels.FromMap(map[string]string{
 				types.LabelContainerName: "mysql_1",
 				types.LabelInstance:      "hostname-mysql_1:3306",
-				types.LabelJob:           "glouton",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				ServiceName: "mysql",
@@ -401,14 +393,12 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaBleemeoUUID:      "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
 				// necessary for some labels to be applied
 				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
-				types.LabelJob:                  "glouton",
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance:     "icmp://8.8.8.8",
 				types.LabelScraper:      "test",
 				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
-				types.LabelJob:          "glouton",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
@@ -425,14 +415,12 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaBleemeoUUID:    "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
 				// necessary for some labels to be applied
 				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
-				types.LabelJob:                  "glouton",
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance:     "icmp://8.8.8.8",
 				types.LabelScraper:      "super-instance:1111",
 				types.LabelInstanceUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
 				types.LabelScraperUUID:  "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
-				types.LabelJob:          "glouton",
 			}),
 			wantAnnotations: types.MetricAnnotations{
 				BleemeoAgentID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
@@ -451,5 +439,118 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				t.Errorf("Registry.applyRelabel() annotations = %+v, want %+v", annotations, tt.wantAnnotations)
 			}
 		})
+	}
+}
+
+func TestRegistry_runOnce(t *testing.T) {
+	var (
+		l                sync.Mutex
+		bleemeoT0        time.Time
+		bleemeoPoints    []types.MetricPoint
+		prometheusT0     time.Time
+		prometheusPoints []types.MetricPoint
+	)
+
+	regBleemeo := &Registry{
+		MetricFormat: types.MetricFormatBleemeo,
+		PushPoint: pushFunction(func(points []types.MetricPoint) {
+			l.Lock()
+			bleemeoPoints = append(bleemeoPoints, points...)
+			l.Unlock()
+		}),
+		BleemeoAgentID: "fake-uuid",
+		FQDN:           "example.com",
+		GloutonPort:    "1234",
+	}
+	regBleemeo.init()
+
+	regPrometheus := &Registry{
+		MetricFormat: types.MetricFormatPrometheus,
+		PushPoint: pushFunction(func(points []types.MetricPoint) {
+			l.Lock()
+			prometheusPoints = append(prometheusPoints, points...)
+			l.Unlock()
+		}),
+		BleemeoAgentID: "fake-uuid",
+		FQDN:           "example.com",
+		GloutonPort:    "1234",
+	}
+	regPrometheus.init()
+
+	gather1 := &fakeGatherer{name: "name1"}
+	gather1.fillResponse()
+
+	gather2 := &fakeGatherer{name: "name2"}
+	gather2.fillResponse()
+
+	_, err := regBleemeo.RegisterGatherer(gather1, nil, nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = regBleemeo.RegisterGatherer(gather2, nil, nil, true)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = regPrometheus.RegisterGatherer(gather1, nil, nil, false)
+	if err != nil {
+		t.Error(err)
+	}
+
+	_, err = regPrometheus.RegisterGatherer(gather2, nil, nil, true)
+	if err != nil {
+		t.Error(err)
+	}
+
+	regBleemeo.AddPushPointsCallback(func(t time.Time) {
+		l.Lock()
+		bleemeoT0 = t
+		l.Unlock()
+
+		regBleemeo.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		})
+	})
+
+	regPrometheus.AddPushPointsCallback(func(t time.Time) {
+		l.Lock()
+		prometheusT0 = t
+		l.Unlock()
+
+		regPrometheus.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		})
+	})
+
+	if bleemeoPoints != nil {
+		t.Errorf("bleemeoPoints = %v, want nil", bleemeoPoints)
+	}
+
+	gatherTime := regBleemeo.runOnce()
+
+	want := []types.MetricPoint{
+		{Point: types.Point{Time: bleemeoT0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		{Point: types.Point{Time: bleemeoT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": "fake-uuid"}},
+		{Point: types.Point{Time: bleemeoT0, Value: gatherTime.Seconds()}, Labels: map[string]string{"__name__": "agent_gather_time"}},
+	}
+
+	if diff := cmp.Diff(want, bleemeoPoints); diff != "" {
+		t.Errorf("bleemeoPoints != want: %v", diff)
+	}
+
+	if prometheusPoints != nil {
+		t.Errorf("prometheusPoints = %v, want nil", prometheusPoints)
+	}
+
+	regPrometheus.runOnce()
+
+	want = []types.MetricPoint{
+		{Point: types.Point{Time: prometheusT0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "instance": "example.com:1234", "instance_uuid": "fake-uuid", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		{Point: types.Point{Time: prometheusT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": "fake-uuid"}},
+	}
+
+	if diff := cmp.Diff(want, prometheusPoints); diff != "" {
+		t.Errorf("prometheusPoints != want: %v", diff)
 	}
 }

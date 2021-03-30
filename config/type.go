@@ -35,7 +35,8 @@ const (
 	TypeMap
 )
 
-func convertBoolean(value string) (bool, error) {
+// ConvertBoolean convert a bool. It work like strconv.ParseBool but also support "yes" and "no".
+func ConvertBoolean(value string) (bool, error) {
 	value = strings.ToLower(value)
 
 	result, err := strconv.ParseBool(value)

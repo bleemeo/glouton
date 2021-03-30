@@ -103,7 +103,7 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 	case TypeStringList:
 		c.Set(key, strings.Split(value, ","))
 	case TypeBoolean:
-		value, err := convertBoolean(value)
+		value, err := ConvertBoolean(value)
 		if err != nil {
 			return false, err
 		}
@@ -139,6 +139,33 @@ func (c *Configuration) Set(key string, value interface{}) {
 	keyPart := strings.Split(key, ".")
 
 	setValue(c.rawValues, keyPart, value)
+}
+
+// Delete delete a key.
+func (c *Configuration) Delete(key string) {
+	keyPart := strings.Split(key, ".")
+	deleteCfg(c.rawValues, keyPart)
+}
+
+func deleteCfg(root map[string]interface{}, keyPart []string) {
+	key := keyPart[0]
+
+	if len(keyPart) == 1 {
+		delete(root, key)
+		return
+	}
+
+	newRoot, ok := root[key]
+	if !ok {
+		return
+	}
+
+	newMap, ok := newRoot.(map[string]interface{})
+	if !ok {
+		return
+	}
+
+	deleteCfg(newMap, keyPart[1:])
 }
 
 // String return the given key as string.
@@ -259,9 +286,9 @@ func (c *Configuration) Bool(key string) bool {
 	case bool:
 		return value
 	case int:
-		return value == 0
+		return value != 0
 	case string:
-		v, err := convertBoolean(value)
+		v, err := ConvertBoolean(value)
 		if err != nil {
 			return false
 		}

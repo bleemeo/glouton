@@ -40,11 +40,10 @@ var (
 
 type errNeedRegister struct {
 	remoteMetric bleemeoTypes.Metric
-	key          string
 }
 
 func (e errNeedRegister) Error() string {
-	return fmt.Sprintf("metric %v was deleted from API, it need to be re-registered", e.key)
+	return fmt.Sprintf("metric %v was deleted from API, it need to be re-registered", e.remoteMetric.LabelsText)
 }
 
 // The metric registration function is done in 4 pass
@@ -95,15 +94,21 @@ func (m fakeMetric) Labels() map[string]string {
 type metricPayload struct {
 	bleemeoTypes.Metric
 	Name  string `json:"label,omitempty"`
+	Item  string `json:"item,omitempty"`
 	Agent string `json:"agent"`
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
 func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
-	if mp.Item != "" || mp.LabelsText == "" {
+	if mp.LabelsText == "" {
 		mp.Labels = map[string]string{
 			types.LabelName: mp.Name,
 		}
+
+		if mp.Item != "" {
+			mp.Labels[types.LabelItem] = mp.Item
+		}
+
 		annotations := types.MetricAnnotations{
 			BleemeoItem: mp.Item,
 		}
@@ -373,7 +378,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
 
 	for _, m := range s.option.Cache.Metrics() {
-		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Item}
+		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
 		thresholds[key] = m.Threshold.ToInternalThreshold()
 		units[key] = m.Unit
 	}
@@ -523,7 +528,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 
-		if s.option.MetricFormat == types.MetricFormatBleemeo {
+		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels()) {
 			annotations := metric.Annotations()
 			params["label"] = metric.Labels()[types.LabelName]
 			params["item"] = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
@@ -730,7 +735,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 				registerMetrics = append(registerMetrics, metric)
 
 				delete(registeredMetricsByUUID, errReReg.remoteMetric.ID)
-				delete(registeredMetricsByKey, errReReg.key)
+				delete(registeredMetricsByKey, errReReg.remoteMetric.LabelsText)
 
 				continue metricLoop
 			}
@@ -826,7 +831,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	remoteMetric, remoteFound := registeredMetricsByKey[key]
 
 	if remoteFound {
-		result, err := s.metricUpdateOne(key, metric, remoteMetric)
+		result, err := s.metricUpdateOne(metric, remoteMetric)
 		if err != nil {
 			return err
 		}
@@ -847,7 +852,9 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 
 	if s.option.MetricFormat == types.MetricFormatBleemeo {
 		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
-		payload.LabelsText = ""
+		if common.MetricOnlyHasItem(labels) {
+			payload.LabelsText = ""
+		}
 	}
 
 	var (
@@ -940,7 +947,9 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	return nil
 }
 
-func (s *Synchronizer) metricUpdateOne(key string, metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
+func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {
+	updates := make(map[string]string)
+
 	if !remoteMetric.DeactivatedAt.IsZero() {
 		points, err := metric.Points(s.now().Add(-10*time.Minute), s.now())
 		if err != nil {
@@ -960,23 +969,31 @@ func (s *Synchronizer) metricUpdateOne(key string, metric types.Metric, remoteMe
 		}
 
 		if maxTime.After(remoteMetric.DeactivatedAt.Add(10 * time.Second)) {
-			logger.V(2).Printf("Mark active the metric %v (uuid %s)", key, remoteMetric.ID)
+			logger.V(2).Printf("Mark active the metric %v (uuid %s)", remoteMetric.LabelsText, remoteMetric.ID)
 
-			_, err := s.client.Do(
-				s.ctx,
-				"PATCH",
-				fmt.Sprintf("v1/metric/%s/", remoteMetric.ID),
-				map[string]string{"fields": "active"},
-				map[string]string{"active": "True"},
-				nil,
-			)
-			if err != nil && client.IsNotFound(err) {
-				return remoteMetric, errNeedRegister{remoteMetric: remoteMetric, key: key}
-			} else if err != nil {
-				return remoteMetric, err
-			}
-
+			updates["active"] = "True"
 			remoteMetric.DeactivatedAt = time.Time{}
+		}
+	}
+
+	if len(updates) > 0 {
+		fields := make([]string, 0, len(updates))
+		for k := range updates {
+			fields = append(fields, k)
+		}
+
+		_, err := s.client.Do(
+			s.ctx,
+			"PATCH",
+			fmt.Sprintf("v1/metric/%s/", remoteMetric.ID),
+			map[string]string{"fields": strings.Join(fields, ",")},
+			updates,
+			nil,
+		)
+		if err != nil && client.IsNotFound(err) {
+			return remoteMetric, errNeedRegister{remoteMetric: remoteMetric}
+		} else if err != nil {
+			return remoteMetric, err
 		}
 	}
 

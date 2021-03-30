@@ -19,6 +19,7 @@ package registry
 import (
 	"glouton/inputs"
 	"glouton/prometheus/exporter/windows"
+	"glouton/types"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -37,7 +38,7 @@ func (r *Registry) AddWindowsExporter(collectors []string, options inputs.Collec
 		return err
 	}
 
-	_, err = r.RegisterGatherer(reg, nil, nil)
+	_, err = r.RegisterGatherer(reg, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
 
 	return err
 }

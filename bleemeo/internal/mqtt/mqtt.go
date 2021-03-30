@@ -634,11 +634,11 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 				Value:       forceDecimalFloat(p.Value),
 			}
 
-			if c.option.MetricFormat == types.MetricFormatBleemeo {
+			if c.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(m.Labels) {
 				value.UUID = m.ID
 				value.LabelsText = ""
-				value.Measurement = p.Labels[types.LabelName]
-				value.BleemeoItem = common.TruncateItem(p.Annotations.BleemeoItem, p.Annotations.ServiceName != "")
+				value.Measurement = m.Labels[types.LabelName]
+				value.BleemeoItem = m.Labels[types.LabelItem]
 			}
 
 			if p.Annotations.Status.CurrentStatus.IsSet() {

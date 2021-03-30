@@ -627,27 +627,20 @@ func (a *agent) run() { //nolint:gocyclo
 		a.metricFormat,
 	)
 
-	var targets map[string]string
+	var targets []*scrapper.Target
 
-	if promCfg, found := a.config.Get("metric.prometheus"); found {
-		targets = prometheusConfigToURLs(promCfg)
+	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
+		targets = prometheusConfigToURLs(
+			promCfg,
+			a.config.StringList("metric.prometheus.allow_metrics"),
+			a.config.StringList("metric.prometheus.deny_metrics"),
+			a.config.Bool("metric.prometheus.include_default_metrics"),
+		)
 	}
 
-	for name, value := range targets {
-		u, err := url.Parse(value)
-		if err != nil {
-			logger.Printf("ignoring invalid exporter config: %v", err)
-			continue
-		}
-
-		target := (*scrapper.Target)(u)
-		extraLabels := map[string]string{
-			types.LabelMetaScrapeJob:      name,
-			types.LabelMetaScrapeInstance: target.HostPort(),
-		}
-
-		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, extraLabels); err != nil {
-			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", u.String(), err)
+	for _, target := range targets {
+		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
+			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
@@ -670,7 +663,7 @@ func (a *agent) run() { //nolint:gocyclo
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
 
-		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf)
+		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -1758,32 +1751,86 @@ func setupContainer(hostRootPath string) {
 	}
 }
 
-// prometheusConfigToURLs convert metric.prometheus config to a map of target name to URL
+// prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
-// the config is expected to be a like:
-// config:
-//   your_custom_name_here:
-//     url: http://localhost:9100/metrics
-func prometheusConfigToURLs(config interface{}) map[string]string {
-	result := make(map[string]string)
-
-	configMap, ok := config.(map[string]interface{})
+// See tests for the expected config.
+func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string, globalIncludeDefault bool) (result []*scrapper.Target) {
+	configList, ok := cfg.([]interface{})
 	if !ok {
 		return nil
 	}
 
-	for name, v := range configMap {
+	for _, v := range configList {
 		vMap, ok := v.(map[string]interface{})
 		if !ok {
 			continue
 		}
 
-		url, ok := vMap["url"].(string)
+		uText, ok := vMap["url"].(string)
 		if !ok {
 			continue
 		}
 
-		result[name] = url
+		u, err := url.Parse(uText)
+		if err != nil {
+			logger.Printf("ignoring invalid exporter config: %v", err)
+			continue
+		}
+
+		name, _ := vMap["name"].(string)
+
+		target := &scrapper.Target{
+			ExtraLabels: map[string]string{
+				types.LabelMetaScrapeJob:      name,
+				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
+			},
+			URL:            u,
+			AllowList:      globalAllow,
+			DenyList:       globalDeny,
+			IncludeDefault: globalIncludeDefault,
+		}
+
+		if allow, ok := vMap["allow_metrics"].([]interface{}); ok {
+			target.AllowList = make([]string, 0, len(allow))
+
+			for _, x := range allow {
+				s, _ := x.(string)
+				if s != "" {
+					target.AllowList = append(target.AllowList, x.(string))
+				}
+			}
+		}
+
+		if deny, ok := vMap["deny_metrics"].([]interface{}); ok {
+			target.DenyList = make([]string, 0, len(deny))
+
+			for _, x := range deny {
+				s, _ := x.(string)
+				if s != "" {
+					target.DenyList = append(target.DenyList, x.(string))
+				}
+			}
+		}
+
+		switch value := vMap["include_default_metrics"].(type) {
+		case bool:
+			target.IncludeDefault = value
+		case int:
+			target.IncludeDefault = (value != 0)
+		case string:
+			v, err := config.ConvertBoolean(value)
+			if err != nil {
+				logger.Printf("ignoring invalid boolean \"%s\" for include_default on target %s: %v", value, uText, err)
+			} else {
+				target.IncludeDefault = v
+			}
+		default:
+			if value != nil {
+				logger.Printf("ignoring invalid boolean \"%v\" for include_default on target %s: unknown type", value, uText)
+			}
+		}
+
+		result = append(result, target)
 	}
 
 	return result

@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// nolint: scopelint
 package config
 
 import (
@@ -423,6 +424,180 @@ func TestLoadEnv(t *testing.T) {
 		} else if ok {
 			t.Errorf("Get(%v) == %v, want not found", c.key, got)
 		}
+	}
+}
+
+func TestDelete(t *testing.T) {
+	makeCfg := func() *Configuration {
+		cfg := Configuration{}
+
+		cfg.Set("test-flat", "value")
+		cfg.Set("test.sub.list", []int{})
+		cfg.Set("test.sub.dict", map[string]interface{}{"temp": 28.5})
+		cfg.Set("test.sub.sub.int", 5)
+		cfg.Set("test.sub.deepdict", map[string]interface{}{
+			"deep1": map[string]interface{}{
+				"deep2": []string{"Hello, world"},
+			},
+		})
+
+		return &cfg
+	}
+
+	cases := []struct {
+		name        string
+		keyToDelete string
+		wants       map[string]interface{}
+	}{
+		{
+			name:        "non-existing-key",
+			keyToDelete: "some-value",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            28.5,
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
+			},
+		},
+		{
+			name:        "simple",
+			keyToDelete: "test-flat",
+			wants: map[string]interface{}{
+				"test-flat":                     nil,
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            28.5,
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
+			},
+		},
+		{
+			name:        "sub",
+			keyToDelete: "test.sub.list",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 nil,
+				"test.sub.dict.temp":            28.5,
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
+			},
+		},
+		{
+			name:        "sub-sub",
+			keyToDelete: "test.sub.sub.int",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            28.5,
+				"test.sub.sub.int":              nil,
+				"test.sub.sub":                  map[string]interface{}{},
+				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
+			},
+		},
+		{
+			name:        "sub.dict",
+			keyToDelete: "test.sub.dict",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            nil,
+				"test.sub.dict":                 nil,
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
+			},
+		},
+		{
+			name:        "sub.dict.temp",
+			keyToDelete: "test.sub.dict.temp",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            nil,
+				"test.sub.dict":                 map[string]interface{}{},
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": []string{"Hello, world"},
+			},
+		},
+		{
+			name:        "deep2",
+			keyToDelete: "test.sub.deepdict.deep1.deep2",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            28.5,
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": nil,
+				"test.sub.deepdict.deep1":       map[string]interface{}{},
+				"test.sub.deepdict": map[string]interface{}{
+					"deep1": map[string]interface{}{},
+				},
+			},
+		},
+		{
+			name:        "deep1",
+			keyToDelete: "test.sub.deepdict.deep1",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            28.5,
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": nil,
+				"test.sub.deepdict.deep1":       nil,
+				"test.sub.deepdict":             map[string]interface{}{},
+			},
+		},
+		{
+			name:        "deep0",
+			keyToDelete: "test.sub.deepdict",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 []int{},
+				"test.sub.dict.temp":            28.5,
+				"test.sub.sub.int":              5,
+				"test.sub.deepdict.deep1.deep2": nil,
+				"test.sub.deepdict.deep1":       nil,
+				"test.sub.deepdict":             nil,
+			},
+		},
+		{
+			name:        "full tree",
+			keyToDelete: "test.sub",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 nil,
+				"test.sub.dict.temp":            nil,
+				"test.sub.sub.int":              nil,
+				"test.sub.deepdict.deep1.deep2": nil,
+			},
+		},
+		{
+			name:        "full tree2",
+			keyToDelete: "test",
+			wants: map[string]interface{}{
+				"test-flat":                     "value",
+				"test.sub.list":                 nil,
+				"test.sub.dict.temp":            nil,
+				"test.sub.sub.int":              nil,
+				"test.sub.deepdict.deep1.deep2": nil,
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := makeCfg()
+
+			cfg.Delete(c.keyToDelete)
+
+			for key, want := range c.wants {
+				got, ok := cfg.Get(key)
+
+				if want == nil && ok {
+					t.Errorf("Get(%v) == %v, want nothing", key, got)
+				} else if !reflect.DeepEqual(got, want) {
+					t.Errorf("Get(%v) == %v, want %v", key, got, want)
+				}
+			}
+		})
 	}
 }
 

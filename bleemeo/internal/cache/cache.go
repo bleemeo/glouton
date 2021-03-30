@@ -24,7 +24,7 @@ import (
 	"sync"
 )
 
-const cacheVersion = 3
+const cacheVersion = 4
 const cacheKey = "CacheBleemeoConnector"
 
 // Cache store information about object registered in Bleemeo API.
@@ -446,6 +446,20 @@ func Load(state bleemeoTypes.State) *Cache {
 		newData.Containers = nil
 
 		fallthrough
+	case 3:
+		logger.V(1).Printf("Version 3 of cache found, upgrading it.")
+
+		// Version 4 stopped using "_item" to store Bleemeo item and use "item"
+		for i, m := range newData.Metrics {
+			labels := types.TextToLabels(m.LabelsText)
+			if v, ok := labels["_item"]; ok {
+				labels[types.LabelItem] = v
+				delete(labels, "_item")
+				newData.Metrics[i].LabelsText = types.LabelsToText(labels)
+			}
+		}
+
+		fallthrough
 	case cacheVersion:
 		newData.Version = cacheVersion
 		cache.data = newData
@@ -457,14 +471,6 @@ func Load(state bleemeoTypes.State) *Cache {
 
 	for i, m := range cache.data.Metrics {
 		m.Labels = types.TextToLabels(m.LabelsText)
-
-		if m.Item != "" {
-			// This metric is using Bleemeo mode, labels must only contains name and item
-			// it stored in the Item fields
-			m.Labels = map[string]string{
-				types.LabelName: m.Labels[types.LabelName],
-			}
-		}
 
 		cache.data.Metrics[i] = m
 	}

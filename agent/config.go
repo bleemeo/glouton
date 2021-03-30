@@ -109,25 +109,28 @@ var defaultConfig = map[string]interface{}{
 		"^rsxx[0-9]$",
 		"^[A-Z]:$",
 	},
-	"influxdb.db_name":                 "glouton",
-	"influxdb.enabled":                 false,
-	"influxdb.host":                    "localhost",
-	"influxdb.port":                    8086,
-	"influxdb.tags":                    map[string]string{},
-	"jmx.enabled":                      true,
-	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
-	"jmxtrans.file_permission":         "0640",
-	"jmxtrans.graphite_port":           2004,
-	"kubernetes.enabled":               false,
-	"kubernetes.nodename":              "",
-	"kubernetes.kubeconfig":            "",
-	"logging.buffer.head_size":         150,
-	"logging.buffer.tail_size":         1000,
-	"logging.level":                    "INFO",
-	"logging.output":                   "console",
-	"logging.package_levels":           "",
-	"metric.prometheus":                map[string]interface{}{},
-	"metric.softstatus_period_default": 5 * 60,
+	"influxdb.db_name":                          "glouton",
+	"influxdb.enabled":                          false,
+	"influxdb.host":                             "localhost",
+	"influxdb.port":                             8086,
+	"influxdb.tags":                             map[string]string{},
+	"jmx.enabled":                               true,
+	"jmxtrans.config_file":                      "/var/lib/jmxtrans/glouton-generated.json",
+	"jmxtrans.file_permission":                  "0640",
+	"jmxtrans.graphite_port":                    2004,
+	"kubernetes.enabled":                        false,
+	"kubernetes.nodename":                       "",
+	"kubernetes.kubeconfig":                     "",
+	"logging.buffer.head_size":                  150,
+	"logging.buffer.tail_size":                  1000,
+	"logging.level":                             "INFO",
+	"logging.output":                            "console",
+	"logging.package_levels":                    "",
+	"metric.prometheus.targets":                 []interface{}{},
+	"metric.prometheus.include_default_metrics": true,
+	"metric.prometheus.allow_metrics":           []interface{}{},
+	"metric.prometheus.deny_metrics":            []interface{}{},
+	"metric.softstatus_period_default":          5 * 60,
 	"metric.softstatus_period": map[string]interface{}{
 		"system_pending_updates":          86400,
 		"system_pending_security_updates": 86400,
@@ -179,6 +182,46 @@ func loadDefault(cfg *config.Configuration) {
 			cfg.Set(key, value)
 		}
 	}
+}
+
+// migrate upgrade the configuration when Glouton change it settings
+// The list returned are actually warnings, not errors.
+func migrate(cfg *config.Configuration) (warnings []error) {
+	// metrics.prometheus was renamed metrics.prometheus.scrapper
+	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
+	v, ok := cfg.Get("metric.prometheus")
+	if ok {
+		var migratedTargets []interface{}
+
+		if vMap, ok := v.(map[string]interface{}); ok {
+			for key, dict := range vMap {
+				if tmp, ok := dict.(map[string]interface{}); ok {
+					if u, ok := tmp["url"].(string); ok {
+						warnings = append(warnings, fmt.Errorf(
+							"setting \"metric.prometheus\" is depreacted and replaced by \"metric.prometheus.targets\". See https://docs.bleemeo.com/metrics-sources/prometheus",
+						))
+
+						migratedTargets = append(migratedTargets, map[string]interface{}{
+							"url":  u,
+							"name": key,
+						})
+
+						cfg.Delete(fmt.Sprintf("metric.prometheus.%s", key))
+					}
+				}
+			}
+		}
+
+		if len(migratedTargets) > 0 {
+			existing, _ := cfg.Get("metric.prometheus.targets")
+			targets, _ := existing.([]interface{})
+			targets = append(targets, migratedTargets...)
+
+			cfg.Set("metric.prometheus.targets", targets)
+		}
+	}
+
+	return warnings
 }
 
 func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err error) {
@@ -298,9 +341,13 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 		finalError = err
 	}
 
+	warnings = append(warnings, moreMarnings...)
+	moreMarnings = migrate(cfg)
+	warnings = append(warnings, moreMarnings...)
+
 	loadDefault(cfg)
 
-	return cfg, append(warnings, moreMarnings...), finalError
+	return cfg, warnings, finalError
 }
 
 func convertToMap(input interface{}) (result map[string]interface{}, ok bool) {

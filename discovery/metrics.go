@@ -356,15 +356,13 @@ func (d *Discovery) createInput(service Service) error {
 			annotations.ServiceName = service.Name
 			annotations.ContainerID = service.ContainerID
 
-			if d.metricFormat == types.MetricFormatPrometheus {
-				labels[types.LabelMetaContainerName] = service.ContainerName
-				labels[types.LabelMetaServiceName] = service.ContainerName
-				labels[types.LabelMetaContainerID] = service.ContainerName
+			labels[types.LabelMetaContainerName] = service.ContainerName
+			labels[types.LabelMetaServiceName] = service.ContainerName
+			labels[types.LabelMetaContainerID] = service.ContainerName
 
-				_, port := service.AddressPort()
-				if port != 0 {
-					labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
-				}
+			_, port := service.AddressPort()
+			if port != 0 {
+				labels[types.LabelMetaServicePort] = strconv.FormatInt(int64(port), 10)
 			}
 
 			if service.ContainerName != "" {

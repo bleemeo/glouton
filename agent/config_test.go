@@ -14,9 +14,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// nolint: scopelint
 package agent
 
 import (
+	"glouton/config"
 	"reflect"
 	"testing"
 )
@@ -159,6 +161,89 @@ func Test_confFieldToSliceMap(t *testing.T) {
 			// nolint: scopelint
 			if got := confFieldToSliceMap(tt.args.input, tt.args.confType); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("confFieldToSliceMap() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_migrate(t *testing.T) {
+	tests := []struct {
+		name        string
+		cfgFilename string
+		wantKeys    map[string]interface{}
+		absentKeys  []string
+	}{
+		{
+			name:        "new-prometheus-targets",
+			cfgFilename: "testdata/new-prometheus-targets.conf",
+			wantKeys: map[string]interface{}{
+				"metric.prometheus.targets": []interface{}{
+					map[string]interface{}{
+						"name": "test1",
+						"url":  "http://localhost:9090/metrics",
+					},
+				},
+			},
+		},
+		{
+			name:        "old-prometheus-targets",
+			cfgFilename: "testdata/old-prometheus-targets.conf",
+			wantKeys: map[string]interface{}{
+				"metric.prometheus.targets": []interface{}{
+					map[string]interface{}{
+						"name": "test1",
+						"url":  "http://localhost:9090/metrics",
+					},
+				},
+			},
+			absentKeys: []string{"metric.prometheus.test1"},
+		},
+		{
+			name:        "both-prometheus-targets",
+			cfgFilename: "testdata/both-prometheus-targets.conf",
+			wantKeys: map[string]interface{}{
+				"metric.prometheus.targets": []interface{}{
+					map[string]interface{}{
+						"name": "new",
+						"url":  "http://new:9090/metrics",
+					},
+					map[string]interface{}{
+						"name": "old",
+						"url":  "http://old:9090/metrics",
+					},
+				},
+			},
+			absentKeys: []string{"metric.prometheus.old"},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := &config.Configuration{}
+
+			if err := configLoadFile(tt.cfgFilename, cfg); err != nil {
+				t.Error(err)
+			}
+
+			for _, key := range tt.absentKeys {
+				if _, ok := cfg.Get(key); !ok {
+					t.Errorf("Get(%v) = nil, want to exists before migrate()", key)
+				}
+			}
+
+			_ = migrate(cfg)
+
+			for _, key := range tt.absentKeys {
+				if v, ok := cfg.Get(key); ok {
+					t.Errorf("Get(%v) = %v, want absent", key, v)
+				}
+			}
+
+			for key, want := range tt.wantKeys {
+				if got, ok := cfg.Get(key); !ok {
+					t.Errorf("Get(%v) = nil, want present", key)
+				} else if !reflect.DeepEqual(got, want) {
+					t.Errorf("Get(%v) = %#v, want %#v", key, got, want)
+				}
 			}
 		})
 	}
