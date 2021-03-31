@@ -29,7 +29,8 @@ import (
 var (
 	// ErrMockNotImplemented is returned when a mock does not implement a method
 	ErrMockNotImplemented = errors.New("mock does not implement this method")
-	ErrWrongNamespace     = errors.New("missmatch namespace")
+	// ErrWrongNamespace is returned when the namespace is mismatched.
+	ErrWrongNamespace = errors.New("missmatch namespace")
 )
 
 // MockClient is a fake containerd client.

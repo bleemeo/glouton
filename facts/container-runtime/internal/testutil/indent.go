@@ -2,6 +2,7 @@ package testutil
 
 import "strings"
 
+// Unindent removes all the indentation of a string.
 func Unindent(input string) string {
 	lines := strings.Split(input, "\n")
 	kept := make([]string, 0, len(lines))

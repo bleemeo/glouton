@@ -597,6 +597,7 @@ func (p psListerWrapper) PidExists(pid int32) (bool, error) {
 	return process.PidExists(pid)
 }
 
+// PsutilLister contains the passwd cache information.
 type PsutilLister struct {
 	pwdCache *etcpwdparse.EtcPasswdCache
 }

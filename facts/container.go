@@ -17,6 +17,7 @@ const (
 	containerEnableLegacyLabel = "bleemeo.enable"
 )
 
+// Container is an interface that defines all the information retrievable of a container.
 type Container interface {
 	Annotations() map[string]string
 	Command() []string
@@ -40,20 +41,28 @@ type Container interface {
 	RuntimeName() string
 }
 
+// ContainerState is the container lifecycle state.
 type ContainerState int
 
 const (
+	// ContainerUnknown is the default container state.
 	ContainerUnknown ContainerState = iota
+	// ContainerCreated is the state in which a container was just created.
 	ContainerCreated
+	// ContainerRunning is the state in which a container is currently running.
 	ContainerRunning
+	// ContainerRestarting is the state in which a container is restarting.
 	ContainerRestarting
+	// ContainerStopped is the state in which a container was stopped.
 	ContainerStopped
 )
 
+// IsRunning checks if a container is currently in a running state.
 func (st ContainerState) IsRunning() bool {
 	return st == ContainerRunning
 }
 
+// String returns the container state as string.
 func (st ContainerState) String() string {
 	switch st {
 	case ContainerRunning:
@@ -69,35 +78,51 @@ func (st ContainerState) String() string {
 	}
 }
 
+// ContainerEvent encapsulates an event related to a container.
 type ContainerEvent struct {
 	Type        EventType
 	ContainerID string
 	Container   Container
 }
 
+// ContainerHealth is the health status.
 type ContainerHealth int
 
 const (
+	// ContainerHealthUnknown is the default state value.
 	ContainerHealthUnknown ContainerHealth = iota
+	// ContainerStarting is the value for which the container status is starting.
 	ContainerStarting
+	// ContainerHealthy is the value for which the container status is healthy.
 	ContainerHealthy
+	// ContainerUnhealthy is the value for which the container status is unhealthy.
 	ContainerUnhealthy
+	// ContainerNoHealthCheck is the value for which the container status indicates not health check.
 	ContainerNoHealthCheck
 )
 
+// EventType is the container event.
 type EventType int
 
 const (
+	// EventTypeUnknown is the default event value.
 	EventTypeUnknown EventType = iota
+	// EventTypeCreate is the event type for which the event is "Create".
 	EventTypeCreate
+	// EventTypeStart is the event type for which the event is "Start".
 	EventTypeStart
+	// EventTypeKill is the event type for which the event is "Kill".
 	EventTypeKill
+	// EventTypeStop is the event type for which the event is "Stop".
 	EventTypeStop
+	// EventTypeDelete is the event type for which the event is "Delete".
 	EventTypeDelete
+	// EventTypeHealth is the event type for which the event is "Health".
 	EventTypeHealth
 )
 
 var (
+	// ErrContainerDoesNotExists is the default error value when a container does not exists.
 	ErrContainerDoesNotExists = errors.New("the container doesn't exist but process seems to belong to a container")
 )
 
@@ -105,6 +130,7 @@ type containerRuntime interface {
 	ProcessWithCache() ContainerRuntimeProcessQuerier
 }
 
+// ContainerRuntimeProcessQuerier encapsulates queries about containers information.
 type ContainerRuntimeProcessQuerier interface {
 	// Processes could be unimplemented. Return empty processes and nil as error
 	Processes(ctx context.Context) ([]Process, error)
@@ -219,6 +245,9 @@ func ContainerIgnoredPorts(c Container) map[int]bool {
 	return ignoredPort
 }
 
+// FakeContainer is a structure used to emulate containers for tests purposes
+// It is defined in this file instead of the test file because it is used
+// by multiples tests files.
 type FakeContainer struct {
 	FakeRuntimeName             string
 	FakeAnnotations             map[string]string
