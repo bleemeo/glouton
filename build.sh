@@ -2,7 +2,7 @@
 
 set -e
 
-UID=$(id -u)
+USER_UID=$(id -u)
 
 rm -fr work
 
@@ -35,7 +35,7 @@ if [ -e .build-cache ]; then
 fi
 
 if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
-   docker run --rm -u $UID -e HOME=/tmp/home \
+   docker run --rm -u $USER_UID -e HOME=/tmp/home \
       -v $(pwd):/src -w /src/webui ${NODE_MOUNT_CACHE} \
       node:lts \
       sh -c 'rm -fr node_modules && npm install && npm run deploy'
@@ -44,19 +44,19 @@ fi
 GORELEASER_VERSION="v0.147.2"
 
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
-   docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
+   docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION} sh -c 'go build .'
 elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
-   docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=1 \
+   docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=1 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
       goreleaser/goreleaser:${GORELEASER_VERSION}-cgo sh -c 'go build -ldflags="-linkmode external -extldflags=-static" -race .'
 else
-   docker run --rm -u $UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
+   docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
