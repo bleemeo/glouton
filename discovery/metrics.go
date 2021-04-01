@@ -103,6 +103,12 @@ func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorCo
 		return err
 	}
 
+	return addDefaultFromOs(inputsConfig, coll)
+}
+
+func addDefaultFromOs(inputsConfig inputs.CollectorConfig, coll *collector.Collector) error {
+	var err error
+	var input telegraf.Input
 	switch runtime.GOOS {
 	case "windows":
 		input, err = winperfcounters.New(inputsConfig)

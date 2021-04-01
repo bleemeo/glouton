@@ -282,56 +282,16 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if _, ok := servicesMap[key]; ok {
 			continue
 		}
-
 		if service.ContainerID != "" {
 			service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
 			if !ok || facts.ContainerIgnored(service.container) {
 				continue
 			}
 
-			if stack, ok := facts.LabelsAndAnnotations(service.container)["bleemeo.stack"]; ok {
-				service.Stack = stack
-			}
+			getContainerStack(&service)
 
-			if stack, ok := facts.LabelsAndAnnotations(service.container)["glouton.stack"]; ok {
-				service.Stack = stack
-			}
 		}
-
-		if service.ContainerID == "" {
-			service.ListenAddresses = netstat[pid]
-		} else {
-			var explicit bool
-
-			service.ListenAddresses, explicit = service.container.ListenAddresses()
-			service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
-
-			service.ListenAddresses = excludeEmptyAddress(service.ListenAddresses)
-
-			if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && !explicit) {
-				service.ListenAddresses = netstat[pid]
-			}
-		}
-
-		if len(service.ListenAddresses) > 0 {
-			service.HasNetstatInfo = true
-		}
-
-		di := servicesDiscoveryInfo[service.ServiceType]
-
-		for port, ignore := range di.DefaultIgnoredPorts {
-			if !ignore {
-				continue
-			}
-
-			if _, ok := service.IgnoredPorts[port]; !ok {
-				if service.IgnoredPorts == nil {
-					service.IgnoredPorts = make(map[int]bool)
-				}
-
-				service.IgnoredPorts[port] = ignore
-			}
-		}
+		di := getDiscoveryInfo(&service, dd, &netstat, pid)
 
 		dd.updateListenAddresses(&service, di)
 
@@ -359,6 +319,54 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	dd.services = services
 
 	return nil
+}
+
+func getContainerStack(service *Service) {
+	if stack, ok := facts.LabelsAndAnnotations(service.container)["bleemeo.stack"]; ok {
+		service.Stack = stack
+	}
+
+	if stack, ok := facts.LabelsAndAnnotations(service.container)["glouton.stack"]; ok {
+		service.Stack = stack
+	}
+}
+
+func getDiscoveryInfo(service *Service, dd *DynamicDiscovery, netstat *map[int][]facts.ListenAddress, pid int) discoveryInfo {
+	if service.ContainerID == "" {
+		service.ListenAddresses = (*netstat)[pid]
+	} else {
+		var explicit bool
+
+		service.ListenAddresses, explicit = service.container.ListenAddresses()
+		service.IgnoredPorts = facts.ContainerIgnoredPorts(service.container)
+
+		service.ListenAddresses = excludeEmptyAddress(service.ListenAddresses)
+
+		if len(service.ListenAddresses) == 0 || (len((*netstat)[pid]) > 0 && !explicit) {
+			service.ListenAddresses = (*netstat)[pid]
+		}
+	}
+
+	if len(service.ListenAddresses) > 0 {
+		service.HasNetstatInfo = true
+	}
+
+	di := servicesDiscoveryInfo[service.ServiceType]
+
+	for port, ignore := range di.DefaultIgnoredPorts {
+		if !ignore {
+			continue
+		}
+
+		if _, ok := service.IgnoredPorts[port]; !ok {
+			if service.IgnoredPorts == nil {
+				service.IgnoredPorts = make(map[int]bool)
+			}
+
+			service.IgnoredPorts[port] = ignore
+		}
+	}
+	return di
 }
 
 func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discoveryInfo) {
@@ -514,6 +522,17 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 		}
 	}
 
+	serviceName, ok := serviceByInterpreter(name, cmdLine)
+
+	if ok {
+		return serviceName, ok
+	}
+	serviceName, ok = knownProcesses[name]
+
+	return serviceName, ok
+}
+
+func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceName, found bool) {
 	// For now, special case for java, erlang or python process.
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
@@ -543,10 +562,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 			}
 		}
 	}
-
-	serviceName, ok := knownProcesses[name]
-
-	return serviceName, ok
+	return "", false
 }
 
 // excludeEmptyAddress exlude entry with empty Address IP. It will modify input.
