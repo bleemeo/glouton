@@ -140,21 +140,10 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 		mi := MockTask{}
 
 		task, err := c.Task(ctx, nil)
-		if err == nil {
-			status, err := task.Status(ctx)
-			if err != nil {
-				return err
-			}
+		err = getTaskInfo(ctx, err, task, &mi)
 
-			pids, err := task.Pids(ctx)
-			if err != nil {
-				return err
-			}
-
-			mi.MockID = task.ID()
-			mi.MockPID = task.Pid()
-			mi.MockStatus = status
-			mi.MockPids = pids
+		if err != nil {
+			return err
 		}
 
 		info, err := c.Info(ctx)
@@ -201,6 +190,27 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 		}
 
 		j.MockContainers = append(j.MockContainers, mc)
+	}
+
+	return nil
+}
+
+func getTaskInfo(ctx context.Context, err error, task containerd.Task, mi *MockTask) error {
+	if err == nil {
+		status, err := task.Status(ctx)
+		if err != nil {
+			return err
+		}
+
+		pids, err := task.Pids(ctx)
+		if err != nil {
+			return err
+		}
+
+		mi.MockID = task.ID()
+		mi.MockPID = task.Pid()
+		mi.MockStatus = status
+		mi.MockPids = pids
 	}
 
 	return nil

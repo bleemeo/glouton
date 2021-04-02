@@ -130,7 +130,7 @@ func zabbixResponse(key string, args []string) (string, error) {
 		return fmt.Sprintf("4 (Glouton %s)", version.Version), nil
 	}
 
-	return "", errors.New("Unsupported item key") // nolint: stylecheck
+	return "", errors.New("Unsupported item key") //nolint: stylecheck
 }
 
 type taskInfo struct {
@@ -380,13 +380,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	var rawThreshold map[string]interface{}
 
-	if rawThreshold, ok = rawValue.(map[string]interface{}); !ok {
-		if firstUpdate {
-			logger.V(1).Printf("Threshold in configuration file is not map")
-		}
-
-		rawThreshold = nil
-	}
+	checkThresholdIsMap(&rawThreshold, &rawValue, firstUpdate)
 
 	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
 
@@ -444,6 +438,18 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
 		a.bleemeoConnector.UpdateInfo()
+	}
+}
+
+func checkThresholdIsMap(rawThreshold *map[string]interface{}, rawValue *interface{}, firstUpdate bool) {
+	ok := false
+
+	if *rawThreshold, ok = (*rawValue).(map[string]interface{}); !ok {
+		if firstUpdate {
+			logger.V(1).Printf("Threshold in configuration file is not map")
+		}
+
+		*rawThreshold = nil
 	}
 }
 
@@ -1445,12 +1451,20 @@ func (a *agent) handleTrigger(ctx context.Context) {
 		}
 	}
 
+	runFacts(ctx, runFact, a)
+
+	systemUpdateMetric(ctx, runSystemUpdateMetric, a)
+}
+
+func runFacts(ctx context.Context, runFact bool, a *agent) {
 	if runFact {
 		if _, err := a.factProvider.Facts(ctx, 0); err != nil {
 			logger.V(1).Printf("error during facts gathering: %v", err)
 		}
 	}
+}
 
+func systemUpdateMetric(ctx context.Context, runSystemUpdateMetric bool, a *agent) {
 	if runSystemUpdateMetric {
 		pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
 			ctx,
@@ -1653,7 +1667,14 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		}
 	}
 
-	file, err = zipFile.Create("config.yaml")
+	err = yamlZip(zipFile, a)
+
+	return err
+}
+
+func yamlZip(zipFile *zip.Writer, a *agent) error {
+	file, err := zipFile.Create("config.yaml")
+
 	if err != nil {
 		return err
 	}
@@ -1801,16 +1822,7 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 			}
 		}
 
-		if deny, ok := vMap["deny_metrics"].([]interface{}); ok {
-			target.DenyList = make([]string, 0, len(deny))
-
-			for _, x := range deny {
-				s, _ := x.(string)
-				if s != "" {
-					target.DenyList = append(target.DenyList, x.(string))
-				}
-			}
-		}
+		denyMetricsConfig(&vMap, target)
 
 		switch value := vMap["include_default_metrics"].(type) {
 		case bool:
@@ -1834,4 +1846,17 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 	}
 
 	return result
+}
+
+func denyMetricsConfig(vMap *map[string]interface{}, target *scrapper.Target) {
+	if deny, ok := (*vMap)["deny_metrics"].([]interface{}); ok {
+		target.DenyList = make([]string, 0, len(deny))
+
+		for _, x := range deny {
+			s, _ := x.(string)
+			if s != "" {
+				target.DenyList = append(target.DenyList, x.(string))
+			}
+		}
+	}
 }

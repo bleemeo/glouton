@@ -258,7 +258,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 				FinishedAt:  &finishedAt,
 			}
 
-			err = r.containerInformation(&containerMetrics, &container, c)
+			err = r.containerInformation(&containerMetrics, container, c)
 			if err != nil {
 				return nil, err
 			}
@@ -288,10 +288,10 @@ func paginateInformation(input *Pagination, containersRes *[]*Container) {
 	}
 }
 
-func (r *queryResolver) containerInformation(containerMetrics *[]string, container *facts.Container, c *Container) error {
+func (r *queryResolver) containerInformation(containerMetrics *[]string, container facts.Container, c *Container) error {
 	for _, m := range *containerMetrics {
 		metricFilters := map[string]string{
-			types.LabelMetaContainerName: (*container).ContainerName(),
+			types.LabelMetaContainerName: container.ContainerName(),
 			types.LabelName:              m,
 		}
 

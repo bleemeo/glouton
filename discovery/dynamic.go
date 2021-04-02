@@ -282,6 +282,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		if _, ok := servicesMap[key]; ok {
 			continue
 		}
+
 		if service.ContainerID != "" {
 			service.container, ok = dd.containerInfo.CachedContainer(service.ContainerID)
 			if !ok || facts.ContainerIgnored(service.container) {
@@ -289,9 +290,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			}
 
 			getContainerStack(&service)
-
 		}
-		di := getDiscoveryInfo(&service, dd, &netstat, pid)
+
+		di := getDiscoveryInfo(&service, &netstat, pid)
 
 		dd.updateListenAddresses(&service, di)
 
@@ -331,7 +332,7 @@ func getContainerStack(service *Service) {
 	}
 }
 
-func getDiscoveryInfo(service *Service, dd *DynamicDiscovery, netstat *map[int][]facts.ListenAddress, pid int) discoveryInfo {
+func getDiscoveryInfo(service *Service, netstat *map[int][]facts.ListenAddress, pid int) discoveryInfo {
 	if service.ContainerID == "" {
 		service.ListenAddresses = (*netstat)[pid]
 	} else {
@@ -366,6 +367,7 @@ func getDiscoveryInfo(service *Service, dd *DynamicDiscovery, netstat *map[int][
 			service.IgnoredPorts[port] = ignore
 		}
 	}
+
 	return di
 }
 
@@ -527,6 +529,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 	if ok {
 		return serviceName, ok
 	}
+
 	serviceName, ok = knownProcesses[name]
 
 	return serviceName, ok
@@ -536,7 +539,6 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 	// For now, special case for java, erlang or python process.
 	// Need a more general way to manage those case. Every interpreter/VM
 	// language are affected.
-
 	if name == "java" || name == "python" || name == "erl" || strings.HasPrefix(name, "beam") {
 		for _, candidate := range knownIntepretedProcess {
 			if candidate.Interpreter == "erlang" && name != "erl" && !strings.HasPrefix(name, "beam") {
@@ -562,6 +564,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 			}
 		}
 	}
+
 	return "", false
 }
 

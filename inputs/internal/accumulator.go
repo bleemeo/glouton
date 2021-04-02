@@ -220,23 +220,27 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 		currentPoint := metricPoint{Time: metricTime, Value: value}
 		a.currentValues[flatTag][metricName] = currentPoint
 
-		if ok {
-			valueFloat, err := rateAsFloat(pastMetricPoint, currentPoint)
-
-			switch {
-			case err == nil && valueFloat >= 0:
-				result[metricName] = valueFloat
-			case err == nil:
-				continue
-			default:
-				a.AddError(err)
-			}
-		} else {
-			continue
-		}
+		hasPastMetricPoints(ok, pastMetricPoint, currentPoint, &result, metricName, a)
 	}
 
 	return result
+}
+
+func hasPastMetricPoints(ok bool, pastMetricPoint metricPoint, currentPoint metricPoint, result *map[string]float64, metricName string, a *Accumulator) {
+	if ok {
+		valueFloat, err := rateAsFloat(pastMetricPoint, currentPoint)
+
+		switch {
+		case err == nil && valueFloat >= 0:
+			(*result)[metricName] = valueFloat
+		case err == nil:
+			return
+		default:
+			a.AddError(err)
+		}
+	} else {
+		return
+	}
 }
 
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
