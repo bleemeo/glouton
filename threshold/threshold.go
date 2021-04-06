@@ -135,10 +135,7 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		s.WarningSince = time.Time{}
 	}
 
-	criticalDuration := time.Duration(0)
-	warningDuration := time.Duration(0)
-
-	s.setNewStatus(newStatus, now, &criticalDuration, &warningDuration)
+	criticalDuration, warningDuration := s.setNewStatus(newStatus, now)
 
 	switch {
 	case period == 0:
@@ -160,7 +157,10 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 	return s
 }
 
-func (s *statusState) setNewStatus(newStatus types.Status, now time.Time, criticalDuration *time.Duration, warningDuration *time.Duration) {
+func (s *statusState) setNewStatus(newStatus types.Status, now time.Time) (time.Duration, time.Duration) {
+	criticalDuration := time.Duration(0)
+	warningDuration := time.Duration(0)
+
 	switch newStatus {
 	case types.StatusCritical:
 		if s.CriticalSince.IsZero() {
@@ -171,8 +171,8 @@ func (s *statusState) setNewStatus(newStatus types.Status, now time.Time, critic
 			s.WarningSince = now
 		}
 
-		*criticalDuration = now.Sub(s.CriticalSince)
-		*warningDuration = now.Sub(s.WarningSince)
+		criticalDuration = now.Sub(s.CriticalSince)
+		warningDuration = now.Sub(s.WarningSince)
 	case types.StatusWarning:
 		s.CriticalSince = time.Time{}
 
@@ -180,11 +180,13 @@ func (s *statusState) setNewStatus(newStatus types.Status, now time.Time, critic
 			s.WarningSince = now
 		}
 
-		*warningDuration = now.Sub(s.WarningSince)
+		warningDuration = now.Sub(s.WarningSince)
 	default:
 		s.CriticalSince = time.Time{}
 		s.WarningSince = time.Time{}
 	}
+
+	return criticalDuration, warningDuration
 }
 
 // Threshold define a min/max thresholds.

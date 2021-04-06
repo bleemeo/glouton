@@ -140,7 +140,7 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 		mi := MockTask{}
 
 		task, err := c.Task(ctx, nil)
-		err = getTaskInfo(ctx, err, task, &mi)
+		mi, err = getTaskInfo(ctx, err, task, mi)
 
 		if err != nil {
 			return err
@@ -195,16 +195,16 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 	return nil
 }
 
-func getTaskInfo(ctx context.Context, err error, task containerd.Task, mi *MockTask) error {
+func getTaskInfo(ctx context.Context, err error, task containerd.Task, mi MockTask) (MockTask, error) {
 	if err == nil {
 		status, err := task.Status(ctx)
 		if err != nil {
-			return err
+			return mi, err
 		}
 
 		pids, err := task.Pids(ctx)
 		if err != nil {
-			return err
+			return mi, err
 		}
 
 		mi.MockID = task.ID()
@@ -213,7 +213,7 @@ func getTaskInfo(ctx context.Context, err error, task containerd.Task, mi *MockT
 		mi.MockPids = pids
 	}
 
-	return nil
+	return mi, nil
 }
 
 // NewMockFromFile create a MockClient from JSON file. Use DumpToJSON to build such JSON.

@@ -144,7 +144,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			continue
 		}
 
-		assignIOFields(&newFields, value, metricName)
+		assignIOFields(newFields, value, metricName)
 	}
 
 	return newFields
@@ -167,17 +167,17 @@ func assignCacheMetrics(newFields map[string]float64, value float64, metricName 
 	}
 }
 
-func assignIOFields(newFields *map[string]float64, value float64, metricName string) {
+func assignIOFields(newFields map[string]float64, value float64, metricName string) {
 	switch metricName {
 	case "bytes_received":
-		(*newFields)["octets_rx"] = value
+		newFields["octets_rx"] = value
 	case "bytes_sent":
-		(*newFields)["octets_tx"] = value
+		newFields["octets_tx"] = value
 	case "queries", "slow_queries":
-		(*newFields)[metricName] = value
+		newFields[metricName] = value
 	case "innodb_row_lock_current_waits":
-		(*newFields)["innodb_locked_transaction"] = value
+		newFields["innodb_locked_transaction"] = value
 	case "trx_rseg_history_len":
-		(*newFields)["history_list_len"] = value
+		newFields["history_list_len"] = value
 	}
 }

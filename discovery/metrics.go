@@ -103,10 +103,10 @@ func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorCo
 		return err
 	}
 
-	return addDefaultFromOs(inputsConfig, coll)
+	return addDefaultFromOS(inputsConfig, coll)
 }
 
-func addDefaultFromOs(inputsConfig inputs.CollectorConfig, coll *collector.Collector) error {
+func addDefaultFromOS(inputsConfig inputs.CollectorConfig, coll *collector.Collector) error {
 	var input telegraf.Input
 
 	var err error

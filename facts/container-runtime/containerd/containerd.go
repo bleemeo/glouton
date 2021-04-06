@@ -549,7 +549,7 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 		}
 
 		ctx := namespaces.WithNamespace(ctx, ns)
-		err := containerInfo(ctx, cl, ns, containers, ignoredID)
+		err := addContainersInfo(ctx, containers, cl, ns, ignoredID)
 
 		if err != nil {
 			return err
@@ -575,7 +575,7 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 	return nil
 }
 
-func containerInfo(ctx context.Context, cl containerdClient, ns string, containers map[string]containerObject, ignoredID map[string]bool) error {
+func addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
 	list, err := cl.Containers(ctx)
 
 	if err != nil {
@@ -1011,7 +1011,7 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 		}
 	}
 
-	container, err := updateContainers(ctx, q, pid)
+	container, err := q.containerFromPID(ctx, pid)
 	if err != nil {
 		return nil, err
 	}
@@ -1064,7 +1064,8 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 	return nil, nil
 }
 
-func updateContainers(ctx context.Context, q *containerdProcessQuerier, pid int) (facts.Container, error) {
+// containerFromPID return the container which had pid as first process. It will update list of containers if needed.
+func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int) (facts.Container, error) {
 	if !q.containersUpdated {
 		q.containersUpdated = true
 
