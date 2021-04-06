@@ -126,6 +126,7 @@ func (f *FactProvider) SetFact(key string, value string) {
 	f.facts[key] = value
 }
 
+//nolint: gocyclo
 func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts := make(map[string]string)
 

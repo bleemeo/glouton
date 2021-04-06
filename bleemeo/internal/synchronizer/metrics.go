@@ -257,6 +257,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
+//nolint: gocyclo
 func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {

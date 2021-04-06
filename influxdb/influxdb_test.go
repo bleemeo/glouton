@@ -123,6 +123,7 @@ func TestConvertMetricPoint(t *testing.T) {
 	}
 }
 
+//nolint: gocyclo
 func TestAddPoints(t *testing.T) {
 	var client Client
 

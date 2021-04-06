@@ -83,6 +83,7 @@ func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return result, nil
 }
 
+//nolint: gocyclo
 func TestRegistry_Register(t *testing.T) {
 	reg := &Registry{}
 

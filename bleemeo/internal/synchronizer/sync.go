@@ -111,6 +111,7 @@ func New(option Option) *Synchronizer {
 }
 
 // Run run the Connector.
+//nolint: gocyclo
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = s.now()
@@ -458,6 +459,7 @@ func (s *Synchronizer) setClient() error {
 	return nil
 }
 
+//nolint: gocyclo
 func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	if s.agentID == "" {
 		if err := s.register(); err != nil {
@@ -583,6 +585,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	return firstErr
 }
 
+//nolint: gocyclo
 func (s *Synchronizer) syncToPerform() map[string]bool {
 	s.l.Lock()
 	defer s.l.Unlock()

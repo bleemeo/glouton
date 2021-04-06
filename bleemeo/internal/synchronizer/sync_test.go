@@ -331,6 +331,7 @@ func (api *mockAPI) Server() *httptest.Server {
 	return httptest.NewServer(api.serveMux)
 }
 
+//nolint: gocyclo
 func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 	part := strings.Split(r.URL.Path, "/")
 	if len(part) < 4 || part[1] != "v1" || len(part) > 5 {

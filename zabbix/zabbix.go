@@ -128,6 +128,7 @@ func decode(r io.Reader) (packetStruct, error) {
 	return decodedPacket, err
 }
 
+//nolint: gocyclo
 func splitData(request string) (string, []string, error) {
 	var args []string
 

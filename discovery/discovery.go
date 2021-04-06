@@ -171,6 +171,7 @@ func (d *Discovery) LastUpdate() time.Time {
 }
 
 // DiagnosticZip add to a zipfile useful diagnostic information.
+//nolint: gocyclo
 func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -356,6 +357,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	return nil
 }
 
+//nolint: gocyclo
 func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]map[string]string) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
