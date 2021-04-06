@@ -87,7 +87,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 	for metricName, value := range fields {
 		if strings.HasPrefix(metricName, "qcache_") {
 			metricName = strings.ReplaceAll(metricName, "qcache_", "cache_result_qcache_")
-			assignCacheMetrics(&newFields, value, metricName)
+			assignCacheMetrics(newFields, value, metricName)
 
 			continue
 		}
@@ -150,20 +150,20 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 	return newFields
 }
 
-func assignCacheMetrics(newFields *map[string]float64, value float64, metricName string) {
+func assignCacheMetrics(newFields map[string]float64, value float64, metricName string) {
 	switch metricName {
 	case "cache_result_qcache_lowmem_prunes":
-		(*newFields)["cache_result_qcache_prunes"] = value
+		newFields["cache_result_qcache_prunes"] = value
 	case "cache_result_qcache_queries_in_cache":
-		(*newFields)["cache_size_qcache"] = value
+		newFields["cache_size_qcache"] = value
 	case "cache_result_qcache_total_blocks":
-		(*newFields)["cache_blocksize_qcache"] = value
+		newFields["cache_blocksize_qcache"] = value
 	case "cache_result_qcache_free_blocks":
-		(*newFields)["cache_free_blocks"] = value
+		newFields["cache_free_blocks"] = value
 	case "cache_result_qcache_free_memory":
-		(*newFields)["cache_free_memory"] = value
+		newFields["cache_free_memory"] = value
 	default:
-		(*newFields)[metricName] = value
+		newFields[metricName] = value
 	}
 }
 

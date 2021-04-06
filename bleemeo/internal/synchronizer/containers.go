@@ -194,11 +194,9 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	}
 
 	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
-	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
 
 	for _, container := range localContainers {
-		cont := s.delayedContainerCheck(&newDelayedContainer, container, delay)
-		if cont {
+		if s.delayedContainerCheck(newDelayedContainer, container) {
 			continue
 		}
 
@@ -273,11 +271,13 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	return nil
 }
 
-func (s *Synchronizer) delayedContainerCheck(newDelayedContainer *map[string]time.Time, container facts.Container, delay time.Duration) bool {
+func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time.Time, container facts.Container) bool {
+	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
+
 	if s.now().Sub(container.CreatedAt()) < delay {
 		enable, explicit := facts.ContainerEnabled(container)
 		if !enable || !explicit {
-			(*newDelayedContainer)[container.ID()] = container.CreatedAt().Add(delay)
+			newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
 			return true
 		}
 	}

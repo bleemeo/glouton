@@ -292,7 +292,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 			getContainerStack(&service)
 		}
 
-		di := getDiscoveryInfo(&service, &netstat, pid)
+		di := getDiscoveryInfo(&service, netstat, pid)
 
 		dd.updateListenAddresses(&service, di)
 
@@ -332,9 +332,9 @@ func getContainerStack(service *Service) {
 	}
 }
 
-func getDiscoveryInfo(service *Service, netstat *map[int][]facts.ListenAddress, pid int) discoveryInfo {
+func getDiscoveryInfo(service *Service, netstat map[int][]facts.ListenAddress, pid int) discoveryInfo {
 	if service.ContainerID == "" {
-		service.ListenAddresses = (*netstat)[pid]
+		service.ListenAddresses = netstat[pid]
 	} else {
 		var explicit bool
 
@@ -343,8 +343,8 @@ func getDiscoveryInfo(service *Service, netstat *map[int][]facts.ListenAddress, 
 
 		service.ListenAddresses = excludeEmptyAddress(service.ListenAddresses)
 
-		if len(service.ListenAddresses) == 0 || (len((*netstat)[pid]) > 0 && !explicit) {
-			service.ListenAddresses = (*netstat)[pid]
+		if len(service.ListenAddresses) == 0 || (len(netstat[pid]) > 0 && !explicit) {
+			service.ListenAddresses = netstat[pid]
 		}
 	}
 

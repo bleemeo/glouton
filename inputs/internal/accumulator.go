@@ -220,19 +220,19 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 		currentPoint := metricPoint{Time: metricTime, Value: value}
 		a.currentValues[flatTag][metricName] = currentPoint
 
-		hasPastMetricPoints(ok, pastMetricPoint, currentPoint, &result, metricName, a)
+		hasPastMetricPoints(ok, pastMetricPoint, currentPoint, result, metricName, a)
 	}
 
 	return result
 }
 
-func hasPastMetricPoints(ok bool, pastMetricPoint metricPoint, currentPoint metricPoint, result *map[string]float64, metricName string, a *Accumulator) {
+func hasPastMetricPoints(ok bool, pastMetricPoint metricPoint, currentPoint metricPoint, result map[string]float64, metricName string, a *Accumulator) {
 	if ok {
 		valueFloat, err := rateAsFloat(pastMetricPoint, currentPoint)
 
 		switch {
 		case err == nil && valueFloat >= 0:
-			(*result)[metricName] = valueFloat
+			result[metricName] = valueFloat
 		case err == nil:
 			return
 		default:

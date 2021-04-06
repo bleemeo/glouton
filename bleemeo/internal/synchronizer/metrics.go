@@ -860,14 +860,14 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		Agent: s.agentID,
 	}
 
-	truncateBleemeoPayload(s, &payload, annotations, &labels)
+	truncateBleemeoPayload(s, &payload, annotations, labels)
 
 	var (
 		containerName string
 		result        metricPayload
 	)
 
-	err := statusOfEmpty(annotations, &labels, &payload, &registeredMetricsByKey, s)
+	err := statusOfEmpty(annotations, labels, &payload, &registeredMetricsByKey, s)
 
 	if err != nil {
 		return err
@@ -939,20 +939,20 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	return nil
 }
 
-func truncateBleemeoPayload(s *Synchronizer, payload *metricPayload, annotations types.MetricAnnotations, labels *map[string]string) {
+func truncateBleemeoPayload(s *Synchronizer, payload *metricPayload, annotations types.MetricAnnotations, labels map[string]string) {
 	if s.option.MetricFormat == types.MetricFormatBleemeo {
 		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
-		if common.MetricOnlyHasItem(*labels) {
+		if common.MetricOnlyHasItem(labels) {
 			payload.LabelsText = ""
 		}
 	}
 }
 
-func statusOfEmpty(annotations types.MetricAnnotations, labels *map[string]string, payload *metricPayload, registeredMetricsByKey *map[string]bleemeoTypes.Metric, s *Synchronizer) error {
+func statusOfEmpty(annotations types.MetricAnnotations, labels map[string]string, payload *metricPayload, registeredMetricsByKey *map[string]bleemeoTypes.Metric, s *Synchronizer) error {
 	if annotations.StatusOf != "" {
-		subLabels := make(map[string]string, len(*labels))
+		subLabels := make(map[string]string, len(labels))
 
-		for k, v := range *labels {
+		for k, v := range labels {
 			subLabels[k] = v
 		}
 

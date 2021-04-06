@@ -441,10 +441,10 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 	}
 }
 
-func checkThresholdIsMap(rawThreshold *map[string]interface{}, rawValue *interface{}, firstUpdate bool) {
+func checkThresholdIsMap(rawThreshold *map[string]interface{}, rawValue interface{}, firstUpdate bool) {
 	ok := false
 
-	if *rawThreshold, ok = (*rawValue).(map[string]interface{}); !ok {
+	if *rawThreshold, ok = rawValue.(map[string]interface{}); !ok {
 		if firstUpdate {
 			logger.V(1).Printf("Threshold in configuration file is not map")
 		}
@@ -1451,55 +1451,51 @@ func (a *agent) handleTrigger(ctx context.Context) {
 		}
 	}
 
-	runFacts(ctx, runFact, a)
-
-	systemUpdateMetric(ctx, runSystemUpdateMetric, a)
-}
-
-func runFacts(ctx context.Context, runFact bool, a *agent) {
 	if runFact {
 		if _, err := a.factProvider.Facts(ctx, 0); err != nil {
 			logger.V(1).Printf("error during facts gathering: %v", err)
 		}
 	}
+
+	if runSystemUpdateMetric {
+		systemUpdateMetric(ctx, a)
+	}
 }
 
-func systemUpdateMetric(ctx context.Context, runSystemUpdateMetric bool, a *agent) {
-	if runSystemUpdateMetric {
-		pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
-			ctx,
-			a.config.String("container.type") != "",
-			a.hostRootPath,
-		)
+func systemUpdateMetric(ctx context.Context, a *agent) {
+	pendingUpdate, pendingSecurityUpdate := facts.PendingSystemUpdate(
+		ctx,
+		a.config.String("container.type") != "",
+		a.hostRootPath,
+	)
 
-		points := make([]types.MetricPoint, 0)
+	points := make([]types.MetricPoint, 0)
 
-		if pendingUpdate >= 0 {
-			points = append(points, types.MetricPoint{
-				Labels: map[string]string{
-					types.LabelName: "system_pending_updates",
-				},
-				Point: types.Point{
-					Time:  time.Now(),
-					Value: float64(pendingUpdate),
-				},
-			})
-		}
-
-		if pendingSecurityUpdate >= 0 {
-			points = append(points, types.MetricPoint{
-				Labels: map[string]string{
-					types.LabelName: "system_pending_security_updates",
-				},
-				Point: types.Point{
-					Time:  time.Now(),
-					Value: float64(pendingSecurityUpdate),
-				},
-			})
-		}
-
-		a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(points)
+	if pendingUpdate >= 0 {
+		points = append(points, types.MetricPoint{
+			Labels: map[string]string{
+				types.LabelName: "system_pending_updates",
+			},
+			Point: types.Point{
+				Time:  time.Now(),
+				Value: float64(pendingUpdate),
+			},
+		})
 	}
+
+	if pendingSecurityUpdate >= 0 {
+		points = append(points, types.MetricPoint{
+			Labels: map[string]string{
+				types.LabelName: "system_pending_security_updates",
+			},
+			Point: types.Point{
+				Time:  time.Now(),
+				Value: float64(pendingSecurityUpdate),
+			},
+		})
+	}
+
+	a.threshold.WithPusher(a.gathererRegistry.WithTTL(time.Hour)).PushPoints(points)
 }
 
 func (a *agent) deletedContainersCallback(containersID []string) {
@@ -1822,7 +1818,7 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 			}
 		}
 
-		denyMetricsConfig(&vMap, target)
+		denyMetricsConfig(vMap, target)
 
 		switch value := vMap["include_default_metrics"].(type) {
 		case bool:
@@ -1848,8 +1844,8 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 	return result
 }
 
-func denyMetricsConfig(vMap *map[string]interface{}, target *scrapper.Target) {
-	if deny, ok := (*vMap)["deny_metrics"].([]interface{}); ok {
+func denyMetricsConfig(vMap map[string]interface{}, target *scrapper.Target) {
+	if deny, ok := vMap["deny_metrics"].([]interface{}); ok {
 		target.DenyList = make([]string, 0, len(deny))
 
 		for _, x := range deny {
