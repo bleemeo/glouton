@@ -53,6 +53,8 @@ func LabelsToText(labels map[string]string, annotations types.MetricAnnotations,
 		}
 
 		labelsCopy[types.LabelItem] = TruncateItem(labels[types.LabelItem], annotations.ServiceName != "")
+
+		return types.LabelsToText(labelsCopy)
 	}
 
 	return types.LabelsToText(labels)

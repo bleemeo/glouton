@@ -1185,6 +1185,86 @@ func TestMetricTooMany(t *testing.T) { // nolint: gocyclo
 	}
 }
 
+// TestMetricLongItem test that metric with very long item works.
+// Long item happen with long container name, test this scenario.
+func TestMetricLongItem(t *testing.T) {
+	helper := newMetricHelper(t)
+	defer helper.Close()
+
+	helper.AddTime(time.Minute)
+	// This test is perfect as it don't set service, but helper does not yet support
+	// synchronization with service.
+	helper.store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName: "redis_status",
+				types.LabelItem: "short-redis-container-name",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "short-redis-container-name",
+			},
+		},
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName: "redis_status",
+				types.LabelItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
+			},
+		},
+	})
+
+	helper.RunSync(1, 0, false).CheckNoError("first sync", true)
+
+	metrics := helper.Metrics()
+	// agent_status + the two redis_status metrics
+	if len(metrics) != 3 {
+		t.Errorf("len(metrics) = %v, want %v", len(metrics), 3)
+	}
+
+	helper.AddTime(70 * time.Minute)
+
+	helper.store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName: "redis_status",
+				types.LabelItem: "short-redis-container-name",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "short-redis-container-name",
+			},
+		},
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName: "redis_status",
+				types.LabelItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoItem: "long-redis-container-name--this-one-is-more-than-100-char-which-is-the-limit-on-bleemeo-api-0123456789abcdef",
+			},
+		},
+	})
+
+	helper.RunSync(1, 0, false).CheckNoError("new full sync", true)
+
+	// We do 1 request: list metrics.
+	if helper.api.RequestCount != 1 {
+		t.Errorf("Did %d requests, want 1", helper.api.RequestCount)
+		helper.api.ShowRequest(t, 10)
+	}
+
+	metrics = helper.Metrics()
+	// No new metrics
+	if len(metrics) != 3 {
+		t.Errorf("len(metrics) = %v, want %v", len(metrics), 3)
+	}
+}
+
 // inactive and MQTT
 
 func Test_httpResponseToMetricFailureKind(t *testing.T) {
