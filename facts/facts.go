@@ -107,6 +107,25 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 	return f.facts, nil
 }
 
+// FastFacts returns an incomplete list of facts for this system. The slowest facts
+// are not executed in order to improve the starting time
+func (f *FactProvider) FastFacts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
+	f.l.Lock()
+	defer f.l.Unlock()
+
+	newFacts := make(map[string]string)
+
+	if time.Since(f.lastFactsUpdate) >= maxAge {
+		t := time.Now()
+
+		f.fastUpdateFacts(ctx)
+
+		logger.V(2).Printf("Fastfacts: FastUpdateFacts() took %v", time.Since(t))
+	}
+
+	return newFacts, nil
+}
+
 // SetFact override/add a manual facts
 //
 // Any fact set using this method is valid until next call to SetFact.
@@ -127,6 +146,15 @@ func (f *FactProvider) SetFact(key string, value string) {
 }
 
 func (f *FactProvider) updateFacts(ctx context.Context) {
+	newFacts := f.fastUpdateFacts(ctx)
+
+	collectCloudProvidersFacts(ctx, newFacts)
+
+	f.facts = newFacts
+	f.lastFactsUpdate = time.Now()
+}
+
+func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts := make(map[string]string)
 
 	// get a copy of callbacks while lock is held
@@ -186,8 +214,6 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		newFacts["virtual"] = guessVirtual(newFacts)
 	}
 
-	collectCloudProvidersFacts(ctx, newFacts)
-
 	if !version.IsWindows() {
 		if s, err := mem.SwapMemoryWithContext(ctx); err == nil {
 			if s.Total > 0 {
@@ -229,8 +255,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 		}
 	}
 
-	f.facts = newFacts
-	f.lastFactsUpdate = time.Now()
+	return newFacts
 }
 
 func getFQDN(ctx context.Context) (hostname string, fqdn string) {
