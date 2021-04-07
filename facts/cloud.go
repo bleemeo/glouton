@@ -160,12 +160,13 @@ func parseAzureFacts(inst azureInstance, facts map[string]string) {
 	}
 }
 
-func azureFacts(ctx context.Context, facts map[string]string) (found bool) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+func azureFacts(ctx context.Context, facts map[string]string, done chan bool) (found bool) {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	instanceData := httpQuery(ctx, "http://169.254.169.254/metadata/instance?api-version=2019-11-01", []string{"Metadata:true"})
 	if instanceData == "" {
+		done <- true
 		return false
 	}
 
@@ -174,11 +175,13 @@ func azureFacts(ctx context.Context, facts map[string]string) (found bool) {
 	err := json.Unmarshal([]byte(instanceData), &inst)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't parse azure instance informations, some facts may be missing on your dashboard: %v", err)
+		done <- true
 		return false
 	}
 
 	parseAzureFacts(inst, facts)
 
+	done <- true
 	return true
 }
 
@@ -286,12 +289,13 @@ func parseGceFacts(projectID int64, inst gceInstance, facts map[string]string) {
 	}
 }
 
-func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+func gceFacts(ctx context.Context, facts map[string]string, done chan bool) (found bool) {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	projectIDStr := httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id", []string{"Metadata-Flavor:Google"})
 	if projectIDStr == "" {
+		done <- true
 		return
 	}
 
@@ -299,12 +303,14 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 	projectID, err := strconv.ParseInt(projectIDStr, 0, 64)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't retrieve your google cloud project ID, some facts may be missing on your dashboard: %v", err)
+		done <- true
 		return false
 	}
 
 	// retrieve the metadata itself
 	instanceData := httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/instance/?recursive=true", []string{"Metadata-Flavor:Google"})
 	if instanceData == "" {
+		done <- true
 		return false
 	}
 
@@ -313,6 +319,7 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 	err = json.Unmarshal([]byte(instanceData), &inst)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't parse google cloud instance informations, some facts may be missing on your dashboard: %v", err)
+		done <- true
 		return false
 	}
 
@@ -321,8 +328,8 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 	return true
 }
 
-func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+func awsFacts(ctx context.Context, facts map[string]string, done chan bool) (found bool) {
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id")
@@ -330,6 +337,7 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 	if facts["aws_ami_id"] == "" {
 		// If first request fail, don't try other one, it's probably not an
 		// AWS EC2.
+		done <- true
 		return false
 	}
 
@@ -343,6 +351,7 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 
 	macs := urlContent(ctx, baseURL)
 	if macs == "" {
+		done <- true
 		return false
 	}
 
@@ -369,6 +378,7 @@ func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
 		facts["aws_vpc_ipv4_cidr_block"] = strings.Join(resultIPv4, ",")
 	}
 
+	done <- true
 	return true
 }
 
@@ -378,9 +388,19 @@ func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
 	// Note that we check for gce first, as it perform a dns query, so it will return quickly when not
 	// running on GCE, and conversely it won't have to wait for an http timeout from the azure and aws
 	// facts retriever if the agent runs on GCE.
-	if !gceFacts(ctx, facts) {
-		if !awsFacts(ctx, facts) {
-			azureFacts(ctx, facts)
-		}
+
+	done := make(chan bool, 3)
+
+	go gceFacts(ctx, facts, done)
+	go awsFacts(ctx, facts, done)
+	go azureFacts(ctx, facts, done)
+	for i := 0; i < 3; i++ {
+		<-done
 	}
+	logger.Printf("Done collective Cloud Providers Facts")
+	// if !gceFacts(ctx, facts) {
+	// 	if !awsFacts(ctx, facts) {
+	// 		azureFacts(ctx, facts)
+	// 	}
+	// }
 }
