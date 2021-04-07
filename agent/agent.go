@@ -472,9 +472,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.config.String("agent.public_ip_indicator"),
 	)
 
-	logger.Printf("Before first fact gathering")
 	factsMap, err := a.factProvider.Facts(ctx, 0)
-	logger.Printf("After first fact gathering")
 	if err != nil {
 		logger.Printf("Warning: get facts failed, some information (e.g. name of this server) may be wrong. %v", err)
 	}

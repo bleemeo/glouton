@@ -397,10 +397,4 @@ func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
 	for i := 0; i < 3; i++ {
 		<-done
 	}
-	logger.Printf("Done collective Cloud Providers Facts")
-	// if !gceFacts(ctx, facts) {
-	// 	if !awsFacts(ctx, facts) {
-	// 		azureFacts(ctx, facts)
-	// 	}
-	// }
 }
