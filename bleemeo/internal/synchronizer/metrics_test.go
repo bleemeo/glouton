@@ -271,6 +271,7 @@ func (res runResult) CheckAllowError(name string, wantFull bool) {
 // Agent start and register metrics
 // Some metrics disapear => mark inative
 // Some re-appear and some new => mark active & register.
+//nolint: gocyclo
 func TestMetricSimpleSync(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -451,6 +452,7 @@ func TestMetricSimpleSync(t *testing.T) {
 }
 
 // TestMetricDeleted test that Glouton can update metrics deleted on Bleemeo.
+//nolint: gocyclo
 func TestMetricDeleted(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -768,6 +770,7 @@ func TestMetricUnknownError(t *testing.T) {
 }
 
 // TestMetricPermanentError test that Glouton handle permanent failure metric from Bleemeo correctly.
+//nolint: gocyclo
 func TestMetricPermanentError(t *testing.T) {
 	tests := []struct {
 		name    string

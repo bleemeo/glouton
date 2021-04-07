@@ -111,6 +111,7 @@ type SwapUsage struct {
 	Free  float64 `json:"free"`
 }
 
+// NewPsUtilLister creates and populate a PsUtilLister.
 func NewPsUtilLister(hostRootPath string) PsutilLister {
 	ps := PsutilLister{}
 
@@ -596,11 +597,12 @@ func (p psListerWrapper) PidExists(pid int32) (bool, error) {
 	return process.PidExists(pid)
 }
 
+// PsutilLister contains the passwd cache information.
 type PsutilLister struct {
 	pwdCache *etcpwdparse.EtcPasswdCache
 }
 
-// windows-specific, necessary for running assertions on its size
+// SystemProcessInformationStruct is windows-specific, necessary for running assertions on its size
 //nolint:maligned
 type SystemProcessInformationStruct struct {
 	NextEntryOffset              uint32

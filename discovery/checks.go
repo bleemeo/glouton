@@ -137,18 +137,22 @@ func (d *Discovery) createCheck(service Service) {
 			d.createTCPCheck(service, di, "", tcpAddresses, labels, annotations)
 		}
 	case CustomService:
-		switch service.ExtraAttributes["check_type"] {
-		case customCheckTCP:
-			d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-		case customCheckHTTP:
-			d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
-		case customCheckNagios:
-			d.createNagiosCheck(service, primaryAddress, labels, annotations)
-		default:
-			logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.ExtraAttributes["check_type"], service.Name)
-		}
+		createCheckType(service, d, di, primaryAddress, tcpAddresses, labels, annotations)
 	default:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
+	}
+}
+
+func createCheckType(service Service, d *Discovery, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
+	switch service.ExtraAttributes["check_type"] {
+	case customCheckTCP:
+		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
+	case customCheckHTTP:
+		d.createHTTPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
+	case customCheckNagios:
+		d.createNagiosCheck(service, primaryAddress, labels, annotations)
+	default:
+		logger.V(1).Printf("Unknown check type %#v on custom service %#v", service.ExtraAttributes["check_type"], service.Name)
 	}
 }
 

@@ -8,18 +8,18 @@ import (
 	dto "github.com/prometheus/client_model/go"
 )
 
-type TickingGathererState int
+type tickingGathererState int
 
 const (
-	// Initial state, no gather() calls have been received yet, the next gather() calls will succeed,
+	// Initialized is the initial state, no gather() calls have been received yet, the next gather() calls will succeed,
 	// so that metric collection can start as soon as possible
-	Initialized TickingGathererState = iota
-	// one gather() call have been received, do not gather() anymore until startTime is reached, at which
+	Initialized tickingGathererState = iota
+	// FirstRun is used when one gather() call have been received, do not gather() anymore until startTime is reached, at which
 	// point we will enter the Running state
 	FirstRun
-	// Ticker have been starting, normal operating mode
+	// Running is used when Tick has been started, normal operating mode
 	Running
-	// Ticked have been stopped, using this gatherer will no longer work
+	// Stopped is used when Tick has been stopped, using this gatherer will no longer work
 	Stopped
 )
 
@@ -32,7 +32,7 @@ type TickingGatherer struct {
 	startTime time.Time
 
 	l     sync.Mutex
-	state TickingGathererState
+	state tickingGathererState
 }
 
 // NewTickingGatherer creates a gatherer that only collect metrics once every refreshRate instants.
@@ -50,6 +50,7 @@ func NewTickingGatherer(gatherer prometheus.Gatherer, creationDate time.Time, re
 	}
 }
 
+// Stop sets the gatherer state to stopped, meaning the gatherer won't work anymore.
 func (g *TickingGatherer) Stop() {
 	g.l.Lock()
 	defer g.l.Unlock()

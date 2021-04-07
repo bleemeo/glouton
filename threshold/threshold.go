@@ -135,6 +135,29 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		s.WarningSince = time.Time{}
 	}
 
+	criticalDuration, warningDuration := s.setNewStatus(newStatus, now)
+
+	switch {
+	case period == 0:
+		s.CurrentStatus = newStatus
+	case criticalDuration >= period:
+		s.CurrentStatus = types.StatusCritical
+	case warningDuration >= period:
+		s.CurrentStatus = types.StatusWarning
+	case s.CurrentStatus == types.StatusCritical && newStatus == types.StatusWarning:
+		// downgrade status immediately
+		s.CurrentStatus = types.StatusWarning
+	case newStatus == types.StatusOk:
+		// downgrade status immediately
+		s.CurrentStatus = types.StatusOk
+	}
+
+	s.LastUpdate = time.Now()
+
+	return s
+}
+
+func (s *statusState) setNewStatus(newStatus types.Status, now time.Time) (time.Duration, time.Duration) {
 	criticalDuration := time.Duration(0)
 	warningDuration := time.Duration(0)
 
@@ -163,24 +186,7 @@ func (s statusState) Update(newStatus types.Status, period time.Duration, now ti
 		s.WarningSince = time.Time{}
 	}
 
-	switch {
-	case period == 0:
-		s.CurrentStatus = newStatus
-	case criticalDuration >= period:
-		s.CurrentStatus = types.StatusCritical
-	case warningDuration >= period:
-		s.CurrentStatus = types.StatusWarning
-	case s.CurrentStatus == types.StatusCritical && newStatus == types.StatusWarning:
-		// downgrade status immediately
-		s.CurrentStatus = types.StatusWarning
-	case newStatus == types.StatusOk:
-		// downgrade status immediately
-		s.CurrentStatus = types.StatusOk
-	}
-
-	s.LastUpdate = time.Now()
-
-	return s
+	return criticalDuration, warningDuration
 }
 
 // Threshold define a min/max thresholds.

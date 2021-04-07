@@ -228,17 +228,18 @@ func (t Threshold) ToInternalThreshold() (result threshold.Threshold) {
 	return result
 }
 
-type MinimumSupportedVersions struct {
+type minimumSupportedVersions struct {
 	Glouton string `json:"glouton_version"`
 }
 
-type GlobalInfoAgents struct {
-	MinVersions MinimumSupportedVersions `json:"minimum_versions"`
+type globalInfoAgents struct {
+	MinVersions minimumSupportedVersions `json:"minimum_versions"`
 }
 
+// GlobalInfo represents the bleemeo agent global information.
 type GlobalInfo struct {
 	MaintenanceEnabled bool             `json:"maintenance"`
-	Agents             GlobalInfoAgents `json:"agents"`
+	Agents             globalInfoAgents `json:"agents"`
 	CurrentTime        float64          `json:"current_time"`
 	MaxTimeDrift       float64          `json:"max_time_drift"`
 	FetchedAt          time.Time        `json:"-"`

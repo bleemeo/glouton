@@ -61,6 +61,7 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 	}
 }
 
+//nolint: gocyclo
 func TestContainerd_Containers(t *testing.T) {
 	tests := []struct {
 		name string

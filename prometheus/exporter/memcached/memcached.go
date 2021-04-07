@@ -11,6 +11,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Package memcached handles the memory caching related to exporters.
 //nolint
 package memcached
 

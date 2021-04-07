@@ -257,6 +257,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
+//nolint: gocyclo
 func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
@@ -300,19 +301,10 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 		fullSync = true
 	}
 
-	if fullSync {
-		err := s.metricUpdateAll(false)
-		if err != nil {
-			s.UpdateMetrics(pendingMetricsUpdate...)
-			return err
-		}
-	} else if len(pendingMetricsUpdate) > 0 {
-		logger.V(2).Printf("Update %d metrics by UUID", len(pendingMetricsUpdate))
+	err = s.metricUpdatePendingOrSync(fullSync, &pendingMetricsUpdate)
 
-		if err := s.metricUpdateListUUID(pendingMetricsUpdate); err != nil {
-			s.UpdateMetrics(pendingMetricsUpdate...)
-			return err
-		}
+	if err != nil {
+		return err
 	}
 
 	unregisteredMetrics = s.findUnregisteredMetrics(filteredMetrics)
@@ -368,6 +360,25 @@ func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 	}
 
 	s.lastMetricCount = len(localMetrics)
+
+	return nil
+}
+
+func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUpdate *[]string) error {
+	if fullSync {
+		err := s.metricUpdateAll(false)
+		if err != nil {
+			s.UpdateMetrics(*pendingMetricsUpdate...)
+			return err
+		}
+	} else if len(*pendingMetricsUpdate) > 0 {
+		logger.V(2).Printf("Update %d metrics by UUID", len(*pendingMetricsUpdate))
+
+		if err := s.metricUpdateListUUID(*pendingMetricsUpdate); err != nil {
+			s.UpdateMetrics(*pendingMetricsUpdate...)
+			return err
+		}
+	}
 
 	return nil
 }
@@ -850,35 +861,17 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		Agent: s.agentID,
 	}
 
-	if s.option.MetricFormat == types.MetricFormatBleemeo {
-		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
-		if common.MetricOnlyHasItem(labels) {
-			payload.LabelsText = ""
-		}
-	}
+	truncateBleemeoPayload(s, &payload, annotations, labels)
 
 	var (
 		containerName string
 		result        metricPayload
 	)
 
-	if annotations.StatusOf != "" {
-		subLabels := make(map[string]string, len(labels))
+	err := statusOfEmpty(annotations, labels, &payload, &registeredMetricsByKey, s)
 
-		for k, v := range labels {
-			subLabels[k] = v
-		}
-
-		subLabels[types.LabelName] = annotations.StatusOf
-
-		subKey := common.LabelsToText(subLabels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
-		metricStatusOf, ok := registeredMetricsByKey[subKey]
-
-		if !ok {
-			return errRetryLater
-		}
-
-		payload.StatusOf = metricStatusOf.ID
+	if err != nil {
+		return err
 	}
 
 	if annotations.ContainerID != "" {
@@ -935,7 +928,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		}
 	}
 
-	_, err := s.client.Do(s.ctx, "POST", "v1/metric/", params, payload, &result)
+	_, err = s.client.Do(s.ctx, "POST", "v1/metric/", params, payload, &result)
 	if err != nil {
 		return err
 	}
@@ -943,6 +936,38 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
 	registeredMetricsByKey[key] = result.metricFromAPI()
 	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
+
+	return nil
+}
+
+func truncateBleemeoPayload(s *Synchronizer, payload *metricPayload, annotations types.MetricAnnotations, labels map[string]string) {
+	if s.option.MetricFormat == types.MetricFormatBleemeo {
+		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
+		if common.MetricOnlyHasItem(labels) {
+			payload.LabelsText = ""
+		}
+	}
+}
+
+func statusOfEmpty(annotations types.MetricAnnotations, labels map[string]string, payload *metricPayload, registeredMetricsByKey *map[string]bleemeoTypes.Metric, s *Synchronizer) error {
+	if annotations.StatusOf != "" {
+		subLabels := make(map[string]string, len(labels))
+
+		for k, v := range labels {
+			subLabels[k] = v
+		}
+
+		subLabels[types.LabelName] = annotations.StatusOf
+
+		subKey := common.LabelsToText(subLabels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+		metricStatusOf, ok := (*registeredMetricsByKey)[subKey]
+
+		if !ok {
+			return errRetryLater
+		}
+
+		payload.StatusOf = metricStatusOf.ID
+	}
 
 	return nil
 }

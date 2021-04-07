@@ -85,6 +85,7 @@ func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.D
 }
 
 // Run configure jmxtrans to send metrics to a local graphite server.
+//nolint: gocyclo
 func (j *JMX) Run(ctx context.Context) error {
 	j.l.Lock()
 

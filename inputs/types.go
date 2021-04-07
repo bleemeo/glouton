@@ -148,6 +148,7 @@ func (a *Accumulator) addMetrics(measurement string, fields map[string]interface
 	a.Pusher.PushPoints(points)
 }
 
+//CollectorConfig represents the configuration of a collector.
 type CollectorConfig struct {
 	DFRootPath      string
 	DFPathBlacklist []string

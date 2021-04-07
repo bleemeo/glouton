@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	"glouton/facts"
 	"glouton/logger"
 	"glouton/threshold"
 	"glouton/types"
@@ -32,10 +33,12 @@ import (
 	"github.com/vektah/gqlparser/gqlerror"
 )
 
+// Resolver is the api resolver.
 type Resolver struct {
 	api *API
 }
 
+// Query queries the resolver.
 func (r *Resolver) Query() QueryResolver {
 	return &queryResolver{r}
 }
@@ -173,27 +176,31 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 			HighCritical: &thresholds.HighCritical,
 		}
 
-		if math.IsNaN(*threshold.LowCritical) {
-			threshold.LowCritical = nil
-		}
-
-		if math.IsNaN(*threshold.LowWarning) {
-			threshold.LowWarning = nil
-		}
-
-		if math.IsNaN(*threshold.HighCritical) {
-			threshold.HighCritical = nil
-		}
-
-		if math.IsNaN(*threshold.HighWarning) {
-			threshold.HighWarning = nil
-		}
+		threshold.converNan2Nil()
 
 		metricRes.Thresholds = threshold
 		metricsRes = append(metricsRes, metricRes)
 	}
 
 	return metricsRes, nil
+}
+
+func (threshold *Threshold) converNan2Nil() {
+	if math.IsNaN(*threshold.LowCritical) {
+		threshold.LowCritical = nil
+	}
+
+	if math.IsNaN(*threshold.LowWarning) {
+		threshold.LowWarning = nil
+	}
+
+	if math.IsNaN(*threshold.HighCritical) {
+		threshold.HighCritical = nil
+	}
+
+	if math.IsNaN(*threshold.HighWarning) {
+		threshold.HighWarning = nil
+	}
 }
 
 // Containers returns containers information
@@ -211,14 +218,6 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	}
 
 	containersRes := []*Container{}
-	containerMetrics := []string{
-		"container_io_write_bytes",
-		"container_io_read_bytes",
-		"container_net_bits_recv",
-		"container_net_bits_sent",
-		"container_mem_used_perc",
-		"container_cpu_used",
-	}
 
 	sort.Slice(containers, func(i, j int) bool {
 		return strings.Compare(containers[i].ContainerName(), containers[j].ContainerName()) < 0
@@ -251,52 +250,21 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 				FinishedAt:  &finishedAt,
 			}
 
-			for _, m := range containerMetrics {
-				metricFilters := map[string]string{
-					types.LabelMetaContainerName: container.ContainerName(),
-					types.LabelName:              m,
-				}
-
-				metrics, err := r.api.DB.Metrics(metricFilters)
-				if err != nil {
-					logger.V(2).Printf("Can not retrieve metrics: %v", err)
-					return nil, gqlerror.Errorf("Can not retrieve metrics")
-				}
-
-				if len(metrics) > 0 {
-					points, err := metrics[0].Points(time.Now().UTC().Add(-15*time.Minute), time.Now().UTC())
-					if err != nil {
-						logger.V(2).Printf("Can not retrieve points: %v", err)
-						return nil, gqlerror.Errorf("Can not retrieve points")
-					}
-
-					var point float64
-
-					if len(points) > 0 {
-						point = points[len(points)-1].Value
-					}
-
-					switch m {
-					case "container_io_write_bytes":
-						c.IoWriteBytes = point
-					case "container_io_read_bytes":
-						c.IoReadBytes = point
-					case "container_net_bits_recv":
-						c.NetBitsRecv = point
-					case "container_net_bits_sent":
-						c.NetBitsSent = point
-					case "container_mem_used_perc":
-						c.MemUsedPerc = point
-					case "container_cpu_used":
-						c.CPUUsedPerc = point
-					}
-				}
+			c, err = r.containerInformation(container, c)
+			if err != nil {
+				return nil, err
 			}
 
 			containersRes = append(containersRes, c)
 		}
 	}
 
+	containersRes = paginateInformation(input, containersRes)
+
+	return &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers}, nil
+}
+
+func paginateInformation(input *Pagination, containersRes []*Container) []*Container {
 	if input != nil {
 		if len(containersRes) > input.Offset {
 			to := input.Offset + input.Limit
@@ -311,7 +279,62 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 		}
 	}
 
-	return &Containers{Containers: containersRes, Count: nbContainers, CurrentCount: nbCurrentContainers}, nil
+	return containersRes
+}
+
+func (r *queryResolver) containerInformation(container facts.Container, c *Container) (*Container, error) {
+	containerMetrics := []string{
+		"container_io_write_bytes",
+		"container_io_read_bytes",
+		"container_net_bits_recv",
+		"container_net_bits_sent",
+		"container_mem_used_perc",
+		"container_cpu_used",
+	}
+
+	for _, m := range containerMetrics {
+		metricFilters := map[string]string{
+			types.LabelMetaContainerName: container.ContainerName(),
+			types.LabelName:              m,
+		}
+
+		metrics, err := r.api.DB.Metrics(metricFilters)
+		if err != nil {
+			logger.V(2).Printf("Can not retrieve metrics: %v", err)
+			return c, gqlerror.Errorf("Can not retrieve metrics")
+		}
+
+		if len(metrics) > 0 {
+			points, err := metrics[0].Points(time.Now().UTC().Add(-15*time.Minute), time.Now().UTC())
+			if err != nil {
+				logger.V(2).Printf("Can not retrieve points: %v", err)
+				return c, gqlerror.Errorf("Can not retrieve points")
+			}
+
+			var point float64
+
+			if len(points) > 0 {
+				point = points[len(points)-1].Value
+			}
+
+			switch m {
+			case "container_io_write_bytes":
+				c.IoWriteBytes = point
+			case "container_io_read_bytes":
+				c.IoReadBytes = point
+			case "container_net_bits_recv":
+				c.NetBitsRecv = point
+			case "container_net_bits_sent":
+				c.NetBitsSent = point
+			case "container_mem_used_perc":
+				c.MemUsedPerc = point
+			case "container_cpu_used":
+				c.CPUUsedPerc = point
+			}
+		}
+	}
+
+	return c, nil
 }
 
 // Processes returns a list of processes

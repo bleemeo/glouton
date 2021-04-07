@@ -29,7 +29,8 @@ import (
 var (
 	// ErrMockNotImplemented is returned when a mock does not implement a method
 	ErrMockNotImplemented = errors.New("mock does not implement this method")
-	ErrWrongNamespace     = errors.New("missmatch namespace")
+	// ErrWrongNamespace is returned when the namespace is mismatched.
+	ErrWrongNamespace = errors.New("missmatch namespace")
 )
 
 // MockClient is a fake containerd client.
@@ -139,21 +140,10 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 		mi := MockTask{}
 
 		task, err := c.Task(ctx, nil)
-		if err == nil {
-			status, err := task.Status(ctx)
-			if err != nil {
-				return err
-			}
+		mi, err = getTaskInfo(ctx, err, task, mi)
 
-			pids, err := task.Pids(ctx)
-			if err != nil {
-				return err
-			}
-
-			mi.MockID = task.ID()
-			mi.MockPID = task.Pid()
-			mi.MockStatus = status
-			mi.MockPids = pids
+		if err != nil {
+			return err
 		}
 
 		info, err := c.Info(ctx)
@@ -203,6 +193,27 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 	}
 
 	return nil
+}
+
+func getTaskInfo(ctx context.Context, err error, task containerd.Task, mi MockTask) (MockTask, error) {
+	if err == nil {
+		status, err := task.Status(ctx)
+		if err != nil {
+			return mi, err
+		}
+
+		pids, err := task.Pids(ctx)
+		if err != nil {
+			return mi, err
+		}
+
+		mi.MockID = task.ID()
+		mi.MockPID = task.Pid()
+		mi.MockStatus = status
+		mi.MockPids = pids
+	}
+
+	return mi, nil
 }
 
 // NewMockFromFile create a MockClient from JSON file. Use DumpToJSON to build such JSON.

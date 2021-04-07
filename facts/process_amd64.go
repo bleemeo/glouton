@@ -20,6 +20,7 @@ import (
 	"unsafe"
 )
 
+// UnicodeString represents an unicode string.
 type UnicodeString struct {
 	Length        uint16
 	MaximumLength uint16

@@ -221,15 +221,8 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 		a.currentValues[flatTag][metricName] = currentPoint
 
 		if ok {
-			valueFloat, err := rateAsFloat(pastMetricPoint, currentPoint)
-
-			switch {
-			case err == nil && valueFloat >= 0:
-				result[metricName] = valueFloat
-			case err == nil:
-				continue
-			default:
-				a.AddError(err)
+			if tmp, ok := a.getDerivativeValue(pastMetricPoint, currentPoint); ok {
+				result[metricName] = tmp
 			}
 		} else {
 			continue
@@ -237,6 +230,20 @@ func (a *Accumulator) applyDerivate(originalContext GatherContext, currentContex
 	}
 
 	return result
+}
+
+func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoint metricPoint) (float64, bool) {
+	valueFloat, err := rateAsFloat(pastMetricPoint, currentPoint)
+
+	switch {
+	case err == nil && valueFloat >= 0:
+		return valueFloat, true
+	case err == nil:
+		return 0, false
+	default:
+		a.AddError(err)
+		return 0, false
+	}
 }
 
 type accumulatorFunc func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)

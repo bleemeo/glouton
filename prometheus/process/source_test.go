@@ -96,6 +96,7 @@ func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Durati
 	}
 }
 
+//nolint: gocyclo
 func testProc(t *testing.T, procs proc.Iter) {
 	internalProc := procs.(*iter)
 	current := internalProc.procValue

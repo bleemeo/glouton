@@ -130,6 +130,7 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 	c.Connection.Close()
 }
 
+//nolint: gocyclo
 func (c *jmxtransClient) processLine(line string) {
 	parts := strings.Split(line, " ")
 	if len(parts) != 3 {

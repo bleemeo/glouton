@@ -237,7 +237,7 @@ func (c *Cache) Monitors() []bleemeoTypes.Monitor {
 	return result
 }
 
-// Monitors returns a mapping between their agent ID and the Monitors.
+// MonitorsByAgentUUID returns a mapping between their agent ID and the Monitors.
 func (c *Cache) MonitorsByAgentUUID() map[bleemeoTypes.AgentID]bleemeoTypes.Monitor {
 	c.l.Lock()
 	defer c.l.Unlock()

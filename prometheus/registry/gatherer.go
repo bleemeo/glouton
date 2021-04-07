@@ -13,11 +13,14 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
-type QueryType int
+type queryType int
 
 const (
-	NoProbe QueryType = iota
+	// NoProbe is the default value. Probes can be very costly as it involves network calls, hence it is disabled by default.
+	NoProbe queryType = iota
+	// Only probes specifies we only want data from the probes.
 	OnlyProbes
+	// All specifies we want all the data, including probes.
 	All
 )
 
@@ -27,12 +30,13 @@ const (
 // please make sure that default values are sensible. For example, NoProbe *must* be the default queryType, as
 // we do not want queries on /metrics to always probe the collectors by default).
 type GatherState struct {
-	QueryType QueryType
+	QueryType queryType
 	// Shall TickingGatherer perform immediately the gathering (instead of its normal "ticking"
 	// operation mode) ?
 	NoTick bool
 }
 
+// GatherStateFromMap creates a GatherState from a state passed as a map.
 func GatherStateFromMap(params map[string][]string) GatherState {
 	state := GatherState{}
 

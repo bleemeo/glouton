@@ -99,6 +99,7 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 
 // Metrics return metrics in a format similar to the one returned by Telegraf docker input.
 // Note that Metrics will never open the connection to ContainerD and will return empty points if not connected.
+//nolint: gocyclo
 func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	now := time.Now()
 
@@ -437,6 +438,7 @@ func (c *Containerd) ContainerLastKill(containerID string) time.Time {
 	return time.Time{}
 }
 
+//nolint: gocyclo
 func (c *Containerd) run(ctx context.Context) error {
 	c.l.Lock()
 
@@ -549,67 +551,10 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 		}
 
 		ctx := namespaces.WithNamespace(ctx, ns)
+		err := addContainersInfo(ctx, containers, cl, ns, ignoredID)
 
-		list, err := cl.Containers(ctx)
 		if err != nil {
-			return fmt.Errorf("listing containers failed: %w", err)
-		}
-
-		for _, cont := range list {
-			info, err := cont.Info(ctx, containerd.WithoutRefreshedMetadata)
-			if err != nil {
-				return fmt.Errorf("Info() on %s/%s failed: %w", ns, cont.ID(), err)
-			}
-
-			if info.Spec == nil {
-				logger.V(2).Printf("container %s/%s has no spec", ns, cont.ID())
-				continue
-			}
-
-			img, err := cont.Image(ctx)
-			if err != nil {
-				return fmt.Errorf("Image() on %s/%s failed: %w", ns, cont.ID(), err)
-			}
-
-			var spec oci.Spec
-
-			err = json.Unmarshal(info.Spec.Value, &spec)
-			if err != nil {
-				logger.V(2).Printf("unable to decode container %s/%s spec (type=%s): %v", ns, cont.ID(), info.Spec.TypeUrl, err)
-
-				continue
-			}
-
-			obj := containerObject{
-				namespace: ns,
-				info: ContainerOCISpec{
-					Container: info,
-					Spec:      &spec,
-				},
-				state:   string(containerd.Unknown),
-				imageID: img.Target().Digest.String(),
-			}
-
-			task, err := cont.Task(ctx, nil)
-			if err == nil {
-				obj.pid = int(task.Pid())
-
-				status, err := task.Status(ctx)
-				if err == nil {
-					obj.state = string(status.Status)
-					obj.exitTime = status.ExitTime
-				}
-			}
-
-			if spec.Process != nil {
-				obj.args = spec.Process.Args
-			}
-
-			containers[obj.ID()] = obj
-
-			if facts.ContainerIgnored(obj) {
-				ignoredID[obj.ID()] = true
-			}
+			return err
 		}
 	}
 
@@ -628,6 +573,73 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 	c.lastUpdate = time.Now()
 	c.containers = containers
 	c.ignoredID = ignoredID
+
+	return nil
+}
+
+func addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
+	list, err := cl.Containers(ctx)
+
+	if err != nil {
+		return fmt.Errorf("listing containers failed: %w", err)
+	}
+
+	for _, cont := range list {
+		info, err := cont.Info(ctx, containerd.WithoutRefreshedMetadata)
+		if err != nil {
+			return fmt.Errorf("Info() on %s/%s failed: %w", ns, cont.ID(), err)
+		}
+
+		if info.Spec == nil {
+			logger.V(2).Printf("container %s/%s has no spec", ns, cont.ID())
+			continue
+		}
+
+		img, err := cont.Image(ctx)
+		if err != nil {
+			return fmt.Errorf("Image() on %s/%s failed: %w", ns, cont.ID(), err)
+		}
+
+		var spec oci.Spec
+
+		err = json.Unmarshal(info.Spec.Value, &spec)
+		if err != nil {
+			logger.V(2).Printf("unable to decode container %s/%s spec (type=%s): %v", ns, cont.ID(), info.Spec.TypeUrl, err)
+
+			continue
+		}
+
+		obj := containerObject{
+			namespace: ns,
+			info: ContainerOCISpec{
+				Container: info,
+				Spec:      &spec,
+			},
+			state:   string(containerd.Unknown),
+			imageID: img.Target().Digest.String(),
+		}
+
+		task, err := cont.Task(ctx, nil)
+		if err == nil {
+			obj.pid = int(task.Pid())
+
+			status, err := task.Status(ctx)
+			if err == nil {
+				obj.state = string(status.Status)
+				obj.exitTime = status.ExitTime
+			}
+		}
+
+		if spec.Process != nil {
+			obj.args = spec.Process.Args
+		}
+
+		containers[obj.ID()] = obj
+
+		if facts.ContainerIgnored(obj) {
+			ignoredID[obj.ID()] = true
+		}
+	}
 
 	return nil
 }
@@ -1001,18 +1013,13 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 		}
 	}
 
-	if !q.containersUpdated {
-		q.containersUpdated = true
+	container, err := q.containerFromPID(ctx, pid)
+	if err != nil {
+		return nil, err
+	}
 
-		if err := q.c.updateContainers(ctx); err != nil {
-			return nil, err
-		}
-
-		for _, c := range q.c.containers {
-			if c.pid == pid {
-				return c, nil
-			}
-		}
+	if container != nil {
+		return container, nil
 	}
 
 	if q.containersToQueryPIDS == nil {
@@ -1054,6 +1061,25 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 
 	if c, ok := q.pid2container[pid]; ok {
 		return c, nil
+	}
+
+	return nil, nil
+}
+
+// containerFromPID return the container which had pid as first process. It will update list of containers if needed.
+func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int) (facts.Container, error) {
+	if !q.containersUpdated {
+		q.containersUpdated = true
+
+		if err := q.c.updateContainers(ctx); err != nil {
+			return nil, err
+		}
+
+		for _, c := range q.c.containers {
+			if c.pid == pid {
+				return c, nil
+			}
+		}
 	}
 
 	return nil, nil
@@ -1102,6 +1128,7 @@ type metricValue struct {
 	values             map[string]uint64
 }
 
+//nolint: gocyclo
 func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricValue, newValues []metricValue) []types.MetricPoint {
 	memUsage, err := mem.VirtualMemory()
 	if err != nil {

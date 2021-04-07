@@ -261,7 +261,9 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 		}
 
 		listenAddresses := getListenAddress(srv.ListenAddresses)
-		if remoteFound && remoteSrv.Label == srv.Name && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active && remoteSrv.Stack == srv.Stack {
+		cont := checkRemoteName(remoteFound, remoteSrv, srv, listenAddresses)
+
+		if cont {
 			continue
 		}
 
@@ -320,6 +322,14 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	s.option.Cache.SetServices(remoteServices)
 
 	return nil
+}
+
+func checkRemoteName(remoteFound bool, remoteSrv types.Service, srv discovery.Service, listenAddresses string) bool {
+	if remoteFound && remoteSrv.Label == srv.Name && remoteSrv.ListenAddresses == listenAddresses && remoteSrv.ExePath == srv.ExePath && remoteSrv.Active == srv.Active && remoteSrv.Stack == srv.Stack {
+		return true
+	}
+
+	return false
 }
 
 func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service) error {

@@ -47,6 +47,7 @@ type Processes struct {
 	lastUpdate time.Time
 }
 
+// NewProcessLister creates a new ProcessLister using the specified parameters.
 func NewProcessLister(hostRootPath string, defaultValidity time.Duration) facts.ProcessLister {
 	return &Processes{
 		HostRootPath:    hostRootPath,
@@ -94,6 +95,7 @@ func (c *Processes) getPwdlookup() func(uid int) (string, error) {
 	}
 }
 
+// Processes lists all the processes.
 func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (processes []facts.Process, err error) {
 	procs, err := c.getProcs(maxAge)
 

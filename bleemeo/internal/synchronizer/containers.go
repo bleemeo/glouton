@@ -194,15 +194,10 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 	}
 
 	newDelayedContainer := make(map[string]time.Time, len(s.delayedContainer))
-	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
 
 	for _, container := range localContainers {
-		if s.now().Sub(container.CreatedAt()) < delay {
-			enable, explicit := facts.ContainerEnabled(container)
-			if !enable || !explicit {
-				newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
-				continue
-			}
+		if s.delayedContainerCheck(newDelayedContainer, container) {
+			continue
 		}
 
 		name := container.ContainerName()
@@ -263,33 +258,58 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 			payload.DockerAPIVersion = factsMap["docker_api_version"]
 		}
 
-		var result containerPayload
+		err := s.remoteRegister(remoteFound, &remoteContainer, &remoteContainers, params, payload, remoteIndex)
 
-		if remoteFound {
-			_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
-			if err != nil {
-				return err
-			}
-
-			result.FillInspectHash()
-			result.GloutonLastUpdatedAt = time.Now()
-			logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
-			remoteContainers[remoteIndex] = result.compatibilityContainer()
-		} else {
-			_, err := s.client.Do(s.ctx, "POST", "v1/container/", params, payload, &result)
-			if err != nil {
-				return err
-			}
-
-			result.FillInspectHash()
-			result.GloutonLastUpdatedAt = time.Now()
-			logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
-			remoteContainers = append(remoteContainers, result.compatibilityContainer())
+		if err != nil {
+			return err
 		}
 	}
 
 	s.option.Cache.SetContainers(remoteContainers)
 	s.delayedContainer = newDelayedContainer
+
+	return nil
+}
+
+func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time.Time, container facts.Container) bool {
+	delay := time.Duration(s.option.Config.Int("bleemeo.container_registration_delay_seconds")) * time.Second
+
+	if s.now().Sub(container.CreatedAt()) < delay {
+		enable, explicit := facts.ContainerEnabled(container)
+		if !enable || !explicit {
+			newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
+			return true
+		}
+	}
+
+	return false
+}
+
+func (s *Synchronizer) remoteRegister(remoteFound bool, remoteContainer *types.Container,
+	remoteContainers *[]types.Container, params map[string]string, payload containerPayload, remoteIndex int) error {
+	var result containerPayload
+
+	if remoteFound {
+		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/container/%s/", remoteContainer.ID), params, payload, &result)
+		if err != nil {
+			return err
+		}
+
+		result.FillInspectHash()
+		result.GloutonLastUpdatedAt = time.Now()
+		logger.V(2).Printf("Container %v updated with UUID %s", result.Name, result.ID)
+		(*remoteContainers)[remoteIndex] = result.compatibilityContainer()
+	} else {
+		_, err := s.client.Do(s.ctx, "POST", "v1/container/", params, payload, &result)
+		if err != nil {
+			return err
+		}
+
+		result.FillInspectHash()
+		result.GloutonLastUpdatedAt = time.Now()
+		logger.V(2).Printf("Container %v registered with UUID %s", result.Name, result.ID)
+		*remoteContainers = append(*remoteContainers, result.compatibilityContainer())
+	}
 
 	return nil
 }
