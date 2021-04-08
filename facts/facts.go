@@ -147,6 +147,8 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 
 	collectCloudProvidersFacts(ctx, newFacts)
 
+	cleanFacts(newFacts)
+
 	f.facts = newFacts
 	f.lastFactsUpdate = time.Now()
 }
@@ -242,17 +244,23 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 		newFacts[k] = v
 	}
 
-	for k, v := range newFacts {
+	cleanFacts(newFacts)
+
+	return newFacts
+}
+
+// cleanFacts will remove key with empty values and truncate value
+// with 100 characters or more.
+func cleanFacts(facts map[string]string) {
+	for k, v := range facts {
 		if v == "" {
-			delete(newFacts, k)
+			delete(facts, k)
 		}
 
 		if len(v) >= 100 {
-			newFacts[k] = v[:97] + "..."
+			facts[k] = v[:97] + "..."
 		}
 	}
-
-	return newFacts
 }
 
 func getFQDN(ctx context.Context) (hostname string, fqdn string) {
