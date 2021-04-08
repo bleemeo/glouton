@@ -472,7 +472,7 @@ func (a *agent) run() { //nolint:gocyclo
 		a.config.String("agent.public_ip_indicator"),
 	)
 
-	factsMap, err := a.factProvider.FastFacts(ctx, 0)
+	factsMap, err := a.factProvider.FastFacts(ctx)
 	if err != nil {
 		logger.Printf("Warning: get facts failed, some information (e.g. name of this server) may be wrong. %v", err)
 	}

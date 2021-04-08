@@ -108,20 +108,17 @@ func (f *FactProvider) Facts(ctx context.Context, maxAge time.Duration) (facts m
 }
 
 // FastFacts returns an incomplete list of facts for this system. The slowest facts
-// are not executed in order to improve the starting time
-func (f *FactProvider) FastFacts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
+// are not executed in order to improve the starting time.
+func (f *FactProvider) FastFacts(ctx context.Context) (facts map[string]string, err error) {
 	f.l.Lock()
 	defer f.l.Unlock()
 
 	newFacts := make(map[string]string)
+	t := time.Now()
 
-	if time.Since(f.lastFactsUpdate) >= maxAge {
-		t := time.Now()
+	f.fastUpdateFacts(ctx)
 
-		f.fastUpdateFacts(ctx)
-
-		logger.V(2).Printf("Fastfacts: FastUpdateFacts() took %v", time.Since(t))
-	}
+	logger.V(2).Printf("Fastfacts: FastUpdateFacts() took %v", time.Since(t))
 
 	return newFacts, nil
 }
