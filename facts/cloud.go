@@ -25,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -161,7 +162,7 @@ func parseAzureFacts(inst azureInstance, facts map[string]string) {
 }
 
 func azureFacts(ctx context.Context, facts map[string]string) (found bool) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	instanceData := httpQuery(ctx, "http://169.254.169.254/metadata/instance?api-version=2019-11-01", []string{"Metadata:true"})
@@ -287,7 +288,7 @@ func parseGceFacts(projectID int64, inst gceInstance, facts map[string]string) {
 }
 
 func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	projectIDStr := httpQuery(ctx, "http://metadata.google.internal/computeMetadata/v1/project/numeric-project-id", []string{"Metadata-Flavor:Google"})
@@ -322,7 +323,7 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 }
 
 func awsFacts(ctx context.Context, facts map[string]string) (found bool) {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 1*time.Second)
 	defer cancel()
 
 	facts["aws_ami_id"] = urlContent(ctx, "http://169.254.169.254/latest/meta-data/ami-id")
@@ -378,9 +379,37 @@ func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
 	// Note that we check for gce first, as it perform a dns query, so it will return quickly when not
 	// running on GCE, and conversely it won't have to wait for an http timeout from the azure and aws
 	// facts retriever if the agent runs on GCE.
-	if !gceFacts(ctx, facts) {
-		if !awsFacts(ctx, facts) {
-			azureFacts(ctx, facts)
-		}
+	var wg sync.WaitGroup
+
+	gceFactMap := make(map[string]string)
+	awsFactMap := make(map[string]string)
+	azureFactMap := make(map[string]string)
+
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		awsFacts(ctx, awsFactMap)
+	}()
+	go func() {
+		defer wg.Done()
+		azureFacts(ctx, azureFactMap)
+	}()
+	go func() {
+		defer wg.Done()
+		gceFacts(ctx, gceFactMap)
+	}()
+	wg.Wait()
+
+	for key := range gceFactMap {
+		facts[key] = gceFactMap[key]
+	}
+
+	for key := range awsFactMap {
+		facts[key] = awsFactMap[key]
+	}
+
+	for key := range azureFactMap {
+		facts[key] = azureFactMap[key]
 	}
 }
