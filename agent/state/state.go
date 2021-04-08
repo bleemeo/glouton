@@ -75,6 +75,7 @@ func (s *State) SaveTo(filename string) error {
 
 // Save will write back the State to disk.
 func (s *State) Save() error {
+	logger.Printf("Save accessed")
 	s.l.Lock()
 	defer s.l.Unlock()
 
@@ -82,7 +83,20 @@ func (s *State) Save() error {
 }
 
 func (s *State) save() error {
-	err := s.saveTo(s.path + ".tmp")
+	_, err := os.Open(s.path)
+
+	if err == os.ErrNotExist {
+		// This case happens when the state.json is deleted at runtime.
+		// While this is not a regular use case it is checked in order to prevent
+		// recreating the state on shutdown.
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	err = s.saveTo(s.path + ".tmp")
 	if err != nil {
 		return err
 	}
@@ -93,6 +107,8 @@ func (s *State) save() error {
 }
 
 func (s *State) saveTo(path string) error {
+	logger.Printf("saveTo accessed")
+
 	w, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
