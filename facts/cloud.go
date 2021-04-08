@@ -384,11 +384,23 @@ func collectCloudProvidersFacts(ctx context.Context, facts map[string]string) {
 	// facts retriever if the agent runs on GCE.
 
 	var wg sync.WaitGroup
+	gceFactMap := make(map[string]string)
+	awsFactMap := make(map[string]string)
+	azureFactMap := make(map[string]string)
 
 	wg.Add(3)
-	go gceFacts(ctx, facts, &wg)
-	go awsFacts(ctx, facts, &wg)
-	go azureFacts(ctx, facts, &wg)
-
+	go gceFacts(ctx, gceFactMap, &wg)
+	go awsFacts(ctx, awsFactMap, &wg)
+	go azureFacts(ctx, azureFactMap, &wg)
 	wg.Wait()
+
+	for key := range gceFactMap {
+		facts[key] = gceFactMap[key]
+	}
+	for key := range awsFactMap {
+		facts[key] = awsFactMap[key]
+	}
+	for key := range azureFactMap {
+		facts[key] = azureFactMap[key]
+	}
 }
