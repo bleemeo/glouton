@@ -18,6 +18,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"glouton/logger"
 	"os"
 	"sync"
@@ -82,8 +83,8 @@ func (s *State) Save() error {
 }
 
 func (s *State) saveIfPossible() error {
-	_, err := os.Open(s.path)
-	if err == os.ErrNotExist {
+	file, err := os.Open(s.path)
+	if errors.Is(err, os.ErrNotExist) {
 		// This case happens when the state.json is deleted at runtime.
 		// While this is not a regular use case it is checked in order to prevent
 		// recreating the state on shutdown.
@@ -93,6 +94,8 @@ func (s *State) saveIfPossible() error {
 	if err != nil {
 		return err
 	}
+
+	file.Close()
 
 	return s.save()
 }
@@ -109,7 +112,6 @@ func (s *State) save() error {
 }
 
 func (s *State) saveTo(path string) error {
-
 	w, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
 	if err != nil {
 		return err
