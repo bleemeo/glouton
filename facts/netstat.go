@@ -42,10 +42,15 @@ type NetstatProvider struct {
 // Netstat return a mapping from PID to listening addresses
 //
 // Supported addresses network is currently "tcp", "udp" or "unix".
-func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]ListenAddress, err error) {
+func (np NetstatProvider) Netstat(ctx context.Context, processes map[int]Process) (netstat map[int][]ListenAddress, err error) {
 	netstatData, err := ioutil.ReadFile(np.FilePath)
 	if err != nil && !os.IsNotExist(err) {
 		logger.V(1).Printf("Unable to read netstat file: %v", err)
+	}
+
+	netstatInfo, err := os.Stat(np.FilePath)
+	if err != nil {
+		logger.V(1).Printf("Unable to stat netstat file: %v", err)
 	}
 
 	netstat = decodeNetstatFile(string(netstatData))
@@ -77,7 +82,15 @@ func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]Listen
 				protocol += "6"
 			}
 
-			netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], ListenAddress{
+			listenAdressSlice := netstat[int(c.Pid)]
+
+			if p, ok := processes[int(c.Pid)]; ok && netstatInfo.ModTime().Before(p.CreateTime) {
+				// The process running with p.pid recycled a previously used pid referenced in the netstat file.
+				// We need to flush the last address as it is related to the previous process.
+				listenAdressSlice = []ListenAddress{}
+			}
+
+			netstat[int(c.Pid)] = addAddress(listenAdressSlice, ListenAddress{
 				NetworkFamily: protocol,
 				Address:       address,
 				Port:          int(c.Laddr.Port),

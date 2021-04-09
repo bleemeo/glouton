@@ -43,7 +43,7 @@ type mockNetstat struct {
 	result map[int][]facts.ListenAddress
 }
 
-func (mn mockNetstat) Netstat(ctx context.Context) (netstat map[int][]facts.ListenAddress, err error) {
+func (mn mockNetstat) Netstat(ctx context.Context, processes map[int]facts.Process) (netstat map[int][]facts.ListenAddress, err error) {
 	result := make(map[int][]facts.ListenAddress, len(mn.result))
 
 	for pid, l := range mn.result {
