@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	psutilNet "github.com/shirou/gopsutil/net"
 )
@@ -46,59 +47,79 @@ func (np NetstatProvider) Netstat(ctx context.Context, processes map[int]Process
 	netstatData, err := ioutil.ReadFile(np.FilePath)
 	if err != nil && !os.IsNotExist(err) {
 		logger.V(1).Printf("Unable to read netstat file: %v", err)
-	}
 
-	netstatInfo, err := os.Stat(np.FilePath)
-	if err != nil {
-		logger.V(1).Printf("Unable to stat netstat file: %v", err)
+		new := make(map[int][]ListenAddress)
+
+		return new, err
 	}
 
 	netstat = decodeNetstatFile(string(netstatData))
+	netstatInfo, err := os.Stat(np.FilePath)
 
-	dynamicNetstat, err := psutilNet.Connections("inet")
-	if err == nil {
-		for _, c := range dynamicNetstat {
-			if c.Pid == 0 {
-				continue
-			}
-
-			if c.Status != "LISTEN" {
-				continue
-			}
-
-			address := c.Laddr.IP
-			protocol := ""
-
-			switch {
-			case c.Type == syscall.SOCK_STREAM:
-				protocol = "tcp"
-			case c.Type == syscall.SOCK_DGRAM:
-				protocol = "udp"
-			default:
-				continue
-			}
-
-			if c.Family == syscall.AF_INET6 {
-				protocol += "6"
-			}
-
-			listenAdressSlice := netstat[int(c.Pid)]
-
-			if p, ok := processes[int(c.Pid)]; ok && netstatInfo.ModTime().Before(p.CreateTime) {
-				// The process running with p.pid recycled a previously used pid referenced in the netstat file.
-				// We need to flush the last address as it is related to the previous process.
-				listenAdressSlice = []ListenAddress{}
-			}
-
-			netstat[int(c.Pid)] = addAddress(listenAdressSlice, ListenAddress{
-				NetworkFamily: protocol,
-				Address:       address,
-				Port:          int(c.Laddr.Port),
-			})
-		}
+	if err != nil {
+		logger.V(1).Printf("Unable to stat netstat file: %v", err)
+		return nil, err
 	}
 
+	dynamicNetstat, err := psutilNet.Connections("inet")
+	if err != nil {
+		logger.V(1).Printf("Unable to query connections: %v", err)
+		return nil, err
+	}
+
+	np.cleanRecycledProcesses(netstat, dynamicNetstat, processes, netstatInfo.ModTime())
+
+	np.mergeNetstats(netstat, dynamicNetstat)
+
 	return netstat, nil
+}
+
+func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat) {
+	for _, c := range dynamicNetstat {
+		if c.Pid == 0 {
+			continue
+		}
+
+		if c.Status != "LISTEN" {
+			continue
+		}
+
+		address := c.Laddr.IP
+		protocol := ""
+
+		switch {
+		case c.Type == syscall.SOCK_STREAM:
+			protocol = "tcp"
+		case c.Type == syscall.SOCK_DGRAM:
+			protocol = "udp"
+		default:
+			continue
+		}
+
+		if c.Family == syscall.AF_INET6 {
+			protocol += "6"
+		}
+
+		netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], ListenAddress{
+			NetworkFamily: protocol,
+			Address:       address,
+			Port:          int(c.Laddr.Port),
+		})
+	}
+}
+
+func (np NetstatProvider) cleanRecycledProcesses(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat, processes map[int]Process, modTime time.Time) {
+	for _, c := range dynamicNetstat {
+		if c.Pid == 0 || c.Status != "LISTEN" {
+			continue
+		}
+
+		if p, ok := processes[int(c.Pid)]; ok && modTime.Before(p.CreateTime) {
+			// The process running with p.pid recycled a previously used pid referenced in the netstat file.
+			// We need to flush the last address as it is related to the previous process.
+			netstat[int(c.Pid)] = []ListenAddress{}
+		}
+	}
 }
 
 //nolint:gochecknoglobals
