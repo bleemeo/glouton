@@ -2,14 +2,14 @@
 //
 // bleemeo.com an infrastructure monitoring solution in the Cloud
 //
-// Licensed under the Apache License, Version 2.0 (the License);
+// Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
 // You may obtain a copy of the License at
 //
 // http://www.apache.org/licenses/LICENSE-2.0
 //
 // Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an AS IS BASIS,
+// distributed under the License is distributed on an "AS IS" BASIS,
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
@@ -48,22 +48,22 @@ unix  2      [ ACC ]     SEQPACKET  LISTENING     18666    1/init               
 func getMockNetstat() []psutilNet.ConnectionStat {
 	// (partial) output of a psutil.Connections().
 	return []psutilNet.ConnectionStat{
-		{Fd: 6, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "0.0.0.0", Port: 4242}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 0}, Status: "LISTEN", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323668},
-		{Fd: 6, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "0.0.0.0", Port: 6379}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 0}, Status: "LISTEN", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323667},
-		{Fd: 33, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 47740}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3191},
-		{Fd: 66, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 43479}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
-		{Fd: 196, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 50596}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 80}, Status: "CLOSE_WAIT", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3943},
-		{Fd: 30, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 46290}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 94042},
-		{Fd: 32, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 40308}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
-		{Fd: 25, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 49634}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
-		{Fd: 49, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 51010}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
-		{Fd: 170, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 33884}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
-		{Fd: 11, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 54268}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 139}, Status: "CLOSE_WAIT", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4507},
-		{Fd: 34, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 42536}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3021},
-		{Fd: 0, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 57478}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 443}, Status: "TIME_WAIT", Uids: []int32{}, Pid: 0},
+		{Fd: 6, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "0.0.0.0", Port: 4242}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 0}, Status: "LISTEN", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323668},
+		{Fd: 6, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "0.0.0.0", Port: 6379}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 0}, Status: "LISTEN", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323667},
+		{Fd: 33, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 47740}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3191},
+		{Fd: 66, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 43479}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
+		{Fd: 196, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 50596}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 80}, Status: "CLOSE_WAIT", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3943},
+		{Fd: 30, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 46290}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 94042},
+		{Fd: 32, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 40308}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
+		{Fd: 25, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 49634}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 1898},
+		{Fd: 49, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 51010}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
+		{Fd: 170, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 33884}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3544},
+		{Fd: 11, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 54268}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 139}, Status: "CLOSE_WAIT", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4507},
+		{Fd: 34, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 42536}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "ESTABLISHED", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3021},
+		{Fd: 0, Family: 2, Type: 1, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 57478}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 443}, Status: "TIME_WAIT", Uids: []int32{}, Pid: 0},
 		{Fd: 7, Family: 10, Type: 1, Laddr: psutilNet.Addr{IP: "::", Port: 6379}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: "LISTEN", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 323667},
 		{Fd: 158, Family: 10, Type: 1, Laddr: psutilNet.Addr{IP: "2a01:cb19:820e:5b00:7fa:37be:7396:8d8e", Port: 36116}, Raddr: psutilNet.Addr{IP: "FE80:0000:0000:5EFE:0192.0168.0001.0123", Port: 443}, Status: "CLOSE_WAIT", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 3943},
-		{Fd: 0, Family: 2, Type: 2, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 68}, Raddr: psutilNet.Addr{IP: "01.02.03.04", Port: 67}, Status: "NONE", Uids: []int32{}, Pid: 0},
+		{Fd: 0, Family: 2, Type: 2, Laddr: psutilNet.Addr{IP: "192.168.1.40", Port: 68}, Raddr: psutilNet.Addr{IP: "1.2.3.4", Port: 67}, Status: "NONE", Uids: []int32{}, Pid: 0},
 		{Fd: 76, Family: 10, Type: 2, Laddr: psutilNet.Addr{IP: "::", Port: 46429}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: "NONE", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
 		{Fd: 0, Family: 10, Type: 2, Laddr: psutilNet.Addr{IP: "fe80::92d0:93a3:f56:b588", Port: 546}, Raddr: psutilNet.Addr{IP: "FE80:0000:0000:5EFE:0192.0168.0001.0123", Port: 0}, Status: "NONE", Uids: []int32{}, Pid: 0},
 		{Fd: 38, Family: 10, Type: 2, Laddr: psutilNet.Addr{IP: "::", Port: 60918}, Raddr: psutilNet.Addr{IP: "::", Port: 0}, Status: "NONE", Uids: []int32{1000, 1000, 1000, 1000}, Pid: 4587},
@@ -154,35 +154,42 @@ func TestDecodeNetstatFile(t *testing.T) {
 }
 func TestMergeNetstats(t *testing.T) {
 	netstat := decodeNetstatFile(fileContent)
+	mockNetstat := getMockNetstat()
 
 	np := &NetstatProvider{
 		"null",
 	}
-	// dynamic Netstat should only add one pid, thus we start the number of keys at one
-	want := 1
-	for range netstat {
-		want++
-	}
 
-	np.mergeNetstats(netstat, getMockNetstat())
+	np.mergeNetstats(netstat, mockNetstat)
 
-	_, ok := netstat[323667]
-	got := 0
-
-	for range netstat {
-		got++
-	}
+	data, ok := netstat[323668]
 
 	if !ok {
-		t.Errorf("pid 323667 not in merged Netstat.")
+		t.Errorf("PID 323668 not in merged Netstat.")
 	}
 
-	if want != got {
-		t.Errorf("Unexpected number of key (pid) in netstat result. Got %d, want %d", got, want)
+	_, ok = netstat[5534]
+
+	if !ok {
+		t.Errorf("PID only in netstat file was incorrectly removed")
+	}
+
+	nbAddress := len(netstat[323667])
+
+	if nbAddress != 3 {
+		t.Errorf("PID 323667 did not merge addresses correctly")
+	}
+
+	if len(data) == 0 {
+		t.Errorf("PID 323668 should not be empty")
+	}
+
+	if data[0].Port != 4242 || data[0].Address != "0.0.0.0" {
+		t.Errorf("Unexpected created data in netstat results for port 32668. Got %s:%d, want 0.0.0.0:4242", data[0].Address, data[0].Port)
 	}
 }
 
-func TestCleanNetstat(t *testing.T) {
+func TestCleanRecycledPIDs(t *testing.T) {
 	netstat := decodeNetstatFile(fileContent)
 	np := &NetstatProvider{
 		"null",
@@ -213,11 +220,28 @@ func TestCleanNetstat(t *testing.T) {
 	}
 
 	fmt.Println(modTime.Before(createTime))
-	np.cleanRecycledProcesses(netstat, getMockNetstat(), mockProcesses, modTime)
+	np.cleanRecycledPIDs(netstat, mockProcesses, modTime)
 
-	addressLen := len(netstat[323667])
+	_, ok := netstat[323667]
 
-	if addressLen != 0 {
-		t.Errorf("Netstat address was not cleaned. Expected size 0, got %d", addressLen)
+	if ok {
+		t.Errorf("Netstat PID 323667 was not removed")
+	}
+
+	modTime, _ = time.Parse(time.RFC3339, "2021-12-01T22:08:41+00:00")
+	netstat[323667] = []ListenAddress{
+		{
+			Address:       "0.0.0.0",
+			NetworkFamily: "tcp",
+			Port:          111,
+		},
+	}
+
+	np.cleanRecycledPIDs(netstat, mockProcesses, modTime)
+
+	_, ok = netstat[323667]
+
+	if !ok {
+		t.Errorf("Netstat PID 323667 was incorrectly removed")
 	}
 }

@@ -22,6 +22,7 @@ import (
 	"glouton/facts"
 	"glouton/logger"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -231,7 +232,8 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	}
 
 	netstat, err := dd.netstat.Netstat(ctx, processes)
-	if err != nil {
+	if err != nil && !os.IsNotExist(err) {
+		logger.V(1).Printf("An error occurred while trying to retrieve netstat information: %v", err)
 		return err
 	}
 

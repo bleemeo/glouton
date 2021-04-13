@@ -45,29 +45,23 @@ type NetstatProvider struct {
 // Supported addresses network is currently "tcp", "udp" or "unix".
 func (np NetstatProvider) Netstat(ctx context.Context, processes map[int]Process) (netstat map[int][]ListenAddress, err error) {
 	netstatData, err := ioutil.ReadFile(np.FilePath)
-	if err != nil && !os.IsNotExist(err) {
-		logger.V(1).Printf("Unable to read netstat file: %v", err)
-
-		new := make(map[int][]ListenAddress)
-
-		return new, err
+	if err != nil {
+		return nil, err
 	}
 
 	netstat = decodeNetstatFile(string(netstatData))
 	netstatInfo, err := os.Stat(np.FilePath)
 
 	if err != nil {
-		logger.V(1).Printf("Unable to stat netstat file: %v", err)
 		return nil, err
 	}
 
 	dynamicNetstat, err := psutilNet.Connections("inet")
 	if err != nil {
-		logger.V(1).Printf("Unable to query connections: %v", err)
 		return nil, err
 	}
 
-	np.cleanRecycledProcesses(netstat, dynamicNetstat, processes, netstatInfo.ModTime())
+	np.cleanRecycledPIDs(netstat, processes, netstatInfo.ModTime())
 
 	np.mergeNetstats(netstat, dynamicNetstat)
 
@@ -108,16 +102,16 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 	}
 }
 
-func (np NetstatProvider) cleanRecycledProcesses(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat, processes map[int]Process, modTime time.Time) {
-	for _, c := range dynamicNetstat {
-		if c.Pid == 0 || c.Status != "LISTEN" {
+func (np NetstatProvider) cleanRecycledPIDs(netstat map[int][]ListenAddress, processes map[int]Process, modTime time.Time) {
+	for _, c := range processes {
+		if c.PID == 0 {
 			continue
 		}
 
-		if p, ok := processes[int(c.Pid)]; ok && modTime.Before(p.CreateTime) {
-			// The process running with p.pid recycled a previously used pid referenced in the netstat file.
+		if p, ok := processes[c.PID]; ok && modTime.Before(p.CreateTime) {
+			// The process running with p.PID recycled a previously used pid referenced in the netstat file.
 			// We need to flush the last address as it is related to the previous process.
-			netstat[int(c.Pid)] = []ListenAddress{}
+			delete(netstat, c.PID)
 		}
 	}
 }
