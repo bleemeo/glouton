@@ -234,7 +234,6 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 	netstat, err := dd.netstat.Netstat(ctx, processes)
 	if err != nil && !os.IsNotExist(err) {
 		logger.V(1).Printf("An error occurred while trying to retrieve netstat information: %v", err)
-		return err
 	}
 
 	// Process PID present in netstat output before other PID, because

@@ -108,7 +108,7 @@ func (np NetstatProvider) cleanRecycledPIDs(netstat map[int][]ListenAddress, pro
 			continue
 		}
 
-		if p, ok := processes[c.PID]; ok && modTime.Before(p.CreateTime) {
+		if modTime.Before(c.CreateTime) {
 			// The process running with p.PID recycled a previously used pid referenced in the netstat file.
 			// We need to flush the last address as it is related to the previous process.
 			delete(netstat, c.PID)
