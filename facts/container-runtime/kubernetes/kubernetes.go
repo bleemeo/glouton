@@ -227,6 +227,7 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 		logger.V(0).Println("ERROR: ", err)
 		return nil, err
 	}
+
 	points = append(points, certificatePoint)
 	points = append(points, caCertificatePoint)
 
@@ -235,6 +236,7 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 
 func (k *Kubernetes) getCertificateExpiration(now time.Time) (types.MetricPoint, error) {
 	var config *rest.Config
+
 	var err error
 
 	if k.KubeConfig != "" {
@@ -254,21 +256,15 @@ func (k *Kubernetes) getCertificateExpiration(now time.Time) (types.MetricPoint,
 	conn, err := tls.Dial("tcp", strings.TrimPrefix(config.Host, "https://"), tlsConfig)
 	if err != nil {
 		return types.MetricPoint{}, err
-	} else {
-		expiry := conn.ConnectionState().PeerCertificates[0]
-		return certificatePoint(expiry, "Kubernetes Certificate days left before expiration", now)
 	}
+
+	expiry := conn.ConnectionState().PeerCertificates[0]
+
+	return certificatePoint(expiry, "Kubernetes Certificate days left before expiration", now)
 }
 
 func (k *Kubernetes) getCACertificateExpiration(now time.Time) (types.MetricPoint, error) {
-	var config *rest.Config
-	var err error
-
-	if k.KubeConfig != "" {
-		config, err = clientcmd.BuildConfigFromFlags("", k.KubeConfig)
-	} else {
-		config, err = rest.InClusterConfig()
-	}
+	config, err := getRestConfig(k.KubeConfig)
 
 	if err != nil {
 		return types.MetricPoint{}, err
@@ -277,11 +273,13 @@ func (k *Kubernetes) getCACertificateExpiration(now time.Time) (types.MetricPoin
 	if config.TLSClientConfig.CAData == nil {
 		if config.TLSClientConfig.CAFile != "" {
 			return decodeCertFile(config.TLSClientConfig.CAFile, "Kubernetes CA Certificate days left before expiration", now)
-		} else {
-			logger.V(2).Printf("No certificate data found for api")
-			return types.MetricPoint{}, nil
 		}
+
+		logger.V(2).Printf("No certificate data found for Kubernetes API")
+
+		return types.MetricPoint{}, nil
 	}
+
 	return decodeRawCert(config.TLSClientConfig.CAData, "Kubernetes CA Certificate days left before expiration", now)
 }
 
@@ -308,6 +306,7 @@ func decodeRawCert(rawData []byte, label string, now time.Time) (types.MetricPoi
 	if len(certLeft) != 0 {
 		logger.V(2).Printf("Unexpected leftover blocks in kubernetes API Certificate")
 	}
+
 	return certificatePoint(certData, label, now)
 }
 
@@ -450,7 +449,7 @@ func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error
 	return &info, nil
 }
 
-func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) {
+func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	var (
 		config *rest.Config
 		err    error
@@ -461,6 +460,12 @@ func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) 
 	} else {
 		config, err = rest.InClusterConfig()
 	}
+
+	return config, err
+}
+
+func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) {
+	config, err := getRestConfig(kubeConfig)
 
 	if err != nil {
 		return nil, err
