@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/types"
 	"math"
 	"net/url"
 	"os"
@@ -145,6 +146,10 @@ func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIg
 	}
 
 	return
+}
+
+func (d *Docker) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+	return []types.MetricPoint{}, nil
 }
 
 // Run will run connect and listen to Docker event until context is cancelled

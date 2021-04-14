@@ -925,6 +925,13 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 			logger.V(2).Printf("containerd metrics gather failed: %v", err)
 		}
 
+		containerRuntimePoints, err := a.containerRuntime.Metrics(context.Background())
+		if err != nil {
+			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
+		}
+
+		points = append(points, containerRuntimePoints...)
+
 		// We don't really care about having up-to-date information because
 		// when containers are started/stopped, the information is updated anyway.
 		containers, err := a.containerRuntime.Containers(context.Background(), 2*time.Hour, false)

@@ -7,6 +7,7 @@ import (
 	"glouton/facts"
 	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
+	"glouton/types"
 	"strings"
 	"sync"
 	"time"
@@ -277,6 +278,10 @@ func (r *Runtime) RuntimeFact(ctx context.Context, currentFact map[string]string
 	}
 
 	return newFacts
+}
+
+func (r *Runtime) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+	return []types.MetricPoint{}, nil
 }
 
 type mergeProcessQuerier struct {
