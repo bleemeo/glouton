@@ -218,13 +218,13 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 
 	certificatePoint, err := k.getCertificateExpiration(now)
 	if err != nil {
-		logger.Printf("ERROR: %s", err.Error())
+		logger.V(2).Println("An error occurred while fetching Certificate expiration date: ", err)
 		return nil, err
 	}
 
 	caCertificatePoint, err := k.getCACertificateExpiration(now)
 	if err != nil {
-		logger.V(0).Println("ERROR: ", err)
+		logger.V(2).Println("An error occurred while fetching CA Certificate expiration date: ", err)
 		return nil, err
 	}
 
@@ -235,22 +235,29 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 }
 
 func (k *Kubernetes) getCertificateExpiration(now time.Time) (types.MetricPoint, error) {
-	var config *rest.Config
-
-	var err error
-
-	if k.KubeConfig != "" {
-		config, err = clientcmd.BuildConfigFromFlags("", k.KubeConfig)
-	} else {
-		config, err = rest.InClusterConfig()
-	}
-
+	config, err := getRestConfig(k.KubeConfig)
 	if err != nil {
 		return types.MetricPoint{}, err
 	}
 
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
+	caPool := x509.NewCertPool()
+	tlsConfig := &tls.Config{}
+
+	if config.TLSClientConfig.CAFile == "" {
+		// API did not provide the CA. We fall back to insecure
+		tlsConfig.InsecureSkipVerify = true
+	} else {
+		caData, err := ioutil.ReadFile(config.TLSClientConfig.CAFile)
+		if err != nil {
+			// We set the ssl config as insecure and proceed if no CA was given
+			tlsConfig.InsecureSkipVerify = true
+		}
+		ok := caPool.AppendCertsFromPEM(caData)
+		if !ok {
+			logger.V(2).Println("Could not add CA certificate to the CA Pool.")
+			tlsConfig.InsecureSkipVerify = true
+		}
+		tlsConfig.RootCAs = caPool
 	}
 
 	conn, err := tls.Dial("tcp", strings.TrimPrefix(config.Host, "https://"), tlsConfig)
