@@ -27,6 +27,7 @@ import (
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	psutilNet "github.com/shirou/gopsutil/net"
 )
@@ -42,50 +43,77 @@ type NetstatProvider struct {
 // Netstat return a mapping from PID to listening addresses
 //
 // Supported addresses network is currently "tcp", "udp" or "unix".
-func (np NetstatProvider) Netstat(ctx context.Context) (netstat map[int][]ListenAddress, err error) {
+func (np NetstatProvider) Netstat(ctx context.Context, processes map[int]Process) (netstat map[int][]ListenAddress, err error) {
 	netstatData, err := ioutil.ReadFile(np.FilePath)
-	if err != nil && !os.IsNotExist(err) {
-		logger.V(1).Printf("Unable to read netstat file: %v", err)
+	if err != nil {
+		return nil, err
 	}
 
 	netstat = decodeNetstatFile(string(netstatData))
+	netstatInfo, err := os.Stat(np.FilePath)
 
-	dynamicNetstat, err := psutilNet.Connections("inet")
-	if err == nil {
-		for _, c := range dynamicNetstat {
-			if c.Pid == 0 {
-				continue
-			}
-
-			if c.Status != "LISTEN" {
-				continue
-			}
-
-			address := c.Laddr.IP
-			protocol := ""
-
-			switch {
-			case c.Type == syscall.SOCK_STREAM:
-				protocol = "tcp"
-			case c.Type == syscall.SOCK_DGRAM:
-				protocol = "udp"
-			default:
-				continue
-			}
-
-			if c.Family == syscall.AF_INET6 {
-				protocol += "6"
-			}
-
-			netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], ListenAddress{
-				NetworkFamily: protocol,
-				Address:       address,
-				Port:          int(c.Laddr.Port),
-			})
-		}
+	if err != nil {
+		return nil, err
 	}
 
+	dynamicNetstat, err := psutilNet.Connections("inet")
+	if err != nil {
+		return nil, err
+	}
+
+	np.cleanRecycledPIDs(netstat, processes, netstatInfo.ModTime())
+
+	np.mergeNetstats(netstat, dynamicNetstat)
+
 	return netstat, nil
+}
+
+func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat) {
+	for _, c := range dynamicNetstat {
+		if c.Pid == 0 {
+			continue
+		}
+
+		if c.Status != "LISTEN" {
+			continue
+		}
+
+		address := c.Laddr.IP
+		protocol := ""
+
+		switch {
+		case c.Type == syscall.SOCK_STREAM:
+			protocol = "tcp"
+		case c.Type == syscall.SOCK_DGRAM:
+			protocol = "udp"
+		default:
+			continue
+		}
+
+		if c.Family == syscall.AF_INET6 {
+			protocol += "6"
+		}
+
+		netstat[int(c.Pid)] = addAddress(netstat[int(c.Pid)], ListenAddress{
+			NetworkFamily: protocol,
+			Address:       address,
+			Port:          int(c.Laddr.Port),
+		})
+	}
+}
+
+func (np NetstatProvider) cleanRecycledPIDs(netstat map[int][]ListenAddress, processes map[int]Process, modTime time.Time) {
+	for _, c := range processes {
+		if c.PID == 0 {
+			continue
+		}
+
+		if modTime.Before(c.CreateTime) {
+			// The process running with p.PID recycled a previously used pid referenced in the netstat file.
+			// We need to flush the last address as it is related to the previous process.
+			delete(netstat, c.PID)
+		}
+	}
 }
 
 //nolint:gochecknoglobals

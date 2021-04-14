@@ -142,7 +142,6 @@ func (f *FactProvider) SetFact(key string, value string) {
 	f.facts[key] = value
 }
 
-//nolint: gocyclo
 func (f *FactProvider) updateFacts(ctx context.Context) {
 	newFacts := f.fastUpdateFacts(ctx)
 
@@ -154,6 +153,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	f.lastFactsUpdate = time.Now()
 }
 
+//nolint: gocyclo
 func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts := make(map[string]string)
 

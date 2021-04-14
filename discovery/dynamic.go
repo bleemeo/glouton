@@ -22,6 +22,7 @@ import (
 	"glouton/facts"
 	"glouton/logger"
 	"net"
+	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -221,7 +222,7 @@ type processFact interface {
 }
 
 type netstatProvider interface {
-	Netstat(ctx context.Context) (netstat map[int][]facts.ListenAddress, err error)
+	Netstat(ctx context.Context, processes map[int]facts.Process) (netstat map[int][]facts.ListenAddress, err error)
 }
 
 func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
@@ -230,9 +231,9 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		return err
 	}
 
-	netstat, err := dd.netstat.Netstat(ctx)
-	if err != nil {
-		return err
+	netstat, err := dd.netstat.Netstat(ctx, processes)
+	if err != nil && !os.IsNotExist(err) {
+		logger.V(1).Printf("An error occurred while trying to retrieve netstat information: %v", err)
 	}
 
 	// Process PID present in netstat output before other PID, because
