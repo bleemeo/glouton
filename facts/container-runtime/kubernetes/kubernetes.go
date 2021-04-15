@@ -14,6 +14,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"io/ioutil"
+	"net"
 	"net/url"
 	"sort"
 	"strings"
@@ -271,18 +272,35 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 		return types.MetricPoint{}, err
 	}
 
-	conn, err := tls.Dial("tcp", addr.Host, tlsConfig)
+	colonPos := strings.LastIndex(addr.Host, ":")
+	if colonPos == -1 {
+		colonPos = len(addr.Host)
+	}
+
+	tlsConfig.ServerName = addr.Host[:colonPos]
+
+	conn, err := net.DialTimeout("tcp", addr.Host, time.Second*5)
+	if err != nil {
+		// Something went wrong with the connection, but it is not related to TLS
+		return types.MetricPoint{}, err
+	}
+
+	defer conn.Close()
+
+	tlsConn := tls.Client(conn, tlsConfig)
+	err = tlsConn.Handshake()
 	if err != nil {
 		// Something went wrong with the connection, we consider the certificate as expired
+		logger.V(2).Println("An error occurred on TLS handshake:", err)
 		return createPointFromCertTime(time.Now(), certExpLabel, now)
 	}
 
-	if len(conn.ConnectionState().PeerCertificates) == 0 {
+	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
 		logger.V(2).Println("No peer certificate could be found for tls dial.")
 		return types.MetricPoint{}, nil
 	}
 
-	expiry := conn.ConnectionState().PeerCertificates[0]
+	expiry := tlsConn.ConnectionState().PeerCertificates[0]
 
 	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
 }
