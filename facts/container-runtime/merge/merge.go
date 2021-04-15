@@ -281,7 +281,19 @@ func (r *Runtime) RuntimeFact(ctx context.Context, currentFact map[string]string
 }
 
 func (r *Runtime) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
-	return []types.MetricPoint{}, nil
+	points := make([]types.MetricPoint, 0)
+
+	for _, runtime := range r.Runtimes {
+		runtimePoints, err := runtime.Metrics(ctx)
+		if err != nil {
+			//TODO: how to determine from which runtime the error is from? logging the error in Metrics?
+			logger.V(2).Printf(" metrics gather failed for runtime: %v", err)
+		} else {
+			points = append(points, runtimePoints...)
+		}
+	}
+
+	return points, nil
 }
 
 type mergeProcessQuerier struct {

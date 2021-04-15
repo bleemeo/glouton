@@ -920,17 +920,10 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 	return func(t0 time.Time) {
-		points, err := a.containerdRuntime.Metrics(context.Background())
-		if err != nil {
-			logger.V(2).Printf("containerd metrics gather failed: %v", err)
-		}
-
-		containerRuntimePoints, err := a.containerRuntime.Metrics(context.Background())
+		points, err := a.containerRuntime.Metrics(context.Background())
 		if err != nil {
 			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
-
-		points = append(points, containerRuntimePoints...)
 
 		// We don't really care about having up-to-date information because
 		// when containers are started/stopped, the information is updated anyway.

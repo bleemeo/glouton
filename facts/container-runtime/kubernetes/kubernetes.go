@@ -14,6 +14,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"io/ioutil"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -48,8 +49,8 @@ type Kubernetes struct {
 	podID2Pod      map[string]corev1.Pod
 }
 
-const caExpLabel = "Kubernetes CA Certificate days left before expiration"
-const certExpLabel = "Kubernetes Certificate days left before expiration"
+const caExpLabel = "kubernetes_ca_day_left"
+const certExpLabel = "kubernetes_certificate_day_left"
 
 // LastUpdate return the last time containers list was updated.
 func (k *Kubernetes) LastUpdate() time.Time {
@@ -216,57 +217,69 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 }
 
 func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
-	points := make([]types.MetricPoint, 0)
+	// error are handled in the crTypes.RuntimeInterface Metric Function.
+	points, _ := k.Runtime.Metrics(ctx)
 	now := time.Now()
+	config, err := getRestConfig(k.KubeConfig)
 
-	certificatePoint, err := k.getCertificateExpiration(now)
 	if err != nil {
-		logger.V(2).Println("An error occurred while fetching Certificate expiration date: ", err)
-		return nil, err
+		return points, err
 	}
 
-	caCertificatePoint, err := k.getCACertificateExpiration(now)
+	certificatePoint, err := k.getCertificateExpiration(config, now)
 	if err != nil {
-		logger.V(2).Println("An error occurred while fetching CA Certificate expiration date: ", err)
-		return nil, err
+		return points, err
 	}
 
 	points = append(points, certificatePoint)
+
+	caCertificatePoint, err := k.getCACertificateExpiration(config, now)
+	if err != nil {
+		return points, err
+	}
+
 	points = append(points, caCertificatePoint)
 
 	return points, nil
 }
 
-func (k *Kubernetes) getCertificateExpiration(now time.Time) (types.MetricPoint, error) {
-	config, err := getRestConfig(k.KubeConfig)
+func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
+	caPool := x509.NewCertPool()
+	tlsConfig := &tls.Config{}
+
+	if config.TLSClientConfig.Insecure {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
+	caData, err := ioutil.ReadFile(config.TLSClientConfig.CAFile)
+	if err != nil {
+		// We set the CertPool to nil in order to fallback to system CAs.
+		caPool = nil
+	}
+
+	if caPool != nil {
+		ok := caPool.AppendCertsFromPEM(caData)
+		if ok {
+			tlsConfig.RootCAs = caPool
+		} else {
+			logger.V(2).Println("Could not add CA certificate to the CA Pool. Defaulting to system CAs")
+		}
+	}
+
+	addr, err := url.Parse(config.Host)
 	if err != nil {
 		return types.MetricPoint{}, err
 	}
 
-	caPool := x509.NewCertPool()
-	tlsConfig := &tls.Config{}
-
-	if config.TLSClientConfig.CAFile == "" {
-		// API did not provide the CA. We fall back to insecure
-		tlsConfig.InsecureSkipVerify = true
-	} else {
-		caData, err := ioutil.ReadFile(config.TLSClientConfig.CAFile)
-		if err != nil {
-			// We set the ssl config as insecure and proceed if no CA was given
-			tlsConfig.InsecureSkipVerify = true
-		}
-		ok := caPool.AppendCertsFromPEM(caData)
-		if !ok {
-			logger.V(2).Println("Could not add CA certificate to the CA Pool.")
-			tlsConfig.InsecureSkipVerify = true
-		}
-		tlsConfig.RootCAs = caPool
-	}
-
-	conn, err := tls.Dial("tcp", strings.TrimPrefix(config.Host, "https://"), tlsConfig)
+	conn, err := tls.Dial("tcp", addr.Host, tlsConfig)
 	if err != nil {
 		// Something went wrong with the connection, we consider the certificate as expired
 		return createPointFromCertTime(time.Now(), certExpLabel, now)
+	}
+
+	if len(conn.ConnectionState().PeerCertificates) == 0 {
+		logger.V(2).Println("No peer certificate could be found for tls dial.")
+		return types.MetricPoint{}, nil
 	}
 
 	expiry := conn.ConnectionState().PeerCertificates[0]
@@ -274,29 +287,23 @@ func (k *Kubernetes) getCertificateExpiration(now time.Time) (types.MetricPoint,
 	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
 }
 
-func (k *Kubernetes) getCACertificateExpiration(now time.Time) (types.MetricPoint, error) {
-	config, err := getRestConfig(k.KubeConfig)
+func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
+	caData := config.TLSClientConfig.CAData
 
-	if err != nil {
-		return types.MetricPoint{}, err
-	}
+	var err error
 
-	if config.TLSClientConfig.CAData == nil {
-		if config.TLSClientConfig.CAFile != "" {
-			caCert, err := decodeCertFile(config.TLSClientConfig.CAFile)
-			if err != nil {
-				return types.MetricPoint{}, err
-			}
-
-			return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
+	if caData == nil && config.TLSClientConfig.CAFile != "" {
+		//CAData takes precedence over CAFile, thus we only check CAFile if there is no CAData
+		caData, err = decodeCertFile(config.TLSClientConfig.CAFile)
+		if err != nil {
+			return types.MetricPoint{}, err
 		}
-
+	} else if caData == nil {
 		logger.V(2).Printf("No certificate data found for Kubernetes API")
-
 		return types.MetricPoint{}, nil
 	}
 
-	caCert, err := decodeRawCert(config.TLSClientConfig.CAData)
+	caCert, err := decodeRawCert(caData)
 	if err != nil {
 		return types.MetricPoint{}, err
 	}
@@ -304,13 +311,13 @@ func (k *Kubernetes) getCACertificateExpiration(now time.Time) (types.MetricPoin
 	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
 }
 
-func decodeCertFile(file string) (*x509.Certificate, error) {
-	f, err := ioutil.ReadFile(file)
+func decodeCertFile(file string) ([]byte, error) {
+	data, err := ioutil.ReadFile(file)
 	if err != nil {
 		return nil, err
 	}
 
-	return decodeRawCert(f)
+	return data, nil
 }
 
 func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
