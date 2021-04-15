@@ -48,6 +48,9 @@ type Kubernetes struct {
 	podID2Pod      map[string]corev1.Pod
 }
 
+const caExpLabel = "Kubernetes CA Certificate days left before expiration"
+const certExpLabel = "Kubernetes Certificate days left before expiration"
+
 // LastUpdate return the last time containers list was updated.
 func (k *Kubernetes) LastUpdate() time.Time {
 	t := k.Runtime.LastUpdate()
@@ -262,12 +265,13 @@ func (k *Kubernetes) getCertificateExpiration(now time.Time) (types.MetricPoint,
 
 	conn, err := tls.Dial("tcp", strings.TrimPrefix(config.Host, "https://"), tlsConfig)
 	if err != nil {
-		return types.MetricPoint{}, err
+		// Something went wrong with the connection, we consider the certificate as expired
+		return createPointFromCertTime(time.Now(), certExpLabel, now)
 	}
 
 	expiry := conn.ConnectionState().PeerCertificates[0]
 
-	return certificatePoint(expiry, "Kubernetes Certificate days left before expiration", now)
+	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
 }
 
 func (k *Kubernetes) getCACertificateExpiration(now time.Time) (types.MetricPoint, error) {
@@ -279,7 +283,12 @@ func (k *Kubernetes) getCACertificateExpiration(now time.Time) (types.MetricPoin
 
 	if config.TLSClientConfig.CAData == nil {
 		if config.TLSClientConfig.CAFile != "" {
-			return decodeCertFile(config.TLSClientConfig.CAFile, "Kubernetes CA Certificate days left before expiration", now)
+			caCert, err := decodeCertFile(config.TLSClientConfig.CAFile)
+			if err != nil {
+				return types.MetricPoint{}, err
+			}
+
+			return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
 		}
 
 		logger.V(2).Printf("No certificate data found for Kubernetes API")
@@ -287,42 +296,52 @@ func (k *Kubernetes) getCACertificateExpiration(now time.Time) (types.MetricPoin
 		return types.MetricPoint{}, nil
 	}
 
-	return decodeRawCert(config.TLSClientConfig.CAData, "Kubernetes CA Certificate days left before expiration", now)
-}
-
-func decodeCertFile(file string, label string, now time.Time) (types.MetricPoint, error) {
-	f, err := ioutil.ReadFile(file)
+	caCert, err := decodeRawCert(config.TLSClientConfig.CAData)
 	if err != nil {
 		return types.MetricPoint{}, err
 	}
 
-	return decodeRawCert(f, label, now)
+	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
 }
 
-func decodeRawCert(rawData []byte, label string, now time.Time) (types.MetricPoint, error) {
+func decodeCertFile(file string) (*x509.Certificate, error) {
+	f, err := ioutil.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	return decodeRawCert(f)
+}
+
+func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
 	certDataBlock, certLeft := pem.Decode(rawData)
 	if certDataBlock == nil {
-		return types.MetricPoint{}, errors.New("no data decoded in raw certificate")
+		return nil, errors.New("no data decoded in raw certificate")
 	}
 
 	certData, err := x509.ParseCertificate(certDataBlock.Bytes)
 	if err != nil {
-		return types.MetricPoint{}, err
+		return nil, err
 	}
 
 	if len(certLeft) != 0 {
 		logger.V(2).Printf("Unexpected leftover blocks in kubernetes API Certificate")
 	}
 
-	return certificatePoint(certData, label, now)
+	return certData, nil
 }
 
-func certificatePoint(cert *x509.Certificate, label string, now time.Time) (types.MetricPoint, error) {
+func createPointFromCertTime(certTime time.Time, label string, now time.Time) (types.MetricPoint, error) {
 	labels := make(map[string]string)
 
 	labels[types.LabelName] = label
 
-	remainingDays := cert.NotAfter.Sub(now).Hours() / 24
+	remainingDays := certTime.Sub(now).Hours() / 24
+
+	if remainingDays < 0 {
+		// we clamp remainingDays to 0 when the certificate already expired
+		remainingDays = 0
+	}
 
 	return types.MetricPoint{
 		Point: types.Point{
