@@ -221,9 +221,12 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	points, errors := k.Runtime.Metrics(ctx)
 	now := time.Now()
-	multiErr := merge.MultiError{errors}
+	var multiErr merge.MultiError = nil
 	config, err := getRestConfig(k.KubeConfig)
 
+	if errors != nil {
+		multiErr = append(multiErr, errors)
+	}
 	if err != nil {
 		multiErr = append(multiErr, err)
 		return points, multiErr
@@ -293,7 +296,7 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 	err = tlsConn.Handshake()
 
 	if err != nil {
-		// Something went wrong with the connection, we consider the certificate as expired
+		// Something went wrong with the TLS handshake, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
 		return createPointFromCertTime(time.Now(), certExpLabel, now)
 	}
