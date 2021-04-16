@@ -3,11 +3,20 @@ package kubernetes
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"errors"
 	"fmt"
 	"glouton/facts"
+	"glouton/facts/container-runtime/merge"
 	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
+	"glouton/types"
+	"io/ioutil"
+	"net"
+	"net/url"
 	"sort"
 	"strings"
 	"sync"
@@ -41,6 +50,9 @@ type Kubernetes struct {
 	id2Pod         map[string]corev1.Pod
 	podID2Pod      map[string]corev1.Pod
 }
+
+const caExpLabel = "kubernetes_ca_day_left"
+const certExpLabel = "kubernetes_certificate_day_left"
 
 // LastUpdate return the last time containers list was updated.
 func (k *Kubernetes) LastUpdate() time.Time {
@@ -84,6 +96,7 @@ func (k *Kubernetes) Exec(ctx context.Context, containerID string, cmd []string)
 // Containers return all known container, with annotation added.
 func (k *Kubernetes) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
 	containers, err = k.Runtime.Containers(ctx, maxAge, includeIgnored)
+
 	if err != nil {
 		return nil, err
 	}
@@ -203,6 +216,163 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 	defer k.l.Unlock()
 
 	return k.updatePods(ctx)
+}
+
+func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+	points, errors := k.Runtime.Metrics(ctx)
+	now := time.Now()
+	var multiErr merge.MultiError = nil
+	config, err := getRestConfig(k.KubeConfig)
+
+	if errors != nil {
+		multiErr = append(multiErr, errors)
+	}
+	if err != nil {
+		multiErr = append(multiErr, err)
+		return points, multiErr
+	}
+
+	certificatePoint, err := k.getCertificateExpiration(config, now)
+	if err != nil {
+		multiErr = append(multiErr, err)
+	}
+
+	points = append(points, certificatePoint)
+
+	caCertificatePoint, err := k.getCACertificateExpiration(config, now)
+	if err != nil {
+		multiErr = append(multiErr, err)
+	}
+
+	points = append(points, caCertificatePoint)
+
+	return points, multiErr
+}
+
+func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
+	caPool := x509.NewCertPool()
+	tlsConfig := &tls.Config{}
+	caData := config.TLSClientConfig.CAData
+
+	var err error
+
+	if config.TLSClientConfig.Insecure {
+		tlsConfig.InsecureSkipVerify = true
+	}
+
+	if caData == nil {
+		caData, err = ioutil.ReadFile(config.TLSClientConfig.CAFile)
+		if err != nil {
+			// We set the CertPool to nil in order to fallback to system CAs.
+			caPool = nil
+		}
+	}
+
+	if caPool != nil {
+		ok := caPool.AppendCertsFromPEM(caData)
+		if ok {
+			tlsConfig.RootCAs = caPool
+		} else {
+			logger.V(2).Println("Could not add CA certificate to the CA Pool. Defaulting to system CAs")
+		}
+	}
+
+	addr, err := url.Parse(config.Host)
+	if err != nil {
+		return types.MetricPoint{}, err
+	}
+
+	tlsConfig.ServerName = addr.Hostname()
+
+	conn, err := net.DialTimeout("tcp", addr.Host, 5*time.Second)
+	if err != nil {
+		// Something went wrong with the connection, but it is not related to TLS
+		return types.MetricPoint{}, err
+	}
+
+	defer conn.Close()
+
+	tlsConn := tls.Client(conn, tlsConfig)
+	err = tlsConn.Handshake()
+
+	if err != nil {
+		// Something went wrong with the TLS handshake, we consider the certificate as expired
+		logger.V(2).Println("An error occurred on TLS handshake:", err)
+		return createPointFromCertTime(time.Now(), certExpLabel, now)
+	}
+
+	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
+		logger.V(2).Println("No peer certificate could be found for tls dial.")
+		return types.MetricPoint{}, nil
+	}
+
+	expiry := tlsConn.ConnectionState().PeerCertificates[0]
+
+	return createPointFromCertTime(expiry.NotAfter, certExpLabel, now)
+}
+
+func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
+	caData := config.TLSClientConfig.CAData
+
+	var err error
+
+	if caData == nil && config.TLSClientConfig.CAFile != "" {
+		//CAData takes precedence over CAFile, thus we only check CAFile if there is no CAData
+		caData, err = ioutil.ReadFile(config.TLSClientConfig.CAFile)
+		if err != nil {
+			return types.MetricPoint{}, err
+		}
+	} else if caData == nil {
+		logger.V(2).Printf("No certificate data found for Kubernetes API")
+		return types.MetricPoint{}, nil
+	}
+
+	caCert, err := decodeRawCert(caData)
+	if err != nil {
+		return types.MetricPoint{}, err
+	}
+
+	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
+}
+
+func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
+	certDataBlock, certLeft := pem.Decode(rawData)
+	if certDataBlock == nil {
+		return nil, errors.New("no data decoded in raw certificate")
+	}
+
+	certData, err := x509.ParseCertificate(certDataBlock.Bytes)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(certLeft) != 0 {
+		logger.V(2).Printf("Unexpected leftover blocks in kubernetes API Certificate")
+	}
+
+	return certData, nil
+}
+
+func createPointFromCertTime(certTime time.Time, label string, now time.Time) (types.MetricPoint, error) {
+	labels := make(map[string]string)
+
+	labels[types.LabelName] = label
+
+	remainingDays := certTime.Sub(now).Hours() / 24
+
+	if remainingDays < 0 {
+		// we clamp remainingDays to 0 when the certificate already expired
+		remainingDays = 0
+	}
+
+	return types.MetricPoint{
+		Point: types.Point{
+			Time:  now,
+			Value: remainingDays,
+		},
+		Labels:      labels,
+		Annotations: types.MetricAnnotations{},
+	}, nil
 }
 
 func (k *Kubernetes) getClient(ctx context.Context) (cl kubeClient, err error) {
@@ -327,7 +497,7 @@ func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error
 	return &info, nil
 }
 
-func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) {
+func getRestConfig(kubeConfig string) (*rest.Config, error) {
 	var (
 		config *rest.Config
 		err    error
@@ -338,6 +508,12 @@ func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) 
 	} else {
 		config, err = rest.InClusterConfig()
 	}
+
+	return config, err
+}
+
+func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) {
+	config, err := getRestConfig(kubeConfig)
 
 	if err != nil {
 		return nil, err

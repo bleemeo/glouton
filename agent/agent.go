@@ -920,9 +920,9 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 
 func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 	return func(t0 time.Time) {
-		points, err := a.containerdRuntime.Metrics(context.Background())
+		points, err := a.containerRuntime.Metrics(context.Background())
 		if err != nil {
-			logger.V(2).Printf("containerd metrics gather failed: %v", err)
+			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
 
 		// We don't really care about having up-to-date information because
