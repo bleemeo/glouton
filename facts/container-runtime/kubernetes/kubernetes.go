@@ -219,14 +219,16 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 }
 
 func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
+	var multiErr merge.MultiError
+
 	points, errors := k.Runtime.Metrics(ctx)
 	now := time.Now()
-	var multiErr merge.MultiError = nil
 	config, err := getRestConfig(k.KubeConfig)
 
 	if errors != nil {
 		multiErr = append(multiErr, errors)
 	}
+
 	if err != nil {
 		multiErr = append(multiErr, err)
 		return points, multiErr
