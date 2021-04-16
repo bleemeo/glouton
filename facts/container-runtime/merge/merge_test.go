@@ -8,10 +8,10 @@ import (
 	"testing"
 )
 
-func Test_multiError_Is(t *testing.T) {
+func Test_MultiError_Is(t *testing.T) {
 	tests := []struct {
 		name   string
-		errs   multiError
+		errs   MultiError
 		target error
 		want   bool
 	}{
@@ -23,37 +23,37 @@ func Test_multiError_Is(t *testing.T) {
 		},
 		{
 			name:   "empty",
-			errs:   multiError{},
+			errs:   MultiError{},
 			target: facts.ErrContainerDoesNotExists,
 			want:   false,
 		},
 		{
 			name:   "unrelated error",
-			errs:   multiError([]error{os.ErrClosed}),
+			errs:   MultiError([]error{os.ErrClosed}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   false,
 		},
 		{
 			name:   "matching error",
-			errs:   multiError([]error{facts.ErrContainerDoesNotExists}),
+			errs:   MultiError([]error{facts.ErrContainerDoesNotExists}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},
 		{
 			name:   "multiple error",
-			errs:   multiError([]error{os.ErrClosed, facts.ErrContainerDoesNotExists}),
+			errs:   MultiError([]error{os.ErrClosed, facts.ErrContainerDoesNotExists}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},
 		{
 			name:   "multiple error2",
-			errs:   multiError([]error{facts.ErrContainerDoesNotExists, os.ErrClosed}),
+			errs:   MultiError([]error{facts.ErrContainerDoesNotExists, os.ErrClosed}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},
 		{
 			name:   "multiple wrapped error",
-			errs:   multiError([]error{os.ErrInvalid, fmt.Errorf("wrapped %w", facts.ErrContainerDoesNotExists), os.ErrClosed}),
+			errs:   MultiError([]error{os.ErrInvalid, fmt.Errorf("wrapped %w", facts.ErrContainerDoesNotExists), os.ErrClosed}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},
@@ -63,7 +63,7 @@ func Test_multiError_Is(t *testing.T) {
 
 		t.Run(tt.name, func(t *testing.T) {
 			if got := tt.errs.Is(tt.target); got != tt.want {
-				t.Errorf("multiError.Is() = %v, want %v", got, tt.want)
+				t.Errorf("MultiError.Is() = %v, want %v", got, tt.want)
 			}
 		})
 	}

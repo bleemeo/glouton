@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/facts"
+	"glouton/facts/container-runtime/merge"
 	crTypes "glouton/facts/container-runtime/types"
 	"glouton/logger"
 	"glouton/types"
@@ -218,44 +219,50 @@ func (k *Kubernetes) Test(ctx context.Context) error {
 }
 
 func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
-	// error are handled in the crTypes.RuntimeInterface Metric Function.
-	points, _ := k.Runtime.Metrics(ctx)
+	points, errors := k.Runtime.Metrics(ctx)
 	now := time.Now()
+	multiErr := merge.MultiError{errors}
 	config, err := getRestConfig(k.KubeConfig)
 
 	if err != nil {
-		return points, err
+		multiErr = append(multiErr, err)
+		return points, multiErr
 	}
 
 	certificatePoint, err := k.getCertificateExpiration(config, now)
 	if err != nil {
-		return points, err
+		multiErr = append(multiErr, err)
 	}
 
 	points = append(points, certificatePoint)
 
 	caCertificatePoint, err := k.getCACertificateExpiration(config, now)
 	if err != nil {
-		return points, err
+		multiErr = append(multiErr, err)
 	}
 
 	points = append(points, caCertificatePoint)
 
-	return points, nil
+	return points, multiErr
 }
 
 func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
 	caPool := x509.NewCertPool()
 	tlsConfig := &tls.Config{}
+	caData := config.TLSClientConfig.CAData
+
+	var err error
 
 	if config.TLSClientConfig.Insecure {
 		tlsConfig.InsecureSkipVerify = true
 	}
 
-	caData, err := ioutil.ReadFile(config.TLSClientConfig.CAFile)
-	if err != nil {
-		// We set the CertPool to nil in order to fallback to system CAs.
-		caPool = nil
+	if caData == nil {
+		caData, err = ioutil.ReadFile(config.TLSClientConfig.CAFile)
+		if err != nil {
+			// We set the CertPool to nil in order to fallback to system CAs.
+			caPool = nil
+		}
 	}
 
 	if caPool != nil {
@@ -272,14 +279,9 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 		return types.MetricPoint{}, err
 	}
 
-	colonPos := strings.LastIndex(addr.Host, ":")
-	if colonPos == -1 {
-		colonPos = len(addr.Host)
-	}
+	tlsConfig.ServerName = addr.Hostname()
 
-	tlsConfig.ServerName = addr.Host[:colonPos]
-
-	conn, err := net.DialTimeout("tcp", addr.Host, time.Second*5)
+	conn, err := net.DialTimeout("tcp", addr.Host, 5*time.Second)
 	if err != nil {
 		// Something went wrong with the connection, but it is not related to TLS
 		return types.MetricPoint{}, err
@@ -289,6 +291,7 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 
 	tlsConn := tls.Client(conn, tlsConfig)
 	err = tlsConn.Handshake()
+
 	if err != nil {
 		// Something went wrong with the connection, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
@@ -312,7 +315,7 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 
 	if caData == nil && config.TLSClientConfig.CAFile != "" {
 		//CAData takes precedence over CAFile, thus we only check CAFile if there is no CAData
-		caData, err = decodeCertFile(config.TLSClientConfig.CAFile)
+		caData, err = ioutil.ReadFile(config.TLSClientConfig.CAFile)
 		if err != nil {
 			return types.MetricPoint{}, err
 		}
@@ -327,15 +330,6 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 	}
 
 	return createPointFromCertTime(caCert.NotAfter, caExpLabel, now)
-}
-
-func decodeCertFile(file string) ([]byte, error) {
-	data, err := ioutil.ReadFile(file)
-	if err != nil {
-		return nil, err
-	}
-
-	return data, nil
 }
 
 func decodeRawCert(rawData []byte) (*x509.Certificate, error) {

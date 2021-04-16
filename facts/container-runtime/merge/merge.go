@@ -89,7 +89,7 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([
 
 // Containers call function on container runtimes.
 func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, globalErr error) {
-	var errs multiError
+	var errs MultiError
 
 	idToRuntime := make(map[string]int)
 
@@ -283,17 +283,18 @@ func (r *Runtime) RuntimeFact(ctx context.Context, currentFact map[string]string
 func (r *Runtime) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	points := make([]types.MetricPoint, 0)
 
+	var errors MultiError = nil
+
 	for _, runtime := range r.Runtimes {
 		runtimePoints, err := runtime.Metrics(ctx)
 		if err != nil {
-			//TODO: how to determine from which runtime the error is from? logging the error in Metrics?
-			logger.V(2).Printf(" metrics gather failed for runtime: %v", err)
-		} else {
-			points = append(points, runtimePoints...)
+			errors = append(errors, err)
 		}
+
+		points = append(points, runtimePoints...)
 	}
 
-	return points, nil
+	return points, errors
 }
 
 type mergeProcessQuerier struct {
@@ -322,7 +323,7 @@ func (m mergeProcessQuerier) Processes(ctx context.Context) (result []facts.Proc
 }
 
 func (m mergeProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData string) (facts.Container, error) {
-	var errs multiError
+	var errs MultiError
 
 	for i, q := range m.queriers {
 		cont, err := q.ContainerFromCGroup(ctx, cgroupData)
@@ -354,7 +355,7 @@ func (m mergeProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData
 }
 
 func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
-	var errs multiError
+	var errs MultiError
 
 	for i, q := range m.queriers {
 		cont, err := q.ContainerFromPID(ctx, parentContainerID, pid)
@@ -385,9 +386,10 @@ func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContain
 	return nil, nil
 }
 
-type multiError []error
+//MultiError is a type containing multiple errors. It implements the error interface.
+type MultiError []error
 
-func (errs multiError) Error() string {
+func (errs MultiError) Error() string {
 	list := make([]string, len(errs))
 
 	for i, err := range errs {
@@ -397,7 +399,7 @@ func (errs multiError) Error() string {
 	return strings.Join(list, ", ")
 }
 
-func (errs multiError) Is(target error) bool {
+func (errs MultiError) Is(target error) bool {
 	for _, err := range errs {
 		if errors.Is(err, target) {
 			return true
