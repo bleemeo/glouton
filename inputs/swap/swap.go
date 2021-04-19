@@ -17,13 +17,15 @@
 package swap
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/swap"
 )
+
+const inputName = "swap"
 
 // New initialise swap.Input.
 func New() (i telegraf.Input, err error) {
@@ -37,7 +39,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input swap is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

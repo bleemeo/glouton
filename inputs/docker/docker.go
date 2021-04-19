@@ -17,9 +17,9 @@
 package docker
 
 import (
-	"errors"
 	"glouton/facts"
 	crTypes "glouton/facts/container-runtime/types"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/types"
 	"strings"
@@ -28,6 +28,8 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/docker"
 )
+
+const inputName = "Docker"
 
 // New initialise docker.Input.
 func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegraf.Input, err error) {
@@ -53,10 +55,10 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegr
 				},
 			}
 		} else {
-			err = errors.New("input Docker is not the expected type")
+			err = inputs.ErrUnexpectedType(inputName)
 		}
 	} else {
-		err = errors.New("input Docker not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

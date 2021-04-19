@@ -34,6 +34,9 @@ const (
 	graphitePrefix = "jmxtrans"
 )
 
+var errJmxAlreadyStopped = errors.New("JMX is already stopped, can't update config")
+var errJmxStopping = errors.New("JMX is stopping, can't update config")
+
 // JMX allow to gather metrics from JVM using JMX
 // It use jmxtrans to achieve this goal.
 type JMX struct {
@@ -73,7 +76,7 @@ func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.D
 
 	if j.stopped {
 		j.l.Unlock()
-		return errors.New("JMX is already stopped, can't update config")
+		return errJmxAlreadyStopped
 	}
 
 	j.l.Unlock()
@@ -189,7 +192,7 @@ func (j *JMX) Run(ctx context.Context) error {
 	for {
 		select {
 		case req := <-j.triggerConfigUpdate:
-			req.reply <- errors.New("JMX is stopping, can't update config")
+			req.reply <- errJmxStopping
 		case <-time.After(time.Second):
 			return nil
 		}

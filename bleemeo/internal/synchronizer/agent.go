@@ -24,6 +24,8 @@ import (
 	"reflect"
 )
 
+var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
+
 const apiTagsLength = 100
 
 func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
@@ -50,7 +52,7 @@ func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
 	s.option.Cache.SetAgent(agent)
 
 	if agent.CurrentConfigID == "" {
-		return errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
+		return errNoConfig
 	}
 
 	s.option.Cache.SetAccountID(agent.AccountID)

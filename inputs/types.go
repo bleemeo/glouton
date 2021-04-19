@@ -12,6 +12,9 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
+var errNotImplemented = errors.New("not implemented")
+var errMissingMethod = errors.New("AddFieldsWithAnnotations method missing, the annotation is lost")
+
 // AnnotationAccumulator is a similar to an telegraf.Accumulator but allow to send metric with annocations.
 type AnnotationAccumulator interface {
 	AddFieldsWithAnnotations(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t ...time.Time)
@@ -55,17 +58,17 @@ func (a *Accumulator) AddHistogram(measurement string, fields map[string]interfa
 
 // SetPrecision do nothing right now.
 func (a *Accumulator) SetPrecision(precision time.Duration) {
-	a.AddError(fmt.Errorf("SetPrecision not implemented"))
+	a.AddError(fmt.Errorf("SetPrecision %w", errNotImplemented))
 }
 
 // AddMetric is not yet implemented.
 func (a *Accumulator) AddMetric(telegraf.Metric) {
-	a.AddError(fmt.Errorf("AddMetric not implemented"))
+	a.AddError(fmt.Errorf("AddMetric %w", errNotImplemented))
 }
 
 // WithTracking is not yet implemented.
 func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.AddError(fmt.Errorf("WithTracking not implemented"))
+	a.AddError(fmt.Errorf("WithTracking %w", errNotImplemented))
 	return nil
 }
 
@@ -195,17 +198,17 @@ func (a FixedTimeAccumulator) AddHistogram(measurement string, fields map[string
 
 // SetPrecision do nothing right now.
 func (a FixedTimeAccumulator) SetPrecision(precision time.Duration) {
-	a.AddError(fmt.Errorf("SetPrecision not implemented"))
+	a.AddError(fmt.Errorf("SetPrecision %w", errNotImplemented))
 }
 
 // AddMetric is not yet implemented.
 func (a FixedTimeAccumulator) AddMetric(telegraf.Metric) {
-	a.AddError(fmt.Errorf("AddMetric not implemented"))
+	a.AddError(fmt.Errorf("AddMetric %w", errNotImplemented))
 }
 
 // WithTracking is not yet implemented.
 func (a FixedTimeAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.AddError(fmt.Errorf("WithTracking not implemented"))
+	a.AddError(fmt.Errorf("WithTracking %w", errNotImplemented))
 	return nil
 }
 
@@ -226,5 +229,19 @@ func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, field
 	}
 
 	a.Acc.AddGauge(measurement, fields, tags, a.Time)
-	a.Acc.AddError(errors.New("AddFieldsWithAnnotations method missing, the annotation is lost"))
+	a.Acc.AddError(errMissingMethod)
+}
+
+var errUnexpectedType = errors.New("unexpectedType")
+var errDisabledInput = errors.New("disabledInput")
+
+//TelegrafService is a commonly referenced service for the errDisabledInput error.
+const TelegrafService = "Telegraf"
+
+func ErrUnexpectedType(inputName string) error {
+	return fmt.Errorf("%w: input %s does not have the expected type", errUnexpectedType, inputName)
+}
+
+func ErrDisabledInput(inputName string, serviceName string) error {
+	return fmt.Errorf("%w: input %s is not enabled in service %s", errDisabledInput, inputName, serviceName)
 }

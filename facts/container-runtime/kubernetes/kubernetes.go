@@ -493,7 +493,7 @@ func (cl realClient) GetServerVersion(ctx context.Context) (*version.Info, error
 
 	err = json.Unmarshal(body, &info)
 	if err != nil {
-		return nil, fmt.Errorf("unable to parse the server version: %v", err)
+		return nil, fmt.Errorf("unable to parse the server version: %w", err)
 	}
 
 	return &info, nil

@@ -17,7 +17,7 @@
 package disk
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/version"
 	"os"
@@ -27,6 +27,8 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/disk"
 )
+
+const inputName = "Disk"
 
 type diskTransformer struct {
 	mountPoint string
@@ -64,7 +66,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input disk not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

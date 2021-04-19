@@ -30,6 +30,16 @@ import (
 	"time"
 )
 
+var ErrUnmatchedOpeningBracket = errors.New("unmatched opening bracket")
+var ErrUnmatchedClosingBracket = errors.New("unmatched closing bracket")
+var ErrClosingBracketNotAllowed = errors.New("character ] is not allowed in unquoted parameter string")
+var ErrMissingClosingBracket = errors.New("missing closing bracket at the end")
+var ErrIllegalBraces = errors.New("illegal braces")
+var ErrCommaButNotArgs = errors.New("comma but no arguments detected")
+var ErrMultiArrayNotAllowed = errors.New("multi-level arrays are not allowed")
+var ErrQuotedParamContainsUnquoted = errors.New("quoted parameter cannot contain unquoted part")
+var errWrongHeader = errors.New("wrong packet header")
+
 // Server is a Zabbix server than use Callback for reply to queries.
 type Server struct {
 	callback    callback
@@ -96,13 +106,13 @@ func decode(r io.Reader) (packetStruct, error) {
 	buf := bytes.NewReader(packetHead[4:])
 
 	if !bytes.Equal(header, []byte("ZBXD")) {
-		err = fmt.Errorf("wrong packet header")
+		err = errWrongHeader
 		return decodedPacket, err
 	}
 
 	err = binary.Read(buf, binary.LittleEndian, &decodedPacket.version)
 	if err != nil {
-		err = fmt.Errorf("binary.Read failed for packet_version: %v", err)
+		err = fmt.Errorf("binary.Read failed for packet_version: %w", err)
 		return decodedPacket, err
 	}
 
@@ -110,7 +120,7 @@ func decode(r io.Reader) (packetStruct, error) {
 
 	err = binary.Read(buf, binary.LittleEndian, &dataLength)
 	if err != nil {
-		err = fmt.Errorf("binary.Read failed for packet_version: %v", err)
+		err = fmt.Errorf("binary.Read failed for packet_version: %w", err)
 		return decodedPacket, err
 	}
 
@@ -118,7 +128,7 @@ func decode(r io.Reader) (packetStruct, error) {
 
 	_, err = r.Read(packetData)
 	if err != nil {
-		err = fmt.Errorf("r.Read failed for data: %v", err)
+		err = fmt.Errorf("r.Read failed for data: %w", err)
 		return decodedPacket, err
 	}
 
@@ -133,13 +143,13 @@ func splitData(request string) (string, []string, error) {
 	var args []string
 
 	if strings.Contains(request, "{") || strings.Contains(request, "}") {
-		return request, args, errors.New("illegal braces")
+		return request, args, ErrIllegalBraces
 	}
 
 	i := strings.Index(request, "[")
 	if i == -1 {
 		if strings.Contains(request, ",") {
-			return request, args, errors.New("comma but no arguments detected")
+			return request, args, ErrCommaButNotArgs
 		}
 
 		return request, args, nil
@@ -149,7 +159,7 @@ func splitData(request string) (string, []string, error) {
 	key := newrequest[0:i]
 
 	if string(newrequest[len(newrequest)-1]) != "]" {
-		return key, args, errors.New("missing closing bracket at the end")
+		return key, args, ErrMissingClosingBracket
 	}
 
 	joinArgs := newrequest[i+1 : len(newrequest)-1]
@@ -166,7 +176,7 @@ func splitData(request string) (string, []string, error) {
 		if inBrackets {
 			if string(s) == "[" {
 				if joinArgs[k-1:k+2] != `"["` {
-					return key, args, errors.New("multi-level arrays are not allowed")
+					return key, args, ErrMultiArrayNotAllowed
 				}
 			}
 
@@ -176,7 +186,7 @@ func splitData(request string) (string, []string, error) {
 
 					if strings.Contains(joinArgs[j:k], `"`) {
 						if strings.LastIndex(joinArgs[j:k], `"`) != k-j-1 {
-							return key, args, errors.New("quoted parameter cannot contain unquoted part")
+							return key, args, ErrQuotedParamContainsUnquoted
 						}
 					}
 
@@ -187,7 +197,7 @@ func splitData(request string) (string, []string, error) {
 				}
 
 				if string(joinArgs[k+1]) == "]" {
-					return key, args, errors.New("unmatched closing bracket")
+					return key, args, ErrUnmatchedClosingBracket
 				}
 			}
 
@@ -206,7 +216,7 @@ func splitData(request string) (string, []string, error) {
 			if string(s) == "," {
 				if strings.Contains(joinArgs[j:k], `"`) {
 					if strings.LastIndex(joinArgs[j:k], `"`) != k-j-1 {
-						return key, args, errors.New("quoted parameter cannot contain unquoted part")
+						return key, args, ErrQuotedParamContainsUnquoted
 					}
 
 					if string(joinArgs[j]) == `"` {
@@ -222,13 +232,13 @@ func splitData(request string) (string, []string, error) {
 			}
 
 			if string(s) == "]" {
-				return key, args, errors.New("character ] is not allowed in unquoted parameter string")
+				return key, args, ErrClosingBracketNotAllowed
 			}
 		}
 	}
 
 	if inBrackets {
-		err := errors.New("unmatched opening bracket")
+		err := ErrUnmatchedOpeningBracket
 		return key, args, err
 	}
 
@@ -239,7 +249,7 @@ func splitData(request string) (string, []string, error) {
 	} else {
 		if strings.Contains(joinArgs[j:], `"`) {
 			if strings.LastIndex(joinArgs, `"`) != len(joinArgs)-1 {
-				return key, args, errors.New("quoted parameter cannot contain unquoted part")
+				return key, args, ErrQuotedParamContainsUnquoted
 			}
 			if string(joinArgs[j]) == `"` {
 				args = append(args, joinArgs[j+1:len(joinArgs)-1])
@@ -270,7 +280,7 @@ func encodeReply(message string, inputError error) ([]byte, error) {
 
 	err := binary.Write(buf, binary.LittleEndian, &dataLength)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for data_length: %v", err)
+		err = fmt.Errorf("binary.Write failed for data_length: %w", err)
 		return encodedPacket, err
 	}
 

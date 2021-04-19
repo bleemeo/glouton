@@ -81,6 +81,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var errUnsupportedKey = errors.New("Unsupported item key") //nolint: stylecheck
+
 type agent struct {
 	taskRegistry *task.Registry
 	config       *config.Configuration
@@ -130,7 +132,7 @@ func zabbixResponse(key string, args []string) (string, error) {
 		return fmt.Sprintf("4 (Glouton %s)", version.Version), nil
 	}
 
-	return "", errors.New("Unsupported item key") //nolint: stylecheck
+	return "", errUnsupportedKey
 }
 
 type taskInfo struct {

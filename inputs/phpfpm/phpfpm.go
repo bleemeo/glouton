@@ -19,6 +19,7 @@ package phpfpm
 import (
 	"errors"
 	"fmt"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"reflect"
 
@@ -26,6 +27,10 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	_ "github.com/influxdata/telegraf/plugins/inputs/phpfpm" // we use it
 )
+
+const inputName = "PHP-FPM"
+
+var errInputCreation = errors.New("error during creation of PHP-FPM input")
 
 // We use a dedicated function to be able to recover from a panic.
 func reflectSet(url string, input telegraf.Input) {
@@ -43,7 +48,7 @@ func New(url string) (i telegraf.Input, err error) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					err = fmt.Errorf("error during creation of PHP-FPM input: %v", r)
+					err = fmt.Errorf("%w: %v", errInputCreation, r)
 				}
 			}()
 			reflectSet(url, phpfpmInput)
@@ -60,7 +65,7 @@ func New(url string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input PHP-FPM is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

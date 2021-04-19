@@ -17,13 +17,15 @@
 package rabbitmq
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/rabbitmq"
 )
+
+const inputName = "rabbitmq"
 
 // New initialise rabbitmq.Input.
 func New(url string, username string, password string) (i telegraf.Input, err error) {
@@ -43,10 +45,10 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 				},
 			}
 		} else {
-			err = errors.New("input RabbitMQ is not the expected type")
+			err = inputs.ErrUnexpectedType(inputName)
 		}
 	} else {
-		err = errors.New("input RabbitMQ is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

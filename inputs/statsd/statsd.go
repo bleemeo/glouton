@@ -19,6 +19,7 @@ package statsd
 import (
 	"errors"
 	"fmt"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"reflect"
 
@@ -26,6 +27,10 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/statsd"
 )
+
+var errCreation = errors.New("error during creation of StatsD input")
+
+const inputName = "Statsd"
 
 func reflectSetPercentile(input *statsd.Statsd) {
 	inputValue := reflect.Indirect(reflect.ValueOf(input))
@@ -56,7 +61,7 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 			func() {
 				defer func() {
 					if r := recover(); r != nil {
-						err = fmt.Errorf("error during creation of StatsD input: %v", r)
+						err = fmt.Errorf("%w: %v", errCreation, r)
 					}
 				}()
 				reflectSetPercentile(statsdInput)
@@ -71,10 +76,10 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("input StatsD is not the expected type")
+			err = inputs.ErrUnexpectedType(inputName)
 		}
 	} else {
-		err = errors.New("input StatsD is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return i, nil

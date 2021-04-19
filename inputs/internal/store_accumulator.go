@@ -1,7 +1,6 @@
 package internal
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -70,7 +69,7 @@ func (a *StoreAccumulator) AddHistogram(measurement string, fields map[string]in
 
 // AddMetric adds an metric to the accumulator.
 func (a *StoreAccumulator) AddMetric(telegraf.Metric) {
-	a.AddError(fmt.Errorf("AddMetric not implemented"))
+	a.AddError(ErrAddMetricNotImplemented)
 }
 
 // AddError reports an error.
@@ -83,12 +82,12 @@ func (a *StoreAccumulator) AddError(err error) {
 // as the order of time that the metrics should be rounded to, with the
 // maximum being 1s.
 func (a *StoreAccumulator) SetPrecision(precision time.Duration) {
-	a.AddError(fmt.Errorf("SetPrecision not implemented"))
+	a.AddError(ErrSetPrecisionNotImplemented)
 }
 
 // WithTracking upgrades to a TrackingAccumulator with space for maxTracked
 // metrics/batches.
 func (a *StoreAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.AddError(fmt.Errorf("WithTracking not implemented"))
+	a.AddError(ErrWithTrackingNotImplemented)
 	return nil
 }

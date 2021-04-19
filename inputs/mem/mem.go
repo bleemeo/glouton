@@ -17,14 +17,16 @@
 package mem
 
 import (
-	"errors"
 	"fmt"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mem"
 )
+
+const inputName = "Mem"
 
 // New initialise mem.Input.
 func New() (i telegraf.Input, err error) {
@@ -43,7 +45,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input mem not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

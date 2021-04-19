@@ -17,13 +17,15 @@
 package elasticsearch
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/elasticsearch"
 )
+
+const inputName = "Elasticsearch"
 
 // New initialise elasticsearch.Input.
 func New(url string) (i telegraf.Input, err error) {
@@ -43,10 +45,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("input Elasticsearch is not the exepcted type")
+			err = inputs.ErrUnexpectedType(inputName)
 		}
 	} else {
-		err = errors.New("input Elasticsearch not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

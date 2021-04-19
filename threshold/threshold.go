@@ -18,6 +18,7 @@ package threshold
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
@@ -25,6 +26,8 @@ import (
 	"sync"
 	"time"
 )
+
+var errIncorrectType = errors.New("incorrect variable type")
 
 const statusCacheKey = "CacheStatusState"
 
@@ -257,7 +260,7 @@ func FromInterfaceMap(input map[string]interface{}) (Threshold, error) {
 			case int:
 				value = float64(v)
 			default:
-				return result, fmt.Errorf("%v is not a float", raw)
+				return result, fmt.Errorf("%w: %v is not a float", errIncorrectType, raw)
 			}
 
 			switch name {

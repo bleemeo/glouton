@@ -24,6 +24,12 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
+var errUnknownUser = errors.New("user not found")
+var errExpectedPointer = errors.New("process-exporter changed its internal, expected a pointer")
+var errExpectedStruct = errors.New("process-exporter changed its internal, expected a struct")
+var errExpectedProc = errors.New("process-exporter changed its internal, expected a proc.Proc")
+var errNullPointer = errors.New("process-exporter changed its internal, getProcCache return null-pointer")
+
 // See https://github.com/prometheus/procfs/blob/master/proc_stat.go for details on userHZ.
 const userHZ = 100
 
@@ -88,7 +94,7 @@ func (c *Processes) getPwdlookup() func(uid int) (string, error) {
 	return func(uid int) (string, error) {
 		u, ok := pwdCache.LookupUserByUid(uid)
 		if !ok {
-			return "", errors.New("user not found")
+			return "", errUnknownUser
 		}
 
 		return u.Username(), nil
@@ -122,7 +128,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 		}
 
 		if p.procErr != nil {
-			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %v)", err)
+			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %w)", err)
 			continue
 		}
 
@@ -270,7 +276,7 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 	value := reflect.ValueOf(p)
 
 	if value.Kind() != reflect.Ptr {
-		return nil, errors.New("process-exporter changed its internal, expected a pointer")
+		return nil, errExpectedPointer
 	}
 
 	value = value.Elem()
@@ -280,7 +286,7 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 	}
 
 	if value.Kind() != reflect.Struct {
-		return nil, errors.New("process-exporter changed its internal, expected a struct")
+		return nil, errExpectedStruct
 	}
 
 	procValue := value.FieldByName("Proc")
@@ -288,7 +294,7 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 	result, ok := procValue.Interface().(proc.Proc)
 
 	if !ok {
-		return nil, errors.New("process-exporter changed its internal, expected a proc.Proc")
+		return nil, errExpectedProc
 	}
 
 	return result, nil
@@ -299,7 +305,7 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 	value := reflect.ValueOf(p)
 
 	if value.Kind() != reflect.Ptr {
-		return nil, errors.New("process-exporter changed its internal, expected a pointer")
+		return nil, errExpectedPointer
 	}
 
 	value = value.Elem()
@@ -309,7 +315,7 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 	}
 
 	if value.Kind() != reflect.Struct {
-		return nil, errors.New("process-exporter changed its internal, expected a struct")
+		return nil, errExpectedStruct
 	}
 
 	value = value.FieldByName("proccache")
@@ -320,7 +326,7 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 
 	ptr := unsafe.Pointer(value.UnsafeAddr())
 	if uintptr(ptr) == 0 {
-		return nil, errors.New("process-exporter changed its internal, getProcCache return null-pointer")
+		return nil, errNullPointer
 	}
 
 	return ptr, nil

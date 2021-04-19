@@ -19,6 +19,7 @@ package haproxy
 import (
 	"errors"
 	"fmt"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"reflect"
 
@@ -26,6 +27,10 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	_ "github.com/influxdata/telegraf/plugins/inputs/haproxy" // we use it
 )
+
+var errCreation = errors.New("error during creation of HAproxy input")
+
+const inputName = "HAProxy"
 
 // We use a dedicated function to be able to recover from a panic.
 func reflectSet(url string, input telegraf.Input) {
@@ -44,7 +49,7 @@ func New(url string) (i telegraf.Input, err error) {
 		func() {
 			defer func() {
 				if r := recover(); r != nil {
-					err = fmt.Errorf("error during creation of HAproxy input: %v", r)
+					err = fmt.Errorf("%w: %v", errCreation, r)
 				}
 			}()
 			reflectSet(url, haproxyInput)
@@ -63,7 +68,7 @@ func New(url string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input HAProxy not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return i, err

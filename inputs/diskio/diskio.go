@@ -17,7 +17,7 @@
 package diskio
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"glouton/version"
 	"regexp"
@@ -31,6 +31,8 @@ type diskIOTransformer struct {
 	whitelist []*regexp.Regexp
 	blacklist []*regexp.Regexp
 }
+
+const inputName = "Diskio"
 
 // New initialise diskio.Input.
 //
@@ -57,7 +59,7 @@ func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Inp
 			},
 		}
 	} else {
-		err = errors.New("input diskio not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return i, err

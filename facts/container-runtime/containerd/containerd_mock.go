@@ -31,6 +31,8 @@ var (
 	ErrMockNotImplemented = errors.New("mock does not implement this method")
 	// ErrWrongNamespace is returned when the namespace is mismatched.
 	ErrWrongNamespace = errors.New("missmatch namespace")
+	errIncorrectValue = errors.New("incorrect value")
+	errNotImplemented = errors.New("not implemented")
 )
 
 // MockClient is a fake containerd client.
@@ -153,19 +155,19 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 
 		// Ensure that information from Info() and other method match
 		if c.ID() != info.ID {
-			return fmt.Errorf("ID() = %v, want %v", c.ID(), info.ID)
+			return fmt.Errorf("%w for ID() = %v, want %v", errIncorrectValue, c.ID(), info.ID)
 		}
 
 		if img.Name() != info.Image {
-			return fmt.Errorf("img.Name() = %v, want %v", img.Name(), info.Image)
+			return fmt.Errorf("%w img.Name() = %v, want %v", errIncorrectValue, img.Name(), info.Image)
 		}
 
 		if !reflect.DeepEqual(lbls, info.Labels) {
-			return fmt.Errorf("labels = %v, want %v", lbls, info.Labels)
+			return fmt.Errorf("%w, labels = %v, want %v", errIncorrectValue, lbls, info.Labels)
 		}
 
 		if info.Spec.TypeUrl != expectedSpecType {
-			return fmt.Errorf("TypeUrl = %v, want %v", info.Spec.TypeUrl, expectedSpecType)
+			return fmt.Errorf("%w, TypeUrl = %v, want %v", errIncorrectValue, info.Spec.TypeUrl, expectedSpecType)
 		}
 
 		var infoSpec oci.Spec
@@ -176,7 +178,7 @@ func (j *MockNamespace) fill(ctx context.Context, client *containerd.Client) err
 		}
 
 		if diff := cmp.Diff(&infoSpec, spec); diff != "" {
-			return fmt.Errorf("spec don't match: %v", diff)
+			return fmt.Errorf("%w, spec don't match: %s", errIncorrectValue, diff)
 		}
 
 		mc := MockContainer{
@@ -265,7 +267,7 @@ func (m *MockClient) Containers(ctx context.Context) ([]containerd.Container, er
 		}
 	}
 
-	return nil, errors.New("namespace not found")
+	return nil, fmt.Errorf("namespace %w", errNotFound)
 }
 
 // LoadContainer do LoadContainer.
@@ -291,7 +293,7 @@ func (m *MockClient) LoadContainer(ctx context.Context, id string) (containerd.C
 		}
 	}
 
-	return nil, errors.New("not found")
+	return nil, errNotFound
 }
 
 // Version do version.
@@ -334,7 +336,7 @@ func (m *MockClient) Events(ctx context.Context) (<-chan *events.Envelope, <-cha
 	}
 
 	ch := make(chan error, 1)
-	ch <- errors.New("ContainerTop not implemented")
+	ch <- fmt.Errorf("ContainerTop %w", errNotImplemented)
 
 	return nil, ch
 }

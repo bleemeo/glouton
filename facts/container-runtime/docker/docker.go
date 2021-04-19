@@ -32,6 +32,8 @@ import (
 // errors of Docker runtime.
 var (
 	ErrDockerUnexcepted = errors.New("unexcepted data")
+	errUnknownFormat    = errors.New("unknown pstime format")
+	errNilJSON          = errors.New("ContainerJSONBase is nil. Assume container is deleted")
 )
 
 // DefaultAddresses returns default address for the Docker socket. If hostroot is set (and not "/") ALSO add
@@ -530,7 +532,7 @@ func (d *Docker) updateContainer(ctx context.Context, cl dockerClient, container
 	}
 
 	if inspect.ContainerJSONBase == nil {
-		return result, errors.New("ContainerJSONBase is nil. Assume container is deleted")
+		return result, errNilJSON
 	}
 
 	sortInspect(inspect)
@@ -1296,7 +1298,7 @@ func psTime2Second(psTime string) (int, error) {
 		return int(day)*86400 + int(hour)*3600, nil
 	}
 
-	return 0, fmt.Errorf("unknown pstime format %#v", psTime)
+	return 0, fmt.Errorf("%w %#v", errUnknownFormat, psTime)
 }
 
 func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupData string) (facts.Container, error) {

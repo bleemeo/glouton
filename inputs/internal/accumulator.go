@@ -17,6 +17,7 @@
 package internal
 
 import (
+	"errors"
 	"fmt"
 	"glouton/inputs"
 	"glouton/logger"
@@ -29,6 +30,10 @@ import (
 
 	"github.com/influxdata/telegraf"
 )
+
+var ErrSetPrecisionNotImplemented = errors.New("setPrecision not implemented")
+var ErrWithTrackingNotImplemented = errors.New("withTracking not implemented")
+var ErrAddMetricNotImplemented = errors.New("addMetric not implemented")
 
 type metricPoint struct {
 	Value interface{} // could be uint64 or int64
@@ -367,7 +372,7 @@ func (a *Accumulator) AddHistogram(measurement string, fields map[string]interfa
 
 // AddMetric adds an metric to the accumulator.
 func (a *Accumulator) AddMetric(telegraf.Metric) {
-	a.AddError(fmt.Errorf("AddMetric not implemented"))
+	a.AddError(ErrAddMetricNotImplemented)
 }
 
 // AddError reports an error.
@@ -384,12 +389,12 @@ func (a *Accumulator) AddError(err error) {
 // as the order of time that the metrics should be rounded to, with the
 // maximum being 1s.
 func (a *Accumulator) SetPrecision(precision time.Duration) {
-	a.AddError(fmt.Errorf("SetPrecision not implemented"))
+	a.AddError(ErrSetPrecisionNotImplemented)
 }
 
 // WithTracking upgrades to a TrackingAccumulator with space for maxTracked
 // metrics/batches.
 func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.AddError(fmt.Errorf("WithTracking not implemented"))
+	a.AddError(ErrWithTrackingNotImplemented)
 	return nil
 }

@@ -19,6 +19,7 @@ package scrapper
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/types"
@@ -38,6 +39,8 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 )
+
+var errIncorrectStatus = errors.New("incorrect status")
 
 // nolint: gochecknoglobals
 var defaultMetrics = []string{
@@ -78,7 +81,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
-		return nil, fmt.Errorf("prepare request to Prometheus exporter %s: %v", u.String(), err)
+		return nil, fmt.Errorf("prepare request to Prometheus exporter %s: %w", u.String(), err)
 	}
 
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
@@ -98,12 +101,12 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 		// Ensure response body is read to allow HTTP keep-alive to works
 		_, _ = io.Copy(ioutil.Discard, resp.Body)
 
-		return nil, fmt.Errorf("exporter %s HTTP status is %s", u.String(), resp.Status)
+		return nil, fmt.Errorf("%w: exporter %s HTTP status is %s", errIncorrectStatus, u.String(), resp.Status)
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("read from %s: %v", u.String(), err)
+		return nil, fmt.Errorf("read from %s: %w", u.String(), err)
 	}
 
 	reader := bytes.NewReader(body)
@@ -112,7 +115,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 
 	resultMap, err := parser.TextToMetricFamilies(reader)
 	if err != nil {
-		return nil, fmt.Errorf("parse metrics from %s: %v", u.String(), err)
+		return nil, fmt.Errorf("parse metrics from %s: %w", u.String(), err)
 	}
 
 	result := make([]*dto.MetricFamily, 0, len(resultMap))
@@ -132,7 +135,7 @@ func (t *Target) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
 			if strings.Contains(x, "{") {
 				matcher, err := parser.ParseMetricSelector(x)
 				if err != nil {
-					logger.V(1).Printf("ignoring invalid matcher %v: %v", x, err)
+					logger.V(1).Printf("ignoring invalid matcher %v: %w", x, err)
 					continue
 				}
 
@@ -151,7 +154,7 @@ func (t *Target) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
 			if strings.Contains(x, "{") {
 				matcher, err := parser.ParseMetricSelector(x)
 				if err != nil {
-					logger.V(1).Printf("ignoring invalid matcher %v: %v", x, err)
+					logger.V(1).Printf("ignoring invalid matcher %v: %w", x, err)
 					continue
 				}
 

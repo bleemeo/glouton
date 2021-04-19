@@ -14,6 +14,8 @@ import (
 	"time"
 )
 
+var errHandshakeTimeout = errors.New("TLS handshake timeout")
+
 // DiagnosticTCP return information about the ability to open a TCP connection to given host:port.
 // If tlsConfig is not nil, open a TLS connection.
 func DiagnosticTCP(host string, port int, tlsConfig *tls.Config) string {
@@ -64,7 +66,7 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 
 	errChannel := make(chan error, 2)
 	timer := time.AfterFunc(5*time.Second, func() {
-		errChannel <- errors.New("TLS handshake timeout")
+		errChannel <- errHandshakeTimeout
 	})
 
 	defer timer.Stop()

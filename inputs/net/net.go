@@ -17,7 +17,7 @@
 package net
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"strings"
 
@@ -29,6 +29,8 @@ import (
 type netTransformer struct {
 	blacklist []string
 }
+
+const inputName = "net"
 
 // New initialise net.Input
 //
@@ -50,7 +52,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input net is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

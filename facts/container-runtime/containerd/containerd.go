@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
@@ -30,6 +31,8 @@ import (
 	"github.com/shirou/gopsutil/mem"
 	"github.com/shirou/gopsutil/process"
 )
+
+var errNotFound = errors.New("not found")
 
 // DefaultAddresses returns default address for the Docker socket. If hostroot is set (and not "/") ALSO add
 // socket path prefixed by hostRoot.
@@ -282,7 +285,7 @@ func (c *Containerd) Exec(ctx context.Context, containerID string, cmd []string)
 	}
 
 	if !found {
-		return nil, fmt.Errorf("container %s not found", containerID)
+		return nil, fmt.Errorf("container %w: %s", errNotFound, containerID)
 	}
 
 	// general worklow for exec is inspired by ctr tasks exec command.

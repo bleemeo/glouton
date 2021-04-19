@@ -17,7 +17,7 @@
 package mysql
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"strings"
 
@@ -25,6 +25,8 @@ import (
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
+
+const inputName = "MySQL"
 
 // New initialise mysql.Input.
 func New(server string) (i telegraf.Input, err error) {
@@ -47,10 +49,10 @@ func New(server string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("input MySQL is not the expected type")
+			err = inputs.ErrUnexpectedType(inputName)
 		}
 	} else {
-		err = errors.New("input MySQL is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
 	}
 
 	return

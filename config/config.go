@@ -17,6 +17,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -26,6 +27,8 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+var errUnknownVarType = errors.New("unknown variable type")
 
 // Configuration hold the agent configuration are set of key/value
 //
@@ -56,11 +59,11 @@ func (c *Configuration) LoadDirectory(dirPath string) error {
 
 		data, err := ioutil.ReadFile(filepath.Join(dirPath, f.Name()))
 		if err != nil && firstError == nil {
-			firstError = fmt.Errorf("%#v: %v", f, err)
+			firstError = fmt.Errorf("%#v: %w", f, err)
 		} else if err == nil {
 			err = c.LoadByte(data)
 			if err != nil && firstError == nil {
-				firstError = fmt.Errorf("%#v: %v", f, err)
+				firstError = fmt.Errorf("%#v: %w", f, err)
 			}
 		}
 	}
@@ -124,7 +127,7 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 
 		c.Set(key, mapValue)
 	default:
-		return false, fmt.Errorf("unknown variable type %v", varType)
+		return false, fmt.Errorf("%w %#v", errUnknownVarType, varType)
 	}
 
 	return found, err

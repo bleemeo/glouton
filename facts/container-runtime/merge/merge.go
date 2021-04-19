@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var errNoRuntimeAvailable = errors.New("no container-runtime available")
+
 // Runtime provide container-runtime which merge multiple container runtime.
 // It assume that container ID are unique across all runtimes.
 // Runtimes could NOT be changed after creation.
@@ -81,7 +83,7 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([
 
 	if cr == nil {
 		logger.V(2).Printf("Exec: can't route container %s to a container runtime", containerID)
-		return nil, errors.New("no container-runtime available")
+		return nil, errNoRuntimeAvailable
 	}
 
 	return cr.Exec(ctx, containerID, cmd)

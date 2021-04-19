@@ -26,6 +26,9 @@ import (
 	"strings"
 )
 
+var errRunInContainer = errors.New("can't gather the postfix running on host because Glouton run in a container")
+var errUnexpectedOutput = errors.New("postqueue output don't contains expected output")
+
 //nolint:gochecknoglobals
 var (
 	postfixRECount = regexp.MustCompile(
@@ -57,7 +60,7 @@ func postfixQueueSize(ctx context.Context, srv discovery.Service, hostRootPath s
 		return parsePostfix(out)
 	}
 
-	return 0, errors.New("can't gather the postfix running on host because Glouton run in a container")
+	return 0, errRunInContainer
 }
 
 func parsePostfix(output []byte) (n float64, err error) {
@@ -67,7 +70,7 @@ func parsePostfix(output []byte) (n float64, err error) {
 
 	result := postfixRECount.FindSubmatch(output)
 	if len(result) == 0 {
-		return 0, errors.New("postqueue output don't contains expected output")
+		return 0, errUnexpectedOutput
 	}
 
 	return strconv.ParseFloat(string(result[1]), 64)
@@ -90,5 +93,5 @@ func eximQueueSize(ctx context.Context, srv discovery.Service, hostRootPath stri
 		return strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
 	}
 
-	return 0, errors.New("can't gather the postfix running on host because Glouton run in a container")
+	return 0, errRunInContainer
 }

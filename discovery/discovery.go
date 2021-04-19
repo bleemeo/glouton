@@ -19,6 +19,7 @@ package discovery
 import (
 	"archive/zip"
 	"context"
+	"errors"
 	"fmt"
 	"glouton/facts"
 	"glouton/inputs"
@@ -35,6 +36,8 @@ import (
 	"github.com/influxdata/telegraf"
 	"github.com/prometheus/client_golang/prometheus"
 )
+
+var errNoCheckAssociated = errors.New("there is no check associated with the container")
 
 const localhostIP = "127.0.0.1"
 
@@ -508,7 +511,7 @@ type CheckNow func(ctx context.Context) types.StatusDescription
 func (d *Discovery) GetCheckNow(nameContainer NameContainer) (CheckNow, error) {
 	CheckDetails, ok := d.activeCheck[nameContainer]
 	if !ok {
-		return nil, fmt.Errorf("there is now check associated with the container %s", nameContainer.Name)
+		return nil, fmt.Errorf("%w %s", errNoCheckAssociated, nameContainer.Name)
 	}
 
 	return CheckDetails.check.CheckNow, nil

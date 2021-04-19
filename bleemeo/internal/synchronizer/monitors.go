@@ -18,12 +18,16 @@ package synchronizer
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/types"
 )
+
+var errMissingAccountConf = errors.New("missing account configuration")
+var errCannotParse = errors.New("couldn't parse monitor")
 
 type monitorOperation int
 
@@ -137,7 +141,7 @@ func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error 
 		// try to retrieve the account config associated with this monitor
 		conf, present := accountConfigs[monitor.AccountConfig]
 		if !present {
-			return fmt.Errorf("missing account configuration '%s' for probe '%s'", monitor.AccountConfig, monitor.URL)
+			return fmt.Errorf("%w '%s' for probe '%s'", errMissingAccountConf, monitor.AccountConfig, monitor.URL)
 		}
 
 		processedMonitors = append(processedMonitors, types.Monitor{
@@ -179,7 +183,7 @@ func (s *Synchronizer) getMonitorsFromAPI() ([]bleemeoTypes.Monitor, error) {
 		var monitor bleemeoTypes.Monitor
 
 		if err := json.Unmarshal(jsonMessage, &monitor); err != nil {
-			return nil, fmt.Errorf("couldn't parse monitor %v", jsonMessage)
+			return nil, fmt.Errorf("%w %v", errCannotParse, jsonMessage)
 		}
 
 		monitors = append(monitors, monitor)

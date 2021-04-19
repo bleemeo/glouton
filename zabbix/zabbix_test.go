@@ -18,7 +18,6 @@ package zabbix
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"reflect"
@@ -97,27 +96,27 @@ func TestValidSplitData(t *testing.T) {
 		in   string
 		want error
 	}{
-		{`key[["a",]`, errors.New("unmatched opening bracket")},
-		{`key[[a"]"]`, errors.New("unmatched opening bracket")},
-		{`key[["a","\"b\"]"]`, errors.New("unmatched opening bracket")},
-		{`key["a",["b","c\"]"]]]`, errors.New("unmatched closing bracket")},
-		{"key[a ]]", errors.New("character ] is not allowed in unquoted parameter string")},
-		{"key[ a]]", errors.New("character ] is not allowed in unquoted parameter string")},
-		{"key[abca]654", errors.New("missing closing bracket at the end")},
-		{"{}key", errors.New("illegal braces")},
-		{"ssh,21", errors.New("comma but no arguments detected")},
-		{"key[][]", errors.New("character ] is not allowed in unquoted parameter string")},
-		{`key["a",b,["c","d\",]"]]["d"]`, errors.New("unmatched closing bracket")},
-		{"key[[[]]]", errors.New("multi-level arrays are not allowed")},
-		{`key["a",["b",["c","d"],e],"f"]`, errors.New("multi-level arrays are not allowed")},
-		{`key["a","b",[["c","d\",]"]]]`, errors.New("multi-level arrays are not allowed")},
-		{`key[a]]`, errors.New("character ] is not allowed in unquoted parameter string")},
-		{`key[a[b]]`, errors.New("character ] is not allowed in unquoted parameter string")},
-		{`key["a",b[c,d],e]`, errors.New("character ] is not allowed in unquoted parameter string")},
-		{`key["a"b]`, errors.New("quoted parameter cannot contain unquoted part")},
-		{`key["a",["b","]"c]]`, errors.New("quoted parameter cannot contain unquoted part")},
-		{`key[["]"a]]`, errors.New("quoted parameter cannot contain unquoted part")},
-		{`key[[a]"b"]`, errors.New("unmatched opening bracket")},
+		{`key[["a",]`, ErrUnmatchedOpeningBracket},
+		{`key[[a"]"]`, ErrUnmatchedOpeningBracket},
+		{`key[["a","\"b\"]"]`, ErrUnmatchedOpeningBracket},
+		{`key["a",["b","c\"]"]]]`, ErrUnmatchedClosingBracket},
+		{"key[a ]]", ErrClosingBracketNotAllowed},
+		{"key[ a]]", ErrClosingBracketNotAllowed},
+		{"key[abca]654", ErrMissingClosingBracket},
+		{"{}key", ErrIllegalBraces},
+		{"ssh,21", ErrCommaButNotArgs},
+		{"key[][]", ErrClosingBracketNotAllowed},
+		{`key["a",b,["c","d\",]"]]["d"]`, ErrUnmatchedClosingBracket},
+		{"key[[[]]]", ErrMultiArrayNotAllowed},
+		{`key["a",["b",["c","d"],e],"f"]`, ErrMultiArrayNotAllowed},
+		{`key["a","b",[["c","d\",]"]]]`, ErrMultiArrayNotAllowed},
+		{`key[a]]`, ErrClosingBracketNotAllowed},
+		{`key[a[b]]`, ErrClosingBracketNotAllowed},
+		{`key["a",b[c,d],e]`, ErrClosingBracketNotAllowed},
+		{`key["a"b]`, ErrQuotedParamContainsUnquoted},
+		{`key["a",["b","]"c]]`, ErrQuotedParamContainsUnquoted},
+		{`key[["]"a]]`, ErrQuotedParamContainsUnquoted},
+		{`key[[a]"b"]`, ErrUnmatchedOpeningBracket},
 	}
 	for _, c := range cases {
 		_, _, err := splitData(c.in)
