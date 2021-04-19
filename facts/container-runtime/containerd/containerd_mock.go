@@ -420,7 +420,7 @@ func (c MockContainer) Task(ctx context.Context, io cio.Attach) (containerd.Task
 	c.MockTask.namespace = c.namespace
 
 	if c.MockTask.MockID == "" {
-		return nil, errors.New("not found")
+		return nil, errNotFound
 	}
 
 	return c.MockTask, nil

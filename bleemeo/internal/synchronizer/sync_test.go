@@ -37,6 +37,14 @@ const (
 	jwtToken string = "{\"token\":\"blebleble\"}"
 )
 
+var errUnknownURLFormat = errors.New("unknown URL format")
+var errUnknownResource = errors.New("unknown resource")
+var errUnknownBool = errors.New("unknown boolean")
+var errUnknownRequestType = errors.New("type of request unknown")
+var errIncorrectID = errors.New("incorrect id")
+var errInvalidAccountID = errors.New("invalid accountId supplied")
+var errInvalidAuthHeader = errors.New("invalid authorization header")
+
 // this is a go limitation, these are constants but we have to treat them as variables
 //nolint:gochecknoglobals
 var (
@@ -168,7 +176,7 @@ func newAPI() *mockAPI {
 				case "false":
 					metricPtr.DeactivatedAt = time.Now()
 				default:
-					return fmt.Errorf("unknown boolean %v", boolText)
+					return fmt.Errorf("%w %v", errUnknownBool, boolText)
 				}
 			}
 
@@ -335,12 +343,12 @@ func (api *mockAPI) Server() *httptest.Server {
 func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 	part := strings.Split(r.URL.Path, "/")
 	if len(part) < 4 || part[1] != "v1" || len(part) > 5 {
-		return nil, http.StatusNotImplemented, fmt.Errorf("URL format unknown %#v", part)
+		return nil, http.StatusNotImplemented, fmt.Errorf("%w %#v", errUnknownURLFormat, part)
 	}
 
 	resource := api.resources[part[2]]
 	if resource == nil {
-		return nil, http.StatusNotImplemented, fmt.Errorf("resource %v unknown", part[2])
+		return nil, http.StatusNotImplemented, fmt.Errorf("%w: %v", errUnknownResource, part[2])
 	}
 
 	var id string
@@ -375,7 +383,7 @@ func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 
 		return response, http.StatusOK, nil
 	default:
-		return nil, http.StatusNotImplemented, fmt.Errorf("type of request unknown for %s %s", r.Method, r.URL.Path)
+		return nil, http.StatusNotImplemented, fmt.Errorf("%w for %s %s", errUnknownRequestType, r.Method, r.URL.Path)
 	}
 }
 
@@ -510,7 +518,7 @@ func (res *genericResource) Patch(id string, r *http.Request) (interface{}, erro
 
 	id2 := valueReflect.Elem().FieldByName("ID").String()
 	if id2 != id {
-		return nil, fmt.Errorf("ID = %v, want %v", id2, id)
+		return nil, fmt.Errorf("%w, ID = %v, want %v", errIncorrectID, id2, id)
 	}
 
 	if res.store == nil {
@@ -546,12 +554,12 @@ func runFakeAPI() *mockAPI {
 			}
 
 			if values["account"] != accountID {
-				err := fmt.Errorf("Invalid accountId supplied, got %v, want %v", values["account"], accountID)
+				err := fmt.Errorf("%w, got %v, want %v", errInvalidAccountID, values["account"], accountID)
 				return nil, http.StatusInternalServerError, err
 			}
 
 			if r.Header.Get("Authorization") != basicAuth {
-				err := fmt.Errorf("Invalid authorization header, got %v, want %v", r.Header.Get("Authorization"), basicAuth)
+				err := fmt.Errorf("%w, got %v, want %v", errInvalidAuthHeader, r.Header.Get("Authorization"), basicAuth)
 				return nil, http.StatusInternalServerError, err
 			}
 

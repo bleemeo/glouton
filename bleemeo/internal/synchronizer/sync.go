@@ -40,6 +40,8 @@ import (
 
 var errFQDNNotSet = errors.New("unable to register, fqdn is not set")
 var errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
+var errBleemeoUndefined = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
+var errIncorrectStatusCode = errors.New("registration status code is")
 
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
@@ -734,7 +736,7 @@ func (s *Synchronizer) register() error {
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
 
 	for accountID == "" || registrationKey == "" {
-		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
+		return errBleemeoUndefined
 	}
 
 	password := generatePassword(20)
@@ -765,7 +767,7 @@ func (s *Synchronizer) register() error {
 	}
 
 	if statusCode != 201 {
-		return fmt.Errorf("registration status code is %v, want 201", statusCode)
+		return fmt.Errorf("%w: got %v, want 201", errIncorrectStatusCode, statusCode)
 	}
 
 	s.agentID = objectID.ID

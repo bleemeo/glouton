@@ -14,6 +14,7 @@ import (
 
 var errNotImplemented = errors.New("not implemented")
 var errMissingMethod = errors.New("AddFieldsWithAnnotations method missing, the annotation is lost")
+var errTypeNotSupported = errors.New("value type not supported")
 
 // AnnotationAccumulator is a similar to an telegraf.Accumulator but allow to send metric with annocations.
 type AnnotationAccumulator interface {
@@ -107,7 +108,7 @@ func convertInterface(value interface{}) (float64, error) {
 		return float64(value), nil
 	default:
 		var valueType = reflect.TypeOf(value)
-		return float64(0), fmt.Errorf("value type not supported :(%v)", valueType)
+		return float64(0), fmt.Errorf("%w :(%v)", errTypeNotSupported, valueType)
 	}
 }
 

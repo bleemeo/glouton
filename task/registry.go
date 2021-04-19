@@ -23,6 +23,8 @@ import (
 	"sync"
 )
 
+var errAlreadyClosed = errors.New("registry already closed")
+
 // Runner is something that can be Run.
 type Runner func(context.Context) error
 
@@ -84,7 +86,7 @@ func (r *Registry) AddTask(task Runner, shortName string) (int, error) {
 	defer r.l.Unlock()
 
 	if r.closed {
-		return 0, errors.New("registry already closed")
+		return 0, errAlreadyClosed
 	}
 
 	id := 1

@@ -31,9 +31,12 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-var ErrSetPrecisionNotImplemented = errors.New("setPrecision not implemented")
-var ErrWithTrackingNotImplemented = errors.New("withTracking not implemented")
-var ErrAddMetricNotImplemented = errors.New("addMetric not implemented")
+var (
+	ErrSetPrecisionNotImplemented = errors.New("setPrecision not implemented")
+	ErrWithTrackingNotImplemented = errors.New("withTracking not implemented")
+	ErrAddMetricNotImplemented    = errors.New("addMetric not implemented")
+	errUnsupportedType            = errors.New("value type not supported")
+)
 
 type metricPoint struct {
 	Value interface{} // could be uint64 or int64
@@ -124,7 +127,7 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 		}
 	default:
 		var valueType = reflect.TypeOf(value)
-		err = fmt.Errorf("value type not supported: %v", valueType)
+		err = fmt.Errorf("%w: %v", errUnsupportedType, valueType)
 	}
 
 	return

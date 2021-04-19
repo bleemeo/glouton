@@ -54,6 +54,8 @@ type Kubernetes struct {
 const caExpLabel = "kubernetes_ca_day_left"
 const certExpLabel = "kubernetes_certificate_day_left"
 
+var errNoDecodedData = errors.New("no data decoded in raw certificate")
+
 // LastUpdate return the last time containers list was updated.
 func (k *Kubernetes) LastUpdate() time.Time {
 	t := k.Runtime.LastUpdate()
@@ -340,7 +342,7 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 func decodeRawCert(rawData []byte) (*x509.Certificate, error) {
 	certDataBlock, certLeft := pem.Decode(rawData)
 	if certDataBlock == nil {
-		return nil, errors.New("no data decoded in raw certificate")
+		return nil, errNoDecodedData
 	}
 
 	certData, err := x509.ParseCertificate(certDataBlock.Bytes)

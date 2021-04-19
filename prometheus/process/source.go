@@ -25,10 +25,8 @@ import (
 )
 
 var errUnknownUser = errors.New("user not found")
-var errExpectedPointer = errors.New("process-exporter changed its internal, expected a pointer")
-var errExpectedStruct = errors.New("process-exporter changed its internal, expected a struct")
-var errExpectedProc = errors.New("process-exporter changed its internal, expected a proc.Proc")
-var errNullPointer = errors.New("process-exporter changed its internal, getProcCache return null-pointer")
+var errNullPointer = errors.New("getProcCache return null-pointer")
+var errChangedInternal = errors.New("process-exporter changed its internal")
 
 // See https://github.com/prometheus/procfs/blob/master/proc_stat.go for details on userHZ.
 const userHZ = 100
@@ -51,6 +49,10 @@ type Processes struct {
 	exeCache   map[proc.ID]string
 	userCache  map[proc.ID]string
 	lastUpdate time.Time
+}
+
+func expectedError(expected string) error {
+	return fmt.Errorf("%w, expected a %s", errChangedInternal, expected)
 }
 
 // NewProcessLister creates a new ProcessLister using the specified parameters.
@@ -276,17 +278,17 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 	value := reflect.ValueOf(p)
 
 	if value.Kind() != reflect.Ptr {
-		return nil, errExpectedPointer
+		return nil, expectedError("pointer")
 	}
 
 	value = value.Elem()
 
 	if value.Type().Name() != "procIterator" {
-		return nil, fmt.Errorf("process-exporter changed its internal, expected procIterator, got %v", value.Type().Name())
+		return nil, fmt.Errorf("%w, expected procIterator, got %v", errChangedInternal, value.Type().Name())
 	}
 
 	if value.Kind() != reflect.Struct {
-		return nil, errExpectedStruct
+		return nil, expectedError("struct")
 	}
 
 	procValue := value.FieldByName("Proc")
@@ -294,7 +296,7 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 	result, ok := procValue.Interface().(proc.Proc)
 
 	if !ok {
-		return nil, errExpectedProc
+		return nil, expectedError("proc.Proc")
 	}
 
 	return result, nil
@@ -305,23 +307,23 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 	value := reflect.ValueOf(p)
 
 	if value.Kind() != reflect.Ptr {
-		return nil, errExpectedPointer
+		return nil, expectedError("pointer")
 	}
 
 	value = value.Elem()
 
 	if value.Type().Name() != "proc" {
-		return nil, fmt.Errorf("process-exporter changed its internal, expected proc, got %v", value.Type().Name())
+		return nil, fmt.Errorf("%w, expected proc, got %v", errChangedInternal, value.Type().Name())
 	}
 
 	if value.Kind() != reflect.Struct {
-		return nil, errExpectedStruct
+		return nil, expectedError("struct")
 	}
 
 	value = value.FieldByName("proccache")
 
 	if value.Type().Name() != "proccache" {
-		return nil, fmt.Errorf("process-exporter changed its internal, expected proccache, got %v", value.Type().Name())
+		return nil, fmt.Errorf("%w, expected proccache, got %v", errChangedInternal, value.Type().Name())
 	}
 
 	ptr := unsafe.Pointer(value.UnsafeAddr())
