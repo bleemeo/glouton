@@ -135,7 +135,7 @@ func (t *Target) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
 			if strings.Contains(x, "{") {
 				matcher, err := parser.ParseMetricSelector(x)
 				if err != nil {
-					logger.V(1).Printf("ignoring invalid matcher %v: %w", x, err)
+					logger.V(1).Printf("ignoring invalid matcher %v: %s", x, err)
 					continue
 				}
 
@@ -154,7 +154,7 @@ func (t *Target) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
 			if strings.Contains(x, "{") {
 				matcher, err := parser.ParseMetricSelector(x)
 				if err != nil {
-					logger.V(1).Printf("ignoring invalid matcher %v: %w", x, err)
+					logger.V(1).Printf("ignoring invalid matcher %v: %s", x, err)
 					continue
 				}
 

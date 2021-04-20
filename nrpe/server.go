@@ -99,7 +99,7 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 	}
 
 	if err != nil {
-		logger.V(1).Printf("Failed to encode NRPE packet: %w", err)
+		logger.V(1).Printf("Failed to encode NRPE packet: %s", err)
 		c.Close()
 
 		return
@@ -107,7 +107,7 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 
 	_, err = c.Write(encodedAnswer)
 	if err != nil {
-		logger.V(1).Printf("Failed to write NRPE packet: %w", err)
+		logger.V(1).Printf("Failed to write NRPE packet: %s", err)
 	}
 
 	c.Close()
