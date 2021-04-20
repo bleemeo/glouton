@@ -25,8 +25,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/rabbitmq"
 )
 
-const inputName = "rabbitmq"
-
 // New initialise rabbitmq.Input.
 func New(url string, username string, password string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["rabbitmq"]
@@ -45,10 +43,10 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 				},
 			}
 		} else {
-			err = inputs.ErrUnexpectedType(inputName)
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

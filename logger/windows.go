@@ -18,8 +18,10 @@
 
 package logger
 
-import "fmt"
+import "errors"
+
+var errUnsupported = errors.New("syslog is unsupported on windows")
 
 func (cfg *config) enableSyslog() error {
-	return fmt.Errorf("syslog is unsupported on windows")
+	return errUnsupported
 }

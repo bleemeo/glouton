@@ -25,8 +25,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/system"
 )
 
-const inputName = "system"
-
 // New initialise system.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["system"]
@@ -41,7 +39,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

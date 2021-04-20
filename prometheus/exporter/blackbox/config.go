@@ -29,7 +29,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var errUnknownModule = errors.New("blackbox_exporter: unknown blackbox module found in your configuration")
+var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
 
 const maxTimeout time.Duration = 9500 * time.Millisecond
 

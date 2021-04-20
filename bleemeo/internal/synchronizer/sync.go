@@ -134,7 +134,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	if err := s.setClient(); err != nil {
-		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
+		//TODO: an error occurs with the linter as of v1.27. This is fixed in the latest updates.
+		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err) //nolint: goerr113
 	}
 
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).

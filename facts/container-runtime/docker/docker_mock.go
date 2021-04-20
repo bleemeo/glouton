@@ -25,22 +25,18 @@ type MockDockerClient struct {
 	TopCallCount int
 }
 
-var errNotFound = errors.New("not found?")
+var errNotFound = errors.New("not found")
 var errNotImplemented = errors.New("not implemented")
 var errContainerTopMissingArg = errors.New("ContainerTop called without empty arg or waux")
 
-func notImplemented(action string) error {
-	return fmt.Errorf("%s %w", action, errNotImplemented)
-}
-
 // ContainerExecAttach is not implemented.
 func (cl *MockDockerClient) ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error) {
-	return dockerTypes.HijackedResponse{}, notImplemented("ContainerExecAttach")
+	return dockerTypes.HijackedResponse{}, errNotImplemented
 }
 
 // ContainerExecCreate is not implemented.
 func (cl *MockDockerClient) ContainerExecCreate(ctx context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error) {
-	return dockerTypes.IDResponse{}, notImplemented("ContainerExecCreate")
+	return dockerTypes.IDResponse{}, errNotImplemented
 }
 
 // ContainerInspect return inspect for in-memory list of containers.

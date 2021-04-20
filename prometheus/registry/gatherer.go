@@ -259,7 +259,7 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 		if exists {
 			if existingMF.GetType() != mf.GetType() {
 				errs = append(errs, fmt.Errorf(
-					"%w: family %s has type %s but should have %s", errIncorrectType,
+					"%w: %s has type %s but should have %s", errIncorrectType,
 					mf.GetName(), mf.GetType(), existingMF.GetType(),
 				))
 

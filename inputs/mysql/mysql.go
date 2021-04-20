@@ -26,8 +26,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/mysql"
 )
 
-const inputName = "MySQL"
-
 // New initialise mysql.Input.
 func New(server string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mysql"]
@@ -49,10 +47,10 @@ func New(server string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = inputs.ErrUnexpectedType(inputName)
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

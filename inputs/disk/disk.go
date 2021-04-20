@@ -28,8 +28,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/disk"
 )
 
-const inputName = "Disk"
-
 type diskTransformer struct {
 	mountPoint string
 	blacklist  []string
@@ -66,7 +64,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

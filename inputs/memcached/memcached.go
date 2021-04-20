@@ -26,8 +26,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/memcached"
 )
 
-const inputName = "Memcached"
-
 // New initialise memcached.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["memcached"]
@@ -45,10 +43,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = inputs.ErrUnexpectedType(inputName)
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

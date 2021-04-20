@@ -30,8 +30,6 @@ import (
 
 var errCreation = errors.New("error during creation of HAproxy input")
 
-const inputName = "HAProxy"
-
 // We use a dedicated function to be able to recover from a panic.
 func reflectSet(url string, input telegraf.Input) {
 	inputValue := reflect.Indirect(reflect.ValueOf(input))
@@ -68,7 +66,7 @@ func New(url string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return i, err

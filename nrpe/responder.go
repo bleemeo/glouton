@@ -34,8 +34,6 @@ import (
 
 var errContainsEmptyCommand = errors.New("NRPE: config file contains an empty command")
 var errUnreadable = errors.New("NRPE: Unable to read output")
-var errCommandUndefined = errors.New("NRPE: Command undefined")
-var errNoAssociatedCheck = errors.New("NRPE: Command exists but hasn't an associated check")
 
 type checkRegistry interface {
 	GetCheckNow(discovery.NameContainer) (discovery.CheckNow, error)
@@ -89,7 +87,8 @@ func (r Responder) Response(ctx context.Context, request string) (string, int16,
 		return r.responseNRPEConf(ctx, requestArgs)
 	}
 
-	return "", 0, fmt.Errorf("%w: %s", errCommandUndefined, requestArgs[0])
+	// this error has been disabled as we want to closely match the nrpe server output
+	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0]) //nolint: goerr113
 }
 
 func (r Responder) responseCustomCheck(ctx context.Context, request string) (string, int16, error) {
@@ -97,7 +96,8 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 
 	checkNow, err := r.discovery.GetCheckNow(nameContainer)
 	if err != nil {
-		return "", 0, fmt.Errorf("%w: %s", errNoAssociatedCheck, request)
+		// this error has been disabled as we want to closely match the nrpe server output
+		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but does not have an associated check", request) //nolint: goerr113
 	}
 
 	statusDescription := checkNow(ctx)

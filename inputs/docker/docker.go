@@ -29,8 +29,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/docker"
 )
 
-const inputName = "Docker"
-
 // New initialise docker.Input.
 func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["docker"]
@@ -55,10 +53,10 @@ func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegr
 				},
 			}
 		} else {
-			err = inputs.ErrUnexpectedType(inputName)
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

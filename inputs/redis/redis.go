@@ -25,8 +25,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/redis"
 )
 
-const inputName = "redis"
-
 // New initialise redis.Input.
 func New(url string) (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["redis"]
@@ -44,10 +42,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = inputs.ErrUnexpectedType(inputName)
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

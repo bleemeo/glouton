@@ -28,8 +28,6 @@ import (
 	_ "github.com/influxdata/telegraf/plugins/inputs/phpfpm" // we use it
 )
 
-const inputName = "PHP-FPM"
-
 var errInputCreation = errors.New("error during creation of PHP-FPM input")
 
 // We use a dedicated function to be able to recover from a panic.
@@ -65,7 +63,7 @@ func New(url string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

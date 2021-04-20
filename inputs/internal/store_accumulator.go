@@ -69,7 +69,7 @@ func (a *StoreAccumulator) AddHistogram(measurement string, fields map[string]in
 
 // AddMetric adds an metric to the accumulator.
 func (a *StoreAccumulator) AddMetric(telegraf.Metric) {
-	a.AddError(ErrAddMetricNotImplemented)
+	a.AddError(errNotImplemented)
 }
 
 // AddError reports an error.
@@ -82,12 +82,12 @@ func (a *StoreAccumulator) AddError(err error) {
 // as the order of time that the metrics should be rounded to, with the
 // maximum being 1s.
 func (a *StoreAccumulator) SetPrecision(precision time.Duration) {
-	a.AddError(ErrSetPrecisionNotImplemented)
+	a.AddError(errNotImplemented)
 }
 
 // WithTracking upgrades to a TrackingAccumulator with space for maxTracked
 // metrics/batches.
 func (a *StoreAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
-	a.AddError(ErrWithTrackingNotImplemented)
+	a.AddError(errNotImplemented)
 	return nil
 }

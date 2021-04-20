@@ -69,7 +69,7 @@ type callback func(ctx context.Context, command string) (string, int16, error)
 func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rndBytes [2]byte) {
 	decodedRequest, err := decode(c)
 	if err != nil {
-		logger.V(1).Printf("Unable to decode NRPE packet: %w", err)
+		logger.V(1).Printf("Unable to decode NRPE packet: %v", err)
 		c.Close()
 
 		return

@@ -233,16 +233,5 @@ func (a FixedTimeAccumulator) AddFieldsWithAnnotations(measurement string, field
 	a.Acc.AddError(errMissingMethod)
 }
 
-var errUnexpectedType = errors.New("unexpectedType")
-var errDisabledInput = errors.New("disabledInput")
-
-//TelegrafService is a commonly referenced service for the errDisabledInput error.
-const TelegrafService = "Telegraf"
-
-func ErrUnexpectedType(inputName string) error {
-	return fmt.Errorf("%w: input %s does not have the expected type", errUnexpectedType, inputName)
-}
-
-func ErrDisabledInput(inputName string, serviceName string) error {
-	return fmt.Errorf("%w: input %s is not enabled in service %s", errDisabledInput, inputName, serviceName)
-}
+var ErrUnexpectedType = errors.New("input does not have the expected type")
+var ErrDisabledInput = errors.New("input is not enabled in service Telegraf")

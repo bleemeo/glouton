@@ -294,7 +294,7 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 
 	found, err = cfg.LoadEnv(key, varType, envName)
 	if varType == config.TypeUnknown && found {
-		return false, fmt.Errorf("%w: key = %s value = %s", errUpdateFromEnv, envName, key)
+		return false, fmt.Errorf("%w: env = %s key = %s", errUpdateFromEnv, envName, key)
 	}
 
 	if err != nil && varType != config.TypeUnknown {

@@ -130,7 +130,8 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 		}
 
 		if p.procErr != nil {
-			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %w)", err)
+			//TODO: an error occurs with the linter as of v1.27. This is fixed in the latest updates.
+			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %w)", err) //nolint: goerr113
 			continue
 		}
 

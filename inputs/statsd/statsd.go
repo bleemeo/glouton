@@ -30,8 +30,6 @@ import (
 
 var errCreation = errors.New("error during creation of StatsD input")
 
-const inputName = "Statsd"
-
 func reflectSetPercentile(input *statsd.Statsd) {
 	inputValue := reflect.Indirect(reflect.ValueOf(input))
 	percentilesValue := inputValue.FieldByName("Percentiles")
@@ -76,10 +74,10 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = inputs.ErrUnexpectedType(inputName)
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return i, nil

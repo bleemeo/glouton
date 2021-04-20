@@ -19,8 +19,6 @@ package zabbix
 
 import "errors"
 
-var errUnsupportedKey = errors.New("Unsupported item key") //nolint: stylecheck
-
 var allPackets = []packetCapture{
 	versionPacket,
 	pingPacket,
@@ -157,5 +155,6 @@ var doesNotExist = packetCapture{
 		0x64, 0x20, 0x69, 0x74, 0x65, 0x6d, 0x20, 0x6b,
 		0x65, 0x79, 0x2e,
 	},
-	ReplyError: errUnsupportedKey,
+	// This errors represents a raw zabbix response, hence we don't respect go's errors guideline
+	ReplyError: errors.New("Unsupported item key"), //nolint: stylecheck,goerr113
 }

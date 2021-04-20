@@ -28,8 +28,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/cpu"
 )
 
-const inputName = "cpu"
-
 // New initialise cpu.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["cpu"]
@@ -47,7 +45,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

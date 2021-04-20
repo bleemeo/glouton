@@ -30,8 +30,6 @@ type netTransformer struct {
 	blacklist []string
 }
 
-const inputName = "net"
-
 // New initialise net.Input
 //
 // blacklist contains a list of interface name prefix to ignore.
@@ -52,7 +50,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

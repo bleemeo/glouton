@@ -26,8 +26,6 @@ import (
 	"github.com/influxdata/telegraf/plugins/inputs/mem"
 )
 
-const inputName = "Mem"
-
 // New initialise mem.Input.
 func New() (i telegraf.Input, err error) {
 	var input, ok = telegraf_inputs.Inputs["mem"]
@@ -45,7 +43,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return

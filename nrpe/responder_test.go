@@ -17,6 +17,7 @@
 package nrpe
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -62,7 +63,7 @@ command[list_partitions]=lsblk
 const nrpeConf7 = `
 command[check_with_unexpected_char]=command with [] and =
 command[check_event_worse]=command[check_event_worse]=ls
-command[ check with space]= command --followed-by-tailing-space      
+command[ check with space]= command --followed-by-tailing-space
 command[strange command?/$µ]=strange command characters §#@
 
 # Note: nagios-nrpe-server don't support "dont_blame_nrpe =1", but support the
@@ -488,7 +489,7 @@ func TestReturnCommand(t *testing.T) {
 			t.Errorf("%v r.retunrCommand(%v) == '%v', want '%v'", i, c.Entries.Args, commandResult, c.Want.Command)
 		}
 
-		if !reflect.DeepEqual(errResult, c.Want.Err) {
+		if !errors.Is(errResult, c.Want.Err) {
 			t.Errorf("%v r.returnCommand(%v) == '%v', want '%v'", i, c.Entries.Args, errResult, c.Want.Err)
 		}
 	}

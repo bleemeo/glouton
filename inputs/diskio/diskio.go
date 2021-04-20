@@ -32,8 +32,6 @@ type diskIOTransformer struct {
 	blacklist []*regexp.Regexp
 }
 
-const inputName = "Diskio"
-
 // New initialise diskio.Input.
 //
 // whitelist is a list of regular expretion for device to include
@@ -59,7 +57,7 @@ func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Inp
 			},
 		}
 	} else {
-		err = inputs.ErrDisabledInput(inputName, inputs.TelegrafService)
+		err = inputs.ErrDisabledInput
 	}
 
 	return i, err
