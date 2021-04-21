@@ -442,7 +442,11 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool
 		if agentID != s.agentID {
 			agentUUID, present := types.TextToLabels(metric.LabelsText)[types.LabelScraperUUID]
 
-			if !present || agentUUID != s.agentID {
+			if present && agentUUID != s.agentID {
+				continue
+			}
+
+			if !present && types.TextToLabels(metric.LabelsText)[types.LabelScraper] != s.option.BlackboxScraperName {
 				continue
 			}
 		}
@@ -907,8 +911,8 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	if metric.Annotations().BleemeoAgentID != "" {
 		found := false
 
-		if metric.Labels()[types.LabelScraperUUID] != s.agentID {
-			return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, metric.Labels()[types.LabelScraperUUID], s.agentID)
+		if scaperID := metric.Labels()[types.LabelScraperUUID]; scaperID != "" && scaperID != s.agentID {
+			return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, scaperID, s.agentID)
 		}
 
 		for _, monitor := range monitors {

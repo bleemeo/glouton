@@ -37,9 +37,10 @@ var errSettingsDeprecated = errors.New(
 
 //nolint:gochecknoglobals
 var defaultConfig = map[string]interface{}{
-	"blackbox.enabled":      true,
-	"blackbox.scraper_name": "",
-	"blackbox.targets":      []interface{}{},
+	"blackbox.enabled":           true,
+	"blackbox.scraper_name":      "",
+	"blackbox.scraper_send_uuid": true,
+	"blackbox.targets":           []interface{}{},
 	"blackbox.modules": map[string]interface{}{
 		"http": map[string]interface{}{
 			"prober": "http",

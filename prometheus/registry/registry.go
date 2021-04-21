@@ -75,11 +75,7 @@ func (f pushFunction) PushPoints(points []types.MetricPoint) {
 // * any points returned by a registered Gatherer when pushPoint option was set
 //   when gatherer was registered.
 type Registry struct {
-	PushPoint      types.PointPusher
-	FQDN           string
-	GloutonPort    string
-	BleemeoAgentID string
-	MetricFormat   types.MetricFormat
+	Option
 
 	l sync.Mutex
 
@@ -102,6 +98,15 @@ type Registry struct {
 	lastPushedPointsCleanup    time.Time
 	currentDelay               time.Duration
 	updateDelayC               chan interface{}
+}
+
+type Option struct {
+	PushPoint             types.PointPusher
+	FQDN                  string
+	GloutonPort           string
+	BleemeoAgentID        string
+	MetricFormat          types.MetricFormat
+	BlackboxSentScraperID bool
 }
 
 type registration struct {
@@ -142,12 +147,12 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			TargetLabel:  types.LabelInstance,
 			Replacement:  "$1-$2:$3",
 		},
-		// when the metric comes from a probe, the 'scraper_uuid' label is the uuid of the agent
+		// when the metric comes from a probe, the 'scraper_uuid' label is the uuid of the agent. But only if scraper_send_uuid is enabled
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
-			Regex:        relabel.MustNewRegexp("(.+);(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID},
+			Regex:        relabel.MustNewRegexp("(.+);(.+);yes"),
+			SourceLabels: model.LabelNames{types.LabelMetaProbeServiceUUID, types.LabelMetaBleemeoUUID, types.LabelMetaSendScraperUUID},
 			TargetLabel:  types.LabelScraperUUID,
 			Replacement:  "$2",
 		},
@@ -733,6 +738,9 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 
 	if r.BleemeoAgentID != "" {
 		result[types.LabelMetaBleemeoUUID] = r.BleemeoAgentID
+		if r.BlackboxSentScraperID {
+			result[types.LabelMetaSendScraperUUID] = "yes"
+		}
 	}
 
 	servicePort := result[types.LabelMetaServicePort]

@@ -534,11 +534,14 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.store = store.New()
 	a.gathererRegistry = &registry.Registry{
-		PushPoint:      a.store,
-		FQDN:           fqdn,
-		BleemeoAgentID: a.BleemeoAgentID(),
-		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
-		MetricFormat:   a.metricFormat,
+		Option: registry.Option{
+			PushPoint:             a.store,
+			FQDN:                  fqdn,
+			BleemeoAgentID:        a.BleemeoAgentID(),
+			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
+			MetricFormat:          a.metricFormat,
+			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
+		},
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
@@ -740,6 +743,11 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
+		scaperName := a.config.String("blackbox.scraper_name")
+		if scaperName == "" {
+			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Int("web.listener.port"))
+		}
+
 		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.config,
 			State:                   a.state,
@@ -755,6 +763,7 @@ func (a *agent) run() { //nolint:gocyclo
 			UpdateUnits:             a.threshold.SetUnits,
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+			BlackboxScraperName:     scaperName,
 		})
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
