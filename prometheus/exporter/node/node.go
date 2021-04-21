@@ -75,7 +75,7 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 	}
 
 	if _, err := kingpin.CommandLine.Parse(args); err != nil {
-		return nil, fmt.Errorf("kingpin initialization: %v", err)
+		return nil, fmt.Errorf("kingpin initialization: %w", err)
 	}
 
 	setCollector(option.EnabledCollectors)

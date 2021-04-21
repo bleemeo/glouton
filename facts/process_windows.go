@@ -18,6 +18,7 @@ package facts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"strings"
@@ -27,6 +28,10 @@ import (
 
 	"golang.org/x/sys/windows"
 )
+
+var errCannotRetrieveInfo = errors.New("cannot retrieve the command line informations for the process")
+var errCannotRetrieveToken = errors.New("cannot retrieve the token for the process")
+var errCannotRetrieveUserToken = errors.New("cannot retrieve the user token for the process")
 
 //nolint:gochecknoglobals
 var (
@@ -125,11 +130,12 @@ func retrieveCmdLine(pid uint32) (cmdline string, err error) {
 	)
 
 	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
-		return "", fmt.Errorf("cannot retrieve the command line informations for the process %d, system call 'NtQueryInformationProcess' failed: %v", pid, err)
+		return "", fmt.Errorf("%w %d, system call 'NtQueryInformationProcess' failed: %v", errCannotRetrieveInfo, pid, err)
 	}
 
 	if bufLen == 0 {
-		return "", fmt.Errorf("NtQueryInformationProcess: empty buffer requested")
+		// This errors represents a windows specific error realated to the NtQueryInformationProcess
+		return "", fmt.Errorf("NtQueryInformationProcess: empty buffer requested") //nolint: goerr113
 	}
 
 	buf := make([]byte, bufLen)
@@ -142,7 +148,7 @@ func retrieveCmdLine(pid uint32) (cmdline string, err error) {
 	)
 	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
 	if ret >= 0x80000000 {
-		return "", fmt.Errorf("cannot retrieve the command line informations for the process %d, system call 'NtQueryInformationProcess' failed: %v", pid, err)
+		return "", fmt.Errorf("%w %d, system call 'NtQueryInformationProcess' failed: %v", errCannotRetrieveInfo, pid, err)
 	}
 
 	_ = syscall.CloseHandle(syscall.Handle(h))
@@ -162,12 +168,12 @@ func retrieveUsername(pid uint32) (string, error) {
 
 	err = windows.OpenProcessToken(h, windows.TOKEN_QUERY, &token)
 	if err != nil {
-		return "", fmt.Errorf("cannot retrieve the token for the process %d: %v", pid, err)
+		return "", fmt.Errorf("%w %d: %v", errCannotRetrieveToken, pid, err)
 	}
 
 	userToken, err := token.GetTokenUser()
 	if err != nil {
-		return "", fmt.Errorf("cannot retrieve the user token for the process %d: %v", pid, err)
+		return "", fmt.Errorf("%w %d: %v", errCannotRetrieveUserToken, pid, err)
 	}
 
 	res, _, _, err := userToken.User.Sid.LookupAccount("")

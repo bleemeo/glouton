@@ -155,5 +155,6 @@ var doesNotExist = packetCapture{
 		0x64, 0x20, 0x69, 0x74, 0x65, 0x6d, 0x20, 0x6b,
 		0x65, 0x79, 0x2e,
 	},
-	ReplyError: errors.New("Unsupported item key"), // nolint: stylecheck
+	// This errors represents a raw zabbix response, hence we don't respect go's errors guideline
+	ReplyError: errors.New("Unsupported item key"), //nolint: stylecheck,goerr113
 }

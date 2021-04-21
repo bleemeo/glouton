@@ -27,6 +27,8 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
+var errTooManyInputs = errors.New("too many inputs in the collectors. Unable to find new slot")
+
 // Collector implement running Gather on inputs every fixed time interval.
 type Collector struct {
 	acc          telegraf.Accumulator
@@ -64,7 +66,7 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	for ok {
 		id++
 		if id == 0 {
-			return 0, errors.New("too many inputs in the collectors. Unable to find new slot")
+			return 0, errTooManyInputs
 		}
 
 		_, ok = c.inputs[id]

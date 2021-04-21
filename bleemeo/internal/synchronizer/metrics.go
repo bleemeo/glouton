@@ -35,7 +35,9 @@ import (
 const agentStatusName = "agent_status"
 
 var (
-	errRetryLater = errors.New("metric registration should be retried laster")
+	errRetryLater     = errors.New("metric registration should be retried laster")
+	errAttemptToSpoof = errors.New("attempt to spoof another agent (or missing label)")
+	errNotImplemented = errors.New("not implemented on fakeMetric")
 )
 
 type errNeedRegister struct {
@@ -80,7 +82,7 @@ type fakeMetric struct {
 }
 
 func (m fakeMetric) Points(time.Time, time.Time) ([]types.Point, error) {
-	return nil, errors.New("not implemented on fakeMetric")
+	return nil, errNotImplemented
 }
 func (m fakeMetric) Annotations() types.MetricAnnotations {
 	return types.MetricAnnotations{}
@@ -737,7 +739,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 			}
 
 			err := s.metricRegisterAndUpdateOne(metric, registeredMetricsByUUID, registeredMetricsByKey, containersByContainerID, servicesByKey, params, monitors)
-			if err != nil && err == errRetryLater && state < metricPassRetry {
+			if err != nil && errors.Is(err, errRetryLater) && state < metricPassRetry {
 				retryMetrics = append(retryMetrics, metric)
 				continue metricLoop
 			}
@@ -906,7 +908,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		found := false
 
 		if metric.Labels()[types.LabelScraperUUID] != s.agentID {
-			return fmt.Errorf("attempt to spoof another agent (or missing label): %s, want %s", metric.Labels()[types.LabelScraperUUID], s.agentID)
+			return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, metric.Labels()[types.LabelScraperUUID], s.agentID)
 		}
 
 		for _, monitor := range monitors {

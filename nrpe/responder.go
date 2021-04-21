@@ -18,6 +18,7 @@ package nrpe
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/discovery"
 	"glouton/logger"
@@ -30,6 +31,9 @@ import (
 
 	"github.com/google/shlex"
 )
+
+var errContainsEmptyCommand = errors.New("NRPE: config file contains an empty command")
+var errUnreadable = errors.New("NRPE: Unable to read output")
 
 type checkRegistry interface {
 	GetCheckNow(discovery.NameContainer) (discovery.CheckNow, error)
@@ -83,7 +87,8 @@ func (r Responder) Response(ctx context.Context, request string) (string, int16,
 		return r.responseNRPEConf(ctx, requestArgs)
 	}
 
-	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0])
+	// this error has been disabled as we want to closely match the nrpe server output
+	return "", 0, fmt.Errorf("NRPE: Command '%s' not defined", requestArgs[0]) //nolint: goerr113
 }
 
 func (r Responder) responseCustomCheck(ctx context.Context, request string) (string, int16, error) {
@@ -91,7 +96,8 @@ func (r Responder) responseCustomCheck(ctx context.Context, request string) (str
 
 	checkNow, err := r.discovery.GetCheckNow(nameContainer)
 	if err != nil {
-		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but hasn't an associated check", request)
+		// this error has been disabled as we want to closely match the nrpe server output
+		return "", 0, fmt.Errorf("NRPE: Command '%s' exists but does not have an associated check", request) //nolint: goerr113
 	}
 
 	statusDescription := checkNow(ctx)
@@ -103,11 +109,11 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	nrpeCommand, err := r.returnCommand(requestArgs)
 	if err != nil {
 		logger.V(1).Printf("Impossible to create the NRPE command : %s", err)
-		return "", 0, fmt.Errorf("NRPE: Unable to read output")
+		return "", 0, errUnreadable
 	}
 
 	if len(nrpeCommand) == 0 {
-		return "", 0, fmt.Errorf("NRPE: config file contains an empty command")
+		return "", 0, errContainsEmptyCommand
 	}
 
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
@@ -122,7 +128,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 		nagiosCode = exitError.ExitCode()
 	} else if err != nil {
 		logger.V(1).Printf("NRPE command %s failed : %s", nrpeCommand, err)
-		return "", 0, fmt.Errorf("NRPE: Unable to read output")
+		return "", 0, errUnreadable
 	}
 
 	output := string(out)

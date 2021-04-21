@@ -17,7 +17,7 @@
 package elasticsearch
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
@@ -43,10 +43,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("input Elasticsearch is not the exepcted type")
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = errors.New("input Elasticsearch not enabled in Telegraf")
+		err = inputs.ErrDisabledInput
 	}
 
 	return

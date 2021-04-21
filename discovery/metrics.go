@@ -245,7 +245,7 @@ func (d *Discovery) createInput(service Service) error {
 
 	if d.metricFormat == types.MetricFormatPrometheus {
 		err := d.createPrometheusCollector(service)
-		if err != errNotSupported {
+		if !errors.Is(err, errNotSupported) {
 			logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
 			return err
 		}

@@ -17,7 +17,7 @@
 package memcached
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"strings"
 
@@ -43,10 +43,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("input Memcached is not the expected type")
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = errors.New("input Memcached is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput
 	}
 
 	return

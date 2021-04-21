@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"path/filepath"
 	"reflect"
@@ -24,14 +25,18 @@ type MockDockerClient struct {
 	TopCallCount int
 }
 
+var errNotFound = errors.New("not found")
+var errNotImplemented = errors.New("not implemented")
+var errContainerTopMissingArg = errors.New("ContainerTop called without empty arg or waux")
+
 // ContainerExecAttach is not implemented.
 func (cl *MockDockerClient) ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error) {
-	return dockerTypes.HijackedResponse{}, errors.New("ContainerExecAttach not implemented")
+	return dockerTypes.HijackedResponse{}, errNotImplemented
 }
 
 // ContainerExecCreate is not implemented.
 func (cl *MockDockerClient) ContainerExecCreate(ctx context.Context, container string, config dockerTypes.ExecConfig) (dockerTypes.IDResponse, error) {
-	return dockerTypes.IDResponse{}, errors.New("ContainerExecCreatenot implemented")
+	return dockerTypes.IDResponse{}, errNotImplemented
 }
 
 // ContainerInspect return inspect for in-memory list of containers.
@@ -42,17 +47,17 @@ func (cl *MockDockerClient) ContainerInspect(ctx context.Context, container stri
 		}
 	}
 
-	return dockerTypes.ContainerJSON{}, errors.New("not found?")
+	return dockerTypes.ContainerJSON{}, errNotFound
 }
 
 // ContainerList list containers from in-memory list.
 func (cl *MockDockerClient) ContainerList(ctx context.Context, options dockerTypes.ContainerListOptions) ([]dockerTypes.Container, error) {
 	if !reflect.DeepEqual(options, dockerTypes.ContainerListOptions{All: true}) {
-		return nil, errors.New("ContainerList not implemented with options other that all=True")
+		return nil, fmt.Errorf("ContainerList %w with options other than all=True", errNotImplemented)
 	}
 
 	if cl.Containers == nil {
-		return nil, errors.New("ContainerList not implemented")
+		return nil, fmt.Errorf("ContainerList %w", errNotImplemented)
 	}
 
 	result := make([]dockerTypes.Container, len(cl.Containers))
@@ -77,7 +82,7 @@ func (cl *MockDockerClient) ContainerTop(ctx context.Context, container string, 
 		return cl.TopWaux[container], nil
 	}
 
-	return containerTypes.ContainerTopOKBody{}, errors.New("ContainerTop called without empty arg or waux")
+	return containerTypes.ContainerTopOKBody{}, errContainerTopMissingArg
 }
 
 // Events do events.
@@ -87,19 +92,19 @@ func (cl *MockDockerClient) Events(ctx context.Context, options dockerTypes.Even
 	}
 
 	ch := make(chan error, 1)
-	ch <- errors.New("ContainerTop not implemented")
+	ch <- fmt.Errorf("ContainerTop %w", errNotImplemented)
 
 	return nil, ch
 }
 
 // NetworkInspect is not implemented.
 func (cl *MockDockerClient) NetworkInspect(ctx context.Context, network string, options dockerTypes.NetworkInspectOptions) (dockerTypes.NetworkResource, error) {
-	return dockerTypes.NetworkResource{}, errors.New("NetworkInspect not implemented")
+	return dockerTypes.NetworkResource{}, fmt.Errorf("NetworkInspect %w", errNotImplemented)
 }
 
 // NetworkList is not implemented.
 func (cl *MockDockerClient) NetworkList(ctx context.Context, options dockerTypes.NetworkListOptions) ([]dockerTypes.NetworkResource, error) {
-	return nil, errors.New("NetworkList not implemented")
+	return nil, fmt.Errorf("NetworkList %w", errNotImplemented)
 }
 
 // Ping do nothing.

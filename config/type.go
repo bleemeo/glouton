@@ -17,10 +17,12 @@
 package config
 
 import (
-	"fmt"
+	"errors"
 	"strconv"
 	"strings"
 )
+
+var ErrWrongMapFormat = errors.New("wrong map format, impossible to convert variable in map[string]string")
 
 // ValueType is a list of known value type.
 type ValueType int
@@ -66,7 +68,7 @@ func convertMap(value string) (map[string]string, error) {
 		}
 
 		if len(values) < 2 {
-			return make(map[string]string), fmt.Errorf("wrong map format, impossible to convert variable in map[string]string")
+			return make(map[string]string), ErrWrongMapFormat
 		}
 
 		finalMap[strings.TrimLeft(values[0], " ")] = strings.TrimRight(strings.Join(values[1:], "="), " ")

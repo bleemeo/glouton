@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"errors"
 	"fmt"
 	"glouton/types"
 	"strings"
@@ -12,6 +13,8 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
+
+var errIncorrectType = errors.New("incorrect type for gathered metric family")
 
 type queryType int
 
@@ -256,7 +259,7 @@ func (gs Gatherers) GatherWithState(state GatherState) ([]*dto.MetricFamily, err
 		if exists {
 			if existingMF.GetType() != mf.GetType() {
 				errs = append(errs, fmt.Errorf(
-					"gathered metric family %s has type %s but should have %s",
+					"%w: %s has type %s but should have %s", errIncorrectType,
 					mf.GetName(), mf.GetType(), existingMF.GetType(),
 				))
 

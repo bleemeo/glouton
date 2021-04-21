@@ -18,6 +18,7 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"glouton/config"
 	"glouton/logger"
@@ -26,6 +27,12 @@ import (
 	"strconv"
 	"strings"
 	"time"
+)
+
+var errUpdateFromEnv = errors.New("update from environment variable is not supported")
+var errDeprecatedEnv = errors.New("environement variable is deprecated")
+var errSettingsDeprecated = errors.New(
+	"setting \"metric.prometheus\" is depreacted and replaced by \"metric.prometheus.targets\". See https://docs.bleemeo.com/metrics-sources/prometheus",
 )
 
 //nolint:gochecknoglobals
@@ -197,9 +204,7 @@ func migrate(cfg *config.Configuration) (warnings []error) {
 			for key, dict := range vMap {
 				if tmp, ok := dict.(map[string]interface{}); ok {
 					if u, ok := tmp["url"].(string); ok {
-						warnings = append(warnings, fmt.Errorf(
-							"setting \"metric.prometheus\" is depreacted and replaced by \"metric.prometheus.targets\". See https://docs.bleemeo.com/metrics-sources/prometheus",
-						))
+						warnings = append(warnings, errSettingsDeprecated)
 
 						migratedTargets = append(migratedTargets, map[string]interface{}{
 							"url":  u,
@@ -244,7 +249,7 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		}
 
 		if found {
-			warnings = append(warnings, fmt.Errorf("environement variable %#v is deprecated, use %#v instead", oldEnv, keyToEnvironemntName(key)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, oldEnv, keyToEnvironemntName(key)))
 		}
 	}
 
@@ -252,7 +257,7 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		if found, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
 			return nil, err
 		} else if found {
-			warnings = append(warnings, fmt.Errorf("environement variable %#v is deprecated, use %#v instead", keyToBleemeoEnvironemntName(key), keyToEnvironemntName(key)))
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(key), keyToEnvironemntName(key)))
 		}
 
 		if _, err := loadEnvironmentVariable(cfg, key, keyToEnvironemntName(key), value); err != nil {
@@ -289,11 +294,11 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 
 	found, err = cfg.LoadEnv(key, varType, envName)
 	if varType == config.TypeUnknown && found {
-		return false, fmt.Errorf("update %#v from environment variable %#v is not supported", key, envName)
+		return false, fmt.Errorf("%w: env = %s key = %s", errUpdateFromEnv, envName, key)
 	}
 
 	if err != nil && varType != config.TypeUnknown {
-		return false, fmt.Errorf("bad environ variable %v: %v", envName, err)
+		return false, fmt.Errorf("bad environ variable %s: %w", envName, err)
 	}
 
 	return found, nil

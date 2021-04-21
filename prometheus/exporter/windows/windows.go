@@ -49,7 +49,7 @@ func NewCollector(enabledCollectors []string, options inputs.CollectorConfig) (p
 	}
 
 	if _, err := kingpin.CommandLine.Parse(args); err != nil {
-		return nil, fmt.Errorf("windows_exporter: kingpin initialization failed: %v", err)
+		return nil, fmt.Errorf("windows_exporter: kingpin initialization failed: %w", err)
 	}
 
 	collectors := map[string]collector.Collector{}

@@ -17,7 +17,7 @@
 package redis
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
@@ -42,10 +42,10 @@ func New(url string) (i telegraf.Input, err error) {
 				},
 			}
 		} else {
-			err = errors.New("input Redis is not the expected type")
+			err = inputs.ErrUnexpectedType
 		}
 	} else {
-		err = errors.New("input Redis is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput
 	}
 
 	return

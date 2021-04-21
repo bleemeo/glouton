@@ -38,6 +38,8 @@ import (
 	"time"
 )
 
+var errWrongValue = errors.New("wrong value for crc32")
+
 type reducedPacket struct {
 	packetVersion int16
 	packetType    int16
@@ -97,7 +99,7 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 	}
 
 	if err != nil {
-		logger.V(1).Printf("Failed to encode NRPE packet: %v", err)
+		logger.V(1).Printf("Failed to encode NRPE packet: %s", err)
 		c.Close()
 
 		return
@@ -105,7 +107,7 @@ func handleConnection(ctx context.Context, c io.ReadWriteCloser, cb callback, rn
 
 	_, err = c.Write(encodedAnswer)
 	if err != nil {
-		logger.V(1).Printf("Failed to write NRPE packet: %v", err)
+		logger.V(1).Printf("Failed to write NRPE packet: %s", err)
 	}
 
 	c.Close()
@@ -128,13 +130,13 @@ func decode(r io.Reader) (reducedPacket, error) {
 
 	err = binary.Read(buf, binary.BigEndian, &decodedPacket.packetVersion)
 	if err != nil {
-		err = fmt.Errorf("binary.Read failed for packet_version: %v", err)
+		err = fmt.Errorf("binary.Read failed for packet_version: %w", err)
 		return decodedPacket, err
 	}
 
 	err = binary.Read(buf, binary.BigEndian, &decodedPacket.packetType)
 	if err != nil {
-		err = fmt.Errorf("binary.Read failed for packet_type: %v", err)
+		err = fmt.Errorf("binary.Read failed for packet_type: %w", err)
 		return decodedPacket, err
 	}
 
@@ -142,13 +144,13 @@ func decode(r io.Reader) (reducedPacket, error) {
 
 	err = binary.Read(buf, binary.BigEndian, &crc32value)
 	if err != nil {
-		err = fmt.Errorf("binary.Read failed for crc32value: %v", err)
+		err = fmt.Errorf("binary.Read failed for crc32value: %w", err)
 		return decodedPacket, err
 	}
 
 	err = binary.Read(buf, binary.BigEndian, &decodedPacket.resultCode)
 	if err != nil {
-		err = fmt.Errorf("binary.Read failed for result_code: %v", err)
+		err = fmt.Errorf("binary.Read failed for result_code: %w", err)
 		return decodedPacket, err
 	}
 
@@ -162,13 +164,13 @@ func decode(r io.Reader) (reducedPacket, error) {
 
 		err = binary.Read(buf, binary.BigEndian, &uselessvariable)
 		if err != nil {
-			err = fmt.Errorf("binary.Read failed for alignment: %v", err)
+			err = fmt.Errorf("binary.Read failed for alignment: %w", err)
 			return decodedPacket, err
 		}
 
 		err = binary.Read(buf, binary.BigEndian, &bufferlength)
 		if err != nil {
-			err = fmt.Errorf("binary.Read failed for buffer_length: %v", err)
+			err = fmt.Errorf("binary.Read failed for buffer_length: %w", err)
 			return decodedPacket, err
 		}
 	}
@@ -195,7 +197,7 @@ func decode(r io.Reader) (reducedPacket, error) {
 	completePacket[7] = 0
 
 	if crc32.ChecksumIEEE(completePacket) != crc32value {
-		return decodedPacket, errors.New("wrong value for crc32")
+		return decodedPacket, errWrongValue
 	}
 
 	i := bytes.IndexByte(packetBuffer, 0x0)
@@ -223,7 +225,7 @@ func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
 
 	err := binary.Write(buf, binary.BigEndian, &decodedPacket.packetType)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for packet_type: %v", err)
+		err = fmt.Errorf("binary.Write failed for packet_type: %w", err)
 		return encodedPacket, err
 	}
 
@@ -233,7 +235,7 @@ func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
 
 	err = binary.Write(buf, binary.BigEndian, &decodedPacket.resultCode)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for result_code: %v", err)
+		err = fmt.Errorf("binary.Write failed for result_code: %w", err)
 		return encodedPacket, err
 	}
 
@@ -253,7 +255,7 @@ func encodeV2(decodedPacket reducedPacket, randBytes [2]byte) ([]byte, error) {
 
 	err = binary.Write(buf, binary.BigEndian, &crc32Value)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for crc32_value: %v", err)
+		err = fmt.Errorf("binary.Write failed for crc32_value: %w", err)
 		return encodedPacket, err
 	}
 
@@ -271,7 +273,7 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 
 	err := binary.Write(buf, binary.BigEndian, &decodedPacket.packetVersion)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for packet_version: %v", err)
+		err = fmt.Errorf("binary.Write failed for packet_version: %w", err)
 		return encodedPacket, err
 	}
 
@@ -281,7 +283,7 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 
 	err = binary.Write(buf, binary.BigEndian, &decodedPacket.packetType)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for packet_type: %v", err)
+		err = fmt.Errorf("binary.Write failed for packet_type: %w", err)
 		return encodedPacket, err
 	}
 
@@ -291,7 +293,7 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 
 	err = binary.Write(buf, binary.BigEndian, &bufferLength)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for bufferLength: %v", err)
+		err = fmt.Errorf("binary.Write failed for bufferLength: %w", err)
 		return encodedPacket, err
 	}
 
@@ -301,7 +303,7 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 
 	err = binary.Write(buf, binary.BigEndian, &decodedPacket.resultCode)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for resultCode: %v", err)
+		err = fmt.Errorf("binary.Write failed for resultCode: %w", err)
 		return encodedPacket, err
 	}
 
@@ -314,7 +316,7 @@ func encodeV3(decodedPacket reducedPacket) ([]byte, error) {
 
 	err = binary.Write(buf, binary.BigEndian, &crc32Value)
 	if err != nil {
-		err = fmt.Errorf("binary.Write failed for crc32_value: %v", err)
+		err = fmt.Errorf("binary.Write failed for crc32_value: %w", err)
 		return encodedPacket, err
 	}
 
@@ -330,7 +332,7 @@ func certTemplate() (*x509.Certificate, error) {
 
 	serialNumber, err := rand.Int(rand.Reader, serialNumberLimit)
 	if err != nil {
-		return nil, errors.New("failed to generate serial number: " + err.Error())
+		return nil, fmt.Errorf("failed to generate serial number: %w", err)
 	}
 
 	tmpl := x509.Certificate{

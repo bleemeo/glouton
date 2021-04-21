@@ -17,10 +17,10 @@
 package cpu
 
 import (
-	"errors"
 	"runtime"
 	"strings"
 
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
@@ -45,7 +45,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input cpu not enabled in Telegraf")
+		err = inputs.ErrDisabledInput
 	}
 
 	return

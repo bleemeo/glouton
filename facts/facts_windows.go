@@ -18,6 +18,7 @@ package facts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"net"
@@ -25,6 +26,8 @@ import (
 	"github.com/StackExchange/wmi"
 	"golang.org/x/sys/windows/registry"
 )
+
+var errNoResults = errors.New("the WMI request returned 0 result")
 
 //nolint
 type Win32_ComputerSystem struct {
@@ -255,9 +258,9 @@ func getCPULoads() ([]float64, error) {
 
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("unable to read wmi informations: %v", err)
+		return nil, fmt.Errorf("unable to read wmi informations: %w", err)
 	case len(process) == 0:
-		return nil, fmt.Errorf("the WMI request returned 0 result")
+		return nil, errNoResults
 	}
 
 	var system []Win32_PerfFormattedData_PerfOS_System
@@ -266,9 +269,9 @@ func getCPULoads() ([]float64, error) {
 
 	switch {
 	case err != nil:
-		return nil, fmt.Errorf("unable to read wmi informations: %v", err)
+		return nil, fmt.Errorf("unable to read wmi informations: %w", err)
 	case len(system) == 0:
-		return nil, fmt.Errorf("the WMI request returned 0 result")
+		return nil, errNoResults
 	}
 
 	return []float64{1. - float64(process[0].PercentIdleTime)/100. + float64(system[0].ProcessorQueueLength)}, nil

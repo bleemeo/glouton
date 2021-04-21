@@ -20,6 +20,7 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"html/template"
 	"io"
@@ -220,7 +221,7 @@ func (api *API) Run(ctx context.Context) error {
 	logger.Printf("Starting API on %s ✔️", api.BindAddress)
 	logger.Printf("To access the local panel connect to http://%s 🌐", api.BindAddress)
 
-	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+	if err := srv.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
 

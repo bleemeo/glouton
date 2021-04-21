@@ -9,7 +9,6 @@ linters:
     - gomnd # too picky. For example it say that all service port in our known services list is a magic number (even if present only once)
     - godox # too many TODO in code, but should be removed and TODO fixed :)
     - testpackage # Require to review all our tests. Should be done
-    - goerr113 # Require to refactor how we return error. But would be useful
     - nestif # Too many error for now, which would require significant refactor.
     - gocognit
 linters-settings:

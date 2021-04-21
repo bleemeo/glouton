@@ -18,6 +18,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+var errNotImplemented = errors.New("not implemented")
+
 type mockKubernetesClient struct {
 	node     corev1.NodeList
 	pods     corev1.PodList
@@ -59,7 +61,7 @@ func newKubernetesMock(dirname string) (*mockKubernetesClient, error) {
 
 func (k *mockKubernetesClient) GetNode(ctx context.Context, nodeName string) (*corev1.Node, error) {
 	if len(k.node.Items) == 0 {
-		return nil, errors.New("not implmented")
+		return nil, errNotImplemented
 	}
 
 	return &k.node.Items[0], nil

@@ -19,7 +19,6 @@ package synchronizer
 
 import (
 	"context"
-	"errors"
 	"glouton/agent/state"
 	"glouton/bleemeo/internal/cache"
 	bleemeoTypes "glouton/bleemeo/types"
@@ -48,7 +47,7 @@ func (m mockMetric) Annotations() types.MetricAnnotations {
 	return types.MetricAnnotations{}
 }
 func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
-	return nil, errors.New("not implemented")
+	return nil, errNotImplemented
 }
 
 type mockTime struct {

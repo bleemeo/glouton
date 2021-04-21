@@ -17,7 +17,7 @@
 package system
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 
 	"github.com/influxdata/telegraf"
@@ -39,7 +39,7 @@ func New() (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input system is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput
 	}
 
 	return

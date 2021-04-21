@@ -114,6 +114,8 @@ type registration struct {
 // This type is used to have another Collecto() method private which only return pushed points.
 type pushCollector Registry
 
+var errToManyGatherers = errors.New("too many gatherers in the registry. Unable to find a new slot")
+
 func getDefaultRelabelConfig() []*relabel.Config {
 	return []*relabel.Config{
 		{
@@ -344,7 +346,7 @@ func (r *Registry) RegisterGatherer(gatherer prometheus.Gatherer, stopCallback f
 	for ok {
 		id++
 		if id == 0 {
-			return 0, errors.New("too many gatherers in the registry. Unable to find a new slot")
+			return 0, errToManyGatherers
 		}
 
 		_, ok = r.registrations[id]

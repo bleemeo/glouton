@@ -36,6 +36,9 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
+var errCannotFindParsedConfig = errors.New("cannot find in the win_perfs_counters config")
+var errMultipleInstanceNotSupported = errors.New("running multiple win_perfs_counters instances simultaneously is not currently supported")
+
 const (
 	diskIOModuleName    string = "win_diskio"
 	memModuleName       string = "win_mem"
@@ -98,18 +101,20 @@ type winCollector struct {
 	runLength   float64
 }
 
+var errInvalidType = errors.New("invalid type")
+
 // New initialise win_perf_counters.Input.
 func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["win_perf_counters"]
 	if !ok {
-		return result, errors.New("input 'win_perf_counters' is not enabled in Telegraf")
+		return result, inputs.ErrDisabledInput
 	}
 
 	tmpInput := input()
 
 	winInput, ok := tmpInput.(*win_perf_counters.Win_PerfCounters)
 	if !ok {
-		return result, fmt.Errorf("invalid type for telegraf input 'win_perf_counters', got %T, expected *win_perf_counters.Win_PerfCounters", tmpInput)
+		return result, fmt.Errorf("%w for telegraf input 'win_perf_counters', got %T, expected *win_perf_counters.Win_PerfCounters", errInvalidType, tmpInput)
 	}
 
 	var parsedConfig *ast.Table
@@ -122,22 +127,22 @@ func New(inputsConfig inputs.CollectorConfig) (result telegraf.Input, err error)
 	if val, ok := parsedConfig.Fields["inputs"]; ok {
 		inputsConfig, ok := val.(*ast.Table)
 		if !ok {
-			return result, errors.New("cannot find 'inputs' in the win_perfs_counters config")
+			return result, fmt.Errorf("%w: 'inputs'", errCannotFindParsedConfig)
 		}
 
 		if val, ok := inputsConfig.Fields["win_perf_counters"]; ok {
 			winConfig, ok := val.([]*ast.Table)
 			if !ok {
-				return result, errors.New("cannot find toml parsedConfig inputs.win_perfs_counters in the win_perfs_counters config")
+				return result, fmt.Errorf("%w: toml parsedConfig inputs.win_perfs_counters", errCannotFindParsedConfig)
 			}
 
 			if len(winConfig) > 1 {
-				return result, errors.New("running multiple win_perfs_counters instances simultaneously is not currently supported")
+				return result, errMultipleInstanceNotSupported
 			}
 
 			if len(winConfig) != 0 {
 				if err = toml.UnmarshalTable(winConfig[0], &winInput); err != nil {
-					return result, fmt.Errorf("cannot unmarshal inputs.win_perf_counters: %v", err)
+					return result, fmt.Errorf("cannot unmarshal inputs.win_perf_counters: %w", err)
 				}
 			}
 		}

@@ -40,6 +40,8 @@ import (
 	paho "github.com/eclipse/paho.mqtt.golang"
 )
 
+var errNotPem = errors.New("not a PEM file")
+
 const maxPendingPoints = 100000
 const pointsBatchSize = 1000
 const minimalDelayBetweenConnect = 5 * time.Second
@@ -852,7 +854,7 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 
 	ok := rootCAs.AppendCertsFromPEM(certs)
 	if !ok {
-		return nil, errors.New("not a PEM file")
+		return nil, errNotPem
 	}
 
 	return rootCAs, nil

@@ -17,7 +17,7 @@
 package net
 
 import (
-	"errors"
+	"glouton/inputs"
 	"glouton/inputs/internal"
 	"strings"
 
@@ -50,7 +50,7 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 			},
 		}
 	} else {
-		err = errors.New("input net is not enabled in Telegraf")
+		err = inputs.ErrDisabledInput
 	}
 
 	return

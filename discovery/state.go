@@ -18,12 +18,16 @@ package discovery
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"glouton/facts"
 	"glouton/logger"
 	"strconv"
 	"strings"
 )
+
+var errUnexpectedFormat = errors.New("unexpected format for old netstat key")
+var errIncorrectPartNumber = errors.New("incorrect number of parts")
 
 const stateKey = "DiscoveredServices"
 
@@ -37,7 +41,7 @@ type oldServiceKeyValue []json.RawMessage
 
 func (o oldServiceKeyValue) toService() (srv Service, err error) {
 	if len(o) != 2 {
-		return srv, fmt.Errorf("old service has %d part, want 2", len(o))
+		return srv, fmt.Errorf("%w: old service has %d part, want 2", errIncorrectPartNumber, len(o))
 	}
 
 	var (
@@ -80,7 +84,7 @@ func (o oldService) toService(instance string) (srv Service, err error) {
 		} else {
 			part := strings.Split(k, "/")
 			if len(part) != 2 {
-				return srv, fmt.Errorf("unexpected format for old netstat key: %#v", k)
+				return srv, fmt.Errorf("%w: %s", errUnexpectedFormat, k)
 			}
 
 			port, err := strconv.ParseInt(part[0], 10, 0)

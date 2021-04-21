@@ -24,6 +24,10 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
+var errUnknownUser = errors.New("user not found")
+var errNullPointer = errors.New("getProcCache return null-pointer")
+var errChangedInternal = errors.New("process-exporter changed its internal")
+
 // See https://github.com/prometheus/procfs/blob/master/proc_stat.go for details on userHZ.
 const userHZ = 100
 
@@ -45,6 +49,10 @@ type Processes struct {
 	exeCache   map[proc.ID]string
 	userCache  map[proc.ID]string
 	lastUpdate time.Time
+}
+
+func expectedError(expected string) error {
+	return fmt.Errorf("%w, expected a %s", errChangedInternal, expected)
 }
 
 // NewProcessLister creates a new ProcessLister using the specified parameters.
@@ -88,7 +96,7 @@ func (c *Processes) getPwdlookup() func(uid int) (string, error) {
 	return func(uid int) (string, error) {
 		u, ok := pwdCache.LookupUserByUid(uid)
 		if !ok {
-			return "", errors.New("user not found")
+			return "", errUnknownUser
 		}
 
 		return u.Username(), nil
@@ -122,7 +130,8 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 		}
 
 		if p.procErr != nil {
-			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %v)", err)
+			//TODO: an error occurs with the linter as of v1.27. This is fixed in the latest updates.
+			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %w)", err) //nolint: goerr113
 			continue
 		}
 
@@ -270,17 +279,17 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 	value := reflect.ValueOf(p)
 
 	if value.Kind() != reflect.Ptr {
-		return nil, errors.New("process-exporter changed its internal, expected a pointer")
+		return nil, expectedError("pointer")
 	}
 
 	value = value.Elem()
 
 	if value.Type().Name() != "procIterator" {
-		return nil, fmt.Errorf("process-exporter changed its internal, expected procIterator, got %v", value.Type().Name())
+		return nil, fmt.Errorf("%w, expected procIterator, got %v", errChangedInternal, value.Type().Name())
 	}
 
 	if value.Kind() != reflect.Struct {
-		return nil, errors.New("process-exporter changed its internal, expected a struct")
+		return nil, expectedError("struct")
 	}
 
 	procValue := value.FieldByName("Proc")
@@ -288,7 +297,7 @@ func getProc(p proc.Proc) (proc.Proc, error) {
 	result, ok := procValue.Interface().(proc.Proc)
 
 	if !ok {
-		return nil, errors.New("process-exporter changed its internal, expected a proc.Proc")
+		return nil, expectedError("proc.Proc")
 	}
 
 	return result, nil
@@ -299,28 +308,28 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 	value := reflect.ValueOf(p)
 
 	if value.Kind() != reflect.Ptr {
-		return nil, errors.New("process-exporter changed its internal, expected a pointer")
+		return nil, expectedError("pointer")
 	}
 
 	value = value.Elem()
 
 	if value.Type().Name() != "proc" {
-		return nil, fmt.Errorf("process-exporter changed its internal, expected proc, got %v", value.Type().Name())
+		return nil, fmt.Errorf("%w, expected proc, got %v", errChangedInternal, value.Type().Name())
 	}
 
 	if value.Kind() != reflect.Struct {
-		return nil, errors.New("process-exporter changed its internal, expected a struct")
+		return nil, expectedError("struct")
 	}
 
 	value = value.FieldByName("proccache")
 
 	if value.Type().Name() != "proccache" {
-		return nil, fmt.Errorf("process-exporter changed its internal, expected proccache, got %v", value.Type().Name())
+		return nil, fmt.Errorf("%w, expected proccache, got %v", errChangedInternal, value.Type().Name())
 	}
 
 	ptr := unsafe.Pointer(value.UnsafeAddr())
 	if uintptr(ptr) == 0 {
-		return nil, errors.New("process-exporter changed its internal, getProcCache return null-pointer")
+		return nil, errNullPointer
 	}
 
 	return ptr, nil

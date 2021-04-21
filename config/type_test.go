@@ -17,7 +17,6 @@
 package config
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 )
@@ -56,7 +55,7 @@ func TestConvertMap(t *testing.T) {
 			Entry: "value=1234,5,agent_uuid=1234",
 			Want: Want{
 				Exit: make(map[string]string),
-				Err:  fmt.Errorf("wrong map format, impossible to convert variable in map[string]string"),
+				Err:  ErrWrongMapFormat,
 			},
 		},
 		{

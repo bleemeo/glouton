@@ -38,6 +38,11 @@ import (
 	"time"
 )
 
+var errFQDNNotSet = errors.New("unable to register, fqdn is not set")
+var errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
+var errBleemeoUndefined = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
+var errIncorrectStatusCode = errors.New("registration status code is")
+
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
 	ctx    context.Context
@@ -129,7 +134,8 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	if err := s.setClient(); err != nil {
-		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %v)", err)
+		//TODO: an error occurs with the linter as of v1.27. This is fixed in the latest updates.
+		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err) //nolint: goerr113
 	}
 
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
@@ -524,7 +530,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 			// This would also show errors that could confuse the user like "Synchronization with
 			// Bleemeo Cloud platform still have to wait 1m27s due to too many errors".
 			if firstErr == nil && reason != bleemeoTypes.DisableAgentTooOld {
-				firstErr = errors.New("bleemeo connector is temporary disabled")
+				firstErr = errConnectorTemporaryDisabled
 			}
 
 			break
@@ -705,7 +711,7 @@ func (s *Synchronizer) checkDuplicated() error {
 				"and https://docs.bleemeo.com/agent/installation#install-agent-with-cloud-image-creation ",
 		)
 
-		return errors.New("bleemeo connector temporary disabled")
+		return errConnectorTemporaryDisabled
 	}
 
 	return nil
@@ -719,7 +725,7 @@ func (s *Synchronizer) register() error {
 
 	fqdn := facts["fqdn"]
 	if fqdn == "" {
-		return errors.New("unable to register, fqdn is not set")
+		return errFQDNNotSet
 	}
 
 	name := s.option.Config.String("bleemeo.initial_agent_name")
@@ -731,7 +737,7 @@ func (s *Synchronizer) register() error {
 	registrationKey := s.option.Config.String("bleemeo.registration_key")
 
 	for accountID == "" || registrationKey == "" {
-		return errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
+		return errBleemeoUndefined
 	}
 
 	password := generatePassword(20)
@@ -762,7 +768,7 @@ func (s *Synchronizer) register() error {
 	}
 
 	if statusCode != 201 {
-		return fmt.Errorf("registration status code is %v, want 201", statusCode)
+		return fmt.Errorf("%w: got %v, want 201", errIncorrectStatusCode, statusCode)
 	}
 
 	s.agentID = objectID.ID

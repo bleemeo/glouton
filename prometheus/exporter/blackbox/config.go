@@ -17,6 +17,7 @@
 package blackbox
 
 import (
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
@@ -27,6 +28,8 @@ import (
 	bbConf "github.com/prometheus/blackbox_exporter/config"
 	"gopkg.in/yaml.v3"
 )
+
+var errUnknownModule = errors.New("unknown blackbox module found in your configuration")
 
 const maxTimeout time.Duration = 9500 * time.Millisecond
 
@@ -189,8 +192,8 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 		module, present := conf.Modules[conf.Targets[idx].ModuleName]
 		// if the module is unknown, add it to the list
 		if !present {
-			return nil, fmt.Errorf("blackbox_exporter: unknown blackbox module found in your configuration for %s (module '%v'). "+
-				"This is a probably bug, please contact us", conf.Targets[idx].Name, conf.Targets[idx].ModuleName)
+			return nil, fmt.Errorf("%w for %s (module '%v'). "+
+				"This is a probably bug, please contact us", errUnknownModule, conf.Targets[idx].Name, conf.Targets[idx].ModuleName)
 		}
 
 		targets = append(targets, genCollectorFromStaticTarget(configTarget{
