@@ -631,15 +631,18 @@ func (r *Registry) runOnce() time.Duration {
 func (r *Registry) filterPoints(points []types.MetricPoint) []types.MetricPoint {
 	for i := 0; i < len(points); i++ {
 		pointName := points[i].Labels[types.LabelName]
+		pointJob, pointJobFound := points[i].Labels[types.LabelScrapeJob]
 		for _, denyVal := range r.DenyList {
-			denyName := mapFromPromString(denyVal)[types.LabelName]
+			denyMap := mapFromPromString(denyVal)
+			denyName := denyMap[types.LabelName]
+			denyJob, denyJobFound := denyMap[types.LabelScrapeJob]
 
 			matched, err := regexp.MatchString(denyName, pointName)
 			if err != nil {
 				//FIXME: Proper handling of error
 				logger.V(0).Println("Error: ", err)
 			}
-			if matched {
+			if matched && ((pointJobFound && denyJobFound && pointJob == denyJob) || (!pointJobFound || !denyJobFound)) {
 				if i+1 >= len(points) {
 					points = points[0:i]
 				} else {
@@ -653,15 +656,18 @@ func (r *Registry) filterPoints(points []types.MetricPoint) []types.MetricPoint 
 
 	for _, point := range points {
 		pointName := point.Labels[types.LabelName]
+		pointJob, pointJobFound := points[i].Labels[types.LabelScrapeJob]
 		for _, allowVal := range r.AllowList {
-			allowName := mapFromPromString(allowVal)[types.LabelName]
+			allowMap := mapFromPromString(allowVal)
+			allowName := allowMap[types.LabelName]
+			allowJob, allowJobFound := allowMap[types.LabelScrapeJob]
 
 			matched, err := regexp.MatchString(allowName, pointName)
 			if err != nil {
 				//FIXME: Proper handling of error
 				logger.V(0).Println("Error: ", err)
 			}
-			if matched {
+			if matched && ((pointJobFound && allowJobFound && pointJob == allowJob) || (!pointJobFound || !allowJobFound)) {
 				points[i] = point
 				i++
 				break
