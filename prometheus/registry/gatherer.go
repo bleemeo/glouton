@@ -3,7 +3,9 @@ package registry
 import (
 	"errors"
 	"fmt"
+	"glouton/logger"
 	"glouton/types"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -71,14 +73,18 @@ type GathererWithState interface {
 // - pass the wrapper to a new prometheus HTTP handler.
 // - when Gather() is called upon the wrapper by prometheus, the wrapper calls GathererWithState(newState)
 // on its internal gatherer.
+// GatherWithState also contains the metrics allow/deny list in order to sync the metrics on /metric
+// with the metrics sent to the bleemeo platform
 type GathererWithStateWrapper struct {
 	gatherState GatherState
 	gatherer    GathererWithState
+	allowList   []string
+	denyList    []string
 }
 
 // NewGathererWithStateWrapper creates a new wrapper around GathererWithState.
-func NewGathererWithStateWrapper(g GathererWithState) *GathererWithStateWrapper {
-	return &GathererWithStateWrapper{gatherer: g}
+func NewGathererWithStateWrapper(g GathererWithState, allowList []string, denyList []string) *GathererWithStateWrapper {
+	return &GathererWithStateWrapper{gatherer: g, allowList: allowList, denyList: denyList}
 }
 
 // SetState updates the state the wrapper will provide to its internal gatherer when called.
@@ -88,7 +94,64 @@ func (w *GathererWithStateWrapper) SetState(state GatherState) {
 
 // Gather implements prometheus.Gatherer for GathererWithStateWrapper.
 func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
-	return w.gatherer.GatherWithState(w.gatherState)
+	res, err := w.gatherer.GatherWithState(w.gatherState)
+	if err != nil {
+		return res, err
+	}
+	res = w.filter(res)
+	return res, err
+}
+
+func (w *GathererWithStateWrapper) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
+	for i := 0; i < len(result); i++ {
+		pointName := result[i].Name
+		// pointJob, pointJobFound := result[i].
+		for _, denyVal := range w.denyList {
+			denyMap := mapFromPromString(denyVal)
+			denyName := denyMap[types.LabelName]
+			// denyJob, denyJobFound := denyMap[types.LabelScrapeJob]
+
+			matched, err := regexp.MatchString(denyName, *pointName)
+			if err != nil {
+				//FIXME: Proper handling of error
+				logger.V(0).Println("Error: ", err)
+			}
+			if matched { //&& ((pointJobFound && denyJobFound && pointJob == denyJob) || (!pointJobFound || !denyJobFound)) {
+				if i+1 >= len(result) {
+					result = result[0:i]
+				} else {
+					result = append(result[0:i], result[i+1:]...)
+				}
+			}
+		}
+	}
+
+	i := 0
+
+	for _, point := range result {
+		pointName := point.Name
+		// pointJob, pointJobFound := result[i].Labels[types.LabelScrapeJob]
+		for _, allowVal := range w.allowList {
+			allowMap := mapFromPromString(allowVal)
+			allowName := allowMap[types.LabelName]
+			// allowJob, allowJobFound := allowMap[types.LabelScrapeJob]
+
+			matched, err := regexp.MatchString(allowName, *pointName)
+			if err != nil {
+				//FIXME: Proper handling of error
+				logger.V(0).Println("Error: ", err)
+			}
+			if matched { //&& ((pointJobFound && allowJobFound && pointJob == allowJob) || (!pointJobFound || !allowJobFound)) {
+				result[i] = point
+				i++
+				break
+			}
+		}
+	}
+
+	result = result[:i]
+
+	return result
 }
 
 // labeledGatherer provide a gatherer that will add provided labels to all metrics.

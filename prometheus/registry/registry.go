@@ -451,7 +451,7 @@ func (r *Registry) AddDefaultCollector() {
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(r)
+		wrapper := NewGathererWithStateWrapper(r, r.AllowList, r.DenyList)
 
 		state := GatherStateFromMap(req.URL.Query())
 		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
