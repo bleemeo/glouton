@@ -539,6 +539,8 @@ func (a *agent) run() { //nolint:gocyclo
 		BleemeoAgentID: a.BleemeoAgentID(),
 		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 		MetricFormat:   a.metricFormat,
+		AllowList:      registry.BuildAllowList(a.config),
+		DenyList:       registry.BuildDenyList(a.config),
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
