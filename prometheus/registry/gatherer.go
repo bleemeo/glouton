@@ -4,9 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/config"
-	"glouton/logger"
 	"glouton/types"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -103,54 +101,28 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	return res, err
 }
 
-//FIXME: to remove, it's only to temporarily build
-func mapFromPromString(tmp string) map[string]string {
-	new := make(map[string]string)
-
-	return new
-}
-
 func (w *GathererWithStateWrapper) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
-	for i := 0; i < len(result); i++ {
-		pointName := result[i].Name
-		// pointJob, pointJobFound := result[i].
-		for _, denyVal := range w.denyList {
-			denyMap := mapFromPromString(denyVal[0].Name)
-			denyName := denyMap[types.LabelName]
-			// denyJob, denyJobFound := denyMap[types.LabelScrapeJob]
+	i := 0
 
-			matched, err := regexp.MatchString(denyName, *pointName)
-			if err != nil {
-				//FIXME: Proper handling of error
-				logger.V(0).Println("Error: ", err)
-			}
-			if matched { //&& ((pointJobFound && denyJobFound && pointJob == denyJob) || (!pointJobFound || !denyJobFound)) {
-				if i+1 >= len(result) {
-					result = result[0:i]
-				} else {
-					result = append(result[0:i], result[i+1:]...)
+	if len(w.denyList) != 0 {
+		for _, family := range result {
+			for _, denyVal := range w.denyList {
+				matched := denyVal.MatchesMetricFamily(family)
+				if !matched {
+					result[i] = family
+					i++
 				}
 			}
 		}
+		result = result[:i]
+		i = 0
 	}
 
-	i := 0
-
-	for _, point := range result {
-		pointName := point.Name
-		// pointJob, pointJobFound := result[i].Labels[types.LabelScrapeJob]
+	for _, family := range result {
 		for _, allowVal := range w.allowList {
-			allowMap := mapFromPromString(allowVal[0].Name)
-			allowName := allowMap[types.LabelName]
-			// allowJob, allowJobFound := allowMap[types.LabelScrapeJob]
-
-			matched, err := regexp.MatchString(allowName, *pointName)
-			if err != nil {
-				//FIXME: Proper handling of error
-				logger.V(0).Println("Error: ", err)
-			}
-			if matched { //&& ((pointJobFound && allowJobFound && pointJob == allowJob) || (!pointJobFound || !allowJobFound)) {
-				result[i] = point
+			matched := allowVal.MatchesMetricFamily(family)
+			if matched {
+				result[i] = family
 				i++
 				break
 			}

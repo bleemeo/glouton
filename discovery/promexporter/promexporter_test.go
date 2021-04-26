@@ -333,10 +333,10 @@ func TestListExporters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := DynamicScrapper{
-				DynamicJobName:              "jobname",
-				GlobalAllowMetrics:          tt.globalAllow,
-				GlobalDenyMetrics:           tt.globalDeny,
-				GlobalIncludeDefaultMetrics: tt.globalIncludeDefault,
+				DynamicJobName: "jobname",
+				// GlobalAllowMetrics:          tt.globalAllow,
+				// GlobalDenyMetrics:           tt.globalDeny,
+				// GlobalIncludeDefaultMetrics: tt.globalIncludeDefault,
 			}
 			got := d.listExporters(tt.containers)
 

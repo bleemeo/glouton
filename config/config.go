@@ -27,7 +27,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/promql/parser"
 	"gopkg.in/yaml.v3"
@@ -457,14 +459,6 @@ func setValue(root map[string]interface{}, keyPart []string, value interface{}) 
 
 type MetricSelector []*labels.Matcher
 
-func BuildAllowList(config *Configuration) ([]MetricSelector, error) {
-	return buildList(config, "allow")
-}
-
-func BuildDenyList(config *Configuration) ([]MetricSelector, error) {
-	return buildList(config, "deny")
-}
-
 func buildList(config *Configuration, listType string) ([]MetricSelector, error) {
 	metricListType := listType + "_metrics"
 	metricList := []MetricSelector{}
@@ -652,10 +646,63 @@ func (matchers *MetricSelector) MatchesPoint(point types.MetricPoint) bool {
 	return true
 }
 
+func (matchers *MetricSelector) MatchesMetricFamily(fm *dto.MetricFamily) bool {
+	for _, m := range *matchers {
+		match := m.Matches(fm.GetName())
+		if match {
+			return true
+		}
+	}
+
+	return false
+}
+
 // HostPort return host:port.
 func HostPort(u *url.URL) string {
 	hostname := u.Hostname()
 	port := u.Port()
 
 	return hostname + ":" + port
+}
+
+//MetricFilter is the interface used to handle allow / deny metrics lists.
+type MetricFilter interface {
+	BuildList(config *Configuration, listType string) error
+	UpdateList(map[string]string) error
+	GetList() []MetricSelector
+}
+
+//MetricList is a thread-safe holder of an allow / deny metrics list
+type MetricList struct {
+	list []MetricSelector
+	l    sync.Mutex
+}
+
+func NewMetricList(config *Configuration, listType string) (*MetricList, error) {
+	new := MetricList{}
+	err := new.BuildList(config, listType)
+
+	return &new, err
+}
+
+func (m *MetricList) BuildList(config *Configuration, listType string) error {
+	var err error
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	m.list, err = buildList(config, listType)
+
+	return err
+}
+
+func (m *MetricList) UpdateList(map[string]string) error {
+	return nil
+}
+
+func (m *MetricList) GetList() []MetricSelector {
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	return m.list
 }

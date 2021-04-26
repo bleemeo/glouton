@@ -532,12 +532,12 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
-	allowList, err := config.BuildAllowList(a.config)
+	allowList, err := config.NewMetricList(a.config, "allow")
 	if err != nil {
 		logger.Printf("An error occured while building the allowList, no metric will be allowed: %v", err)
 	}
 
-	denyList, err := config.BuildDenyList(a.config)
+	denyList, err := config.NewMetricList(a.config, "deny")
 	if err != nil {
 		logger.Printf("An error occured while building the denyList, no metric will be denied: %v", err)
 	}

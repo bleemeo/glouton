@@ -81,8 +81,8 @@ type Registry struct {
 	GloutonPort    string
 	BleemeoAgentID string
 	MetricFormat   types.MetricFormat
-	AllowList      []config.MetricSelector
-	DenyList       []config.MetricSelector
+	AllowList      config.MetricFilter
+	DenyList       config.MetricFilter
 
 	l sync.Mutex
 
@@ -447,7 +447,7 @@ func (r *Registry) AddDefaultCollector() {
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(r, r.AllowList, r.DenyList)
+		wrapper := NewGathererWithStateWrapper(r, r.AllowList.GetList(), r.DenyList.GetList())
 
 		state := GatherStateFromMap(req.URL.Query())
 		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
@@ -626,10 +626,12 @@ func (r *Registry) runOnce() time.Duration {
 
 func (r *Registry) filterPoints(points []types.MetricPoint) []types.MetricPoint {
 	i := 0
+	denyList := r.DenyList.GetList()
+	allowList := r.AllowList.GetList()
 
-	if len(r.DenyList) != 0 {
+	if len(denyList) != 0 {
 		for _, point := range points {
-			for _, denyVal := range r.DenyList {
+			for _, denyVal := range denyList {
 				matched := denyVal.MatchesPoint(point)
 				if !matched {
 					points[i] = point
@@ -642,7 +644,7 @@ func (r *Registry) filterPoints(points []types.MetricPoint) []types.MetricPoint 
 	}
 
 	for _, point := range points {
-		for _, allowVal := range r.AllowList {
+		for _, allowVal := range allowList {
 			matched := allowVal.MatchesPoint(point)
 			if matched {
 				points[i] = point

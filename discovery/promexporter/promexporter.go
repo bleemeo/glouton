@@ -69,11 +69,11 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 		}
 
 		target := &scrapper.Target{
-			URL:            tmp,
-			ExtraLabels:    labels,
-			AllowList:      d.GlobalAllowMetrics,
-			DenyList:       d.GlobalDenyMetrics,
-			IncludeDefault: d.GlobalIncludeDefaultMetrics,
+			URL:         tmp,
+			ExtraLabels: labels,
+			// AllowList:      d.GlobalAllowMetrics,
+			// DenyList:       d.GlobalDenyMetrics,
+			// IncludeDefault: d.GlobalIncludeDefaultMetrics,
 		}
 
 		updateAllowDeny(target, c.Labels())
@@ -141,14 +141,14 @@ func updateAllowDeny(target *scrapper.Target, labels map[string]string) {
 
 // DynamicScrapper is a Prometheus scrapper that will update its target based on ListExporters.
 type DynamicScrapper struct {
-	l                           sync.Mutex
-	registeredID                map[string]int
-	registeredLabels            map[string]map[string]string
-	DynamicJobName              string
-	Registry                    *registry.Registry
-	GlobalAllowMetrics          []string
-	GlobalDenyMetrics           []string
-	GlobalIncludeDefaultMetrics bool
+	l                sync.Mutex
+	registeredID     map[string]int
+	registeredLabels map[string]map[string]string
+	DynamicJobName   string
+	Registry         *registry.Registry
+	// GlobalAllowMetrics          []string
+	// GlobalDenyMetrics           []string
+	// GlobalIncludeDefaultMetrics bool
 }
 
 // Update updates the scrappers targets using new containers informations.
