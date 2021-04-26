@@ -23,13 +23,10 @@ package registry
 import (
 	"context"
 	"errors"
-	"fmt"
 	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"net/http"
-	"net/url"
-	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -42,7 +39,6 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
-	"github.com/prometheus/prometheus/promql/parser"
 )
 
 const (
@@ -85,8 +81,8 @@ type Registry struct {
 	GloutonPort    string
 	BleemeoAgentID string
 	MetricFormat   types.MetricFormat
-	AllowList      []string
-	DenyList       []string
+	AllowList      []config.MetricSelector
+	DenyList       []config.MetricSelector
 
 	l sync.Mutex
 
@@ -629,45 +625,26 @@ func (r *Registry) runOnce() time.Duration {
 }
 
 func (r *Registry) filterPoints(points []types.MetricPoint) []types.MetricPoint {
-	for i := 0; i < len(points); i++ {
-		pointName := points[i].Labels[types.LabelName]
-		pointJob, pointJobFound := points[i].Labels[types.LabelScrapeJob]
-		for _, denyVal := range r.DenyList {
-			denyMap := mapFromPromString(denyVal)
-			denyName := denyMap[types.LabelName]
-			denyJob, denyJobFound := denyMap[types.LabelScrapeJob]
+	i := 0
 
-			matched, err := regexp.MatchString(denyName, pointName)
-			if err != nil {
-				//FIXME: Proper handling of error
-				logger.V(0).Println("Error: ", err)
-			}
-			if matched && ((pointJobFound && denyJobFound && pointJob == denyJob) || (!pointJobFound || !denyJobFound)) {
-				if i+1 >= len(points) {
-					points = points[0:i]
-				} else {
-					points = append(points[0:i], points[i+1:]...)
+	if len(r.DenyList) != 0 {
+		for _, point := range points {
+			for _, denyVal := range r.DenyList {
+				matched := denyVal.MatchesPoint(point)
+				if !matched {
+					points[i] = point
+					i++
 				}
 			}
 		}
+		points = points[:i]
+		i = 0
 	}
 
-	i := 0
-
 	for _, point := range points {
-		pointName := point.Labels[types.LabelName]
-		pointJob, pointJobFound := points[i].Labels[types.LabelScrapeJob]
 		for _, allowVal := range r.AllowList {
-			allowMap := mapFromPromString(allowVal)
-			allowName := allowMap[types.LabelName]
-			allowJob, allowJobFound := allowMap[types.LabelScrapeJob]
-
-			matched, err := regexp.MatchString(allowName, pointName)
-			if err != nil {
-				//FIXME: Proper handling of error
-				logger.V(0).Println("Error: ", err)
-			}
-			if matched && ((pointJobFound && allowJobFound && pointJob == allowJob) || (!pointJobFound || !allowJobFound)) {
+			matched := allowVal.MatchesPoint(point)
+			if matched {
 				points[i] = point
 				i++
 				break
@@ -905,164 +882,4 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 
 		ch <- prometheus.NewMetricWithTimestamp(p.Time, promMetric)
 	}
-}
-
-func globToRegex(str string) string {
-	str = strings.ReplaceAll(str, ".", "\\.")
-	str = strings.ReplaceAll(str, "$", "\\$")
-	str = strings.ReplaceAll(str, "^", "\\^")
-	str = strings.ReplaceAll(str, "*", ".*")
-	return str
-}
-
-func normalizeMetricScrapper(metric string, instance string, job string) string {
-	promMetric := normalizeMetric(metric)
-	matcherMap := mapFromPromString(promMetric)
-
-	matcherMap[types.LabelScrapeInstance] = instance
-	matcherMap[types.LabelScrapeJob] = job
-
-	return promStringFromMap(matcherMap)
-}
-
-func normalizeMetric(metric string) string {
-	if !strings.Contains(metric, "{") {
-		// metric is in the blob format: we need to convert it in a regex
-		metric = globToRegex(metric)
-		metric = fmt.Sprintf("{%s=\"%s\"}", types.LabelName, metric)
-		return metric
-	}
-
-	metricName := metric[0:strings.Index(metric, "{")]
-	matcherMap := mapFromPromString(metric)
-
-	matcherMap[types.LabelName] = metricName
-
-	return promStringFromMap(matcherMap)
-}
-
-func promStringFromMap(matcherMap map[string]string) string {
-	metric := "{"
-	keyList := []string{}
-
-	for key := range matcherMap {
-		keyList = append(keyList, key)
-	}
-
-	// Keys are ordered for predictability
-	sort.Strings(keyList)
-	for _, key := range keyList {
-		metric += key + "=\"" + matcherMap[key] + "\","
-	}
-	metric = metric[:len(metric)-1]
-	metric += "}"
-
-	return metric
-}
-
-func mapFromPromString(metric string) map[string]string {
-	matcherMap := make(map[string]string)
-	matcher, err := parser.ParseMetricSelector(metric)
-	if err != nil {
-		logger.V(2).Println("Could not parse the metric as a PromQL Matcher: ", err)
-		return matcherMap
-	}
-
-	for _, val := range matcher {
-		matcherMap[val.Name] = val.Value
-	}
-
-	return matcherMap
-}
-
-func BuildAllowList(config *config.Configuration) []string {
-	return buildList(config, "allow")
-}
-
-func BuildDenyList(config *config.Configuration) []string {
-	return buildList(config, "deny")
-}
-
-func buildList(config *config.Configuration, listType string) []string {
-	metricListType := listType + "_metrics"
-	metricList := []string{}
-	globalList := config.StringList("metric." + metricListType)
-
-	for _, str := range globalList {
-		metricList = append(metricList, normalizeMetric(str))
-	}
-
-	promList := config.StringList("metric.prometheus." + metricListType)
-	if len(promList) != 0 {
-		logger.V(0).Printf("DEPRECATED: metric.prometheus.%s is deprecated. Please use metric.allow_metrics from now on", metricListType)
-		for _, val := range promList {
-			metricList = append(metricList, normalizeMetric(val))
-		}
-	}
-
-	promList = config.StringList("metric.prometheus." + listType)
-	if len(promList) != 0 {
-		logger.V(0).Printf("DEPRECATED: metric.Prometheus.%s is deprecated. Please use metric.allow_metrics from now on", listType)
-		for _, val := range promList {
-			metricList = append(metricList, normalizeMetric(val))
-		}
-	}
-
-	metricList = addScrappersList(config, metricList, metricListType)
-
-	return metricList
-}
-
-func addScrappersList(config *config.Configuration, metricList []string, metricListType string) []string {
-	promTargets, _ := config.Get("metric.prometheus.targets")
-	promTargetList, ok := promTargets.([]interface{})
-
-	if !ok {
-		logger.V(2).Println("Could not cast prometheus.targets as a list of map")
-		return metricList
-	}
-	for _, val := range promTargetList {
-		vMap, ok := val.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		name, ok := vMap["name"].(string)
-		if !ok {
-			continue
-		}
-
-		instance, ok := vMap["url"].(string)
-		if !ok {
-			continue
-		}
-
-		parsedURL, err := url.Parse(instance)
-		if err != nil {
-			logger.V(2).Println("Could not parse url for target", name)
-		}
-
-		instance = parsedURL.Host
-
-		allowTargetRaw, ok := vMap[metricListType]
-		if !ok {
-			// No metrics for this target
-			continue
-		}
-
-		allowTargetString, ok := allowTargetRaw.([]interface{})
-		if !ok {
-			logger.V(2).Printf("Could not cast prometheus.targets.%s as a []interface{} for target %s", metricListType, vMap["name"])
-		}
-
-		for _, str := range allowTargetString {
-			allowString, ok := str.(string)
-			if !ok {
-				logger.V(2).Printf("Could not cast prometheus.targets.%s field as a string for target %s", metricListType, vMap["name"])
-				continue
-			}
-			metricList = append(metricList, normalizeMetricScrapper(allowString, instance, ""))
-		}
-	}
-	return metricList
 }

@@ -3,6 +3,7 @@ package registry
 import (
 	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"regexp"
@@ -78,12 +79,12 @@ type GathererWithState interface {
 type GathererWithStateWrapper struct {
 	gatherState GatherState
 	gatherer    GathererWithState
-	allowList   []string
-	denyList    []string
+	allowList   []config.MetricSelector
+	denyList    []config.MetricSelector
 }
 
 // NewGathererWithStateWrapper creates a new wrapper around GathererWithState.
-func NewGathererWithStateWrapper(g GathererWithState, allowList []string, denyList []string) *GathererWithStateWrapper {
+func NewGathererWithStateWrapper(g GathererWithState, allowList []config.MetricSelector, denyList []config.MetricSelector) *GathererWithStateWrapper {
 	return &GathererWithStateWrapper{gatherer: g, allowList: allowList, denyList: denyList}
 }
 
@@ -102,12 +103,19 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	return res, err
 }
 
+//FIXME: to remove, it's only to temporarily build
+func mapFromPromString(tmp string) map[string]string {
+	new := make(map[string]string)
+
+	return new
+}
+
 func (w *GathererWithStateWrapper) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
 	for i := 0; i < len(result); i++ {
 		pointName := result[i].Name
 		// pointJob, pointJobFound := result[i].
 		for _, denyVal := range w.denyList {
-			denyMap := mapFromPromString(denyVal)
+			denyMap := mapFromPromString(denyVal[0].Name)
 			denyName := denyMap[types.LabelName]
 			// denyJob, denyJobFound := denyMap[types.LabelScrapeJob]
 
@@ -132,7 +140,7 @@ func (w *GathererWithStateWrapper) filter(result []*dto.MetricFamily) []*dto.Met
 		pointName := point.Name
 		// pointJob, pointJobFound := result[i].Labels[types.LabelScrapeJob]
 		for _, allowVal := range w.allowList {
-			allowMap := mapFromPromString(allowVal)
+			allowMap := mapFromPromString(allowVal[0].Name)
 			allowName := allowMap[types.LabelName]
 			// allowJob, allowJobFound := allowMap[types.LabelScrapeJob]
 

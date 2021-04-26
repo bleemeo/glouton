@@ -21,6 +21,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"glouton/version"
@@ -48,8 +49,6 @@ var defaultMetrics = []string{
 	"process_resident_memory_bytes",
 }
 
-type metricSelector []*labels.Matcher
-
 // Target is an URL to scrape.
 type Target struct {
 	URL            *url.URL
@@ -60,17 +59,9 @@ type Target struct {
 
 	l            sync.Mutex
 	allowGlob    []string
-	allowMatcher []metricSelector
+	allowMatcher []config.MetricSelector
 	denyGlob     []string
-	denyMatcher  []metricSelector
-}
-
-// HostPort return host:port.
-func HostPort(u *url.URL) string {
-	hostname := u.Hostname()
-	port := u.Port()
-
-	return hostname + ":" + port
+	denyMatcher  []config.MetricSelector
 }
 
 // Gather implement prometheus.Gatherer.
@@ -206,7 +197,7 @@ func (t *Target) filterMF(mf *dto.MetricFamily) bool {
 		}
 	}
 
-	var allowMatcher []metricSelector
+	var allowMatcher []config.MetricSelector
 
 	// We only need to test allowMatcher if allowGlob didn't already allowed it
 	if !allowed {
@@ -236,8 +227,8 @@ func (t *Target) filterMF(mf *dto.MetricFamily) bool {
 	return true
 }
 
-func (t *Target) matcherForMetricFamily(mf *dto.MetricFamily, allSelectors []metricSelector) []metricSelector {
-	results := make([]metricSelector, 0, len(allSelectors))
+func (t *Target) matcherForMetricFamily(mf *dto.MetricFamily, allSelectors []config.MetricSelector) []config.MetricSelector {
+	results := make([]config.MetricSelector, 0, len(allSelectors))
 
 	for _, selector := range allSelectors {
 		candidate := true
@@ -261,11 +252,11 @@ func (t *Target) matcherForMetricFamily(mf *dto.MetricFamily, allSelectors []met
 	return results
 }
 
-func (t *Target) keepMetric(name string, m *dto.Metric, globalAllow bool, allowMatcher []metricSelector, denyMatcher []metricSelector) bool {
+func (t *Target) keepMetric(name string, m *dto.Metric, globalAllow bool, allowMatcher []config.MetricSelector, denyMatcher []config.MetricSelector) bool {
 	allow := globalAllow
 
 	for _, selector := range allowMatcher {
-		if selector.Matches(dto2Labels(name, m)) {
+		if selector.MatchesLabels(dto2Labels(name, m)) {
 			allow = true
 			break
 		}
@@ -276,7 +267,7 @@ func (t *Target) keepMetric(name string, m *dto.Metric, globalAllow bool, allowM
 	}
 
 	for _, selector := range denyMatcher {
-		if selector.Matches(dto2Labels(name, m)) {
+		if selector.MatchesLabels(dto2Labels(name, m)) {
 			return false
 		}
 	}
@@ -293,15 +284,4 @@ func dto2Labels(name string, input *dto.Metric) labels.Labels {
 	lbls["__name__"] = name
 
 	return labels.FromMap(lbls)
-}
-
-func (matchers metricSelector) Matches(lbls labels.Labels) bool {
-	for _, m := range matchers {
-		value := lbls.Get(m.Name)
-		if !m.Matches(value) {
-			return false
-		}
-	}
-
-	return true
 }

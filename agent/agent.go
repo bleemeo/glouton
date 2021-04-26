@@ -532,6 +532,16 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
+	allowList, err := config.BuildAllowList(a.config)
+	if err != nil {
+		logger.Printf("An error occured while building the allowList, no metric will be allowed: %v", err)
+	}
+
+	denyList, err := config.BuildDenyList(a.config)
+	if err != nil {
+		logger.Printf("An error occured while building the denyList, no metric will be denied: %v", err)
+	}
+
 	a.store = store.New()
 	a.gathererRegistry = &registry.Registry{
 		PushPoint:      a.store,
@@ -539,8 +549,8 @@ func (a *agent) run() { //nolint:gocyclo
 		BleemeoAgentID: a.BleemeoAgentID(),
 		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 		MetricFormat:   a.metricFormat,
-		AllowList:      registry.BuildAllowList(a.config),
-		DenyList:       registry.BuildDenyList(a.config),
+		AllowList:      allowList,
+		DenyList:       denyList,
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
@@ -1804,7 +1814,7 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
 				types.LabelMetaScrapeJob:      name,
-				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
+				types.LabelMetaScrapeInstance: config.HostPort(u),
 			},
 			URL:            u,
 			AllowList:      globalAllow,

@@ -55,7 +55,7 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 
 		labels := map[string]string{
 			types.LabelMetaScrapeJob:      d.DynamicJobName,
-			types.LabelMetaScrapeInstance: scrapper.HostPort(tmp),
+			types.LabelMetaScrapeInstance: config.HostPort(tmp),
 		}
 
 		ns := c.PodNamespace()
