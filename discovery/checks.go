@@ -23,6 +23,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"net"
+	"net/url"
 	"strconv"
 )
 
@@ -199,7 +200,12 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		return
 	}
 
-	url := fmt.Sprintf("http://%s", primaryAddress)
+	u, err := url.Parse(fmt.Sprintf("http://%s", primaryAddress))
+	if err != nil {
+		logger.V(2).Printf("can't parse URL \"%s\" ? This shouldn't happen: %v", fmt.Sprintf("http://%s", primaryAddress), err)
+		return
+	}
+
 	expectedStatusCode := 0
 
 	if service.ServiceType == SquidService {
@@ -209,14 +215,14 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 	}
 
 	if service.ServiceType == InfluxDBService {
-		url += "/ping"
+		u.Path = "/ping"
 	}
 
-	if service.ServiceType == CustomService && service.ExtraAttributes["http_path"] != "" {
-		url += service.ExtraAttributes["http_path"]
+	if service.ExtraAttributes["http_path"] != "" {
+		u.Path = service.ExtraAttributes["http_path"]
 	}
 
-	if service.ServiceType == CustomService && service.ExtraAttributes["http_status_code"] != "" {
+	if service.ExtraAttributes["http_status_code"] != "" {
 		tmp, err := strconv.ParseInt(service.ExtraAttributes["http_status_code"], 10, 0)
 		if err != nil {
 			logger.V(1).Printf("Invalid http_status_code %#v on service %s. Ignoring this option", service.Name, service.ExtraAttributes["http_status_code"])
@@ -225,8 +231,14 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 		}
 	}
 
+	httpHost := u.Host
+	if service.ExtraAttributes["http_host"] != "" {
+		httpHost = service.ExtraAttributes["http_host"]
+	}
+
 	httpCheck := check.NewHTTP(
-		url,
+		u.String(),
+		httpHost,
 		tcpAddresses,
 		!di.DisablePersistentConnection,
 		expectedStatusCode,

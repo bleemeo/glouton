@@ -35,6 +35,7 @@ type HTTPCheck struct {
 	*baseCheck
 
 	url                string
+	httpHost           string
 	expectedStatusCode int
 	client             *http.Client
 }
@@ -46,7 +47,7 @@ type HTTPCheck struct {
 //
 // If expectedStatusCode is 0, StatusCode below 400 will generate Ok, between 400 and 499 => warning and above 500 => critical
 // If expectedStatusCode is not 0, StatusCode must match the value or result will be critical.
-func NewHTTP(urlValue string, persitentAddresses []string, persistentConnection bool, expectedStatusCode int, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *HTTPCheck {
+func NewHTTP(urlValue string, httpHost string, persitentAddresses []string, persistentConnection bool, expectedStatusCode int, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *HTTPCheck {
 	myTransport := &http.Transport{
 		Proxy: http.ProxyFromEnvironment,
 		TLSClientConfig: &tls.Config{
@@ -68,6 +69,7 @@ func NewHTTP(urlValue string, persitentAddresses []string, persistentConnection 
 
 	hc := &HTTPCheck{
 		url:                urlValue,
+		httpHost:           httpHost,
 		expectedStatusCode: expectedStatusCode,
 		client: &http.Client{
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -85,6 +87,7 @@ func NewHTTP(urlValue string, persitentAddresses []string, persistentConnection 
 func (hc *HTTPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	req, err := http.NewRequest("GET", hc.url, nil)
 	req.Header.Add("User-Agent", version.UserAgent())
+	req.Host = hc.httpHost
 
 	if err != nil {
 		logger.V(2).Printf("Unable to create HTTP Request: %v", err)

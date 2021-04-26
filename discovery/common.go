@@ -212,7 +212,7 @@ var (
 		ApacheService: {
 			ServicePort:         80,
 			ServiceProtocol:     "tcp",
-			ExtraAttributeNames: []string{"address", "port"},
+			ExtraAttributeNames: []string{"address", "port", "http_host", "http_path", "http_status_code"},
 		},
 		BitBucketService: {
 			ServicePort:         7990,
@@ -300,7 +300,7 @@ var (
 		NginxService: {
 			ServicePort:         80,
 			ServiceProtocol:     "tcp",
-			ExtraAttributeNames: []string{"address", "port"},
+			ExtraAttributeNames: []string{"address", "port", "http_host", "http_path", "http_status_code"},
 		},
 		NTPService: {
 			ServicePort:         123,
@@ -348,7 +348,7 @@ var (
 		SquidService: {
 			ServicePort:         3128,
 			ServiceProtocol:     "tcp",
-			ExtraAttributeNames: []string{"address", "port"},
+			ExtraAttributeNames: []string{"address", "port", "http_host", "http_path", "http_status_code"},
 		},
 		VarnishService: {
 			ServicePort:         6082,
@@ -363,7 +363,7 @@ var (
 		},
 
 		CustomService: {
-			ExtraAttributeNames: []string{"address", "port", "check_type", "check_command", "http_path", "http_status_code"},
+			ExtraAttributeNames: []string{"address", "port", "check_type", "check_command", "http_host", "http_path", "http_status_code"},
 		},
 	}
 )

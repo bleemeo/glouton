@@ -298,6 +298,7 @@ func (dd *DynamicDiscovery) updateDiscovery(ctx context.Context, maxAge time.Dur
 		dd.updateListenAddresses(&service, di)
 
 		dd.fillExtraAttributes(&service)
+		dd.fillGenericExtraAttributes(&service, di)
 		dd.guessJMX(&service, process.CmdLineList)
 
 		logger.V(2).Printf(
@@ -454,6 +455,22 @@ func (dd *DynamicDiscovery) fillExtraAttributes(service *Service) {
 
 				if k == "POSTGRES_USER" {
 					service.ExtraAttributes["username"] = v
+				}
+			}
+		}
+	}
+}
+
+func (dd *DynamicDiscovery) fillGenericExtraAttributes(service *Service, di discoveryInfo) {
+	if service.ExtraAttributes == nil {
+		service.ExtraAttributes = make(map[string]string)
+	}
+
+	if service.container != nil {
+		for k, v := range facts.LabelsAndAnnotations(service.container) {
+			for _, n := range di.ExtraAttributeNames {
+				if "glouton."+n == k {
+					service.ExtraAttributes[n] = v
 				}
 			}
 		}
