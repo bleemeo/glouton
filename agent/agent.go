@@ -65,6 +65,7 @@ import (
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/common"
+	"glouton/prometheus/matcher"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -74,6 +75,8 @@ import (
 	"glouton/types"
 	"glouton/version"
 	"glouton/zabbix"
+
+	dto "github.com/prometheus/client_model/go"
 
 	"net/http"
 	"net/url"
@@ -532,14 +535,9 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
-	allowList, err := config.NewMetricList(a.config, "allow")
+	mFilter, err := NewMetricFilter(a.config)
 	if err != nil {
-		logger.Printf("An error occured while building the allowList, no metric will be allowed: %v", err)
-	}
-
-	denyList, err := config.NewMetricList(a.config, "deny")
-	if err != nil {
-		logger.Printf("An error occured while building the denyList, no metric will be denied: %v", err)
+		logger.Printf("An error occured while building the metric filter, no metric will be allowed: %v", err)
 	}
 
 	a.store = store.New()
@@ -549,8 +547,7 @@ func (a *agent) run() { //nolint:gocyclo
 		BleemeoAgentID: a.BleemeoAgentID(),
 		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 		MetricFormat:   a.metricFormat,
-		AllowList:      allowList,
-		DenyList:       denyList,
+		Filter:         mFilter,
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
@@ -1814,7 +1811,7 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
 				types.LabelMetaScrapeJob:      name,
-				types.LabelMetaScrapeInstance: config.HostPort(u),
+				types.LabelMetaScrapeInstance: matcher.HostPort(u),
 			},
 			URL:            u,
 			AllowList:      globalAllow,
@@ -1870,4 +1867,184 @@ func denyMetricsConfig(vMap map[string]interface{}, target *scrapper.Target) {
 			}
 		}
 	}
+}
+
+//MetricFilter is a thread-safe holder of an allow / deny metrics list
+type MetricFilter struct {
+	allowList []matcher.Matchers
+	denyList  []matcher.Matchers
+	l         sync.Mutex
+}
+
+func buildList(config *config.Configuration, listType string) ([]matcher.Matchers, error) {
+	metricListType := listType + "_metrics"
+	metricList := []matcher.Matchers{}
+	globalList := config.StringList("metric." + metricListType)
+
+	for _, str := range globalList {
+		new, err := matcher.NormalizeMetric(str)
+		if err != nil {
+			return nil, err
+		}
+
+		metricList = append(metricList, new)
+	}
+
+	metricList = addScrappersList(config, metricList, metricListType)
+
+	return metricList, nil
+}
+
+func addScrappersList(config *config.Configuration, metricList []matcher.Matchers,
+	metricListType string) []matcher.Matchers {
+	promTargets, _ := config.Get("metric.prometheus.targets")
+	promTargetList, ok := promTargets.([]interface{})
+
+	if !ok {
+		logger.V(2).Println("Could not cast prometheus.targets as a list of map")
+		return metricList
+	}
+	for _, val := range promTargetList {
+		vMap, ok := val.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		name, ok := vMap["name"].(string)
+		if !ok {
+			continue
+		}
+
+		instance, ok := vMap["url"].(string)
+		if !ok {
+			continue
+		}
+
+		parsedURL, err := url.Parse(instance)
+		if err != nil {
+			logger.V(2).Println("Could not parse url for target", name)
+		}
+
+		instance = matcher.HostPort(parsedURL)
+
+		allowTargetRaw, ok := vMap[metricListType]
+		if !ok {
+			// No metrics for this target
+			continue
+		}
+
+		allowTargetString, ok := allowTargetRaw.([]interface{})
+		if !ok {
+			logger.V(2).Printf("Could not cast prometheus.targets.%s as a []interface{} for target %s", metricListType, name)
+		}
+
+		for _, str := range allowTargetString {
+			allowString, ok := str.(string)
+			if !ok {
+				logger.V(2).Printf("Could not cast prometheus.targets.%s field as a string for target %s", metricListType, name)
+				continue
+			}
+			new, err := matcher.NormalizeMetricScrapper(allowString, instance, "")
+			if err != nil {
+				logger.V(2).Printf("Could not normalize metric %s with instance %s and job %s", allowString, instance, name)
+			}
+			metricList = append(metricList, new)
+		}
+	}
+	return metricList
+}
+
+func (m *MetricFilter) buildList(config *config.Configuration) error {
+	var err error
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	m.allowList, err = buildList(config, "allow")
+	if err != nil {
+		return err
+	}
+
+	m.denyList, err = buildList(config, "deny")
+
+	return err
+}
+
+func NewMetricFilter(config *config.Configuration) (*MetricFilter, error) {
+	new := MetricFilter{}
+	err := new.buildList(config)
+
+	return &new, err
+}
+
+func (m *MetricFilter) UpdateList(map[string]string) error {
+	return nil
+}
+
+func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
+	i := 0
+
+	if len(m.denyList) != 0 {
+		for _, point := range points {
+			for _, denyVal := range m.denyList {
+				matched := denyVal.MatchesPoint(point)
+				if !matched {
+					points[i] = point
+					i++
+					break
+				}
+			}
+		}
+		points = points[:i]
+		i = 0
+	}
+
+	for _, point := range points {
+		for _, allowVal := range m.allowList {
+			matched := allowVal.MatchesPoint(point)
+			if matched {
+				points[i] = point
+				i++
+				break
+			}
+		}
+	}
+
+	points = points[:i]
+
+	return points
+}
+
+func (m *MetricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
+	i := 0
+
+	if len(m.denyList) != 0 {
+		for _, family := range f {
+			for _, denyVal := range m.denyList {
+				matched := denyVal.MatchesMetricFamily(family)
+				if !matched {
+					f[i] = family
+					i++
+					break
+				}
+			}
+		}
+		f = f[:i]
+		i = 0
+	}
+
+	for _, family := range f {
+		for _, allowVal := range m.allowList {
+			matched := allowVal.MatchesMetricFamily(family)
+			if matched {
+				f[i] = family
+				i++
+				break
+			}
+		}
+	}
+
+	f = f[:i]
+
+	return f
 }

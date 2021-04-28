@@ -31,9 +31,7 @@ import (
 
 var errUpdateFromEnv = errors.New("update from environment variable is not supported")
 var errDeprecatedEnv = errors.New("environement variable is deprecated")
-var errSettingsDeprecated = errors.New(
-	"setting \"metric.prometheus\" is depreacted and replaced by \"metric.prometheus.targets\". See https://docs.bleemeo.com/metrics-sources/prometheus",
-)
+var errSettingsDeprecated = errors.New("setting is deprecated ")
 
 //nolint:gochecknoglobals
 var defaultConfig = map[string]interface{}{
@@ -191,9 +189,44 @@ func loadDefault(cfg *config.Configuration) {
 	}
 }
 
-// migrate upgrade the configuration when Glouton change it settings
-// The list returned are actually warnings, not errors.
-func migrate(cfg *config.Configuration) (warnings []error) {
+func migrateScrapperMetrics(cfg *config.Configuration) (warnings []error) {
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.deny_metrics", "metric.deny_metrics")...)
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.allow", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.deny", "metric.deny_metrics")...)
+
+	return warnings
+}
+
+func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPath string) (warnings []error) {
+	migratedTargets := []interface{}{}
+	v, ok := cfg.Get(deprecatedPath)
+	if !ok {
+		return warnings
+	}
+
+	vTab, ok := v.([]interface{})
+	if !ok {
+		return warnings
+	}
+
+	if len(vTab) > 0 {
+		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
+		migratedTargets = append(migratedTargets, vTab...)
+	}
+
+	if len(migratedTargets) > 0 {
+		existing, _ := cfg.Get(correctPath)
+		targets, _ := existing.([]interface{})
+		targets = append(targets, migratedTargets...)
+
+		cfg.Set(correctPath, targets)
+	}
+
+	return warnings
+}
+
+func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 	// metrics.prometheus was renamed metrics.prometheus.scrapper
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
 	v, ok := cfg.Get("metric.prometheus")
@@ -204,7 +237,7 @@ func migrate(cfg *config.Configuration) (warnings []error) {
 			for key, dict := range vMap {
 				if tmp, ok := dict.(map[string]interface{}); ok {
 					if u, ok := tmp["url"].(string); ok {
-						warnings = append(warnings, errSettingsDeprecated)
+						warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
 
 						migratedTargets = append(migratedTargets, map[string]interface{}{
 							"url":  u,
@@ -225,6 +258,16 @@ func migrate(cfg *config.Configuration) (warnings []error) {
 			cfg.Set("metric.prometheus.targets", targets)
 		}
 	}
+
+	return warnings
+}
+
+// migrate upgrade the configuration when Glouton change it settings
+// The list returned are actually warnings, not errors.
+func migrate(cfg *config.Configuration) (warnings []error) {
+
+	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
+	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
 
 	return warnings
 }

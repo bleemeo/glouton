@@ -23,7 +23,6 @@ package registry
 import (
 	"context"
 	"errors"
-	"glouton/config"
 	"glouton/logger"
 	"glouton/types"
 	"net/http"
@@ -50,6 +49,11 @@ type pushFunction func(points []types.MetricPoint)
 // AddMetricPoints implement PointAdder.
 func (f pushFunction) PushPoints(points []types.MetricPoint) {
 	f(points)
+}
+
+type metricFilter interface {
+	FilterPoints(points []types.MetricPoint) []types.MetricPoint
+	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 }
 
 // Registry is a dynamic collection of metrics sources.
@@ -81,8 +85,7 @@ type Registry struct {
 	GloutonPort    string
 	BleemeoAgentID string
 	MetricFormat   types.MetricFormat
-	AllowList      config.MetricFilter
-	DenyList       config.MetricFilter
+	Filter         metricFilter
 
 	l sync.Mutex
 
@@ -447,7 +450,7 @@ func (r *Registry) AddDefaultCollector() {
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(r, r.AllowList.GetList(), r.DenyList.GetList())
+		wrapper := NewGathererWithStateWrapper(r, r.Filter)
 
 		state := GatherStateFromMap(req.URL.Query())
 		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
@@ -610,7 +613,7 @@ func (r *Registry) runOnce() time.Duration {
 		}
 	}
 
-	points = r.filterPoints(points)
+	points = r.Filter.FilterPoints(points)
 
 	if len(points) > 0 {
 		r.PushPoint.PushPoints(points)
@@ -622,41 +625,6 @@ func (r *Registry) runOnce() time.Duration {
 	r.l.Unlock()
 
 	return gatherTime
-}
-
-func (r *Registry) filterPoints(points []types.MetricPoint) []types.MetricPoint {
-	i := 0
-	denyList := r.DenyList.GetList()
-	allowList := r.AllowList.GetList()
-
-	if len(denyList) != 0 {
-		for _, point := range points {
-			for _, denyVal := range denyList {
-				matched := denyVal.MatchesPoint(point)
-				if !matched {
-					points[i] = point
-					i++
-				}
-			}
-		}
-		points = points[:i]
-		i = 0
-	}
-
-	for _, point := range points {
-		for _, allowVal := range allowList {
-			matched := allowVal.MatchesPoint(point)
-			if matched {
-				points[i] = point
-				i++
-				break
-			}
-		}
-	}
-
-	points = points[:i]
-
-	return points
 }
 
 func familiesToMetricPoints(now time.Time, families []*dto.MetricFamily) []types.MetricPoint {

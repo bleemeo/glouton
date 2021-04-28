@@ -3,7 +3,6 @@ package registry
 import (
 	"errors"
 	"fmt"
-	"glouton/config"
 	"glouton/types"
 	"strings"
 	"sync"
@@ -77,13 +76,12 @@ type GathererWithState interface {
 type GathererWithStateWrapper struct {
 	gatherState GatherState
 	gatherer    GathererWithState
-	allowList   []config.MetricSelector
-	denyList    []config.MetricSelector
+	filter      metricFilter
 }
 
 // NewGathererWithStateWrapper creates a new wrapper around GathererWithState.
-func NewGathererWithStateWrapper(g GathererWithState, allowList []config.MetricSelector, denyList []config.MetricSelector) *GathererWithStateWrapper {
-	return &GathererWithStateWrapper{gatherer: g, allowList: allowList, denyList: denyList}
+func NewGathererWithStateWrapper(g GathererWithState, filter metricFilter) *GathererWithStateWrapper {
+	return &GathererWithStateWrapper{gatherer: g, filter: filter}
 }
 
 // SetState updates the state the wrapper will provide to its internal gatherer when called.
@@ -97,41 +95,8 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	if err != nil {
 		return res, err
 	}
-	res = w.filter(res)
+	res = w.filter.FilterFamilies(res)
 	return res, err
-}
-
-func (w *GathererWithStateWrapper) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
-	i := 0
-
-	if len(w.denyList) != 0 {
-		for _, family := range result {
-			for _, denyVal := range w.denyList {
-				matched := denyVal.MatchesMetricFamily(family)
-				if !matched {
-					result[i] = family
-					i++
-				}
-			}
-		}
-		result = result[:i]
-		i = 0
-	}
-
-	for _, family := range result {
-		for _, allowVal := range w.allowList {
-			matched := allowVal.MatchesMetricFamily(family)
-			if matched {
-				result[i] = family
-				i++
-				break
-			}
-		}
-	}
-
-	result = result[:i]
-
-	return result
 }
 
 // labeledGatherer provide a gatherer that will add provided labels to all metrics.

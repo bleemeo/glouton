@@ -22,6 +22,7 @@ import (
 	"glouton/config"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/prometheus/matcher"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
@@ -55,7 +56,7 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 
 		labels := map[string]string{
 			types.LabelMetaScrapeJob:      d.DynamicJobName,
-			types.LabelMetaScrapeInstance: config.HostPort(tmp),
+			types.LabelMetaScrapeInstance: matcher.HostPort(tmp),
 		}
 
 		ns := c.PodNamespace()
