@@ -55,7 +55,7 @@ func NormalizeMetric(metric string) (Matchers, error) {
 		metric = globToRegex(metric)
 		if strings.ContainsAny(metric, "*.$^") {
 			// metric is in the blob format: we need to convert it in a regex
-			matchType = "=~"
+			matchType += "~"
 		}
 		metric = fmt.Sprintf("{%s%s\"%s\"}", types.LabelName, matchType, metric)
 	}
@@ -68,11 +68,22 @@ func NormalizeMetric(metric string) (Matchers, error) {
 	return m, nil
 }
 
-//Add will add a new matcher to the metric
+//Add will add a new matcher to the metric. If the name and the type are the same,
+// Add will overwrite the old value.
 func (m *Matchers) Add(label string, value string, labelType labels.MatchType) error {
 	new, err := labels.NewMatcher(labelType, label, value)
 	if err != nil {
 		return err
+	}
+	for _, val := range *m {
+		if val.Name == new.Name {
+			if val.Type == new.Type {
+				val.Value = new.Value
+			} else {
+				break
+			}
+			return nil
+		}
 	}
 	*m = append(*m, new)
 
@@ -80,16 +91,16 @@ func (m *Matchers) Add(label string, value string, labelType labels.MatchType) e
 }
 
 //MatchesLabels will check in the label List matches the Matchers
-func (matchers *Matchers) MatchesLabels(lbls labels.Labels) bool {
-	for _, m := range *matchers {
-		value := lbls.Get(m.Name)
-		if !m.Matches(value) {
-			return false
-		}
-	}
+// func (matchers *Matchers) MatchesLabels(lbls labels.Labels) bool {
+// 	for _, m := range *matchers {
+// 		value := lbls.Get(m.Name)
+// 		if !m.Matches(value) {
+// 			return false
+// 		}
+// 	}
 
-	return true
-}
+// 	return true
+// }
 
 func (matchers *Matchers) MatchesPoint(point types.MetricPoint) bool {
 	for _, m := range *matchers {
@@ -107,18 +118,27 @@ func (matchers *Matchers) MatchesPoint(point types.MetricPoint) bool {
 }
 
 func (matchers *Matchers) MatchesMetricFamily(fm *dto.MetricFamily) bool {
-	match := false
 
 	for _, m := range *matchers {
 		if m.Name == types.LabelName {
-			match = m.Matches(fm.GetName())
-			if match {
+			if m.Matches(fm.GetName()) {
 				return true
 			}
 		}
 	}
 
 	return false
+}
+
+//Get returns the value of the label for this matcher, or an empty string if none were found.
+func (m *Matchers) Get(label string) string {
+	for _, val := range *m {
+		if val.Name == label {
+			return val.Value
+		}
+	}
+
+	return ""
 }
 
 // HostPort return host:port.

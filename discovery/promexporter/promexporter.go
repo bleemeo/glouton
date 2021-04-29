@@ -77,9 +77,8 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 			// IncludeDefault: d.GlobalIncludeDefaultMetrics,
 		}
 
-		updateAllowDeny(target, c.Labels())
-		updateAllowDeny(target, c.Annotations())
-
+		d.Registry.Filter.UpdateFilters(c.Labels())
+		d.Registry.Filter.UpdateFilters(c.Annotations())
 		result = append(result, target)
 	}
 
