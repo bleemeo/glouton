@@ -36,6 +36,7 @@ require (
 	github.com/influxdata/telegraf v1.16.3
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/jackc/pgx v3.6.2+incompatible // indirect
+	github.com/json-iterator/go v1.1.10
 	github.com/mdlayher/netlink v1.1.1 // indirect
 	github.com/mdlayher/wifi v0.0.0-20200527114002-84f0b9457fdd // indirect
 	github.com/miekg/dns v1.1.35 // indirect

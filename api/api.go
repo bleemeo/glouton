@@ -33,18 +33,15 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/logger"
+	"glouton/prometheus/promql"
+	"glouton/store"
 	"glouton/threshold"
-	"glouton/types"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
 	"github.com/rs/cors"
 )
-
-type storeInterface interface {
-	Metrics(filters map[string]string) (result []types.Metric, err error)
-}
 
 type containerInterface interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
@@ -61,7 +58,7 @@ type agentInterface interface {
 type API struct {
 	BindAddress        string
 	StaticCDNURL       string
-	DB                 storeInterface
+	DB                 *store.Store
 	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider
 	FactProvider       *facts.FactProvider
@@ -146,7 +143,8 @@ func (api *API) init() {
 			logger.Printf("Error while loading diagnostic.html. Local UI will be broken: %v", err)
 		}
 	}
-
+	promql := promql.PromQL{}
+	router.Mount("/api/v1", promql.Register(api.DB))
 	router.Handle("/metrics", api.PrometheurExporter)
 	router.Handle("/playground", playground.Handler("GraphQL playground", "/graphql"))
 	router.Handle("/graphql", handler.NewDefaultServer(NewExecutableSchema(Config{Resolvers: &Resolver{api: api}})))
