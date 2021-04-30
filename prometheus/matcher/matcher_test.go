@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"testing"
 
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -208,5 +209,468 @@ func Test_Host_Port(t *testing.T) {
 
 	if got != want {
 		t.Errorf("An error occurred: expected %s, got %s", want, got)
+	}
+}
+
+func Test_Matches_Basic_Point(t *testing.T) {
+	tests := []struct {
+		name     string
+		point    types.MetricPoint
+		matchers Matchers
+		want     bool
+	}{
+		{
+			name: "basic metric glob",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "cpu_percent",
+					types.LabelScrapeInstance: "instance_1",
+					types.LabelScrapeJob:      "job_1",
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "basic metric glob fail",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "should_fail",
+					types.LabelScrapeInstance: "instance_3",
+					types.LabelScrapeJob:      "job_3",
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_3",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_3",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "basic metric glob fail missing label",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "cpu_percent",
+					types.LabelScrapeInstance: "instance_3",
+					// missing scrape job
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_3",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_3",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "basic metric regex",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "cpu_percent_whatever",
+					types.LabelScrapeInstance: "instance_2",
+					types.LabelScrapeJob:      "job_2",
+				},
+			},
+			matchers: Matchers{
+				labels.MustNewMatcher(labels.MatchRegexp, types.LabelName, "cpu_percent.*"),
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_2",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_2",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "basic metric regex fail",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "cpu_percent_whatever_should_fail",
+					types.LabelScrapeInstance: "instance_4",
+					types.LabelScrapeJob:      "job_4",
+				},
+			},
+			matchers: Matchers{
+				labels.MustNewMatcher(labels.MatchRegexp, types.LabelName, "cpu_percent.*_whatever"),
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_4",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_4",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "basic metric regex fail missing label",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "cpu_percent_whatever",
+					types.LabelScrapeInstance: "instance_2",
+				},
+			},
+			matchers: Matchers{
+				labels.MustNewMatcher(labels.MatchRegexp, types.LabelName, "cpu_percent.*"),
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_2",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_2",
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		got := test.matchers.MatchesPoint(test.point)
+
+		if got != test.want {
+			t.Errorf("Incorrect result for test %s: expected %v, got %v", test.name, test.want, got)
+		}
+		fmt.Printf("Test %s done\n", test.name)
+	}
+}
+
+func Test_Matches_Point_Error(t *testing.T) {
+	point := types.MetricPoint{
+		Labels: map[string]string{
+			types.LabelScrapeInstance: "should_fail",
+			types.LabelScrapeJob:      "should_fail",
+		},
+	}
+	matchers := Matchers{
+		&labels.Matcher{
+			Type:  labels.MatchEqual,
+			Name:  types.LabelName,
+			Value: "cpu_percent",
+		},
+		&labels.Matcher{
+			Type:  labels.MatchEqual,
+			Name:  types.LabelScrapeInstance,
+			Value: "instance_1",
+		},
+		&labels.Matcher{
+			Type:  labels.MatchEqual,
+			Name:  types.LabelScrapeJob,
+			Value: "job_1",
+		},
+	}
+
+	res := matchers.MatchesPoint(point)
+
+	if res {
+		t.Errorf("Incorrect value on match: expected false but got true")
+	}
+}
+
+func Test_Matches_Basic_Family(t *testing.T) {
+	fn := []string{"cpu_percent", "should_fail", "cpu_whatever_should_fail"}
+	lbln := []string{types.LabelScrapeInstance, types.LabelScrapeJob}
+	lblv := []string{"instance_1", "job_1", "instance_2", "job_2"}
+	tests := []struct {
+		name     string
+		family   dto.MetricFamily
+		matchers Matchers
+		want     bool
+	}{
+		{
+			name: "basic metric glob",
+			family: dto.MetricFamily{
+				Name: &fn[0],
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{
+								Name:  &lbln[0],
+								Value: &lblv[0],
+							},
+							{
+								Name:  &lbln[1],
+								Value: &lblv[1],
+							},
+						},
+					},
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "basic metric regex",
+			family: dto.MetricFamily{
+				Name: &fn[0],
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{
+								Name:  &lbln[0],
+								Value: &lblv[0],
+							},
+							{
+								Name:  &lbln[1],
+								Value: &lblv[1],
+							},
+						},
+					},
+				},
+			},
+			matchers: Matchers{
+				labels.MustNewMatcher(labels.MatchRegexp, types.LabelName, "cpu.*"),
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "basic metric glob fail",
+			family: dto.MetricFamily{
+				Name: &fn[1],
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{
+								Name:  &lbln[0],
+								Value: &lblv[0],
+							},
+							{
+								Name:  &lbln[1],
+								Value: &lblv[1],
+							},
+						},
+					},
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "basic metric glob fail missing label",
+			family: dto.MetricFamily{
+				Name: &fn[0],
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{
+								Name:  &lbln[0],
+								Value: &lblv[0],
+							}, // missing scrape job label
+						},
+					},
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "basic metric regex fail",
+			family: dto.MetricFamily{
+				Name: &fn[2],
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{
+								Name:  &lbln[0],
+								Value: &lblv[0],
+							},
+							{
+								Name:  &lbln[1],
+								Value: &lblv[1],
+							},
+						},
+					},
+				},
+			},
+			matchers: Matchers{
+				labels.MustNewMatcher(labels.MatchRegexp, types.LabelName, "cpu.*whatever"),
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "metric regex with unchecked labels",
+			family: dto.MetricFamily{
+				Name: &fn[0],
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{
+								Name:  &lbln[0],
+								Value: &lblv[0],
+							},
+							{
+								Name:  &lbln[1],
+								Value: &lblv[1],
+							},
+						},
+					},
+				},
+			},
+			matchers: Matchers{
+				labels.MustNewMatcher(labels.MatchRegexp, types.LabelName, "cpu.*"),
+			},
+			want: true,
+		},
+		{
+			name: "metric regex with different labels",
+			family: dto.MetricFamily{
+				Name: &fn[2],
+				Metric: []*dto.Metric{
+					{
+						Label: []*dto.LabelPair{
+							{
+								Name:  &lbln[0],
+								Value: &lblv[2],
+							},
+							{
+								Name:  &lbln[1],
+								Value: &lblv[3],
+							},
+						},
+					},
+				},
+			},
+			matchers: Matchers{
+				labels.MustNewMatcher(labels.MatchRegexp, types.LabelName, "cpu.*whatever"),
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: false,
+		},
+	}
+
+	for _, test := range tests {
+		got := test.matchers.MatchesMetricFamily(&test.family)
+
+		if got != test.want {
+			t.Errorf("An error occurred for test %s: expected %v, got %v", test.name, test.want, got)
+		}
 	}
 }

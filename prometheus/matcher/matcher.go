@@ -90,18 +90,6 @@ func (m *Matchers) Add(label string, value string, labelType labels.MatchType) e
 	return nil
 }
 
-//MatchesLabels will check in the label List matches the Matchers
-// func (matchers *Matchers) MatchesLabels(lbls labels.Labels) bool {
-// 	for _, m := range *matchers {
-// 		value := lbls.Get(m.Name)
-// 		if !m.Matches(value) {
-// 			return false
-// 		}
-// 	}
-
-// 	return true
-// }
-
 func (matchers *Matchers) MatchesPoint(point types.MetricPoint) bool {
 	for _, m := range *matchers {
 		value, found := point.Labels[m.Name]
@@ -117,29 +105,76 @@ func (matchers *Matchers) MatchesPoint(point types.MetricPoint) bool {
 	return true
 }
 
+func dto2Labels(name string, input *dto.Metric) labels.Labels {
+	lbls := make(map[string]string, len(input.Label)+1)
+	for _, lp := range input.Label {
+		lbls[*lp.Name] = *lp.Value
+	}
+
+	lbls["__name__"] = name
+
+	return labels.FromMap(lbls)
+}
+
+func matchesLabels(m *labels.Matcher, lbls labels.Labels) bool {
+	val := lbls.Get(m.Name)
+
+	if val == "" {
+		return false
+	}
+
+	matched := m.Matches(val)
+
+	return matched
+}
+
+func (matchers *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
+	didMatch := true
+
+	for _, m := range *matchers {
+		labels := dto2Labels(name, mt)
+
+		if !matchesLabels(m, labels) {
+			didMatch = false
+		}
+	}
+
+	return didMatch
+}
+
 func (matchers *Matchers) MatchesMetricFamily(fm *dto.MetricFamily) bool {
 
 	for _, m := range *matchers {
-		if m.Name == types.LabelName {
-			if m.Matches(fm.GetName()) {
-				return true
+		if *fm.Name == "process_cpu_seconds_total" && m.Value == "process_cpu_seconds_total" {
+			fmt.Println(fm)
+		}
+		found := false
+		for _, metric := range fm.Metric {
+			labels := dto2Labels(*fm.Name, metric)
+			matched := matchesLabels(m, labels)
+
+			if matched {
+				found = true
 			}
 		}
-	}
-
-	return false
-}
-
-//Get returns the value of the label for this matcher, or an empty string if none were found.
-func (m *Matchers) Get(label string) string {
-	for _, val := range *m {
-		if val.Name == label {
-			return val.Value
+		if !found {
+			return false
 		}
 	}
 
-	return ""
+	return true
 }
+
+// //Get returns the value of the label for this matcher, or an empty string if none were found.
+// func (m *Matchers) Get(label string) string {
+// 	for _, val := range *m {
+// 		if val.Name == label {
+// 			return val.Value
+// 		}
+// 	}
+
+// 	return ""
+// }
 
 // HostPort return host:port.
 func HostPort(u *url.URL) string {

@@ -23,7 +23,6 @@ import (
 	"glouton/types"
 	"testing"
 
-	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -261,17 +260,17 @@ func Test_Basic_FilterPoints(t *testing.T) {
 // 	return result
 // }
 
-func DTOtoMetricLabels(input []*dto.MetricFamily) []labels.Labels {
-	result := make([]labels.Labels, 0, len(input))
+// func DTOtoMetricLabels(input []*dto.MetricFamily) []labels.Labels {
+// 	result := make([]labels.Labels, 0, len(input))
 
-	for _, mf := range input {
-		for _, m := range mf.Metric {
-			result = append(result, dto2Labels(*mf.Name, m))
-		}
-	}
+// 	for _, mf := range input {
+// 		for _, m := range mf.Metric {
+// 			result = append(result, dto2Labels(*mf.Name, m))
+// 		}
+// 	}
 
-	return result
-}
+// 	return result
+// }
 
 // func dto2Labels(name string, input *dto.Metric) labels.Labels {
 // 	lbls := make(map[string]string, len(input.Label)+1)

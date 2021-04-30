@@ -3,7 +3,6 @@ package registry
 import (
 	"errors"
 	"fmt"
-	"glouton/logger"
 	"glouton/types"
 	"strings"
 	"sync"
@@ -93,10 +92,7 @@ func (w *GathererWithStateWrapper) SetState(state GatherState) {
 // Gather implements prometheus.Gatherer for GathererWithStateWrapper.
 func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	res, err := w.gatherer.GatherWithState(w.gatherState)
-	if err != nil {
-		logger.V(0).Println("Error: %v", err)
-		return res, err
-	}
+
 	res = w.filter.FilterFamilies(res)
 	return res, err
 }

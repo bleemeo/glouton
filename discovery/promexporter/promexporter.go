@@ -77,8 +77,8 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 			// IncludeDefault: d.GlobalIncludeDefaultMetrics,
 		}
 
-		d.Registry.Filter.UpdateFilters(c.Labels())
-		d.Registry.Filter.UpdateFilters(c.Annotations())
+		d.Registry.Filter.UpdateFilters(matcher.HostPort(tmp)+"-labels", c.Labels())
+		d.Registry.Filter.UpdateFilters(matcher.HostPort(tmp)+"-annotations", c.Annotations())
 		result = append(result, target)
 	}
 
