@@ -42,8 +42,13 @@ func NormalizeMetricScrapper(metric string, instance string, job string) (Matche
 		return nil, err
 	}
 
-	promMetric.Add(types.LabelScrapeInstance, instance, labels.MatchEqual)
-	promMetric.Add(types.LabelScrapeJob, job, labels.MatchEqual)
+	if promMetric.Get(types.LabelScrapeInstance) == nil {
+		promMetric.Add(types.LabelScrapeInstance, instance, labels.MatchEqual)
+	}
+
+	if promMetric.Get(types.LabelScrapeJob) == nil {
+		promMetric.Add(types.LabelScrapeJob, job, labels.MatchEqual)
+	}
 
 	return promMetric, err
 }
@@ -68,6 +73,18 @@ func NormalizeMetric(metric string) (Matchers, error) {
 	return m, nil
 }
 
+//Get returns the matcher with the specided label as Name.
+// nil will be returned if not matcher were found.
+func (m *Matchers) Get(label string) *labels.Matcher {
+	for _, val := range *m {
+		if val.Name == label {
+			return val
+		}
+	}
+
+	return nil
+}
+
 //Add will add a new matcher to the metric. If the name and the type are the same,
 // Add will overwrite the old value.
 func (m *Matchers) Add(label string, value string, labelType labels.MatchType) error {
@@ -85,11 +102,12 @@ func (m *Matchers) String() string {
 	res := "{"
 
 	for i := 0; i < len(*m); i++ {
-		res += res + (*m)[i].String()
+		res += (*m)[i].String()
 		if i+1 < len(*m) {
 			res += ","
 		}
 	}
+	res += "}"
 	return res
 }
 
@@ -144,40 +162,6 @@ func (matchers *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
 
 	return didMatch
 }
-
-func (matchers *Matchers) MatchesMetricFamily(fm *dto.MetricFamily) bool {
-
-	for _, m := range *matchers {
-		if *fm.Name == "process_cpu_seconds_total" && m.Value == "process_cpu_seconds_total" {
-			fmt.Println(fm)
-		}
-		found := false
-		for _, metric := range fm.Metric {
-			labels := dto2Labels(*fm.Name, metric)
-			matched := matchesLabels(m, labels)
-
-			if matched {
-				found = true
-			}
-		}
-		if !found {
-			return false
-		}
-	}
-
-	return true
-}
-
-// //Get returns the value of the label for this matcher, or an empty string if none were found.
-// func (m *Matchers) Get(label string) string {
-// 	for _, val := range *m {
-// 		if val.Name == label {
-// 			return val.Value
-// 		}
-// 	}
-
-// 	return ""
-// }
 
 // HostPort return host:port.
 func HostPort(u *url.URL) string {

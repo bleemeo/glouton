@@ -12,6 +12,7 @@ import (
 
 func Test_NormalizeMetric(t *testing.T) {
 	tests := []struct {
+		name            string
 		allowListString string
 		scrapperName    string
 		scrapeInstance  string
@@ -19,6 +20,7 @@ func Test_NormalizeMetric(t *testing.T) {
 		want            Matchers
 	}{
 		{
+			name:            "basic metric",
 			allowListString: "cpu_percent",
 			scrapeInstance:  "instance_1",
 			scrapeJob:       "job_1",
@@ -41,6 +43,7 @@ func Test_NormalizeMetric(t *testing.T) {
 			},
 		},
 		{
+			name:            "basic glob metric",
 			allowListString: "cpu_*",
 			scrapeInstance:  "instance_2",
 			scrapeJob:       "job_2",
@@ -63,6 +66,7 @@ func Test_NormalizeMetric(t *testing.T) {
 			},
 		},
 		{
+			name:            "multiple glob metric",
 			allowListString: "prom*_cpu_*",
 			scrapeInstance:  "instance_3",
 			scrapeJob:       "job_3",
@@ -85,7 +89,8 @@ func Test_NormalizeMetric(t *testing.T) {
 			},
 		},
 		{
-			allowListString: "prom_cpu{test=\"Hello\",scrape_instance=\"instance_4\",scrape_job=\"job_3\"}",
+			name:            "complete PromQL Matcher string",
+			allowListString: "prom_cpu{test=\"Hello\",scrape_instance=\"instance_4\",scrape_job=\"job_4\"}",
 			scrapeInstance:  "instance_4",
 			scrapeJob:       "job_4",
 			want: Matchers{
@@ -117,21 +122,21 @@ func Test_NormalizeMetric(t *testing.T) {
 		got, err := NormalizeMetricScrapper(test.allowListString, test.scrapeInstance, test.scrapeJob)
 
 		if err != nil {
-			t.Errorf("Invalid result: Got error => %v ", err)
+			t.Errorf("Invalid result for test %s: Got error => %v ", test.name, err)
 		}
 		if len(got) != len(test.want) {
-			t.Errorf("Invalid Matchers length for metric %v: expected=%d, got=%d", test, len(test.want), len(got))
+			t.Errorf("Invalid Matchers length for test %s: expected=%d, got=%d", test.name, len(test.want), len(got))
 			continue
 		}
 
 		for idx, val := range got {
 			if val.Type != test.want[idx].Type {
-				t.Errorf("Invalid Match Type for metric %v:\nexpected %s got %s", test, test.want[idx].Type, val.Type)
+				t.Errorf("Invalid Match Type for test %s:\nexpected %s got %s", test.name, test.want[idx].Type, val.Type)
 			}
 
 			if !val.Matches(test.want[idx].Value) {
-				t.Errorf("Invalid unmatched for metric %v:\nexpected={%s: '%s'} got={%s: '%s'}\n",
-					test, test.want[idx].Name, test.want[idx].Value, val.Name, val.Value)
+				t.Errorf("Unmatched value for test %s:\nexpected={%s: '%s'} got={%s: '%s'}\n",
+					test.name, test.want[idx].Name, test.want[idx].Value, val.Name, val.Value)
 			}
 		}
 	}
@@ -152,7 +157,6 @@ func Test_Fail_NormalizeMetrics(t *testing.T) {
 func Test_Add_Same_Type(t *testing.T) {
 	metric := "cpu"
 	m, _ := NormalizeMetricScrapper(metric, "instance", "job")
-	before := len(m)
 
 	err := m.Add(types.LabelName, "cpu2", labels.MatchEqual)
 
@@ -160,16 +164,12 @@ func Test_Add_Same_Type(t *testing.T) {
 		t.Errorf("An error occurred: %v", err)
 	}
 
-	if before != len(m) {
-		t.Errorf("Add function did not overwrite properly: expected size %d, got %d", before, len(m))
-	}
+	last := m[len(m)-1]
 
-	for _, val := range m {
-		if val.Name == types.LabelName {
-			if val.Value != "cpu2" {
-				t.Errorf("Invalid value for label %s: got %s, expected %s", types.LabelName, val.Name, "cpu2")
-			}
-		}
+	if last.Name != types.LabelName || last.Type != labels.MatchEqual || last.Value != "cpu2" {
+		t.Errorf("Invalid value of matcher field: expected {%s %v %s}, got {%s %s %s}",
+			types.LabelName, labels.MatchEqual, "cpu2",
+			last.Name, last.Type, last.Value)
 	}
 }
 
@@ -423,27 +423,24 @@ func Test_Matches_Basic_Family(t *testing.T) {
 	lbln := []string{types.LabelScrapeInstance, types.LabelScrapeJob}
 	lblv := []string{"instance_1", "job_1", "instance_2", "job_2"}
 	tests := []struct {
-		name     string
-		family   dto.MetricFamily
-		matchers Matchers
-		want     bool
+		name       string
+		metricName string
+		metric     dto.Metric
+		matchers   Matchers
+		want       bool
 	}{
 		{
-			name: "basic metric glob",
-			family: dto.MetricFamily{
-				Name: &fn[0],
-				Metric: []*dto.Metric{
+			name:       "basic metric glob",
+			metricName: fn[0],
+			metric: dto.Metric{
+				Label: []*dto.LabelPair{
 					{
-						Label: []*dto.LabelPair{
-							{
-								Name:  &lbln[0],
-								Value: &lblv[0],
-							},
-							{
-								Name:  &lbln[1],
-								Value: &lblv[1],
-							},
-						},
+						Name:  &lbln[0],
+						Value: &lblv[0],
+					},
+					{
+						Name:  &lbln[1],
+						Value: &lblv[1],
 					},
 				},
 			},
@@ -467,21 +464,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "basic metric regex",
-			family: dto.MetricFamily{
-				Name: &fn[0],
-				Metric: []*dto.Metric{
+			name:       "basic metric regex",
+			metricName: fn[0],
+			metric: dto.Metric{
+				Label: []*dto.LabelPair{
 					{
-						Label: []*dto.LabelPair{
-							{
-								Name:  &lbln[0],
-								Value: &lblv[0],
-							},
-							{
-								Name:  &lbln[1],
-								Value: &lblv[1],
-							},
-						},
+						Name:  &lbln[0],
+						Value: &lblv[0],
+					},
+					{
+						Name:  &lbln[1],
+						Value: &lblv[1],
 					},
 				},
 			},
@@ -501,21 +494,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "basic metric glob fail",
-			family: dto.MetricFamily{
-				Name: &fn[1],
-				Metric: []*dto.Metric{
+			name:       "basic metric glob fail",
+			metricName: fn[1],
+			metric: dto.Metric{
+				Label: []*dto.LabelPair{
 					{
-						Label: []*dto.LabelPair{
-							{
-								Name:  &lbln[0],
-								Value: &lblv[0],
-							},
-							{
-								Name:  &lbln[1],
-								Value: &lblv[1],
-							},
-						},
+						Name:  &lbln[0],
+						Value: &lblv[0],
+					},
+					{
+						Name:  &lbln[1],
+						Value: &lblv[1],
 					},
 				},
 			},
@@ -539,18 +528,15 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "basic metric glob fail missing label",
-			family: dto.MetricFamily{
-				Name: &fn[0],
-				Metric: []*dto.Metric{
+			name:       "basic metric glob fail missing label",
+			metricName: fn[0],
+			metric: dto.Metric{
+
+				Label: []*dto.LabelPair{
 					{
-						Label: []*dto.LabelPair{
-							{
-								Name:  &lbln[0],
-								Value: &lblv[0],
-							}, // missing scrape job label
-						},
-					},
+						Name:  &lbln[0],
+						Value: &lblv[0],
+					}, // missing scrape job label
 				},
 			},
 			matchers: Matchers{
@@ -573,21 +559,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "basic metric regex fail",
-			family: dto.MetricFamily{
-				Name: &fn[2],
-				Metric: []*dto.Metric{
+			name:       "basic metric regex fail",
+			metricName: fn[2],
+			metric: dto.Metric{
+				Label: []*dto.LabelPair{
 					{
-						Label: []*dto.LabelPair{
-							{
-								Name:  &lbln[0],
-								Value: &lblv[0],
-							},
-							{
-								Name:  &lbln[1],
-								Value: &lblv[1],
-							},
-						},
+						Name:  &lbln[0],
+						Value: &lblv[0],
+					},
+					{
+						Name:  &lbln[1],
+						Value: &lblv[1],
 					},
 				},
 			},
@@ -607,21 +589,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "metric regex with unchecked labels",
-			family: dto.MetricFamily{
-				Name: &fn[0],
-				Metric: []*dto.Metric{
+			name:       "metric regex with unchecked labels",
+			metricName: fn[0],
+			metric: dto.Metric{
+				Label: []*dto.LabelPair{
 					{
-						Label: []*dto.LabelPair{
-							{
-								Name:  &lbln[0],
-								Value: &lblv[0],
-							},
-							{
-								Name:  &lbln[1],
-								Value: &lblv[1],
-							},
-						},
+						Name:  &lbln[0],
+						Value: &lblv[0],
+					},
+					{
+						Name:  &lbln[1],
+						Value: &lblv[1],
 					},
 				},
 			},
@@ -631,21 +609,17 @@ func Test_Matches_Basic_Family(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "metric regex with different labels",
-			family: dto.MetricFamily{
-				Name: &fn[2],
-				Metric: []*dto.Metric{
+			name:       "metric regex with different labels",
+			metricName: fn[2],
+			metric: dto.Metric{
+				Label: []*dto.LabelPair{
 					{
-						Label: []*dto.LabelPair{
-							{
-								Name:  &lbln[0],
-								Value: &lblv[2],
-							},
-							{
-								Name:  &lbln[1],
-								Value: &lblv[3],
-							},
-						},
+						Name:  &lbln[0],
+						Value: &lblv[2],
+					},
+					{
+						Name:  &lbln[1],
+						Value: &lblv[3],
 					},
 				},
 			},
@@ -667,10 +641,23 @@ func Test_Matches_Basic_Family(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := test.matchers.MatchesMetricFamily(&test.family)
+		got := test.matchers.MatchesMetric(test.metricName, &test.metric)
 
 		if got != test.want {
 			t.Errorf("An error occurred for test %s: expected %v, got %v", test.name, test.want, got)
 		}
+	}
+}
+
+func Test_String(t *testing.T) {
+	m, _ := NormalizeMetric("cpu")
+
+	m.Add("test", "test", labels.MatchEqual)
+
+	want := "{__name__=\"cpu\",test=\"test\"}"
+	got := m.String()
+
+	if got != want {
+		t.Errorf("Invalid value for string result: got %s want %s", got, want)
 	}
 }
