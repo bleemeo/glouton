@@ -75,19 +75,22 @@ func (m *Matchers) Add(label string, value string, labelType labels.MatchType) e
 	if err != nil {
 		return err
 	}
-	for _, val := range *m {
-		if val.Name == new.Name {
-			if val.Type == new.Type {
-				val.Value = new.Value
-			} else {
-				break
-			}
-			return nil
-		}
-	}
+
 	*m = append(*m, new)
 
 	return nil
+}
+
+func (m *Matchers) String() string {
+	res := "{"
+
+	for i := 0; i < len(*m); i++ {
+		res += res + (*m)[i].String()
+		if i+1 < len(*m) {
+			res += ","
+		}
+	}
+	return res
 }
 
 func (matchers *Matchers) MatchesPoint(point types.MetricPoint) bool {

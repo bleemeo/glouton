@@ -43,11 +43,12 @@ var defaultMetrics = []string{
 
 // Target is an URL to scrape.
 type Target struct {
-	URL            *url.URL
-	AllowList      []string
-	DenyList       []string
-	IncludeDefault bool
-	ExtraLabels    map[string]string
+	URL             *url.URL
+	AllowList       []string
+	DenyList        []string
+	IncludeDefault  bool
+	ExtraLabels     map[string]string
+	ContainerLabels map[string]string
 
 	// l sync.Mutex
 	// allowGlob    []string

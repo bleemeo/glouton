@@ -54,7 +54,6 @@ func (f pushFunction) PushPoints(points []types.MetricPoint) {
 type metricFilter interface {
 	FilterPoints(points []types.MetricPoint) []types.MetricPoint
 	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
-	UpdateFilters(name string, labels map[string]string) error
 }
 
 // Registry is a dynamic collection of metrics sources.
