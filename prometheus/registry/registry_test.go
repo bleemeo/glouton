@@ -161,7 +161,7 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer(gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value"}, false); err != nil {
+	if id1, err = reg.RegisterGatherer(gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value", "empty-value-to-dropped": ""}, false); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 

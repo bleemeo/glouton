@@ -67,6 +67,10 @@ type Target struct {
 
 // HostPort return host:port.
 func HostPort(u *url.URL) string {
+	if u.Scheme == "file" || u.Scheme == "" {
+		return ""
+	}
+
 	hostname := u.Hostname()
 	port := u.Port()
 
@@ -79,32 +83,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 
 	logger.V(2).Printf("Scrapping Prometheus exporter %s", u.String())
 
-	req, err := http.NewRequest("GET", u.String(), nil)
-	if err != nil {
-		return nil, fmt.Errorf("prepare request to Prometheus exporter %s: %w", u.String(), err)
-	}
-
-	req.Header.Add("Accept", "text/plain;version=0.0.4")
-	req.Header.Set("User-Agent", version.UserAgent())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
-	if err != nil {
-		return nil, err
-	}
-
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		// Ensure response body is read to allow HTTP keep-alive to works
-		_, _ = io.Copy(ioutil.Discard, resp.Body)
-
-		return nil, fmt.Errorf("%w: exporter %s HTTP status is %s", errIncorrectStatus, u.String(), resp.Status)
-	}
-
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := t.readAll()
 	if err != nil {
 		return nil, fmt.Errorf("read from %s: %w", u.String(), err)
 	}
@@ -125,6 +104,41 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	}
 
 	return t.filter(result), nil
+}
+
+func (t *Target) readAll() ([]byte, error) {
+	if t.URL.Scheme == "file" || t.URL.Scheme == "" {
+		return ioutil.ReadFile(t.URL.Path)
+	}
+
+	req, err := http.NewRequest("GET", t.URL.String(), nil)
+	if err != nil {
+		return nil, fmt.Errorf("prepare request to Prometheus exporter %s: %w", t.URL.String(), err)
+	}
+
+	req.Header.Add("Accept", "text/plain;version=0.0.4")
+	req.Header.Set("User-Agent", version.UserAgent())
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
+	if err != nil {
+		return nil, err
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		// Ensure response body is read to allow HTTP keep-alive to works
+		_, _ = io.Copy(ioutil.Discard, resp.Body)
+
+		return nil, fmt.Errorf("%w: exporter %s HTTP status is %s", errIncorrectStatus, t.URL.String(), resp.Status)
+	}
+
+	body, err := ioutil.ReadAll(resp.Body)
+
+	return body, err
 }
 
 func (t *Target) filter(result []*dto.MetricFamily) []*dto.MetricFamily {
