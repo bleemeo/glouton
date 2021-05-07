@@ -15,7 +15,7 @@ import FetchSuspense from "../UI/FetchSuspense";
 import { CONTAINER_PROCESSES } from "../utils/gqlRequests";
 
 const DockerProcesses = ({ containerId, name }) => {
-  const { isLoading, error, processes, points } = useFetch(
+  const { isLoading, error, processes } = useFetch(
     CONTAINER_PROCESSES,
     { containerId },
     10000
@@ -30,29 +30,18 @@ const DockerProcesses = ({ containerId, name }) => {
         isLoading={isLoading}
         error={error}
         processes={processes}
-        points={points}
       >
-        {({ processes, points }) => {
+        {({ processes }) => {
           const result = processes;
           const dockerProcesses =
-            result && result.processes ? result.processes : [];
-          const metrics = points;
-          const memRegexp = /^mem_/;
+            result && result['Processes'] ? result['Processes'] : [];
           if (!dockerProcesses || dockerProcesses.length === 0) {
             return <h4>There are no processes related to {name}</h4>;
           } else {
-            let memTotal = 0;
-            metrics.forEach((m) => {
-              if (
-                m.points &&
-                memRegexp.test(m.labels.find((l) => l.key === LabelName).value)
-              ) {
-                memTotal += m.points[m.points.length - 1].value;
-              }
-            });
+            let memTotal = result['Memory']['Total'];
             dockerProcesses.map((process) => {
               process.mem_percent = d3.format(".2r")(
-                ((process.memory_rss * 1024) / memTotal) * 100
+                ((process.memory_rss) / memTotal) * 100
               );
               process.new_cpu_times = _formatCpuTime(process.cpu_time);
               return process;

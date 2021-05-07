@@ -26,7 +26,7 @@ const AgentDockerList = () => {
       allContainers,
       search,
     },
-    10000
+    10000000000000
   );
   let displayContainers;
   if (isLoading) {

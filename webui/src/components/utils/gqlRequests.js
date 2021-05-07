@@ -79,7 +79,7 @@ export const CONTAINERS_DETAILS = gql`
 export const CONTAINER_PROCESSES = gql`
   query containerProcesses($containerId: String!) {
     processes(containerId: $containerId) {
-      processes {
+      Processes {
         pid
         cmdline
         name
@@ -89,25 +89,8 @@ export const CONTAINER_PROCESSES = gql`
         status
         username
       }
-    }
-    points(
-      metricsFilter: [
-        { labels: { key: "${LabelName}", value: "mem_buffered" } }
-        { labels: { key: "${LabelName}", value: "mem_cached" } }
-        { labels: { key: "${LabelName}", value: "mem_free" } }
-        { labels: { key: "${LabelName}", value: "mem_used" } }
-      ]
-      start: ""
-      end: ""
-      minutes: 15
-    ) {
-      labels {
-        key
-        value
-      }
-      points {
-        time
-        value
+      Memory {
+        Total
       }
     }
   }
