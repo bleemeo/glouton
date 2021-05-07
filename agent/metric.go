@@ -17,24 +17,42 @@
 package agent
 
 import (
-	"fmt"
 	"glouton/config"
 	"glouton/discovery/promexporter"
+	"glouton/facts/container-runtime/merge"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
 	"glouton/types"
-	"net/url"
 	"strings"
 	"sync"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/promql/parser"
 )
 
-// var errEmptyMetaData = errors.New("missing scrape instance or scrape job for metric")
+//nolint:gochecknoglobals
+var defaultMetrics []string = []string{
+	"agent_gather_time", "agent_status", "cpu_idle", "cpu_interrup", "cpu_nice",
+	"cpu_other", "cpu_softirq", "cpu_steal", "cpu_system", "cpu_used",
+	"cpu_used_status", "cpu_user", "cpu_wait", "cpu_guest_nice", "cpu_guest",
+	"disk_free", "disk_inodes_free", "disk_inodes_total", "disk_inodes_used",
+	"disk_total", "disk_used", "disk_used_perc", "disk_used_perc_status",
+	"io_merge_reads", "io_merged_writes", "io_read_bytes", "io_reads", "io_time",
+	"io_utilization", "io_write_bytes", "io_write_time", "io_wites",
+	"mem_available", "mem_available_perc", "mem_buffered", "mem_cached",
+	"mem_free", "mem_total", "mem_used", "mem_used_perc", "mem_used,perc_status",
+	"net_bites_recv", "net_bits_sent", "net_drop_in", "net_drop_out",
+	"net_err_in", "net_err_in_status", "net_err_out", "net_err_out_status",
+	"net_packets_recv", "net_packets_sent", "process_status_blocked",
+	"process_status_paging", "process_status_running", "process_status_sleeping",
+	"process_status_stopped", "process_status_zombies", "process_total",
+	"process_total_threads", "swap_free", "swap_in", "swap_out", "swap_total",
+	"swap_used", "swap_used_perc", "swap_used_perc_status", "system_load1",
+	"system_load5", "system_load15", "system_pending_updates",
+	"system_pending_security_updates", "uptime", "users_logged",
+}
 
-//MetricFilter is a thread-safe holder of an allow / deny metrics list
+//MetricFilter is a thread-safe holder of an allow / deny metrics list.
 type MetricFilter struct {
 
 	// staticList contains the matchers generated from static source (config file).
@@ -71,59 +89,44 @@ func buildMatcherList(config *config.Configuration, listType string) ([]matcher.
 func addScrappersList(config *config.Configuration, metricList []matcher.Matchers,
 	metricListType string) []matcher.Matchers {
 	promTargets, _ := config.Get("metric.prometheus.targets")
-	promTargetList, ok := promTargets.([]interface{})
+	targetList := prometheusConfigToURLs(promTargets, []string{}, []string{})
 
-	if !ok {
-		logger.V(2).Println("Could not cast prometheus.targets as a list of map")
-		return metricList
-	}
-	for _, val := range promTargetList {
-		vMap, ok := val.(map[string]interface{})
-		if !ok {
-			continue
+	for _, t := range targetList {
+		var list []string
+
+		if metricListType == "allow" {
+			list = t.AllowList
+		} else {
+			list = t.DenyList
 		}
 
-		name, ok := vMap["name"].(string)
-		if !ok {
-			continue
-		}
-
-		instance, ok := vMap["url"].(string)
-		if !ok {
-			continue
-		}
-
-		parsedURL, err := url.Parse(instance)
-		if err != nil {
-			logger.V(2).Println("Could not parse url for target", name)
-		}
-
-		instance = matcher.HostPort(parsedURL)
-
-		allowTargetRaw, ok := vMap[metricListType]
-		if !ok {
-			// No metrics for this target
-			continue
-		}
-
-		allowTargetString, ok := allowTargetRaw.([]interface{})
-		if !ok {
-			logger.V(2).Printf("Could not cast prometheus.targets.%s as a []interface{} for target %s", metricListType, name)
-		}
-
-		for _, str := range allowTargetString {
-			allowString, ok := str.(string)
-			if !ok {
-				logger.V(2).Printf("Could not cast prometheus.targets.%s field as a string for target %s", metricListType, name)
+		for _, val := range list {
+			new, err := matcher.NormalizeMetric(val)
+			if err != nil {
+				logger.V(2).Printf("Could not normalize metric %s with instance %s and job %s", val, t.ExtraLabels[types.LabelMetaScrapeInstance], t.ExtraLabels[types.LabelMetaScrapeJob])
 				continue
 			}
-			new, err := matcher.NormalizeMetricScrapper(allowString, instance, name)
-			if err != nil {
-				logger.V(2).Printf("Could not normalize metric %s with instance %s and job %s", allowString, instance, name)
+
+			if new.Get(types.LabelScrapeInstance) == nil {
+				err := new.Add(types.LabelScrapeInstance, t.ExtraLabels[types.LabelMetaScrapeInstance], labels.MatchEqual)
+				if err != nil {
+					logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeInstance, val)
+					continue
+				}
 			}
+
+			if new.Get(types.LabelScrapeJob) == nil {
+				err := new.Add(types.LabelScrapeJob, t.ExtraLabels[types.LabelMetaScrapeJob], labels.MatchEqual)
+				if err != nil {
+					logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeJob, val)
+					continue
+				}
+			}
+
 			metricList = append(metricList, new)
 		}
 	}
+
 	return metricList
 }
 
@@ -141,6 +144,18 @@ func (m *MetricFilter) buildList(config *config.Configuration) error {
 	m.staticDenyList, err = buildMatcherList(config, "deny")
 	m.allowList = m.staticAllowList
 	m.denyList = m.staticDenyList
+
+	includeDefault := config.Bool("metric.include_default_metrics")
+	if includeDefault {
+		for _, val := range defaultMetrics {
+			new, err := matcher.NormalizeMetric(val)
+			if err != nil {
+				return err
+			}
+
+			m.staticAllowList = append(m.staticAllowList, new)
+		}
+	}
 
 	return err
 }
@@ -160,18 +175,22 @@ func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	if len(m.denyList) != 0 {
 		for _, point := range points {
 			didMatch := false
+
 			for _, denyVal := range m.denyList {
 				matched := denyVal.MatchesPoint(point)
 				if matched {
 					didMatch = true
+
 					break
 				}
 			}
+
 			if !didMatch {
 				points[i] = point
 				i++
 			}
 		}
+
 		points = points[:i]
 		i = 0
 	}
@@ -182,6 +201,7 @@ func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 			if matched {
 				points[i] = point
 				i++
+
 				break
 			}
 		}
@@ -198,12 +218,14 @@ func (m *MetricFilter) filterFamily(f *dto.MetricFamily) {
 	if len(m.denyList) > 0 {
 		for _, metric := range f.Metric {
 			didMatch := false
+
 			for _, denyVal := range m.denyList {
 				if denyVal.MatchesMetric(*f.Name, metric) {
 					didMatch = true
 					break
 				}
 			}
+
 			if !didMatch {
 				f.Metric[i] = metric
 				i++
@@ -219,6 +241,7 @@ func (m *MetricFilter) filterFamily(f *dto.MetricFamily) {
 			if allowVal.MatchesMetric(*f.Name, metric) {
 				f.Metric[i] = metric
 				i++
+
 				break
 			}
 		}
@@ -226,30 +249,62 @@ func (m *MetricFilter) filterFamily(f *dto.MetricFamily) {
 }
 
 func (m *MetricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
+	i := 0
+
 	for _, family := range f {
 		m.filterFamily(family)
+
+		if len(family.Metric) != 0 {
+			f[i] = family
+		}
 	}
+
+	f = f[:i]
 
 	return f
 }
 
-func (m *MetricFilter) RebuildDynamicLists(scrapper *promexporter.DynamicScrapper) error {
+func (m *MetricFilter) RebuildDynamicLists(scrapper *promexporter.DynamicScrapper, metricAgentWhitelist string) error {
 	allowList := []matcher.Matchers{}
 	denyList := []matcher.Matchers{}
+	errors := merge.MultiError{}
 
 	for key, val := range scrapper.RegisteredLabels {
 		allowMatchers, denyMatchers, err := addNewSource(scrapper.ContainersLabels[key], val)
 		if err != nil {
-			return err
+			errors = append(errors, err)
+			continue
 		}
+
 		allowList = append(allowList, allowMatchers...)
 		denyList = append(denyList, denyMatchers...)
 	}
 
-	m.allowList = append(m.staticAllowList, allowList...)
-	m.denyList = append(m.staticDenyList, denyList...)
+	agentWhitelist := strings.Split(metricAgentWhitelist, ",")
 
-	return nil
+	for _, val := range agentWhitelist {
+		allowVal, err := matcher.NormalizeMetric(val)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		allowList = append(allowList, allowVal)
+	}
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	m.allowList = m.staticAllowList
+	m.allowList = append(m.allowList, allowList...)
+	m.denyList = m.staticDenyList
+	m.denyList = append(m.denyList, denyList...)
+
+	if len(errors) == 0 {
+		return nil
+	}
+
+	return errors
 }
 
 func addNewSource(cLabels map[string]string, extraLabels map[string]string) ([]matcher.Matchers, []matcher.Matchers, error) {
@@ -268,6 +323,7 @@ func addNewSource(cLabels map[string]string, extraLabels map[string]string) ([]m
 	logger.V(0).Println(denyList)
 	allowMatchers, denyMatchers, err := newMatcherSource(allowList, denyList,
 		extraLabels[types.LabelMetaScrapeInstance], extraLabels[types.LabelMetaScrapeJob])
+
 	if err != nil {
 		return nil, nil, err
 	}
@@ -276,22 +332,20 @@ func addNewSource(cLabels map[string]string, extraLabels map[string]string) ([]m
 }
 
 func addMetaLabels(metric string, scrapeInstance string, scrapeJob string) (string, error) {
-	if !strings.Contains(metric, "{") {
-		return fmt.Sprintf("%s{%s=\"%s\",%s=\"%s\"}", metric, types.LabelScrapeInstance, scrapeInstance, types.LabelScrapeJob, scrapeJob), nil
-	}
-
-	var m matcher.Matchers
-
-	var err error
-
-	m, err = parser.ParseMetricSelector(metric)
-
+	m, err := matcher.NormalizeMetric(metric)
 	if err != nil {
 		return "", err
 	}
 
-	m.Add(types.LabelScrapeInstance, scrapeInstance, labels.MatchEqual)
-	m.Add(types.LabelScrapeJob, scrapeJob, labels.MatchEqual)
+	err = m.Add(types.LabelScrapeInstance, scrapeInstance, labels.MatchEqual)
+	if err != nil {
+		return "", err
+	}
+
+	err = m.Add(types.LabelScrapeJob, scrapeJob, labels.MatchEqual)
+	if err != nil {
+		return "", err
+	}
 
 	return m.String(), nil
 }
@@ -329,5 +383,4 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 	}
 
 	return allowMatchers, denyMatchers, nil
-
 }

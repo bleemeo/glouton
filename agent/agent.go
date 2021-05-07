@@ -536,7 +536,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	mFilter, err := NewMetricFilter(a.config)
 	if err != nil {
-		logger.Printf("An error occured while building the metric filter, no metric will be allowed: %v", err)
+		logger.Printf("An error occurred while building the metric filter, no metric will be allowed: %v", err)
 	}
 
 	a.metricFilter = mFilter
@@ -651,7 +651,6 @@ func (a *agent) run() { //nolint:gocyclo
 			promCfg,
 			a.config.StringList("metric.prometheus.allow_metrics"),
 			a.config.StringList("metric.prometheus.deny_metrics"),
-			a.config.Bool("metric.prometheus.include_default_metrics"),
 		)
 	}
 
@@ -1442,10 +1441,10 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			if a.dynamicScrapper != nil {
 				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
 					a.dynamicScrapper.Update(containers)
-					err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper)
+					err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, a.bleemeoConnector.MetricAgentWhitelist())
 
 					if err != nil {
-						logger.V(2).Println("Error during dynamic Filter rebuild: %v", err)
+						logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 					}
 				}
 			}
@@ -1788,7 +1787,7 @@ func setupContainer(hostRootPath string) {
 // prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string, globalIncludeDefault bool) (result []*scrapper.Target) {
+func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string) (result []*scrapper.Target) {
 	configList, ok := cfg.([]interface{})
 	if !ok {
 		return nil
@@ -1818,10 +1817,9 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 				types.LabelMetaScrapeJob:      name,
 				types.LabelMetaScrapeInstance: matcher.HostPort(u),
 			},
-			URL:            u,
-			AllowList:      globalAllow,
-			DenyList:       globalDeny,
-			IncludeDefault: globalIncludeDefault,
+			URL:       u,
+			AllowList: globalAllow,
+			DenyList:  globalDeny,
 		}
 
 		if allow, ok := vMap["allow_metrics"].([]interface{}); ok {
@@ -1836,25 +1834,6 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 		}
 
 		denyMetricsConfig(vMap, target)
-
-		switch value := vMap["include_default_metrics"].(type) {
-		case bool:
-			target.IncludeDefault = value
-		case int:
-			target.IncludeDefault = (value != 0)
-		case string:
-			v, err := config.ConvertBoolean(value)
-			if err != nil {
-				logger.Printf("ignoring invalid boolean \"%s\" for include_default on target %s: %v", value, uText, err)
-			} else {
-				target.IncludeDefault = v
-			}
-		default:
-			if value != nil {
-				logger.Printf("ignoring invalid boolean \"%v\" for include_default on target %s: unknown type", value, uText)
-			}
-		}
-
 		result = append(result, target)
 	}
 

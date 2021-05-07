@@ -45,8 +45,6 @@ func TestListExporters(t *testing.T) {
 		name                 string
 		containers           []facts.Container
 		want                 []*scrapper.Target
-		globalAllow          []string
-		globalDeny           []string
 		globalIncludeDefault bool
 	}{
 		{
@@ -68,6 +66,9 @@ func TestListExporters(t *testing.T) {
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape": "true",
+					},
 					ExtraLabels: map[string]string{
 						types.LabelContainerName:      "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
@@ -92,6 +93,9 @@ func TestListExporters(t *testing.T) {
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape": "true",
+					},
 					ExtraLabels: map[string]string{
 						"kubernetes.pod.namespace":    fakePodNamespace,
 						"kubernetes.pod.name":         "my_pod-1234",
@@ -142,6 +146,9 @@ func TestListExporters(t *testing.T) {
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample1:9102/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape": "true",
+					},
 					ExtraLabels: map[string]string{
 						types.LabelContainerName:      "sample1_1",
 						types.LabelMetaScrapeJob:      fakeJobName,
@@ -150,6 +157,10 @@ func TestListExporters(t *testing.T) {
 				},
 				{
 					URL: mustParse("http://sample2:8080/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape": "true",
+						"prometheus.io/port":   "8080",
+					},
 					ExtraLabels: map[string]string{
 						"kubernetes.pod.namespace":    fakePodNamespace,
 						"kubernetes.pod.name":         "sample2-1234",
@@ -175,6 +186,11 @@ func TestListExporters(t *testing.T) {
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:8080/metrics.txt"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape": "true",
+						"prometheus.io/port":   "8080",
+						"prometheus.io/path":   "/metrics.txt",
+					},
 					ExtraLabels: map[string]string{
 						types.LabelContainerName:      "testname",
 						types.LabelMetaScrapeJob:      fakeJobName,
@@ -198,6 +214,10 @@ func TestListExporters(t *testing.T) {
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics.txt"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape": "true",
+						"prometheus.io/path":   "metrics.txt",
+					},
 					ExtraLabels: map[string]string{
 						types.LabelContainerName:      "testname",
 						types.LabelMetaScrapeJob:      fakeJobName,
@@ -217,20 +237,17 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			globalAllow:          []string{"global", "allow*"},
-			globalDeny:           []string{"nope"},
-			globalIncludeDefault: true,
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape": "true",
+					},
 					ExtraLabels: map[string]string{
 						types.LabelContainerName:      "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
-					AllowList:      []string{"global", "allow*"},
-					DenyList:       []string{"nope"},
-					IncludeDefault: true,
 				},
 			},
 		},
@@ -248,20 +265,20 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			globalAllow:          []string{"global", "allow*"},
-			globalDeny:           []string{"nope"},
-			globalIncludeDefault: true,
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape":            "true",
+						"glouton.allow_metrics":           "cpu_used,mem_used",
+						"glouton.deny_metrics":            "up{job=\"prometheus\"}",
+						"glouton.include_default_metrics": "no",
+					},
 					ExtraLabels: map[string]string{
 						types.LabelContainerName:      "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
-					AllowList:      []string{"cpu_used", "mem_used"},
-					DenyList:       []string{"up{job=\"prometheus\"}"},
-					IncludeDefault: false,
 				},
 			},
 		},
@@ -279,20 +296,20 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			globalAllow:          []string{"global", "allow*"},
-			globalDeny:           []string{"nope"},
-			globalIncludeDefault: true,
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape":            "true",
+						"glouton.allow_metrics":           "",
+						"glouton.deny_metrics":            "",
+						"glouton.include_default_metrics": "false",
+					},
 					ExtraLabels: map[string]string{
 						types.LabelContainerName:      "my_container",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
-					AllowList:      []string{},
-					DenyList:       []string{},
-					IncludeDefault: false,
 				},
 			},
 		},
@@ -311,21 +328,20 @@ func TestListExporters(t *testing.T) {
 					},
 				},
 			},
-			globalAllow:          []string{"global", "allow*"},
-			globalDeny:           []string{"nope"},
-			globalIncludeDefault: false,
 			want: []*scrapper.Target{
 				{
 					URL: mustParse("http://sample:9102/metrics"),
+					ContainerLabels: map[string]string{
+						"prometheus.io/scrape":            "true",
+						"glouton.allow_metrics":           "something,else",
+						"glouton.include_default_metrics": "1",
+					},
 					ExtraLabels: map[string]string{
 						"kubernetes.pod.namespace":    fakePodNamespace,
 						"kubernetes.pod.name":         "my_pod-1234",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
-					AllowList:      []string{"something", "else"},
-					DenyList:       []string{"nope"},
-					IncludeDefault: true,
 				},
 			},
 		},
@@ -334,9 +350,6 @@ func TestListExporters(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			d := DynamicScrapper{
 				DynamicJobName: "jobname",
-				// GlobalAllowMetrics:          tt.globalAllow,
-				// GlobalDenyMetrics:           tt.globalDeny,
-				// GlobalIncludeDefaultMetrics: tt.globalIncludeDefault,
 			}
 			got := d.listExporters(tt.containers)
 

@@ -33,35 +33,20 @@ func globToRegex(str string) string {
 	r := strings.NewReplacer(
 		".", "\\.", "$", "\\$", "^", "\\^", "*", ".*",
 	)
+
 	return r.Replace(str)
-}
-
-func NormalizeMetricScrapper(metric string, instance string, job string) (Matchers, error) {
-	promMetric, err := NormalizeMetric(metric)
-	if err != nil {
-		return nil, err
-	}
-
-	if promMetric.Get(types.LabelScrapeInstance) == nil {
-		promMetric.Add(types.LabelScrapeInstance, instance, labels.MatchEqual)
-	}
-
-	if promMetric.Get(types.LabelScrapeJob) == nil {
-		promMetric.Add(types.LabelScrapeJob, job, labels.MatchEqual)
-	}
-
-	return promMetric, err
 }
 
 func NormalizeMetric(metric string) (Matchers, error) {
 	if !strings.Contains(metric, "{") {
 		matchType := "="
 
-		metric = globToRegex(metric)
-		if strings.ContainsAny(metric, "*.$^") {
+		if strings.Contains(metric, "*") {
 			// metric is in the blob format: we need to convert it in a regex
 			matchType += "~"
 		}
+
+		metric = globToRegex(metric)
 		metric = fmt.Sprintf("{%s%s\"%s\"}", types.LabelName, matchType, metric)
 	}
 
@@ -85,8 +70,7 @@ func (m *Matchers) Get(label string) *labels.Matcher {
 	return nil
 }
 
-//Add will add a new matcher to the metric. If the name and the type are the same,
-// Add will overwrite the old value.
+//Add will add a new matcher to the metric.
 func (m *Matchers) Add(label string, value string, labelType labels.MatchType) error {
 	new, err := labels.NewMatcher(labelType, label, value)
 	if err != nil {
@@ -101,32 +85,29 @@ func (m *Matchers) Add(label string, value string, labelType labels.MatchType) e
 func (m *Matchers) String() string {
 	res := "{"
 
-	for i := 0; i < len(*m); i++ {
-		res += (*m)[i].String()
+	for i, value := range *m {
+		res += value.String()
 		if i+1 < len(*m) {
 			res += ","
 		}
 	}
+
 	res += "}"
+
 	return res
 }
 
-func (matchers *Matchers) MatchesPoint(point types.MetricPoint) bool {
-	for _, m := range *matchers {
-		value, found := point.Labels[m.Name]
-		if !found {
-			return false
-		}
-
-		match := m.Matches(value)
-		if !match {
+func (m *Matchers) MatchesPoint(point types.MetricPoint) bool {
+	for _, matcher := range *m {
+		if !matchesLabels(matcher, point.Labels) {
 			return false
 		}
 	}
+
 	return true
 }
 
-func dto2Labels(name string, input *dto.Metric) labels.Labels {
+func dto2Labels(name string, input *dto.Metric) map[string]string {
 	lbls := make(map[string]string, len(input.Label)+1)
 	for _, lp := range input.Label {
 		lbls[*lp.Name] = *lp.Value
@@ -134,28 +115,25 @@ func dto2Labels(name string, input *dto.Metric) labels.Labels {
 
 	lbls["__name__"] = name
 
-	return labels.FromMap(lbls)
+	return lbls
 }
 
-func matchesLabels(m *labels.Matcher, lbls labels.Labels) bool {
-	val := lbls.Get(m.Name)
-
-	if val == "" {
-		return false
+func matchesLabels(m *labels.Matcher, lbls map[string]string) bool {
+	val, found := lbls[m.Name]
+	if !found {
+		val = ""
 	}
 
-	matched := m.Matches(val)
-
-	return matched
+	return m.Matches(val)
 }
 
-func (matchers *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
+func (m *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
 	didMatch := true
 
-	for _, m := range *matchers {
+	for _, matcher := range *m {
 		labels := dto2Labels(name, mt)
 
-		if !matchesLabels(m, labels) {
+		if !matchesLabels(matcher, labels) {
 			didMatch = false
 		}
 	}

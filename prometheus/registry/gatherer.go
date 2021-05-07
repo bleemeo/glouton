@@ -73,7 +73,7 @@ type GathererWithState interface {
 // - when Gather() is called upon the wrapper by prometheus, the wrapper calls GathererWithState(newState)
 // on its internal gatherer.
 // GatherWithState also contains the metrics allow/deny list in order to sync the metrics on /metric
-// with the metrics sent to the bleemeo platform
+// with the metrics sent to the bleemeo platform.
 type GathererWithStateWrapper struct {
 	gatherState GatherState
 	gatherer    GathererWithState
@@ -98,6 +98,7 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 	}
 
 	res = w.filter.FilterFamilies(res)
+
 	return res, err
 }
 

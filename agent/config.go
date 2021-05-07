@@ -201,6 +201,7 @@ func migrateScrapperMetrics(cfg *config.Configuration) (warnings []error) {
 func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPath string) (warnings []error) {
 	migratedTargets := []interface{}{}
 	v, ok := cfg.Get(deprecatedPath)
+
 	if !ok {
 		return warnings
 	}
@@ -259,13 +260,17 @@ func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 		}
 	}
 
+	_, found := cfg.Get("metric.prometheus.targets.include_default_metrics")
+	if found {
+		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus.targets.include_default_metrics. This option does not exists anymore and has not effects", errSettingsDeprecated))
+	}
+
 	return warnings
 }
 
 // migrate upgrade the configuration when Glouton change it settings
 // The list returned are actually warnings, not errors.
 func migrate(cfg *config.Configuration) (warnings []error) {
-
 	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
 	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
 

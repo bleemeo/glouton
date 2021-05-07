@@ -1,7 +1,22 @@
+// Copyright 2015-2021 Bleemeo
+//
+// bleemeo.com an infrastructure monitoring solution in the Cloud
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package matcher
 
 import (
-	"fmt"
 	"glouton/types"
 	"net/url"
 	"testing"
@@ -15,84 +30,44 @@ func Test_NormalizeMetric(t *testing.T) {
 		name            string
 		allowListString string
 		scrapperName    string
-		scrapeInstance  string
-		scrapeJob       string
 		want            Matchers
 	}{
 		{
 			name:            "basic metric",
 			allowListString: "cpu_percent",
-			scrapeInstance:  "instance_1",
-			scrapeJob:       "job_1",
 			want: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
 					Name:  types.LabelName,
 					Value: "cpu_percent",
 				},
-				&labels.Matcher{
-					Type:  labels.MatchEqual,
-					Name:  types.LabelScrapeInstance,
-					Value: "instance_1",
-				},
-				&labels.Matcher{
-					Type:  labels.MatchEqual,
-					Name:  types.LabelScrapeJob,
-					Value: "job_1",
-				},
 			},
 		},
 		{
 			name:            "basic glob metric",
 			allowListString: "cpu_*",
-			scrapeInstance:  "instance_2",
-			scrapeJob:       "job_2",
 			want: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchRegexp,
 					Name:  types.LabelName,
 					Value: "cpu_.*",
 				},
-				&labels.Matcher{
-					Type:  labels.MatchEqual,
-					Name:  types.LabelScrapeInstance,
-					Value: "instance_2",
-				},
-				&labels.Matcher{
-					Type:  labels.MatchEqual,
-					Name:  types.LabelScrapeJob,
-					Value: "job_2",
-				},
 			},
 		},
 		{
 			name:            "multiple glob metric",
 			allowListString: "prom*_cpu_*",
-			scrapeInstance:  "instance_3",
-			scrapeJob:       "job_3",
 			want: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchRegexp,
 					Name:  types.LabelName,
 					Value: "prom.*_cpu_.*",
 				},
-				&labels.Matcher{
-					Type:  labels.MatchEqual,
-					Name:  types.LabelScrapeInstance,
-					Value: "instance_3",
-				},
-				&labels.Matcher{
-					Type:  labels.MatchEqual,
-					Name:  types.LabelScrapeJob,
-					Value: "job_3",
-				},
 			},
 		},
 		{
 			name:            "complete PromQL Matcher string",
 			allowListString: "prom_cpu{test=\"Hello\",scrape_instance=\"instance_4\",scrape_job=\"job_4\"}",
-			scrapeInstance:  "instance_4",
-			scrapeJob:       "job_4",
 			want: Matchers{
 				&labels.Matcher{
 					Type:  labels.MatchEqual,
@@ -119,26 +94,30 @@ func Test_NormalizeMetric(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got, err := NormalizeMetricScrapper(test.allowListString, test.scrapeInstance, test.scrapeJob)
+		localTest := test
 
-		if err != nil {
-			t.Errorf("Invalid result for test %s: Got error => %v ", test.name, err)
-		}
-		if len(got) != len(test.want) {
-			t.Errorf("Invalid Matchers length for test %s: expected=%d, got=%d", test.name, len(test.want), len(got))
-			continue
-		}
+		t.Run(localTest.name, func(t *testing.T) {
+			got, err := NormalizeMetric(localTest.allowListString)
 
-		for idx, val := range got {
-			if val.Type != test.want[idx].Type {
-				t.Errorf("Invalid Match Type for test %s:\nexpected %s got %s", test.name, test.want[idx].Type, val.Type)
+			if err != nil {
+				t.Errorf("Invalid result for test %s: Got error => %v ", localTest.name, err)
 			}
 
-			if !val.Matches(test.want[idx].Value) {
-				t.Errorf("Unmatched value for test %s:\nexpected={%s: '%s'} got={%s: '%s'}\n",
-					test.name, test.want[idx].Name, test.want[idx].Value, val.Name, val.Value)
+			if len(got) != len(localTest.want) {
+				t.Errorf("Invalid Matchers length for test %s: expected=%d, got=%d", localTest.name, len(localTest.want), len(got))
 			}
-		}
+
+			for idx, val := range got {
+				if val.Type != localTest.want[idx].Type {
+					t.Errorf("Invalid Match Type for test %s:\nexpected %s got %s", localTest.name, localTest.want[idx].Type, val.Type)
+				}
+
+				if !val.Matches(localTest.want[idx].Value) {
+					t.Errorf("Unmatched value for test %s:\nexpected={%s: '%s'} got={%s: '%s'}\n",
+						localTest.name, localTest.want[idx].Name, localTest.want[idx].Value, val.Name, val.Value)
+				}
+			}
+		})
 	}
 }
 
@@ -146,18 +125,14 @@ func Test_Fail_NormalizeMetrics(t *testing.T) {
 	metric := "this*_should$_fail{scrape_instance=\"error\"}"
 
 	_, err := NormalizeMetric(metric)
-	_, err2 := NormalizeMetricScrapper(metric, "instance", "job")
 
-	if err == nil || err2 == nil {
+	if err == nil {
 		t.Errorf("Invalid case not treated as error: expected metric %s to fail", metric)
 	}
-
 }
 
 func Test_Add_Same_Type(t *testing.T) {
-	metric := "cpu"
-	m, _ := NormalizeMetricScrapper(metric, "instance", "job")
-
+	m, _ := NormalizeMetric("cpu")
 	err := m.Add(types.LabelName, "cpu2", labels.MatchEqual)
 
 	if err != nil {
@@ -174,17 +149,13 @@ func Test_Add_Same_Type(t *testing.T) {
 }
 
 func Test_Add_Different_Type(t *testing.T) {
-	metric := "cpu"
-	m, _ := NormalizeMetricScrapper(metric, "instance", "job")
+	m, _ := NormalizeMetric("cpu")
 	before := len(m)
 
-	fmt.Println(before)
 	err := m.Add(types.LabelName, "cpu2", labels.MatchRegexp)
-
 	if err != nil {
 		t.Errorf("An error occurred: %v", err)
 	}
-	fmt.Println(m)
 
 	if before == len(m) {
 		t.Errorf("Add function did not add properly: expected size %d, got %d", before, len(m))
@@ -193,8 +164,8 @@ func Test_Add_Different_Type(t *testing.T) {
 
 func Test_Add_Error(t *testing.T) {
 	metric := "cpu"
-	m, _ := NormalizeMetricScrapper(metric, "instance", "job")
-	err := m.Add("test", "cpu[", labels.MatchRegexp)
+	m, _ := NormalizeMetric(metric)
+	err := m.Add("test", metric+"[", labels.MatchRegexp)
 
 	if err == nil {
 		t.Errorf("An error was not caught: expected a regex compile error on metric %s", metric)
@@ -377,12 +348,15 @@ func Test_Matches_Basic_Point(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := test.matchers.MatchesPoint(test.point)
+		test := test
 
-		if got != test.want {
-			t.Errorf("Incorrect result for test %s: expected %v, got %v", test.name, test.want, got)
-		}
-		fmt.Printf("Test %s done\n", test.name)
+		t.Run(test.name, func(t *testing.T) {
+			got := test.matchers.MatchesPoint(test.point)
+
+			if got != test.want {
+				t.Errorf("Incorrect result for test %s: expected %v, got %v", test.name, test.want, got)
+			}
+		})
 	}
 }
 
@@ -641,18 +615,22 @@ func Test_Matches_Basic_Family(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		got := test.matchers.MatchesMetric(test.metricName, &test.metric)
+		test := test
 
-		if got != test.want {
-			t.Errorf("An error occurred for test %s: expected %v, got %v", test.name, test.want, got)
-		}
+		t.Run(test.name, func(t *testing.T) {
+			got := test.matchers.MatchesMetric(test.metricName, &test.metric)
+
+			if got != test.want {
+				t.Errorf("An error occurred: expected %v, got %v", test.want, got)
+			}
+		})
 	}
 }
 
 func Test_String(t *testing.T) {
 	m, _ := NormalizeMetric("cpu")
 
-	m.Add("test", "test", labels.MatchEqual)
+	_ = m.Add("test", "test", labels.MatchEqual)
 
 	want := "{__name__=\"cpu\",test=\"test\"}"
 	got := m.String()

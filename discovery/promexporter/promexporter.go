@@ -68,17 +68,12 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 			labels[types.LabelContainerName] = c.ContainerName()
 		}
 
-		cLabels := c.Labels()
-		cAnnotations := c.Annotations()
-
-		for key, val := range cAnnotations {
-			cLabels[key] = val
-		}
+		cLabelsAnnotations := facts.LabelsAndAnnotations(c)
 
 		target := &scrapper.Target{
 			URL:             tmp,
 			ExtraLabels:     labels,
-			ContainerLabels: cLabels,
+			ContainerLabels: cLabelsAnnotations,
 		}
 		result = append(result, target)
 	}
