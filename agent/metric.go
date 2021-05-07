@@ -32,6 +32,7 @@ import (
 
 //nolint:gochecknoglobals
 var defaultMetrics []string = []string{
+	// Operating system metrics
 	"agent_gather_time", "agent_status", "cpu_idle", "cpu_interrup", "cpu_nice",
 	"cpu_other", "cpu_softirq", "cpu_steal", "cpu_system", "cpu_used",
 	"cpu_used_status", "cpu_user", "cpu_wait", "cpu_guest_nice", "cpu_guest",
@@ -50,6 +51,29 @@ var defaultMetrics []string = []string{
 	"swap_used", "swap_used_perc", "swap_used_perc_status", "system_load1",
 	"system_load5", "system_load15", "system_pending_updates",
 	"system_pending_security_updates", "uptime", "users_logged",
+	// Services
+	"apache_*", "bitbucket_*", "cassandra_*", "confluence*", "bind_status",
+	"dovecot_status", "ejabberd_status", "elasticsearch_*", "exim_status",
+	"exim_queue_size", "haproxy_*", "influxdb_status", "jira_*", "memcached_*",
+	"mongodb_*", "mosquitto_status", "mysql_*", "nginx_*", "ntp_status", //nolint: misspell
+	"openldap_status", "openvpn_status", "phpfpm_*", "postfix_status",
+	"postfix_queue_size", "postgresql_*", "rabbitmq_*", "redis_*", "salt_status",
+	"squid3_status", "uwsgi_status", "varnish_status", "zookeeper_*",
+	// Key Processes
+	"process_context_switch", "process_context_switch", "process_cpu_user",
+	"process_io_read_bytes", "process_io_write_bytes", "process_major_fault",
+	"process_mem_bytes", "process_num_procs", "process_num_threads",
+	"process_open_filedesc", "process_worst_fd_ratio",
+	// Docker
+	"docker_container_cpu_used", "docker_container_health_status",
+	"docker_container_io_read_bytes", "docker_container_io_write_bytes",
+	"docker_container_mem_used", "docker_container_mem_used_perc",
+	"docker_container_mem_used_perc_status", "docker_container_net_bits_recv",
+	"docker_container_net_bits_sent",
+	// Prometheus
+	"process_cpu_seconds_total", "process_resident_memory_bytes",
+	// Java
+	"*_jvm_*",
 }
 
 //MetricFilter is a thread-safe holder of an allow / deny metrics list.
@@ -268,9 +292,11 @@ func (m *MetricFilter) RebuildDynamicLists(scrapper *promexporter.DynamicScrappe
 	allowList := []matcher.Matchers{}
 	denyList := []matcher.Matchers{}
 	errors := merge.MultiError{}
+	registeredLabels := scrapper.GetRegisteredLabels()
+	containersLabels := scrapper.GetContainersLabels()
 
-	for key, val := range scrapper.RegisteredLabels {
-		allowMatchers, denyMatchers, err := addNewSource(scrapper.ContainersLabels[key], val)
+	for key, val := range registeredLabels {
+		allowMatchers, denyMatchers, err := addNewSource(containersLabels[key], val)
 		if err != nil {
 			errors = append(errors, err)
 			continue

@@ -108,44 +108,14 @@ func urlFromLabels(labels map[string]string, address string) string {
 	return fmt.Sprintf("http://%s:%d%s", address, port, path)
 }
 
-// func updateAllowDeny(target *scrapper.Target, labels map[string]string) {
-// 	if allow, ok := labels["glouton.allow_metrics"]; ok {
-// 		if allow == "" {
-// 			target.AllowList = []string{}
-// 		} else {
-// 			target.AllowList = strings.Split(allow, ",")
-// 		}
-// 	}
-
-// 	if deny, ok := labels["glouton.deny_metrics"]; ok {
-// 		if deny == "" {
-// 			target.DenyList = []string{}
-// 		} else {
-// 			target.DenyList = strings.Split(deny, ",")
-// 		}
-// 	}
-
-// 	if include, ok := labels["glouton.include_default_metrics"]; ok {
-// 		v, err := config.ConvertBoolean(include)
-// 		if err == nil {
-// 			target.IncludeDefault = v
-// 		} else {
-// 			logger.V(1).Printf("ignoring invalid boolean \"%s\" for glouton.include_default: %v", include, err)
-// 		}
-// 	}
-// }
-
 // DynamicScrapper is a Prometheus scrapper that will update its target based on ListExporters.
 type DynamicScrapper struct {
 	l                sync.Mutex
 	registeredID     map[string]int
-	RegisteredLabels map[string]map[string]string
-	ContainersLabels map[string]map[string]string
+	registeredLabels map[string]map[string]string
+	containersLabels map[string]map[string]string
 	DynamicJobName   string
 	Registry         *registry.Registry
-	// GlobalAllowMetrics          []string
-	// GlobalDenyMetrics           []string
-	// GlobalIncludeDefaultMetrics bool
 }
 
 // Update updates the scrappers targets using new containers informations.
@@ -166,14 +136,14 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 	for _, t := range dynamicTargets {
 		currentURLs[t.URL.String()] = true
 
-		if labels, ok := d.RegisteredLabels[t.URL.String()]; ok && reflect.DeepEqual(labels, t.ExtraLabels) {
+		if labels, ok := d.registeredLabels[t.URL.String()]; ok && reflect.DeepEqual(labels, t.ExtraLabels) {
 			continue
 		}
 
 		if id, ok := d.registeredID[t.URL.String()]; ok {
 			d.Registry.UnregisterGatherer(id)
 			delete(d.registeredID, t.URL.String())
-			delete(d.RegisteredLabels, t.URL.String())
+			delete(d.registeredLabels, t.URL.String())
 		}
 
 		id, err := d.Registry.RegisterGatherer(t, nil, t.ExtraLabels, true)
@@ -184,13 +154,13 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 
 		if d.registeredID == nil {
 			d.registeredID = make(map[string]int)
-			d.RegisteredLabels = make(map[string]map[string]string)
-			d.ContainersLabels = make(map[string]map[string]string)
+			d.registeredLabels = make(map[string]map[string]string)
+			d.containersLabels = make(map[string]map[string]string)
 		}
 
 		d.registeredID[t.URL.String()] = id
-		d.RegisteredLabels[t.URL.String()] = t.ExtraLabels
-		d.ContainersLabels[t.URL.String()] = t.ContainerLabels
+		d.registeredLabels[t.URL.String()] = t.ExtraLabels
+		d.containersLabels[t.URL.String()] = t.ContainerLabels
 	}
 
 	for u, id := range d.registeredID {
@@ -200,6 +170,31 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 
 		d.Registry.UnregisterGatherer(id)
 		delete(d.registeredID, u)
-		delete(d.RegisteredLabels, u)
+		delete(d.registeredLabels, u)
 	}
+}
+
+//GetRegisteredLabels returns a copy of registeredLabels.
+func (d *DynamicScrapper) GetRegisteredLabels() map[string]map[string]string {
+	return copyMap(d.registeredLabels)
+}
+
+//GetContainersLabels returns a copy of containersLabels.
+func (d *DynamicScrapper) GetContainersLabels() map[string]map[string]string {
+	return copyMap(d.containersLabels)
+}
+
+func copyMap(toCopy map[string]map[string]string) map[string]map[string]string {
+	copyMap := make(map[string]map[string]string)
+
+	for key, value := range toCopy {
+		new := make(map[string]string)
+		for key2, value2 := range value {
+			new[key2] = value2
+		}
+
+		copyMap[key] = new
+	}
+
+	return copyMap
 }
