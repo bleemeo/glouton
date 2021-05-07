@@ -128,10 +128,14 @@ export const CONTAINER_SERVICE = gql`
 export const PROCESSES = gql`
   query processesQuery {
     processes {
-      updatedAt
-      processes {
+      Time
+      Uptime
+      Loads
+      Users
+      Processes {
         pid
         ppid
+        create_time
         cmdline
         name
         memory_rss
@@ -139,39 +143,32 @@ export const PROCESSES = gql`
         cpu_time
         status
         username
+        executable
+        container_id
       }
-    }
-    points(
-      metricsFilter: [
-        { labels: { key: "${LabelName}", value: "mem_buffered" } }
-        { labels: { key: "${LabelName}", value: "mem_cached" } }
-        { labels: { key: "${LabelName}", value: "mem_free" } }
-        { labels: { key: "${LabelName}", value: "mem_used" } }
-        { labels: { key: "${LabelName}", value: "system_load1" } }
-        { labels: { key: "${LabelName}", value: "system_load5" } }
-        { labels: { key: "${LabelName}", value: "system_load15" } }
-        { labels: { key: "${LabelName}", value: "swap_free" } }
-        { labels: { key: "${LabelName}", value: "swap_used" } }
-        { labels: { key: "${LabelName}", value: "swap_total" } }
-        { labels: { key: "${LabelName}", value: "cpu_system" } }
-        { labels: { key: "${LabelName}", value: "cpu_user" } }
-        { labels: { key: "${LabelName}", value: "cpu_nice" } }
-        { labels: { key: "${LabelName}", value: "cpu_wait" } }
-        { labels: { key: "${LabelName}", value: "cpu_idle" } }
-        { labels: { key: "${LabelName}", value: "uptime" } }
-        { labels: { key: "${LabelName}", value: "users_logged" } }
-      ]
-      start: ""
-      end: ""
-      minutes: 15
-    ) {
-      labels {
-        key
-        value
+      CPU {
+        Nice
+        System
+        User
+        Idle
+        IOWait
+        Guest
+        GuestNice
+        IRQ
+        SoftIRQ
+        Steal
       }
-      points {
-        time
-        value
+      Memory {
+        Total
+        Used
+        Free
+        Buffers
+        Cached
+      }
+      Swap {
+        Total
+        Used
+        Free
       }
     }
   }

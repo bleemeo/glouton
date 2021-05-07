@@ -53,6 +53,19 @@ type ComplexityRoot struct {
 		StatusDescription func(childComplexity int) int
 	}
 
+	CPUUsage struct {
+		Guest     func(childComplexity int) int
+		GuestNice func(childComplexity int) int
+		IOWait    func(childComplexity int) int
+		Idle      func(childComplexity int) int
+		Irq       func(childComplexity int) int
+		Nice      func(childComplexity int) int
+		SoftIrq   func(childComplexity int) int
+		Steal     func(childComplexity int) int
+		System    func(childComplexity int) int
+		User      func(childComplexity int) int
+	}
+
 	Container struct {
 		CPUUsedPerc  func(childComplexity int) int
 		Command      func(childComplexity int) int
@@ -85,6 +98,14 @@ type ComplexityRoot struct {
 	Label struct {
 		Key   func(childComplexity int) int
 		Value func(childComplexity int) int
+	}
+
+	MemoryUsage struct {
+		Buffers func(childComplexity int) int
+		Cached  func(childComplexity int) int
+		Free    func(childComplexity int) int
+		Total   func(childComplexity int) int
+		Used    func(childComplexity int) int
 	}
 
 	Metric struct {
@@ -137,6 +158,12 @@ type ComplexityRoot struct {
 		StatusDescription func(childComplexity int) int
 	}
 
+	SwapUsage struct {
+		Free  func(childComplexity int) int
+		Total func(childComplexity int) int
+		Used  func(childComplexity int) int
+	}
+
 	Tag struct {
 		TagName func(childComplexity int) int
 	}
@@ -149,8 +176,14 @@ type ComplexityRoot struct {
 	}
 
 	Topinfo struct {
+		CPU       func(childComplexity int) int
+		Loads     func(childComplexity int) int
+		Memory    func(childComplexity int) int
 		Processes func(childComplexity int) int
-		UpdatedAt func(childComplexity int) int
+		Swap      func(childComplexity int) int
+		Time      func(childComplexity int) int
+		Uptime    func(childComplexity int) int
+		Users     func(childComplexity int) int
 	}
 }
 
@@ -215,6 +248,76 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.AgentStatus.StatusDescription(childComplexity), true
+
+	case "CPUUsage.Guest":
+		if e.complexity.CPUUsage.Guest == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.Guest(childComplexity), true
+
+	case "CPUUsage.GuestNice":
+		if e.complexity.CPUUsage.GuestNice == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.GuestNice(childComplexity), true
+
+	case "CPUUsage.IOWait":
+		if e.complexity.CPUUsage.IOWait == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.IOWait(childComplexity), true
+
+	case "CPUUsage.Idle":
+		if e.complexity.CPUUsage.Idle == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.Idle(childComplexity), true
+
+	case "CPUUsage.IRQ":
+		if e.complexity.CPUUsage.Irq == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.Irq(childComplexity), true
+
+	case "CPUUsage.Nice":
+		if e.complexity.CPUUsage.Nice == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.Nice(childComplexity), true
+
+	case "CPUUsage.SoftIRQ":
+		if e.complexity.CPUUsage.SoftIrq == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.SoftIrq(childComplexity), true
+
+	case "CPUUsage.Steal":
+		if e.complexity.CPUUsage.Steal == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.Steal(childComplexity), true
+
+	case "CPUUsage.System":
+		if e.complexity.CPUUsage.System == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.System(childComplexity), true
+
+	case "CPUUsage.User":
+		if e.complexity.CPUUsage.User == nil {
+			break
+		}
+
+		return e.complexity.CPUUsage.User(childComplexity), true
 
 	case "Container.cpuUsedPerc":
 		if e.complexity.Container.CPUUsedPerc == nil {
@@ -369,6 +472,41 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Label.Value(childComplexity), true
+
+	case "MemoryUsage.Buffers":
+		if e.complexity.MemoryUsage.Buffers == nil {
+			break
+		}
+
+		return e.complexity.MemoryUsage.Buffers(childComplexity), true
+
+	case "MemoryUsage.Cached":
+		if e.complexity.MemoryUsage.Cached == nil {
+			break
+		}
+
+		return e.complexity.MemoryUsage.Cached(childComplexity), true
+
+	case "MemoryUsage.Free":
+		if e.complexity.MemoryUsage.Free == nil {
+			break
+		}
+
+		return e.complexity.MemoryUsage.Free(childComplexity), true
+
+	case "MemoryUsage.Total":
+		if e.complexity.MemoryUsage.Total == nil {
+			break
+		}
+
+		return e.complexity.MemoryUsage.Total(childComplexity), true
+
+	case "MemoryUsage.Used":
+		if e.complexity.MemoryUsage.Used == nil {
+			break
+		}
+
+		return e.complexity.MemoryUsage.Used(childComplexity), true
 
 	case "Metric.labels":
 		if e.complexity.Metric.Labels == nil {
@@ -640,6 +778,27 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Service.StatusDescription(childComplexity), true
 
+	case "SwapUsage.Free":
+		if e.complexity.SwapUsage.Free == nil {
+			break
+		}
+
+		return e.complexity.SwapUsage.Free(childComplexity), true
+
+	case "SwapUsage.Total":
+		if e.complexity.SwapUsage.Total == nil {
+			break
+		}
+
+		return e.complexity.SwapUsage.Total(childComplexity), true
+
+	case "SwapUsage.Used":
+		if e.complexity.SwapUsage.Used == nil {
+			break
+		}
+
+		return e.complexity.SwapUsage.Used(childComplexity), true
+
 	case "Tag.tagName":
 		if e.complexity.Tag.TagName == nil {
 			break
@@ -675,19 +834,61 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Threshold.LowWarning(childComplexity), true
 
-	case "Topinfo.processes":
+	case "Topinfo.CPU":
+		if e.complexity.Topinfo.CPU == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.CPU(childComplexity), true
+
+	case "Topinfo.Loads":
+		if e.complexity.Topinfo.Loads == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.Loads(childComplexity), true
+
+	case "Topinfo.Memory":
+		if e.complexity.Topinfo.Memory == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.Memory(childComplexity), true
+
+	case "Topinfo.Processes":
 		if e.complexity.Topinfo.Processes == nil {
 			break
 		}
 
 		return e.complexity.Topinfo.Processes(childComplexity), true
 
-	case "Topinfo.updatedAt":
-		if e.complexity.Topinfo.UpdatedAt == nil {
+	case "Topinfo.Swap":
+		if e.complexity.Topinfo.Swap == nil {
 			break
 		}
 
-		return e.complexity.Topinfo.UpdatedAt(childComplexity), true
+		return e.complexity.Topinfo.Swap(childComplexity), true
+
+	case "Topinfo.Time":
+		if e.complexity.Topinfo.Time == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.Time(childComplexity), true
+
+	case "Topinfo.Uptime":
+		if e.complexity.Topinfo.Uptime == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.Uptime(childComplexity), true
+
+	case "Topinfo.Users":
+		if e.complexity.Topinfo.Users == nil {
+			break
+		}
+
+		return e.complexity.Topinfo.Users(childComplexity), true
 
 	}
 	return 0, false
@@ -802,9 +1003,43 @@ type Process {
   container_id: String!
 }
 
+type CPUUsage {
+	User: Float!
+	Nice: Float!
+	System: Float!
+	Idle: Float!
+	IOWait: Float!
+	Guest: Float!
+	GuestNice: Float!
+	IRQ: Float!
+	SoftIRQ: Float!
+	Steal: Float!
+}
+
+type MemoryUsage {
+	Total: Float!
+	Used: Float!
+	Free: Float!
+	Buffers: Float!
+	Cached: Float!
+}
+
+type SwapUsage {
+	Total: Float!
+	Used: Float!
+	Free: Float!
+}
+
 type Topinfo {
-  updatedAt: Time!
-  processes: [Process!]!
+	Time: Time!
+	Uptime: Int!
+	Loads: [Float!]!
+	Users: Int!
+	Processes: [Process!]!
+	CPU: CPUUsage
+	Memory: MemoryUsage
+	Swap: SwapUsage
+
 }
 
 type Service {
@@ -1213,6 +1448,356 @@ func (ec *executionContext) _AgentStatus_statusDescription(ctx context.Context, 
 	res := resTmp.([]string)
 	fc.Result = res
 	return ec.marshalNString2ᚕstringᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_User(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.User, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_Nice(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Nice, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_System(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.System, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_Idle(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Idle, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_IOWait(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.IOWait, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_Guest(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Guest, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_GuestNice(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.GuestNice, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_IRQ(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Irq, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_SoftIRQ(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.SoftIrq, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _CPUUsage_Steal(ctx context.Context, field graphql.CollectedField, obj *CPUUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "CPUUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Steal, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Container_command(ctx context.Context, field graphql.CollectedField, obj *Container) (ret graphql.Marshaler) {
@@ -1974,6 +2559,181 @@ func (ec *executionContext) _Label_value(ctx context.Context, field graphql.Coll
 	res := resTmp.(string)
 	fc.Result = res
 	return ec.marshalNString2string(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _MemoryUsage_Total(ctx context.Context, field graphql.CollectedField, obj *MemoryUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MemoryUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Total, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _MemoryUsage_Used(ctx context.Context, field graphql.CollectedField, obj *MemoryUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MemoryUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Used, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _MemoryUsage_Free(ctx context.Context, field graphql.CollectedField, obj *MemoryUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MemoryUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Free, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _MemoryUsage_Buffers(ctx context.Context, field graphql.CollectedField, obj *MemoryUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MemoryUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Buffers, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _MemoryUsage_Cached(ctx context.Context, field graphql.CollectedField, obj *MemoryUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "MemoryUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Cached, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Metric_name(ctx context.Context, field graphql.CollectedField, obj *Metric) (ret graphql.Marshaler) {
@@ -3301,6 +4061,111 @@ func (ec *executionContext) _Service_statusDescription(ctx context.Context, fiel
 	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _SwapUsage_Total(ctx context.Context, field graphql.CollectedField, obj *SwapUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "SwapUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Total, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _SwapUsage_Used(ctx context.Context, field graphql.CollectedField, obj *SwapUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "SwapUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Used, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _SwapUsage_Free(ctx context.Context, field graphql.CollectedField, obj *SwapUsage) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "SwapUsage",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Free, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(float64)
+	fc.Result = res
+	return ec.marshalNFloat2float64(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Tag_tagName(ctx context.Context, field graphql.CollectedField, obj *Tag) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -3464,7 +4329,7 @@ func (ec *executionContext) _Threshold_highWarning(ctx context.Context, field gr
 	return ec.marshalOFloat2ᚖfloat64(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Topinfo_updatedAt(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+func (ec *executionContext) _Topinfo_Time(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -3482,7 +4347,7 @@ func (ec *executionContext) _Topinfo_updatedAt(ctx context.Context, field graphq
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.UpdatedAt, nil
+		return obj.Time, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -3499,7 +4364,112 @@ func (ec *executionContext) _Topinfo_updatedAt(ctx context.Context, field graphq
 	return ec.marshalNTime2timeᚐTime(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Topinfo_processes(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+func (ec *executionContext) _Topinfo_Uptime(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Topinfo",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Uptime, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_Loads(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Topinfo",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Loads, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.([]float64)
+	fc.Result = res
+	return ec.marshalNFloat2ᚕfloat64ᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_Users(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Topinfo",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Users, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		if !graphql.HasFieldError(ctx, fc) {
+			ec.Errorf(ctx, "must not be null")
+		}
+		return graphql.Null
+	}
+	res := resTmp.(int)
+	fc.Result = res
+	return ec.marshalNInt2int(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_Processes(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -3532,6 +4502,102 @@ func (ec *executionContext) _Topinfo_processes(ctx context.Context, field graphq
 	res := resTmp.([]*Process)
 	fc.Result = res
 	return ec.marshalNProcess2ᚕᚖgloutonᚋapiᚐProcessᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_CPU(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Topinfo",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.CPU, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*CPUUsage)
+	fc.Result = res
+	return ec.marshalOCPUUsage2ᚖgloutonᚋapiᚐCPUUsage(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_Memory(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Topinfo",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Memory, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*MemoryUsage)
+	fc.Result = res
+	return ec.marshalOMemoryUsage2ᚖgloutonᚋapiᚐMemoryUsage(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Topinfo_Swap(ctx context.Context, field graphql.CollectedField, obj *Topinfo) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:     "Topinfo",
+		Field:      field,
+		Args:       nil,
+		IsMethod:   false,
+		IsResolver: false,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return obj.Swap, nil
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*SwapUsage)
+	fc.Result = res
+	return ec.marshalOSwapUsage2ᚖgloutonᚋapiᚐSwapUsage(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) ___Directive_name(ctx context.Context, field graphql.CollectedField, obj *introspection.Directive) (ret graphql.Marshaler) {
@@ -4768,6 +5834,78 @@ func (ec *executionContext) _AgentStatus(ctx context.Context, sel ast.SelectionS
 	return out
 }
 
+var cPUUsageImplementors = []string{"CPUUsage"}
+
+func (ec *executionContext) _CPUUsage(ctx context.Context, sel ast.SelectionSet, obj *CPUUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, cPUUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("CPUUsage")
+		case "User":
+			out.Values[i] = ec._CPUUsage_User(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Nice":
+			out.Values[i] = ec._CPUUsage_Nice(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "System":
+			out.Values[i] = ec._CPUUsage_System(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Idle":
+			out.Values[i] = ec._CPUUsage_Idle(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "IOWait":
+			out.Values[i] = ec._CPUUsage_IOWait(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Guest":
+			out.Values[i] = ec._CPUUsage_Guest(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "GuestNice":
+			out.Values[i] = ec._CPUUsage_GuestNice(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "IRQ":
+			out.Values[i] = ec._CPUUsage_IRQ(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "SoftIRQ":
+			out.Values[i] = ec._CPUUsage_SoftIRQ(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Steal":
+			out.Values[i] = ec._CPUUsage_Steal(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var containerImplementors = []string{"Container"}
 
 func (ec *executionContext) _Container(ctx context.Context, sel ast.SelectionSet, obj *Container) graphql.Marshaler {
@@ -4943,6 +6081,53 @@ func (ec *executionContext) _Label(ctx context.Context, sel ast.SelectionSet, ob
 			}
 		case "value":
 			out.Values[i] = ec._Label_value(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
+var memoryUsageImplementors = []string{"MemoryUsage"}
+
+func (ec *executionContext) _MemoryUsage(ctx context.Context, sel ast.SelectionSet, obj *MemoryUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, memoryUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("MemoryUsage")
+		case "Total":
+			out.Values[i] = ec._MemoryUsage_Total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Used":
+			out.Values[i] = ec._MemoryUsage_Used(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Free":
+			out.Values[i] = ec._MemoryUsage_Free(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Buffers":
+			out.Values[i] = ec._MemoryUsage_Buffers(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Cached":
+			out.Values[i] = ec._MemoryUsage_Cached(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
@@ -5325,6 +6510,43 @@ func (ec *executionContext) _Service(ctx context.Context, sel ast.SelectionSet, 
 	return out
 }
 
+var swapUsageImplementors = []string{"SwapUsage"}
+
+func (ec *executionContext) _SwapUsage(ctx context.Context, sel ast.SelectionSet, obj *SwapUsage) graphql.Marshaler {
+	fields := graphql.CollectFields(ec.OperationContext, sel, swapUsageImplementors)
+
+	out := graphql.NewFieldSet(fields)
+	var invalids uint32
+	for i, field := range fields {
+		switch field.Name {
+		case "__typename":
+			out.Values[i] = graphql.MarshalString("SwapUsage")
+		case "Total":
+			out.Values[i] = ec._SwapUsage_Total(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Used":
+			out.Values[i] = ec._SwapUsage_Used(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Free":
+			out.Values[i] = ec._SwapUsage_Free(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		default:
+			panic("unknown field " + strconv.Quote(field.Name))
+		}
+	}
+	out.Dispatch()
+	if invalids > 0 {
+		return graphql.Null
+	}
+	return out
+}
+
 var tagImplementors = []string{"Tag"}
 
 func (ec *executionContext) _Tag(ctx context.Context, sel ast.SelectionSet, obj *Tag) graphql.Marshaler {
@@ -5393,16 +6615,37 @@ func (ec *executionContext) _Topinfo(ctx context.Context, sel ast.SelectionSet, 
 		switch field.Name {
 		case "__typename":
 			out.Values[i] = graphql.MarshalString("Topinfo")
-		case "updatedAt":
-			out.Values[i] = ec._Topinfo_updatedAt(ctx, field, obj)
+		case "Time":
+			out.Values[i] = ec._Topinfo_Time(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "processes":
-			out.Values[i] = ec._Topinfo_processes(ctx, field, obj)
+		case "Uptime":
+			out.Values[i] = ec._Topinfo_Uptime(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "Loads":
+			out.Values[i] = ec._Topinfo_Loads(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Users":
+			out.Values[i] = ec._Topinfo_Users(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "Processes":
+			out.Values[i] = ec._Topinfo_Processes(ctx, field, obj)
+			if out.Values[i] == graphql.Null {
+				invalids++
+			}
+		case "CPU":
+			out.Values[i] = ec._Topinfo_CPU(ctx, field, obj)
+		case "Memory":
+			out.Values[i] = ec._Topinfo_Memory(ctx, field, obj)
+		case "Swap":
+			out.Values[i] = ec._Topinfo_Swap(ctx, field, obj)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -5823,6 +7066,36 @@ func (ec *executionContext) marshalNFloat2float64(ctx context.Context, sel ast.S
 		}
 	}
 	return res
+}
+
+func (ec *executionContext) unmarshalNFloat2ᚕfloat64ᚄ(ctx context.Context, v interface{}) ([]float64, error) {
+	var vSlice []interface{}
+	if v != nil {
+		if tmp1, ok := v.([]interface{}); ok {
+			vSlice = tmp1
+		} else {
+			vSlice = []interface{}{v}
+		}
+	}
+	var err error
+	res := make([]float64, len(vSlice))
+	for i := range vSlice {
+		ctx := graphql.WithPathContext(ctx, graphql.NewPathWithIndex(i))
+		res[i], err = ec.unmarshalNFloat2float64(ctx, vSlice[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func (ec *executionContext) marshalNFloat2ᚕfloat64ᚄ(ctx context.Context, sel ast.SelectionSet, v []float64) graphql.Marshaler {
+	ret := make(graphql.Array, len(v))
+	for i := range v {
+		ret[i] = ec.marshalNFloat2float64(ctx, sel, v[i])
+	}
+
+	return ret
 }
 
 func (ec *executionContext) unmarshalNInt2int(ctx context.Context, v interface{}) (int, error) {
@@ -6474,6 +7747,13 @@ func (ec *executionContext) marshalOBoolean2ᚖbool(ctx context.Context, sel ast
 	return graphql.MarshalBoolean(*v)
 }
 
+func (ec *executionContext) marshalOCPUUsage2ᚖgloutonᚋapiᚐCPUUsage(ctx context.Context, sel ast.SelectionSet, v *CPUUsage) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._CPUUsage(ctx, sel, v)
+}
+
 func (ec *executionContext) unmarshalOFloat2ᚖfloat64(ctx context.Context, v interface{}) (*float64, error) {
 	if v == nil {
 		return nil, nil
@@ -6487,6 +7767,13 @@ func (ec *executionContext) marshalOFloat2ᚖfloat64(ctx context.Context, sel as
 		return graphql.Null
 	}
 	return graphql.MarshalFloat(*v)
+}
+
+func (ec *executionContext) marshalOMemoryUsage2ᚖgloutonᚋapiᚐMemoryUsage(ctx context.Context, sel ast.SelectionSet, v *MemoryUsage) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._MemoryUsage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOPagination2ᚖgloutonᚋapiᚐPagination(ctx context.Context, v interface{}) (*Pagination, error) {
@@ -6559,6 +7846,13 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 		return graphql.Null
 	}
 	return graphql.MarshalString(*v)
+}
+
+func (ec *executionContext) marshalOSwapUsage2ᚖgloutonᚋapiᚐSwapUsage(ctx context.Context, sel ast.SelectionSet, v *SwapUsage) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._SwapUsage(ctx, sel, v)
 }
 
 func (ec *executionContext) unmarshalOTime2ᚖtimeᚐTime(ctx context.Context, v interface{}) (*time.Time, error) {

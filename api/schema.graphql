@@ -61,9 +61,43 @@ type Process {
   container_id: String!
 }
 
+type CPUUsage {
+	User: Float!
+	Nice: Float!
+	System: Float!
+	Idle: Float!
+	IOWait: Float!
+	Guest: Float!
+	GuestNice: Float!
+	IRQ: Float!
+	SoftIRQ: Float!
+	Steal: Float!
+}
+
+type MemoryUsage {
+	Total: Float!
+	Used: Float!
+	Free: Float!
+	Buffers: Float!
+	Cached: Float!
+}
+
+type SwapUsage {
+	Total: Float!
+	Used: Float!
+	Free: Float!
+}
+
 type Topinfo {
-  updatedAt: Time!
-  processes: [Process!]!
+	Time: Time!
+	Uptime: Int!
+	Loads: [Float!]!
+	Users: Int!
+	Processes: [Process!]!
+	CPU: CPUUsage
+	Memory: MemoryUsage
+	Swap: SwapUsage
+
 }
 
 type Service {

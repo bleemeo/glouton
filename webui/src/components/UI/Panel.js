@@ -13,7 +13,7 @@ const Panel = ({
   <Grid.Row>
     <Grid.Col xl={xl} md={md} offset={offset}>
       <Card className={noBorder ? "no-border" : null}>
-        <div style={{ marginTop: "-1.8rem" }}>
+        <div style={{ marginTop: "-0.8rem" }}>
           <Card.Body>
             <div className={className}>{children}</div>
           </Card.Body>

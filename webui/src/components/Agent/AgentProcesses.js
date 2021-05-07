@@ -1,40 +1,12 @@
 import * as d3 from "d3";
 import React from "react";
 import PropTypes from "prop-types";
-import { Form } from "tabler-react";
 
 import { createFilterFn, isNullOrUndefined, isEmpty } from "../utils";
-import {
-  bytesToString,
-  _formatCpuTime,
-  formatToBytes,
-  formatDateTimeWithSeconds,
-} from "../utils/formater";
+import { _formatCpuTime, formatToBytes } from "../utils/formater";
 import ProcessesTable, { formatCmdLine, GraphCell } from "../UI/ProcessesTable";
+import AgentProcessesInfo from "./AgentProcessesInfo";
 import FaIcon from "../UI/FaIcon";
-import { chartColorMap } from "../utils/colors";
-
-// taken from the Agent code
-const formatUptime = (uptimeSeconds) => {
-  const uptimeDays = Math.trunc(uptimeSeconds / (24 * 60 * 60));
-  const uptimeHours = Math.trunc((uptimeSeconds % (24 * 60 * 60)) / (60 * 60));
-  const uptimeMinutes = Math.trunc((uptimeSeconds % (60 * 60)) / 60);
-
-  const textMinutes = uptimeDays > 1 ? "minutes" : "minute";
-  const textHours = uptimeHours > 1 ? "hours" : "hour";
-  const textDays = uptimeMinutes > 1 ? "days" : "day";
-
-  let uptimeString;
-  if (uptimeDays === 0 && uptimeHours === 0) {
-    uptimeString = `${uptimeMinutes} ${textMinutes}`;
-  } else if (uptimeDays === 0) {
-    uptimeString = `${uptimeHours} ${textHours}`;
-  } else {
-    uptimeString = `${uptimeDays} ${textDays}, ${uptimeHours} ${textHours}`;
-  }
-
-  return uptimeString;
-};
 
 const PercentBar = ({ color, title, percent }) => (
   <div
@@ -53,15 +25,8 @@ PercentBar.propTypes = {
 
 export default class AgentProcesses extends React.Component {
   static propTypes = {
-    processes: PropTypes.instanceOf(Array).isRequired,
-    updatedAt: PropTypes.string.isRequired,
+    top: PropTypes.object.isRequired,
     sizePage: PropTypes.number.isRequired,
-    memTypes: PropTypes.object.isRequired,
-    loadTypes: PropTypes.object.isRequired,
-    swapTypes: PropTypes.object.isRequired,
-    cpuTypes: PropTypes.object.isRequired,
-    uptime: PropTypes.number.isRequired,
-    usersLogged: PropTypes.number.isRequired,
   };
 
   state = {
@@ -72,13 +37,13 @@ export default class AgentProcesses extends React.Component {
   };
 
   showRowDetail = (row) => {
-    const { processes } = this.props;
+    const { top } = this.props;
     const { order, field } = this.state;
     const filteredProcesses = this.getFilteredProcesses();
     const processesWithSamePPID = filteredProcesses.filter(
       (p) => row.ppid === p.ppid
     );
-    const processParent = processes.find((p) => row.ppid === p.pid);
+    const processParent = top["Processes"].find((p) => row.ppid === p.pid);
     processesWithSamePPID.sort((a, b) => {
       if (typeof a[field] === "string" && typeof b[field] === "string") {
         return order === "asc"
@@ -190,10 +155,10 @@ export default class AgentProcesses extends React.Component {
   };
 
   getFilteredProcesses = () => {
-    const { processes } = this.props;
+    const { top } = this.props;
     const { filter, usernamesFilter } = this.state;
     const filterFn = createFilterFn(filter);
-    return processes.filter((proc) => {
+    return top["Processes"].filter((proc) => {
       return (
         (usernamesFilter.length === 0
           ? true
@@ -207,330 +172,17 @@ export default class AgentProcesses extends React.Component {
     });
   };
 
-  handleUsersFilter = (username) => {
-    const prevUsernamesFilter = Array.from(this.state.usernamesFilter);
-    if (prevUsernamesFilter.includes(username))
-      prevUsernamesFilter.splice(prevUsernamesFilter.indexOf(username), 1);
-    else prevUsernamesFilter.push(username);
-    this.setState({
-      usernamesFilter: prevUsernamesFilter,
-    });
-  };
-
   render() {
-    const {
-      processes,
-      sizePage,
-      memTypes,
-      loadTypes,
-      swapTypes,
-      cpuTypes,
-      updatedAt,
-      uptime,
-      usersLogged,
-    } = this.props;
-    const { filter } = this.state;
+    const { top, sizePage } = this.props;
 
     let info = null;
     let filterInput = null;
     let processesTable = null;
-    if (
-      !isEmpty(cpuTypes) &&
-      !isEmpty(memTypes) &&
-      !isEmpty(swapTypes) &&
-      !isEmpty(loadTypes) &&
-      processes &&
-      updatedAt &&
-      uptime
-    ) {
-      // sometimes the sum of all CPU percentage make more than 100%
-      // which broke the bar, so we have to re-compute them
-      const cpuTotal = Object.values(cpuTypes).reduce((acc, v) => acc + v);
-      const cpuSystemPerc = (cpuTypes.cpu_system / cpuTotal) * 100;
-      const cpuUserPerc = (cpuTypes.cpu_user / cpuTotal) * 100;
-      const cpuNicePerc = (cpuTypes.cpu_nice / cpuTotal) * 100;
-      const cpuWaitPerc = (cpuTypes.cpu_wait / cpuTotal) * 100;
-      const cpuIdlePerc = (cpuTypes.cpu_idle / cpuTotal) * 100;
-
-      const cpuTooltipMsg =
-        `${d3.format(".2r")(cpuTypes.cpu_system)}% system` +
-        ` ‒ ${d3.format(".2r")(cpuTypes.cpu_user)}% user` +
-        ` ‒ ${d3.format(".2r")(cpuTypes.cpu_nice)}% nice` +
-        ` ‒ ${d3.format(".2r")(cpuTypes.cpu_wait)}% wait` +
-        ` ‒ ${d3.format(".2r")(cpuTypes.cpu_idle)}% idle`;
-
-      const memTotal = Object.values(memTypes).reduce((acc, v) => acc + v);
-
-      const memUsed = memTypes.mem_used;
-      const memUsedPerc = (memUsed / memTotal) * 100;
-      const memFreePerc = (memTypes.mem_free / memTotal) * 100;
-      const memBuffersPerc = (memTypes.mem_buffered / memTotal) * 100;
-      const memCachedPerc = (memTypes.mem_cached / memTotal) * 100;
-
-      const memTooltipMsg =
-        `${bytesToString(memUsed)} used` +
-        ` ‒ ${bytesToString(memTypes.mem_buffered)} buffers` +
-        ` ‒ ${bytesToString(memTypes.mem_cached)} cached` +
-        ` ‒ ${bytesToString(memTypes.mem_free)} free`;
-
-      const swapUsedPerc = (swapTypes.swap_used / swapTypes.swap_total) * 100;
-      const swapFreePerc = (swapTypes.swap_free / swapTypes.swap_total) * 100;
-
-      const swapTooltipMsg =
-        `${bytesToString(swapTypes.swap_used)} used` +
-        ` ‒ ${bytesToString(swapTypes.swap_free)} free`;
-      filterInput = (
-        <Form.Input
-          className="mb-3 form-control form-control-sm w-25"
-          icon="search"
-          value={filter}
-          onChange={(e) => this.setState({ filter: e.target.value })}
-        />
-      );
-      const timeDate = new Date(updatedAt);
-      const maxLoad = Math.max(...Object.values(loadTypes));
-      const loadTooltipMdg =
-        loadTypes.system_load1 +
-        "\n" +
-        loadTypes.system_load5 +
-        "\n" +
-        loadTypes.system_load15;
-
-      const usernames = [];
-      const filterFn = createFilterFn(this.state.filter);
-      const searchedProcesses = processes.filter((proc) => {
-        return (
-          filterFn(proc.pid.toString()) ||
-          filterFn(proc.ppid ? proc.ppid.toString() : "") ||
-          filterFn(proc.username) ||
-          filterFn(proc.cmdline) ||
-          filterFn(proc.name)
-        );
-      });
-      searchedProcesses.map((process) => {
-        if (!usernames.includes(process.username))
-          usernames.push(process.username);
-      });
-
-      info = (
-        <div className="row">
-          <div className="col-xl-8 col-sm-12">
-            <table className="table table-sm" style={{ marginBottom: 0 }}>
-              <tbody>
-                <tr>
-                  <td className="percent-bar-label">
-                    <strong>Cpu(s):</strong>
-                  </td>
-                  <td>
-                    <div className="percent-bars">
-                      <PercentBar
-                        color="#e67e22"
-                        percent={cpuSystemPerc}
-                        title={cpuTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#3498db"
-                        percent={cpuUserPerc}
-                        title={cpuTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#4DD0E1"
-                        percent={cpuNicePerc}
-                        title={cpuTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#e74c3c"
-                        percent={cpuWaitPerc}
-                        title={cpuTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#2ecc71"
-                        percent={cpuIdlePerc}
-                        title={cpuTooltipMsg}
-                      />
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="percent-bar-label">
-                    <strong>Mem:</strong>
-                  </td>
-                  <td>
-                    <div className="percent-bars">
-                      <PercentBar
-                        color="#3498db"
-                        percent={memUsedPerc}
-                        title={memTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#95a5a6"
-                        percent={memBuffersPerc}
-                        title={memTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#f1c40f"
-                        percent={memCachedPerc}
-                        title={memTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#2ecc71"
-                        percent={memFreePerc}
-                        title={memTooltipMsg}
-                      />
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td className="percent-bar-label">
-                    <strong>Swap:</strong>
-                  </td>
-                  <td>
-                    <div className="percent-bars">
-                      <PercentBar
-                        color="#3498db"
-                        percent={swapUsedPerc}
-                        title={swapTooltipMsg}
-                      />
-                      <PercentBar
-                        color="#2ecc71"
-                        percent={swapFreePerc}
-                        title={swapTooltipMsg}
-                      />
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div className="col-xl-3 col-sm-8">
-            <table className="table table-sm" style={{ marginBottom: 0 }}>
-              <tbody>
-                <tr>
-                  <td colSpan="2">
-                    <h4 style={{ marginBottom: 0 }}>
-                      <strong style={{ fontSize: "medium" }}>
-                        Last update:{" "}
-                      </strong>
-                      <span className="badge badge-secondary">
-                        {formatDateTimeWithSeconds(timeDate)}
-                      </span>
-                    </h4>
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan="5">
-                    <strong>Users:</strong> {usersLogged}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan="5">
-                    <strong>Uptime:</strong> {formatUptime(uptime)}
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan="5">
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "left",
-                        justifyContent: "right",
-                        flexDirection: "row",
-                      }}
-                    >
-                      <div style={{ width: "30%" }}>
-                        <strong>Load average:</strong>
-                      </div>
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "left",
-                          justifyContent: "right",
-                          flexDirection: "column",
-                          width: "70%",
-                        }}
-                      >
-                        <div
-                          className="percent-bars littleBorderRadius"
-                          style={{ height: "8px" }}
-                        >
-                          <PercentBar
-                            color={chartColorMap(0)}
-                            percent={(loadTypes.system_load1 / maxLoad) * 100}
-                            title={loadTooltipMdg}
-                          />
-                        </div>
-                        <div
-                          className="percent-bars littleBorderRadius"
-                          style={{ height: "8px" }}
-                        >
-                          <PercentBar
-                            color={chartColorMap(1)}
-                            percent={(loadTypes.system_load5 / maxLoad) * 100}
-                            title={loadTooltipMdg}
-                          />
-                        </div>
-                        <div
-                          className="percent-bars littleBorderRadius"
-                          style={{ height: "8px" }}
-                        >
-                          <PercentBar
-                            color={chartColorMap(2)}
-                            percent={(loadTypes.system_load15 / maxLoad) * 100}
-                            title={loadTooltipMdg}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td colSpan="5">
-                    <strong>Tasks:</strong>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-            <table className="table table-sm" style={{ marginBottom: 0 }}>
-              <tbody>
-                <tr>
-                  <td className="smaller">{processes.length} total</td>
-                  <td className="smaller">
-                    {processes.filter((p) => p.status === "running").length}{" "}
-                    running
-                  </td>
-                  <td className="smaller">
-                    {
-                      processes.filter(
-                        (p) =>
-                          p.status === "sleeping" ||
-                          p.status === "?" ||
-                          p.status === "idle" ||
-                          p.status === "disk-sleep"
-                      ).length
-                    }{" "}
-                    sleeping
-                  </td>
-                  <td className="smaller">
-                    {processes.filter((p) => p.status === "stopped").length}{" "}
-                    stopped
-                  </td>
-                  <td className="smaller">
-                    {processes.filter((p) => p.status === "zombie").length}{" "}
-                    zombie
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-      );
-    }
-    if (processes && !isEmpty(memTypes)) {
-      const memTotal = Object.values(memTypes).reduce((acc, v) => acc + v);
+    if (top["Processes"] && !isEmpty(top["Memory"])) {
       const filteredProcesses = this.getFilteredProcesses();
       const processesTmp = filteredProcesses.map((process) => {
         process.mem_percent = parseFloat(
-          d3.format(".2r")(((process.memory_rss * 1024) / memTotal) * 100)
+          d3.format(".2r")((process.memory_rss / top["Memory"]["Total"]) * 100)
         );
         process.new_cpu_times = _formatCpuTime(process.cpu_time);
         return process;
@@ -555,7 +207,7 @@ export default class AgentProcesses extends React.Component {
         if (
           process.ppid === undefined ||
           process.ppid === 1 ||
-          !processes.find((p) => process.ppid === p.pid)
+          !top["Processes"].find((p) => process.ppid === p.pid)
         ) {
           processesNodes.push(process);
         } else if (
@@ -574,7 +226,9 @@ export default class AgentProcesses extends React.Component {
       const previousProcesses = [];
       processesLeaves.map((process) => {
         const processesWithSameParents = childrenProcesses.get(process.ppid);
-        const processParent = processes.find((p) => process.ppid === p.pid);
+        const processParent = top["Processes"].find(
+          (p) => process.ppid === p.pid
+        );
         if (!previousProcesses.includes(processParent.pid)) {
           previousProcesses.push(processParent.pid);
           const totalRes = [...processesWithSameParents, processParent]
@@ -665,10 +319,13 @@ export default class AgentProcesses extends React.Component {
       );
     }
     return (
-      <div className="marginOffset">
-        {info}
-        {filterInput}
-        {processesTable}
+      <div>
+        <AgentProcessesInfo top={top} />
+        <div className="marginOffset">
+          {info}
+          {filterInput}
+          {processesTable}
+        </div>
       </div>
     );
   }

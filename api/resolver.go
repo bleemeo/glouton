@@ -337,19 +337,20 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 	return c, nil
 }
 
-// Processes returns a list of processes
+// Processes returns a list of topInfo
 // They can be filtered by container's ID.
 func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*Topinfo, error) {
 	if r.api.PsFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
 	}
 
-	processes, updatedAt, err := r.api.PsFact.ProcessesWithTime(ctx, time.Second*15)
+	topInfo, err := r.api.PsFact.TopInfo(ctx, time.Second*15)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve processes: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve processes")
 	}
 
+	processes := topInfo.Processes
 	processesRes := []*Process{}
 
 	for _, process := range processes {
@@ -371,8 +372,31 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 			processesRes = append(processesRes, p)
 		}
 	}
-
-	return &Topinfo{UpdatedAt: updatedAt, Processes: processesRes}, nil
+	CpuRes := &CPUUsage{
+		Nice:      topInfo.CPU.Nice,
+		System:    topInfo.CPU.System,
+		User:      topInfo.CPU.User,
+		Idle:      topInfo.CPU.Idle,
+		IOWait:    topInfo.CPU.IOWait,
+		Guest:     topInfo.CPU.Guest,
+		GuestNice: topInfo.CPU.GuestNice,
+		Irq:       topInfo.CPU.IRQ,
+		SoftIrq:   topInfo.CPU.SoftIRQ,
+		Steal:     topInfo.CPU.Steal,
+	}
+	MemoryRes := &MemoryUsage{
+		Total:   topInfo.Memory.Total,
+		Used:    topInfo.Memory.Used,
+		Free:    topInfo.Memory.Free,
+		Buffers: topInfo.Memory.Buffers,
+		Cached:  topInfo.Memory.Cached,
+	}
+	SwapRes := &SwapUsage{
+		Total: topInfo.Swap.Total,
+		Free:  topInfo.Swap.Free,
+		Used:  topInfo.Swap.Used,
+	}
+	return &Topinfo{Time: time.Now(), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users, CPU: CpuRes, Memory: MemoryRes, Swap: SwapRes, Processes: processesRes}, nil
 }
 
 // Facts returns a list of facts discovered by agent.
