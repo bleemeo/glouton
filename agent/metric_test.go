@@ -44,6 +44,18 @@ metric:
 
 `
 
+const defaultConf = `
+metric:
+  include_default_metrics: true
+`
+
+const errorConf = `
+metric:
+  allow_metrics:
+    - cpu*[{[
+    - pro*
+`
+
 func Test_Basic_Build(t *testing.T) {
 	cfg := config.Configuration{}
 
@@ -133,6 +145,41 @@ func Test_Basic_Build(t *testing.T) {
 				t.Errorf("Generated deny list does not match the expected output: Expected %v, Got %v", correct, data)
 			}
 		}
+	}
+}
+
+func Test_error_invalid_conf(t *testing.T) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(errorConf))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	_, err = NewMetricFilter(&cfg)
+
+	if err == nil {
+		t.Errorf("No error returned with an invalid configuration")
+	}
+}
+
+func Test_basic_build_default(t *testing.T) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(defaultConf))
+	if err != nil {
+		t.Error(err)
+	}
+
+	filter, err := NewMetricFilter(&cfg)
+
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(filter.allowList) != len(defaultMetrics) {
+		t.Errorf("Unexpected number of matcher: expected %d, got %d", len(defaultMetrics), len(filter.allowList))
 	}
 }
 

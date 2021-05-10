@@ -44,9 +44,9 @@ func NormalizeMetric(metric string) (Matchers, error) {
 		if strings.Contains(metric, "*") {
 			// metric is in the blob format: we need to convert it in a regex
 			matchType += "~"
+			metric = globToRegex(metric)
 		}
 
-		metric = globToRegex(metric)
 		metric = fmt.Sprintf("{%s%s\"%s\"}", types.LabelName, matchType, metric)
 	}
 
@@ -83,18 +83,13 @@ func (m *Matchers) Add(label string, value string, labelType labels.MatchType) e
 }
 
 func (m *Matchers) String() string {
-	res := "{"
+	res := make([]string, 0)
 
-	for i, value := range *m {
-		res += value.String()
-		if i+1 < len(*m) {
-			res += ","
-		}
+	for _, value := range *m {
+		res = append(res, value.String())
 	}
 
-	res += "}"
-
-	return res
+	return "{" + strings.Join(res, ",") + "}"
 }
 
 func (m *Matchers) MatchesPoint(point types.MetricPoint) bool {

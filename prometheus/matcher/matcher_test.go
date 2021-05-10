@@ -91,6 +91,17 @@ func Test_NormalizeMetric(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:            "metric contains a point but is not a regex",
+			allowListString: "my.metric",
+			want: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "my.metric",
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -100,21 +111,21 @@ func Test_NormalizeMetric(t *testing.T) {
 			got, err := NormalizeMetric(localTest.allowListString)
 
 			if err != nil {
-				t.Errorf("Invalid result for test %s: Got error => %v ", localTest.name, err)
+				t.Errorf("Invalid result Got error => %v ", err)
 			}
 
 			if len(got) != len(localTest.want) {
-				t.Errorf("Invalid Matchers length for test %s: expected=%d, got=%d", localTest.name, len(localTest.want), len(got))
+				t.Errorf("Invalid Matchers length expected=%d, got=%d", len(localTest.want), len(got))
 			}
 
 			for idx, val := range got {
 				if val.Type != localTest.want[idx].Type {
-					t.Errorf("Invalid Match Type for test %s:\nexpected %s got %s", localTest.name, localTest.want[idx].Type, val.Type)
+					t.Errorf("Invalid Match Type \nexpected %s got %s", localTest.want[idx].Type, val.Type)
 				}
 
 				if !val.Matches(localTest.want[idx].Value) {
-					t.Errorf("Unmatched value for test %s:\nexpected={%s: '%s'} got={%s: '%s'}\n",
-						localTest.name, localTest.want[idx].Name, localTest.want[idx].Value, val.Name, val.Value)
+					t.Errorf("Unmatched value \nexpected={%s: '%s'} got={%s: '%s'}\n",
+						localTest.want[idx].Name, localTest.want[idx].Value, val.Name, val.Value)
 				}
 			}
 		})
@@ -354,7 +365,7 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			got := test.matchers.MatchesPoint(test.point)
 
 			if got != test.want {
-				t.Errorf("Incorrect result for test %s: expected %v, got %v", test.name, test.want, got)
+				t.Errorf("Incorrect result expected %v, got %v", test.want, got)
 			}
 		})
 	}

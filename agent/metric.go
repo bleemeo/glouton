@@ -33,47 +33,143 @@ import (
 //nolint:gochecknoglobals
 var defaultMetrics []string = []string{
 	// Operating system metrics
-	"agent_gather_time", "agent_status", "cpu_idle", "cpu_interrup", "cpu_nice",
-	"cpu_other", "cpu_softirq", "cpu_steal", "cpu_system", "cpu_used",
-	"cpu_used_status", "cpu_user", "cpu_wait", "cpu_guest_nice", "cpu_guest",
-	"disk_free", "disk_inodes_free", "disk_inodes_total", "disk_inodes_used",
-	"disk_total", "disk_used", "disk_used_perc", "disk_used_perc_status",
-	"io_merge_reads", "io_merged_writes", "io_read_bytes", "io_reads", "io_time",
-	"io_utilization", "io_write_bytes", "io_write_time", "io_wites",
-	"mem_available", "mem_available_perc", "mem_buffered", "mem_cached",
-	"mem_free", "mem_total", "mem_used", "mem_used_perc", "mem_used,perc_status",
-	"net_bites_recv", "net_bits_sent", "net_drop_in", "net_drop_out",
-	"net_err_in", "net_err_in_status", "net_err_out", "net_err_out_status",
-	"net_packets_recv", "net_packets_sent", "process_status_blocked",
-	"process_status_paging", "process_status_running", "process_status_sleeping",
-	"process_status_stopped", "process_status_zombies", "process_total",
-	"process_total_threads", "swap_free", "swap_in", "swap_out", "swap_total",
-	"swap_used", "swap_used_perc", "swap_used_perc_status", "system_load1",
-	"system_load5", "system_load15", "system_pending_updates",
-	"system_pending_security_updates", "uptime", "users_logged",
+	"agent_gather_time",
+	"agent_status",
+	"cpu_idle",
+	"cpu_interrup",
+	"cpu_nice",
+	"cpu_other",
+	"cpu_softirq",
+	"cpu_steal",
+	"cpu_system",
+	"cpu_used",
+	"cpu_used_status",
+	"cpu_user",
+	"cpu_wait",
+	"cpu_guest_nice",
+	"cpu_guest",
+	"disk_free",
+	"disk_inodes_free",
+	"disk_inodes_total",
+	"disk_inodes_used",
+	"disk_total",
+	"disk_used",
+	"disk_used_perc",
+	"disk_used_perc_status",
+	"io_merge_reads",
+	"io_merged_writes",
+	"io_read_bytes",
+	"io_reads",
+	"io_time",
+	"io_utilization",
+	"io_write_bytes",
+	"io_write_time",
+	"io_wites",
+	"mem_available",
+	"mem_available_perc",
+	"mem_buffered",
+	"mem_cached",
+	"mem_free",
+	"mem_total",
+	"mem_used",
+	"mem_used_perc",
+	"mem_used,perc_status",
+	"net_bites_recv",
+	"net_bits_sent",
+	"net_drop_in",
+	"net_drop_out",
+	"net_err_in",
+	"net_err_in_status",
+	"net_err_out",
+	"net_err_out_status",
+	"net_packets_recv",
+	"net_packets_sent",
+	"process_status_blocked",
+	"process_status_paging",
+	"process_status_running",
+	"process_status_sleeping",
+	"process_status_stopped",
+	"process_status_zombies",
+	"process_total",
+	"process_total_threads",
+	"swap_free",
+	"swap_in",
+	"swap_out",
+	"swap_total",
+	"swap_used",
+	"swap_used_perc",
+	"swap_used_perc_status",
+	"system_load1",
+	"system_load5",
+	"system_load15",
+	"system_pending_updates",
+	"system_pending_security_updates",
+	"uptime",
+	"users_logged",
 	// Services
-	"apache_*", "bitbucket_*", "cassandra_*", "confluence*", "bind_status",
-	"dovecot_status", "ejabberd_status", "elasticsearch_*", "exim_status",
-	"exim_queue_size", "haproxy_*", "influxdb_status", "jira_*", "memcached_*",
-	"mongodb_*", "mosquitto_status", "mysql_*", "nginx_*", "ntp_status", //nolint: misspell
-	"openldap_status", "openvpn_status", "phpfpm_*", "postfix_status",
-	"postfix_queue_size", "postgresql_*", "rabbitmq_*", "redis_*", "salt_status",
-	"squid3_status", "uwsgi_status", "varnish_status", "zookeeper_*",
+	"apache_*",
+	"bitbucket_*",
+	"cassandra_*",
+	"confluence*",
+	"bind_status",
+	"dovecot_status",
+	"ejabberd_status",
+	"elasticsearch_*",
+	"exim_status",
+	"exim_queue_size",
+	"haproxy_*",
+	"influxdb_status",
+	"jira_*",
+	"memcached_*",
+	"mongodb_*",
+	"mosquitto_status", //nolint: misspell
+	"mysql_*",
+	"nginx_*",
+	"ntp_status",
+	"openldap_status",
+	"openvpn_status",
+	"phpfpm_*",
+	"postfix_status",
+	"postfix_queue_size",
+	"postgresql_*",
+	"rabbitmq_*",
+	"redis_*",
+	"salt_status",
+	"squid3_status",
+	"uwsgi_status",
+	"varnish_status",
+	"zookeeper_*",
 	// Key Processes
-	"process_context_switch", "process_context_switch", "process_cpu_user",
-	"process_io_read_bytes", "process_io_write_bytes", "process_major_fault",
-	"process_mem_bytes", "process_num_procs", "process_num_threads",
-	"process_open_filedesc", "process_worst_fd_ratio",
+	"process_context_switch",
+	"process_context_switch",
+	"process_cpu_user",
+	"process_io_read_bytes",
+	"process_io_write_bytes",
+	"process_major_fault",
+	"process_mem_bytes",
+	"process_num_procs",
+	"process_num_threads",
+	"process_open_filedesc",
+	"process_worst_fd_ratio",
 	// Docker
-	"docker_container_cpu_used", "docker_container_health_status",
-	"docker_container_io_read_bytes", "docker_container_io_write_bytes",
-	"docker_container_mem_used", "docker_container_mem_used_perc",
-	"docker_container_mem_used_perc_status", "docker_container_net_bits_recv",
-	"docker_container_net_bits_sent",
-	// Prometheus
-	"process_cpu_seconds_total", "process_resident_memory_bytes",
+	"container_cpu_used",
+	"container_health_status",
+	"container_io_read_bytes",
+	"container_io_write_bytes",
+	"container_mem_used",
+	"container_mem_used_perc",
+	"container_mem_used_perc_status",
+	"container_net_bits_recv",
+	"container_net_bits_sent",
+	// Prometheus scrapper
+	"process_cpu_seconds_total",
+	"process_resident_memory_bytes",
 	// Java
-	"*_jvm_*",
+	"*_jvm_gc",
+	"*_jvm_gc_time",
+	"*_jvm_gc_utilization",
+	"*_jvm_heap_used",
+	"*_jvm_non_heap_used",
 }
 
 //MetricFilter is a thread-safe holder of an allow / deny metrics list.
@@ -105,7 +201,7 @@ func buildMatcherList(config *config.Configuration, listType string) ([]matcher.
 		metricList = append(metricList, new)
 	}
 
-	metricList = addScrappersList(config, metricList, metricListType)
+	metricList = addScrappersList(config, metricList, listType)
 
 	return metricList, nil
 }
@@ -165,9 +261,11 @@ func (m *MetricFilter) buildList(config *config.Configuration) error {
 		return err
 	}
 
+	if len(m.staticAllowList) > 0 {
+		logger.V(1).Println("Your allow list may not be compatible with your plan. Please your plan allowed metrics if you encounter any problem.")
+	}
+
 	m.staticDenyList, err = buildMatcherList(config, "deny")
-	m.allowList = m.staticAllowList
-	m.denyList = m.staticDenyList
 
 	includeDefault := config.Bool("metric.include_default_metrics")
 	if includeDefault {
@@ -180,6 +278,9 @@ func (m *MetricFilter) buildList(config *config.Configuration) error {
 			m.staticAllowList = append(m.staticAllowList, new)
 		}
 	}
+
+	m.allowList = m.staticAllowList
+	m.denyList = m.staticDenyList
 
 	return err
 }
