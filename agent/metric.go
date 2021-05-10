@@ -17,6 +17,8 @@
 package agent
 
 import (
+	"errors"
+	"fmt"
 	"glouton/config"
 	"glouton/discovery/promexporter"
 	"glouton/facts/container-runtime/merge"
@@ -29,6 +31,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
+
+var errCantCast = errors.New("could not convert field to correct type")
 
 //nolint:gochecknoglobals
 var defaultMetrics []string = []string{
@@ -266,6 +270,9 @@ func (m *MetricFilter) buildList(config *config.Configuration) error {
 	}
 
 	m.staticDenyList, err = buildMatcherList(config, "deny")
+	if err != nil {
+		return err
+	}
 
 	includeDefault := config.Bool("metric.include_default_metrics")
 	if includeDefault {
@@ -279,10 +286,69 @@ func (m *MetricFilter) buildList(config *config.Configuration) error {
 		}
 	}
 
+	jmxMetrics, err := getJmxMetrics(config)
+	if err != nil {
+		return err
+	}
+
+	if len(jmxMetrics) > 0 {
+		for _, val := range jmxMetrics {
+			new, err := matcher.NormalizeMetric(val)
+			if err != nil {
+				return err
+			}
+
+			m.staticAllowList = append(m.staticAllowList, new)
+		}
+	}
+
 	m.allowList = m.staticAllowList
 	m.denyList = m.staticDenyList
 
 	return err
+}
+
+func getJmxMetrics(cfg *config.Configuration) ([]string, error) {
+	res := []string{}
+	serviceListRaw, found := cfg.Get("service")
+
+	if !found {
+		return []string{}, nil
+	}
+
+	serviceList, ok := serviceListRaw.([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("%w: service", errCantCast)
+	}
+
+	for _, service := range serviceList {
+		srv, ok := service.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		if srv["id"] == nil || srv["jmx_metrics"] == nil {
+			continue
+		}
+
+		nameList, ok := srv["jmx_metrics"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, val := range nameList {
+			metric, ok := val.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			name := metric["name"].(string)
+
+			res = append(res, srv["id"].(string)+"_"+name)
+		}
+	}
+
+	return res, nil
 }
 
 func NewMetricFilter(config *config.Configuration) (*MetricFilter, error) {
