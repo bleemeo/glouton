@@ -11,7 +11,6 @@ import {
 import LineChart from "./LineChart";
 import { useFetch, POLL } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
-import { GET_POINTS } from "../utils/gqlRequests";
 
 const CPU = [
   "cpu_steal",
@@ -43,23 +42,25 @@ const WidgetDashboardItem = ({
   const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
-        const resultGauge = points.sort((a, b) => {
-          const aString = b.labels.map(() => "${l.key}=${l.value}").join(",");
-          const bString = b.labels.map(() => "${l.key}=${l.value}").join(",");
-          return aString.localeCompare(bString);
-        })[0];
-        const end = computeEnd(type, period);
-        let lastPoint = null;
+        //        const resultGauge = points.sort((a, b) => {
+        //          const aString = b.labels.map(() => "${l.key}=${l.value}").join(",");
+        //          const bString = b.labels.map(() => "${l.key}=${l.value}").join(",");
+        //          return aString.localeCompare(bString);
+        //        })[0];
+        //        const end = computeEnd(type, period);
+        //        let lastPoint = null;
+        //        let thresholds = null;
+        //        if (
+        //          resultGauge &&
+        //          resultGauge.points &&
+        //          new Date(resultGauge.points[resultGauge.points.length - 1].time) <=
+        //            new Date(end)
+        //        ) {
+        //          lastPoint = points[0][1];
+        //          thresholds = resultGauge.thresholds;
+        //        }
+        let lastPoint = points[0][1];
         let thresholds = null;
-        if (
-          resultGauge &&
-          resultGauge.points &&
-          new Date(resultGauge.points[resultGauge.points.length - 1].time) <=
-            new Date(end)
-        ) {
-          lastPoint = resultGauge.points[resultGauge.points.length - 1].value;
-          thresholds = resultGauge.thresholds;
-        }
         return (
           <MetricGaugeItem
             unit={unit}
@@ -120,21 +121,21 @@ const WidgetDashboardItem = ({
       }
       break;
     default:
-      metrics.forEach((metric) => {
-        let labels = [];
-        for (let [key, value] of Object.entries(metric)) {
-          labels.push({ key: key, value: value });
-        }
-        metricsFilter.push({ labels: labels });
-      });
+      metricsFilter.push(metrics);
   }
   const { isLoading, error, points, networkStatus } = useFetch(
-    GET_POINTS,
+    "",
     {
-      metricsFilter,
-      start: period.from ? new Date(period.from).toISOString() : "",
-      end: period.to ? new Date(period.to).toISOString() : "",
-      minutes: period.minutes ? period.minutes : 0,
+      query: metrics,
+      start: period.from
+        ? new Date(period.from).toISOString()
+        : new Date(
+            new Date().setMinutes(new Date().getMinutes() - period.minutes)
+          ).toISOString(),
+      end: period.to
+        ? new Date(period.to).toISOString()
+        : new Date().toISOString(),
+      step: period.minutes ? period.minutes : 15,
     },
     refetchTime * 1000
   );
@@ -143,6 +144,7 @@ const WidgetDashboardItem = ({
     hasError = previousError.current;
   }
   previousError.current = error;
+  console.log(isLoading, error, points, networkStatus);
   return (
     <div>
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
@@ -196,6 +198,7 @@ WidgetDashboardItem.propTypes = {
   type: PropTypes.string.isRequired,
   title: PropTypes.string.isRequired,
   metrics: PropTypes.any,
+  mountpoins: PropTypes.string,
   labels: PropTypes.instanceOf(Array),
   unit: PropTypes.number,
   refetchTime: PropTypes.number.isRequired,

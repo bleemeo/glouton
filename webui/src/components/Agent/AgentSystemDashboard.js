@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import VisibilitySensor from "react-visibility-sensor";
+import PropTypes from "prop-types";
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
 import {
   chartTypes,
@@ -16,92 +17,133 @@ import LineChart from "../UI/LineChart";
 import { useWindowWidth } from "../utils/hooks";
 import { getStorageItem, setStorageItem } from "../utils/storage";
 
-const gaugesBar = [
+var gaugesBar = [];
+
+const gaugesBarPrometheus = [
   {
     title: "CPU",
-    metrics: [{ [LabelName]: "cpu_used" }],
+    metrics: [
+      '(1-sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m])))*100',
+    ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "Memory",
-    metrics: [{ [LabelName]: "mem_used_perc" }],
+    metrics: [
+      "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+    ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "IO",
-    metrics: [{ [LabelName]: "io_utilization" }],
+    metrics: ["irate(node_disk_io_time_seconds_total[1m])*100"],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "/",
-    metrics: [{ [LabelName]: "disk_used_perc", mountpoint: "/" }],
+    metrics: [
+      '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+    ],
     unit: UNIT_PERCENTAGE,
   },
 ];
 
-const widgets = [
+const gaugesBarBLEEMEO = [
+  {
+    title: "CPU",
+    metrics: ["cpu_used"],
+    unit: UNIT_PERCENTAGE,
+  },
+  {
+    title: "Memory",
+    metrics: ["mem_used_perc"],
+    unit: UNIT_PERCENTAGE,
+  },
+  {
+    title: "IO",
+    metrics: ["io_utilization"],
+    unit: UNIT_PERCENTAGE,
+  },
+  {
+    title: "/",
+    metrics: ["disk_used_perc"],
+    mountpoint: "/",
+    unit: UNIT_PERCENTAGE,
+  },
+];
+
+var widgets = [];
+
+const widgetsBLEEMEO = [
   { title: "Processor Usage", type: chartTypes[1], unit: UNIT_PERCENTAGE },
   { title: "Memory Usage", type: chartTypes[1], unit: UNIT_BYTE },
   {
     title: "Disk IO Utilization",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: [{ [LabelName]: "io_utilization" }],
+    metrics: ["io_utilization"],
   },
   {
     title: "Disk Read Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: [{ [LabelName]: "io_read_bytes" }],
+    metrics: ["io_read_bytes"],
   },
   {
     title: "Disk Write Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: [{ [LabelName]: "io_write_bytes" }],
+    metrics: ["io_write_bytes"],
   },
   {
     title: "Disk Read Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: [{ [LabelName]: "io_reads" }],
+    metrics: ["io_reads"],
   },
   {
     title: "Disk Write Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: [{ [LabelName]: "io_writes" }],
+    metrics: ["io_writes"],
   },
   {
     title: "Network Packets",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: [
-      { [LabelName]: "net_packets_recv" },
-      { [LabelName]: "net_packets_sent" },
-    ],
+    metrics: ["net_packets_recv", "net_packets_sent"],
   },
   {
     title: "Network Errors",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: [{ [LabelName]: "net_err_in" }, { [LabelName]: "net_err_out" }],
+    metrics: ["net_err_in", "net_err_out"],
   },
   {
     title: "Disk Space",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: [{ [LabelName]: "disk_used_perc" }],
+    metrics: ["disk_used_perc"],
   },
   {
     title: "Swap Usage",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: [{ [LabelName]: "swap_used_perc" }],
+    metrics: ["swap_used_perc"],
   },
 ];
 
-const AgentSystemDashboard = () => {
+const AgentSystemDashboard = ({ facts }) => {
+  console.log();
+  if (facts.find((f) => f.name === "metrics_format").value === "Bleemeo") {
+    gaugesBar = gaugesBarBLEEMEO;
+    widgets = widgetsBLEEMEO;
+  } else if (
+    facts.find((f) => f.name === "metrics_format").value == "Prometheus"
+  ) {
+    gaugesBar = gaugesBarPrometheus;
+    widgets = widgetsBLEEMEO;
+  }
   const [period, setPeriod] = useState(
     getStorageItem("period") || { minutes: 60 }
   );
@@ -258,6 +300,10 @@ const AgentSystemDashboard = () => {
       </div>
     </>
   );
+};
+
+AgentSystemDashboard.propTypes = {
+  facts: PropTypes.instanceOf(Array).isRequired,
 };
 
 export default AgentSystemDashboard;
