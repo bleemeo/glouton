@@ -396,7 +396,9 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 		Free:  topInfo.Swap.Free,
 		Used:  topInfo.Swap.Used,
 	}
-	return &Topinfo{Time: time.Now(), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users, CPU: CpuRes, Memory: MemoryRes, Swap: SwapRes, Processes: processesRes}, nil
+	return &Topinfo{Time: time.Now(), Uptime: topInfo.Uptime, Loads: topInfo.Loads,
+		Users: topInfo.Users, CPU: CpuRes, Memory: MemoryRes,
+		Swap: SwapRes, Processes: processesRes}, nil
 }
 
 // Facts returns a list of facts discovered by agent.

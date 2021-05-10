@@ -3,7 +3,6 @@ import React, { useState } from "react";
 import PropTypes from "prop-types";
 
 import FaIcon from "../UI/FaIcon";
-import { LabelName } from "../utils";
 import { formatDateTime, _formatCpuTime } from "../utils/formater";
 import { renderDisk } from "./utils";
 import { renderNetwork, renderDonutDocker } from "../UI";
