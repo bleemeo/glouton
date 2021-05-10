@@ -617,10 +617,6 @@ func (c *Connector) HealthCheck() bool {
 	return ok
 }
 
-func (c *Connector) MetricAgentWhitelist() string {
-	return c.cache.CurrentAccountConfig().MetricsAgentWhitelist
-}
-
 func (c *Connector) emitInternalMetric() {
 	c.l.RLock()
 	defer c.l.RUnlock()

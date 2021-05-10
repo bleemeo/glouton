@@ -389,7 +389,7 @@ func (m *MetricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 	return f
 }
 
-func (m *MetricFilter) RebuildDynamicLists(scrapper *promexporter.DynamicScrapper, metricAgentWhitelist string) error {
+func (m *MetricFilter) RebuildDynamicLists(scrapper *promexporter.DynamicScrapper) error {
 	allowList := []matcher.Matchers{}
 	denyList := []matcher.Matchers{}
 	errors := merge.MultiError{}
@@ -405,18 +405,6 @@ func (m *MetricFilter) RebuildDynamicLists(scrapper *promexporter.DynamicScrappe
 
 		allowList = append(allowList, allowMatchers...)
 		denyList = append(denyList, denyMatchers...)
-	}
-
-	agentWhitelist := strings.Split(metricAgentWhitelist, ",")
-
-	for _, val := range agentWhitelist {
-		allowVal, err := matcher.NormalizeMetric(val)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		allowList = append(allowList, allowVal)
 	}
 
 	m.l.Lock()

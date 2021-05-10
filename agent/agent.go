@@ -1441,7 +1441,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			if a.dynamicScrapper != nil {
 				if containers, err := a.containerRuntime.Containers(ctx, time.Hour, false); err == nil {
 					a.dynamicScrapper.Update(containers)
-					err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, a.bleemeoConnector.MetricAgentWhitelist())
+					err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper)
 
 					if err != nil {
 						logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
