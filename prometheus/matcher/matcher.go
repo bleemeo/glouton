@@ -19,7 +19,6 @@ package matcher
 import (
 	"fmt"
 	"glouton/types"
-	"net/url"
 	"strings"
 
 	dto "github.com/prometheus/client_model/go"
@@ -133,12 +132,4 @@ func (m *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
 	}
 
 	return didMatch
-}
-
-// HostPort return host:port.
-func HostPort(u *url.URL) string {
-	hostname := u.Hostname()
-	port := u.Port()
-
-	return hostname + ":" + port
 }

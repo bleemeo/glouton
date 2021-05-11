@@ -65,7 +65,6 @@ import (
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/common"
-	"glouton/prometheus/matcher"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
@@ -542,12 +541,14 @@ func (a *agent) run() { //nolint:gocyclo
 	a.metricFilter = mFilter
 	a.store = store.New()
 	a.gathererRegistry = &registry.Registry{
-		PushPoint:      a.store,
-		FQDN:           fqdn,
-		BleemeoAgentID: a.BleemeoAgentID(),
-		GloutonPort:    strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
-		MetricFormat:   a.metricFormat,
-		Filter:         mFilter,
+		Option: registry.Option{
+			PushPoint:             a.store,
+			FQDN:                  fqdn,
+			BleemeoAgentID:        a.BleemeoAgentID(),
+			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
+			MetricFormat:          a.metricFormat,
+			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
+		},
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
@@ -748,6 +749,11 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	if a.config.Bool("bleemeo.enabled") {
+		scaperName := a.config.String("blackbox.scraper_name")
+		if scaperName == "" {
+			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Int("web.listener.port"))
+		}
+
 		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.config,
 			State:                   a.state,
@@ -763,6 +769,7 @@ func (a *agent) run() { //nolint:gocyclo
 			UpdateUnits:             a.threshold.SetUnits,
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+			BlackboxScraperName:     scaperName,
 		})
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
@@ -1814,8 +1821,10 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob:      name,
-				types.LabelMetaScrapeInstance: matcher.HostPort(u),
+				types.LabelMetaScrapeJob: name,
+				// HostPort could be empty, but this ExtraLabels is used by Registry which
+				// correctly handle empty value value (drop the label).
+				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
 			},
 			URL:       u,
 			AllowList: globalAllow,

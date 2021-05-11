@@ -40,6 +40,7 @@ type GlobalOption struct {
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
 	NotifyFirstRegistration func(ctx context.Context)
+	BlackboxScraperName     string
 
 	UpdateMetricResolution func(resolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)

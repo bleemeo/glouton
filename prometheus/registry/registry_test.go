@@ -171,7 +171,7 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer(gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value"}, false); err != nil {
+	if id1, err = reg.RegisterGatherer(gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value", "empty-value-to-dropped": ""}, false); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
@@ -374,6 +374,20 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			wantAnnotations: types.MetricAnnotations{},
 		},
 		{
+			name:   "node_exporter, with LabelMetaSendScraperUUID",
+			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
+			args: args{map[string]string{
+				types.LabelMetaGloutonFQDN:     "hostname",
+				types.LabelMetaGloutonPort:     "8015",
+				types.LabelMetaPort:            "8015",
+				types.LabelMetaSendScraperUUID: "yes",
+			}},
+			want: labels.FromMap(map[string]string{
+				types.LabelInstance: "hostname:8015",
+			}),
+			wantAnnotations: types.MetricAnnotations{},
+		},
+		{
 			name:   "mysql container",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
@@ -404,6 +418,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaBleemeoUUID:      "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
 				// necessary for some labels to be applied
 				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
+				types.LabelMetaSendScraperUUID:  "yes",
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance:     "icmp://8.8.8.8",
@@ -426,6 +441,7 @@ func TestRegistry_applyRelabel(t *testing.T) {
 				types.LabelMetaBleemeoUUID:    "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
 				// necessary for some labels to be applied
 				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
+				types.LabelMetaSendScraperUUID:  "yes",
 			}},
 			want: labels.FromMap(map[string]string{
 				types.LabelInstance:     "icmp://8.8.8.8",
@@ -463,30 +479,34 @@ func TestRegistry_runOnce(t *testing.T) {
 	)
 
 	regBleemeo := &Registry{
-		MetricFormat: types.MetricFormatBleemeo,
-		PushPoint: pushFunction(func(points []types.MetricPoint) {
-			l.Lock()
-			bleemeoPoints = append(bleemeoPoints, points...)
-			l.Unlock()
-		}),
-		BleemeoAgentID: "fake-uuid",
-		FQDN:           "example.com",
-		GloutonPort:    "1234",
-		Filter:         &fakeFilter{},
+		Option: Option{
+			MetricFormat: types.MetricFormatBleemeo,
+			PushPoint: pushFunction(func(points []types.MetricPoint) {
+				l.Lock()
+				bleemeoPoints = append(bleemeoPoints, points...)
+				l.Unlock()
+			}),
+			BleemeoAgentID: "fake-uuid",
+			FQDN:           "example.com",
+			GloutonPort:    "1234",
+		},
+		Filter: &fakeFilter{},
 	}
 	regBleemeo.init()
 
 	regPrometheus := &Registry{
-		MetricFormat: types.MetricFormatPrometheus,
-		PushPoint: pushFunction(func(points []types.MetricPoint) {
-			l.Lock()
-			prometheusPoints = append(prometheusPoints, points...)
-			l.Unlock()
-		}),
-		BleemeoAgentID: "fake-uuid",
-		FQDN:           "example.com",
-		GloutonPort:    "1234",
-		Filter:         &fakeFilter{},
+		Option: Option{
+			MetricFormat: types.MetricFormatPrometheus,
+			PushPoint: pushFunction(func(points []types.MetricPoint) {
+				l.Lock()
+				prometheusPoints = append(prometheusPoints, points...)
+				l.Unlock()
+			}),
+			BleemeoAgentID: "fake-uuid",
+			FQDN:           "example.com",
+			GloutonPort:    "1234",
+		},
+		Filter: &fakeFilter{},
 	}
 	regPrometheus.init()
 

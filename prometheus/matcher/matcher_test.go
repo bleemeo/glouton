@@ -18,7 +18,6 @@ package matcher
 
 import (
 	"glouton/types"
-	"net/url"
 	"testing"
 
 	dto "github.com/prometheus/client_model/go"
@@ -180,17 +179,6 @@ func Test_Add_Error(t *testing.T) {
 
 	if err == nil {
 		t.Errorf("An error was not caught: expected a regex compile error on metric %s", metric)
-	}
-}
-
-func Test_Host_Port(t *testing.T) {
-	url, _ := url.Parse("https://example.com:8080")
-	want := "example.com:8080"
-
-	got := HostPort(url)
-
-	if got != want {
-		t.Errorf("An error occurred: expected %s, got %s", want, got)
 	}
 }
 
