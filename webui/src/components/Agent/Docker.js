@@ -25,22 +25,18 @@ const DockerProcesses = ({ containerId, name }) => {
       style={{ minHeight: "10rem" }}
     >
       <h3>Processes</h3>
-      <FetchSuspense
-        isLoading={isLoading}
-        error={error}
-        processes={processes}
-      >
+      <FetchSuspense isLoading={isLoading} error={error} processes={processes}>
         {({ processes }) => {
           const result = processes;
           const dockerProcesses =
-            result && result['Processes'] ? result['Processes'] : [];
+            result && result["Processes"] ? result["Processes"] : [];
           if (!dockerProcesses || dockerProcesses.length === 0) {
             return <h4>There are no processes related to {name}</h4>;
           } else {
-            let memTotal = result['Memory']['Total'];
+            let memTotal = result["Memory"]["Total"];
             dockerProcesses.map((process) => {
               process.mem_percent = d3.format(".2r")(
-                ((process.memory_rss) / memTotal) * 100
+                (process.memory_rss / memTotal) * 100
               );
               process.new_cpu_times = _formatCpuTime(process.cpu_time);
               return process;
