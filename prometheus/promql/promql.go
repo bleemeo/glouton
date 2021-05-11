@@ -1,7 +1,6 @@
 // Disable stylecheck because is complain on error message (should not be capitalized)
 // but we prefer keeping the exact message used by Prometheus.
 
-//nolint: stylecheck
 package promql
 
 import (
@@ -36,12 +35,6 @@ const (
 	statusError   status = "error"
 )
 
-//nolint: gochecknoglobals
-var (
-	minTime = time.Unix(0, 0).UTC()
-	maxTime = time.Unix(math.MaxInt32*3600, 0).UTC()
-)
-
 type response struct {
 	Status    status      `json:"status"`
 	Data      interface{} `json:"data,omitempty"`
@@ -59,6 +52,12 @@ const (
 	errorNotFound errorType = "not_found"
 )
 
+var errorStartTime = errors.New("end timestamp must not be before start time")
+var errorPositiveInteger = errors.New("zero or negative query resolution step widths are not accepted. Try a positive integer")
+var errorMaxStep = errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
+var errorParseDuration = errors.New("cannot parse to a valid duration")
+var errorInvalidTimestamp = errors.New("cannot parse to a valid timestamp")
+
 type PromQL struct {
 	CORSOrigin *regexp.Regexp
 
@@ -71,6 +70,7 @@ type apiFunc func(r *http.Request, st *store.Store) apiFuncResult
 // Register the API's endpoints in the given router.
 func (p *PromQL) Register(st *store.Store) http.Handler {
 	r := chi.NewRouter()
+
 	p.init()
 
 	wrap := func(f apiFunc) http.HandlerFunc {
@@ -106,6 +106,7 @@ func (p *PromQL) Register(st *store.Store) http.Handler {
 
 	r.Get("/query_range", wrap(p.queryRange))
 	r.Post("/query_range", wrap(p.queryRange))
+
 	return r
 }
 
@@ -152,28 +153,14 @@ func parseTime(s string) (time.Time, error) {
 		return t, nil
 	}
 
-	return time.Time{}, fmt.Errorf("cannot parse %q to a valid timestamp", s)
-}
-
-func parseTimeParam(r *http.Request, paramName string, defaultValue time.Time) (time.Time, error) {
-	val := r.FormValue(paramName)
-	if val == "" {
-		return defaultValue, nil
-	}
-
-	result, err := parseTime(val)
-	if err != nil {
-		return time.Time{}, fmt.Errorf("Invalid time value for '%s': %w", paramName, err)
-	}
-
-	return result, nil
+	return time.Time{}, errorInvalidTimestamp
 }
 
 func parseDuration(s string) (time.Duration, error) {
 	if d, err := strconv.ParseFloat(s, 64); err == nil {
 		ts := d * float64(time.Second)
 		if ts > float64(math.MaxInt64) || ts < float64(math.MinInt64) {
-			return 0, fmt.Errorf("cannot parse %q to a valid duration. It overflows int64", s)
+			return 0, errorParseDuration
 		}
 
 		return time.Duration(ts), nil
@@ -183,7 +170,7 @@ func parseDuration(s string) (time.Duration, error) {
 		return time.Duration(d), nil
 	}
 
-	return 0, fmt.Errorf("cannot parse %q to a valid duration", s)
+	return 0, errorParseDuration
 }
 
 func returnAPIError(err error) *apiError {
@@ -219,9 +206,7 @@ func (p *PromQL) queryRange(r *http.Request, st *store.Store) (result apiFuncRes
 	}
 
 	if end.Before(start) {
-		err := errors.New("end timestamp must not be before start time")
-
-		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
+		return apiFuncResult{nil, &apiError{errorBadData, errorStartTime}, nil, nil}
 	}
 
 	step, err := parseDuration(r.FormValue("step"))
@@ -232,17 +217,13 @@ func (p *PromQL) queryRange(r *http.Request, st *store.Store) (result apiFuncRes
 	}
 
 	if step <= 0 {
-		err := errors.New("zero or negative query resolution step widths are not accepted. Try a positive integer")
-
-		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
+		return apiFuncResult{nil, &apiError{errorBadData, errorPositiveInteger}, nil, nil}
 	}
 
 	// For safety, limit the number of returned points per timeseries.
 	// This is sufficient for 60s resolution for a week or 1h resolution for a year.
 	if end.Sub(start)/step > 11000 {
-		err := errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
-
-		return apiFuncResult{nil, &apiError{errorBadData, err}, nil, nil}
+		return apiFuncResult{nil, &apiError{errorBadData, errorMaxStep}, nil, nil}
 	}
 
 	ctx := r.Context()

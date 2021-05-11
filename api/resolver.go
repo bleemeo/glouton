@@ -372,7 +372,8 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 			processesRes = append(processesRes, p)
 		}
 	}
-	CpuRes := &CPUUsage{
+
+	cpuRes := &CPUUsage{
 		Nice:      topInfo.CPU.Nice,
 		System:    topInfo.CPU.System,
 		User:      topInfo.CPU.User,
@@ -384,21 +385,21 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 		SoftIrq:   topInfo.CPU.SoftIRQ,
 		Steal:     topInfo.CPU.Steal,
 	}
-	MemoryRes := &MemoryUsage{
+	memoryRes := &MemoryUsage{
 		Total:   topInfo.Memory.Total,
 		Used:    topInfo.Memory.Used,
 		Free:    topInfo.Memory.Free,
 		Buffers: topInfo.Memory.Buffers,
 		Cached:  topInfo.Memory.Cached,
 	}
-	SwapRes := &SwapUsage{
+	swapRes := &SwapUsage{
 		Total: topInfo.Swap.Total,
 		Free:  topInfo.Swap.Free,
 		Used:  topInfo.Swap.Used,
 	}
-	return &Topinfo{Time: time.Now(), Uptime: topInfo.Uptime, Loads: topInfo.Loads,
-		Users: topInfo.Users, CPU: CpuRes, Memory: MemoryRes,
-		Swap: SwapRes, Processes: processesRes}, nil
+
+	return &Topinfo{Time: time.Now(), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
+		CPU: cpuRes, Memory: memoryRes, Swap: swapRes, Processes: processesRes}, nil
 }
 
 // Facts returns a list of facts discovered by agent.

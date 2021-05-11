@@ -176,7 +176,6 @@ export default class AgentProcesses extends React.Component {
     const { top, sizePage } = this.props;
 
     let info = null;
-    let filterInput = null;
     let processesTable = null;
     if (top["Processes"] && !isEmpty(top["Memory"])) {
       const filteredProcesses = this.getFilteredProcesses();
@@ -323,7 +322,6 @@ export default class AgentProcesses extends React.Component {
         <AgentProcessesInfo top={top} />
         <div className="marginOffset">
           {info}
-          {filterInput}
           {processesTable}
         </div>
       </div>

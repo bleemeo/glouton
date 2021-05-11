@@ -143,6 +143,7 @@ func (api *API) init() {
 			logger.Printf("Error while loading diagnostic.html. Local UI will be broken: %v", err)
 		}
 	}
+
 	promql := promql.PromQL{}
 	router.Mount("/api/v1", promql.Register(api.DB))
 	router.Handle("/metrics", api.PrometheurExporter)
