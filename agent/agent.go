@@ -1810,7 +1810,9 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob:      name,
+				types.LabelMetaScrapeJob: name,
+				// HostPort could be empty, but this ExtraLabels is used by Registry which
+				// correctly handle empty value value (drop the label).
 				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
 			},
 			URL:            u,
