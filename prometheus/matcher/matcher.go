@@ -124,10 +124,9 @@ func matchesLabels(m *labels.Matcher, lbls map[string]string) bool {
 
 func (m *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
 	didMatch := true
+	labels := dto2Labels(name, mt)
 
 	for _, matcher := range *m {
-		labels := dto2Labels(name, mt)
-
 		if !matchesLabels(matcher, labels) {
 			didMatch = false
 		}

@@ -23,6 +23,9 @@ import (
 	"glouton/types"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
 
@@ -42,6 +45,24 @@ metric:
         allow_metrics:
           - process_cpu_seconds_total
 
+service:
+  - id: myapplication
+    jmx_port: 1234
+    jmx_metrics:
+    - name: heap_size_mb
+      mbean: java.lang:type=Memory
+      attribute: HeapMemoryUsage
+      path: used
+      scale: 0.000000954  # 1 / 1024 / 1024
+    - name: request
+      mbean: com.bleemeo.myapplication:type=ClientRequest
+      attribute: Count
+      derive: True
+  - id: "apache"
+    address: "127.0.0.1"
+    port: 80
+    http_path: "/"
+    http_host: "127.0.0.1:80"
 `
 
 const defaultConf = `
@@ -96,6 +117,20 @@ func Test_Basic_Build(t *testing.T) {
 					Name:  types.LabelScrapeJob,
 					Type:  labels.MatchEqual,
 					Value: "my_application123",
+				},
+			},
+			{
+				&labels.Matcher{
+					Name:  types.LabelName,
+					Type:  labels.MatchEqual,
+					Value: "myapplication_heap_size_mb",
+				},
+			},
+			{
+				&labels.Matcher{
+					Name:  types.LabelName,
+					Type:  labels.MatchEqual,
+					Value: "myapplication_request",
 				},
 			},
 		},
@@ -262,5 +297,201 @@ func Test_Basic_FilterPoints(t *testing.T) {
 				t.Errorf("Invalid value of label %s: expected %s, got %s", key, want[idx].Labels[key], val)
 			}
 		}
+	}
+}
+
+func Test_Basic_FilterFamilies(t *testing.T) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(basicConf))
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	new, err := NewMetricFilter(&cfg)
+
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	metricNames := []string{"cpu_seconds", "process_cpu_seconds_total", "whatever"}
+	lblsNames := []string{"scrape_instance", "scrape_job"}
+	lblsValues := []string{"localhost:8015", "my_application123", "my_application456"}
+
+	fm := []*dto.MetricFamily{
+		{ // should not be filtered out
+			Name: &metricNames[0],
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+					},
+				},
+			},
+		},
+		{ // should be half filtered out, so the family should NOT be removed
+			Name: &metricNames[1],
+			Metric: []*dto.Metric{
+				{ // should be filtered out
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+						{
+							Name:  &lblsNames[1],
+							Value: &lblsValues[1],
+						},
+					},
+				},
+				{ // should NOT be filtered out
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+						{
+							Name:  &lblsNames[1],
+							Value: &lblsValues[2],
+						},
+					},
+				},
+			},
+		},
+		{ // should be entirely filtered out, so the family should be removed
+			Name: &metricNames[2],
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+					},
+				},
+			},
+		},
+	}
+
+	want := []*dto.MetricFamily{
+		{
+			Name: &metricNames[0],
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+					},
+				},
+			},
+		},
+		{
+			Name: &metricNames[1],
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+						{
+							Name:  &lblsNames[1],
+							Value: &lblsValues[2],
+						},
+					},
+				},
+			},
+		},
+	}
+
+	got := new.FilterFamilies(fm)
+
+	fmt.Println(got)
+
+	res := cmp.Diff(got, want,
+		cmpopts.IgnoreUnexported(dto.MetricFamily{}), cmpopts.IgnoreUnexported(dto.Metric{}),
+		cmpopts.IgnoreUnexported(dto.LabelPair{}))
+
+	if res != "" {
+		t.Errorf("got() != expected(): %s", res)
+	}
+}
+
+type fakeScrapper struct {
+	name             string
+	registeredLabels map[string]map[string]string
+	containersLabels map[string]map[string]string
+}
+
+func (f *fakeScrapper) GetContainersLabels() map[string]map[string]string {
+	return f.containersLabels
+}
+
+func (f *fakeScrapper) GetRegisteredLabels() map[string]map[string]string {
+	return f.registeredLabels
+}
+
+func Test_RebuildDynamicList(t *testing.T) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(basicConf))
+	if err != nil {
+		t.Error(err)
+	}
+
+	mf, _ := NewMetricFilter(&cfg)
+
+	d := fakeScrapper{
+		name: "jobname",
+		registeredLabels: map[string]map[string]string{
+			"containerURL": {
+				types.LabelMetaScrapeInstance: "containerURL",
+				types.LabelMetaScrapeJob:      "discovered-exporters",
+				"test":                        "salut",
+			},
+		},
+		containersLabels: map[string]map[string]string{
+			"containerURL": {
+				"prometheus.io/scrape":  "true",
+				"glouton.allow_metrics": "something,else",
+				"glouton.deny_metrics":  "other",
+			},
+		},
+	}
+
+	allowListWant := make([]matcher.Matchers, len(mf.allowList))
+	denyListWant := make([]matcher.Matchers, len(mf.denyList))
+
+	copy(allowListWant, mf.allowList)
+	copy(denyListWant, mf.denyList)
+
+	new, _ := matcher.NormalizeMetric("{__name__=\"something\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	new2, _ := matcher.NormalizeMetric("{__name__=\"else\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	new3, _ := matcher.NormalizeMetric("{__name__=\"other\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+
+	allowListWant = append(allowListWant, new)
+	allowListWant = append(allowListWant, new2)
+	denyListWant = append(denyListWant, new3)
+
+	err = mf.RebuildDynamicLists(&d)
+	if err != nil {
+		t.Errorf("Unexpected error: %w", err)
+	}
+
+	res := cmp.Diff(mf.allowList, allowListWant, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	if res != "" {
+		t.Errorf("got != expected: %s", res)
+	}
+
+	res = cmp.Diff(mf.denyList, denyListWant, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	if res != "" {
+		t.Errorf("got != expected: %s", res)
 	}
 }

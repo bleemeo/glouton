@@ -20,7 +20,6 @@ import (
 	"errors"
 	"fmt"
 	"glouton/config"
-	"glouton/discovery/promexporter"
 	"glouton/facts/container-runtime/merge"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
@@ -447,6 +446,7 @@ func (m *MetricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 
 		if len(family.Metric) != 0 {
 			f[i] = family
+			i++
 		}
 	}
 
@@ -455,7 +455,12 @@ func (m *MetricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 	return f
 }
 
-func (m *MetricFilter) RebuildDynamicLists(scrapper *promexporter.DynamicScrapper) error {
+type dynamicScrapper interface {
+	GetRegisteredLabels() map[string]map[string]string
+	GetContainersLabels() map[string]map[string]string
+}
+
+func (m *MetricFilter) RebuildDynamicLists(scrapper dynamicScrapper) error {
 	allowList := []matcher.Matchers{}
 	denyList := []matcher.Matchers{}
 	errors := merge.MultiError{}
@@ -500,8 +505,6 @@ func addNewSource(cLabels map[string]string, extraLabels map[string]string) ([]m
 		denyList = strings.Split(deny, ",")
 	}
 
-	logger.V(0).Println(allowList)
-	logger.V(0).Println(denyList)
 	allowMatchers, denyMatchers, err := newMatcherSource(allowList, denyList,
 		extraLabels[types.LabelMetaScrapeInstance], extraLabels[types.LabelMetaScrapeJob])
 
