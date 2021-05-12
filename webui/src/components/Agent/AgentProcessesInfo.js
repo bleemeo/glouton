@@ -12,6 +12,13 @@ const PercentBar = ({ color, title, percent }) => (
     style={{ backgroundColor: color, width: percent + "%" }}
   />
 );
+
+PercentBar.propTypes = {
+  color: PropTypes.string.isRequired,
+  title: PropTypes.string.isRequired,
+  percent: PropTypes.number.isRequired,
+};
+
 const formatUptime = (uptimeSeconds) => {
   const uptimeDays = Math.trunc(uptimeSeconds / (24 * 60 * 60));
   const uptimeHours = Math.trunc((uptimeSeconds % (24 * 60 * 60)) / (60 * 60));

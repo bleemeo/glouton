@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo } from "react";
+import React, { useEffect } from "react";
 
 import AgentProcesses from "./AgentProcesses";
 import Loading from "../UI/Loading";
 import Panel from "../UI/Panel";
 import QueryError from "../UI/QueryError";
 import { useFetch } from "../utils/hooks";
-import { isNullOrUndefined, LabelName } from "../utils";
+import { isNullOrUndefined } from "../utils";
 import FetchSuspense from "../UI/FetchSuspense";
 import { PROCESSES } from "../utils/gqlRequests";
 

@@ -17,11 +17,9 @@ import {
   widgetsPrometheus,
 } from "../Metric/DefaultDashboardMetrics";
 
-var gaugesBar = [];
-var widgets = [];
-
 const AgentSystemDashboard = ({ facts }) => {
-  console.log();
+  let gaugesBar = [];
+  let widgets = [];
   if (facts.find((f) => f.name === "metrics_format").value === "Bleemeo") {
     gaugesBar = gaugesBarBLEEMEO;
     widgets = widgetsBLEEMEO;

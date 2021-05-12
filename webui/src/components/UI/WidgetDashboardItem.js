@@ -3,13 +3,12 @@ import PropTypes from "prop-types";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import {
   chartTypes,
-  computeEnd,
   composeMetricName,
   isShallowEqual,
   LabelName,
 } from "../utils";
 import LineChart from "./LineChart";
-import { useFetch, POLL } from "../utils/hooks";
+import { POLL, httpFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
 
 const CPU = [
@@ -42,24 +41,10 @@ const WidgetDashboardItem = ({
   const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
-        //        const resultGauge = points.sort((a, b) => {
-        //          const aString = b.labels.map(() => "${l.key}=${l.value}").join(",");
-        //          const bString = b.labels.map(() => "${l.key}=${l.value}").join(",");
-        //          return aString.localeCompare(bString);
-        //        })[0];
-        //        const end = computeEnd(type, period);
-        //        let lastPoint = null;
-        //        let thresholds = null;
-        //        if (
-        //          resultGauge &&
-        //          resultGauge.points &&
-        //          new Date(resultGauge.points[resultGauge.points.length - 1].time) <=
-        //            new Date(end)
-        //        ) {
-        //          lastPoint = points[0][1];
-        //          thresholds = resultGauge.thresholds;
-        //        }
-        let lastPoint = points[0][1];
+        let lastPoint = 0;
+        for (const point in points) {
+          lastPoint += parseFloat(points[point]["values"][0][1]);
+        }
         let thresholds = null;
         return (
           <MetricGaugeItem
@@ -123,28 +108,25 @@ const WidgetDashboardItem = ({
     default:
       metricsFilter.push(metrics);
   }
-  const { isLoading, error, points, networkStatus } = useFetch(
-    "",
-    {
-      query: metrics,
-      start: period.from
-        ? new Date(period.from).toISOString()
-        : new Date(
-            new Date().setMinutes(new Date().getMinutes() - period.minutes)
-          ).toISOString(),
-      end: period.to
-        ? new Date(period.to).toISOString()
-        : new Date().toISOString(),
-      step: period.minutes ? period.minutes : 15,
-    },
-    refetchTime * 1000
-  );
+  const { isLoading, data, error } = httpFetch({
+    query: metrics,
+    start: period.from
+      ? new Date(period.from).toISOString()
+      : new Date(
+          new Date().setSeconds(new Date().getSeconds() - 10)
+        ).toISOString(),
+    end: period.to
+      ? new Date(period.to).toISOString()
+      : new Date().toISOString(),
+    step: period.minutes ? period.minutes : 15,
+  });
+  const networkStatus = POLL;
+  const points = data;
   let hasError = error;
   if (previousError.current && !error && networkStatus === POLL) {
     hasError = previousError.current;
   }
   previousError.current = error;
-  console.log(isLoading, error, points, networkStatus);
   return (
     <div>
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}

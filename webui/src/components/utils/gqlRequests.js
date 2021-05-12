@@ -1,5 +1,4 @@
 import { gql } from "apollo-boost";
-import { LabelName } from ".";
 
 // FACTS AND DETAILS
 

@@ -112,7 +112,7 @@ export const widgetsBLEEMEO = [
   },
 ];
 
-export const widgetsPrometheus = [
+export const widgetsPrometheus = []; /*[
   {
     title: "Processor Usage",
     type: chartTypes[2],
@@ -193,4 +193,4 @@ export const widgetsPrometheus = [
     unit: UNIT_PERCENTAGE,
     metrics: ["(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100"],
   },
-];
+];*/
