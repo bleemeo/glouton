@@ -81,7 +81,6 @@ type metricFilter interface {
 //   when gatherer was registered.
 type Registry struct {
 	Option
-	Filter metricFilter
 
 	l sync.Mutex
 
@@ -113,6 +112,7 @@ type Option struct {
 	BleemeoAgentID        string
 	MetricFormat          types.MetricFormat
 	BlackboxSentScraperID bool
+	Filter                metricFilter
 }
 
 type registration struct {
@@ -679,6 +679,10 @@ func sleepToAlign(interval time.Duration) {
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
+	if r.Filter != nil {
+		points = r.Filter.FilterPoints(points)
+	}
+
 	r.l.Lock()
 
 	for r.blockPushPoint {

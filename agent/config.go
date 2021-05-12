@@ -134,8 +134,8 @@ var defaultConfig = map[string]interface{}{
 	"logging.package_levels":                    "",
 	"metric.prometheus.targets":                 []interface{}{},
 	"metric.prometheus.include_default_metrics": true,
-	"metric.prometheus.allow_metrics":           []interface{}{},
-	"metric.prometheus.deny_metrics":            []interface{}{},
+	"metric.allow_metrics":                      []interface{}{},
+	"metric.deny_metrics":                       []interface{}{},
 	"metric.softstatus_period_default":          5 * 60,
 	"metric.softstatus_period": map[string]interface{}{
 		"system_pending_updates":          86400,
@@ -200,7 +200,7 @@ func migrateScrapperMetrics(cfg *config.Configuration) (warnings []error) {
 }
 
 func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPath string) (warnings []error) {
-	migratedTargets := []interface{}{}
+	migratedTargets := []string{}
 	v, ok := cfg.Get(deprecatedPath)
 
 	if !ok {
@@ -214,15 +214,22 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 
 	if len(vTab) > 0 {
 		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
-		migratedTargets = append(migratedTargets, vTab...)
+
+		for _, val := range vTab {
+			migratedTargets = append(migratedTargets, val.(string))
+		}
 	}
 
 	if len(migratedTargets) > 0 {
 		existing, _ := cfg.Get(correctPath)
 		targets, _ := existing.([]interface{})
-		targets = append(targets, migratedTargets...)
+
+		for _, val := range migratedTargets {
+			targets = append(targets, val)
+		}
 
 		cfg.Set(correctPath, targets)
+		cfg.Delete(deprecatedPath)
 	}
 
 	return warnings

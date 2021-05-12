@@ -57,7 +57,7 @@ func NormalizeMetric(metric string) (Matchers, error) {
 	return m, nil
 }
 
-//Get returns the matcher with the specided label as Name.
+//Get returns a matcher with the specided label as Name.
 // nil will be returned if not matcher were found.
 func (m *Matchers) Get(label string) *labels.Matcher {
 	for _, val := range *m {
@@ -113,23 +113,19 @@ func dto2Labels(name string, input *dto.Metric) map[string]string {
 }
 
 func matchesLabels(m *labels.Matcher, lbls map[string]string) bool {
-	val, found := lbls[m.Name]
-	if !found {
-		val = ""
-	}
+	val := lbls[m.Name]
 
 	return m.Matches(val)
 }
 
 func (m *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
-	didMatch := true
 	labels := dto2Labels(name, mt)
 
 	for _, matcher := range *m {
 		if !matchesLabels(matcher, labels) {
-			didMatch = false
+			return false
 		}
 	}
 
-	return didMatch
+	return true
 }

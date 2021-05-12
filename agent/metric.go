@@ -17,8 +17,6 @@
 package agent
 
 import (
-	"errors"
-	"fmt"
 	"glouton/config"
 	"glouton/facts/container-runtime/merge"
 	"glouton/logger"
@@ -30,8 +28,6 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
-
-var errCantCast = errors.New("could not convert field to correct type")
 
 //nolint:gochecknoglobals
 var defaultMetrics []string = []string{
@@ -175,8 +171,8 @@ var defaultMetrics []string = []string{
 	"*_jvm_non_heap_used",
 }
 
-//MetricFilter is a thread-safe holder of an allow / deny metrics list.
-type MetricFilter struct {
+//metricFilter is a thread-safe holder of an allow / deny metrics list.
+type metricFilter struct {
 
 	// staticList contains the matchers generated from static source (config file).
 	// They won't change at runtime, and don't need to be rebuilt
@@ -186,11 +182,11 @@ type MetricFilter struct {
 	// these list are the actual list used while filtering.
 	allowList []matcher.Matchers
 	denyList  []matcher.Matchers
-	l         sync.Mutex
-	config    *config.Configuration
+
+	l sync.Mutex
 }
 
-func buildMatcherList(config *config.Configuration, listType string) ([]matcher.Matchers, error) {
+func buildMatcherList(config *config.Configuration, listType string) []matcher.Matchers {
 	metricListType := listType + "_metrics"
 	metricList := []matcher.Matchers{}
 	globalList := config.StringList("metric." + metricListType)
@@ -198,7 +194,8 @@ func buildMatcherList(config *config.Configuration, listType string) ([]matcher.
 	for _, str := range globalList {
 		new, err := matcher.NormalizeMetric(str)
 		if err != nil {
-			return nil, err
+			logger.V(2).Printf("An error occurred while normalizing metric: %w", err)
+			continue
 		}
 
 		metricList = append(metricList, new)
@@ -206,13 +203,13 @@ func buildMatcherList(config *config.Configuration, listType string) ([]matcher.
 
 	metricList = addScrappersList(config, metricList, listType)
 
-	return metricList, nil
+	return metricList
 }
 
 func addScrappersList(config *config.Configuration, metricList []matcher.Matchers,
 	metricListType string) []matcher.Matchers {
 	promTargets, _ := config.Get("metric.prometheus.targets")
-	targetList := prometheusConfigToURLs(promTargets, []string{}, []string{})
+	targetList := prometheusConfigToURLs(promTargets)
 
 	for _, t := range targetList {
 		var list []string
@@ -253,25 +250,17 @@ func addScrappersList(config *config.Configuration, metricList []matcher.Matcher
 	return metricList
 }
 
-func (m *MetricFilter) buildList(config *config.Configuration) error {
-	var err error
-
+func (m *metricFilter) buildList(config *config.Configuration) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	m.staticAllowList, err = buildMatcherList(config, "allow")
-	if err != nil {
-		return err
-	}
+	m.staticAllowList = buildMatcherList(config, "allow")
 
 	if len(m.staticAllowList) > 0 {
 		logger.V(1).Println("Your allow list may not be compatible with your plan. Please your plan allowed metrics if you encounter any problem.")
 	}
 
-	m.staticDenyList, err = buildMatcherList(config, "deny")
-	if err != nil {
-		return err
-	}
+	m.staticDenyList = buildMatcherList(config, "deny")
 
 	includeDefault := config.Bool("metric.include_default_metrics")
 	if includeDefault {
@@ -285,84 +274,25 @@ func (m *MetricFilter) buildList(config *config.Configuration) error {
 		}
 	}
 
-	jmxMetrics, err := getJmxMetrics(config)
-	if err != nil {
-		return err
-	}
-
-	if len(jmxMetrics) > 0 {
-		for _, val := range jmxMetrics {
-			new, err := matcher.NormalizeMetric(val)
-			if err != nil {
-				return err
-			}
-
-			m.staticAllowList = append(m.staticAllowList, new)
-		}
-	}
-
 	m.allowList = m.staticAllowList
 	m.denyList = m.staticDenyList
 
-	return err
+	return nil
 }
 
-func getJmxMetrics(cfg *config.Configuration) ([]string, error) {
-	res := []string{}
-	serviceListRaw, found := cfg.Get("service")
-
-	if !found {
-		return []string{}, nil
-	}
-
-	serviceList, ok := serviceListRaw.([]interface{})
-	if !ok {
-		return nil, fmt.Errorf("%w: service", errCantCast)
-	}
-
-	for _, service := range serviceList {
-		srv, ok := service.(map[string]interface{})
-		if !ok {
-			continue
-		}
-
-		if srv["id"] == nil || srv["jmx_metrics"] == nil {
-			continue
-		}
-
-		nameList, ok := srv["jmx_metrics"].([]interface{})
-		if !ok {
-			continue
-		}
-
-		for _, val := range nameList {
-			metric, ok := val.(map[string]interface{})
-			if !ok {
-				continue
-			}
-
-			name := metric["name"].(string)
-
-			res = append(res, srv["id"].(string)+"_"+name)
-		}
-	}
-
-	return res, nil
-}
-
-func NewMetricFilter(config *config.Configuration) (*MetricFilter, error) {
-	new := MetricFilter{}
+func NewMetricFilter(config *config.Configuration) (*metricFilter, error) {
+	new := metricFilter{}
 	err := new.buildList(config)
-
-	new.config = config
 
 	return &new, err
 }
 
-func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
+func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	i := 0
 
 	if len(m.denyList) != 0 {
+		m.l.Lock()
+
 		for _, point := range points {
 			didMatch := false
 
@@ -381,11 +311,15 @@ func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 			}
 		}
 
+		m.l.Unlock()
+
 		points = points[:i]
 		i = 0
 	}
 
 	for _, point := range points {
+		m.l.Lock()
+
 		for _, allowVal := range m.allowList {
 			matched := allowVal.MatchesPoint(point)
 			if matched {
@@ -395,6 +329,8 @@ func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 				break
 			}
 		}
+
+		m.l.Unlock()
 	}
 
 	points = points[:i]
@@ -402,7 +338,7 @@ func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	return points
 }
 
-func (m *MetricFilter) filterFamily(f *dto.MetricFamily) {
+func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 	i := 0
 
 	if len(m.denyList) > 0 {
@@ -438,7 +374,7 @@ func (m *MetricFilter) filterFamily(f *dto.MetricFamily) {
 	}
 }
 
-func (m *MetricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
+func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
 	i := 0
 
 	for _, family := range f {
@@ -460,7 +396,7 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *MetricFilter) RebuildDynamicLists(scrapper dynamicScrapper) error {
+func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper) error {
 	allowList := []matcher.Matchers{}
 	denyList := []matcher.Matchers{}
 	errors := merge.MultiError{}
@@ -515,23 +451,23 @@ func addNewSource(cLabels map[string]string, extraLabels map[string]string) ([]m
 	return allowMatchers, denyMatchers, nil
 }
 
-func addMetaLabels(metric string, scrapeInstance string, scrapeJob string) (string, error) {
+func addMetaLabels(metric string, scrapeInstance string, scrapeJob string) (matcher.Matchers, error) {
 	m, err := matcher.NormalizeMetric(metric)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	err = m.Add(types.LabelScrapeInstance, scrapeInstance, labels.MatchEqual)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	err = m.Add(types.LabelScrapeJob, scrapeJob, labels.MatchEqual)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return m.String(), nil
+	return m, nil
 }
 
 func newMatcherSource(allowList []string, denyList []string, scrapeInstance string, scrapeJob string) ([]matcher.Matchers, []matcher.Matchers, error) {
@@ -544,12 +480,7 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 			return nil, nil, err
 		}
 
-		res, err := matcher.NormalizeMetric(allowVal)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		allowMatchers = append(allowMatchers, res)
+		allowMatchers = append(allowMatchers, allowVal)
 	}
 
 	for _, val := range denyList {
@@ -558,12 +489,7 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 			return nil, nil, err
 		}
 
-		res, err := matcher.NormalizeMetric(denyVal)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		denyMatchers = append(denyMatchers, res)
+		denyMatchers = append(denyMatchers, denyVal)
 	}
 
 	return allowMatchers, denyMatchers, nil

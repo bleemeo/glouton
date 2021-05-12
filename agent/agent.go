@@ -107,7 +107,7 @@ type agent struct {
 	dynamicScrapper        *promexporter.DynamicScrapper
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
-	metricFilter           *MetricFilter
+	metricFilter           *metricFilter
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -548,6 +548,7 @@ func (a *agent) run() { //nolint:gocyclo
 			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
+			Filter:                mFilter,
 		},
 	}
 	a.threshold = threshold.New(a.state)
@@ -648,11 +649,7 @@ func (a *agent) run() { //nolint:gocyclo
 	var targets []*scrapper.Target
 
 	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(
-			promCfg,
-			a.config.StringList("metric.prometheus.allow_metrics"),
-			a.config.StringList("metric.prometheus.deny_metrics"),
-		)
+		targets = prometheusConfigToURLs(promCfg)
 	}
 
 	for _, target := range targets {
@@ -1794,7 +1791,7 @@ func setupContainer(hostRootPath string) {
 // prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string) (result []*scrapper.Target) {
+func prometheusConfigToURLs(cfg interface{}) (result []*scrapper.Target) {
 	configList, ok := cfg.([]interface{})
 	if !ok {
 		return nil
@@ -1827,8 +1824,8 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
 			},
 			URL:       u,
-			AllowList: globalAllow,
-			DenyList:  globalDeny,
+			AllowList: []string{},
+			DenyList:  []string{},
 		}
 
 		if allow, ok := vMap["allow_metrics"].([]interface{}); ok {

@@ -70,13 +70,6 @@ metric:
   include_default_metrics: true
 `
 
-const errorConf = `
-metric:
-  allow_metrics:
-    - cpu*[{[
-    - pro*
-`
-
 func Test_Basic_Build(t *testing.T) {
 	cfg := config.Configuration{}
 
@@ -86,7 +79,7 @@ func Test_Basic_Build(t *testing.T) {
 		return
 	}
 
-	want := MetricFilter{
+	want := metricFilter{
 		allowList: []matcher.Matchers{
 			{
 				&labels.Matcher{
@@ -180,22 +173,6 @@ func Test_Basic_Build(t *testing.T) {
 				t.Errorf("Generated deny list does not match the expected output: Expected %v, Got %v", correct, data)
 			}
 		}
-	}
-}
-
-func Test_error_invalid_conf(t *testing.T) {
-	cfg := config.Configuration{}
-
-	err := cfg.LoadByte([]byte(errorConf))
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	_, err = NewMetricFilter(&cfg)
-
-	if err == nil {
-		t.Errorf("No error returned with an invalid configuration")
 	}
 }
 

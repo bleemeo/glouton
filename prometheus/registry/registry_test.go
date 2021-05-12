@@ -489,8 +489,8 @@ func TestRegistry_runOnce(t *testing.T) {
 			BleemeoAgentID: "fake-uuid",
 			FQDN:           "example.com",
 			GloutonPort:    "1234",
+			Filter:         &fakeFilter{},
 		},
-		Filter: &fakeFilter{},
 	}
 	regBleemeo.init()
 
@@ -505,8 +505,8 @@ func TestRegistry_runOnce(t *testing.T) {
 			BleemeoAgentID: "fake-uuid",
 			FQDN:           "example.com",
 			GloutonPort:    "1234",
+			Filter:         &fakeFilter{},
 		},
-		Filter: &fakeFilter{},
 	}
 	regPrometheus.init()
 
