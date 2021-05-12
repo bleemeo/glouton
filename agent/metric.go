@@ -171,8 +171,8 @@ var defaultMetrics []string = []string{
 	"*_jvm_non_heap_used",
 }
 
-//metricFilter is a thread-safe holder of an allow / deny metrics list.
-type metricFilter struct {
+//MetricFilter is a thread-safe holder of an allow / deny metrics list.
+type MetricFilter struct {
 
 	// staticList contains the matchers generated from static source (config file).
 	// They won't change at runtime, and don't need to be rebuilt
@@ -250,7 +250,7 @@ func addScrappersList(config *config.Configuration, metricList []matcher.Matcher
 	return metricList
 }
 
-func (m *metricFilter) buildList(config *config.Configuration) error {
+func (m *MetricFilter) buildList(config *config.Configuration) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -280,14 +280,14 @@ func (m *metricFilter) buildList(config *config.Configuration) error {
 	return nil
 }
 
-func NewMetricFilter(config *config.Configuration) (*metricFilter, error) {
-	new := metricFilter{}
+func NewMetricFilter(config *config.Configuration) (*MetricFilter, error) {
+	new := MetricFilter{}
 	err := new.buildList(config)
 
 	return &new, err
 }
 
-func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
+func (m *MetricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	i := 0
 
 	if len(m.denyList) != 0 {
@@ -338,7 +338,7 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	return points
 }
 
-func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
+func (m *MetricFilter) filterFamily(f *dto.MetricFamily) {
 	i := 0
 
 	if len(m.denyList) > 0 {
@@ -374,7 +374,7 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 	}
 }
 
-func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
+func (m *MetricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
 	i := 0
 
 	for _, family := range f {
@@ -396,7 +396,7 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper) error {
+func (m *MetricFilter) RebuildDynamicLists(scrapper dynamicScrapper) error {
 	allowList := []matcher.Matchers{}
 	denyList := []matcher.Matchers{}
 	errors := merge.MultiError{}

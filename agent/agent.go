@@ -107,7 +107,7 @@ type agent struct {
 	dynamicScrapper        *promexporter.DynamicScrapper
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
-	metricFilter           *metricFilter
+	metricFilter           *MetricFilter
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex

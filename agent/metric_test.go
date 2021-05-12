@@ -79,7 +79,7 @@ func Test_Basic_Build(t *testing.T) {
 		return
 	}
 
-	want := metricFilter{
+	want := MetricFilter{
 		allowList: []matcher.Matchers{
 			{
 				&labels.Matcher{
