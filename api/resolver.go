@@ -398,7 +398,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 		Used:  topInfo.Swap.Used,
 	}
 
-	return &Topinfo{Time: time.Now(), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
+	return &Topinfo{Time: time.Unix(topInfo.Time, topInfo.Time), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
 		CPU: cpuRes, Memory: memoryRes, Swap: swapRes, Processes: processesRes}, nil
 }
 
