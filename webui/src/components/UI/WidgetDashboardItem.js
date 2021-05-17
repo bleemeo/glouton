@@ -41,7 +41,7 @@ const WidgetDashboardItem = ({
   const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
-        let lastPoint = 0.0;
+        let lastPoint = null;
         if (points[0]) {
           lastPoint = parseFloat(
             points[0]["values"][points[0]["values"].length - 1][1]

@@ -95,16 +95,16 @@ const AgentSystemDashboard = ({ facts }) => {
     setPeriod({ from: startDate, to: endDate });
   };
 
-  let editFromAndToModal = null;
-  if (showEditPeriodMal) {
-    editFromAndToModal = (
-      <EditPeriodModal
-        period={period}
-        onPeriodChange={(newPeriod) => setPeriod(newPeriod)}
-        onClose={() => setShowEditPeriodMal(false)}
-      />
-    );
-  }
+  //  let editFromAndToModal = null;
+  //  if (showEditPeriodMal) {
+  //    editFromAndToModal = (
+  //      <EditPeriodModal
+  //        period={period}
+  //        onPeriodChange={(newPeriod) => setPeriod(newPeriod)}
+  //        onClose={() => setShowEditPeriodMal(false)}
+  //      />
+  //    );
+  //  }
 
   let refetchTime = 10080;
   if (period.minutes) {
@@ -113,13 +113,10 @@ const AgentSystemDashboard = ({ facts }) => {
 
   return (
     <>
-      {editFromAndToModal}
       <div className="row">
         <div className="col-xl-12">
           <div className="btn-toolbar float-right" id="copy">
-            <button className="btn btn-outline-dark" onClick={onPeriodClick}>
-              {periodText}
-            </button>
+            <div className="btn btn-outline-dark">Last 1 hour</div>
           </div>
         </div>
       </div>
