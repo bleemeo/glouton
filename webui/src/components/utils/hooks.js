@@ -23,13 +23,11 @@ export const useFetch = (query, variables, pollInterval = 0) => {
 
 export const httpFetch = (variables) => {
   const [data, setData] = useState({});
-  const [url] = useState(
-    `/api/v1/query_range?query=${encodeURIComponent(
-      variables.query
-    )}&start=${encodeURIComponent(variables.start)}&end=${encodeURIComponent(
-      variables.end
-    )}&step=${encodeURIComponent(variables.step)}`
-  );
+  const url = `/api/v1/query_range?query=${encodeURIComponent(
+    variables.query
+  )}&start=${encodeURIComponent(variables.start)}&end=${encodeURIComponent(
+    variables.end
+  )}&step=${encodeURIComponent(variables.step)}`;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState(null);
 

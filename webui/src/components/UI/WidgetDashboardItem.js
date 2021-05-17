@@ -8,7 +8,7 @@ import {
   LabelName,
 } from "../utils";
 import LineChart from "./LineChart";
-import { POLL, httpFetch } from "../utils/hooks";
+import { httpFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
 
 const CPU = [
@@ -113,17 +113,16 @@ const WidgetDashboardItem = ({
     start: period.from
       ? new Date(period.from).toISOString()
       : new Date(
-          new Date().setSeconds(new Date().getSeconds() - 10)
+          new Date().setSeconds(new Date().getSeconds() - 9)
         ).toISOString(),
     end: period.to
       ? new Date(period.to).toISOString()
       : new Date().toISOString(),
-    step: period.minutes ? period.minutes : 15,
+    step: 10,
   });
-  const networkStatus = POLL;
   const points = data;
   let hasError = error;
-  if (previousError.current && !error && networkStatus === POLL) {
+  if (previousError.current && !error) {
     hasError = previousError.current;
   }
   previousError.current = error;
