@@ -34,18 +34,17 @@ export const httpFetch = (variables, delay = 3000) => {
 
   useEffect(() => {
     const fetchData = async () => {
-      setTimeout(() => setIsDelayState(true), delay)
+      setTimeout(() => setIsDelayState(true), delay);
       setIsError(null);
 
       try {
         const result = await axios(url);
 
         setData(result.data["data"]["result"]);
+        setIsLoading(false);
       } catch (error) {
         setIsError(error);
       }
-
-      setIsLoading(false);
       setIsDelayState(false);
     };
     fetchData();

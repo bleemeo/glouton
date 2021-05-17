@@ -82,7 +82,7 @@ export const gaugesBarBLEEMEO = [
   },
 ];
 
-export const widgetsBLEEMEO = [
+export const widgetsBLEEMEO = []; /*[
   { title: "Processor Usage", type: chartTypes[1], unit: UNIT_PERCENTAGE },
   { title: "Memory Usage", type: chartTypes[1], unit: UNIT_BYTE },
   {
@@ -139,7 +139,7 @@ export const widgetsBLEEMEO = [
     unit: UNIT_PERCENTAGE,
     metrics: ["swap_used_perc"],
   },
-];
+];*/
 
 export const widgetsPrometheusLinux = []; /*[
   {

@@ -41,7 +41,12 @@ const WidgetDashboardItem = ({
   const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
-        let lastPoint = parseFloat(points[0]["values"][0][1]);
+        let lastPoint = 0.0;
+        if (points[0]) {
+          lastPoint = parseFloat(
+            points[0]["values"][points[0]["values"].length - 1][1]
+          );
+        }
         let thresholds = null;
         return (
           <MetricGaugeItem
@@ -105,19 +110,20 @@ const WidgetDashboardItem = ({
     default:
       metricsFilter.push(metrics);
   }
-  const { isLoading, data, error } = httpFetch({
-    query: metrics,
-    start: period.from
-      ? new Date(period.from).toISOString()
-      : new Date(
-          new Date().setSeconds(new Date().getSeconds() - 9)
-        ).toISOString(),
-    end: period.to
-      ? new Date(period.to).toISOString()
-      : new Date().toISOString(),
-    step: 10,
-  },
-  10000
+  const { isLoading, data, error } = httpFetch(
+    {
+      query: metrics,
+      start: period.from
+        ? new Date(period.from).toISOString()
+        : new Date(
+            new Date().setMinutes(new Date().getMinutes() - 59)
+          ).toISOString(),
+      end: period.to
+        ? new Date(period.to).toISOString()
+        : new Date().toISOString(),
+      step: 10,
+    },
+    10000
   );
   const points = data;
   let hasError = error;
