@@ -41,10 +41,7 @@ const WidgetDashboardItem = ({
   const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
-        let lastPoint = 0;
-        for (const point in points) {
-          lastPoint += parseFloat(points[point]["values"][0][1]);
-        }
+        let lastPoint = parseFloat(points[0]["values"][0][1]);
         let thresholds = null;
         return (
           <MetricGaugeItem
@@ -56,7 +53,7 @@ const WidgetDashboardItem = ({
         );
       }
       case chartTypes[1]: {
-        const resultStacked = points;
+        const resultStacked = points[0]["values"];
         return (
           <LineChart
             stacked
@@ -119,7 +116,9 @@ const WidgetDashboardItem = ({
       ? new Date(period.to).toISOString()
       : new Date().toISOString(),
     step: 10,
-  });
+  },
+  10000
+  );
   const points = data;
   let hasError = error;
   if (previousError.current && !error) {

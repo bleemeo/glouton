@@ -21,7 +21,7 @@ export const useFetch = (query, variables, pollInterval = 0) => {
   return { isLoading, error, ...data, networkStatus };
 };
 
-export const httpFetch = (variables) => {
+export const httpFetch = (variables, delay = 3000) => {
   const [data, setData] = useState({});
   const url = `/api/v1/query_range?query=${encodeURIComponent(
     variables.query
@@ -30,11 +30,12 @@ export const httpFetch = (variables) => {
   )}&step=${encodeURIComponent(variables.step)}`;
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState(null);
+  const [delayState, setIsDelayState] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
+      setTimeout(() => setIsDelayState(true), delay)
       setIsError(null);
-      setIsLoading(true);
 
       try {
         const result = await axios(url);
@@ -45,10 +46,10 @@ export const httpFetch = (variables) => {
       }
 
       setIsLoading(false);
+      setIsDelayState(false);
     };
-
     fetchData();
-  }, [url]);
+  }, [delayState]);
 
   return { data, isLoading, error };
 };

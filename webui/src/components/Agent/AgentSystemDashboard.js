@@ -12,9 +12,11 @@ import { useWindowWidth } from "../utils/hooks";
 import { getStorageItem, setStorageItem } from "../utils/storage";
 import {
   gaugesBarBLEEMEO,
-  gaugesBarPrometheus,
+  gaugesBarPrometheusLinux,
+  gaugesBarPrometheusWindows,
   widgetsBLEEMEO,
-  widgetsPrometheus,
+  widgetsPrometheusLinux,
+  widgetsPrometheusWindows,
 } from "../Metric/DefaultDashboardMetrics";
 
 const AgentSystemDashboard = ({ facts }) => {
@@ -26,8 +28,13 @@ const AgentSystemDashboard = ({ facts }) => {
   } else if (
     facts.find((f) => f.name === "metrics_format").value == "Prometheus"
   ) {
-    gaugesBar = gaugesBarPrometheus;
-    widgets = widgetsPrometheus;
+    if (facts.find((f) => f.name === "kernel").value == "Linux") {
+      gaugesBar = gaugesBarPrometheusLinux;
+      widgets = widgetsPrometheusLinux;
+    } else {
+      gaugesBar = gaugesBarPrometheusWindows;
+      widgets = widgetsPrometheusWindows;
+    }
   }
   const [period, setPeriod] = useState(
     getStorageItem("period") || { minutes: 60 }
