@@ -79,7 +79,7 @@ func Test_Basic_Build(t *testing.T) {
 		return
 	}
 
-	want := MetricFilter{
+	want := metricFilter{
 		allowList: []matcher.Matchers{
 			{
 				&labels.Matcher{
@@ -150,7 +150,7 @@ func Test_Basic_Build(t *testing.T) {
 		},
 	}
 
-	new, err := NewMetricFilter(&cfg)
+	new, err := newMetricFilter(&cfg)
 
 	if err != nil {
 		t.Error(err)
@@ -184,7 +184,7 @@ func Test_basic_build_default(t *testing.T) {
 		t.Error(err)
 	}
 
-	filter, err := NewMetricFilter(&cfg)
+	filter, err := newMetricFilter(&cfg)
 
 	if err != nil {
 		t.Error(err)
@@ -204,7 +204,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 		return
 	}
 
-	new, err := NewMetricFilter(&cfg)
+	new, err := newMetricFilter(&cfg)
 
 	if err != nil {
 		t.Error(err)
@@ -286,7 +286,7 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		return
 	}
 
-	new, err := NewMetricFilter(&cfg)
+	new, err := newMetricFilter(&cfg)
 
 	if err != nil {
 		t.Error(err)
@@ -423,7 +423,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 		t.Error(err)
 	}
 
-	mf, _ := NewMetricFilter(&cfg)
+	mf, _ := newMetricFilter(&cfg)
 
 	d := fakeScrapper{
 		name: "jobname",

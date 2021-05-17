@@ -107,7 +107,7 @@ type agent struct {
 	dynamicScrapper        *promexporter.DynamicScrapper
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
-	metricFilter           *MetricFilter
+	metricFilter           *metricFilter
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -533,7 +533,7 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
-	mFilter, err := NewMetricFilter(a.config)
+	mFilter, err := newMetricFilter(a.config)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, no metric will be allowed: %v", err)
 	}
