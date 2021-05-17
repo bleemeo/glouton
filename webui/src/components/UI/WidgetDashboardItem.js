@@ -116,7 +116,7 @@ const WidgetDashboardItem = ({
       start: period.from
         ? new Date(period.from).toISOString()
         : new Date(
-            new Date().setMinutes(new Date().getMinutes() - 59)
+            new Date().setMinutes(new Date().getMinutes() - period.minutes)
           ).toISOString(),
       end: period.to
         ? new Date(period.to).toISOString()
