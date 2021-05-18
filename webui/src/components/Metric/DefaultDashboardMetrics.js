@@ -144,7 +144,7 @@ export const widgetsBLEEMEO = [
 export const widgetsPrometheusLinux = [
   {
     title: "Processor Usage",
-    type: chartTypes[2],
+    type: chartTypes[1],
     unit: UNIT_PERCENTAGE,
     metrics: [
       "(sum by (mode)(irate(node_cpu_seconds_total[1m])) / ignoring(mode) group_left sum(irate(node_cpu_seconds_total[1m])))*100",
@@ -152,7 +152,7 @@ export const widgetsPrometheusLinux = [
   },
   {
     title: "Memory Usage",
-    type: chartTypes[2],
+    type: chartTypes[1],
     unit: UNIT_BYTE,
     metrics: [
       "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)",

@@ -85,21 +85,22 @@ const WidgetDashboardItem = ({
   };
 
   const metricsFilter = [];
-  switch (type) {
-    case chartTypes[1]:
-      if (title === "Processor Usage") {
-        CPU.forEach((name) => {
-          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
-        });
-      } else if (title === "Memory Usage") {
-        MEMORY.forEach((name) => {
-          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
-        });
-      }
-      break;
-    default:
-      metricsFilter.push(metrics);
-  }
+  metricsFilter.push(metrics);
+  //  switch (type) {
+  //    case chartTypes[1]:
+  //      if (title === "Processor Usage") {
+  //        CPU.forEach((name) => {
+  //          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
+  //        });
+  //      } else if (title === "Memory Usage") {
+  //        MEMORY.forEach((name) => {
+  //          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
+  //        });
+  //      }
+  //      break;
+  //    default:
+  //      metricsFilter.push(metrics);
+  //  }
   const { isLoading, data, error } = httpFetch(
     {
       query: metrics,
