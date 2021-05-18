@@ -1,22 +1,10 @@
 import React, { useRef } from "react";
 import PropTypes from "prop-types";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
-import { chartTypes, isShallowEqual, LabelName } from "../utils";
+import { chartTypes, isShallowEqual } from "../utils";
 import LineChart from "./LineChart";
 import { httpFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
-
-const CPU = [
-  "cpu_steal",
-  "cpu_softirq",
-  "cpu_interrupt",
-  "cpu_system",
-  "cpu_user",
-  "cpu_nice",
-  "cpu_wait",
-  "cpu_idle",
-];
-const MEMORY = ["mem_used", "mem_buffered", "mem_cached", "mem_free"];
 
 const WidgetDashboardItem = ({
   type,
@@ -84,23 +72,6 @@ const WidgetDashboardItem = ({
     }
   };
 
-  const metricsFilter = [];
-  metricsFilter.push(metrics);
-  //  switch (type) {
-  //    case chartTypes[1]:
-  //      if (title === "Processor Usage") {
-  //        CPU.forEach((name) => {
-  //          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
-  //        });
-  //      } else if (title === "Memory Usage") {
-  //        MEMORY.forEach((name) => {
-  //          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
-  //        });
-  //      }
-  //      break;
-  //    default:
-  //      metricsFilter.push(metrics);
-  //  }
   const { isLoading, data, error } = httpFetch(
     {
       query: metrics,

@@ -4,8 +4,6 @@ import PropTypes from "prop-types";
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
 import { chartTypes } from "../utils";
 import { computeBackwardForward } from "../utils/ComputeBackwarForward";
-import { formatDateTime } from "../utils/formater";
-import { lastQuickRanges } from "./EditPeriodModal";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import LineChart from "../UI/LineChart";
 import { useWindowWidth } from "../utils/hooks";

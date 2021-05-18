@@ -83,8 +83,27 @@ export const gaugesBarBLEEMEO = [
 ];
 
 export const widgetsBLEEMEO = [
-  { title: "Processor Usage", type: chartTypes[1], unit: UNIT_PERCENTAGE },
-  { title: "Memory Usage", type: chartTypes[1], unit: UNIT_BYTE },
+  {
+    title: "Processor Usage",
+    type: chartTypes[1],
+    unit: UNIT_PERCENTAGE,
+    metrics: [
+      "cpu_steal",
+      "cpu_softirq",
+      "cpu_interrupt",
+      "cpu_system",
+      "cpu_user",
+      "cpu_nice",
+      "cpu_wait",
+      "cpu_idle",
+    ],
+  },
+  {
+    title: "Memory Usage",
+    type: chartTypes[1],
+    unit: UNIT_BYTE,
+    metrics: ["mem_used", "mem_buffered", "mem_cached", "mem_free"],
+  },
   {
     title: "Disk IO Utilization",
     type: chartTypes[2],
