@@ -1,12 +1,7 @@
 import React, { useRef } from "react";
 import PropTypes from "prop-types";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
-import {
-  chartTypes,
-  composeMetricName,
-  isShallowEqual,
-  LabelName,
-} from "../utils";
+import { chartTypes, isShallowEqual, LabelName } from "../utils";
 import LineChart from "./LineChart";
 import { httpFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
@@ -58,7 +53,7 @@ const WidgetDashboardItem = ({
         );
       }
       case chartTypes[1]: {
-        const resultStacked = points[0]["values"];
+        const resultStacked = points;
         return (
           <LineChart
             stacked
@@ -74,11 +69,6 @@ const WidgetDashboardItem = ({
       }
       case chartTypes[2]: {
         const resultsLines = points;
-        resultsLines.sort((a, b) => {
-          const aLabel = composeMetricName(a);
-          const bLabel = composeMetricName(b);
-          return aLabel.localeCompare(bLabel);
-        });
         return (
           <LineChart
             metrics={resultsLines}

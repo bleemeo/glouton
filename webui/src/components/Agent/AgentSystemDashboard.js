@@ -5,11 +5,11 @@ import WidgetDashboardItem from "../UI/WidgetDashboardItem";
 import { chartTypes } from "../utils";
 import { computeBackwardForward } from "../utils/ComputeBackwarForward";
 import { formatDateTime } from "../utils/formater";
-import EditPeriodModal, { lastQuickRanges } from "./EditPeriodModal";
+import { lastQuickRanges } from "./EditPeriodModal";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import LineChart from "../UI/LineChart";
 import { useWindowWidth } from "../utils/hooks";
-import { getStorageItem, setStorageItem } from "../utils/storage";
+import { setStorageItem } from "../utils/storage";
 import {
   gaugesBarBLEEMEO,
   gaugesBarPrometheusLinux,
@@ -36,10 +36,8 @@ const AgentSystemDashboard = ({ facts }) => {
       widgets = widgetsPrometheusWindows;
     }
   }
-  const [period, setPeriod] = useState(
-    getStorageItem("period") || { minutes: 60 }
-  );
-  const [showEditPeriodMal, setShowEditPeriodMal] = useState(false);
+  const [period, setPeriod] = useState({ minutes: 60 });
+  //  const [showEditPeriodMal, setShowEditPeriodMal] = useState(false);
   useEffect(() => {
     document.title = "Dashboard | Glouton";
   }, []);
@@ -47,22 +45,21 @@ const AgentSystemDashboard = ({ facts }) => {
   useEffect(() => {
     setStorageItem("period", period);
   }, [period]);
-
   const windowWidth = useWindowWidth();
 
-  let periodText = "";
-  if (period.minutes) {
-    const range = lastQuickRanges.find((p) => p.value === period.minutes);
-    if (range) periodText = range.label;
-  } else if (period.from && period.to) {
-    periodText =
-      "from " +
-      formatDateTime(period.from) +
-      " to " +
-      formatDateTime(period.to);
-  }
+  //  let periodText = "";
+  //  if (period.minutes) {
+  //    const range = lastQuickRanges.find((p) => p.value === period.minutes);
+  //    if (range) periodText = range.label;
+  //  } else if (period.from && period.to) {
+  //    periodText =
+  //      "from " +
+  //      formatDateTime(period.from) +
+  //      " to " +
+  //      formatDateTime(period.to);
+  //  }
 
-  const onPeriodClick = () => setShowEditPeriodMal(true);
+  //  const onPeriodClick = () => setShowEditPeriodMal(true);
 
   const handleBackwardForwardFunc = (isForward = false) => {
     let startDate = new Date();

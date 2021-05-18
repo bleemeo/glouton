@@ -212,19 +212,8 @@ export const isEmpty = (obj) => {
   return true;
 };
 
-export function composeMetricName(metric, skipMetricName = false) {
-  let keys = metric.labels.map((l) => l.key).sort();
-
-  if (skipMetricName) {
-    keys = keys.filter((l) => l !== LabelName);
-  }
-
-  const labelsMap = metric.labels.reduce((acc, l) => {
-    acc[l.key] = l.value;
-    return acc;
-  }, {});
-  const nameDisplay = keys.map((key) => labelsMap[key]).join(" ");
-  return nameDisplay;
+export function composeMetricName(metric) {
+  return Object.values(metric.metric).join(" ");
 }
 
 export function isShallowEqual(v, o) {

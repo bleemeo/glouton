@@ -82,7 +82,7 @@ export const gaugesBarBLEEMEO = [
   },
 ];
 
-export const widgetsBLEEMEO = []; /*[
+export const widgetsBLEEMEO = [
   { title: "Processor Usage", type: chartTypes[1], unit: UNIT_PERCENTAGE },
   { title: "Memory Usage", type: chartTypes[1], unit: UNIT_BYTE },
   {
@@ -139,9 +139,92 @@ export const widgetsBLEEMEO = []; /*[
     unit: UNIT_PERCENTAGE,
     metrics: ["swap_used_perc"],
   },
-];*/
+];
 
-export const widgetsPrometheusLinux = []; /*[
+export const widgetsPrometheusLinux = [
+  {
+    title: "Processor Usage",
+    type: chartTypes[2],
+    unit: UNIT_PERCENTAGE,
+    metrics: [
+      "(sum by (mode)(irate(node_cpu_seconds_total[1m])) / ignoring(mode) group_left sum(irate(node_cpu_seconds_total[1m])))*100",
+    ],
+  },
+  {
+    title: "Memory Usage",
+    type: chartTypes[2],
+    unit: UNIT_BYTE,
+    metrics: [
+      "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)",
+    ],
+  },
+  {
+    title: "Disk IO Utilization",
+    type: chartTypes[2],
+    unit: UNIT_PERCENTAGE,
+    metrics: ["irate(node_disk_io_time_seconds_total[1m])*100"],
+  },
+  {
+    title: "Disk Read Bytes",
+    type: chartTypes[2],
+    unit: UNIT_BYTE,
+    metrics: ["irate(node_disk_read_bytes_total[1m])"],
+  },
+  {
+    title: "Disk Write Bytes",
+    type: chartTypes[2],
+    unit: UNIT_BYTE,
+    metrics: ["irate(node_disk_write_bytes_total[1m])"],
+  },
+  {
+    title: "Disk Read Number",
+    type: chartTypes[2],
+    unit: UNIT_NUMBER,
+    metrics: ["irate(node_disk_reads_completed_total[1m])"],
+  },
+  {
+    title: "Disk Write Number",
+    type: chartTypes[2],
+    unit: UNIT_NUMBER,
+    metrics: ["irate(node_disk_reads_completed_total[1m])"],
+  },
+  {
+    title: "Network Packets",
+    type: chartTypes[2],
+    unit: UNIT_NUMBER,
+    metrics: [
+      "irate(node_network_receive_bytes_total[1m])*8",
+      "irate(node_network_transmit_bytes_total[1m])*8",
+    ],
+  },
+  {
+    title: "Network Errors",
+    type: chartTypes[2],
+    unit: UNIT_NUMBER,
+    metrics: [
+      "irate(node_network_receive_errs_total[1m])*8",
+      "irate(node_network_transmit_errs_total[1m])*8",
+    ],
+  },
+  {
+    title: "Disk Space",
+    type: chartTypes[2],
+    unit: UNIT_PERCENTAGE,
+    metrics: [
+      "(1-node_filesystem_avail_bytes{mountpoint=" /
+        "}/node_filesystem_size_bytes{mountpoint=" /
+        "})*100",
+    ],
+  },
+  {
+    title: "Swap Usage",
+    type: chartTypes[2],
+    unit: UNIT_PERCENTAGE,
+    metrics: ["(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100"],
+  },
+];
+
+export const widgetsPrometheusWindows = [
   {
     title: "Processor Usage",
     type: chartTypes[2],
@@ -222,87 +305,4 @@ export const widgetsPrometheusLinux = []; /*[
     unit: UNIT_PERCENTAGE,
     metrics: ["(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100"],
   },
-];*/
-
-export const widgetsPrometheusWindows = []; /*[
-  {
-    title: "Processor Usage",
-    type: chartTypes[2],
-    unit: UNIT_PERCENTAGE,
-    metrics: [
-      "(sum by (mode)(irate(node_cpu_seconds_total[1m])) / ignoring(mode) group_left sum(irate(node_cpu_seconds_total[1m])))*100",
-    ],
-  },
-  {
-    title: "Memory Usage",
-    type: chartTypes[1],
-    unit: UNIT_BYTE,
-    metrics: [
-      "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)",
-    ],
-  },
-  {
-    title: "Disk IO Utilization",
-    type: chartTypes[2],
-    unit: UNIT_PERCENTAGE,
-    metrics: ["irate(node_disk_io_time_seconds_total[1m])*100"],
-  },
-  {
-    title: "Disk Read Bytes",
-    type: chartTypes[2],
-    unit: UNIT_BYTE,
-    metrics: ["irate(node_disk_read_bytes_total[1m])"],
-  },
-  {
-    title: "Disk Write Bytes",
-    type: chartTypes[2],
-    unit: UNIT_BYTE,
-    metrics: ["irate(node_disk_write_bytes_total[1m])"],
-  },
-  {
-    title: "Disk Read Number",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: ["irate(node_disk_reads_completed_total[1m])"],
-  },
-  {
-    title: "Disk Write Number",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: ["irate(node_disk_reads_completed_total[1m])"],
-  },
-  {
-    title: "Network Packets",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: [
-      "irate(node_network_receive_bytes_total[1m])*8",
-      "irate(node_network_transmit_bytes_total[1m])*8",
-    ],
-  },
-  {
-    title: "Network Errors",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: [
-      "irate(node_network_receive_errs_total[1m])*8",
-      "irate(node_network_transmit_errs_total[1m])*8",
-    ],
-  },
-  {
-    title: "Disk Space",
-    type: chartTypes[2],
-    unit: UNIT_PERCENTAGE,
-    metrics: [
-      "(1-node_filesystem_avail_bytes{mountpoint=" /
-        "}/node_filesystem_size_bytes{mountpoint=" /
-        "})*100",
-    ],
-  },
-  {
-    title: "Swap Usage",
-    type: chartTypes[2],
-    unit: UNIT_PERCENTAGE,
-    metrics: ["(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100"],
-  },
-];*/
+];

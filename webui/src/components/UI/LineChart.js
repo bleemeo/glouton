@@ -12,12 +12,7 @@ import {
   iopsToString,
 } from "../utils/formater";
 import Loading from "./Loading";
-import {
-  fillEmptyPoints,
-  UNIT_PERCENTAGE,
-  composeMetricName,
-  LabelName,
-} from "../utils";
+import { fillEmptyPoints, UNIT_PERCENTAGE, composeMetricName } from "../utils";
 import FaIcon from "./FaIcon";
 import QueryError from "./QueryError";
 import { chartColorMap } from "../utils/colors";
@@ -225,24 +220,15 @@ const LineChart = ({
       svgChart.current &&
       metrics &&
       metrics.length > 0 &&
-      metrics[0].points &&
-      metrics[0].points.length > 1 &&
-      metrics[0].labels
+      metrics[0].values &&
+      metrics[0].values.length > 1 &&
+      metrics[0].metric
     ) {
       const series = [];
-      /* eslint-disable indent */
-      const skipMetricName =
-        metrics.length > 1
-          ? metrics.every(
-              (m) =>
-                m.labels.find((l) => l.key === LabelName).value ===
-                metrics[0].labels.find((l) => l.key === LabelName).value
-            )
-          : false;
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
-        const nameDisplay = composeMetricName(metric, skipMetricName);
-        let data = metric.points.map((point) => [point.time, point.value]);
+        const nameDisplay = composeMetricName(metric);
+        let data = metric.values.map((point) => [point.time, point.value]);
         data = fillEmptyPoints(data, period);
         let color = chartColorMap(idx);
         if (title === "Processor Usage") {
@@ -325,8 +311,8 @@ const LineChart = ({
   } else if (
     metrics &&
     metrics.length > 0 &&
-    metrics[0].points &&
-    metrics[0].points.length < 2
+    metrics[0].values &&
+    metrics[0].values.length < 2
   ) {
     doNotDisplayCarets = true;
     return (
@@ -377,7 +363,7 @@ const LineChart = ({
         </Card.Body>
       </Card>
     );
-  } else if (metrics && metrics.length > 0 && !metrics[0].points) {
+  } else if (metrics && metrics.length > 0 && !metrics[0].values) {
     noData = true;
   }
 
