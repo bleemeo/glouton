@@ -294,8 +294,8 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 
 	for _, m := range containerMetrics {
 		metricFilters := map[string]string{
-			types.LabelMetaContainerName: container.ContainerName(),
-			types.LabelName:              m,
+			types.LabelItem: container.ContainerName(),
+			types.LabelName: m,
 		}
 
 		metrics, err := r.api.DB.Metrics(metricFilters)
