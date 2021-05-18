@@ -20,6 +20,8 @@ import (
 	"glouton/types"
 	"testing"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
 )
@@ -101,6 +103,17 @@ func Test_NormalizeMetric(t *testing.T) {
 				},
 			},
 		},
+		{
+			name:            "metric contains a regex and is a glob",
+			allowListString: "curr*.$_customer*",
+			want: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchRegexp,
+					Name:  types.LabelName,
+					Value: "curr.*\\.\\$_customer.*",
+				},
+			},
+		},
 	}
 
 	for _, test := range tests {
@@ -113,19 +126,9 @@ func Test_NormalizeMetric(t *testing.T) {
 				t.Errorf("Invalid result Got error => %v ", err)
 			}
 
-			if len(got) != len(localTest.want) {
-				t.Errorf("Invalid Matchers length expected=%d, got=%d", len(localTest.want), len(got))
-			}
-
-			for idx, val := range got {
-				if val.Type != localTest.want[idx].Type {
-					t.Errorf("Invalid Match Type \nexpected %s got %s", localTest.want[idx].Type, val.Type)
-				}
-
-				if !val.Matches(localTest.want[idx].Value) {
-					t.Errorf("Unmatched value \nexpected={%s: '%s'} got={%s: '%s'}\n",
-						localTest.want[idx].Name, localTest.want[idx].Value, val.Name, val.Value)
-				}
+			res := cmp.Diff(got, localTest.want, cmpopts.IgnoreUnexported(labels.Matcher{}))
+			if res != "" {
+				t.Errorf("got() != expected(): =%s", res)
 			}
 		})
 	}
@@ -190,7 +193,7 @@ func Test_Matches_Basic_Point(t *testing.T) {
 		want     bool
 	}{
 		{
-			name: "basic metric glob",
+			name: "basic metric",
 			point: types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName:           "cpu_percent",
@@ -218,7 +221,7 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "basic metric glob fail",
+			name: "basic metric fail",
 			point: types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName:           "should_fail",
@@ -246,7 +249,7 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			want: false,
 		},
 		{
-			name: "basic metric glob fail missing label",
+			name: "basic metric fail missing label",
 			point: types.MetricPoint{
 				Labels: map[string]string{
 					types.LabelName:           "cpu_percent",
@@ -344,6 +347,89 @@ func Test_Matches_Basic_Point(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "basic metric label that matches not equal",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "cpu_percent",
+					types.LabelScrapeInstance: "instance_3",
+					types.LabelScrapeJob:      "job_not_wanted",
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_3",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchNotEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_not_wanted",
+				},
+			},
+			want: false,
+		},
+		{
+			name: "basic metric missing label that works",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelName:           "cpu_percent",
+					types.LabelScrapeInstance: "instance_4",
+					// No scrape job, but the matcher is : scrape_job != "job_not_wanted"
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_4",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchNotEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_not_wanted",
+				},
+			},
+			want: true,
+		},
+		{
+			name: "should faile",
+			point: types.MetricPoint{
+				Labels: map[string]string{
+					types.LabelScrapeInstance: "should_fail",
+					types.LabelScrapeJob:      "should_fail",
+				},
+			},
+			matchers: Matchers{
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelName,
+					Value: "cpu_percent",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeInstance,
+					Value: "instance_1",
+				},
+				&labels.Matcher{
+					Type:  labels.MatchEqual,
+					Name:  types.LabelScrapeJob,
+					Value: "job_1",
+				},
+			},
+			want: false,
+		},
 	}
 
 	for _, test := range tests {
@@ -356,38 +442,6 @@ func Test_Matches_Basic_Point(t *testing.T) {
 				t.Errorf("Incorrect result expected %v, got %v", test.want, got)
 			}
 		})
-	}
-}
-
-func Test_Matches_Point_Error(t *testing.T) {
-	point := types.MetricPoint{
-		Labels: map[string]string{
-			types.LabelScrapeInstance: "should_fail",
-			types.LabelScrapeJob:      "should_fail",
-		},
-	}
-	matchers := Matchers{
-		&labels.Matcher{
-			Type:  labels.MatchEqual,
-			Name:  types.LabelName,
-			Value: "cpu_percent",
-		},
-		&labels.Matcher{
-			Type:  labels.MatchEqual,
-			Name:  types.LabelScrapeInstance,
-			Value: "instance_1",
-		},
-		&labels.Matcher{
-			Type:  labels.MatchEqual,
-			Name:  types.LabelScrapeJob,
-			Value: "job_1",
-		},
-	}
-
-	res := matchers.MatchesPoint(point)
-
-	if res {
-		t.Errorf("Incorrect value on match: expected false but got true")
 	}
 }
 

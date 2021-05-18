@@ -30,7 +30,7 @@ type Matchers []*labels.Matcher
 
 func globToRegex(str string) string {
 	r := strings.NewReplacer(
-		".", "\\.", "$", "\\$", "^", "\\^", "*", ".*",
+		".", "\\\\.", "$", "\\\\$", "^", "\\\\^", "*", ".*",
 	)
 
 	return r.Replace(str)

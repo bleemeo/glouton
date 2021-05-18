@@ -30,12 +30,44 @@ import (
 )
 
 //nolint:gochecknoglobals
-var defaultMetrics []string = []string{
+var commonDefaultSystemMetrics []string = []string{
+	"agent_status",
+	"system_pending_updates",
+	"system_pending_security_updates",
+}
+
+//nolint:gochecknoglobals
+var promDefaultSystemMetrics []string = []string{
+	// missing equivalent of agent_gather_time
+	"node_cpu_seconds_global",
+	"node_memory_MemTotal_bytes",
+	"node_memory_MemAvailable_bytes",
+	"node_memory_MemFree_bytes",
+	"node_memory_Buffers_bytes",
+	"node_memory_Cached_bytes",
+	"node_memory_SwapFree_bytes",
+	"node_memory_SwapTotal_bytes",
+	"node_disk_io_time_seconds_total",
+	"node_disk_read_bytes_total",
+	"node_disk_write_bytes_total",
+	"node_disk_reads_completed_total",
+	"node_disk_writes_completed_total",
+	"node_filesystem_avail_bytes",
+	"node_filesystem_size_bytes",
+	"node_network_receive_bytes_total",
+	"node_network_transmit_bytes_total",
+	"node_network_receive_packets_total",
+	"node_network_transmit_packets_total",
+	"node_network_receive_errs_total",
+	"node_network_transmit_errs_total",
+}
+
+//nolint:gochecknoglobals
+var bleemeoDefaultSystemMetrics []string = []string{
 	// Operating system metrics
 	"agent_gather_time",
-	"agent_status",
 	"cpu_idle",
-	"cpu_interrup",
+	"cpu_interrupt",
 	"cpu_nice",
 	"cpu_other",
 	"cpu_softirq",
@@ -55,15 +87,15 @@ var defaultMetrics []string = []string{
 	"disk_used",
 	"disk_used_perc",
 	"disk_used_perc_status",
-	"io_merge_reads",
-	"io_merged_writes",
 	"io_read_bytes",
 	"io_reads",
+	"io_read_merged",
 	"io_time",
 	"io_utilization",
 	"io_write_bytes",
-	"io_write_time",
+	"io_write_merged",
 	"io_wites",
+	"io_write_time",
 	"mem_available",
 	"mem_available_perc",
 	"mem_buffered",
@@ -73,7 +105,7 @@ var defaultMetrics []string = []string{
 	"mem_used",
 	"mem_used_perc",
 	"mem_used,perc_status",
-	"net_bites_recv",
+	"net_bits_recv",
 	"net_bits_sent",
 	"net_drop_in",
 	"net_drop_out",
@@ -101,10 +133,13 @@ var defaultMetrics []string = []string{
 	"system_load1",
 	"system_load5",
 	"system_load15",
-	"system_pending_updates",
-	"system_pending_security_updates",
+	"time_drift",
 	"uptime",
 	"users_logged",
+}
+
+//nolint:gochecknoglobals
+var defaultServiceMetrics []string = []string{
 	// Services
 	"apache_*",
 	"bitbucket_*",
@@ -141,6 +176,7 @@ var defaultMetrics []string = []string{
 	// Key Processes
 	"process_context_switch",
 	"process_context_switch",
+	"process_cpu_system",
 	"process_cpu_user",
 	"process_io_read_bytes",
 	"process_io_write_bytes",
@@ -250,7 +286,21 @@ func addScrappersList(config *config.Configuration, metricList []matcher.Matcher
 	return metricList
 }
 
-func (m *metricFilter) buildList(config *config.Configuration) error {
+func getDefaultMetrics(format types.MetricFormat) []string {
+	res := defaultServiceMetrics
+
+	res = append(res, commonDefaultSystemMetrics...)
+	if format == types.MetricFormatBleemeo {
+		res = append(res, bleemeoDefaultSystemMetrics...)
+	} else {
+		res = append(res, promDefaultSystemMetrics...)
+		// res = append(res, "agent_gather_time")
+	}
+
+	return res
+}
+
+func (m *metricFilter) buildList(config *config.Configuration, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -264,7 +314,8 @@ func (m *metricFilter) buildList(config *config.Configuration) error {
 
 	includeDefault := config.Bool("metric.include_default_metrics")
 	if includeDefault {
-		for _, val := range defaultMetrics {
+		defaultMetricsList := getDefaultMetrics(format)
+		for _, val := range defaultMetricsList {
 			new, err := matcher.NormalizeMetric(val)
 			if err != nil {
 				return err
@@ -280,9 +331,9 @@ func (m *metricFilter) buildList(config *config.Configuration) error {
 	return nil
 }
 
-func newMetricFilter(config *config.Configuration) (*metricFilter, error) {
+func newMetricFilter(config *config.Configuration, metricFormat types.MetricFormat) (*metricFilter, error) {
 	new := metricFilter{}
-	err := new.buildList(config)
+	err := new.buildList(config, metricFormat)
 
 	return &new, err
 }

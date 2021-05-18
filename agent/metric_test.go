@@ -112,20 +112,6 @@ func Test_Basic_Build(t *testing.T) {
 					Value: "my_application123",
 				},
 			},
-			{
-				&labels.Matcher{
-					Name:  types.LabelName,
-					Type:  labels.MatchEqual,
-					Value: "myapplication_heap_size_mb",
-				},
-			},
-			{
-				&labels.Matcher{
-					Name:  types.LabelName,
-					Type:  labels.MatchEqual,
-					Value: "myapplication_request",
-				},
-			},
 		},
 		denyList: []matcher.Matchers{
 			{
@@ -150,29 +136,21 @@ func Test_Basic_Build(t *testing.T) {
 		},
 	}
 
-	new, err := newMetricFilter(&cfg)
+	new, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	for idx, val := range new.allowList {
-		for idx2, data := range val {
-			correct := want.allowList[idx][idx2]
-			if data.Name != correct.Name || data.Type != correct.Type || data.Value != correct.Value {
-				t.Errorf("Generated allow list does not match the expected output: Expected %v, Got %v", correct, data)
-			}
-		}
+	res := cmp.Diff(new.allowList, want.allowList, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	if res != "" {
+		t.Errorf("Generated allow list does not match the expected output: %s", res)
 	}
 
-	for idx, val := range new.denyList {
-		for idx2, data := range val {
-			correct := want.denyList[idx][idx2]
-			if data.Name != correct.Name || data.Type != correct.Type || data.Value != correct.Value {
-				t.Errorf("Generated deny list does not match the expected output: Expected %v, Got %v", correct, data)
-			}
-		}
+	res = cmp.Diff(new.denyList, want.denyList, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	if res != "" {
+		t.Errorf("Generated deny list does not match the expected output: %s", res)
 	}
 }
 
@@ -184,14 +162,16 @@ func Test_basic_build_default(t *testing.T) {
 		t.Error(err)
 	}
 
-	filter, err := newMetricFilter(&cfg)
+	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 
 	if err != nil {
 		t.Error(err)
 	}
 
-	if len(filter.allowList) != len(defaultMetrics) {
-		t.Errorf("Unexpected number of matcher: expected %d, got %d", len(defaultMetrics), len(filter.allowList))
+	wantLen := len(bleemeoDefaultSystemMetrics) + len(commonDefaultSystemMetrics) + len(defaultServiceMetrics)
+
+	if len(filter.allowList) != wantLen {
+		t.Errorf("Unexpected number of matcher: expected %d, got %d", wantLen, len(filter.allowList))
 	}
 }
 
@@ -204,7 +184,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 		return
 	}
 
-	new, err := newMetricFilter(&cfg)
+	new, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 
 	if err != nil {
 		t.Error(err)
@@ -216,6 +196,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 		{
 			Labels: map[string]string{
 				"__name__":        "process_cpu_seconds_total",
+				"label_not_read":  "value_not_read",
 				"scrape_instance": "localhost:2113",
 				"scrape_job":      "my_application123",
 			},
@@ -232,7 +213,8 @@ func Test_Basic_FilterPoints(t *testing.T) {
 	want := []types.MetricPoint{
 		{
 			Labels: map[string]string{
-				"__name__": "cpu_process_1",
+				"__name__":            "cpu_process_1",
+				"label_not_impacting": "value_not_impacting",
 			},
 		},
 		{
@@ -286,7 +268,7 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		return
 	}
 
-	new, err := newMetricFilter(&cfg)
+	new, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 
 	if err != nil {
 		t.Error(err)
@@ -294,8 +276,8 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 	}
 
 	metricNames := []string{"cpu_seconds", "process_cpu_seconds_total", "whatever"}
-	lblsNames := []string{"scrape_instance", "scrape_job"}
-	lblsValues := []string{"localhost:8015", "my_application123", "my_application456"}
+	lblsNames := []string{"scrape_instance", "scrape_job", "does_not_impact"}
+	lblsValues := []string{"localhost:8015", "my_application123", "my_application456", "does_not_impact"}
 
 	fm := []*dto.MetricFamily{
 		{ // should not be filtered out
@@ -306,6 +288,18 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 						{
 							Name:  &lblsNames[0],
 							Value: &lblsValues[0],
+						},
+					},
+				},
+				{
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+						{
+							Name:  &lblsNames[2],
+							Value: &lblsValues[3],
 						},
 					},
 				},
@@ -323,6 +317,22 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 						{
 							Name:  &lblsNames[1],
 							Value: &lblsValues[1],
+						},
+					},
+				},
+				{ // should be filtered out, even with the extra label
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+						{
+							Name:  &lblsNames[1],
+							Value: &lblsValues[1],
+						},
+						{
+							Name:  &lblsNames[2],
+							Value: &lblsValues[3],
 						},
 					},
 				},
@@ -364,6 +374,18 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 						{
 							Name:  &lblsNames[0],
 							Value: &lblsValues[0],
+						},
+					},
+				},
+				{
+					Label: []*dto.LabelPair{
+						{
+							Name:  &lblsNames[0],
+							Value: &lblsValues[0],
+						},
+						{
+							Name:  &lblsNames[2],
+							Value: &lblsValues[3],
 						},
 					},
 				},
@@ -423,7 +445,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 		t.Error(err)
 	}
 
-	mf, _ := newMetricFilter(&cfg)
+	mf, _ := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 
 	d := fakeScrapper{
 		name: "jobname",

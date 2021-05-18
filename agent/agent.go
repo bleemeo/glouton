@@ -533,9 +533,9 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
-	mFilter, err := newMetricFilter(a.config)
+	mFilter, err := newMetricFilter(a.config, a.metricFormat)
 	if err != nil {
-		logger.Printf("An error occurred while building the metric filter, no metric will be allowed: %v", err)
+		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
 
 	a.metricFilter = mFilter
