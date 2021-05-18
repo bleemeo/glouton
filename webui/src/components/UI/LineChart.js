@@ -228,11 +228,8 @@ const LineChart = ({
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
         const nameDisplay = composeMetricName(metric);
-        let data = metric.values.map((point) => [
-          point[0],
-          parseFloat(point[1]),
-        ]);
-        //        data = fillEmptyPoints(data, period);
+        let data = metric.values.map((point) => [point[0] * 1000, point[1]]);
+        data = fillEmptyPoints(data, period);
         let color = chartColorMap(idx);
         if (title === "Processor Usage") {
           color = CPU[idx];
