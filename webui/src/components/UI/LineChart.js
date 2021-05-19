@@ -245,7 +245,7 @@ const LineChart = ({
           data,
           symbol: "none",
           areaStyle: stacked ? { opacity: 0.9 } : null,
-          lineStyle: { width: "1" },
+          lineStyle: { width: 1 },
           stack: stacked ? "stack" : null,
         });
       });
