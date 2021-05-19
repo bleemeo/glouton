@@ -36,11 +36,13 @@ var commonDefaultSystemMetrics []string = []string{
 	"agent_status",
 	"system_pending_updates",
 	"system_pending_security_updates",
+	"time_drift",
 }
 
 //nolint:gochecknoglobals
 var promDefaultSystemMetrics []string = []string{
-	// missing equivalent of agent_gather_time
+	"glouton_gatherer_execution_seconds_count",
+	"glouton_gatherer_execution_seconds_sum",
 	"node_cpu_seconds_global",
 	"node_memory_MemTotal_bytes",
 	"node_memory_MemAvailable_bytes",
@@ -92,11 +94,12 @@ var bleemeoDefaultSystemMetrics []string = []string{
 	"io_read_bytes",
 	"io_reads",
 	"io_read_merged",
+	"io_read_time",
 	"io_time",
 	"io_utilization",
 	"io_write_bytes",
 	"io_write_merged",
-	"io_wites",
+	"io_writes",
 	"io_write_time",
 	"mem_available",
 	"mem_available_perc",
@@ -135,7 +138,6 @@ var bleemeoDefaultSystemMetrics []string = []string{
 	"system_load1",
 	"system_load5",
 	"system_load15",
-	"time_drift",
 	"uptime",
 	"users_logged",
 }
@@ -146,7 +148,7 @@ var defaultServiceMetrics []string = []string{
 	"apache_*",
 	"bitbucket_*",
 	"cassandra_*",
-	"confluence*",
+	"confluence_*",
 	"bind_status",
 	"dovecot_status",
 	"ejabberd_status",
@@ -189,6 +191,7 @@ var defaultServiceMetrics []string = []string{
 	"process_open_filedesc",
 	"process_worst_fd_ratio",
 	// Docker
+	"containers_count",
 	"container_cpu_used",
 	"container_health_status",
 	"container_io_read_bytes",
@@ -201,12 +204,6 @@ var defaultServiceMetrics []string = []string{
 	// Prometheus scrapper
 	"process_cpu_seconds_total",
 	"process_resident_memory_bytes",
-	// Java
-	"*_jvm_gc",
-	"*_jvm_gc_time",
-	"*_jvm_gc_utilization",
-	"*_jvm_heap_used",
-	"*_jvm_non_heap_used",
 }
 
 //metricFilter is a thread-safe holder of an allow / deny metrics list.
@@ -296,7 +293,6 @@ func getDefaultMetrics(format types.MetricFormat) []string {
 		res = append(res, bleemeoDefaultSystemMetrics...)
 	} else {
 		res = append(res, promDefaultSystemMetrics...)
-		// res = append(res, "agent_gather_time")
 	}
 
 	return res
@@ -447,19 +443,17 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) rebuildServicesMetrics(allowList *[]matcher.Matchers, services []discovery.Service, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
-	jmxMetrics := make(map[string]matcher.Matchers)
-
+func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
 	for _, service := range services {
+		if !service.Active {
+			continue
+		}
+
 		newMetrics := jmxtrans.GetJMXMetrics(service)
 
 		if len(newMetrics) != 0 {
 			for _, val := range newMetrics {
-				metricName := val.Name
-
-				if !strings.Contains(val.MBean, "java.lang") {
-					metricName = service.Name + "." + metricName
-				}
+				metricName := service.Name + "." + val.Name
 
 				new, err := matcher.NormalizeMetric(metricName)
 				if err != nil {
@@ -467,7 +461,7 @@ func (m *metricFilter) rebuildServicesMetrics(allowList *[]matcher.Matchers, ser
 					continue
 				}
 
-				jmxMetrics[metricName] = new
+				allowList[metricName] = new
 			}
 		}
 
@@ -477,56 +471,65 @@ func (m *metricFilter) rebuildServicesMetrics(allowList *[]matcher.Matchers, ser
 			continue
 		}
 
-		*allowList = append(*allowList, new)
+		allowList[service.Name+"_status"] = new
 	}
 
-	return jmxMetrics, errors
+	return allowList, errors
 }
 
 func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string) error {
-	allowList := []matcher.Matchers{}
-	denyList := []matcher.Matchers{}
+	allowList := make(map[string]matcher.Matchers)
+	denyList := make(map[string]matcher.Matchers)
 	errors := merge.MultiError{}
-	registeredLabels := scrapper.GetRegisteredLabels()
-	containersLabels := scrapper.GetContainersLabels()
-	thresholdMetrics := []matcher.Matchers{}
+	var registeredLabels map[string]map[string]string
+	var containersLabels map[string]map[string]string
 
-	for key, val := range registeredLabels {
-		allowMatchers, denyMatchers, err := addNewSource(containersLabels[key], val)
-		if err != nil {
-			errors = append(errors, err)
-			continue
+	if scrapper != nil {
+		registeredLabels = scrapper.GetRegisteredLabels()
+		containersLabels = scrapper.GetContainersLabels()
+		for key, val := range registeredLabels {
+			allowMatchers, denyMatchers, err := addNewSource(containersLabels[key], val)
+			if err != nil {
+				errors = append(errors, err)
+				continue
+			}
+
+			for key, val := range allowMatchers {
+				allowList[key] = val
+			}
+
+			for key, val := range denyMatchers {
+				denyList[key] = val
+			}
 		}
-
-		allowList = append(allowList, allowMatchers...)
-		denyList = append(denyList, denyMatchers...)
 	}
 
-	jmxMetrics, errors := m.rebuildServicesMetrics(&allowList, services, errors)
+	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
 
 	for _, val := range thresholdMetricNames {
-		new, err := matcher.NormalizeMetric(val)
+		new, err := matcher.NormalizeMetric(val + "_status")
 		if err != nil {
 			errors = append(errors, err)
 			continue
 		}
 
-		thresholdMetrics = append(thresholdMetrics, new)
+		allowList[val+"_status"] = new
 	}
 
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	m.allowList = m.staticAllowList
-	m.allowList = append(m.allowList, allowList...)
-	m.allowList = append(m.allowList, thresholdMetrics...)
 
-	for _, val := range jmxMetrics {
+	for _, val := range allowList {
 		m.allowList = append(m.allowList, val)
 	}
 
 	m.denyList = m.staticDenyList
-	m.denyList = append(m.denyList, denyList...)
+
+	for _, val := range denyList {
+		m.denyList = append(m.denyList, val)
+	}
 
 	if len(errors) == 0 {
 		return nil
@@ -535,7 +538,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	return errors
 }
 
-func addNewSource(cLabels map[string]string, extraLabels map[string]string) ([]matcher.Matchers, []matcher.Matchers, error) {
+func addNewSource(cLabels map[string]string, extraLabels map[string]string) (map[string]matcher.Matchers, map[string]matcher.Matchers, error) {
 	allowList := []string{}
 	denyList := []string{}
 
@@ -576,9 +579,9 @@ func addMetaLabels(metric string, scrapeInstance string, scrapeJob string) (matc
 	return m, nil
 }
 
-func newMatcherSource(allowList []string, denyList []string, scrapeInstance string, scrapeJob string) ([]matcher.Matchers, []matcher.Matchers, error) {
-	allowMatchers := []matcher.Matchers{}
-	denyMatchers := []matcher.Matchers{}
+func newMatcherSource(allowList []string, denyList []string, scrapeInstance string, scrapeJob string) (map[string]matcher.Matchers, map[string]matcher.Matchers, error) {
+	allowMatchers := make(map[string]matcher.Matchers)
+	denyMatchers := make(map[string]matcher.Matchers)
 
 	for _, val := range allowList {
 		allowVal, err := addMetaLabels(val, scrapeInstance, scrapeJob)
@@ -586,7 +589,7 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 			return nil, nil, err
 		}
 
-		allowMatchers = append(allowMatchers, allowVal)
+		allowMatchers[val] = allowVal
 	}
 
 	for _, val := range denyList {
@@ -595,7 +598,7 @@ func newMatcherSource(allowList []string, denyList []string, scrapeInstance stri
 			return nil, nil, err
 		}
 
-		denyMatchers = append(denyMatchers, denyVal)
+		denyMatchers[val] = denyVal
 	}
 
 	return allowMatchers, denyMatchers, nil
