@@ -19,6 +19,7 @@ package agent
 import (
 	"fmt"
 	"glouton/config"
+	"glouton/discovery"
 	"glouton/prometheus/matcher"
 	"glouton/types"
 	"testing"
@@ -479,7 +480,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 	allowListWant = append(allowListWant, new2)
 	denyListWant = append(denyListWant, new3)
 
-	err = mf.RebuildDynamicLists(&d)
+	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %w", err)
 	}

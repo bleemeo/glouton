@@ -18,7 +18,9 @@ package agent
 
 import (
 	"glouton/config"
+	"glouton/discovery"
 	"glouton/facts/container-runtime/merge"
+	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/prometheus/matcher"
 	"glouton/types"
@@ -445,12 +447,49 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper) error {
+func (m *metricFilter) rebuildServicesMetrics(allowList *[]matcher.Matchers, services []discovery.Service, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
+	jmxMetrics := make(map[string]matcher.Matchers)
+
+	for _, service := range services {
+		newMetrics := jmxtrans.GetJMXMetrics(service)
+
+		if len(newMetrics) != 0 {
+			for _, val := range newMetrics {
+				metricName := val.Name
+
+				if !strings.Contains(val.MBean, "java.lang") {
+					metricName = service.Name + "." + metricName
+				}
+
+				new, err := matcher.NormalizeMetric(metricName)
+				if err != nil {
+					errors = append(errors, err)
+					continue
+				}
+
+				jmxMetrics[metricName] = new
+			}
+		}
+
+		new, err := matcher.NormalizeMetric(service.Name + "_status")
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		*allowList = append(*allowList, new)
+	}
+
+	return jmxMetrics, errors
+}
+
+func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string) error {
 	allowList := []matcher.Matchers{}
 	denyList := []matcher.Matchers{}
 	errors := merge.MultiError{}
 	registeredLabels := scrapper.GetRegisteredLabels()
 	containersLabels := scrapper.GetContainersLabels()
+	thresholdMetrics := []matcher.Matchers{}
 
 	for key, val := range registeredLabels {
 		allowMatchers, denyMatchers, err := addNewSource(containersLabels[key], val)
@@ -463,11 +502,29 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper) error {
 		denyList = append(denyList, denyMatchers...)
 	}
 
+	jmxMetrics, errors := m.rebuildServicesMetrics(&allowList, services, errors)
+
+	for _, val := range thresholdMetricNames {
+		new, err := matcher.NormalizeMetric(val)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		thresholdMetrics = append(thresholdMetrics, new)
+	}
+
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	m.allowList = m.staticAllowList
 	m.allowList = append(m.allowList, allowList...)
+	m.allowList = append(m.allowList, thresholdMetrics...)
+
+	for _, val := range jmxMetrics {
+		m.allowList = append(m.allowList, val)
+	}
+
 	m.denyList = m.staticDenyList
 	m.denyList = append(m.denyList, denyList...)
 

@@ -53,7 +53,7 @@ type nameItem struct {
 
 type metricInfo struct {
 	Service     discovery.Service
-	Metric      jmxMetric
+	Metric      JmxMetric
 	Labels      map[string]string
 	Annotations types.MetricAnnotations
 	Timestamp   time.Time
@@ -63,7 +63,7 @@ type metricInfo struct {
 
 type configInterface interface {
 	GetService(md5Service string) (discovery.Service, bool)
-	GetMetrics(md5Service string, md5Bean string, attr string) (metrics []jmxMetric, usedInRatio bool)
+	GetMetrics(md5Service string, md5Bean string, attr string) (metrics []JmxMetric, usedInRatio bool)
 }
 
 func (c *jmxtransClient) init() {

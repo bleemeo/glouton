@@ -20,10 +20,12 @@ import (
 	"encoding/json"
 	"glouton/discovery"
 	"glouton/logger"
+	"strconv"
 	"strings"
 )
 
-type jmxMetric struct {
+//JmxMetric represents a jmx Metric.
+type JmxMetric struct {
 	Name      string
 	MBean     string
 	Attribute string
@@ -36,7 +38,7 @@ type jmxMetric struct {
 }
 
 // nolint: gochecknoglobals
-var defaultGenericMetrics = []jmxMetric{
+var defaultGenericMetrics = []JmxMetric{
 	{
 		Name:      "jvm_heap_used",
 		MBean:     "java.lang:type=Memory",
@@ -77,7 +79,7 @@ var defaultGenericMetrics = []jmxMetric{
 }
 
 // nolint: gochecknoglobals
-var defaultServiceMetrics = map[discovery.ServiceName][]jmxMetric{
+var defaultServiceMetrics = map[discovery.ServiceName][]JmxMetric{
 	discovery.CassandraService: {
 		{
 			Name:      "read_requests",
@@ -270,7 +272,7 @@ var defaultServiceMetrics = map[discovery.ServiceName][]jmxMetric{
 }
 
 // nolint: gochecknoglobals
-var cassandraDetailedTableMetrics = []jmxMetric{
+var cassandraDetailedTableMetrics = []JmxMetric{
 	{
 		Name:      "bloom_filter_false_ratio",
 		MBean:     "org.apache.cassandra.metrics:type=Table,keyspace={keyspace},scope={table},name=BloomFilterFalseRatio",
@@ -314,8 +316,26 @@ var cassandraDetailedTableMetrics = []jmxMetric{
 	},
 }
 
-func getJMXMetrics(service discovery.Service) []jmxMetric {
-	var result []jmxMetric
+//GetJMXMetrics parses the jmx info and returns a list of JmxMetric struct.
+func GetJMXMetrics(service discovery.Service) []JmxMetric {
+	var result []JmxMetric
+
+	if !service.Active {
+		return result
+	}
+
+	if service.ExtraAttributes["jmx_port"] == "" {
+		return result
+	}
+
+	_, err := strconv.ParseInt(service.ExtraAttributes["jmx_port"], 10, 0)
+	if err != nil {
+		return result
+	}
+
+	if service.IPAddress == "" {
+		return result
+	}
 
 	if service.ExtraAttributes["jmx_metrics"] != "" {
 		err := json.Unmarshal([]byte(service.ExtraAttributes["jmx_metrics"]), &result)
