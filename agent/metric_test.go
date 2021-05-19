@@ -487,11 +487,11 @@ func Test_RebuildDynamicList(t *testing.T) {
 
 	res := cmp.Diff(mf.allowList, allowListWant, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("got != expected: %s", res)
+		t.Errorf("got != expected for allowList: %s", res)
 	}
 
 	res = cmp.Diff(mf.denyList, denyListWant, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("got != expected: %s", res)
+		t.Errorf("got != expected for denyList: %s", res)
 	}
 }

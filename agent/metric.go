@@ -339,6 +339,8 @@ func newMetricFilter(config *config.Configuration, metricFormat types.MetricForm
 func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	i := 0
 
+	logger.V(2).Printf("Starting Point filtering. Number of points to filter: %d", len(points))
+
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -378,6 +380,8 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	}
 
 	points = points[:i]
+
+	logger.V(2).Printf("Finished Point filtering. Number of points after filter: %d", len(points))
 
 	return points
 }
@@ -421,6 +425,8 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
 	i := 0
 
+	logger.V(2).Printf("Starting Families filtering. Number of families to filter: %d", len(f))
+
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -434,6 +440,8 @@ func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 	}
 
 	f = f[:i]
+
+	logger.V(2).Printf("Families filtering finished. Number of families after filter: %d", len(f))
 
 	return f
 }
@@ -481,12 +489,15 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
 	errors := merge.MultiError{}
+
 	var registeredLabels map[string]map[string]string
+
 	var containersLabels map[string]map[string]string
 
 	if scrapper != nil {
 		registeredLabels = scrapper.GetRegisteredLabels()
 		containersLabels = scrapper.GetContainersLabels()
+
 		for key, val := range registeredLabels {
 			allowMatchers, denyMatchers, err := addNewSource(containersLabels[key], val)
 			if err != nil {
