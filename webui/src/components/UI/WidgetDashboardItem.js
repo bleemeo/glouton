@@ -3,7 +3,7 @@ import PropTypes from "prop-types";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import { chartTypes, isShallowEqual } from "../utils";
 import LineChart from "./LineChart";
-import { httpFetch } from "../utils/hooks";
+import { useHTTPFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
 
 const WidgetDashboardItem = ({
@@ -27,7 +27,7 @@ const WidgetDashboardItem = ({
         let lastPoint = null;
         if (points[0]) {
           lastPoint = parseFloat(
-            points[0]["values"][points[0]["values"].length - 1][1]
+            points[0].values[points[0].values.length - 1][1]
           );
         }
         let thresholds = null;
@@ -46,6 +46,7 @@ const WidgetDashboardItem = ({
           <LineChart
             stacked
             metrics={resultStacked}
+            metrics_param={metrics}
             title={title}
             unit={unit}
             period={period}
@@ -60,6 +61,7 @@ const WidgetDashboardItem = ({
         return (
           <LineChart
             metrics={resultsLines}
+            metrics_param={metrics}
             title={title}
             unit={unit}
             period={period}
@@ -72,21 +74,31 @@ const WidgetDashboardItem = ({
     }
   };
 
-  const { isLoading, data, error } = httpFetch(
-    {
-      query: metrics,
-      start: period.from
-        ? new Date(period.from).toISOString()
-        : new Date(
-            new Date().setMinutes(new Date().getMinutes() - period.minutes)
-          ).toISOString(),
-      end: period.to
-        ? new Date(period.to).toISOString()
-        : new Date().toISOString(),
-      step: 10,
-    },
-    10000
-  );
+  const urls = (metrics, period) => {
+    let start = period.from
+      ? new Date(period.from).toISOString()
+      : new Date(
+          new Date().setMinutes(new Date().getMinutes() - period.minutes)
+        ).toISOString();
+    let end = period.to
+      ? new Date(period.to).toISOString()
+      : new Date().toISOString();
+    let step = 10;
+    let urls = [];
+
+    for (let idx in metrics) {
+      urls.push(
+        `/api/v1/query_range?query=${encodeURIComponent(
+          metrics[idx].query
+        )}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(
+          end
+        )}&step=${encodeURIComponent(step)}`
+      );
+    }
+    return urls;
+  };
+
+  const { isLoading, data, error } = useHTTPFetch(urls(metrics, period), 10000);
   const points = data;
   let hasError = error;
   if (previousError.current && !error) {
@@ -97,20 +109,24 @@ const WidgetDashboardItem = ({
     <div>
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
       <FetchSuspense
-        isLoading={isLoading || !points}
+        isLoading={isLoading || !points || typeof points[0] === "undefined"}
         error={hasError}
         loadingComponent={
           type === chartTypes[0] ? (
             <MetricGaugeItem loading name={title} />
           ) : (
-            <LineChart title={title} loading />
+            <LineChart title={title} metrics_param={metrics} loading />
           )
         }
         fallbackComponent={
           type === chartTypes[0] ? (
             <MetricGaugeItem hasError={hasError} name={title} />
           ) : (
-            <LineChart title={title} hasError={hasError} />
+            <LineChart
+              title={title}
+              metrics_param={metrics}
+              hasError={hasError}
+            />
           ) /* eslint-disable-line react/jsx-indent */
         }
         points={points}

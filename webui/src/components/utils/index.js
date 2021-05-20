@@ -212,8 +212,13 @@ export const isEmpty = (obj) => {
   return true;
 };
 
-export function composeMetricName(metric) {
-  return Object.values(metric.metric).join(" ");
+export function composeMetricName(metric, name) {
+  let metricName = name;
+
+  if (metricName.indexOf("{{ device }}") > -1) {
+    metricName = metricName.replace("{{ device }}", metric.metric.device);
+  }
+  return metricName;
 }
 
 export function isShallowEqual(v, o) {

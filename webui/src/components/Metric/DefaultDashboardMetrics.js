@@ -4,26 +4,39 @@ export const gaugesBarPrometheusLinux = [
   {
     title: "CPU",
     metrics: [
-      '(1-sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m])))*100',
+      {
+        query:
+          '(1-sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m])))*100',
+      },
     ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "Memory",
     metrics: [
-      "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+      {
+        query:
+          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+      },
     ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "IO",
-    metrics: ["irate(node_disk_io_time_seconds_total[1m])*100"],
+    metrics: [
+      {
+        query: "irate(node_disk_io_time_seconds_total[1m])*100",
+      },
+    ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "/",
     metrics: [
-      '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+      {
+        query:
+          '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+      },
     ],
     unit: UNIT_PERCENTAGE,
   },
@@ -33,26 +46,39 @@ export const gaugesBarPrometheusWindows = [
   {
     title: "CPU",
     metrics: [
-      '(1-sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m])))*100',
+      {
+        query:
+          '(1-sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m])))*100',
+      },
     ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "Memory",
     metrics: [
-      "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+      {
+        query:
+          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+      },
     ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "IO",
-    metrics: ["irate(node_disk_io_time_seconds_total[1m])*100"],
+    metrics: [
+      {
+        query: "irate(node_disk_io_time_seconds_total[1m])*100",
+      },
+    ],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "/",
     metrics: [
-      '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+      {
+        query:
+          '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+      },
     ],
     unit: UNIT_PERCENTAGE,
   },
@@ -61,22 +87,22 @@ export const gaugesBarPrometheusWindows = [
 export const gaugesBarBLEEMEO = [
   {
     title: "CPU",
-    metrics: ["cpu_used"],
+    metrics: [{ query: "cpu_used" }],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "Memory",
-    metrics: ["mem_used_perc"],
+    metrics: [{ query: "mem_used_perc" }],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "IO",
-    metrics: ["io_utilization"],
+    metrics: [{ query: "io_utilization" }],
     unit: UNIT_PERCENTAGE,
   },
   {
     title: "/",
-    metrics: ["disk_used_perc"],
+    metrics: [{ query: "disk_used_perc" }],
     mountpoint: "/",
     unit: UNIT_PERCENTAGE,
   },
@@ -88,75 +114,181 @@ export const widgetsBLEEMEO = [
     type: chartTypes[1],
     unit: UNIT_PERCENTAGE,
     metrics: [
-      "cpu_steal",
-      "cpu_softirq",
-      "cpu_interrupt",
-      "cpu_system",
-      "cpu_user",
-      "cpu_nice",
-      "cpu_wait",
-      "cpu_idle",
+      {
+        query: "cpu_steal",
+        color: "#c49c94",
+        legend: "steal",
+      },
+      {
+        query: "cpu_softirq",
+        color: "#f7b6d2",
+        legend: "softirq",
+      },
+      {
+        query: "cpu_interrupt",
+        color: "#c5b0d5",
+        legend: "interrupt",
+      },
+      {
+        query: "cpu_system",
+        color: "#ff7f0e",
+        legend: "system",
+      },
+      {
+        query: "cpu_user",
+        color: "#aec7e8",
+        legend: "user",
+      },
+      {
+        query: "cpu_nice",
+        color: "#9edae5",
+        legend: "nice",
+      },
+      {
+        query: "cpu_wait",
+        color: "#d62728",
+        legend: "wait",
+      },
+      {
+        query: "cpu_idle",
+        color: "#98df8a",
+        legend: "idle",
+      },
     ],
   },
   {
     title: "Memory Usage",
     type: chartTypes[1],
     unit: UNIT_BYTE,
-    metrics: ["mem_used", "mem_buffered", "mem_cached", "mem_free"],
+    metrics: [
+      {
+        query: "mem_used",
+        color: "#aec7e8",
+        legend: "used",
+      },
+      {
+        query: "mem_buffered",
+        color: "#c7c7c7",
+        legend: "buffered",
+      },
+      {
+        query: "mem_cached",
+        color: "#dbdb8d",
+        legend: "cached",
+      },
+      {
+        query: "mem_free",
+        color: "#98df8a",
+        legend: "free",
+      },
+    ],
   },
   {
     title: "Disk IO Utilization",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: ["io_utilization"],
+    metrics: [
+      {
+        query: "io_utilization",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Read Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: ["io_read_bytes"],
+    metrics: [
+      {
+        query: "io_read_bytes",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Write Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: ["io_write_bytes"],
+    metrics: [
+      {
+        query: "io_write_bytes",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Read Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["io_reads"],
+    metrics: [
+      {
+        query: "io_reads",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Write Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["io_writes"],
+    metrics: [
+      {
+        query: "io_writes",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Network Packets",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["net_packets_recv", "net_packets_sent"],
+    metrics: [
+      {
+        query: "net_packets_recv",
+        legend: "received from {{ device }}",
+      },
+      {
+        query: "net_packets_sent",
+        legend: "sent from {{ device }}",
+      },
+    ],
   },
   {
     title: "Network Errors",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["net_err_in", "net_err_out"],
+    metrics: [
+      {
+        query: "net_err_in",
+        legend: "received from {{ device }}",
+      },
+      {
+        query: "net_err_out",
+        legend: "sent from {{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Space",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: ["disk_used_perc"],
+    metrics: [
+      {
+        query: "disk_used_perc",
+        legend: "/",
+      },
+    ],
   },
   {
     title: "Swap Usage",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: ["swap_used_perc"],
+    metrics: [
+      {
+        query: "swap_used_perc",
+        legend: "usage",
+      },
+    ],
   },
 ];
 
@@ -166,7 +298,54 @@ export const widgetsPrometheusLinux = [
     type: chartTypes[1],
     unit: UNIT_PERCENTAGE,
     metrics: [
-      "(sum by (mode)(irate(node_cpu_seconds_total[1m])) / ignoring(mode) group_left sum(irate(node_cpu_seconds_total[1m])))*100",
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="steal"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#c49c94",
+        legend: "steal",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="softirq"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#f7b6d2",
+        legend: "softirq",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="irq"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#c5b0d5",
+        legend: "interrupt",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="system"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#ff7f0e",
+        legend: "system",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="user"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#aec7e8",
+        legend: "user",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="nice"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#9edae5",
+        legend: "nice",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="iowait"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#d62728",
+        legend: "wait",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#98df8a",
+        legend: "idle",
+      },
     ],
   },
   {
@@ -174,46 +353,97 @@ export const widgetsPrometheusLinux = [
     type: chartTypes[1],
     unit: UNIT_BYTE,
     metrics: [
-      "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)",
+      {
+        query: "node_memory_MemFree_bytes",
+        color: "#98df8a",
+        legend: "free",
+      },
+      {
+        query: "node_memory_Cached_bytes",
+        color: "#dbdb8d",
+        legend: "cached",
+      },
+      {
+        query: "node_memory_Buffers_bytes",
+        color: "#c7c7c7",
+        legend: "buffered",
+      },
+      {
+        query:
+          "node_memory_MemTotal_bytes - node_memory_MemFree_bytes -  node_memory_Cached_bytes - node_memory_Buffers_bytes",
+        color: "#aec7e8",
+        legend: "used",
+      },
     ],
   },
   {
     title: "Disk IO Utilization",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: ["irate(node_disk_io_time_seconds_total[1m])*100"],
+    metrics: [
+      {
+        query: "irate(node_disk_io_time_seconds_total[1m])*100",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Read Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: ["irate(node_disk_read_bytes_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_read_bytes_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Write Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: ["irate(node_disk_write_bytes_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_written_bytes_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Read Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["irate(node_disk_reads_completed_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_reads_completed_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Write Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["irate(node_disk_reads_completed_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_reads_completed_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Network Packets",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
     metrics: [
-      "irate(node_network_receive_bytes_total[1m])*8",
-      "irate(node_network_transmit_bytes_total[1m])*8",
+      {
+        query: "irate(node_network_receive_bytes_total[1m])*8",
+        legend: "received from {{ device }}",
+      },
+      {
+        query: "irate(node_network_transmit_bytes_total[1m])*8",
+        legend: "sent from {{ device }}",
+      },
     ],
   },
   {
@@ -221,8 +451,14 @@ export const widgetsPrometheusLinux = [
     type: chartTypes[2],
     unit: UNIT_NUMBER,
     metrics: [
-      "irate(node_network_receive_errs_total[1m])*8",
-      "irate(node_network_transmit_errs_total[1m])*8",
+      {
+        query: "irate(node_network_receive_errs_total[1m])*8",
+        legend: "received from {{ device }}",
+      },
+      {
+        query: "irate(node_network_transmit_errs_total[1m])*8",
+        legend: "sent from {{ device }}",
+      },
     ],
   },
   {
@@ -230,26 +466,79 @@ export const widgetsPrometheusLinux = [
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
     metrics: [
-      "(1-node_filesystem_avail_bytes{mountpoint=" /
-        "}/node_filesystem_size_bytes{mountpoint=" /
-        "})*100",
+      {
+        query: "(1-node_filesystem_avail_bytes/node_filesystem_size_bytes)*100",
+        legend: "/",
+      },
     ],
   },
   {
     title: "Swap Usage",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: ["(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100"],
+    metrics: [
+      {
+        query: "(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100",
+        legend: "usage",
+      },
+    ],
   },
 ];
 
 export const widgetsPrometheusWindows = [
   {
     title: "Processor Usage",
-    type: chartTypes[2],
+    type: chartTypes[1],
     unit: UNIT_PERCENTAGE,
     metrics: [
-      "(sum by (mode)(irate(node_cpu_seconds_total[1m])) / ignoring(mode) group_left sum(irate(node_cpu_seconds_total[1m])))*100",
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="steal"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#c49c94",
+        legend: "steal",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="softirq"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#f7b6d2",
+        legend: "softirq",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="irq"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#c5b0d5",
+        legend: "interrupt",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="system"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#ff7f0e",
+        legend: "system",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="user"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#aec7e8",
+        legend: "user",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="nice"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#9edae5",
+        legend: "nice",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="iowait"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#d62728",
+        legend: "wait",
+      },
+      {
+        query:
+          'sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+        color: "#98df8a",
+        legend: "idle",
+      },
     ],
   },
   {
@@ -257,46 +546,97 @@ export const widgetsPrometheusWindows = [
     type: chartTypes[1],
     unit: UNIT_BYTE,
     metrics: [
-      "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)",
+      {
+        query: "node_memory_MemFree_bytes",
+        color: "#98df8a",
+        legend: "free",
+      },
+      {
+        query: "node_memory_Cached_bytes",
+        color: "#dbdb8d",
+        legend: "cached",
+      },
+      {
+        query: "node_memory_Buffers_bytes",
+        color: "#c7c7c7",
+        legend: "buffered",
+      },
+      {
+        query:
+          "node_memory_MemTotal_bytes - node_memory_MemFree_bytes -  node_memory_Cached_bytes - node_memory_Buffers_bytes",
+        color: "#aec7e8",
+        legend: "used",
+      },
     ],
   },
   {
     title: "Disk IO Utilization",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: ["irate(node_disk_io_time_seconds_total[1m])*100"],
+    metrics: [
+      {
+        query: "irate(node_disk_io_time_seconds_total[1m])*100",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Read Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: ["irate(node_disk_read_bytes_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_read_bytes_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Write Bytes",
     type: chartTypes[2],
     unit: UNIT_BYTE,
-    metrics: ["irate(node_disk_write_bytes_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_written_bytes_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Read Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["irate(node_disk_reads_completed_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_reads_completed_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Disk Write Number",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
-    metrics: ["irate(node_disk_reads_completed_total[1m])"],
+    metrics: [
+      {
+        query: "irate(node_disk_reads_completed_total[1m])",
+        legend: "{{ device }}",
+      },
+    ],
   },
   {
     title: "Network Packets",
     type: chartTypes[2],
     unit: UNIT_NUMBER,
     metrics: [
-      "irate(node_network_receive_bytes_total[1m])*8",
-      "irate(node_network_transmit_bytes_total[1m])*8",
+      {
+        query: "irate(node_network_receive_bytes_total[1m])*8",
+        legend: "received from {{ device }}",
+      },
+      {
+        query: "irate(node_network_transmit_bytes_total[1m])*8",
+        legend: "sent from {{ device }}",
+      },
     ],
   },
   {
@@ -304,8 +644,14 @@ export const widgetsPrometheusWindows = [
     type: chartTypes[2],
     unit: UNIT_NUMBER,
     metrics: [
-      "irate(node_network_receive_errs_total[1m])*8",
-      "irate(node_network_transmit_errs_total[1m])*8",
+      {
+        query: "irate(node_network_receive_errs_total[1m])*8",
+        legend: "received from {{ device }}",
+      },
+      {
+        query: "irate(node_network_transmit_errs_total[1m])*8",
+        legend: "sent from {{ device }}",
+      },
     ],
   },
   {
@@ -313,15 +659,21 @@ export const widgetsPrometheusWindows = [
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
     metrics: [
-      "(1-node_filesystem_avail_bytes{mountpoint=" /
-        "}/node_filesystem_size_bytes{mountpoint=" /
-        "})*100",
+      {
+        query: "(1-node_filesystem_avail_bytes/node_filesystem_size_bytes)*100",
+        legend: "/",
+      },
     ],
   },
   {
     title: "Swap Usage",
     type: chartTypes[2],
     unit: UNIT_PERCENTAGE,
-    metrics: ["(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100"],
+    metrics: [
+      {
+        query: "(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100",
+        legend: "usage",
+      },
+    ],
   },
 ];

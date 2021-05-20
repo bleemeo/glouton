@@ -17,18 +17,6 @@ import FaIcon from "./FaIcon";
 import QueryError from "./QueryError";
 import { chartColorMap } from "../utils/colors";
 
-const CPU = [
-  "#C49C94",
-  "#F7B6D2",
-  "#C5B0D5",
-  "#FF7F0D",
-  "#BDD1EC",
-  "#9DD9E5",
-  "#D62728",
-  "#98DF89",
-];
-const MEMORY = ["#AEC7E8", "#C7C7C7", "#E1E1A2", "#98DF8A"];
-
 export const getOptions = (series, stacked, funcConverter, unit) => ({
   colors: series.map((serie) => serie.color),
   animation: false,
@@ -170,7 +158,7 @@ const selectUnitConverter = (unit) => {
       };
     default:
       return function (value) {
-        return value.toFixed(2);
+        return value;
       };
   }
 };
@@ -204,6 +192,7 @@ export const renderLegend = (series, noPointer = true) => {
 const LineChart = ({
   stacked,
   metrics,
+  metrics_param,
   title,
   unit,
   loading,
@@ -227,14 +216,15 @@ const LineChart = ({
       const series = [];
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
-        const nameDisplay = composeMetricName(metric);
+        const nameDisplay = composeMetricName(
+          metric,
+          metrics_param[idx].legend
+        );
         let data = metric.values.map((point) => [point[0] * 1000, point[1]]);
         data = fillEmptyPoints(data, period);
         let color = chartColorMap(idx);
-        if (title === "Processor Usage") {
-          color = CPU[idx];
-        } else if (title === "Memory Usage") {
-          color = MEMORY[idx];
+        if (title === "Processor Usage" || title === "Memory Usage") {
+          color = metrics_param[idx].color;
         }
         series.push({
           id: idx,
@@ -447,6 +437,7 @@ const LineChart = ({
 LineChart.propTypes = {
   stacked: PropTypes.bool,
   metrics: PropTypes.instanceOf(Array),
+  metrics_param: PropTypes.instanceOf(Array),
   title: PropTypes.string.isRequired,
   unit: PropTypes.number,
   loading: PropTypes.bool,

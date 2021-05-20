@@ -21,35 +21,39 @@ export const useFetch = (query, variables, pollInterval = 0) => {
   return { isLoading, error, ...data, networkStatus };
 };
 
-export const httpFetch = (variables, delay = 3000) => {
-  const [data, setData] = useState({});
-  const url = `/api/v1/query_range?query=${encodeURIComponent(
-    variables.query
-  )}&start=${encodeURIComponent(variables.start)}&end=${encodeURIComponent(
-    variables.end
-  )}&step=${encodeURIComponent(variables.step)}`;
+export const useHTTPFetch = (urls, delay = 3000) => {
+  const [data, setData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setIsError] = useState(null);
   const [delayState, setIsDelayState] = useState(false);
+  let time;
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setTimeout(() => setIsDelayState(true), delay);
-      setIsError(null);
+  useEffect(async () => {
+    time = setTimeout(() => setIsDelayState(true), delay);
+    const res = await Promise.all(urls).then(async (values) => {
+      const fetchData = async (url) => {
+        setIsError(null);
 
-      try {
-        const result = await axios(url);
+        try {
+          const result = await axios(url);
 
-        setData(result.data["data"]["result"]);
-        setIsLoading(false);
-      } catch (error) {
-        setIsError(error);
+          setIsLoading(false);
+          return result.data["data"]["result"][0];
+        } catch (error) {
+          setIsError(error);
+        }
+      };
+      let array_tmp = [];
+      for (let idx in values) {
+        array_tmp.push(await fetchData(values[idx]));
       }
       setIsDelayState(false);
-    };
-    fetchData();
+      return array_tmp;
+    });
+    await setData(res);
   }, [delayState]);
 
+  clearTimeout(time);
   return { data, isLoading, error };
 };
 
