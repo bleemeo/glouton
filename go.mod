@@ -11,6 +11,7 @@ require (
 	github.com/agnivade/levenshtein v1.1.0 // indirect
 	github.com/alecthomas/units v0.0.0-20201120081800-1786d5ef83d4 // indirect
 	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327
+	github.com/containerd/console v0.0.0-20180822173158-c12b1e7919c1
 	github.com/containerd/containerd v1.4.3
 	github.com/containerd/typeurl v0.0.0-20180627222232-a93fcdb778cd
 	github.com/dimchansky/utfbom v1.1.1 // indirect

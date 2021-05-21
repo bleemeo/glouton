@@ -304,6 +304,19 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 			return c, gqlerror.Errorf("Can not retrieve metrics")
 		}
 
+		// this code is to fix LabelItem != container.ContainerName(). In prometheus mode we need to use the older version with LabelContainerName
+		if len(metrics) == 0 {
+			metricFilters = map[string]string{
+				types.LabelContainerName: container.ContainerName(),
+				types.LabelName:          m,
+			}
+			metrics, err = r.api.DB.Metrics(metricFilters)
+			if err != nil {
+				logger.V(2).Printf("Can not retrieve metrics: %v", err)
+				return c, gqlerror.Errorf("Can not retrieve metrics")
+			}
+		}
+
 		if len(metrics) > 0 {
 			points, err := metrics[0].Points(time.Now().UTC().Add(-15*time.Minute), time.Now().UTC())
 			if err != nil {
