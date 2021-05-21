@@ -95,7 +95,9 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       if (stacked) {
         total = 0;
         params.map((p) => {
-          total += p.data[1];
+          if (p.data[1] !== null && p.data[1] !== undefined) {
+            total += Number(p.data[1]);
+          }
           return params;
         });
       }
