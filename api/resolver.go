@@ -310,6 +310,7 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 				types.LabelContainerName: container.ContainerName(),
 				types.LabelName:          m,
 			}
+
 			metrics, err = r.api.DB.Metrics(metricFilters)
 			if err != nil {
 				logger.V(2).Printf("Can not retrieve metrics: %v", err)

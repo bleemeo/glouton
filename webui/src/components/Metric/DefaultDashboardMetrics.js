@@ -190,7 +190,7 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "io_utilization",
-        legend: "{{ device }}",
+        legend: "{{ item }}",
       },
     ],
   },
@@ -201,7 +201,7 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "io_read_bytes",
-        legend: "{{ device }}",
+        legend: "{{ item }}",
       },
     ],
   },
@@ -212,7 +212,7 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "io_write_bytes",
-        legend: "{{ device }}",
+        legend: "{{ item }}",
       },
     ],
   },
@@ -223,7 +223,7 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "io_reads",
-        legend: "{{ device }}",
+        legend: "{{ item }}",
       },
     ],
   },
@@ -234,7 +234,7 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "io_writes",
-        legend: "{{ device }}",
+        legend: "{{ item }}",
       },
     ],
   },
@@ -245,11 +245,11 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "net_packets_recv",
-        legend: "received from {{ device }}",
+        legend: "received from {{ item }}",
       },
       {
         query: "net_packets_sent",
-        legend: "sent from {{ device }}",
+        legend: "sent from {{ item }}",
       },
     ],
   },
@@ -260,11 +260,11 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "net_err_in",
-        legend: "received from {{ device }}",
+        legend: "received from {{ item }}",
       },
       {
         query: "net_err_out",
-        legend: "sent from {{ device }}",
+        legend: "sent from {{ item }}",
       },
     ],
   },
@@ -275,7 +275,7 @@ export const widgetsBLEEMEO = [
     metrics: [
       {
         query: "disk_used_perc",
-        legend: "/",
+        legend: "{{ item }}",
       },
     ],
   },
@@ -467,8 +467,9 @@ export const widgetsPrometheusLinux = [
     unit: UNIT_PERCENTAGE,
     metrics: [
       {
-        query: "(1-node_filesystem_avail_bytes/node_filesystem_size_bytes)*100",
-        legend: "/",
+        query:
+          '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+        legend: "{{ mountpoint }}",
       },
     ],
   },
@@ -660,8 +661,9 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_PERCENTAGE,
     metrics: [
       {
-        query: "(1-node_filesystem_avail_bytes/node_filesystem_size_bytes)*100",
-        legend: "/",
+        query:
+          '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+        legend: "{{ mountpoint }}",
       },
     ],
   },

@@ -217,6 +217,13 @@ export function composeMetricName(metric, name) {
 
   if (metricName.indexOf("{{ device }}") > -1) {
     metricName = metricName.replace("{{ device }}", metric.metric.device);
+  } else if (metricName.indexOf("{{ mountpoint }}") > -1) {
+    metricName = metricName.replace(
+      "{{ mountpoint }}",
+      metric.metric.mountpoint
+    );
+  } else if (metricName.indexOf("{{ item }}") > -1) {
+    metricName = metricName.replace("{{ item }}", metric.metric.item);
   }
   return metricName;
 }
