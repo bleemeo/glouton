@@ -22,6 +22,7 @@ import (
 	"glouton/discovery"
 	"glouton/prometheus/matcher"
 	"glouton/types"
+	"sort"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -476,14 +477,20 @@ func Test_RebuildDynamicList(t *testing.T) {
 	new2, _ := matcher.NormalizeMetric("{__name__=\"else\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 	new3, _ := matcher.NormalizeMetric("{__name__=\"other\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 
-	allowListWant = append(allowListWant, new)
 	allowListWant = append(allowListWant, new2)
+	allowListWant = append(allowListWant, new)
 	denyListWant = append(denyListWant, new3)
+
+	allowListWant = sortMatchers(allowListWant)
+	denyListWant = sortMatchers(denyListWant)
 
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %w", err)
 	}
+
+	mf.allowList = sortMatchers(mf.allowList)
+	mf.denyList = sortMatchers(mf.denyList)
 
 	res := cmp.Diff(mf.allowList, allowListWant, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
@@ -494,4 +501,26 @@ func Test_RebuildDynamicList(t *testing.T) {
 	if res != "" {
 		t.Errorf("got != expected for denyList: %s", res)
 	}
+}
+
+func sortMatchers(list []matcher.Matchers) []matcher.Matchers {
+	nameList := []string{}
+	orderedList := []matcher.Matchers{}
+
+	for _, val := range list {
+		nameList = append(nameList, val[0].Value)
+	}
+
+	sort.Strings(nameList)
+
+	for _, val := range nameList {
+		for _, v := range list {
+			if v[0].Value == val {
+				orderedList = append(orderedList, v)
+				break
+			}
+		}
+	}
+
+	return orderedList
 }
