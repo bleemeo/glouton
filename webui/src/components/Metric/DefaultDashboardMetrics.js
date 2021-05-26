@@ -437,11 +437,11 @@ export const widgetsPrometheusLinux = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_network_receive_bytes_total[1m])*8",
+        query: "irate(node_network_receive_bytes_total[1m])",
         legend: "received from {{ device }}",
       },
       {
-        query: "irate(node_network_transmit_bytes_total[1m])*8",
+        query: "irate(node_network_transmit_bytes_total[1m])",
         legend: "sent from {{ device }}",
       },
     ],
@@ -452,11 +452,11 @@ export const widgetsPrometheusLinux = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_network_receive_errs_total[1m])*8",
+        query: "irate(node_network_receive_errs_total[1m])",
         legend: "received from {{ device }}",
       },
       {
-        query: "irate(node_network_transmit_errs_total[1m])*8",
+        query: "irate(node_network_transmit_errs_total[1m])",
         legend: "sent from {{ device }}",
       },
     ],
@@ -631,11 +631,11 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_network_receive_bytes_total[1m])*8",
+        query: "irate(node_network_receive_bytes_total[1m])",
         legend: "received from {{ device }}",
       },
       {
-        query: "irate(node_network_transmit_bytes_total[1m])*8",
+        query: "irate(node_network_transmit_bytes_total[1m])",
         legend: "sent from {{ device }}",
       },
     ],
@@ -646,11 +646,11 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_network_receive_errs_total[1m])*8",
+        query: "irate(node_network_receive_errs_total[1m])",
         legend: "received from {{ device }}",
       },
       {
-        query: "irate(node_network_transmit_errs_total[1m])*8",
+        query: "irate(node_network_transmit_errs_total[1m])",
         legend: "sent from {{ device }}",
       },
     ],
