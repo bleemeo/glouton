@@ -162,14 +162,9 @@ export const widgetsBLEEMEO = [
     unit: UNIT_BYTE,
     metrics: [
       {
-        query: "mem_used",
-        color: "#aec7e8",
-        legend: "used",
-      },
-      {
-        query: "mem_buffered",
-        color: "#c7c7c7",
-        legend: "buffered",
+        query: "mem_free",
+        color: "#98df8a",
+        legend: "free",
       },
       {
         query: "mem_cached",
@@ -177,9 +172,14 @@ export const widgetsBLEEMEO = [
         legend: "cached",
       },
       {
-        query: "mem_free",
-        color: "#98df8a",
-        legend: "free",
+        query: "mem_buffered",
+        color: "#c7c7c7",
+        legend: "buffered",
+      },
+      {
+        query: "mem_used",
+        color: "#aec7e8",
+        legend: "used",
       },
     ],
   },
@@ -354,15 +354,9 @@ export const widgetsPrometheusLinux = [
     unit: UNIT_BYTE,
     metrics: [
       {
-        query:
-          "node_memory_MemTotal_bytes - node_memory_MemFree_bytes -  node_memory_Cached_bytes - node_memory_Buffers_bytes",
-        color: "#aec7e8",
-        legend: "used",
-      },
-      {
-        query: "node_memory_Buffers_bytes",
-        color: "#c7c7c7",
-        legend: "buffered",
+        query: "node_memory_MemFree_bytes",
+        color: "#98df8a",
+        legend: "free",
       },
       {
         query: "node_memory_Cached_bytes",
@@ -370,9 +364,15 @@ export const widgetsPrometheusLinux = [
         legend: "cached",
       },
       {
-        query: "node_memory_MemFree_bytes",
-        color: "#98df8a",
-        legend: "free",
+        query: "node_memory_Buffers_bytes",
+        color: "#c7c7c7",
+        legend: "buffered",
+      },
+      {
+        query:
+          "node_memory_MemTotal_bytes - node_memory_MemFree_bytes -  node_memory_Cached_bytes - node_memory_Buffers_bytes",
+        color: "#aec7e8",
+        legend: "used",
       },
     ],
   },
@@ -426,7 +426,7 @@ export const widgetsPrometheusLinux = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_disk_reads_completed_total[1m])",
+        query: "irate(node_disk_writes_completed_total[1m])",
         legend: "{{ device }}",
       },
     ],
@@ -548,15 +548,9 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_BYTE,
     metrics: [
       {
-        query:
-          "node_memory_MemTotal_bytes - node_memory_MemFree_bytes -  node_memory_Cached_bytes - node_memory_Buffers_bytes",
-        color: "#aec7e8",
-        legend: "used",
-      },
-      {
-        query: "node_memory_Buffers_bytes",
-        color: "#c7c7c7",
-        legend: "buffered",
+        query: "node_memory_MemFree_bytes",
+        color: "#98df8a",
+        legend: "free",
       },
       {
         query: "node_memory_Cached_bytes",
@@ -564,9 +558,15 @@ export const widgetsPrometheusWindows = [
         legend: "cached",
       },
       {
-        query: "node_memory_MemFree_bytes",
-        color: "#98df8a",
-        legend: "free",
+        query: "node_memory_Buffers_bytes",
+        color: "#c7c7c7",
+        legend: "buffered",
+      },
+      {
+        query:
+          "node_memory_MemTotal_bytes - node_memory_MemFree_bytes -  node_memory_Cached_bytes - node_memory_Buffers_bytes",
+        color: "#aec7e8",
+        legend: "used",
       },
     ],
   },
@@ -620,7 +620,7 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_disk_reads_completed_total[1m])",
+        query: "irate(node_disk_writes_completed_total[1m])",
         legend: "{{ device }}",
       },
     ],
