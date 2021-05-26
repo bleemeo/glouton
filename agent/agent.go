@@ -733,6 +733,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.netstatWatcher, "Netstat file watcher"},
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
+		{a.recordingRules, "Recording rules"},
 	}
 
 	if a.config.Bool("web.enabled") {
