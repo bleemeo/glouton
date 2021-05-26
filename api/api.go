@@ -36,6 +36,7 @@ import (
 	"glouton/prometheus/promql"
 	"glouton/store"
 	"glouton/threshold"
+	"glouton/types"
 
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
@@ -58,6 +59,7 @@ type agentInterface interface {
 type API struct {
 	BindAddress        string
 	StaticCDNURL       string
+	MetricFormat       types.MetricFormat
 	DB                 *store.Store
 	ContainerRuntime   containerInterface
 	PsFact             *facts.ProcessProvider

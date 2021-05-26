@@ -701,6 +701,7 @@ func (a *agent) run() { //nolint:gocyclo
 		StaticCDNURL:       a.config.String("web.static_cdn_url"),
 		DiagnosticPage:     a.DiagnosticPage,
 		DiagnosticZip:      a.DiagnosticZip,
+		MetricFormat:       a.metricFormat,
 	}
 
 	a.FireTrigger(true, true, false, false)
