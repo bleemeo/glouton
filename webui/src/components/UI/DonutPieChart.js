@@ -86,7 +86,7 @@ const DonutPieChart = ({
     textCmpt = (
       <text
         fontSize={`${
-          typeof InstallTrigger !== "undefined" ? fontSize - 3 : fontSize
+          typeof InstallTrigger !== "undefined" ? fontSize - 3 : fontSize - 3
         }`}
         textAnchor="middle"
         style={{

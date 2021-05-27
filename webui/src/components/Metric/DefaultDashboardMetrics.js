@@ -467,8 +467,7 @@ export const widgetsPrometheusLinux = [
     unit: UNIT_PERCENTAGE,
     metrics: [
       {
-        query:
-          '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+        query: "(1-node_filesystem_avail_bytes/node_filesystem_size_bytes)*100",
         legend: "{{ mountpoint }}",
       },
     ],
@@ -661,8 +660,7 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_PERCENTAGE,
     metrics: [
       {
-        query:
-          '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+        query: "(1-node_filesystem_avail_bytes/node_filesystem_size_bytes)*100",
         legend: "{{ mountpoint }}",
       },
     ],

@@ -38,14 +38,17 @@ export const useHTTPFetch = (urls, delay = 3000) => {
           const result = await axios(url);
 
           setIsLoading(false);
-          return result.data["data"]["result"][0];
+          return result.data["data"]["result"];
         } catch (error) {
           setIsError(error);
         }
       };
       let array_tmp = [];
       for (let idx in values) {
-        array_tmp.push(await fetchData(values[idx]));
+        const arrayData = await fetchData(values[idx]);
+        for (let value in arrayData) {
+          array_tmp.push(arrayData[value]);
+        }
       }
       setIsDelayState(false);
       return array_tmp;

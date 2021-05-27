@@ -218,9 +218,12 @@ const LineChart = ({
       const series = [];
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
+        const legendIdx = parseInt(
+          idx / (metrics.length / metrics_param.length)
+        );
         const nameDisplay = composeMetricName(
           metric,
-          metrics_param[idx].legend
+          metrics_param[legendIdx].legend
         );
         let data = metric.values.map((point) => [point[0] * 1000, point[1]]);
         data = fillEmptyPoints(data, period);
