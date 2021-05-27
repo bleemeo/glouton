@@ -47,6 +47,7 @@ export const useHTTPFetch = (urls, delay = 3000) => {
       for (let idx in values) {
         const arrayData = await fetchData(values[idx]);
         for (let value in arrayData) {
+          arrayData[value].metric.legendId = idx;
           array_tmp.push(arrayData[value]);
         }
       }
