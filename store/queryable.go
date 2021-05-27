@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"glouton/types"
+	"sort"
 	"time"
 
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -34,7 +35,6 @@ func (q querier) Select(sortSeries bool, hints *storage.SelectHints, matchers ..
 	mint := time.Unix(0, q.mint*1e6)
 	maxt := time.Unix(0, q.maxt*1e6)
 
-	// TODO: sortSeries is not implemented
 	metrics := make([]metric, 0)
 
 outerLoop:
@@ -46,6 +46,14 @@ outerLoop:
 		}
 
 		metrics = append(metrics, metric)
+	}
+
+	if sortSeries {
+		sort.Slice(metrics, func(i, j int) bool {
+			lblsA := labels.FromMap(metrics[i].labels)
+			lblsB := labels.FromMap(metrics[j].labels)
+			return labels.Compare(lblsA, lblsB) < 0
+		})
 	}
 
 	return &seriesIter{store: q.store, metrics: metrics, mint: mint, maxt: maxt}
