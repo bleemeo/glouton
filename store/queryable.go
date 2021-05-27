@@ -34,7 +34,6 @@ func (q querier) Select(sortSeries bool, hints *storage.SelectHints, matchers ..
 	mint := time.Unix(0, q.mint*1e6)
 	maxt := time.Unix(0, q.maxt*1e6)
 
-	// TODO: what happen if q.store.metrics remove a metric we "copied" here ?
 	// TODO: sortSeries is not implemented
 	metrics := make([]metric, 0)
 
@@ -83,7 +82,7 @@ func (i *seriesIter) Next() bool {
 		i.metrics = i.metrics[1:]
 
 		points, err := metric.Points(i.mint, i.maxt)
-		if err != nil {
+		if err != nil && !errors.Is(err, errDeletedMetric) {
 			i.err = err
 			return false
 		}

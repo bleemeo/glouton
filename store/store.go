@@ -21,12 +21,17 @@ package store
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"sync"
 	"time"
 
 	"glouton/logger"
 	"glouton/types"
+)
+
+var (
+	errDeletedMetric = errors.New("metric was deleted")
 )
 
 // Store implement an interface to retrieve metrics and metric points.
@@ -167,6 +172,10 @@ func (m metric) Points(start, end time.Time) (result []types.Point, err error) {
 	m.store.lock.Lock()
 	defer m.store.lock.Unlock()
 
+	if !m.store.metrics[m.metricID].createAt.Equal(m.createAt) {
+		return nil, errDeletedMetric
+	}
+
 	points := m.store.points[m.metricID]
 	result = make([]types.Point, 0)
 
@@ -185,6 +194,7 @@ type metric struct {
 	annotations types.MetricAnnotations
 	store       *Store
 	metricID    int
+	createAt    time.Time
 }
 
 // Return true if filter match given labels.
@@ -270,6 +280,7 @@ func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.Me
 		annotations: annotations,
 		store:       s,
 		metricID:    newID,
+		createAt:    time.Now(),
 	}
 
 	s.metrics[newID] = m
