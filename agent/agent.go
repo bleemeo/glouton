@@ -442,6 +442,14 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
 		a.bleemeoConnector.UpdateInfo()
 	}
+
+	ctx := context.Background()
+	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
+	if err != nil {
+		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
+	} else {
+		a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
+	}
 }
 
 func checkThresholdIsMap(rawThreshold *map[string]interface{}, rawValue interface{}, firstUpdate bool) {
