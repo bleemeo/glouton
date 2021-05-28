@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package agent
+package rules
 
 import (
 	"context"
@@ -22,7 +22,6 @@ import (
 	"glouton/logger"
 	"glouton/store"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -32,23 +31,25 @@ import (
 	"github.com/prometheus/prometheus/rules"
 )
 
-type rulesManager struct {
-	queryable  *store.Store
-	appendable *store.Store
-
+//RulesManager is a wrapper handling everything related to prometheus recording
+// and alerting rules.
+type RulesManager struct {
+	// store implements both appendable and queryable.
+	store          *store.Store
 	recordingRules []*rules.Group
+	alertingRules  []*rules.Group
+	interval       time.Duration
 
-	//alertingRules ]*rules.AlertingRule | Rule?
-
-	l   sync.Mutex
 	mgr *rules.Manager
 }
 
-func (a *agent) recordingRules(ctx context.Context) error {
+//nolint: gochecknoglobals
+var defaultRecordingRules = map[string]string{
+	"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",
+}
+
+func NewManager(ctx context.Context, interval time.Duration, store *store.Store) *RulesManager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
-	m := rulesManager{}
-	m.queryable = a.store
-	m.appendable = a.store
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
 		Reg:                nil,
@@ -57,12 +58,13 @@ func (a *agent) recordingRules(ctx context.Context) error {
 		ActiveQueryTracker: nil,
 		LookbackDelta:      5 * time.Minute,
 	})
+
 	mgrOptions := &rules.ManagerOptions{
 		Context:    ctx,
 		Logger:     log.With(promLogger, "component", "rules manager"),
-		Appendable: m.appendable,
-		Queryable:  m.queryable,
-		QueryFunc:  rules.EngineQueryFunc(engine, m.queryable),
+		Appendable: store,
+		Queryable:  store,
+		QueryFunc:  rules.EngineQueryFunc(engine, store),
 		NotifyFunc: func(ctx context.Context, expr string, alerts ...*rules.Alert) {
 			if len(alerts) == 0 {
 				return
@@ -71,32 +73,47 @@ func (a *agent) recordingRules(ctx context.Context) error {
 		},
 	}
 
-	exp, err := parser.ParseExpr("sum(node_cpu_seconds_total) without (cpu)")
-	if err != nil {
-		logger.V(0).Printf("An error occurred while parsing expression: %v", err)
+	defaultGroupRules := []rules.Rule{}
+
+	for metricName, val := range defaultRecordingRules {
+		exp, err := parser.ParseExpr(val)
+		if err != nil {
+			logger.V(0).Printf("An error occurred while parsing expression %s: %v. This rule was not registered", val, err)
+		} else {
+			newRule := rules.NewRecordingRule(metricName, exp, labels.Labels{})
+			defaultGroupRules = append(defaultGroupRules, newRule)
+		}
 	}
 
-	rule := rules.NewRecordingRule("node_cpu_seconds_global", exp, labels.Labels{})
-	group := rules.NewGroup(rules.GroupOptions{
+	defaultGroup := rules.NewGroup(rules.GroupOptions{
 		Name:          "default",
-		Interval:      a.metricResolution,
-		Rules:         []rules.Rule{rule},
+		Interval:      interval,
+		Rules:         defaultGroupRules,
 		ShouldRestore: true,
 		Opts:          mgrOptions,
 	})
 
-	m.recordingRules = append(m.recordingRules, group)
+	rm := RulesManager{
+		store:    store,
+		interval: interval,
+	}
 
-	m.mgr = rules.NewManager(mgrOptions)
+	rm.recordingRules = append(rm.recordingRules, defaultGroup)
 
-	go func() {
-		for ctx.Err() == nil {
-			time.Sleep(a.metricResolution)
-			for _, gr := range m.recordingRules {
-				gr.Eval(ctx, time.Now())
-			}
-		}
-	}()
+	rm.mgr = rules.NewManager(mgrOptions)
 
-	return nil
+	return &rm
+}
+
+func (rm *RulesManager) Run() {
+	ctx := context.Background()
+	now := time.Now()
+
+	for _, rgr := range rm.recordingRules {
+		rgr.Eval(ctx, now)
+	}
+
+	for _, agr := range rm.alertingRules {
+		agr.Eval(ctx, now)
+	}
 }

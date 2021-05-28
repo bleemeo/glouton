@@ -41,7 +41,6 @@ func (a appender) Add(l labels.Labels, t int64, v float64) (uint64, error) {
 		labelsMap[lblv.Name] = lblv.Value
 	}
 
-	logger.V(0).Printf("Add(%v, %d, %f)\n", l, t, v)
 	newPoint := types.MetricPoint{
 		Point: types.Point{
 			Time:  time.Unix(0, t*1e6),

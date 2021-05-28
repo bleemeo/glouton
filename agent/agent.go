@@ -67,6 +67,7 @@ import (
 	"glouton/prometheus/exporter/common"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
+	"glouton/prometheus/rules"
 	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
@@ -552,6 +553,8 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.metricFilter = mFilter
 	a.store = store.New()
+	rulesManager := rules.NewManager(ctx, a.metricResolution, a.store)
+
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
 			PushPoint:             a.store,
@@ -562,6 +565,7 @@ func (a *agent) run() { //nolint:gocyclo
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
 			Filter:                mFilter,
 		},
+		RulesCallback: rulesManager.Run,
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
@@ -733,7 +737,6 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.netstatWatcher, "Netstat file watcher"},
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
-		{a.recordingRules, "Recording rules"},
 	}
 
 	if a.config.Bool("web.enabled") {
