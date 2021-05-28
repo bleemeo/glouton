@@ -42,6 +42,16 @@ type fakeGatherer struct {
 	response  []*dto.MetricFamily
 }
 
+type fakeFilter struct{}
+
+func (f *fakeFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
+	return points
+}
+
+func (f *fakeFilter) FilterFamilies(families []*dto.MetricFamily) []*dto.MetricFamily {
+	return families
+}
+
 func (g *fakeGatherer) fillResponse() {
 	helpStr := "fake metric"
 	value := 1.0
@@ -228,7 +238,11 @@ func TestRegistry_Register(t *testing.T) {
 }
 
 func TestRegistry_pushPoint(t *testing.T) {
-	reg := &Registry{}
+	reg := &Registry{
+		Option: Option{
+			Filter: &fakeFilter{},
+		},
+	}
 
 	t0 := time.Date(2020, 3, 2, 10, 30, 0, 0, time.UTC)
 	t0MS := t0.UnixNano() / 1e6
@@ -479,6 +493,7 @@ func TestRegistry_runOnce(t *testing.T) {
 			BleemeoAgentID: "fake-uuid",
 			FQDN:           "example.com",
 			GloutonPort:    "1234",
+			Filter:         &fakeFilter{},
 		},
 	}
 	regBleemeo.init()
@@ -494,6 +509,7 @@ func TestRegistry_runOnce(t *testing.T) {
 			BleemeoAgentID: "fake-uuid",
 			FQDN:           "example.com",
 			GloutonPort:    "1234",
+			Filter:         &fakeFilter{},
 		},
 	}
 	regPrometheus.init()

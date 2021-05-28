@@ -31,9 +31,7 @@ import (
 
 var errUpdateFromEnv = errors.New("update from environment variable is not supported")
 var errDeprecatedEnv = errors.New("environement variable is deprecated")
-var errSettingsDeprecated = errors.New(
-	"setting \"metric.prometheus\" is depreacted and replaced by \"metric.prometheus.targets\". See https://docs.bleemeo.com/metrics-sources/prometheus",
-)
+var errSettingsDeprecated = errors.New("setting is deprecated ")
 
 //nolint:gochecknoglobals
 var defaultConfig = map[string]interface{}{
@@ -117,28 +115,28 @@ var defaultConfig = map[string]interface{}{
 		"^rsxx[0-9]$",
 		"^[A-Z]:$",
 	},
-	"influxdb.db_name":                          "glouton",
-	"influxdb.enabled":                          false,
-	"influxdb.host":                             "localhost",
-	"influxdb.port":                             8086,
-	"influxdb.tags":                             map[string]string{},
-	"jmx.enabled":                               true,
-	"jmxtrans.config_file":                      "/var/lib/jmxtrans/glouton-generated.json",
-	"jmxtrans.file_permission":                  "0640",
-	"jmxtrans.graphite_port":                    2004,
-	"kubernetes.enabled":                        false,
-	"kubernetes.nodename":                       "",
-	"kubernetes.kubeconfig":                     "",
-	"logging.buffer.head_size":                  150,
-	"logging.buffer.tail_size":                  1000,
-	"logging.level":                             "INFO",
-	"logging.output":                            "console",
-	"logging.package_levels":                    "",
-	"metric.prometheus.targets":                 []interface{}{},
-	"metric.prometheus.include_default_metrics": true,
-	"metric.prometheus.allow_metrics":           []interface{}{},
-	"metric.prometheus.deny_metrics":            []interface{}{},
-	"metric.softstatus_period_default":          5 * 60,
+	"influxdb.db_name":                 "glouton",
+	"influxdb.enabled":                 false,
+	"influxdb.host":                    "localhost",
+	"influxdb.port":                    8086,
+	"influxdb.tags":                    map[string]string{},
+	"jmx.enabled":                      true,
+	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
+	"jmxtrans.file_permission":         "0640",
+	"jmxtrans.graphite_port":           2004,
+	"kubernetes.enabled":               false,
+	"kubernetes.nodename":              "",
+	"kubernetes.kubeconfig":            "",
+	"logging.buffer.head_size":         150,
+	"logging.buffer.tail_size":         1000,
+	"logging.level":                    "INFO",
+	"logging.output":                   "console",
+	"logging.package_levels":           "",
+	"metric.prometheus.targets":        []interface{}{},
+	"metric.include_default_metrics":   true,
+	"metric.allow_metrics":             []interface{}{},
+	"metric.deny_metrics":              []interface{}{},
+	"metric.softstatus_period_default": 5 * 60,
 	"metric.softstatus_period": map[string]interface{}{
 		"system_pending_updates":          86400,
 		"system_pending_security_updates": 86400,
@@ -192,9 +190,52 @@ func loadDefault(cfg *config.Configuration) {
 	}
 }
 
-// migrate upgrade the configuration when Glouton change it settings
-// The list returned are actually warnings, not errors.
-func migrate(cfg *config.Configuration) (warnings []error) {
+func migrateScrapperMetrics(cfg *config.Configuration) (warnings []error) {
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.allow_metrics", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.deny_metrics", "metric.deny_metrics")...)
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.allow", "metric.allow_metrics")...)
+	warnings = append(warnings, migrateScrapper(cfg, "metric.prometheus.deny", "metric.deny_metrics")...)
+
+	return warnings
+}
+
+func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPath string) (warnings []error) {
+	migratedTargets := []string{}
+	v, ok := cfg.Get(deprecatedPath)
+
+	if !ok {
+		return warnings
+	}
+
+	vTab, ok := v.([]interface{})
+	if !ok {
+		return warnings
+	}
+
+	if len(vTab) > 0 {
+		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, deprecatedPath, correctPath))
+
+		for _, val := range vTab {
+			migratedTargets = append(migratedTargets, val.(string))
+		}
+	}
+
+	if len(migratedTargets) > 0 {
+		existing, _ := cfg.Get(correctPath)
+		targets, _ := existing.([]interface{})
+
+		for _, val := range migratedTargets {
+			targets = append(targets, val)
+		}
+
+		cfg.Set(correctPath, targets)
+		cfg.Delete(deprecatedPath)
+	}
+
+	return warnings
+}
+
+func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 	// metrics.prometheus was renamed metrics.prometheus.scrapper
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
 	v, ok := cfg.Get("metric.prometheus")
@@ -205,7 +246,7 @@ func migrate(cfg *config.Configuration) (warnings []error) {
 			for key, dict := range vMap {
 				if tmp, ok := dict.(map[string]interface{}); ok {
 					if u, ok := tmp["url"].(string); ok {
-						warnings = append(warnings, errSettingsDeprecated)
+						warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus", errSettingsDeprecated))
 
 						migratedTargets = append(migratedTargets, map[string]interface{}{
 							"url":  u,
@@ -226,6 +267,20 @@ func migrate(cfg *config.Configuration) (warnings []error) {
 			cfg.Set("metric.prometheus.targets", targets)
 		}
 	}
+
+	_, found := cfg.Get("metric.prometheus.targets.include_default_metrics")
+	if found {
+		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus.targets.include_default_metrics. This option does not exists anymore and has not effects", errSettingsDeprecated))
+	}
+
+	return warnings
+}
+
+// migrate upgrade the configuration when Glouton change it settings
+// The list returned are actually warnings, not errors.
+func migrate(cfg *config.Configuration) (warnings []error) {
+	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
+	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
 
 	return warnings
 }

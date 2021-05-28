@@ -311,6 +311,19 @@ func (t Threshold) CurrentStatus(value float64) (types.Status, float64) {
 	return types.StatusOk, math.NaN()
 }
 
+func (r *Registry) GetThresholdMetricNames() []string {
+	res := []string{}
+
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	for key := range r.thresholds {
+		res = append(res, key.Name)
+	}
+
+	return res
+}
+
 // GetThreshold return the current threshold for given Metric.
 func (r *Registry) GetThreshold(key MetricNameItem) Threshold {
 	r.l.Lock()

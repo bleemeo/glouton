@@ -36,7 +36,7 @@ type jmxtransConfig struct {
 	targetAddress   string
 	targetPort      int
 	sha256ToService map[string]discovery.Service
-	knownMetrics    map[metricKey][]jmxMetric
+	knownMetrics    map[metricKey][]JmxMetric
 	isDivisor       map[string]bool
 }
 
@@ -110,7 +110,7 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 	}
 
 	cfg.sha256ToService = make(map[string]discovery.Service)
-	cfg.knownMetrics = make(map[metricKey][]jmxMetric)
+	cfg.knownMetrics = make(map[metricKey][]JmxMetric)
 	cfg.isDivisor = make(map[string]bool)
 
 	outputConfig := configWriter{
@@ -126,20 +126,13 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 	}
 
 	for _, service := range cfg.services {
-		if !service.Active {
-			continue
-		}
-
-		if service.ExtraAttributes["jmx_port"] == "" {
+		metrics := GetJMXMetrics(service)
+		if len(metrics) == 0 {
 			continue
 		}
 
 		port, err := strconv.ParseInt(service.ExtraAttributes["jmx_port"], 10, 0)
 		if err != nil {
-			continue
-		}
-
-		if service.IPAddress == "" {
 			continue
 		}
 
@@ -165,7 +158,6 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 			server.Password = service.ExtraAttributes["jmx_password"]
 		}
 
-		metrics := getJMXMetrics(service)
 		for _, m := range metrics {
 			hash := sha256.New()
 			_, _ = hash.Write([]byte(m.MBean))
@@ -218,7 +210,7 @@ func (cfg *jmxtransConfig) GetService(sha256Service string) (discovery.Service, 
 	return service, found
 }
 
-func (cfg *jmxtransConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) (metrics []jmxMetric, usedInRatio bool) {
+func (cfg *jmxtransConfig) GetMetrics(sha256Service string, sha256Bean string, attr string) (metrics []JmxMetric, usedInRatio bool) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 

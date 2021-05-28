@@ -3,6 +3,7 @@ package registry
 import (
 	"errors"
 	"fmt"
+	"glouton/logger"
 	"glouton/types"
 	"strings"
 	"sync"
@@ -71,14 +72,17 @@ type GathererWithState interface {
 // - pass the wrapper to a new prometheus HTTP handler.
 // - when Gather() is called upon the wrapper by prometheus, the wrapper calls GathererWithState(newState)
 // on its internal gatherer.
+// GatherWithState also contains the metrics allow/deny list in order to sync the metrics on /metric
+// with the metrics sent to the bleemeo platform.
 type GathererWithStateWrapper struct {
 	gatherState GatherState
 	gatherer    GathererWithState
+	filter      metricFilter
 }
 
 // NewGathererWithStateWrapper creates a new wrapper around GathererWithState.
-func NewGathererWithStateWrapper(g GathererWithState) *GathererWithStateWrapper {
-	return &GathererWithStateWrapper{gatherer: g}
+func NewGathererWithStateWrapper(g GathererWithState, filter metricFilter) *GathererWithStateWrapper {
+	return &GathererWithStateWrapper{gatherer: g, filter: filter}
 }
 
 // SetState updates the state the wrapper will provide to its internal gatherer when called.
@@ -88,7 +92,14 @@ func (w *GathererWithStateWrapper) SetState(state GatherState) {
 
 // Gather implements prometheus.Gatherer for GathererWithStateWrapper.
 func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
-	return w.gatherer.GatherWithState(w.gatherState)
+	res, err := w.gatherer.GatherWithState(w.gatherState)
+	if err != nil {
+		logger.V(2).Printf("Error during gather on /metrics: %v", err)
+	}
+
+	res = w.filter.FilterFamilies(res)
+
+	return res, err
 }
 
 // labeledGatherer provide a gatherer that will add provided labels to all metrics.

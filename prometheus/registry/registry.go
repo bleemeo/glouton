@@ -51,6 +51,11 @@ func (f pushFunction) PushPoints(points []types.MetricPoint) {
 	f(points)
 }
 
+type metricFilter interface {
+	FilterPoints(points []types.MetricPoint) []types.MetricPoint
+	FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
+}
+
 // Registry is a dynamic collection of metrics sources.
 //
 // For the Prometheus metrics source, it mostly a wrapper around prometheus.Gatherers,
@@ -107,6 +112,7 @@ type Option struct {
 	BleemeoAgentID        string
 	MetricFormat          types.MetricFormat
 	BlackboxSentScraperID bool
+	Filter                metricFilter
 }
 
 type registration struct {
@@ -449,7 +455,7 @@ func (r *Registry) AddDefaultCollector() {
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(r)
+		wrapper := NewGathererWithStateWrapper(r, r.Filter)
 
 		state := GatherStateFromMap(req.URL.Query())
 		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
@@ -613,6 +619,10 @@ func (r *Registry) runOnce() time.Duration {
 	}
 
 	if len(points) > 0 {
+		points = r.Filter.FilterPoints(points)
+	}
+
+	if len(points) > 0 {
 		r.PushPoint.PushPoints(points)
 	}
 
@@ -671,6 +681,10 @@ func sleepToAlign(interval time.Duration) {
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
+	if len(points) > 0 {
+		points = r.Filter.FilterPoints(points)
+	}
+
 	r.l.Lock()
 
 	for r.blockPushPoint {

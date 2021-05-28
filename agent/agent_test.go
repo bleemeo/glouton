@@ -40,9 +40,9 @@ func TestParseIPOutput(t *testing.T) {
        valid_lft forever preferred_lft forever
     inet6 fe80::42:8dff:fee2:7426/64 scope link 
        valid_lft forever preferred_lft forever
-5: vethde299e2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default 
+5: vethde299e2: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue master docker0 state UP group default
     link/ether fe:b8:9f:9e:36:aa brd ff:ff:ff:ff:ff:ff
-    inet6 fe80::fcb8:9fff:fe9e:36aa/64 scope link 
+    inet6 fe80::fcb8:9fff:fe9e:36aa/64 scope link
        valid_lft forever preferred_lft forever
 `,
 			want: "08:00:27:72:ca:f1",
@@ -73,12 +73,9 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 	}
 
 	tests := []struct {
-		name                 string
-		cfgFilename          string
-		want                 []*scrapper.Target
-		globalAllow          []string
-		globalDeny           []string
-		globalIncludeDefault bool
+		name        string
+		cfgFilename string
+		want        []*scrapper.Target
 	}{
 		{
 			name:        "old",
@@ -89,7 +86,9 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 						types.LabelMetaScrapeJob:      "test1",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					URL: mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
 				},
 			},
 		},
@@ -102,7 +101,9 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 						types.LabelMetaScrapeJob:      "test1",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					URL: mustParse("http://localhost:9090/metrics"),
+					URL:       mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
 				},
 			},
 		},
@@ -115,152 +116,138 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 						types.LabelMetaScrapeJob:      "new",
 						types.LabelMetaScrapeInstance: "new:9090",
 					},
-					URL: mustParse("http://new:9090/metrics"),
+					URL:       mustParse("http://new:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "old",
 						types.LabelMetaScrapeInstance: "old:9090",
 					},
-					URL: mustParse("http://old:9090/metrics"),
+					URL:       mustParse("http://old:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
 				},
 			},
 		},
 		{
-			name:                 "test-with-allow-deny",
-			cfgFilename:          "testdata/test-prometheus-targets.conf",
-			globalIncludeDefault: true,
-			globalAllow:          []string{"global1", "global2"},
-			globalDeny:           []string{"!global1"},
+			name:        "test-with-allow-deny",
+			cfgFilename: "testdata/test-prometheus-targets.conf",
 			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "use-global",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"global1", "global2"},
-					DenyList:       []string{"!global1"},
-					IncludeDefault: true,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "reset-global",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{},
-					DenyList:       []string{},
-					IncludeDefault: false,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-allow",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"local2{item=~\"plop\"}"},
-					DenyList:       []string{"!global1"},
-					IncludeDefault: true,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{"local2{item=~\"plop\"}"},
+					DenyList:  []string{},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-deny",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"global1", "global2"},
-					DenyList:       []string{"local1", "local2{item!~\"plop\"}"},
-					IncludeDefault: true,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{"local1", "local2{item!~\"plop\"}"},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-all",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"hello", "world"},
-					DenyList:       []string{"test"},
-					IncludeDefault: true,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{"hello", "world"},
+					DenyList:  []string{"test"},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "old",
 						types.LabelMetaScrapeInstance: "old:9090",
 					},
-					AllowList:      []string{"global1", "global2"},
-					DenyList:       []string{"!global1"},
-					IncludeDefault: true,
-					URL:            mustParse("http://old:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
+					URL:       mustParse("http://old:9090/metrics"),
 				},
 			},
 		},
 		{
-			name:                 "test-with-allow-deny-2",
-			cfgFilename:          "testdata/test-prometheus-targets.conf",
-			globalIncludeDefault: false,
-			globalAllow:          []string{"only", "global"},
-			globalDeny:           []string{"changed"},
+			name:        "test-with-allow-deny-2",
+			cfgFilename: "testdata/test-prometheus-targets.conf",
 			want: []*scrapper.Target{
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "use-global",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"only", "global"},
-					DenyList:       []string{"changed"},
-					IncludeDefault: false,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "reset-global",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{},
-					DenyList:       []string{},
-					IncludeDefault: false,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-allow",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"local2{item=~\"plop\"}"},
-					DenyList:       []string{"changed"},
-					IncludeDefault: false,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{"local2{item=~\"plop\"}"},
+					DenyList:  []string{},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-deny",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"only", "global"},
-					DenyList:       []string{"local1", "local2{item!~\"plop\"}"},
-					IncludeDefault: false,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{"local1", "local2{item!~\"plop\"}"},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "set-all",
 						types.LabelMetaScrapeInstance: "localhost:9090",
 					},
-					AllowList:      []string{"hello", "world"},
-					DenyList:       []string{"test"},
-					IncludeDefault: true,
-					URL:            mustParse("http://localhost:9090/metrics"),
+					AllowList: []string{"hello", "world"},
+					DenyList:  []string{"test"},
+					URL:       mustParse("http://localhost:9090/metrics"),
 				},
 				{
 					ExtraLabels: map[string]string{
 						types.LabelMetaScrapeJob:      "old",
 						types.LabelMetaScrapeInstance: "old:9090",
 					},
-					AllowList:      []string{"only", "global"},
-					DenyList:       []string{"changed"},
-					IncludeDefault: false,
-					URL:            mustParse("http://old:9090/metrics"),
+					AllowList: []string{},
+					DenyList:  []string{},
+					URL:       mustParse("http://old:9090/metrics"),
 				},
 			},
 		},
@@ -277,7 +264,7 @@ func Test_prometheusConfigToURLs(t *testing.T) {
 
 			input, _ := cfg.Get("metric.prometheus.targets")
 
-			got := prometheusConfigToURLs(input, tt.globalAllow, tt.globalDeny, tt.globalIncludeDefault)
+			got := prometheusConfigToURLs(input)
 			if diff := cmp.Diff(tt.want, got, cmpopts.IgnoreUnexported(scrapper.Target{})); diff != "" {
 				t.Errorf("prometheusConfigToURLs() != want: %v", diff)
 			}

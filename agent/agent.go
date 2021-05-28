@@ -107,6 +107,7 @@ type agent struct {
 	dynamicScrapper        *promexporter.DynamicScrapper
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
+	metricFilter           *metricFilter
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -420,6 +421,19 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
+	ctx := context.Background()
+	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
+
+	if err != nil {
+		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
+	} else {
+		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
+
+		if err != nil {
+			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
+		}
+	}
+
 	for _, name := range []string{"system_pending_updates", "system_pending_security_updates"} {
 		key := threshold.MetricNameItem{
 			Name: name,
@@ -532,6 +546,12 @@ func (a *agent) run() { //nolint:gocyclo
 		}()
 	}
 
+	mFilter, err := newMetricFilter(a.config, a.metricFormat)
+	if err != nil {
+		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
+	}
+
+	a.metricFilter = mFilter
 	a.store = store.New()
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
@@ -541,6 +561,7 @@ func (a *agent) run() { //nolint:gocyclo
 			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
+			Filter:                mFilter,
 		},
 	}
 	a.threshold = threshold.New(a.state)
@@ -641,12 +662,7 @@ func (a *agent) run() { //nolint:gocyclo
 	var targets []*scrapper.Target
 
 	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(
-			promCfg,
-			a.config.StringList("metric.prometheus.allow_metrics"),
-			a.config.StringList("metric.prometheus.deny_metrics"),
-			a.config.Bool("metric.prometheus.include_default_metrics"),
-		)
+		targets = prometheusConfigToURLs(promCfg)
 	}
 
 	for _, target := range targets {
@@ -1445,6 +1461,12 @@ func (a *agent) handleTrigger(ctx context.Context) {
 					a.dynamicScrapper.Update(containers)
 				}
 			}
+
+			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
+
+			if err != nil {
+				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
+			}
 		}
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
@@ -1784,7 +1806,7 @@ func setupContainer(hostRootPath string) {
 // prometheusConfigToURLs convert metric.prometheus.targets config to a map of target name to URL
 //
 // See tests for the expected config.
-func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []string, globalIncludeDefault bool) (result []*scrapper.Target) {
+func prometheusConfigToURLs(cfg interface{}) (result []*scrapper.Target) {
 	configList, ok := cfg.([]interface{})
 	if !ok {
 		return nil
@@ -1816,10 +1838,9 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 				// correctly handle empty value value (drop the label).
 				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
 			},
-			URL:            u,
-			AllowList:      globalAllow,
-			DenyList:       globalDeny,
-			IncludeDefault: globalIncludeDefault,
+			URL:       u,
+			AllowList: []string{},
+			DenyList:  []string{},
 		}
 
 		if allow, ok := vMap["allow_metrics"].([]interface{}); ok {
@@ -1834,25 +1855,6 @@ func prometheusConfigToURLs(cfg interface{}, globalAllow []string, globalDeny []
 		}
 
 		denyMetricsConfig(vMap, target)
-
-		switch value := vMap["include_default_metrics"].(type) {
-		case bool:
-			target.IncludeDefault = value
-		case int:
-			target.IncludeDefault = (value != 0)
-		case string:
-			v, err := config.ConvertBoolean(value)
-			if err != nil {
-				logger.Printf("ignoring invalid boolean \"%s\" for include_default on target %s: %v", value, uText, err)
-			} else {
-				target.IncludeDefault = v
-			}
-		default:
-			if value != nil {
-				logger.Printf("ignoring invalid boolean \"%v\" for include_default on target %s: unknown type", value, uText)
-			}
-		}
-
 		result = append(result, target)
 	}
 

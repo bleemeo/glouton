@@ -215,6 +215,22 @@ func Test_migrate(t *testing.T) {
 			},
 			absentKeys: []string{"metric.prometheus.old"},
 		},
+		{
+			name:        "old-prometheus-allow/deny_metrics",
+			cfgFilename: "testdata/old-prometheus-metrics.conf",
+			wantKeys: map[string]interface{}{
+				"metric.allow_metrics": []interface{}{
+					"test4",
+					"test1",
+					"test2",
+				},
+				"metric.deny_metrics": []interface{}{
+					"test5",
+					"test3",
+				},
+			},
+			absentKeys: []string{"metric.prometheus.allow_metrics", "metric.prometheus.deny_metrics"},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
