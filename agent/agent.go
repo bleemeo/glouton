@@ -421,6 +421,19 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
+	ctx := context.Background()
+	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
+
+	if err != nil {
+		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
+	} else {
+		err = a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
+
+		if err != nil {
+			logger.V(2).Printf("An error occurred while rebuilding dynamic list for updateThresholds: %v", err)
+		}
+	}
+
 	for _, name := range []string{"system_pending_updates", "system_pending_security_updates"} {
 		key := threshold.MetricNameItem{
 			Name: name,
@@ -441,14 +454,6 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
 		a.bleemeoConnector.UpdateInfo()
-	}
-
-	ctx := context.Background()
-	services, err := a.discovery.Discovery(ctx, 1*time.Hour)
-	if err != nil {
-		logger.V(2).Printf("An error occurred while running discoveries for updateThresholds: %v", err)
-	} else {
-		a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
 	}
 }
 
