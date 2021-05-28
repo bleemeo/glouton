@@ -1,111 +1,41 @@
 import React, { useEffect, useState } from "react";
 import VisibilitySensor from "react-visibility-sensor";
+import PropTypes from "prop-types";
 import WidgetDashboardItem from "../UI/WidgetDashboardItem";
-import {
-  chartTypes,
-  UNIT_PERCENTAGE,
-  UNIT_BYTE,
-  UNIT_NUMBER,
-  LabelName,
-} from "../utils";
+import { chartTypes } from "../utils";
 import { computeBackwardForward } from "../utils/ComputeBackwarForward";
-import { formatDateTime } from "../utils/formater";
-import EditPeriodModal, { lastQuickRanges } from "./EditPeriodModal";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
 import LineChart from "../UI/LineChart";
 import { useWindowWidth } from "../utils/hooks";
-import { getStorageItem, setStorageItem } from "../utils/storage";
+import { setStorageItem } from "../utils/storage";
+import {
+  gaugesBarBLEEMEO,
+  gaugesBarPrometheusLinux,
+  gaugesBarPrometheusWindows,
+  widgetsBLEEMEO,
+  widgetsPrometheusLinux,
+  widgetsPrometheusWindows,
+} from "../Metric/DefaultDashboardMetrics";
 
-const gaugesBar = [
-  {
-    title: "CPU",
-    metrics: [{ [LabelName]: "cpu_used" }],
-    unit: UNIT_PERCENTAGE,
-  },
-  {
-    title: "Memory",
-    metrics: [{ [LabelName]: "mem_used_perc" }],
-    unit: UNIT_PERCENTAGE,
-  },
-  {
-    title: "IO",
-    metrics: [{ [LabelName]: "io_utilization" }],
-    unit: UNIT_PERCENTAGE,
-  },
-  {
-    title: "/",
-    metrics: [{ [LabelName]: "disk_used_perc", mountpoint: "/" }],
-    unit: UNIT_PERCENTAGE,
-  },
-];
-
-const widgets = [
-  { title: "Processor Usage", type: chartTypes[1], unit: UNIT_PERCENTAGE },
-  { title: "Memory Usage", type: chartTypes[1], unit: UNIT_BYTE },
-  {
-    title: "Disk IO Utilization",
-    type: chartTypes[2],
-    unit: UNIT_PERCENTAGE,
-    metrics: [{ [LabelName]: "io_utilization" }],
-  },
-  {
-    title: "Disk Read Bytes",
-    type: chartTypes[2],
-    unit: UNIT_BYTE,
-    metrics: [{ [LabelName]: "io_read_bytes" }],
-  },
-  {
-    title: "Disk Write Bytes",
-    type: chartTypes[2],
-    unit: UNIT_BYTE,
-    metrics: [{ [LabelName]: "io_write_bytes" }],
-  },
-  {
-    title: "Disk Read Number",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: [{ [LabelName]: "io_reads" }],
-  },
-  {
-    title: "Disk Write Number",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: [{ [LabelName]: "io_writes" }],
-  },
-  {
-    title: "Network Packets",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: [
-      { [LabelName]: "net_packets_recv" },
-      { [LabelName]: "net_packets_sent" },
-    ],
-  },
-  {
-    title: "Network Errors",
-    type: chartTypes[2],
-    unit: UNIT_NUMBER,
-    metrics: [{ [LabelName]: "net_err_in" }, { [LabelName]: "net_err_out" }],
-  },
-  {
-    title: "Disk Space",
-    type: chartTypes[2],
-    unit: UNIT_PERCENTAGE,
-    metrics: [{ [LabelName]: "disk_used_perc" }],
-  },
-  {
-    title: "Swap Usage",
-    type: chartTypes[2],
-    unit: UNIT_PERCENTAGE,
-    metrics: [{ [LabelName]: "swap_used_perc" }],
-  },
-];
-
-const AgentSystemDashboard = () => {
-  const [period, setPeriod] = useState(
-    getStorageItem("period") || { minutes: 60 }
-  );
-  const [showEditPeriodMal, setShowEditPeriodMal] = useState(false);
+const AgentSystemDashboard = ({ facts }) => {
+  let gaugesBar = [];
+  let widgets = [];
+  if (facts.find((f) => f.name === "metrics_format").value === "Bleemeo") {
+    gaugesBar = gaugesBarBLEEMEO;
+    widgets = widgetsBLEEMEO;
+  } else if (
+    facts.find((f) => f.name === "metrics_format").value == "Prometheus"
+  ) {
+    if (facts.find((f) => f.name === "kernel").value == "Linux") {
+      gaugesBar = gaugesBarPrometheusLinux;
+      widgets = widgetsPrometheusLinux;
+    } else {
+      gaugesBar = gaugesBarPrometheusWindows;
+      widgets = widgetsPrometheusWindows;
+    }
+  }
+  const [period, setPeriod] = useState({ minutes: 60 });
+  //  const [showEditPeriodMal, setShowEditPeriodMal] = useState(false);
   useEffect(() => {
     document.title = "Dashboard | Glouton";
   }, []);
@@ -113,22 +43,21 @@ const AgentSystemDashboard = () => {
   useEffect(() => {
     setStorageItem("period", period);
   }, [period]);
-
   const windowWidth = useWindowWidth();
 
-  let periodText = "";
-  if (period.minutes) {
-    const range = lastQuickRanges.find((p) => p.value === period.minutes);
-    if (range) periodText = range.label;
-  } else if (period.from && period.to) {
-    periodText =
-      "from " +
-      formatDateTime(period.from) +
-      " to " +
-      formatDateTime(period.to);
-  }
+  //  let periodText = "";
+  //  if (period.minutes) {
+  //    const range = lastQuickRanges.find((p) => p.value === period.minutes);
+  //    if (range) periodText = range.label;
+  //  } else if (period.from && period.to) {
+  //    periodText =
+  //      "from " +
+  //      formatDateTime(period.from) +
+  //      " to " +
+  //      formatDateTime(period.to);
+  //  }
 
-  const onPeriodClick = () => setShowEditPeriodMal(true);
+  //  const onPeriodClick = () => setShowEditPeriodMal(true);
 
   const handleBackwardForwardFunc = (isForward = false) => {
     let startDate = new Date();
@@ -161,16 +90,16 @@ const AgentSystemDashboard = () => {
     setPeriod({ from: startDate, to: endDate });
   };
 
-  let editFromAndToModal = null;
-  if (showEditPeriodMal) {
-    editFromAndToModal = (
-      <EditPeriodModal
-        period={period}
-        onPeriodChange={(newPeriod) => setPeriod(newPeriod)}
-        onClose={() => setShowEditPeriodMal(false)}
-      />
-    );
-  }
+  //  let editFromAndToModal = null;
+  //  if (showEditPeriodMal) {
+  //    editFromAndToModal = (
+  //      <EditPeriodModal
+  //        period={period}
+  //        onPeriodChange={(newPeriod) => setPeriod(newPeriod)}
+  //        onClose={() => setShowEditPeriodMal(false)}
+  //      />
+  //    );
+  //  }
 
   let refetchTime = 10080;
   if (period.minutes) {
@@ -179,13 +108,10 @@ const AgentSystemDashboard = () => {
 
   return (
     <>
-      {editFromAndToModal}
       <div className="row">
         <div className="col-xl-12">
           <div className="btn-toolbar float-right" id="copy">
-            <button className="btn btn-outline-dark" onClick={onPeriodClick}>
-              {periodText}
-            </button>
+            <div className="btn btn-outline-dark">Last 1 hour</div>
           </div>
         </div>
       </div>
@@ -258,6 +184,10 @@ const AgentSystemDashboard = () => {
       </div>
     </>
   );
+};
+
+AgentSystemDashboard.propTypes = {
+  facts: PropTypes.instanceOf(Array).isRequired,
 };
 
 export default AgentSystemDashboard;

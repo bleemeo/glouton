@@ -52,7 +52,7 @@ const Routes = () => {
                     <Route
                       exact
                       path="/dashboard"
-                      component={AgentSystemDashboard}
+                      render={() => <AgentSystemDashboard facts={facts} />}
                     />
                     {facts.some((f) => f.name === "container_runtime") ? (
                       <Route

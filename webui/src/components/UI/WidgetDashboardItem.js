@@ -1,29 +1,10 @@
 import React, { useRef } from "react";
 import PropTypes from "prop-types";
 import MetricGaugeItem from "../Metric/MetricGaugeItem";
-import {
-  chartTypes,
-  computeEnd,
-  composeMetricName,
-  isShallowEqual,
-  LabelName,
-} from "../utils";
+import { chartTypes, isShallowEqual } from "../utils";
 import LineChart from "./LineChart";
-import { useFetch, POLL } from "../utils/hooks";
+import { useHTTPFetch } from "../utils/hooks";
 import FetchSuspense from "./FetchSuspense";
-import { GET_POINTS } from "../utils/gqlRequests";
-
-const CPU = [
-  "cpu_steal",
-  "cpu_softirq",
-  "cpu_interrupt",
-  "cpu_system",
-  "cpu_user",
-  "cpu_nice",
-  "cpu_wait",
-  "cpu_idle",
-];
-const MEMORY = ["mem_used", "mem_buffered", "mem_cached", "mem_free"];
 
 const WidgetDashboardItem = ({
   type,
@@ -43,23 +24,13 @@ const WidgetDashboardItem = ({
   const displayWidget = (points) => {
     switch (type) {
       case chartTypes[0]: {
-        const resultGauge = points.sort((a, b) => {
-          const aString = b.labels.map(() => "${l.key}=${l.value}").join(",");
-          const bString = b.labels.map(() => "${l.key}=${l.value}").join(",");
-          return aString.localeCompare(bString);
-        })[0];
-        const end = computeEnd(type, period);
         let lastPoint = null;
-        let thresholds = null;
-        if (
-          resultGauge &&
-          resultGauge.points &&
-          new Date(resultGauge.points[resultGauge.points.length - 1].time) <=
-            new Date(end)
-        ) {
-          lastPoint = resultGauge.points[resultGauge.points.length - 1].value;
-          thresholds = resultGauge.thresholds;
+        if (points[0]) {
+          lastPoint = parseFloat(
+            points[0].values[points[0].values.length - 1][1]
+          );
         }
+        let thresholds = null;
         return (
           <MetricGaugeItem
             unit={unit}
@@ -75,6 +46,7 @@ const WidgetDashboardItem = ({
           <LineChart
             stacked
             metrics={resultStacked}
+            metrics_param={metrics}
             title={title}
             unit={unit}
             period={period}
@@ -86,14 +58,10 @@ const WidgetDashboardItem = ({
       }
       case chartTypes[2]: {
         const resultsLines = points;
-        resultsLines.sort((a, b) => {
-          const aLabel = composeMetricName(a);
-          const bLabel = composeMetricName(b);
-          return aLabel.localeCompare(bLabel);
-        });
         return (
           <LineChart
             metrics={resultsLines}
+            metrics_param={metrics}
             title={title}
             unit={unit}
             period={period}
@@ -106,40 +74,34 @@ const WidgetDashboardItem = ({
     }
   };
 
-  const metricsFilter = [];
-  switch (type) {
-    case chartTypes[1]:
-      if (title === "Processor Usage") {
-        CPU.forEach((name) => {
-          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
-        });
-      } else if (title === "Memory Usage") {
-        MEMORY.forEach((name) => {
-          metricsFilter.push({ labels: [{ key: LabelName, value: name }] });
-        });
-      }
-      break;
-    default:
-      metrics.forEach((metric) => {
-        let labels = [];
-        for (let [key, value] of Object.entries(metric)) {
-          labels.push({ key: key, value: value });
-        }
-        metricsFilter.push({ labels: labels });
-      });
-  }
-  const { isLoading, error, points, networkStatus } = useFetch(
-    GET_POINTS,
-    {
-      metricsFilter,
-      start: period.from ? new Date(period.from).toISOString() : "",
-      end: period.to ? new Date(period.to).toISOString() : "",
-      minutes: period.minutes ? period.minutes : 0,
-    },
-    refetchTime * 1000
-  );
+  const urls = (metrics, period) => {
+    let start = period.from
+      ? new Date(period.from).toISOString()
+      : new Date(
+          new Date().setMinutes(new Date().getMinutes() - period.minutes)
+        ).toISOString();
+    let end = period.to
+      ? new Date(period.to).toISOString()
+      : new Date().toISOString();
+    let step = 10;
+    let urls = [];
+
+    for (let idx in metrics) {
+      urls.push(
+        `/api/v1/query_range?query=${encodeURIComponent(
+          metrics[idx].query
+        )}&start=${encodeURIComponent(start)}&end=${encodeURIComponent(
+          end
+        )}&step=${encodeURIComponent(step)}`
+      );
+    }
+    return urls;
+  };
+
+  const { isLoading, data, error } = useHTTPFetch(urls(metrics, period), 10000);
+  const points = data;
   let hasError = error;
-  if (previousError.current && !error && networkStatus === POLL) {
+  if (previousError.current && !error) {
     hasError = previousError.current;
   }
   previousError.current = error;
@@ -147,20 +109,24 @@ const WidgetDashboardItem = ({
     <div>
       {/* See Issue : https://github.com/apollographql/apollo-client/pull/4974 */}
       <FetchSuspense
-        isLoading={isLoading || !points}
+        isLoading={isLoading || !points || typeof points[0] === "undefined"}
         error={hasError}
         loadingComponent={
           type === chartTypes[0] ? (
             <MetricGaugeItem loading name={title} />
           ) : (
-            <LineChart title={title} loading />
+            <LineChart title={title} metrics_param={metrics} loading />
           )
         }
         fallbackComponent={
           type === chartTypes[0] ? (
             <MetricGaugeItem hasError={hasError} name={title} />
           ) : (
-            <LineChart title={title} hasError={hasError} />
+            <LineChart
+              title={title}
+              metrics_param={metrics}
+              hasError={hasError}
+            />
           ) /* eslint-disable-line react/jsx-indent */
         }
         points={points}
@@ -196,6 +162,7 @@ WidgetDashboardItem.propTypes = {
   type: PropTypes.string.isRequired,
   title: PropTypes.string.isRequired,
   metrics: PropTypes.any,
+  mountpoins: PropTypes.string,
   labels: PropTypes.instanceOf(Array),
   unit: PropTypes.number,
   refetchTime: PropTypes.number.isRequired,

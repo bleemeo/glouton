@@ -17,6 +17,19 @@ type AgentStatus struct {
 	StatusDescription []string `json:"statusDescription"`
 }
 
+type CPUUsage struct {
+	User      float64 `json:"User"`
+	Nice      float64 `json:"Nice"`
+	System    float64 `json:"System"`
+	Idle      float64 `json:"Idle"`
+	IOWait    float64 `json:"IOWait"`
+	Guest     float64 `json:"Guest"`
+	GuestNice float64 `json:"GuestNice"`
+	Irq       float64 `json:"IRQ"`
+	SoftIrq   float64 `json:"SoftIRQ"`
+	Steal     float64 `json:"Steal"`
+}
+
 type Container struct {
 	Command      string     `json:"command"`
 	CreatedAt    *time.Time `json:"createdAt"`
@@ -54,6 +67,14 @@ type Label struct {
 type LabelInput struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+type MemoryUsage struct {
+	Total   float64 `json:"Total"`
+	Used    float64 `json:"Used"`
+	Free    float64 `json:"Free"`
+	Buffers float64 `json:"Buffers"`
+	Cached  float64 `json:"Cached"`
 }
 
 type Metric struct {
@@ -103,6 +124,12 @@ type Service struct {
 	StatusDescription *string  `json:"statusDescription"`
 }
 
+type SwapUsage struct {
+	Total float64 `json:"Total"`
+	Used  float64 `json:"Used"`
+	Free  float64 `json:"Free"`
+}
+
 type Tag struct {
 	TagName string `json:"tagName"`
 }
@@ -115,6 +142,12 @@ type Threshold struct {
 }
 
 type Topinfo struct {
-	UpdatedAt time.Time  `json:"updatedAt"`
-	Processes []*Process `json:"processes"`
+	Time      time.Time    `json:"Time"`
+	Uptime    int          `json:"Uptime"`
+	Loads     []float64    `json:"Loads"`
+	Users     int          `json:"Users"`
+	Processes []*Process   `json:"Processes"`
+	CPU       *CPUUsage    `json:"CPU"`
+	Memory    *MemoryUsage `json:"Memory"`
+	Swap      *SwapUsage   `json:"Swap"`
 }

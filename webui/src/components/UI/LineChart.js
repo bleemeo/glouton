@@ -12,27 +12,10 @@ import {
   iopsToString,
 } from "../utils/formater";
 import Loading from "./Loading";
-import {
-  fillEmptyPoints,
-  UNIT_PERCENTAGE,
-  composeMetricName,
-  LabelName,
-} from "../utils";
+import { fillEmptyPoints, UNIT_PERCENTAGE, composeMetricName } from "../utils";
 import FaIcon from "./FaIcon";
 import QueryError from "./QueryError";
 import { chartColorMap } from "../utils/colors";
-
-const CPU = [
-  "#C49C94",
-  "#F7B6D2",
-  "#C5B0D5",
-  "#FF7F0D",
-  "#BDD1EC",
-  "#9DD9E5",
-  "#D62728",
-  "#98DF89",
-];
-const MEMORY = ["#AEC7E8", "#C7C7C7", "#E1E1A2", "#98DF8A"];
 
 export const getOptions = (series, stacked, funcConverter, unit) => ({
   colors: series.map((serie) => serie.color),
@@ -112,7 +95,9 @@ export const getOptions = (series, stacked, funcConverter, unit) => ({
       if (stacked) {
         total = 0;
         params.map((p) => {
-          total += p.data[1];
+          if (p.data[1] !== null && p.data[1] !== undefined) {
+            total += Number(p.data[1]);
+          }
           return params;
         });
       }
@@ -175,7 +160,7 @@ const selectUnitConverter = (unit) => {
       };
     default:
       return function (value) {
-        return value.toFixed(2);
+        return value;
       };
   }
 };
@@ -209,6 +194,7 @@ export const renderLegend = (series, noPointer = true) => {
 const LineChart = ({
   stacked,
   metrics,
+  metrics_param,
   title,
   unit,
   loading,
@@ -225,30 +211,22 @@ const LineChart = ({
       svgChart.current &&
       metrics &&
       metrics.length > 0 &&
-      metrics[0].points &&
-      metrics[0].points.length > 1 &&
-      metrics[0].labels
+      metrics[0].values &&
+      metrics[0].values.length > 1 &&
+      metrics[0].metric
     ) {
       const series = [];
-      /* eslint-disable indent */
-      const skipMetricName =
-        metrics.length > 1
-          ? metrics.every(
-              (m) =>
-                m.labels.find((l) => l.key === LabelName).value ===
-                metrics[0].labels.find((l) => l.key === LabelName).value
-            )
-          : false;
       /* eslint-enable indent */
       metrics.forEach((metric, idx) => {
-        const nameDisplay = composeMetricName(metric, skipMetricName);
-        let data = metric.points.map((point) => [point.time, point.value]);
+        const nameDisplay = composeMetricName(
+          metric,
+          metrics_param[metric.metric.legendId].legend
+        );
+        let data = metric.values.map((point) => [point[0] * 1000, point[1]]);
         data = fillEmptyPoints(data, period);
         let color = chartColorMap(idx);
-        if (title === "Processor Usage") {
-          color = CPU[idx];
-        } else if (title === "Memory Usage") {
-          color = MEMORY[idx];
+        if (title === "Processor Usage" || title === "Memory Usage") {
+          color = metrics_param[idx].color;
         }
         series.push({
           id: idx,
@@ -259,7 +237,7 @@ const LineChart = ({
           data,
           symbol: "none",
           areaStyle: stacked ? { opacity: 0.9 } : null,
-          lineStyle: { width: "1" },
+          lineStyle: { width: 1 },
           stack: stacked ? "stack" : null,
         });
       });
@@ -325,8 +303,8 @@ const LineChart = ({
   } else if (
     metrics &&
     metrics.length > 0 &&
-    metrics[0].points &&
-    metrics[0].points.length < 2
+    metrics[0].values &&
+    metrics[0].values.length < 2
   ) {
     doNotDisplayCarets = true;
     return (
@@ -377,7 +355,7 @@ const LineChart = ({
         </Card.Body>
       </Card>
     );
-  } else if (metrics && metrics.length > 0 && !metrics[0].points) {
+  } else if (metrics && metrics.length > 0 && !metrics[0].values) {
     noData = true;
   }
 
@@ -461,6 +439,7 @@ const LineChart = ({
 LineChart.propTypes = {
   stacked: PropTypes.bool,
   metrics: PropTypes.instanceOf(Array),
+  metrics_param: PropTypes.instanceOf(Array),
   title: PropTypes.string.isRequired,
   unit: PropTypes.number,
   loading: PropTypes.bool,

@@ -298,6 +298,13 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 			types.LabelName: m,
 		}
 
+		if r.api.MetricFormat == types.MetricFormatPrometheus {
+			metricFilters = map[string]string{
+				types.LabelContainerName: container.ContainerName(),
+				types.LabelName:          m,
+			}
+		}
+
 		metrics, err := r.api.DB.Metrics(metricFilters)
 		if err != nil {
 			logger.V(2).Printf("Can not retrieve metrics: %v", err)
@@ -337,19 +344,20 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 	return c, nil
 }
 
-// Processes returns a list of processes
+// Processes returns a list of topInfo
 // They can be filtered by container's ID.
 func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*Topinfo, error) {
 	if r.api.PsFact == nil {
 		return nil, gqlerror.Errorf("Can not retrieve processes at this moment. Please try later")
 	}
 
-	processes, updatedAt, err := r.api.PsFact.ProcessesWithTime(ctx, time.Second*15)
+	topInfo, err := r.api.PsFact.TopInfo(ctx, time.Second*15)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve processes: %v", err)
 		return nil, gqlerror.Errorf("Can not retrieve processes")
 	}
 
+	processes := topInfo.Processes
 	processesRes := []*Process{}
 
 	for _, process := range processes {
@@ -372,7 +380,33 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 		}
 	}
 
-	return &Topinfo{UpdatedAt: updatedAt, Processes: processesRes}, nil
+	cpuRes := &CPUUsage{
+		Nice:      topInfo.CPU.Nice,
+		System:    topInfo.CPU.System,
+		User:      topInfo.CPU.User,
+		Idle:      topInfo.CPU.Idle,
+		IOWait:    topInfo.CPU.IOWait,
+		Guest:     topInfo.CPU.Guest,
+		GuestNice: topInfo.CPU.GuestNice,
+		Irq:       topInfo.CPU.IRQ,
+		SoftIrq:   topInfo.CPU.SoftIRQ,
+		Steal:     topInfo.CPU.Steal,
+	}
+	memoryRes := &MemoryUsage{
+		Total:   topInfo.Memory.Total,
+		Used:    topInfo.Memory.Used,
+		Free:    topInfo.Memory.Free,
+		Buffers: topInfo.Memory.Buffers,
+		Cached:  topInfo.Memory.Cached,
+	}
+	swapRes := &SwapUsage{
+		Total: topInfo.Swap.Total,
+		Free:  topInfo.Swap.Free,
+		Used:  topInfo.Swap.Used,
+	}
+
+	return &Topinfo{Time: time.Unix(topInfo.Time, topInfo.Time), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
+		CPU: cpuRes, Memory: memoryRes, Swap: swapRes, Processes: processesRes}, nil
 }
 
 // Facts returns a list of facts discovered by agent.
