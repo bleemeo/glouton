@@ -44,28 +44,28 @@ type NetstatProvider struct {
 //
 // Supported addresses network is currently "tcp", "udp" or "unix".
 func (np NetstatProvider) Netstat(ctx context.Context, processes map[int]Process) (netstat map[int][]ListenAddress, err error) {
-	netstatData, err := ioutil.ReadFile(np.FilePath)
-	if err != nil {
-		return nil, err
-	}
+	netstat = make(map[int][]ListenAddress)
 
-	netstat = decodeNetstatFile(string(netstatData))
-	netstatInfo, err := os.Stat(np.FilePath)
+	netstatInfo, errFile := os.Stat(np.FilePath)
+	if errFile == nil {
+		var netstatData []byte
 
-	if err != nil {
-		return nil, err
+		netstatData, errFile = ioutil.ReadFile(np.FilePath)
+		if errFile == nil {
+			netstat = decodeNetstatFile(string(netstatData))
+
+			np.cleanRecycledPIDs(netstat, processes, netstatInfo.ModTime())
+		}
 	}
 
 	dynamicNetstat, err := psutilNet.Connections("inet")
 	if err != nil {
-		return nil, err
+		return netstat, err
 	}
-
-	np.cleanRecycledPIDs(netstat, processes, netstatInfo.ModTime())
 
 	np.mergeNetstats(netstat, dynamicNetstat)
 
-	return netstat, nil
+	return netstat, errFile
 }
 
 func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamicNetstat []psutilNet.ConnectionStat) {
