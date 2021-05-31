@@ -26,6 +26,7 @@ import (
 	"glouton/types"
 	"strings"
 	"sync"
+	"time"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -547,6 +548,10 @@ var defaultServiceMetrics []string = []string{
 	"process_resident_memory_bytes",
 }
 
+const (
+	filterLogDuration = 50 * time.Millisecond
+)
+
 //metricFilter is a thread-safe holder of an allow / deny metrics list.
 type metricFilter struct {
 
@@ -680,10 +685,10 @@ func newMetricFilter(config *config.Configuration, metricFormat types.MetricForm
 func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	i := 0
 
-	logger.V(2).Printf("Starting Point filtering. Number of points to filter: %d", len(points))
-
 	m.l.Lock()
 	defer m.l.Unlock()
+
+	start := time.Now()
 
 	if len(m.denyList) != 0 {
 		for _, point := range points {
@@ -720,9 +725,12 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 		}
 	}
 
-	points = points[:i]
+	duration := time.Since(start)
+	if duration > filterLogDuration {
+		logger.V(2).Printf("filtering points took %v with %d points in and %d points out", duration, len(points), i)
+	}
 
-	logger.V(2).Printf("Finished Point filtering. Number of points after filter: %d", len(points))
+	points = points[:i]
 
 	return points
 }
@@ -766,13 +774,19 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
 	i := 0
 
-	logger.V(2).Printf("Starting Families filtering. Number of families to filter: %d", len(f))
-
 	m.l.Lock()
 	defer m.l.Unlock()
 
+	start := time.Now()
+	pointsIn := 0
+	pointsOut := 0
+
 	for _, family := range f {
+		pointsIn += len(family.Metric)
+
 		m.filterFamily(family)
+
+		pointsOut += len(family.Metric)
 
 		if len(family.Metric) != 0 {
 			f[i] = family
@@ -780,9 +794,12 @@ func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 		}
 	}
 
-	f = f[:i]
+	duration := time.Since(start)
+	if duration > filterLogDuration {
+		logger.V(2).Printf("filtering family took %v with %d points in and %d points out", duration, pointsIn, pointsOut)
+	}
 
-	logger.V(2).Printf("Families filtering finished. Number of families after filter: %d", len(f))
+	f = f[:i]
 
 	return f
 }
