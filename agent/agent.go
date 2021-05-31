@@ -375,15 +375,20 @@ func (a *agent) updateMetricResolution(resolution time.Duration) {
 	}
 }
 
-func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
 	rawValue, ok := a.config.Get("thresholds")
 	if !ok {
 		rawValue = map[string]interface{}{}
 	}
 
-	var rawThreshold map[string]interface{}
+	rawThreshold, ok := rawValue.(map[string]interface{})
+	if !ok {
+		if firstUpdate {
+			logger.V(1).Printf("Threshold in configuration file is not map")
+		}
 
-	checkThresholdIsMap(&rawThreshold, &rawValue, firstUpdate)
+		return make(map[string]threshold.Threshold)
+	}
 
 	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
 
@@ -408,6 +413,12 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 		configThreshold[k] = t
 	}
+
+	return configThreshold
+}
+
+func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+	configThreshold := a.getConfigThreshold(firstUpdate)
 
 	oldThresholds := map[string]threshold.Threshold{}
 
@@ -454,18 +465,6 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
 		a.bleemeoConnector.UpdateInfo()
-	}
-}
-
-func checkThresholdIsMap(rawThreshold *map[string]interface{}, rawValue interface{}, firstUpdate bool) {
-	ok := false
-
-	if *rawThreshold, ok = rawValue.(map[string]interface{}); !ok {
-		if firstUpdate {
-			logger.V(1).Printf("Threshold in configuration file is not map")
-		}
-
-		*rawThreshold = nil
 	}
 }
 
