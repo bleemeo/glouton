@@ -627,7 +627,9 @@ func (r *Registry) runOnce() time.Duration {
 		r.PushPoint.PushPoints(points)
 	}
 
-	r.RulesCallback()
+	if r.RulesCallback != nil {
+		r.RulesCallback()
+	}
 
 	r.l.Lock()
 	r.countRunOnce--
