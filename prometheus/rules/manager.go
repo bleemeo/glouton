@@ -31,9 +31,9 @@ import (
 	"github.com/prometheus/prometheus/rules"
 )
 
-//RulesManager is a wrapper handling everything related to prometheus recording
+//Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
-type RulesManager struct {
+type Manager struct {
 	// store implements both appendable and queryable.
 	store          *store.Store
 	recordingRules []*rules.Group
@@ -48,7 +48,7 @@ var defaultRecordingRules = map[string]string{
 	"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",
 }
 
-func NewManager(ctx context.Context, interval time.Duration, store *store.Store) *RulesManager {
+func NewManager(ctx context.Context, interval time.Duration, store *store.Store) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -69,7 +69,11 @@ func NewManager(ctx context.Context, interval time.Duration, store *store.Store)
 			if len(alerts) == 0 {
 				return
 			}
-			promLogger.Log("component", "alert", "expr", expr, "alerts", fmt.Sprintf("%v", alerts), "alert0.State", alerts[0].State, "alert0.Labels", alerts[0].Labels.Copy())
+
+			err := promLogger.Log("component", "alert", "expr", expr, "alerts", fmt.Sprintf("%v", alerts), "alert0.State", alerts[0].State, "alert0.Labels", alerts[0].Labels.Copy())
+			if err != nil {
+				logger.V(2).Printf("an error occurred while running a prometheus notify: %w", err)
+			}
 		},
 	}
 
@@ -93,7 +97,7 @@ func NewManager(ctx context.Context, interval time.Duration, store *store.Store)
 		Opts:          mgrOptions,
 	})
 
-	rm := RulesManager{
+	rm := Manager{
 		store:    store,
 		interval: interval,
 	}
@@ -105,7 +109,7 @@ func NewManager(ctx context.Context, interval time.Duration, store *store.Store)
 	return &rm
 }
 
-func (rm *RulesManager) Run() {
+func (rm *Manager) Run() {
 	ctx := context.Background()
 	now := time.Now()
 
