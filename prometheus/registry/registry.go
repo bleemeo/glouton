@@ -620,10 +620,6 @@ func (r *Registry) runOnce() time.Duration {
 	}
 
 	if len(points) > 0 {
-		points = r.Filter.FilterPoints(points)
-	}
-
-	if len(points) > 0 {
 		r.PushPoint.PushPoints(points)
 	}
 
