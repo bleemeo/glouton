@@ -122,6 +122,8 @@ type agent struct {
 	l                sync.Mutex
 	taskIDs          map[string]int
 	metricResolution time.Duration
+
+	telemetry bool
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -211,6 +213,12 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		}
 	} else if oldStatePath != "" {
 		logger.Printf("The deprecated state file (%s) is migrated to new path (%s).", oldStatePath, statePath)
+	}
+
+	if a.config.Bool("agent.telemetry.enabled") {
+		a.telemetry = true
+	} else {
+		a.telemetry = false
 	}
 
 	return true
