@@ -18,7 +18,6 @@ package rules
 
 import (
 	"context"
-	"fmt"
 	"glouton/logger"
 	"glouton/store"
 	"os"
@@ -38,9 +37,8 @@ type Manager struct {
 	store          *store.Store
 	recordingRules []*rules.Group
 	alertingRules  []*rules.Group
-	interval       time.Duration
 
-	mgr *rules.Manager
+	engine *promql.Engine
 }
 
 //nolint: gochecknoglobals
@@ -48,7 +46,7 @@ var defaultRecordingRules = map[string]string{
 	"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",
 }
 
-func NewManager(ctx context.Context, interval time.Duration, store *store.Store) *Manager {
+func NewManager(ctx context.Context, store *store.Store) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -70,10 +68,7 @@ func NewManager(ctx context.Context, interval time.Duration, store *store.Store)
 				return
 			}
 
-			err := promLogger.Log("component", "alert", "expr", expr, "alerts", fmt.Sprintf("%v", alerts), "alert0.State", alerts[0].State, "alert0.Labels", alerts[0].Labels.Copy())
-			if err != nil {
-				logger.V(2).Printf("an error occurred while running a prometheus notify: %w", err)
-			}
+			logger.V(2).Printf("notification triggered for expression %x with state %v and labels %v", expr, alerts[0].State, alerts[0].Labels)
 		},
 	}
 
@@ -91,20 +86,16 @@ func NewManager(ctx context.Context, interval time.Duration, store *store.Store)
 
 	defaultGroup := rules.NewGroup(rules.GroupOptions{
 		Name:          "default",
-		Interval:      interval,
 		Rules:         defaultGroupRules,
 		ShouldRestore: true,
 		Opts:          mgrOptions,
 	})
 
 	rm := Manager{
-		store:    store,
-		interval: interval,
+		store:          store,
+		engine:         engine,
+		recordingRules: []*rules.Group{defaultGroup},
 	}
-
-	rm.recordingRules = append(rm.recordingRules, defaultGroup)
-
-	rm.mgr = rules.NewManager(mgrOptions)
 
 	return &rm
 }

@@ -17,7 +17,6 @@
 package store
 
 import (
-	"glouton/logger"
 	"glouton/types"
 	"time"
 
@@ -56,16 +55,13 @@ func (a appender) Add(l labels.Labels, t int64, v float64) (uint64, error) {
 }
 
 func (a appender) AddFast(ref uint64, t int64, v float64) error {
-	logger.V(0).Printf("AddFast(%d, %d, %f)\n", ref, t, v)
-	return nil
+	return errNotImplemented
 }
 
 func (a appender) Commit() error {
-	// logger.V(0).Printf("Commit()")
-	return nil
+	return errNotImplemented
 }
 
 func (a appender) Rollback() error {
-	// logger.V(0).Printf("Rollback")
-	return nil
+	return errNotImplemented
 }
