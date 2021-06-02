@@ -18,6 +18,7 @@ package rules
 
 import (
 	"context"
+	"fmt"
 	"glouton/logger"
 	"glouton/store"
 	"os"
@@ -37,9 +38,11 @@ type Manager struct {
 	// store implements both appendable and queryable.
 	store          *store.Store
 	recordingRules []*rules.Group
-	alertingRules  []*rules.Group
+	alertingRules  map[string]*rules.AlertingRule
+	inactive       map[string]bool
 
 	engine *promql.Engine
+	logger log.Logger
 }
 
 //nolint: gochecknoglobals
@@ -105,8 +108,11 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 
 	rm := Manager{
 		store:          store,
-		engine:         engine,
 		recordingRules: []*rules.Group{defaultGroup},
+		alertingRules:  make(map[string]*rules.AlertingRule),
+		inactive:       make(map[string]bool),
+		engine:         engine,
+		logger:         promLogger,
 	}
 
 	return &rm
@@ -120,7 +126,63 @@ func (rm *Manager) Run() {
 		rgr.Eval(ctx, now)
 	}
 
-	for _, agr := range rm.alertingRules {
-		agr.Eval(ctx, now)
+	for i, agr := range rm.alertingRules {
+		prevState := agr.State()
+
+		queryable := &store.CountingQueryable{Queryable: rm.store}
+		_, err := agr.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
+
+		if err != nil {
+			logger.V(2).Printf("an error occurred while evaluating an alerting rule: %w", err)
+		}
+		inactive := queryable.Count() == 0
+		state := agr.State()
+
+		rm.inactive[i] = inactive
+
+		if inactive {
+			continue
+		}
+
+		if state != prevState {
+			logger.V(0).Printf("metric state for %s changed: previous state=%v, new state=%v", agr.Name(), prevState, state)
+		}
 	}
+}
+
+//AddAlertingRule adds a new alerting rule.
+func (rm *Manager) AddAlertingRule(name string, exp string, hold time.Duration, lowWarning int64, highWarning int64, lowCritical int64, highCritical int64) error {
+	severityList := []string{"warning", "warning", "critical", "critical"}
+	thresholdValues := []string{fmt.Sprintf("%d", lowWarning), fmt.Sprintf("%d", highWarning), fmt.Sprintf("%d", lowCritical), fmt.Sprintf("%d", highCritical)}
+	expList := []string{
+		exp + " > " + thresholdValues[0] + " < " + thresholdValues[1],
+		exp + " > " + thresholdValues[1] + " < " + thresholdValues[2],
+		exp + " > " + thresholdValues[2] + " < " + thresholdValues[3],
+		exp + " > " + thresholdValues[3]}
+
+	for i, val := range expList {
+		newExp, err := parser.ParseExpr(val)
+		if err != nil {
+			return err
+		}
+		newRule := rules.NewAlertingRule(name,
+			newExp, hold, labels.Labels{labels.Label{Name: "severity", Value: severityList[i]}}, labels.Labels{}, labels.Labels{}, false, log.With(rm.logger, "alerting_rule", name))
+		rm.alertingRules[name+thresholdValues[i]] = newRule
+
+		rm.inactive[name] = true
+	}
+
+	return nil
+}
+
+//DeleteAlertingRule deletes a an alerting rule set.
+func (rm *Manager) DeleteAlertingRule(name string) {
+	delete(rm.alertingRules, name)
+	delete(rm.inactive, name)
+}
+
+//UpdateAlertingRule updates an alerting rule set.
+func (rm *Manager) UpdateAlertingRule(name string, exp string, hold time.Duration, lowWarning int64, highWarning int64, lowCritical int64, highCritical int64) error {
+	rm.DeleteAlertingRule(name)
+	return rm.AddAlertingRule(name, exp, hold, lowWarning, highWarning, lowCritical, highCritical)
 }

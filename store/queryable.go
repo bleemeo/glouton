@@ -21,6 +21,7 @@ import (
 	"errors"
 	"glouton/types"
 	"sort"
+	"sync/atomic"
 	"time"
 
 	"github.com/prometheus/prometheus/pkg/labels"
@@ -198,4 +199,77 @@ func (s *seriesSample) At() (int64, float64) {
 // exhausted, that is `Next` or `Seek` returns false.
 func (s *seriesSample) Err() error {
 	return nil
+}
+
+type CountingQueryable struct {
+	Queryable storage.Queryable
+	count     int32
+}
+
+func (q *CountingQueryable) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
+	result, err := q.Queryable.Querier(ctx, mint, maxt)
+	if err != nil {
+		return nil, err
+	}
+
+	return countingQuerier{
+		Querier: result,
+		count:   &q.count,
+	}, nil
+}
+
+func (q *CountingQueryable) Count() int32 {
+	return atomic.LoadInt32(&q.count)
+}
+
+type countingQuerier struct {
+	storage.Querier
+	count *int32
+}
+
+func (q countingQuerier) Select(sortSeries bool, hints *storage.SelectHints, matchers ...*labels.Matcher) storage.SeriesSet {
+	result := q.Querier.Select(sortSeries, hints, matchers...)
+
+	return wrapSeriesSet{
+		SeriesSet: result,
+		count:     q.count,
+	}
+}
+
+type wrapSeriesSet struct {
+	storage.SeriesSet
+	count *int32
+}
+
+func (s wrapSeriesSet) At() storage.Series {
+	result := s.SeriesSet.At()
+
+	return wrapSeries{
+		Series: result,
+		count:  s.count,
+	}
+}
+
+type wrapSeries struct {
+	storage.Series
+	count *int32
+}
+
+func (s wrapSeries) Iterator() chunkenc.Iterator {
+	result := s.Series.Iterator()
+
+	return wrapIterator{
+		Iterator: result,
+		count:    s.count,
+	}
+}
+
+type wrapIterator struct {
+	chunkenc.Iterator
+	count *int32
+}
+
+func (i wrapIterator) At() (int64, float64) {
+	atomic.AddInt32(i.count, 1)
+	return i.Iterator.At()
 }
