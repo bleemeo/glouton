@@ -54,7 +54,7 @@ var promDefaultSystemMetrics []string = []string{
 	"node_memory_SwapTotal_bytes",
 	"node_disk_io_time_seconds_total",
 	"node_disk_read_bytes_total",
-	"node_disk_write_bytes_total",
+	"node_disk_written_bytes_total",
 	"node_disk_reads_completed_total",
 	"node_disk_writes_completed_total",
 	"node_filesystem_avail_bytes",
