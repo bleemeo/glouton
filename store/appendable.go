@@ -59,7 +59,7 @@ func (a appender) AddFast(ref uint64, t int64, v float64) error {
 }
 
 func (a appender) Commit() error {
-	return errNotImplemented
+	return nil
 }
 
 func (a appender) Rollback() error {
