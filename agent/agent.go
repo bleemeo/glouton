@@ -67,6 +67,7 @@ import (
 	"glouton/prometheus/exporter/common"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
+	"glouton/prometheus/rules"
 	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
@@ -386,15 +387,20 @@ func (a *agent) updateMetricResolution(resolution time.Duration) {
 	}
 }
 
-func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
 	rawValue, ok := a.config.Get("thresholds")
 	if !ok {
 		rawValue = map[string]interface{}{}
 	}
 
-	var rawThreshold map[string]interface{}
+	rawThreshold, ok := rawValue.(map[string]interface{})
+	if !ok {
+		if firstUpdate {
+			logger.V(1).Printf("Threshold in configuration file is not map")
+		}
 
-	checkThresholdIsMap(&rawThreshold, &rawValue, firstUpdate)
+		return make(map[string]threshold.Threshold)
+	}
 
 	configThreshold := make(map[string]threshold.Threshold, len(rawThreshold))
 
@@ -419,6 +425,12 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 		configThreshold[k] = t
 	}
+
+	return configThreshold
+}
+
+func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool) {
+	configThreshold := a.getConfigThreshold(firstUpdate)
 
 	oldThresholds := map[string]threshold.Threshold{}
 
@@ -465,18 +477,6 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 
 	if !firstUpdate && !oldThresholds[key.Name].Equal(newThreshold) && a.bleemeoConnector != nil {
 		a.bleemeoConnector.UpdateInfo()
-	}
-}
-
-func checkThresholdIsMap(rawThreshold *map[string]interface{}, rawValue interface{}, firstUpdate bool) {
-	ok := false
-
-	if *rawThreshold, ok = rawValue.(map[string]interface{}); !ok {
-		if firstUpdate {
-			logger.V(1).Printf("Threshold in configuration file is not map")
-		}
-
-		*rawThreshold = nil
 	}
 }
 
@@ -564,6 +564,9 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.metricFilter = mFilter
 	a.store = store.New()
+	a.store.SetFilterCallback(mFilter.FilterPoints)
+	rulesManager := rules.NewManager(ctx, a.store)
+
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
 			PushPoint:             a.store,
@@ -574,6 +577,7 @@ func (a *agent) run() { //nolint:gocyclo
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
 			Filter:                mFilter,
 		},
+		RulesCallback: rulesManager.Run,
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}

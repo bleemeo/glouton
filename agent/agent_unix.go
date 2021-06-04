@@ -35,6 +35,8 @@ func (a *agent) registerOSSpecificComponents() {
 
 		nodeOption.WithPathIgnore(a.config.StringList("df.path_ignore"))
 		nodeOption.WithNetworkIgnore(a.config.StringList("network_interface_blacklist"))
+		nodeOption.WithDiskIgnore(a.config.StringList("disk_ignore"))
+		nodeOption.WithPathIgnoreFSType(a.config.StringList("df.ignore_fs_type"))
 
 		if err := a.gathererRegistry.AddNodeExporter(nodeOption); err != nil {
 			logger.Printf("Unable to start node_exporter, system metrics will be missing: %v", err)

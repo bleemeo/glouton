@@ -43,6 +43,7 @@ type Store struct {
 	notifyCallbacks map[int]func([]types.MetricPoint)
 	lock            sync.Mutex
 	notifeeLock     sync.Mutex
+	filterCallback  func([]types.MetricPoint) []types.MetricPoint
 }
 
 // New create a return a store. Store should be Close()d before leaving.
@@ -51,6 +52,7 @@ func New() *Store {
 		metrics:         make(map[int]metric),
 		points:          make(map[int][]types.Point),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
+		filterCallback:  nil,
 	}
 
 	return s
@@ -67,6 +69,12 @@ func (s *Store) Run(ctx context.Context) error {
 			return nil
 		}
 	}
+}
+
+//SetFilterCallback sets the filter callback used to filter points
+// we send to the notifies callbacks.
+func (s *Store) SetFilterCallback(fc func([]types.MetricPoint) []types.MetricPoint) {
+	s.filterCallback = fc
 }
 
 // AddNotifiee add a callback that will be notified of all points received
@@ -307,6 +315,10 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 		dedupPoints = append(dedupPoints, point)
 	}
 	s.lock.Unlock()
+
+	if s.filterCallback != nil && len(dedupPoints) > 0 {
+		dedupPoints = s.filterCallback(dedupPoints)
+	}
 
 	s.notifeeLock.Lock()
 

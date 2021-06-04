@@ -16,7 +16,7 @@ export const gaugesBarPrometheusLinux = [
     metrics: [
       {
         query:
-          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
       },
     ],
     unit: UNIT_PERCENTAGE,
@@ -58,7 +58,7 @@ export const gaugesBarPrometheusWindows = [
     metrics: [
       {
         query:
-          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_SReclaimable_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
       },
     ],
     unit: UNIT_PERCENTAGE,

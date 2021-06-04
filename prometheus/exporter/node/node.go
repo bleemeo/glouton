@@ -20,6 +20,7 @@ import (
 type Option struct {
 	RootFS                       string
 	FilesystemIgnoredMountPoints string
+	FilesystemIgnoredType        string
 	NetworkIgnoredDevices        string
 	DiskStatsIgnoredDevices      string
 	EnabledCollectors            []string
@@ -65,6 +66,10 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 		args = append(args, fmt.Sprintf("--collector.filesystem.ignored-mount-points=%s", option.FilesystemIgnoredMountPoints))
 	}
 
+	if option.FilesystemIgnoredType != "" {
+		args = append(args, fmt.Sprintf("--collector.filesystem.ignored-fs-types=%s", option.FilesystemIgnoredType))
+	}
+
 	if option.NetworkIgnoredDevices != "" {
 		args = append(args, fmt.Sprintf("--collector.netclass.ignored-devices=%s", option.NetworkIgnoredDevices))
 		args = append(args, fmt.Sprintf("--collector.netdev.device-blacklist=%s", option.NetworkIgnoredDevices))
@@ -73,6 +78,8 @@ func NewCollector(option Option) (prometheus.Collector, error) {
 	if option.DiskStatsIgnoredDevices != "" {
 		args = append(args, fmt.Sprintf("--collector.diskstats.ignored-devices=%s", option.DiskStatsIgnoredDevices))
 	}
+
+	logger.V(2).Printf("Starting node_exporter with %v as args", args)
 
 	if _, err := kingpin.CommandLine.Parse(args); err != nil {
 		return nil, fmt.Errorf("kingpin initialization: %w", err)
@@ -110,6 +117,34 @@ func (o *Option) WithPathIgnore(prefixes []string) *Option {
 	}
 
 	o.FilesystemIgnoredMountPoints = re
+
+	return o
+}
+
+// WithDiskIgnore set the of disk device to ignore.
+func (o *Option) WithDiskIgnore(prefixes []string) *Option {
+	var err error
+
+	re, err := common.ReFromREs(prefixes)
+	if err != nil {
+		return o
+	}
+
+	o.DiskStatsIgnoredDevices = re
+
+	return o
+}
+
+// WithPathIgnoreFSType set the of filesystem type to ignore.
+func (o *Option) WithPathIgnoreFSType(prefixes []string) *Option {
+	var err error
+
+	re, err := common.ReFromREs(prefixes)
+	if err != nil {
+		return o
+	}
+
+	o.FilesystemIgnoredType = re
 
 	return o
 }
