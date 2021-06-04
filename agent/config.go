@@ -115,8 +115,8 @@ var defaultConfig = map[string]interface{}{
 		"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$",
 		"^dm-[0-9]+$",
 		// Ignore partition
-		"^(hd|sd|vd|xvd|fio|rssd)[a-z][0-9]+",
-		"^(mmcblk|nvme[0-9]n|drbd|rbd|skd|rsxx)[0-9]p[0-9]+",
+		"^(hd|sd|vd|xvd|fio|rssd)[a-z][0-9]+$",
+		"^(mmcblk|nvme[0-9]n|drbd|rbd|skd|rsxx)[0-9]p[0-9]+$",
 	},
 	"disk_monitor": []string{
 		"^(hd|sd|vd|xvd)[a-z]$",
