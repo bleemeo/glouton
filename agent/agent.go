@@ -114,6 +114,7 @@ type agent struct {
 	lastContainerEventTime time.Time
 	metricFilter           *metricFilter
 	monitorManager         *blackbox.RegisterManager
+	rulesManager           *rules.Manager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -441,6 +442,12 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		oldThresholds[name] = a.threshold.GetThreshold(key)
 	}
 
+	for key, val := range thresholds {
+		err := a.rulesManager.UpdateAlertingRule(key.Name, "node_cpu_seconds_global > 10000", 5*time.Minute, val)
+		if err != nil {
+			logger.V(0).Printf("An error occurred while updating alerting rules: %v", err) // FIXME: turn V0 to V2
+		}
+	}
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
 	ctx := context.Background()
@@ -577,7 +584,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
 			Filter:                mFilter,
 		},
-		RulesCallback: rulesManager.Run,
+		RulesCallback: a.rulesManager.Run,
 	}
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}

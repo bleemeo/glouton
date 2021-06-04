@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/store"
+	"glouton/threshold"
+	"math"
 	"os"
 	"runtime"
 	"time"
@@ -135,6 +137,7 @@ func (rm *Manager) Run() {
 		if err != nil {
 			logger.V(2).Printf("an error occurred while evaluating an alerting rule: %w", err)
 		}
+
 		inactive := queryable.Count() == 0
 		state := agr.State()
 
@@ -150,39 +153,60 @@ func (rm *Manager) Run() {
 	}
 }
 
-//AddAlertingRule adds a new alerting rule.
-func (rm *Manager) AddAlertingRule(name string, exp string, hold time.Duration, lowWarning int64, highWarning int64, lowCritical int64, highCritical int64) error {
-	severityList := []string{"warning", "warning", "critical", "critical"}
-	thresholdValues := []string{fmt.Sprintf("%d", lowWarning), fmt.Sprintf("%d", highWarning), fmt.Sprintf("%d", lowCritical), fmt.Sprintf("%d", highCritical)}
-	expList := []string{
-		exp + " > " + thresholdValues[0] + " < " + thresholdValues[1],
-		exp + " > " + thresholdValues[1] + " < " + thresholdValues[2],
-		exp + " > " + thresholdValues[2] + " < " + thresholdValues[3],
-		exp + " > " + thresholdValues[3]}
+func (rm *Manager) newRule(exp string, name string, hold time.Duration, severity string, desc string) error {
+	newExp, err := parser.ParseExpr(exp)
+	if err != nil {
+		return err
+	}
+	// description à rajouter, voir le truc qui calcule les threshold
+	newRule := rules.NewAlertingRule(name,
+		newExp, hold, labels.Labels{labels.Label{Name: "severity", Value: severity}},
+		labels.Labels{}, labels.Labels{}, false, log.With(rm.logger, "alerting_rule", name))
 
-	for i, val := range expList {
-		newExp, err := parser.ParseExpr(val)
+	rm.alertingRules[name] = newRule
+
+	rm.inactive[name] = true
+
+	return nil
+}
+
+func (rm *Manager) addAlertingRule(name string, exp string, hold time.Duration, thresholds threshold.Threshold) error {
+	if !math.IsNaN(thresholds.LowWarning) {
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.LowWarning), name+"_low_warning", hold, "warning", "")
 		if err != nil {
 			return err
 		}
-		newRule := rules.NewAlertingRule(name,
-			newExp, hold, labels.Labels{labels.Label{Name: "severity", Value: severityList[i]}}, labels.Labels{}, labels.Labels{}, false, log.With(rm.logger, "alerting_rule", name))
-		rm.alertingRules[name+thresholdValues[i]] = newRule
-
-		rm.inactive[name] = true
+	}
+	if !math.IsNaN(thresholds.HighWarning) {
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.HighWarning), name+"_high_warning", hold, "warning", "")
+		if err != nil {
+			return err
+		}
+	}
+	if !math.IsNaN(thresholds.LowCritical) {
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.LowCritical), name+"_low_critical", hold, "critical", "")
+		if err != nil {
+			return err
+		}
+	}
+	if !math.IsNaN(thresholds.HighCritical) {
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.HighCritical), name+"_high_critical", hold, "critical", "")
+		if err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-//DeleteAlertingRule deletes a an alerting rule set.
-func (rm *Manager) DeleteAlertingRule(name string) {
+func (rm *Manager) deleteAlertingRule(name string) {
 	delete(rm.alertingRules, name)
 	delete(rm.inactive, name)
 }
 
 //UpdateAlertingRule updates an alerting rule set.
-func (rm *Manager) UpdateAlertingRule(name string, exp string, hold time.Duration, lowWarning int64, highWarning int64, lowCritical int64, highCritical int64) error {
-	rm.DeleteAlertingRule(name)
-	return rm.AddAlertingRule(name, exp, hold, lowWarning, highWarning, lowCritical, highCritical)
+// It will either create the rule set ([low|high][warning|critical]) or replace the old one.
+func (rm *Manager) UpdateAlertingRule(name string, exp string, hold time.Duration, thresholds threshold.Threshold) error {
+	rm.deleteAlertingRule(name)
+	return rm.addAlertingRule(name, exp, hold, thresholds)
 }
