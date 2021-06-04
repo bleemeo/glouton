@@ -103,6 +103,7 @@ type Registry struct {
 	lastPushedPointsCleanup    time.Time
 	currentDelay               time.Duration
 	updateDelayC               chan interface{}
+	RulesCallback              func()
 }
 
 type Option struct {
@@ -619,11 +620,11 @@ func (r *Registry) runOnce() time.Duration {
 	}
 
 	if len(points) > 0 {
-		points = r.Filter.FilterPoints(points)
+		r.PushPoint.PushPoints(points)
 	}
 
-	if len(points) > 0 {
-		r.PushPoint.PushPoints(points)
+	if r.RulesCallback != nil {
+		r.RulesCallback()
 	}
 
 	r.l.Lock()
