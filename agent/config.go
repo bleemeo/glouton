@@ -64,6 +64,7 @@ var defaultConfig = map[string]interface{}{
 	"agent.metrics_format":                         "Bleemeo",
 	"agent.node_exporter.enabled":                  true,
 	"agent.node_exporter.collectors":               []string{},
+	"agent.telemetry.enabled":                      true,
 	"agent.windows_exporter.enabled":               true,
 	"agent.windows_exporter.collectors":            []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp"},
 	"bleemeo.account_id":                           "",

@@ -70,6 +70,7 @@ import (
 	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
+	"glouton/telemetry"
 	"glouton/threshold"
 	"glouton/types"
 	"glouton/version"
@@ -78,6 +79,8 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/mem"
 	"gopkg.in/yaml.v3"
 )
 
@@ -742,6 +745,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.netstatWatcher, "Netstat file watcher"},
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
+		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 	}
 
 	if a.config.Bool("web.enabled") {
@@ -893,6 +897,11 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
+	cpu, _ := cpu.Info()
+	a.factProvider.SetFact("cpu_model_name", cpu[0].ModelName)
+	a.factProvider.SetFact("cpu_cores", strconv.Itoa(len(cpu)))
+	mem, _ := mem.VirtualMemory()
+	a.factProvider.SetFact("memory_used", fmt.Sprintf("%.2f%%", mem.UsedPercent))
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
@@ -986,6 +995,25 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 
 		pusher.PushPoints(points)
 	}
+}
+
+func (a *agent) sendToTelemetry(ctx context.Context) error {
+	if a.config.Bool("agent.telemetry.enabled") {
+		for {
+			select {
+			case <-time.After(24 * time.Hour):
+			case <-ctx.Done():
+				return nil
+			}
+			facts, err := a.factProvider.Facts(ctx, time.Hour)
+
+			if err != nil {
+				logger.V(2).Printf("error facts load %v", err)
+			}
+			telemetry.SendInformationToTelemetry(a.state, facts)
+		}
+	}
+	return nil
 }
 
 func (a *agent) minuteMetric(ctx context.Context) error {

@@ -11,7 +11,6 @@ require (
 	github.com/agnivade/levenshtein v1.1.0 // indirect
 	github.com/alecthomas/units v0.0.0-20201120081800-1786d5ef83d4 // indirect
 	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327
-	github.com/containerd/console v0.0.0-20180822173158-c12b1e7919c1
 	github.com/containerd/containerd v1.4.3
 	github.com/containerd/typeurl v0.0.0-20180627222232-a93fcdb778cd
 	github.com/dimchansky/utfbom v1.1.1 // indirect
@@ -29,6 +28,7 @@ require (
 	github.com/google/go-cmp v0.5.4
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/google/uuid v1.1.2
 	github.com/googleapis/gnostic v0.5.2 // indirect
 	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665
 	github.com/hodgesds/perf-utils v0.2.5 // indirect
