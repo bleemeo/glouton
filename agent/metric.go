@@ -280,6 +280,10 @@ var defaultServiceMetrics []string = []string{
 	"jira_queued_requests",
 	"jira_status",
 
+	// Kubernetes
+	"kubernetes_ca_day_left",
+	"kubernetes_certificate_day_left",
+
 	// Memcached
 	"memcached_status",
 	"memcached_command_get",
