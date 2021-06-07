@@ -75,7 +75,7 @@ func SendInformationToTelemetry(state State, facts map[string]string) {
 		"os_type":             facts["os_name"],
 		"os_version":          facts["os_version"],
 		"system_architecture": facts["architecture"],
-		"version":             facts["agent_version"],
+		"version":             facts["glouton_version"],
 	})
 	req, err := http.NewRequest("POST", "https://telemetry.bleemeo.com/telemetry/", bytes.NewBuffer(body))
 	req.Header.Set("X-Custom-Header", "telemetry tool")
