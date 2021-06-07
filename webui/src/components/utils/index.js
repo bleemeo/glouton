@@ -222,6 +222,10 @@ export function composeMetricName(metric, name) {
       "{{ mountpoint }}",
       metric.metric.mountpoint
     );
+  } else if (metricName.indexOf("{{ volume }}") > -1) {
+    metricName = metricName.replace("{{ volume }}", metric.metric.volume);
+  } else if (metricName.indexOf("{{ nic }}") > -1) {
+    metricName = metricName.replace("{{ nic }}", metric.metric.nic);
   } else if (metricName.indexOf("{{ item }}") > -1) {
     metricName = metricName.replace("{{ item }}", metric.metric.item);
   }

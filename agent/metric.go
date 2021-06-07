@@ -24,6 +24,7 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/matcher"
 	"glouton/types"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -41,7 +42,7 @@ var commonDefaultSystemMetrics []string = []string{
 }
 
 //nolint:gochecknoglobals
-var promDefaultSystemMetrics []string = []string{
+var promLinuxDefaultSystemMetrics []string = []string{
 	"glouton_gatherer_execution_seconds_count",
 	"glouton_gatherer_execution_seconds_sum",
 	"node_cpu_seconds_global",
@@ -65,6 +66,33 @@ var promDefaultSystemMetrics []string = []string{
 	"node_network_transmit_packets_total",
 	"node_network_receive_errs_total",
 	"node_network_transmit_errs_total",
+	"node_uname_info",
+}
+
+//nolint:gochecknoglobals
+var promWindowsDefaultSystemMetrics []string = []string{
+	"glouton_gatherer_execution_seconds_count",
+	"glouton_gatherer_execution_seconds_sum",
+	"windows_cpu_time_global",
+	"windows_cs_physical_memory_bytes",
+	"windows_memory_available_bytes",
+	"windows_memory_standby_cache_bytes",
+	"windows_os_paging_free_bytes",
+	"windows_os_paging_limit_bytes",
+	"windows_logical_disk_idle_seconds_total",
+	"windows_logical_disk_read_bytes_total",
+	"windows_logical_disk_write_bytes_total",
+	"windows_logical_disk_reads_total",
+	"windows_logical_disk_writes_total",
+	"windows_logical_disk_free_bytes",
+	"windows_logical_disk_size_bytes",
+	"windows_net_bytes_received_total",
+	"windows_net_bytes_sent_total",
+	"windows_net_packets_received_total",
+	"windows_net_packets_sent_total",
+	"windows_net_packets_received_errors",
+	"windows_net_packets_outbound_errors",
+	"windows_cs_hostname",
 }
 
 //nolint:gochecknoglobals
@@ -639,10 +667,14 @@ func getDefaultMetrics(format types.MetricFormat) []string {
 	res := defaultServiceMetrics
 
 	res = append(res, commonDefaultSystemMetrics...)
-	if format == types.MetricFormatBleemeo {
+
+	switch {
+	case format == types.MetricFormatBleemeo:
 		res = append(res, bleemeoDefaultSystemMetrics...)
-	} else {
-		res = append(res, promDefaultSystemMetrics...)
+	case runtime.GOOS == "windows":
+		res = append(res, promWindowsDefaultSystemMetrics...)
+	default:
+		res = append(res, promLinuxDefaultSystemMetrics...)
 	}
 
 	return res
