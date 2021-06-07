@@ -126,8 +126,6 @@ type agent struct {
 	l                sync.Mutex
 	taskIDs          map[string]int
 	metricResolution time.Duration
-
-	telemetry bool
 }
 
 func zabbixResponse(key string, args []string) (string, error) {
@@ -217,12 +215,6 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		}
 	} else if oldStatePath != "" {
 		logger.Printf("The deprecated state file (%s) is migrated to new path (%s).", oldStatePath, statePath)
-	}
-
-	if a.config.Bool("agent.telemetry.enabled") {
-		a.telemetry = true
-	} else {
-		a.telemetry = false
 	}
 
 	return true
@@ -901,11 +893,13 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
+
 	cpu, _ := cpu.Info()
 	a.factProvider.SetFact("cpu_model_name", cpu[0].ModelName)
 	a.factProvider.SetFact("cpu_cores", strconv.Itoa(len(cpu)))
+
 	mem, _ := mem.VirtualMemory()
-	a.factProvider.SetFact("memory_used", fmt.Sprintf("%.2f%%", mem.UsedPercent))
+	a.factProvider.SetFact("memory", fmt.Sprintf("%d", mem.Total))
 
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
@@ -1009,14 +1003,16 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			}
-			facts, err := a.factProvider.Facts(ctx, time.Hour)
 
+			facts, err := a.factProvider.Facts(ctx, time.Hour)
 			if err != nil {
 				logger.V(2).Printf("error facts load %v", err)
 			}
+
 			telemetry.SendInformationToTelemetry(a.state, facts)
 		}
 	}
+
 	return nil
 }
 
