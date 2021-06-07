@@ -124,6 +124,7 @@ type Metric struct {
 	Threshold
 	threshold.Unit
 	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
+	PromQLQuery   string    `json:"promql_query"`
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if

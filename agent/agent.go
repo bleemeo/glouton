@@ -442,12 +442,6 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 		oldThresholds[name] = a.threshold.GetThreshold(key)
 	}
 
-	for key, val := range thresholds {
-		err := a.rulesManager.UpdateAlertingRule(key.Name, "node_cpu_seconds_global > 10000", 5*time.Minute, val)
-		if err != nil {
-			logger.V(0).Printf("An error occurred while updating alerting rules: %v", err) // FIXME: turn V0 to V2
-		}
-	}
 	a.threshold.SetThresholds(thresholds, configThreshold)
 
 	ctx := context.Background()
@@ -800,7 +794,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			BlackboxScraperName:     scaperName,
-		})
+		}, a.rulesManager.UpdateAlertingRule)
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}

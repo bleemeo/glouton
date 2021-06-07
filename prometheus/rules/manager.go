@@ -22,6 +22,7 @@ import (
 	"glouton/logger"
 	"glouton/store"
 	"glouton/threshold"
+	"glouton/types"
 	"math"
 	"os"
 	"runtime"
@@ -41,7 +42,6 @@ type Manager struct {
 	store          *store.Store
 	recordingRules []*rules.Group
 	alertingRules  map[string]*rules.AlertingRule
-	inactive       map[string]bool
 
 	engine *promql.Engine
 	logger log.Logger
@@ -112,7 +112,6 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 		store:          store,
 		recordingRules: []*rules.Group{defaultGroup},
 		alertingRules:  make(map[string]*rules.AlertingRule),
-		inactive:       make(map[string]bool),
 		engine:         engine,
 		logger:         promLogger,
 	}
@@ -123,12 +122,13 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 func (rm *Manager) Run() {
 	ctx := context.Background()
 	now := time.Now()
+	points := []types.MetricPoint{}
 
 	for _, rgr := range rm.recordingRules {
 		rgr.Eval(ctx, now)
 	}
 
-	for i, agr := range rm.alertingRules {
+	for _, agr := range rm.alertingRules {
 		prevState := agr.State()
 
 		queryable := &store.CountingQueryable{Queryable: rm.store}
@@ -136,61 +136,82 @@ func (rm *Manager) Run() {
 
 		if err != nil {
 			logger.V(2).Printf("an error occurred while evaluating an alerting rule: %w", err)
-		}
-
-		inactive := queryable.Count() == 0
-		state := agr.State()
-
-		rm.inactive[i] = inactive
-
-		if inactive {
 			continue
 		}
 
-		if state != prevState {
-			logger.V(0).Printf("metric state for %s changed: previous state=%v, new state=%v", agr.Name(), prevState, state)
+		if queryable.Count() == 0 {
+			continue
 		}
+
+		state := agr.State()
+
+		if state != prevState {
+			logger.V(2).Printf("metric state for %s changed: previous state=%v, new state=%v", agr.Name(), prevState, state)
+
+			newPoint := types.MetricPoint{
+				Point: types.Point{
+					Time:  now,
+					Value: float64(types.NagiosCodeFromString(agr.Labels().Get("severity"))),
+				},
+			}
+
+			if state == rules.StateFiring || prevState == rules.StateFiring {
+				if state != rules.StateFiring && prevState == rules.StateFiring {
+					newPoint.Value = float64(types.NagiosCodeFromString("ok"))
+				}
+
+				points = append(points, newPoint)
+			}
+		}
+	}
+
+	if len(points) != 0 {
+		rm.store.PushPoints(points)
 	}
 }
 
-func (rm *Manager) newRule(exp string, name string, hold time.Duration, severity string, desc string) error {
+func (rm *Manager) newRule(exp string, metricName string, threshold string, hold time.Duration, severity string) error {
 	newExp, err := parser.ParseExpr(exp)
 	if err != nil {
 		return err
 	}
-	// description à rajouter, voir le truc qui calcule les threshold
-	newRule := rules.NewAlertingRule(name,
+	newRule := rules.NewAlertingRule(metricName+threshold,
 		newExp, hold, labels.Labels{labels.Label{Name: "severity", Value: severity}},
-		labels.Labels{}, labels.Labels{}, false, log.With(rm.logger, "alerting_rule", name))
+		labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{}, false, log.With(rm.logger, "alerting_rule", metricName+threshold))
 
-	rm.alertingRules[name] = newRule
-
-	rm.inactive[name] = true
+	rm.alertingRules[metricName+threshold] = newRule
 
 	return nil
 }
 
 func (rm *Manager) addAlertingRule(name string, exp string, hold time.Duration, thresholds threshold.Threshold) error {
+	if len(exp) == 0 {
+		return nil
+	}
+
 	if !math.IsNaN(thresholds.LowWarning) {
-		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.LowWarning), name+"_low_warning", hold, "warning", "")
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.LowWarning), name, "_low_warning", hold, "warning")
 		if err != nil {
 			return err
 		}
 	}
+
 	if !math.IsNaN(thresholds.HighWarning) {
-		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.HighWarning), name+"_high_warning", hold, "warning", "")
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.HighWarning), name, "_high_warning", hold, "warning")
 		if err != nil {
 			return err
 		}
 	}
+
 	if !math.IsNaN(thresholds.LowCritical) {
-		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.LowCritical), name+"_low_critical", hold, "critical", "")
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.LowCritical), name, "_low_critical", hold, "critical")
 		if err != nil {
 			return err
 		}
 	}
+
 	if !math.IsNaN(thresholds.HighCritical) {
-		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.HighCritical), name+"_high_critical", hold, "critical", "")
+		err := rm.newRule(exp+fmt.Sprintf("> %f", thresholds.HighCritical), name, "_high_critical", hold, "critical")
 		if err != nil {
 			return err
 		}
@@ -201,7 +222,6 @@ func (rm *Manager) addAlertingRule(name string, exp string, hold time.Duration, 
 
 func (rm *Manager) deleteAlertingRule(name string) {
 	delete(rm.alertingRules, name)
-	delete(rm.inactive, name)
 }
 
 //UpdateAlertingRule updates an alerting rule set.

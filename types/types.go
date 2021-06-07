@@ -133,6 +133,20 @@ func (s Status) String() string {
 	}
 }
 
+// NagiosCodeFromString return the Nagios value for a string.
+func NagiosCodeFromString(s string) int {
+	switch s {
+	case "ok":
+		return 0
+	case "warning":
+		return 1
+	case "critical":
+		return 2
+	default:
+		return 3
+	}
+}
+
 // NagiosCode return the Nagios value for a Status.
 func (s Status) NagiosCode() int {
 	switch s {

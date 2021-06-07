@@ -471,13 +471,24 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	if s.option.UpdateUnits != nil {
 		s.option.UpdateUnits(units)
 	}
+
+	metricsList := s.option.Cache.MetricLookupFromList()
+
+	if s.option.UpdateAlertingRule != nil {
+		for _, val := range metricsList {
+			err := s.option.UpdateAlertingRule(val.Labels[types.LabelName], val.PromQLQuery, 5*time.Second, val.ToInternalThreshold())
+			if err != nil {
+				logger.V(2).Printf("An error occurred while updating alerting rules: %v", err)
+			}
+		}
+	}
 }
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
 		"agent":  agentID,
-		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
+		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of,promql_query",
 	}
 
 	if fetchInactive {
@@ -610,7 +621,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 		params := map[string]string{
 			"labels_text": common.LabelsToText(metric.Labels(), metric.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo),
 			"agent":       agentID,
-			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query",
 		}
 
 		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels()) {

@@ -27,6 +27,7 @@ import (
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
+	"glouton/threshold"
 	"glouton/types"
 	"math"
 	"math/big"
@@ -102,6 +103,9 @@ type Option struct {
 
 	// SetBleemeoInMaintenanceMode makes the bleemeo connector wait a day before checking again for maintenance
 	SetBleemeoInMaintenanceMode func(maintenance bool)
+
+	//UpdateAlertingRule is the callback to update the alerting rules from cache.
+	UpdateAlertingRule func(name string, exp string, hold time.Duration, thresholds threshold.Threshold) error
 }
 
 // New return a new Synchronizer.
