@@ -147,11 +147,20 @@ func (rm *Manager) Run() {
 
 		if state != prevState {
 			logger.V(2).Printf("metric state for %s changed: previous state=%v, new state=%v", agr.Name(), prevState, state)
+			nagiosCode := types.NagiosCodeFromString(agr.Labels().Get("severity"))
+
+			status := types.StatusDescription{
+				CurrentStatus:     types.FromNagios(nagiosCode),
+				StatusDescription: "",
+			}
 
 			newPoint := types.MetricPoint{
 				Point: types.Point{
 					Time:  now,
-					Value: float64(types.NagiosCodeFromString(agr.Labels().Get("severity"))),
+					Value: float64(nagiosCode),
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
 				},
 			}
 
@@ -175,6 +184,7 @@ func (rm *Manager) newRule(exp string, metricName string, threshold string, hold
 	if err != nil {
 		return err
 	}
+
 	newRule := rules.NewAlertingRule(metricName+threshold,
 		newExp, hold, labels.Labels{labels.Label{Name: "severity", Value: severity}},
 		labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{}, false, log.With(rm.logger, "alerting_rule", metricName+threshold))
