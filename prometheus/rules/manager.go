@@ -37,7 +37,7 @@ import (
 )
 
 // promAlertTime represents the duration for which the alerting rule
-// should exceed the threshold to be considered fired
+// should exceed the threshold to be considered fired.
 const promAlertTime = 5 * time.Minute
 
 //Manager is a wrapper handling everything related to prometheus recording
@@ -127,7 +127,9 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 func (rm *Manager) Run() {
 	ctx := context.Background()
 	now := time.Now()
-	points := []types.MetricPoint{}
+	warningPoints := make(map[string]types.MetricPoint)
+	criticalPoints := make(map[string]types.MetricPoint)
+	okPoints := make(map[string]types.MetricPoint)
 
 	for _, rgr := range rm.recordingRules {
 		rgr.Eval(ctx, now)
@@ -157,6 +159,7 @@ func (rm *Manager) Run() {
 
 		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", agr.Name(), prevState, state)
 
+		metricName := agr.Labels().Get(types.LabelName)
 		newPoint := types.MetricPoint{
 			Point: types.Point{
 				Time:  now,
@@ -171,22 +174,47 @@ func (rm *Manager) Run() {
 			newPoint.Value = float64(types.StatusFromString("ok"))
 		}
 
-		points = append(points, newPoint)
+		switch statusCode {
+		case types.StatusCritical:
+			delete(warningPoints, metricName)
+
+			criticalPoints[metricName] = newPoint
+		case types.StatusWarning:
+			warningPoints[metricName] = newPoint
+		case types.StatusOk:
+			okPoints[metricName] = newPoint
+		default:
+			logger.V(2).Printf("An error occurred while creating new alerting points: unknown state for metric %s", metricName)
+		}
 	}
 
-	if len(points) != 0 {
-		rm.store.PushPoints(points)
+	res := []types.MetricPoint{}
+
+	for _, val := range okPoints {
+		res = append(res, val)
+	}
+
+	for _, val := range warningPoints {
+		res = append(res, val)
+	}
+
+	for _, val := range criticalPoints {
+		res = append(res, val)
+	}
+
+	if len(res) != 0 {
+		rm.store.PushPoints(res)
 	}
 }
 
-func (rm *Manager) newRule(exp string, metricName string, threshold string, hold time.Duration, severity string) error {
+func (rm *Manager) newRule(exp string, metricName string, threshold string, severity string) error {
 	newExp, err := parser.ParseExpr(exp)
 	if err != nil {
 		return err
 	}
 
 	newRule := rules.NewAlertingRule(metricName+threshold,
-		newExp, hold, labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{labels.Label{Name: "severity", Value: severity}},
+		newExp, promAlertTime, labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{labels.Label{Name: "severity", Value: severity}},
 		labels.Labels{}, false, log.With(rm.logger, "alerting_rule", metricName+threshold))
 
 	rm.alertingRules[metricName+threshold] = newRule
@@ -196,28 +224,28 @@ func (rm *Manager) newRule(exp string, metricName string, threshold string, hold
 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 	if !math.IsNaN(*metric.Threshold.LowWarning) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("< %f", *metric.Threshold.LowWarning), metric.Labels[types.LabelName], metric.LabelsText+"_low_warning", promAlertTime, "warning")
+		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("< %f", *metric.Threshold.LowWarning), metric.Labels[types.LabelName], metric.LabelsText+"_low_warning", "warning")
 		if err != nil {
 			return err
 		}
 	}
 
 	if !math.IsNaN(*metric.Threshold.HighWarning) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("> %f", *metric.Threshold.HighWarning), metric.Labels[types.LabelName], metric.LabelsText+"_high_warning", promAlertTime, "warning")
+		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("> %f", *metric.Threshold.HighWarning), metric.Labels[types.LabelName], metric.LabelsText+"_high_warning", "warning")
 		if err != nil {
 			return err
 		}
 	}
 
 	if !math.IsNaN(*metric.Threshold.LowCritical) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("< %f", *metric.Threshold.LowCritical), metric.Labels[types.LabelName], metric.LabelsText+"_low_critical", promAlertTime, "critical")
+		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("< %f", *metric.Threshold.LowCritical), metric.Labels[types.LabelName], metric.LabelsText+"_low_critical", "critical")
 		if err != nil {
 			return err
 		}
 	}
 
 	if !math.IsNaN(*metric.Threshold.HighCritical) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("> %f", *metric.Threshold.HighCritical), metric.Labels[types.LabelName], metric.LabelsText+"_high_critical", promAlertTime, "critical")
+		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("> %f", *metric.Threshold.HighCritical), metric.Labels[types.LabelName], metric.LabelsText+"_high_critical", "critical")
 		if err != nil {
 			return err
 		}
@@ -239,5 +267,6 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 			return err
 		}
 	}
+
 	return nil
 }
