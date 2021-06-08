@@ -86,8 +86,8 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 		}
 	}
 
-	metrics = prioritizeAndFilterMetrics(metrics, false)
-	metrics2 = prioritizeAndFilterMetrics(metrics2, true)
+	metrics = prioritizeAndFilterMetrics(types.MetricFormatBleemeo, metrics, false)
+	metrics2 = prioritizeAndFilterMetrics(types.MetricFormatBleemeo, metrics2, true)
 
 	for i, m := range metrics {
 		if !isHighPriority[m.Labels()[types.LabelName]] && i < countHighPriority {
