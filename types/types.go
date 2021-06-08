@@ -133,17 +133,17 @@ func (s Status) String() string {
 	}
 }
 
-// NagiosCodeFromString return the Nagios value for a string.
-func NagiosCodeFromString(s string) int {
+// StatusFromString return the Nagios value for a string.
+func StatusFromString(s string) Status {
 	switch s {
 	case "ok":
-		return 0
+		return StatusOk
 	case "warning":
-		return 1
+		return StatusWarning
 	case "critical":
-		return 2
+		return StatusCritical
 	default:
-		return 3
+		return StatusUnknown
 	}
 }
 

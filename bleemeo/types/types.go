@@ -45,6 +45,7 @@ type GlobalOption struct {
 	UpdateMetricResolution func(resolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
+	RebuildAlertingRules   func(metrics []Metric) error
 }
 
 // MonitorManager is the interface used by Bleemeo to update the dynamic monitors list.

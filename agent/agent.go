@@ -794,7 +794,8 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			BlackboxScraperName:     scaperName,
-		}, a.rulesManager.UpdateAlertingRule)
+			RebuildAlertingRules:    a.rulesManager.RebuildAlertingRules,
+		})
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}

@@ -36,7 +36,7 @@ import (
 const agentStatusName = "agent_status"
 
 var (
-	errRetryLater     = errors.New("metric registration should be retried laster")
+	errRetryLater     = errors.New("metric registration should be retried later")
 	errAttemptToSpoof = errors.New("attempt to spoof another agent (or missing label)")
 	errNotImplemented = errors.New("not implemented on fakeMetric")
 )
@@ -472,14 +472,12 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 		s.option.UpdateUnits(units)
 	}
 
-	metricsList := s.option.Cache.MetricLookupFromList()
+	metricsList := s.option.Cache.Metrics()
 
-	if s.option.UpdateAlertingRule != nil {
-		for _, val := range metricsList {
-			err := s.option.UpdateAlertingRule(val.Labels[types.LabelName], val.PromQLQuery, 5*time.Second, val.ToInternalThreshold())
-			if err != nil {
-				logger.V(2).Printf("An error occurred while updating alerting rules: %v", err)
-			}
+	if s.option.RebuildAlertingRules != nil {
+		err := s.option.RebuildAlertingRules(metricsList)
+		if err != nil {
+			logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
 		}
 	}
 }
@@ -674,7 +672,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		var metric metricPayload
 
 		params := map[string]string{
-			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query",
 		}
 
 		_, err := s.client.Do(

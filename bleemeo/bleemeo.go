@@ -37,7 +37,6 @@ import (
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/logger"
-	"glouton/threshold"
 	gloutonTypes "glouton/types"
 )
 
@@ -61,7 +60,7 @@ type Connector struct {
 }
 
 // New create a new Connector.
-func New(option types.GlobalOption, alertingRule func(name string, exp string, hold time.Duration, thresholds threshold.Threshold) error) *Connector {
+func New(option types.GlobalOption) *Connector {
 	c := &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
@@ -75,7 +74,6 @@ func New(option types.GlobalOption, alertingRule func(name string, exp string, h
 		SetInitialized:              c.setInitialized,
 		SetBleemeoInMaintenanceMode: c.setMaintenance,
 		IsMqttConnected:             c.Connected,
-		UpdateAlertingRule:          alertingRule,
 	})
 
 	return c
