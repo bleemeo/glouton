@@ -17,28 +17,23 @@
 package telemetry
 
 import (
-	"bytes"
-	"encoding/json"
 	"glouton/logger"
-	"net/http"
-
-	"github.com/google/uuid"
 )
 
 const telemetryKey = "Telemetry"
 
 // State allow to persite object.
-type State interface {
+type state interface {
 	Get(key string, result interface{}) error
 	Set(key string, object interface{}) error
 }
 
-type telemetry struct {
+type Telemetry struct {
 	ID string
 }
 
-func telemetryFromState(state State) telemetry {
-	var result telemetry
+func FromState(state state) Telemetry {
+	var result Telemetry
 
 	if err := state.Get(telemetryKey, &result); err != nil {
 		logger.V(1).Printf("Unable to load new telemetry, try using old format: %v", err)
@@ -47,47 +42,9 @@ func telemetryFromState(state State) telemetry {
 	return result
 }
 
-func saveState(state State, t telemetry) {
+func (t Telemetry) SaveState(state state) {
 	err := state.Set(telemetryKey, t)
 	if err != nil {
 		logger.V(1).Printf("Unable to persist discovered Telemetry id: %v", err)
 	}
-}
-
-func SendInformationToTelemetry(state State, facts map[string]string) {
-	tlm := telemetryFromState(state)
-
-	if tlm.ID == "" {
-		var t telemetry
-		t.ID = uuid.New().String()
-		saveState(state, t)
-		tlm = t
-	}
-
-	body, _ := json.Marshal(map[string]string{
-		"id":                  tlm.ID,
-		"cpu_cores":           facts["cpu_cores"],
-		"country":             facts["timezone"],
-		"installation_format": facts["installation_format"],
-		"kernel_version":      facts["kernel_major_version"],
-		"memory":              facts["memory"],
-		"product":             "Glouton",
-		"os_type":             facts["os_name"],
-		"os_version":          facts["os_version"],
-		"system_architecture": facts["architecture"],
-		"version":             facts["glouton_version"],
-	})
-	req, _ := http.NewRequest("POST", "https://telemetry.bleemeo.com/telemetry/", bytes.NewBuffer(body))
-
-	req.Header.Set("Content-Type", "application/json")
-
-	client := &http.Client{}
-	resp, err := client.Do(req)
-
-	if err != nil {
-		logger.V(1).Printf("%v", err)
-	}
-
-	logger.V(2).Println("telemetry response Satus", resp.Status)
-	defer resp.Body.Close()
 }

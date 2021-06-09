@@ -18,6 +18,7 @@ package facts
 
 import (
 	"context"
+	"fmt"
 	"glouton/logger"
 	"glouton/version"
 	"io"
@@ -32,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"gopkg.in/yaml.v3"
@@ -234,6 +236,13 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	// TODO: drop agent_version. It's deprecated and is replaced by glouton_version
 	newFacts["agent_version"] = version.Version
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
+
+	cpu, _ := cpu.Info()
+	newFacts["cpu_model_name"] = cpu[0].ModelName
+	newFacts["cpu_cores"] = strconv.Itoa(len(cpu))
+
+	mem, _ := mem.VirtualMemory()
+	newFacts["memory"] = fmt.Sprintf("%d", mem.Total)
 
 	for _, c := range callbacks {
 		for k, v := range c(ctx, newFacts) {

@@ -19,7 +19,9 @@ package agent
 
 import (
 	"archive/zip"
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -80,8 +82,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/shirou/gopsutil/cpu"
-	"github.com/shirou/gopsutil/mem"
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 )
 
@@ -894,13 +895,6 @@ func (a *agent) run() { //nolint:gocyclo
 	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
-	cpu, _ := cpu.Info()
-	a.factProvider.SetFact("cpu_model_name", cpu[0].ModelName)
-	a.factProvider.SetFact("cpu_cores", strconv.Itoa(len(cpu)))
-
-	mem, _ := mem.VirtualMemory()
-	a.factProvider.SetFact("memory", fmt.Sprintf("%d", mem.Total))
-
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGINT, syscall.SIGHUP)
 
@@ -1009,7 +1003,45 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				logger.V(2).Printf("error facts load %v", err)
 			}
 
-			telemetry.SendInformationToTelemetry(a.state, facts)
+			tlm := telemetry.FromState(a.state)
+
+			if tlm.ID == "" {
+				var t telemetry.Telemetry
+				t.ID = uuid.New().String()
+				t.SaveState(a.state)
+				tlm = t
+			}
+
+			body, _ := json.Marshal(map[string]string{
+				"id":                  tlm.ID,
+				"cpu_cores":           facts["cpu_cores"],
+				"cpu_model":           facts["cpu_model_name"],
+				"country":             facts["timezone"],
+				"installation_format": facts["installation_format"],
+				"kernel_version":      facts["kernel_major_version"],
+				"memory":              facts["memory"],
+				"product":             "Glouton",
+				"os_type":             facts["os_name"],
+				"os_version":          facts["os_version"],
+				"system_architecture": facts["architecture"],
+				"version":             facts["glouton_version"],
+			})
+			req, _ := http.NewRequest("POST", a.config.String("agent.telemetry.bind_address"), bytes.NewBuffer(body))
+
+			req.Header.Set("Content-Type", "application/json")
+
+			ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
+			defer cancel()
+
+			client := &http.Client{}
+			resp, err := client.Do(req.WithContext(ctx2))
+
+			if err != nil {
+				logger.V(1).Printf("%v", err)
+			}
+
+			logger.V(2).Println("telemetry response Satus", resp.Status)
+			defer resp.Body.Close()
 		}
 	}
 
