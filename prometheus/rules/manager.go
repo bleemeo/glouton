@@ -25,6 +25,7 @@ import (
 	"math"
 	"os"
 	"runtime"
+	"sync"
 	"time"
 
 	bleemeoTypes "glouton/bleemeo/types"
@@ -50,6 +51,9 @@ type Manager struct {
 
 	engine *promql.Engine
 	logger log.Logger
+
+	l            sync.Mutex
+	agentStarted time.Time
 }
 
 //nolint: gochecknoglobals
@@ -119,6 +123,7 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 		alertingRules:  make(map[string]*rules.AlertingRule),
 		engine:         engine,
 		logger:         promLogger,
+		agentStarted:   time.Now(), //FIXME: change this time.now with the real agent created time
 	}
 
 	return &rm
@@ -130,6 +135,8 @@ func (rm *Manager) Run() {
 	warningPoints := make(map[string]types.MetricPoint)
 	criticalPoints := make(map[string]types.MetricPoint)
 	okPoints := make(map[string]types.MetricPoint)
+
+	rm.l.Lock()
 
 	for _, rgr := range rm.recordingRules {
 		rgr.Eval(ctx, now)
@@ -151,6 +158,7 @@ func (rm *Manager) Run() {
 		}
 
 		state := agr.State()
+
 		statusCode := types.StatusFromString(agr.Labels().Get("severity"))
 		status := types.StatusDescription{
 			CurrentStatus:     statusCode,
@@ -171,6 +179,10 @@ func (rm *Manager) Run() {
 		}
 
 		if state != rules.StateFiring {
+			if time.Since(rm.agentStarted) < promAlertTime {
+				continue
+			}
+
 			newPoint.Value = float64(types.StatusFromString("ok"))
 		}
 
@@ -187,6 +199,8 @@ func (rm *Manager) Run() {
 			logger.V(2).Printf("An error occurred while creating new alerting points: unknown state for metric %s", metricName)
 		}
 	}
+
+	rm.l.Unlock()
 
 	res := []types.MetricPoint{}
 
@@ -254,8 +268,12 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 	return nil
 }
 
+//RebuildAlertingRules rebuild the alerting rules list from a bleemeo api metric list.
 func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error {
 	rm.alertingRules = make(map[string]*rules.AlertingRule)
+
+	rm.l.Lock()
+	defer rm.l.Unlock()
 
 	for _, val := range metricsList {
 		if len(val.PromQLQuery) == 0 {
