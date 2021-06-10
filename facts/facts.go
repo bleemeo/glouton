@@ -237,16 +237,16 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["agent_version"] = version.Version
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
-	cpu, _ := cpu.Info()
+	cpu, err := cpu.Info()
 
-	if len(cpu) > 0 {
+	if err == nil && len(cpu) > 0 {
 		newFacts["cpu_model_name"] = cpu[0].ModelName
 		newFacts["cpu_cores"] = strconv.Itoa(len(cpu))
 	}
 
-	mem, _ := mem.VirtualMemory()
+	mem, err := mem.VirtualMemory()
 
-	if mem != nil {
+	if err == nil && mem != nil {
 		newFacts["memory"] = byteCountDecimal(mem.Total)
 	}
 
