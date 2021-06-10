@@ -19,6 +19,7 @@ package telemetry
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"glouton/logger"
 	"net/http"
 	"time"
@@ -53,7 +54,22 @@ func (t Telemetry) SaveState(state state) {
 	}
 }
 
-func PostInformation(ctx context.Context, url string, body []byte) {
+func (t Telemetry) PostInformation(ctx context.Context, url string, facts map[string]string) {
+	body, _ := json.Marshal(map[string]string{
+		"id":                  t.ID,
+		"cpu_cores":           facts["cpu_cores"],
+		"cpu_model":           facts["cpu_model_name"],
+		"country":             facts["timezone"],
+		"installation_format": facts["installation_format"],
+		"kernel_version":      facts["kernel_major_version"],
+		"memory":              facts["memory"],
+		"product":             "Glouton",
+		"os_type":             facts["os_name"],
+		"os_version":          facts["os_version"],
+		"system_architecture": facts["architecture"],
+		"version":             facts["glouton_version"],
+	})
+
 	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
 
 	req.Header.Set("Content-Type", "application/json")

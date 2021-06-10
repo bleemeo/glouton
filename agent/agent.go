@@ -20,7 +20,6 @@ package agent
 import (
 	"archive/zip"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -1014,21 +1013,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				tlm = t
 			}
 
-			body, _ := json.Marshal(map[string]string{
-				"id":                  tlm.ID,
-				"cpu_cores":           facts["cpu_cores"],
-				"cpu_model":           facts["cpu_model_name"],
-				"country":             facts["timezone"],
-				"installation_format": facts["installation_format"],
-				"kernel_version":      facts["kernel_major_version"],
-				"memory":              facts["memory"],
-				"product":             "Glouton",
-				"os_type":             facts["os_name"],
-				"os_version":          facts["os_version"],
-				"system_architecture": facts["architecture"],
-				"version":             facts["glouton_version"],
-			})
-			telemetry.PostInformation(ctx, a.config.String("agent.telemetry.address"), body)
+			tlm.PostInformation(ctx, a.config.String("agent.telemetry.address"), facts)
 		}
 	}
 
