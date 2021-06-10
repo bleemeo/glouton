@@ -69,12 +69,6 @@ func (s *Store) Run(ctx context.Context) error {
 	}
 }
 
-//SetFilterCallback sets the filter callback used to filter points
-// we send to the notifies callbacks.
-func (s *FilteredStore) SetFilterCallback(fc func([]types.MetricPoint) []types.MetricPoint) {
-	s.filterCallback = fc
-}
-
 // AddNotifiee add a callback that will be notified of all points received
 // Note: AddNotifiee should not be called while in the callback.
 func (s *Store) AddNotifiee(cb func([]types.MetricPoint)) int {
@@ -326,14 +320,28 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 //FilteredStore is a store wrapper that intercepts all call to pushPoints and execute filters on points.
 type FilteredStore struct {
 	Store
-	filterCallback func([]types.MetricPoint) []types.MetricPoint
+	filterCallback       func([]types.MetricPoint) []types.MetricPoint
+	filterMetricCallback func([]types.Metric) []types.Metric
 }
 
 func NewFilteredStore() *FilteredStore {
 	return &FilteredStore{
-		Store:          *New(),
-		filterCallback: nil,
+		Store:                *New(),
+		filterCallback:       nil,
+		filterMetricCallback: nil,
 	}
+}
+
+//SetFilterCallback sets the filter callback used to filter points
+// we send to the notifies callbacks.
+func (s *FilteredStore) SetFilterMetricCallback(fc func([]types.Metric) []types.Metric) {
+	s.filterMetricCallback = fc
+}
+
+//SetFilterCallback sets the filter callback used to filter points
+// we send to the notifies callbacks.
+func (s *FilteredStore) SetFilterCallback(fc func([]types.MetricPoint) []types.MetricPoint) {
+	s.filterCallback = fc
 }
 
 // PushPoints wraps the store PushPoints function. It precedes the call with filterCallback.
@@ -348,6 +356,7 @@ func (s *FilteredStore) PushPoints(points []types.MetricPoint) {
 func (s *FilteredStore) Metrics(filters map[string]string) (result []types.Metric, err error) {
 	res, err := s.Store.Metrics(filters)
 
-	//TODO: fix the call
+	res = s.filterMetricCallback(res)
+
 	return res, err
 }

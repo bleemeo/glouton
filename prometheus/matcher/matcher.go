@@ -118,14 +118,18 @@ func matchesLabels(m *labels.Matcher, lbls map[string]string) bool {
 	return m.Matches(val)
 }
 
-func (m *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
-	labels := dto2Labels(name, mt)
-
+func (m *Matchers) MatchesLabels(lbls map[string]string) bool {
 	for _, matcher := range *m {
-		if !matchesLabels(matcher, labels) {
+		if !matchesLabels(matcher, lbls) {
 			return false
 		}
 	}
 
 	return true
+}
+
+func (m *Matchers) MatchesMetric(name string, mt *dto.Metric) bool {
+	labels := dto2Labels(name, mt)
+
+	return m.MatchesLabels(labels)
 }
