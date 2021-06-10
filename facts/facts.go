@@ -238,11 +238,17 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
 	cpu, _ := cpu.Info()
-	newFacts["cpu_model_name"] = cpu[0].ModelName
-	newFacts["cpu_cores"] = strconv.Itoa(len(cpu))
+
+	if len(cpu) > 0 {
+		newFacts["cpu_model_name"] = cpu[0].ModelName
+		newFacts["cpu_cores"] = strconv.Itoa(len(cpu))
+	}
 
 	mem, _ := mem.VirtualMemory()
-	newFacts["memory"] = fmt.Sprintf("%d", mem.Total)
+
+	if mem != nil {
+		newFacts["memory"] = byteCountDecimal(mem.Total)
+	}
 
 	for _, c := range callbacks {
 		for k, v := range c(ctx, newFacts) {
@@ -411,4 +417,20 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 	}
 
 	return string(body)
+}
+
+func byteCountDecimal(b uint64) string {
+	const unit = 1000
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+
+	div, exp := int64(unit), 0
+
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "kMGTPE"[exp])
 }

@@ -992,8 +992,10 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 func (a *agent) sendToTelemetry(ctx context.Context) error {
 	if a.config.Bool("agent.telemetry.enabled") {
 		for {
+			randomDelay := 2*time.Minute + time.Duration(rand.Intn(5))*time.Minute
+
 			select {
-			case <-time.After(24 * time.Hour):
+			case <-time.After(24*time.Hour + randomDelay):
 			case <-ctx.Done():
 				return nil
 			}
@@ -1001,6 +1003,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			facts, err := a.factProvider.Facts(ctx, time.Hour)
 			if err != nil {
 				logger.V(2).Printf("error facts load %v", err)
+				continue
 			}
 
 			tlm := telemetry.FromState(a.state)
@@ -1031,18 +1034,17 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			req.Header.Set("Content-Type", "application/json")
 
 			ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
+			cancel()
 
-			client := &http.Client{}
-			resp, err := client.Do(req.WithContext(ctx2))
+			resp, err := http.DefaultClient.Do(req.WithContext(ctx2))
 
 			if err != nil {
-				logger.V(1).Printf("%v", err)
+				logger.V(1).Printf("failed when we post on telemetry: %v", err)
 			}
 
 			if resp != nil {
 				logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
-				defer resp.Body.Close()
+				resp.Body.Close()
 			}
 		}
 	}
