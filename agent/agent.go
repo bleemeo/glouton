@@ -19,7 +19,6 @@ package agent
 
 import (
 	"archive/zip"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1029,23 +1028,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				"system_architecture": facts["architecture"],
 				"version":             facts["glouton_version"],
 			})
-			req, _ := http.NewRequest("POST", a.config.String("agent.telemetry.address"), bytes.NewBuffer(body))
-
-			req.Header.Set("Content-Type", "application/json")
-
-			ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
-			cancel()
-
-			resp, err := http.DefaultClient.Do(req.WithContext(ctx2))
-
-			if err != nil {
-				logger.V(1).Printf("failed when we post on telemetry: %v", err)
-			}
-
-			if resp != nil {
-				logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
-				resp.Body.Close()
-			}
+			telemetry.PostInformation(ctx, a.config.String("agent.telemetry.address"), body)
 		}
 	}
 

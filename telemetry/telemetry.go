@@ -17,7 +17,11 @@
 package telemetry
 
 import (
+	"bytes"
+	"context"
 	"glouton/logger"
+	"net/http"
+	"time"
 )
 
 const telemetryKey = "Telemetry"
@@ -46,5 +50,25 @@ func (t Telemetry) SaveState(state state) {
 	err := state.Set(telemetryKey, t)
 	if err != nil {
 		logger.V(1).Printf("Unable to persist discovered Telemetry id: %v", err)
+	}
+}
+
+func PostInformation(ctx context.Context, url string, body []byte) {
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer(body))
+
+	req.Header.Set("Content-Type", "application/json")
+
+	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
+	cancel()
+
+	resp, err := http.DefaultClient.Do(req.WithContext(ctx2))
+
+	if err != nil {
+		logger.V(1).Printf("failed when we post on telemetry: %v", err)
+	}
+
+	if resp != nil {
+		logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
+		resp.Body.Close()
 	}
 }
