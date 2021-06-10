@@ -1026,7 +1026,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				"system_architecture": facts["architecture"],
 				"version":             facts["glouton_version"],
 			})
-			req, _ := http.NewRequest("POST", a.config.String("agent.telemetry.bind_address"), bytes.NewBuffer(body))
+			req, _ := http.NewRequest("POST", a.config.String("agent.telemetry.address"), bytes.NewBuffer(body))
 
 			req.Header.Set("Content-Type", "application/json")
 
@@ -1040,8 +1040,10 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				logger.V(1).Printf("%v", err)
 			}
 
-			logger.V(2).Println("telemetry response Satus", resp.Status)
-			defer resp.Body.Close()
+			if resp != nil {
+				logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
+				defer resp.Body.Close()
+			}
 		}
 	}
 

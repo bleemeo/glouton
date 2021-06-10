@@ -67,7 +67,7 @@ var defaultConfig = map[string]interface{}{
 		"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev",
 	},
 	"agent.telemetry.enabled":                      true,
-	"agent.telemetry.bind_address":                 "https://telemetry.bleemeo.com/telemetry/",
+	"agent.telemetry.address":                      "https://telemetry.bleemeo.com/telemetry/",
 	"agent.windows_exporter.enabled":               true,
 	"agent.windows_exporter.collectors":            []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp"},
 	"bleemeo.account_id":                           "",
