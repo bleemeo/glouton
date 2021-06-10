@@ -22,7 +22,6 @@ import (
 	"glouton/logger"
 	"glouton/store"
 	"glouton/types"
-	"math"
 	"os"
 	"runtime"
 	"sync"
@@ -47,13 +46,19 @@ type Manager struct {
 	// store implements both appendable and queryable.
 	store          *store.Store
 	recordingRules []*rules.Group
-	alertingRules  map[string]*rules.AlertingRule
+	alertingRules  []*ruleGroup
 
 	engine *promql.Engine
 	logger log.Logger
 
 	l            sync.Mutex
 	agentStarted time.Time
+}
+
+type ruleGroup struct {
+	rules map[string]*rules.AlertingRule
+
+	promql string
 }
 
 //nolint: gochecknoglobals
@@ -120,10 +125,10 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 	rm := Manager{
 		store:          store,
 		recordingRules: []*rules.Group{defaultGroup},
-		alertingRules:  make(map[string]*rules.AlertingRule),
+		alertingRules:  []*ruleGroup{},
 		engine:         engine,
 		logger:         promLogger,
-		agentStarted:   time.Now(), //FIXME: change this time.now with the real agent created time
+		agentStarted:   time.Now().Truncate(time.Second), //FIXME: change this time.now with the real agent created time
 	}
 
 	return &rm
@@ -131,10 +136,11 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 
 func (rm *Manager) Run() {
 	ctx := context.Background()
-	now := time.Now()
+	now := time.Now().Truncate(time.Second)
 	warningPoints := make(map[string]types.MetricPoint)
 	criticalPoints := make(map[string]types.MetricPoint)
 	okPoints := make(map[string]types.MetricPoint)
+	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
 
 	rm.l.Lock()
 
@@ -143,60 +149,74 @@ func (rm *Manager) Run() {
 	}
 
 	for _, agr := range rm.alertingRules {
-		prevState := agr.State()
+		for _, val := range thresholdOrder {
+			rule := agr.rules[val]
 
-		queryable := &store.CountingQueryable{Queryable: rm.store}
-		_, err := agr.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
-
-		if err != nil {
-			logger.V(2).Printf("an error occurred while evaluating an alerting rule: %w", err)
-			continue
-		}
-
-		if queryable.Count() == 0 {
-			continue
-		}
-
-		state := agr.State()
-
-		statusCode := types.StatusFromString(agr.Labels().Get("severity"))
-		status := types.StatusDescription{
-			CurrentStatus:     statusCode,
-			StatusDescription: "",
-		}
-
-		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", agr.Name(), prevState, state)
-
-		metricName := agr.Labels().Get(types.LabelName)
-		newPoint := types.MetricPoint{
-			Point: types.Point{
-				Time:  now,
-				Value: float64(statusCode.NagiosCode()),
-			},
-			Annotations: types.MetricAnnotations{
-				Status: status,
-			},
-		}
-
-		if state != rules.StateFiring {
-			if time.Since(rm.agentStarted) < promAlertTime {
+			if rule == nil {
 				continue
 			}
 
-			newPoint.Value = float64(types.StatusFromString("ok"))
-		}
+			prevState := rule.State()
 
-		switch statusCode {
-		case types.StatusCritical:
-			delete(warningPoints, metricName)
+			queryable := &store.CountingQueryable{Queryable: rm.store}
+			_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
 
-			criticalPoints[metricName] = newPoint
-		case types.StatusWarning:
-			warningPoints[metricName] = newPoint
-		case types.StatusOk:
-			okPoints[metricName] = newPoint
-		default:
-			logger.V(2).Printf("An error occurred while creating new alerting points: unknown state for metric %s", metricName)
+			if err != nil {
+				logger.V(2).Printf("an error occurred while evaluating an alerting rule: %w", err)
+				continue
+			}
+
+			state := rule.State()
+
+			if queryable.Count() == 0 || state == prevState {
+				continue
+			}
+
+			statusCode := types.StatusFromString(rule.Annotations().Get("severity"))
+			status := types.StatusDescription{
+				CurrentStatus:     statusCode,
+				StatusDescription: "",
+			}
+
+			if statusCode == types.StatusUnknown {
+				logger.V(2).Printf("An error occurred while creating new alerting points: unknown state for metric %s", rule.Labels().String())
+				continue
+			}
+
+			logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
+
+			metricID := rule.Labels().String()
+			newPoint := types.MetricPoint{
+				Point: types.Point{
+					Time:  now,
+					Value: float64(statusCode.NagiosCode()),
+				},
+				Annotations: types.MetricAnnotations{
+					Status: status,
+				},
+			}
+
+			if state == rules.StatePending {
+				if time.Since(rm.agentStarted) < promAlertTime {
+					continue
+				}
+
+				statusCode = types.StatusFromString("ok")
+				newPoint.Value = float64(statusCode.NagiosCode())
+				newPoint.Annotations.Status.CurrentStatus = statusCode
+			}
+
+			if statusCode == types.StatusCritical {
+				criticalPoints[metricID] = newPoint
+				break
+			}
+
+			if statusCode == types.StatusWarning {
+				warningPoints[metricID] = newPoint
+				break
+			} else {
+				okPoints[metricID] = newPoint
+			}
 		}
 	}
 
@@ -221,59 +241,51 @@ func (rm *Manager) Run() {
 	}
 }
 
-func (rm *Manager) newRule(exp string, metricName string, threshold string, severity string) error {
-	newExp, err := parser.ParseExpr(exp)
-	if err != nil {
-		return err
-	}
-
-	newRule := rules.NewAlertingRule(metricName+threshold,
-		newExp, promAlertTime, labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{labels.Label{Name: "severity", Value: severity}},
-		labels.Labels{}, false, log.With(rm.logger, "alerting_rule", metricName+threshold))
-
-	rm.alertingRules[metricName+threshold] = newRule
-
-	return nil
-}
-
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
-	if !math.IsNaN(*metric.Threshold.LowWarning) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("< %f", *metric.Threshold.LowWarning), metric.Labels[types.LabelName], metric.LabelsText+"_low_warning", "warning")
+	newGroup := &ruleGroup{
+		rules:  make(map[string]*rules.AlertingRule),
+		promql: metric.PromQLQuery,
+	}
+
+	if metric.Threshold.LowWarning != nil {
+		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowWarning), metric.Labels[types.LabelName], "low_warning", "warning", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
 
-	if !math.IsNaN(*metric.Threshold.HighWarning) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("> %f", *metric.Threshold.HighWarning), metric.Labels[types.LabelName], metric.LabelsText+"_high_warning", "warning")
+	if metric.Threshold.HighWarning != nil {
+		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighWarning), metric.Labels[types.LabelName], "high_warning", "warning", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
 
-	if !math.IsNaN(*metric.Threshold.LowCritical) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("< %f", *metric.Threshold.LowCritical), metric.Labels[types.LabelName], metric.LabelsText+"_low_critical", "critical")
+	if metric.Threshold.LowCritical != nil {
+		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowCritical), metric.Labels[types.LabelName], "low_critical", "critical", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
 
-	if !math.IsNaN(*metric.Threshold.HighCritical) {
-		err := rm.newRule(metric.PromQLQuery+fmt.Sprintf("> %f", *metric.Threshold.HighCritical), metric.Labels[types.LabelName], metric.LabelsText+"_high_critical", "critical")
+	if metric.Threshold.HighCritical != nil {
+		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighCritical), metric.Labels[types.LabelName], "high_critical", "critical", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
+
+	rm.alertingRules = append(rm.alertingRules, newGroup)
 
 	return nil
 }
 
 //RebuildAlertingRules rebuild the alerting rules list from a bleemeo api metric list.
 func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error {
-	rm.alertingRules = make(map[string]*rules.AlertingRule)
-
 	rm.l.Lock()
 	defer rm.l.Unlock()
+
+	rm.alertingRules = []*ruleGroup{}
 
 	for _, val := range metricsList {
 		if len(val.PromQLQuery) == 0 {
@@ -285,6 +297,21 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 			return err
 		}
 	}
+
+	return nil
+}
+
+func (rg *ruleGroup) newRule(exp string, metricName string, threshold string, severity string, logger log.Logger) error {
+	newExp, err := parser.ParseExpr(exp)
+	if err != nil {
+		return err
+	}
+
+	newRule := rules.NewAlertingRule(metricName+"_"+threshold,
+		newExp, promAlertTime, labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{labels.Label{Name: "severity", Value: severity}},
+		labels.Labels{}, false, log.With(logger, "alerting_rule", metricName+"_"+threshold))
+
+	rg.rules[threshold] = newRule
 
 	return nil
 }
