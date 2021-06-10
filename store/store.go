@@ -43,7 +43,6 @@ type Store struct {
 	notifyCallbacks map[int]func([]types.MetricPoint)
 	lock            sync.Mutex
 	notifeeLock     sync.Mutex
-	filterCallback  func([]types.MetricPoint) []types.MetricPoint
 }
 
 // New create a return a store. Store should be Close()d before leaving.
@@ -52,7 +51,6 @@ func New() *Store {
 		metrics:         make(map[int]metric),
 		points:          make(map[int][]types.Point),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
-		filterCallback:  nil,
 	}
 
 	return s
@@ -73,7 +71,7 @@ func (s *Store) Run(ctx context.Context) error {
 
 //SetFilterCallback sets the filter callback used to filter points
 // we send to the notifies callbacks.
-func (s *Store) SetFilterCallback(fc func([]types.MetricPoint) []types.MetricPoint) {
+func (s *FilteredStore) SetFilterCallback(fc func([]types.MetricPoint) []types.MetricPoint) {
 	s.filterCallback = fc
 }
 
@@ -316,10 +314,6 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 	}
 	s.lock.Unlock()
 
-	if s.filterCallback != nil && len(dedupPoints) > 0 {
-		dedupPoints = s.filterCallback(dedupPoints)
-	}
-
 	s.notifeeLock.Lock()
 
 	for _, cb := range s.notifyCallbacks {
@@ -327,4 +321,33 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 	}
 
 	s.notifeeLock.Unlock()
+}
+
+//FilteredStore is a store wrapper that intercepts all call to pushPoints and execute filters on points.
+type FilteredStore struct {
+	Store
+	filterCallback func([]types.MetricPoint) []types.MetricPoint
+}
+
+func NewFilteredStore() *FilteredStore {
+	return &FilteredStore{
+		Store:          *New(),
+		filterCallback: nil,
+	}
+}
+
+// PushPoints wraps the store PushPoints function. It precedes the call with filterCallback.
+func (s *FilteredStore) PushPoints(points []types.MetricPoint) {
+	if s.filterCallback != nil && len(points) > 0 {
+		points = s.filterCallback(points)
+	}
+
+	s.Store.PushPoints(points)
+}
+
+func (s *FilteredStore) Metrics(filters map[string]string) (result []types.Metric, err error) {
+	res, err := s.Store.Metrics(filters)
+
+	//TODO: fix the call
+	return res, err
 }

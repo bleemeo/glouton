@@ -102,7 +102,7 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
-	store                  *store.Store
+	store                  *store.FilteredStore
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
 	dynamicScrapper        *promexporter.DynamicScrapper
@@ -552,9 +552,9 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	a.metricFilter = mFilter
-	a.store = store.New()
+	a.store = store.NewFilteredStore()
 	a.store.SetFilterCallback(mFilter.FilterPoints)
-	rulesManager := rules.NewManager(ctx, a.store)
+	rulesManager := rules.NewManager(ctx, &a.store.Store)
 
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
@@ -709,7 +709,7 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	api := &api.API{
-		DB:                 a.store,
+		DB:                 &a.store.Store,
 		ContainerRuntime:   a.containerRuntime,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
@@ -813,7 +813,7 @@ func (a *agent) run() { //nolint:gocyclo
 		server := influxdb.New(
 			fmt.Sprintf("http://%s:%s", a.config.String("influxdb.host"), a.config.String("influxdb.port")),
 			a.config.String("influxdb.db_name"),
-			a.store,
+			&a.store.Store,
 			a.config.StringMap("influxdb.tags"),
 		)
 		a.influxdbConnector = server
