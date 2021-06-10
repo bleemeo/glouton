@@ -989,15 +989,9 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 
 func (a *agent) sendToTelemetry(ctx context.Context) error {
 	if a.config.Bool("agent.telemetry.enabled") {
+		time.Sleep(2*time.Minute + time.Duration(rand.Intn(5))*time.Minute)
+
 		for {
-			randomDelay := 2*time.Minute + time.Duration(rand.Intn(5))*time.Minute
-
-			select {
-			case <-time.After(24*time.Hour + randomDelay):
-			case <-ctx.Done():
-				return nil
-			}
-
 			facts, err := a.factProvider.Facts(ctx, time.Hour)
 			if err != nil {
 				logger.V(2).Printf("error facts load %v", err)
@@ -1014,6 +1008,12 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			}
 
 			tlm.PostInformation(ctx, a.config.String("agent.telemetry.address"), facts)
+
+			select {
+			case <-time.After(24 * time.Hour):
+			case <-ctx.Done():
+				return nil
+			}
 		}
 	}
 
