@@ -420,7 +420,7 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 }
 
 func byteCountDecimal(b uint64) string {
-	const unit = 1000
+	const unit = 1024
 	if b < unit {
 		return fmt.Sprintf("%d B", b)
 	}
@@ -432,5 +432,5 @@ func byteCountDecimal(b uint64) string {
 		exp++
 	}
 
-	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "kMGTPE"[exp])
+	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }

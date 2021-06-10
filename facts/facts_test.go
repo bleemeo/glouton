@@ -59,3 +59,15 @@ UBUNTU_CODENAME=bionic
 		t.Errorf("decodeOsRelease(...) == %v, want %v", got, want)
 	}
 }
+
+func TestByteCountDecimal(t *testing.T) {
+	in := uint64(5540000000000000000)
+
+	want := "4.81 EB"
+
+	got := byteCountDecimal(in)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
+	}
+}
