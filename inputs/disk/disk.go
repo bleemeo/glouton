@@ -49,7 +49,8 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 		}
 
 		diskDeduplicateInput := deduplicator{
-			Input: diskInput,
+			Input:    diskInput,
+			hostroot: mountPoint,
 		}
 
 		dt := diskTransformer{
