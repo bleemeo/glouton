@@ -138,9 +138,7 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 }
 
 func (rm *Manager) Run(ctx context.Context, now time.Time) {
-	warningPoints := make(map[string]types.MetricPoint)
-	criticalPoints := make(map[string]types.MetricPoint)
-	okPoints := make(map[string]types.MetricPoint)
+	res := []types.MetricPoint{}
 
 	rm.l.Lock()
 
@@ -149,34 +147,22 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	}
 
 	for _, agr := range rm.alertingRules {
-		err := agr.runGroup(ctx, now, rm, okPoints, warningPoints, criticalPoints)
+		point, err := agr.runGroup(ctx, now, rm)
 		if err != nil {
 			logger.V(2).Printf("An error occurred while trying to execute rules: %w")
+		} else if point != nil {
+			res = append(res, *point)
 		}
 	}
 
 	rm.l.Unlock()
-
-	res := []types.MetricPoint{}
-
-	for _, val := range okPoints {
-		res = append(res, val)
-	}
-
-	for _, val := range warningPoints {
-		res = append(res, val)
-	}
-
-	for _, val := range criticalPoints {
-		res = append(res, val)
-	}
 
 	if len(res) != 0 {
 		rm.store.PushPoints(res)
 	}
 }
 
-func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager, okPoints map[string]types.MetricPoint, warningPoints map[string]types.MetricPoint, criticalPoints map[string]types.MetricPoint) error {
+func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
 	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
 
 	for _, val := range thresholdOrder {
@@ -192,13 +178,13 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager, 
 		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
 
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		state := rule.State()
 
-		if queryable.Count() == 0 || state == prevState {
-			return nil
+		if queryable.Count() == 0 || state == prevState || time.Since(rm.agentStarted) < promAlertTime {
+			return nil, nil
 		}
 
 		statusCode := types.StatusFromString(val)
@@ -208,12 +194,11 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager, 
 		}
 
 		if statusCode == types.StatusUnknown {
-			return fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
+			return nil, fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
 		}
 
 		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
 
-		metricID := rule.Labels().String()
 		newPoint := types.MetricPoint{
 			Point: types.Point{
 				Time:  now,
@@ -225,29 +210,15 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager, 
 		}
 
 		if state == rules.StatePending {
-			if time.Since(rm.agentStarted) < promAlertTime {
-				continue
-			}
-
 			statusCode = types.StatusFromString("ok")
 			newPoint.Value = float64(statusCode.NagiosCode())
 			newPoint.Annotations.Status.CurrentStatus = statusCode
 		}
 
-		if statusCode == types.StatusCritical {
-			criticalPoints[metricID] = newPoint
-			break
-		}
-
-		if statusCode == types.StatusWarning {
-			warningPoints[metricID] = newPoint
-			break
-		} else {
-			okPoints[metricID] = newPoint
-		}
+		return &newPoint, nil
 	}
 
-	return nil
+	return nil, nil
 }
 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
