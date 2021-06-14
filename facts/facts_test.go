@@ -96,7 +96,6 @@ func TestByteCountDecimalKB(t *testing.T) {
 	}
 }
 
-
 func TestByteCountDecimalMB(t *testing.T) {
 	in := uint64(543288000)
 

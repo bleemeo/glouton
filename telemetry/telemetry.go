@@ -85,6 +85,6 @@ func (t Telemetry) PostInformation(ctx context.Context, url string, facts map[st
 
 	if resp != nil {
 		logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
-		resp.Body.Close()
+		defer resp.Body.Close()
 	}
 }
