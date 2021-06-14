@@ -75,7 +75,7 @@ func (t Telemetry) PostInformation(ctx context.Context, url string, facts map[st
 	req.Header.Set("Content-Type", "application/json")
 
 	ctx2, cancel := context.WithTimeout(ctx, 10*time.Second)
-	cancel()
+	defer cancel()
 
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx2))
 
