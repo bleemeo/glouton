@@ -138,13 +138,19 @@ func StatusFromString(s string) Status {
 	switch s {
 	case "ok":
 		return StatusOk
+	case "low_warning":
+	case "high_warning":
 	case "warning":
 		return StatusWarning
+	case "low_critical":
+	case "high_critical":
 	case "critical":
 		return StatusCritical
 	default:
 		return StatusUnknown
 	}
+
+	return StatusUnknown
 }
 
 // NagiosCode return the Nagios value for a Status.

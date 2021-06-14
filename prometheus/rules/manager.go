@@ -18,6 +18,7 @@ package rules
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/store"
@@ -39,6 +40,8 @@ import (
 // promAlertTime represents the duration for which the alerting rule
 // should exceed the threshold to be considered fired.
 const promAlertTime = 5 * time.Minute
+
+var errUnknownState = errors.New("unknown state for metric")
 
 //Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
@@ -125,10 +128,10 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 	rm := Manager{
 		store:          store,
 		recordingRules: []*rules.Group{defaultGroup},
-		alertingRules:  []*ruleGroup{},
+		alertingRules:  nil,
 		engine:         engine,
 		logger:         promLogger,
-		agentStarted:   time.Now().Truncate(time.Second), //FIXME: change this time.now with the real agent created time
+		agentStarted:   time.Now(),
 	}
 
 	return &rm
@@ -140,7 +143,6 @@ func (rm *Manager) Run() {
 	warningPoints := make(map[string]types.MetricPoint)
 	criticalPoints := make(map[string]types.MetricPoint)
 	okPoints := make(map[string]types.MetricPoint)
-	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
 
 	rm.l.Lock()
 
@@ -149,74 +151,9 @@ func (rm *Manager) Run() {
 	}
 
 	for _, agr := range rm.alertingRules {
-		for _, val := range thresholdOrder {
-			rule := agr.rules[val]
-
-			if rule == nil {
-				continue
-			}
-
-			prevState := rule.State()
-
-			queryable := &store.CountingQueryable{Queryable: rm.store}
-			_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
-
-			if err != nil {
-				logger.V(2).Printf("an error occurred while evaluating an alerting rule: %w", err)
-				continue
-			}
-
-			state := rule.State()
-
-			if queryable.Count() == 0 || state == prevState {
-				continue
-			}
-
-			statusCode := types.StatusFromString(rule.Annotations().Get("severity"))
-			status := types.StatusDescription{
-				CurrentStatus:     statusCode,
-				StatusDescription: "",
-			}
-
-			if statusCode == types.StatusUnknown {
-				logger.V(2).Printf("An error occurred while creating new alerting points: unknown state for metric %s", rule.Labels().String())
-				continue
-			}
-
-			logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
-
-			metricID := rule.Labels().String()
-			newPoint := types.MetricPoint{
-				Point: types.Point{
-					Time:  now,
-					Value: float64(statusCode.NagiosCode()),
-				},
-				Annotations: types.MetricAnnotations{
-					Status: status,
-				},
-			}
-
-			if state == rules.StatePending {
-				if time.Since(rm.agentStarted) < promAlertTime {
-					continue
-				}
-
-				statusCode = types.StatusFromString("ok")
-				newPoint.Value = float64(statusCode.NagiosCode())
-				newPoint.Annotations.Status.CurrentStatus = statusCode
-			}
-
-			if statusCode == types.StatusCritical {
-				criticalPoints[metricID] = newPoint
-				break
-			}
-
-			if statusCode == types.StatusWarning {
-				warningPoints[metricID] = newPoint
-				break
-			} else {
-				okPoints[metricID] = newPoint
-			}
+		err := agr.runGroup(ctx, now, rm, okPoints, warningPoints, criticalPoints)
+		if err != nil {
+			logger.V(2).Printf("An error occurred while trying to execute rules: %w")
 		}
 	}
 
@@ -241,9 +178,83 @@ func (rm *Manager) Run() {
 	}
 }
 
+func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager, okPoints map[string]types.MetricPoint, warningPoints map[string]types.MetricPoint, criticalPoints map[string]types.MetricPoint) error {
+	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
+
+	for _, val := range thresholdOrder {
+		rule := agr.rules[val]
+
+		if rule == nil {
+			continue
+		}
+
+		prevState := rule.State()
+
+		queryable := &store.CountingQueryable{Queryable: rm.store}
+		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
+
+		if err != nil {
+			return err
+		}
+
+		state := rule.State()
+
+		if queryable.Count() == 0 || state == prevState {
+			return nil
+		}
+
+		statusCode := types.StatusFromString(val)
+		status := types.StatusDescription{
+			CurrentStatus:     statusCode,
+			StatusDescription: "",
+		}
+
+		if statusCode == types.StatusUnknown {
+			return fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
+		}
+
+		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
+
+		metricID := rule.Labels().String()
+		newPoint := types.MetricPoint{
+			Point: types.Point{
+				Time:  now,
+				Value: float64(statusCode.NagiosCode()),
+			},
+			Annotations: types.MetricAnnotations{
+				Status: status,
+			},
+		}
+
+		if state == rules.StatePending {
+			if time.Since(rm.agentStarted) < promAlertTime {
+				continue
+			}
+
+			statusCode = types.StatusFromString("ok")
+			newPoint.Value = float64(statusCode.NagiosCode())
+			newPoint.Annotations.Status.CurrentStatus = statusCode
+		}
+
+		if statusCode == types.StatusCritical {
+			criticalPoints[metricID] = newPoint
+			break
+		}
+
+		if statusCode == types.StatusWarning {
+			warningPoints[metricID] = newPoint
+			break
+		} else {
+			okPoints[metricID] = newPoint
+		}
+	}
+
+	return nil
+}
+
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 	newGroup := &ruleGroup{
-		rules:  make(map[string]*rules.AlertingRule),
+		rules:  make(map[string]*rules.AlertingRule, 4),
 		promql: metric.PromQLQuery,
 	}
 
@@ -301,7 +312,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 	return nil
 }
 
-func (rg *ruleGroup) newRule(exp string, metricName string, threshold string, severity string, logger log.Logger) error {
+func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, severity string, logger log.Logger) error {
 	newExp, err := parser.ParseExpr(exp)
 	if err != nil {
 		return err
@@ -311,7 +322,7 @@ func (rg *ruleGroup) newRule(exp string, metricName string, threshold string, se
 		newExp, promAlertTime, labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{labels.Label{Name: "severity", Value: severity}},
 		labels.Labels{}, false, log.With(logger, "alerting_rule", metricName+"_"+threshold))
 
-	rg.rules[threshold] = newRule
+	agr.rules[threshold] = newRule
 
 	return nil
 }
