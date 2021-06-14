@@ -137,9 +137,7 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 	return &rm
 }
 
-func (rm *Manager) Run() {
-	ctx := context.Background()
-	now := time.Now().Truncate(time.Second)
+func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	warningPoints := make(map[string]types.MetricPoint)
 	criticalPoints := make(map[string]types.MetricPoint)
 	okPoints := make(map[string]types.MetricPoint)

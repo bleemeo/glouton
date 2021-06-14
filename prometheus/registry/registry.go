@@ -103,7 +103,7 @@ type Registry struct {
 	lastPushedPointsCleanup    time.Time
 	currentDelay               time.Duration
 	updateDelayC               chan interface{}
-	RulesCallback              func()
+	RulesCallback              func(ctx context.Context, now time.Time)
 }
 
 type Option struct {
@@ -638,7 +638,10 @@ func (r *Registry) runOnce() time.Duration {
 	}
 
 	if r.RulesCallback != nil {
-		r.RulesCallback()
+		ctx, cancel := context.WithTimeout(context.Background(), r.currentDelay)
+		defer cancel()
+
+		r.RulesCallback(ctx, t0)
 	}
 
 	r.l.Lock()
