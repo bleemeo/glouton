@@ -102,7 +102,7 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
-	store                  *store.FilteredStore
+	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
 	dynamicScrapper        *promexporter.DynamicScrapper
@@ -552,10 +552,10 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	a.metricFilter = mFilter
-	a.store = store.NewFilteredStore()
-	a.store.SetFilterCallback(mFilter.FilterPoints)
-	a.store.SetFilterMetricCallback(mFilter.filterMetric)
-	rulesManager := rules.NewManager(ctx, &a.store.Store)
+	a.store = store.New()
+	rulesManager := rules.NewManager(ctx, a.store)
+
+	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetric)
 
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
@@ -710,7 +710,7 @@ func (a *agent) run() { //nolint:gocyclo
 	}
 
 	api := &api.API{
-		DB:                 &a.store.Store,
+		DB:                 a.store,
 		ContainerRuntime:   a.containerRuntime,
 		PsFact:             psFact,
 		FactProvider:       a.factProvider,
@@ -776,7 +776,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Facts:                   a.factProvider,
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
-			Store:                   a.store,
+			Store:                   filteredStore,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          monitorManager,
@@ -814,7 +814,7 @@ func (a *agent) run() { //nolint:gocyclo
 		server := influxdb.New(
 			fmt.Sprintf("http://%s:%s", a.config.String("influxdb.host"), a.config.String("influxdb.port")),
 			a.config.String("influxdb.db_name"),
-			&a.store.Store,
+			a.store,
 			a.config.StringMap("influxdb.tags"),
 		)
 		a.influxdbConnector = server

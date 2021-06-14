@@ -773,6 +773,9 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 	i := 0
 
+	m.l.Lock()
+	defer m.l.Unlock()
+
 	if len(m.denyList) > 0 {
 		for _, metric := range mt {
 			didMatch := false
