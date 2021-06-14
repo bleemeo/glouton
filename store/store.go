@@ -365,14 +365,27 @@ func (s *FilteredStore) Metrics(filters map[string]string) (result []types.Metri
 }
 
 func (s *FilteredStore) MetricsCount() int {
-	return s.store.MetricsCount()
+	res, err := s.Metrics(map[string]string{})
+	if err != nil {
+		logger.V(2).Printf("An error occurred while fetching metrics for filtered store: %w", err)
+	}
+
+	return len(res)
 }
+
 func (s *FilteredStore) DropMetrics(labelsList []map[string]string) {
 	s.store.DropMetrics(labelsList)
 }
+
 func (s *FilteredStore) AddNotifiee(fc func([]types.MetricPoint)) int {
+	s.store.AddNotifiee(func(mp []types.MetricPoint) {
+		res := s.filterCallback(mp)
+		fc(res)
+	})
+
 	return s.store.AddNotifiee(fc)
 }
+
 func (s *FilteredStore) RemoveNotifiee(v int) {
 	s.store.RemoveNotifiee(v)
 }
