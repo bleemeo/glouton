@@ -378,12 +378,10 @@ func (s *FilteredStore) DropMetrics(labelsList []map[string]string) {
 }
 
 func (s *FilteredStore) AddNotifiee(fc func([]types.MetricPoint)) int {
-	s.store.AddNotifiee(func(mp []types.MetricPoint) {
+	return s.store.AddNotifiee(func(mp []types.MetricPoint) {
 		res := s.filterCallback(mp)
 		fc(res)
 	})
-
-	return s.store.AddNotifiee(fc)
 }
 
 func (s *FilteredStore) RemoveNotifiee(v int) {
