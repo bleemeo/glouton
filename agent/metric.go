@@ -47,6 +47,7 @@ var commonDefaultSystemMetrics []string = []string{
 var promLinuxDefaultSystemMetrics []string = []string{
 	"glouton_gatherer_execution_seconds_count",
 	"glouton_gatherer_execution_seconds_sum",
+	"node_load1",
 	"node_cpu_seconds_global",
 	"node_memory_MemTotal_bytes",
 	"node_memory_MemAvailable_bytes",
