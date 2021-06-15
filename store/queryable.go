@@ -64,13 +64,15 @@ outerLoop:
 		metrics = append(metrics, metric)
 	}
 
-	if sortSeries {
-		sort.Slice(metrics, func(i, j int) bool {
-			lblsA := labels.FromMap(metrics[i].labels)
-			lblsB := labels.FromMap(metrics[j].labels)
-			return labels.Compare(lblsA, lblsB) < 0
-		})
-	}
+	// Currently the prometheus rule engine does not need to sort the results everytime. This is probably because
+	// the databases prometheus uses already pre-sort, or is deterministic
+	// Our in-memory store uses a map, which does not gurantee sorted values in golang.
+	// We need to force the sort to prevent errors related to float values sums.
+	sort.Slice(metrics, func(i, j int) bool {
+		lblsA := labels.FromMap(metrics[i].labels)
+		lblsB := labels.FromMap(metrics[j].labels)
+		return labels.Compare(lblsA, lblsB) < 0
+	})
 
 	return &seriesIter{store: q.store, metrics: metrics, mint: mint, maxt: maxt}
 }
