@@ -1661,6 +1661,11 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 		return err
 	}
 
+	err = a.metricFilter.DiagnosticZip(zipFile)
+	if err != nil {
+		return err
+	}
+
 	if a.bleemeoConnector != nil {
 		err = a.bleemeoConnector.DiagnosticZip(zipFile)
 		if err != nil {

@@ -17,6 +17,8 @@
 package agent
 
 import (
+	"archive/zip"
+	"fmt"
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/facts/container-runtime/merge"
@@ -678,6 +680,30 @@ func getDefaultMetrics(format types.MetricFormat) []string {
 	}
 
 	return res
+}
+
+func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
+	file, err := zipFile.Create("metrics-filter.txt")
+	if err != nil {
+		return err
+	}
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	fmt.Fprintf(file, "# Allow list (%d entry)\n", len(m.allowList))
+
+	for _, r := range m.allowList {
+		fmt.Fprintf(file, "%s\n", r.String())
+	}
+
+	fmt.Fprintf(file, "\n# Deny list (%d entry)\n", len(m.denyList))
+
+	for _, r := range m.denyList {
+		fmt.Fprintf(file, "%s\n", r.String())
+	}
+
+	return nil
 }
 
 func (m *metricFilter) buildList(config *config.Configuration, format types.MetricFormat) error {
