@@ -66,7 +66,7 @@ outerLoop:
 
 	// Currently the prometheus rule engine does not need to sort the results everytime. This is probably because
 	// the databases prometheus uses already pre-sort, or is deterministic
-	// Our in-memory store uses a map, which does not gurantee sorted values in golang.
+	// Our in-memory store uses a map, which does not guarantee sorted values in golang.
 	// We need to force the sort to prevent errors related to float values sums.
 	sort.Slice(metrics, func(i, j int) bool {
 		lblsA := labels.FromMap(metrics[i].labels)
