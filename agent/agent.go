@@ -553,8 +553,9 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.metricFilter = mFilter
 	a.store = store.New()
-	a.store.SetFilterCallback(mFilter.FilterPoints)
 	rulesManager := rules.NewManager(ctx, a.store)
+
+	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetric)
 
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
@@ -775,7 +776,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Facts:                   a.factProvider,
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
-			Store:                   a.store,
+			Store:                   filteredStore,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          monitorManager,

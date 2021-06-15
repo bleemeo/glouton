@@ -751,8 +751,7 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 
 	for _, point := range points {
 		for _, allowVal := range m.allowList {
-			matched := allowVal.MatchesPoint(point)
-			if matched {
+			if allowVal.MatchesPoint(point) {
 				points[i] = point
 				i++
 
@@ -769,6 +768,49 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	points = points[:i]
 
 	return points
+}
+
+func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
+	i := 0
+
+	m.l.Lock()
+	defer m.l.Unlock()
+
+	if len(m.denyList) > 0 {
+		for _, metric := range mt {
+			didMatch := false
+
+			for _, denyVal := range m.denyList {
+				if denyVal.MatchesLabels(metric.Labels()) {
+					didMatch = true
+					break
+				}
+			}
+
+			if !didMatch {
+				mt[i] = metric
+				i++
+			}
+		}
+
+		mt = mt[:i]
+		i = 0
+	}
+
+	for _, metric := range mt {
+		for _, allowVal := range m.allowList {
+			if allowVal.MatchesLabels(metric.Labels()) {
+				mt[i] = metric
+				i++
+
+				break
+			}
+		}
+	}
+
+	mt = mt[:i]
+
+	return mt
 }
 
 func (m *metricFilter) filterFamily(f *dto.MetricFamily) {

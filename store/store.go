@@ -43,7 +43,6 @@ type Store struct {
 	notifyCallbacks map[int]func([]types.MetricPoint)
 	lock            sync.Mutex
 	notifeeLock     sync.Mutex
-	filterCallback  func([]types.MetricPoint) []types.MetricPoint
 }
 
 // New create a return a store. Store should be Close()d before leaving.
@@ -52,7 +51,6 @@ func New() *Store {
 		metrics:         make(map[int]metric),
 		points:          make(map[int][]types.Point),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
-		filterCallback:  nil,
 	}
 
 	return s
@@ -69,12 +67,6 @@ func (s *Store) Run(ctx context.Context) error {
 			return nil
 		}
 	}
-}
-
-//SetFilterCallback sets the filter callback used to filter points
-// we send to the notifies callbacks.
-func (s *Store) SetFilterCallback(fc func([]types.MetricPoint) []types.MetricPoint) {
-	s.filterCallback = fc
 }
 
 // AddNotifiee add a callback that will be notified of all points received
@@ -316,10 +308,6 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 	}
 	s.lock.Unlock()
 
-	if s.filterCallback != nil && len(dedupPoints) > 0 {
-		dedupPoints = s.filterCallback(dedupPoints)
-	}
-
 	s.notifeeLock.Lock()
 
 	for _, cb := range s.notifyCallbacks {
@@ -327,4 +315,75 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 	}
 
 	s.notifeeLock.Unlock()
+}
+
+type store interface {
+	Metrics(filters map[string]string) (result []types.Metric, err error)
+	MetricsCount() int
+	DropMetrics(labelsList []map[string]string)
+	AddNotifiee(func([]types.MetricPoint)) int
+	RemoveNotifiee(int)
+	PushPoints(points []types.MetricPoint)
+}
+
+//FilteredStore is a store wrapper that intercepts all call to pushPoints and execute filters on points.
+type FilteredStore struct {
+	store                store
+	filterCallback       func([]types.MetricPoint) []types.MetricPoint
+	filterMetricCallback func([]types.Metric) []types.Metric
+}
+
+//NewFilteredStore initializes a new filtered store.
+func NewFilteredStore(store store, fc func([]types.MetricPoint) []types.MetricPoint, fmc func([]types.Metric) []types.Metric) *FilteredStore {
+	new := &FilteredStore{
+		store:                store,
+		filterCallback:       nil,
+		filterMetricCallback: nil,
+	}
+
+	new.filterMetricCallback = fmc
+	new.filterCallback = fc
+
+	return new
+}
+
+// PushPoints wraps the store PushPoints function. It precedes the call with filterCallback.
+func (s *FilteredStore) PushPoints(points []types.MetricPoint) {
+	if s.filterCallback != nil && len(points) > 0 {
+		points = s.filterCallback(points)
+	}
+
+	s.store.PushPoints(points)
+}
+
+func (s *FilteredStore) Metrics(filters map[string]string) (result []types.Metric, err error) {
+	res, err := s.store.Metrics(filters)
+
+	res = s.filterMetricCallback(res)
+
+	return res, err
+}
+
+func (s *FilteredStore) MetricsCount() int {
+	res, err := s.Metrics(map[string]string{})
+	if err != nil {
+		logger.V(2).Printf("An error occurred while fetching metrics for filtered store: %w", err)
+	}
+
+	return len(res)
+}
+
+func (s *FilteredStore) DropMetrics(labelsList []map[string]string) {
+	s.store.DropMetrics(labelsList)
+}
+
+func (s *FilteredStore) AddNotifiee(fc func([]types.MetricPoint)) int {
+	return s.store.AddNotifiee(func(mp []types.MetricPoint) {
+		res := s.filterCallback(mp)
+		fc(res)
+	})
+}
+
+func (s *FilteredStore) RemoveNotifiee(v int) {
+	s.store.RemoveNotifiee(v)
 }
