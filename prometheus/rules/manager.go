@@ -59,8 +59,11 @@ type Manager struct {
 }
 
 type ruleGroup struct {
-	rules map[string]*rules.AlertingRule
+	rules         map[string]*rules.AlertingRule
+	inactiveSince time.Time
+	disabledUntil time.Time
 
+	id     string
 	promql string
 }
 
@@ -73,6 +76,7 @@ var (
 		"windows_cpu_time_global":            "sum(windows_cpu_time_total) without(core)",
 		"windows_memory_standby_cache_bytes": "windows_memory_standby_cache_core_bytes+windows_memory_standby_cache_normal_priority_bytes+windows_memory_standby_cache_reserve_bytes",
 	}
+	epoch = time.Unix(0, 0)
 )
 
 func NewManager(ctx context.Context, store *store.Store) *Manager {
@@ -111,7 +115,7 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 	for metricName, val := range defaultRules {
 		exp, err := parser.ParseExpr(val)
 		if err != nil {
-			logger.V(0).Printf("An error occurred while parsing expression %s: %v. This rule was not registered", val, err)
+			logger.V(2).Printf("An error occurred while parsing expression %s: %v. This rule was not registered", val, err)
 		} else {
 			newRule := rules.NewRecordingRule(metricName, exp, labels.Labels{})
 			defaultGroupRules = append(defaultGroupRules, newRule)
@@ -158,12 +162,27 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	rm.l.Unlock()
 
 	if len(res) != 0 {
+		logger.V(2).Printf("Sending %d new alert to the api", len(res))
 		rm.store.PushPoints(res)
 	}
 }
 
 func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
 	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
+
+	if agr.inactiveSince != epoch {
+		if agr.disabledUntil == epoch && now.After(agr.inactiveSince.Add(2*time.Minute)) {
+			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.id)
+			agr.disabledUntil = now.Add(10 * time.Minute)
+		}
+
+		if now.After(agr.disabledUntil) {
+			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.id, agr.inactiveSince.Format(time.RFC3339))
+			agr.disabledUntil = now.Add(10 * time.Minute)
+		} else {
+			return nil, nil
+		}
+	}
 
 	for _, val := range thresholdOrder {
 		rule := agr.rules[val]
@@ -183,11 +202,22 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 		state := rule.State()
 
-		if queryable.Count() == 0 || state == prevState || time.Since(rm.agentStarted) < promAlertTime {
+		if queryable.Count() == 0 {
+			if agr.inactiveSince == epoch {
+				agr.inactiveSince = now
+			}
+
 			return nil, nil
 		}
 
-		statusCode := types.StatusFromString(val)
+		agr.inactiveSince = epoch
+		agr.disabledUntil = epoch
+
+		if state == prevState || time.Since(rm.agentStarted) < promAlertTime {
+			return nil, nil
+		}
+
+		statusCode := statusFromThreshold(val)
 		status := types.StatusDescription{
 			CurrentStatus:     statusCode,
 			StatusDescription: "",
@@ -210,7 +240,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		}
 
 		if state == rules.StatePending {
-			statusCode = types.StatusFromString("ok")
+			statusCode = statusFromThreshold("ok")
 			newPoint.Value = float64(statusCode.NagiosCode())
 			newPoint.Annotations.Status.CurrentStatus = statusCode
 		}
@@ -223,8 +253,11 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 	newGroup := &ruleGroup{
-		rules:  make(map[string]*rules.AlertingRule, 4),
-		promql: metric.PromQLQuery,
+		rules:         make(map[string]*rules.AlertingRule, 4),
+		inactiveSince: epoch,
+		disabledUntil: epoch,
+		id:            metric.LabelsText,
+		promql:        metric.PromQLQuery,
 	}
 
 	if metric.Threshold.LowWarning != nil {
@@ -265,16 +298,27 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 	rm.l.Lock()
 	defer rm.l.Unlock()
 
+	old := rm.alertingRules
+
 	rm.alertingRules = []*ruleGroup{}
 
 	for _, val := range metricsList {
-		if len(val.PromQLQuery) == 0 {
+		if len(val.PromQLQuery) == 0 || (val.Threshold.LowCritical == nil && val.Threshold.HighCritical == nil && val.Threshold.LowWarning == nil && val.Threshold.HighWarning == nil) {
 			continue
 		}
 
 		err := rm.addAlertingRule(val)
 		if err != nil {
 			return err
+		}
+	}
+
+	for _, val := range old {
+		for _, newVal := range rm.alertingRules {
+			if newVal.id == val.id {
+				newVal.inactiveSince = val.inactiveSince
+				newVal.disabledUntil = val.disabledUntil
+			}
 		}
 	}
 
@@ -294,4 +338,21 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 	agr.rules[threshold] = newRule
 
 	return nil
+}
+
+func statusFromThreshold(s string) types.Status {
+	switch s {
+	case "ok":
+		return types.StatusOk
+	case "low_warning":
+	case "high_warning":
+		return types.StatusWarning
+	case "low_critical":
+	case "high_critical":
+		return types.StatusCritical
+	default:
+		return types.StatusUnknown
+	}
+
+	return types.StatusUnknown
 }
