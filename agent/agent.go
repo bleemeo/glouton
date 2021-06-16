@@ -564,7 +564,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	a.metricFilter = mFilter
 	a.store = store.New()
-	rulesManager := rules.NewManager(ctx, a.store)
+	a.rulesManager = rules.NewManager(ctx, a.store)
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
