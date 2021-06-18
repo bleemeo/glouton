@@ -524,3 +524,207 @@ func sortMatchers(list []matcher.Matchers) []matcher.Matchers {
 
 	return orderedList
 }
+
+func Benchmark_filters_no_match(b *testing.B) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(defaultConf))
+	if err != nil {
+		b.Error(err)
+	}
+
+	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+
+	list := []types.MetricPoint{}
+
+	for i := 0; i < b.N; i++ {
+		new := types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "cpu_used_status",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		}
+
+		list = append(list, new)
+	}
+
+	b.Run("Benchmark_filters_no_match", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			metricFilter.FilterPoints(list)
+		}
+	})
+}
+
+func Benchmark_filters_one_match_first(b *testing.B) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(defaultConf))
+	if err != nil {
+		b.Error(err)
+	}
+
+	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+
+	list := []types.MetricPoint{
+		{
+			Labels: map[string]string{
+				"__name__":        "node_cpu_seconds_global",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		},
+	}
+
+	for i := 0; i < b.N; i++ {
+		new := types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "cpu_used_status",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		}
+
+		list = append(list, new)
+	}
+
+	b.Run("Benchmark_filters_one_match_first", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			metricFilter.FilterPoints(list)
+		}
+	})
+
+}
+
+func Benchmark_filters_one_match_middle(b *testing.B) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(defaultConf))
+	if err != nil {
+		b.Error(err)
+	}
+
+	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+
+	list := []types.MetricPoint{}
+
+	i := 0
+
+	for ; i < b.N/2; i++ {
+		new := types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "cpu_used_status",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		}
+
+		list = append(list, new)
+	}
+
+	list = append(list, types.MetricPoint{
+		Labels: map[string]string{
+			"__name__":        "node_cpu_seconds_global",
+			"label_not_read":  "value_not_read",
+			"scrape_instance": "localhost:2113",
+			"scrape_job":      "my_application123",
+		},
+	})
+
+	for ; i < b.N; i++ {
+		new := types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "cpu_used_status",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		}
+
+		list = append(list, new)
+	}
+
+	b.Run("Benchmark_filters_one_match_middle", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			metricFilter.FilterPoints(list)
+		}
+	})
+}
+
+func Benchmark_filters_one_match_last(b *testing.B) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(defaultConf))
+	if err != nil {
+		b.Error(err)
+	}
+
+	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+
+	list := []types.MetricPoint{}
+
+	for i := 0; i < b.N; i++ {
+		new := types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "cpu_used_status",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		}
+
+		list = append(list, new)
+	}
+
+	list = append(list, types.MetricPoint{
+		Labels: map[string]string{
+			"__name__":        "node_cpu_seconds_global",
+			"label_not_read":  "value_not_read",
+			"scrape_instance": "localhost:2113",
+			"scrape_job":      "my_application123",
+		},
+	})
+
+	b.Run("Benchmark_filters_one_match_last", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			metricFilter.FilterPoints(list)
+		}
+	})
+}
+
+func Benchmark_filters_all(b *testing.B) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(defaultConf))
+	if err != nil {
+		b.Error(err)
+	}
+
+	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+
+	list := []types.MetricPoint{}
+
+	for i := 0; i < b.N; i++ {
+		new := types.MetricPoint{
+			Labels: map[string]string{
+				"__name__":        "node_cpu_seconds_global",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		}
+
+		list = append(list, new)
+	}
+
+	b.Run("Benchmark_filters_all", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			metricFilter.FilterPoints(list)
+		}
+	})
+
+}
