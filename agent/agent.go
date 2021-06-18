@@ -564,9 +564,12 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	a.metricFilter = mFilter
 	a.store = store.New()
+
 	a.rulesManager = rules.NewManager(ctx, a.store)
 
-	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
+	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
+
+	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetric)
 
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{

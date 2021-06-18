@@ -25,6 +25,7 @@ import (
 	"glouton/types"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -76,7 +77,6 @@ var (
 		"windows_cpu_time_global":            "sum(windows_cpu_time_total) without(core)",
 		"windows_memory_standby_cache_bytes": "windows_memory_standby_cache_core_bytes+windows_memory_standby_cache_normal_priority_bytes+windows_memory_standby_cache_reserve_bytes",
 	}
-	epoch = time.Unix(0, 0)
 )
 
 func NewManager(ctx context.Context, store *store.Store) *Manager {
@@ -170,8 +170,10 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
 	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
 
-	if agr.inactiveSince != epoch {
-		if agr.disabledUntil == epoch && now.After(agr.inactiveSince.Add(2*time.Minute)) {
+	var generatedPoint *types.MetricPoint = nil
+
+	if !agr.inactiveSince.IsZero() {
+		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
 			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.id)
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		}
@@ -203,17 +205,17 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		state := rule.State()
 
 		if queryable.Count() == 0 {
-			if agr.inactiveSince == epoch {
+			if agr.inactiveSince.IsZero() {
 				agr.inactiveSince = now
 			}
 
 			return nil, nil
 		}
 
-		agr.inactiveSince = epoch
-		agr.disabledUntil = epoch
+		agr.inactiveSince = time.Time{}
+		agr.disabledUntil = time.Time{}
 
-		if state == prevState || time.Since(rm.agentStarted) < promAlertTime {
+		if state == rules.StateInactive && time.Since(rm.agentStarted) < promAlertTime {
 			return nil, nil
 		}
 
@@ -245,7 +247,11 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 			newPoint.Annotations.Status.CurrentStatus = statusCode
 		}
 
-		return &newPoint, nil
+		if state == rules.StateFiring {
+			return &newPoint, nil
+		} else if generatedPoint == nil {
+			generatedPoint = &newPoint
+		}
 	}
 
 	return nil, nil
@@ -254,8 +260,8 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 	newGroup := &ruleGroup{
 		rules:         make(map[string]*rules.AlertingRule, 4),
-		inactiveSince: epoch,
-		disabledUntil: epoch,
+		inactiveSince: time.Time{},
+		disabledUntil: time.Time{},
 		id:            metric.LabelsText,
 		promql:        metric.PromQLQuery,
 	}
@@ -323,6 +329,20 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 	}
 
 	return nil
+}
+
+func (rm *Manager) ResetInactiveRules(labels map[string]string) {
+	now := time.Now().Truncate(time.Second)
+
+	for _, val := range rm.alertingRules {
+		if val.disabledUntil.IsZero() {
+			continue
+		}
+
+		if strings.Contains(val.promql, labels[types.LabelName]) {
+			val.disabledUntil = now
+		}
+	}
 }
 
 func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, severity string, logger log.Logger) error {

@@ -35,19 +35,21 @@ var errDeletedMetric = errors.New("metric was deleted")
 //
 // See methods GetMetrics and GetMetricPoints.
 type Store struct {
-	metrics         map[int]metric
-	points          map[int][]types.Point
-	notifyCallbacks map[int]func([]types.MetricPoint)
-	lock            sync.Mutex
-	notifeeLock     sync.Mutex
+	metrics           map[int]metric
+	points            map[int][]types.Point
+	notifyCallbacks   map[int]func([]types.MetricPoint)
+	resetRuleCallback func(map[string]string)
+	lock              sync.Mutex
+	notifeeLock       sync.Mutex
 }
 
 // New create a return a store. Store should be Close()d before leaving.
 func New() *Store {
 	s := &Store{
-		metrics:         make(map[int]metric),
-		points:          make(map[int][]types.Point),
-		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
+		metrics:           make(map[int]metric),
+		points:            make(map[int][]types.Point),
+		notifyCallbacks:   make(map[int]func([]types.MetricPoint)),
+		resetRuleCallback: nil,
 	}
 
 	return s
@@ -97,6 +99,11 @@ func (s *Store) RemoveNotifiee(id int) {
 	defer s.notifeeLock.Unlock()
 
 	delete(s.notifyCallbacks, id)
+}
+
+//SetResetRuleCallback sets the resetRuleCallbacks.
+func (s *Store) SetResetRuleCallback(fc func(map[string]string)) {
+	s.resetRuleCallback = fc
 }
 
 // DropMetrics delete metrics and they points.
@@ -250,13 +257,13 @@ func (s *Store) run() {
 // If the metric does not exists, it's created.
 // The store lock is assumed to be held.
 // Annotations is always updated with value provided as argument.
-func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.MetricAnnotations) metric {
+func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.MetricAnnotations) (metric, bool) {
 	for id, m := range s.metrics {
 		if labelsMatch(m.labels, labels, true) {
 			m.annotations = annotations
 			s.metrics[id] = m
 
-			return m
+			return m, false
 		}
 	}
 
@@ -282,7 +289,7 @@ func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.Me
 
 	s.metrics[newID] = m
 
-	return m
+	return m, true
 }
 
 // PushPoints append new metric points to the store, creating new metric
@@ -293,8 +300,12 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 
 	s.lock.Lock()
 	for _, point := range points {
-		metric := s.metricGetOrCreate(point.Labels, point.Annotations)
+		metric, created := s.metricGetOrCreate(point.Labels, point.Annotations)
 		length := len(s.points[metric.metricID])
+
+		if created && s.resetRuleCallback != nil {
+			s.resetRuleCallback(metric.labels)
+		}
 
 		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {
 			continue
