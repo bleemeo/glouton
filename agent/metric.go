@@ -598,19 +598,19 @@ type metricFilter struct {
 
 	// staticList contains the matchers generated from static source (config file).
 	// They won't change at runtime, and don't need to be rebuilt
-	staticAllowList []matcher.Matchers
-	staticDenyList  []matcher.Matchers
+	staticAllowList map[labels.Matcher][]matcher.Matchers
+	staticDenyList  map[labels.Matcher][]matcher.Matchers
 
 	// these list are the actual list used while filtering.
-	allowList []matcher.Matchers
-	denyList  []matcher.Matchers
+	allowList map[labels.Matcher][]matcher.Matchers
+	denyList  map[labels.Matcher][]matcher.Matchers
 
 	l sync.Mutex
 }
 
-func buildMatcherList(config *config.Configuration, listType string) []matcher.Matchers {
+func buildMatcherList(config *config.Configuration, listType string) map[labels.Matcher][]matcher.Matchers {
 	metricListType := listType + "_metrics"
-	metricList := []matcher.Matchers{}
+	metricList := make(map[labels.Matcher][]matcher.Matchers)
 	globalList := config.StringList("metric." + metricListType)
 
 	for _, str := range globalList {
@@ -620,16 +620,24 @@ func buildMatcherList(config *config.Configuration, listType string) []matcher.M
 			continue
 		}
 
-		metricList = append(metricList, new)
+		addToList(metricList, new)
 	}
 
-	metricList = addScrappersList(config, metricList, listType)
+	addScrappersList(config, metricList, listType)
 
 	return metricList
 }
 
-func addScrappersList(config *config.Configuration, metricList []matcher.Matchers,
-	metricListType string) []matcher.Matchers {
+func addToList(metricList map[labels.Matcher][]matcher.Matchers, new matcher.Matchers) {
+	if metricList[*new.Get(types.LabelName)] == nil {
+		metricList[*new.Get(types.LabelName)] = []matcher.Matchers{new}
+	} else {
+		metricList[*new.Get(types.LabelName)] = append(metricList[*new.Get(types.LabelName)], new)
+	}
+}
+
+func addScrappersList(config *config.Configuration, metricList map[labels.Matcher][]matcher.Matchers,
+	metricListType string) {
 	promTargets, _ := config.Get("metric.prometheus.targets")
 	targetList := prometheusConfigToURLs(promTargets)
 
@@ -665,11 +673,9 @@ func addScrappersList(config *config.Configuration, metricList []matcher.Matcher
 				}
 			}
 
-			metricList = append(metricList, new)
+			addToList(metricList, new)
 		}
 	}
-
-	return metricList
 }
 
 func getDefaultMetrics(format types.MetricFormat) []string {
@@ -701,13 +707,17 @@ func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
 	fmt.Fprintf(file, "# Allow list (%d entry)\n", len(m.allowList))
 
 	for _, r := range m.allowList {
-		fmt.Fprintf(file, "%s\n", r.String())
+		for _, val := range r {
+			fmt.Fprintf(file, "%s\n", val.String())
+		}
 	}
 
 	fmt.Fprintf(file, "\n# Deny list (%d entry)\n", len(m.denyList))
 
 	for _, r := range m.denyList {
-		fmt.Fprintf(file, "%s\n", r.String())
+		for _, val := range r {
+			fmt.Fprintf(file, "%s\n", val.String())
+		}
 	}
 
 	return nil
@@ -720,7 +730,7 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 	m.staticAllowList = buildMatcherList(config, "allow")
 
 	if len(m.staticAllowList) > 0 {
-		logger.V(1).Println("Your allow list may not be compatible with your plan. Please your plan allowed metrics if you encounter any problem.")
+		logger.V(0).Println("Your allow list may not be compatible with your plan. Please check your allowed metrics for your plan if you encounter any problem.")
 	}
 
 	m.staticDenyList = buildMatcherList(config, "deny")
@@ -734,7 +744,7 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 				return err
 			}
 
-			m.staticAllowList = append(m.staticAllowList, new)
+			addToList(m.staticAllowList, new)
 		}
 	}
 
@@ -751,6 +761,24 @@ func newMetricFilter(config *config.Configuration, metricFormat types.MetricForm
 	return &new, err
 }
 
+func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName string) []matcher.Matchers {
+	// Matchers are used as key, thus a metric name can match multiple labels (eg: cpu* and cpu_process_count).
+	// We aggregate all possible matchers based on the name, thus reducing the number of total matchers checked for each point.
+	matchers := []matcher.Matchers{}
+
+	for key := range list {
+		if key.Matches(labelName) {
+			matchers = append(matchers, list[key]...)
+		}
+	}
+
+	if len(matchers) == 0 {
+		matchers = nil
+	}
+
+	return matchers
+}
+
 func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPoint {
 	i := 0
 
@@ -761,9 +789,15 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 
 	if len(m.denyList) != 0 {
 		for _, point := range points {
+			denyVals := getMatchersList(m.denyList, point.Labels[types.LabelName])
+
+			if denyVals == nil {
+				continue
+			}
+
 			didMatch := false
 
-			for _, denyVal := range m.denyList {
+			for _, denyVal := range denyVals {
 				matched := denyVal.MatchesPoint(point)
 				if matched {
 					didMatch = true
@@ -783,7 +817,13 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	}
 
 	for _, point := range points {
-		for _, allowVal := range m.allowList {
+		allowVals := getMatchersList(m.allowList, point.Labels[types.LabelName])
+
+		if allowVals == nil {
+			continue
+		}
+
+		for _, allowVal := range allowVals {
 			if allowVal.MatchesPoint(point) {
 				points[i] = point
 				i++
@@ -811,9 +851,15 @@ func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 
 	if len(m.denyList) > 0 {
 		for _, metric := range mt {
+			denyVals := getMatchersList(m.denyList, metric.Labels()[types.LabelName])
+
+			if denyVals == nil {
+				continue
+			}
+
 			didMatch := false
 
-			for _, denyVal := range m.denyList {
+			for _, denyVal := range denyVals {
 				if denyVal.MatchesLabels(metric.Labels()) {
 					didMatch = true
 					break
@@ -831,7 +877,13 @@ func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 	}
 
 	for _, metric := range mt {
-		for _, allowVal := range m.allowList {
+		allowVals := getMatchersList(m.allowList, metric.Labels()[types.LabelName])
+
+		if allowVals == nil {
+			continue
+		}
+
+		for _, allowVal := range allowVals {
 			if allowVal.MatchesLabels(metric.Labels()) {
 				mt[i] = metric
 				i++
@@ -851,9 +903,15 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 
 	if len(m.denyList) > 0 {
 		for _, metric := range f.Metric {
+			denyVals := getMatchersList(m.denyList, *f.Name)
+
+			if denyVals == nil {
+				continue
+			}
+
 			didMatch := false
 
-			for _, denyVal := range m.denyList {
+			for _, denyVal := range denyVals {
 				if denyVal.MatchesMetric(*f.Name, metric) {
 					didMatch = true
 					break
@@ -871,7 +929,13 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 	}
 
 	for _, metric := range f.Metric {
-		for _, allowVal := range m.allowList {
+		allowVals := getMatchersList(m.allowList, *f.Name)
+
+		if allowVals == nil {
+			continue
+		}
+
+		for _, allowVal := range allowVals {
 			if allowVal.MatchesMetric(*f.Name, metric) {
 				f.Metric[i] = metric
 				i++
@@ -1002,13 +1066,13 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	m.allowList = m.staticAllowList
 
 	for _, val := range allowList {
-		m.allowList = append(m.allowList, val)
+		addToList(m.allowList, val)
 	}
 
 	m.denyList = m.staticDenyList
 
 	for _, val := range denyList {
-		m.denyList = append(m.denyList, val)
+		addToList(m.denyList, val)
 	}
 
 	if len(errors) == 0 {

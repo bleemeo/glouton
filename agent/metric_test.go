@@ -82,57 +82,88 @@ func Test_Basic_Build(t *testing.T) {
 	}
 
 	want := metricFilter{
-		allowList: []matcher.Matchers{
+		allowList: map[labels.Matcher][]matcher.Matchers{
 			{
-				&labels.Matcher{
-					Name:  types.LabelName,
-					Type:  labels.MatchRegexp,
-					Value: "cpu.*",
+				Name:  types.LabelName,
+				Type:  labels.MatchRegexp,
+				Value: "cpu.*",
+			}: {
+				{
+					&labels.Matcher{
+						Name:  types.LabelName,
+						Type:  labels.MatchRegexp,
+						Value: "cpu.*",
+					},
 				},
 			},
 			{
-				&labels.Matcher{
-					Name:  types.LabelName,
-					Type:  labels.MatchRegexp,
-					Value: "pro.*",
+				Name:  types.LabelName,
+				Type:  labels.MatchRegexp,
+				Value: "pro.*",
+			}: {
+				{
+
+					&labels.Matcher{
+						Name:  types.LabelName,
+						Type:  labels.MatchRegexp,
+						Value: "pro.*",
+					},
 				},
 			},
 			{
-				&labels.Matcher{
-					Name:  types.LabelName,
-					Type:  labels.MatchEqual,
-					Value: "process_cpu_seconds_total",
-				},
-				&labels.Matcher{
-					Name:  types.LabelScrapeInstance,
-					Type:  labels.MatchEqual,
-					Value: "localhost:2113",
-				},
-				&labels.Matcher{
-					Name:  types.LabelScrapeJob,
-					Type:  labels.MatchEqual,
-					Value: "my_application123",
+				Name:  types.LabelName,
+				Type:  labels.MatchEqual,
+				Value: "process_cpu_seconds_total",
+			}: {
+				{
+					&labels.Matcher{
+						Name:  types.LabelName,
+						Type:  labels.MatchEqual,
+						Value: "process_cpu_seconds_total",
+					},
+					&labels.Matcher{
+						Name:  types.LabelScrapeInstance,
+						Type:  labels.MatchEqual,
+						Value: "localhost:2113",
+					},
+					&labels.Matcher{
+						Name:  types.LabelScrapeJob,
+						Type:  labels.MatchEqual,
+						Value: "my_application123",
+					},
 				},
 			},
 		},
-		denyList: []matcher.Matchers{
+		denyList: map[labels.Matcher][]matcher.Matchers{
 			{
-				&labels.Matcher{
-					Name:  types.LabelScrapeJob,
-					Type:  labels.MatchEqual,
-					Value: "my_application123",
-				},
-				&labels.Matcher{
-					Name:  types.LabelName,
-					Type:  labels.MatchEqual,
-					Value: "process_cpu_seconds_total",
+				Name:  types.LabelName,
+				Type:  labels.MatchEqual,
+				Value: "process_cpu_seconds_total",
+			}: {
+				{
+					&labels.Matcher{
+						Name:  types.LabelScrapeJob,
+						Type:  labels.MatchEqual,
+						Value: "my_application123",
+					},
+					&labels.Matcher{
+						Name:  types.LabelName,
+						Type:  labels.MatchEqual,
+						Value: "process_cpu_seconds_total",
+					},
 				},
 			},
 			{
-				&labels.Matcher{
-					Name:  types.LabelName,
-					Type:  labels.MatchEqual,
-					Value: "whatever",
+				Name:  types.LabelName,
+				Type:  labels.MatchEqual,
+				Value: "whatever",
+			}: {
+				{
+					&labels.Matcher{
+						Name:  types.LabelName,
+						Type:  labels.MatchEqual,
+						Value: "whatever",
+					},
 				},
 			},
 		},
@@ -144,6 +175,30 @@ func Test_Basic_Build(t *testing.T) {
 		t.Error(err)
 		return
 	}
+
+	fmt.Println("Before")
+	for key := range new.allowList {
+		fmt.Printf("%v %s\n", key, key.GetRegexString())
+	}
+	fmt.Println("want")
+	for key := range new.allowList {
+		fmt.Printf("%v %s\n", key, key.GetRegexString())
+	}
+	fmt.Println("end")
+
+	new.allowList = sortMatchers(new.allowList)
+	want.allowList = sortMatchers(want.allowList)
+
+	fmt.Println("After")
+	for key := range new.allowList {
+		fmt.Printf("%v %s\n", key, key.GetRegexString())
+	}
+
+	fmt.Println("want")
+	for key := range new.allowList {
+		fmt.Printf("%v %s\n", key, key.GetRegexString())
+	}
+	fmt.Println("end")
 
 	res := cmp.Diff(new.allowList, want.allowList, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
@@ -467,19 +522,24 @@ func Test_RebuildDynamicList(t *testing.T) {
 		},
 	}
 
-	allowListWant := make([]matcher.Matchers, len(mf.allowList))
-	denyListWant := make([]matcher.Matchers, len(mf.denyList))
+	allowListWant := make(map[labels.Matcher][]matcher.Matchers)
+	denyListWant := make(map[labels.Matcher][]matcher.Matchers)
 
-	copy(allowListWant, mf.allowList)
-	copy(denyListWant, mf.denyList)
+	for key, val := range mf.allowList {
+		allowListWant[key] = val
+	}
+
+	for key, val := range mf.denyList {
+		denyListWant[key] = val
+	}
 
 	new, _ := matcher.NormalizeMetric("{__name__=\"something\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 	new2, _ := matcher.NormalizeMetric("{__name__=\"else\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 	new3, _ := matcher.NormalizeMetric("{__name__=\"other\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 
-	allowListWant = append(allowListWant, new2)
-	allowListWant = append(allowListWant, new)
-	denyListWant = append(denyListWant, new3)
+	allowListWant[*new.Get(types.LabelName)] = append(allowListWant[*new.Get(types.LabelName)], new)
+	allowListWant[*new2.Get(types.LabelName)] = append(allowListWant[*new2.Get(types.LabelName)], new2)
+	denyListWant[*new3.Get(types.LabelName)] = append(denyListWant[*new3.Get(types.LabelName)], new3)
 
 	allowListWant = sortMatchers(allowListWant)
 	denyListWant = sortMatchers(denyListWant)
@@ -503,26 +563,43 @@ func Test_RebuildDynamicList(t *testing.T) {
 	}
 }
 
-func sortMatchers(list []matcher.Matchers) []matcher.Matchers {
-	nameList := []string{}
-	orderedList := []matcher.Matchers{}
+func sortMatchers(list map[labels.Matcher][]matcher.Matchers) map[labels.Matcher][]matcher.Matchers {
+	keyList := []string{}
+	orderedKey := make(map[labels.Matcher][]matcher.Matchers)
 
-	for _, val := range list {
-		nameList = append(nameList, val[0].Value)
+	for key := range list {
+		keyList = append(keyList, key.Value)
 	}
 
-	sort.Strings(nameList)
-
-	for _, val := range nameList {
-		for _, v := range list {
-			if v[0].Value == val {
-				orderedList = append(orderedList, v)
-				break
+	for _, keyVal := range keyList {
+		for k, l := range list {
+			if k.Value != keyVal {
+				continue
 			}
+
+			orderedList := []matcher.Matchers{}
+			nameList := []string{}
+
+			for _, val := range l {
+				nameList = append(nameList, val[0].Value)
+			}
+
+			sort.Strings(nameList)
+
+			for _, val := range nameList {
+				for _, v := range l {
+					if v[0].Value == val {
+						orderedList = append(orderedList, v)
+						break
+					}
+				}
+			}
+
+			orderedKey[k] = orderedList
 		}
 	}
 
-	return orderedList
+	return orderedKey
 }
 
 func Benchmark_filters_no_match(b *testing.B) {
@@ -550,11 +627,19 @@ func Benchmark_filters_no_match(b *testing.B) {
 		list = append(list, new)
 	}
 
-	b.Run("Benchmark_filters_no_match", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			metricFilter.FilterPoints(list)
-		}
-	})
+	cop := []types.MetricPoint{}
+
+	copy(cop, list)
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		metricFilter.FilterPoints(list)
+
+		b.StopTimer()
+		copy(cop, list)
+		b.StartTimer()
+	}
 }
 
 func Benchmark_filters_one_match_first(b *testing.B) {
@@ -591,12 +676,11 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		list = append(list, new)
 	}
 
-	b.Run("Benchmark_filters_one_match_first", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			metricFilter.FilterPoints(list)
-		}
-	})
+	b.ResetTimer()
 
+	for i := 0; i < b.N; i++ {
+		metricFilter.FilterPoints(list)
+	}
 }
 
 func Benchmark_filters_one_match_middle(b *testing.B) {
@@ -648,11 +732,11 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		list = append(list, new)
 	}
 
-	b.Run("Benchmark_filters_one_match_middle", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			metricFilter.FilterPoints(list)
-		}
-	})
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		metricFilter.FilterPoints(list)
+	}
 }
 
 func Benchmark_filters_one_match_last(b *testing.B) {
@@ -689,11 +773,11 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		},
 	})
 
-	b.Run("Benchmark_filters_one_match_last", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			metricFilter.FilterPoints(list)
-		}
-	})
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		metricFilter.FilterPoints(list)
+	}
 }
 
 func Benchmark_filters_all(b *testing.B) {
@@ -721,10 +805,9 @@ func Benchmark_filters_all(b *testing.B) {
 		list = append(list, new)
 	}
 
-	b.Run("Benchmark_filters_all", func(b *testing.B) {
-		for i := 0; i < b.N; i++ {
-			metricFilter.FilterPoints(list)
-		}
-	})
+	b.ResetTimer()
 
+	for i := 0; i < b.N; i++ {
+		metricFilter.FilterPoints(list)
+	}
 }
