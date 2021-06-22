@@ -72,6 +72,22 @@ metric:
   include_default_metrics: true
 `
 
+//golint: gochecknoglobals
+var goodPoint = map[string]string{
+	"__name__":        "node_cpu_seconds_global",
+	"label_not_read":  "value_not_read",
+	"scrape_instance": "localhost:2113",
+	"scrape_job":      "my_application123",
+}
+
+//golint: gochecknoglobals
+var badPoint = map[string]string{
+	"__name__":        "cpu_used_status",
+	"label_not_read":  "value_not_read",
+	"scrape_instance": "localhost:2113",
+	"scrape_job":      "my_application123",
+}
+
 func Test_Basic_Build(t *testing.T) {
 	cfg := config.Configuration{}
 
@@ -602,6 +618,20 @@ func sortMatchers(list map[labels.Matcher][]matcher.Matchers) map[labels.Matcher
 	return orderedKey
 }
 
+func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
+	list := make([]types.MetricPoint, nb)
+
+	for i := 0; i < nb; i++ {
+		new := types.MetricPoint{
+			Labels: lbls,
+		}
+
+		list = append(list, new)
+	}
+
+	return list
+}
+
 func Benchmark_filters_no_match(b *testing.B) {
 	cfg := config.Configuration{}
 
@@ -612,34 +642,59 @@ func Benchmark_filters_no_match(b *testing.B) {
 
 	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
 
-	list := []types.MetricPoint{}
+	list100 := generatePoints(100, badPoint)
 
-	for i := 0; i < b.N; i++ {
-		new := types.MetricPoint{
-			Labels: map[string]string{
-				"__name__":        "cpu_used_status",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
-		}
+	list10 := generatePoints(10, badPoint)
 
-		list = append(list, new)
+	list1 := []types.MetricPoint{
+		{
+			Labels: badPoint,
+		},
 	}
-
-	cop := []types.MetricPoint{}
-
-	copy(cop, list)
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		metricFilter.FilterPoints(list)
+	b.Run("Benchmark_filters_no_match_1", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list1))
 
-		b.StopTimer()
-		copy(cop, list)
-		b.StartTimer()
-	}
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list1)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_no_match_10", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list10))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list10)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_no_match_100", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list100))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list100)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
 }
 
 func Benchmark_filters_one_match_first(b *testing.B) {
@@ -652,7 +707,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 
 	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
 
-	list := []types.MetricPoint{
+	goodPoint := []types.MetricPoint{
 		{
 			Labels: map[string]string{
 				"__name__":        "node_cpu_seconds_global",
@@ -663,24 +718,69 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		},
 	}
 
-	for i := 0; i < b.N; i++ {
-		new := types.MetricPoint{
+	list100 := goodPoint
+
+	list100 = append(list100, generatePoints(99, badPoint)...)
+
+	list10 := goodPoint
+
+	list10 = append(list10, generatePoints(9, badPoint)...)
+
+	list1 := []types.MetricPoint{
+		{
 			Labels: map[string]string{
-				"__name__":        "cpu_used_status",
+				"__name__":        "node_cpu_seconds_global",
 				"label_not_read":  "value_not_read",
 				"scrape_instance": "localhost:2113",
 				"scrape_job":      "my_application123",
 			},
-		}
-
-		list = append(list, new)
+		},
 	}
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		metricFilter.FilterPoints(list)
-	}
+	b.Run("Benchmark_filters_one_match_first_1", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list1))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list1)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_one_match_first_10", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list10))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list10)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_one_match_first_100", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list100))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list100)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
 }
 
 func Benchmark_filters_one_match_middle(b *testing.B) {
@@ -693,24 +793,9 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 
 	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
 
-	list := []types.MetricPoint{}
+	list100 := generatePoints(49, badPoint)
 
-	i := 0
-
-	for ; i < b.N/2; i++ {
-		new := types.MetricPoint{
-			Labels: map[string]string{
-				"__name__":        "cpu_used_status",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
-		}
-
-		list = append(list, new)
-	}
-
-	list = append(list, types.MetricPoint{
+	list100 = append(list100, types.MetricPoint{
 		Labels: map[string]string{
 			"__name__":        "node_cpu_seconds_global",
 			"label_not_read":  "value_not_read",
@@ -719,24 +804,50 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		},
 	})
 
-	for ; i < b.N; i++ {
-		new := types.MetricPoint{
-			Labels: map[string]string{
-				"__name__":        "cpu_used_status",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
-		}
+	list100 = append(list100, generatePoints(50, badPoint)...)
 
-		list = append(list, new)
-	}
+	list10 := generatePoints(4, badPoint)
+
+	list10 = append(list10, types.MetricPoint{
+		Labels: map[string]string{
+			"__name__":        "node_cpu_seconds_global",
+			"label_not_read":  "value_not_read",
+			"scrape_instance": "localhost:2113",
+			"scrape_job":      "my_application123",
+		},
+	})
+
+	list10 = append(list10, generatePoints(5, badPoint)...)
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		metricFilter.FilterPoints(list)
-	}
+	b.Run("Benchmark_filters_one_match_middle_10", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list10))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list10)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_one_match_middle_100", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list100))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list100)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
 }
 
 func Benchmark_filters_one_match_last(b *testing.B) {
@@ -749,22 +860,20 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 
 	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
 
-	list := []types.MetricPoint{}
+	list100 := generatePoints(99, badPoint)
 
-	for i := 0; i < b.N; i++ {
-		new := types.MetricPoint{
-			Labels: map[string]string{
-				"__name__":        "cpu_used_status",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
-		}
+	list100 = append(list100, types.MetricPoint{
+		Labels: map[string]string{
+			"__name__":        "node_cpu_seconds_global",
+			"label_not_read":  "value_not_read",
+			"scrape_instance": "localhost:2113",
+			"scrape_job":      "my_application123",
+		},
+	})
 
-		list = append(list, new)
-	}
+	list10 := generatePoints(9, badPoint)
 
-	list = append(list, types.MetricPoint{
+	list10 = append(list10, types.MetricPoint{
 		Labels: map[string]string{
 			"__name__":        "node_cpu_seconds_global",
 			"label_not_read":  "value_not_read",
@@ -775,9 +884,33 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		metricFilter.FilterPoints(list)
-	}
+	b.Run("Benchmark_filters_one_match_last_10", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list10))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list10)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_one_match_last_100", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list100))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list100)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
 }
 
 func Benchmark_filters_all(b *testing.B) {
@@ -805,9 +938,72 @@ func Benchmark_filters_all(b *testing.B) {
 		list = append(list, new)
 	}
 
+	list100 := generatePoints(100, map[string]string{
+		"__name__":        "node_cpu_seconds_global",
+		"label_not_read":  "value_not_read",
+		"scrape_instance": "localhost:2113",
+		"scrape_job":      "my_application123",
+	})
+
+	list10 := generatePoints(10, map[string]string{
+		"__name__":        "node_cpu_seconds_global",
+		"label_not_read":  "value_not_read",
+		"scrape_instance": "localhost:2113",
+		"scrape_job":      "my_application123",
+	})
+
+	list1 := []types.MetricPoint{
+		{
+			Labels: map[string]string{
+				"__name__":        "node_cpu_seconds_global",
+				"label_not_read":  "value_not_read",
+				"scrape_instance": "localhost:2113",
+				"scrape_job":      "my_application123",
+			},
+		},
+	}
+
 	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
-		metricFilter.FilterPoints(list)
-	}
+	b.Run("Benchmark_filters_no_match_1", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list1))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list1)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_no_match_10", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list10))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list10)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
+
+	b.Run("Benchmark_filters_no_match_100", func(b *testing.B) {
+		cop := make([]types.MetricPoint, len(list100))
+
+		b.ResetTimer()
+
+		for i := 0; i < b.N; i++ {
+			b.StopTimer()
+			copy(cop, list100)
+			b.StartTimer()
+
+			metricFilter.FilterPoints(cop)
+		}
+	})
 }

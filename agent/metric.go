@@ -1077,7 +1077,7 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service) error
 				return err
 			}
 
-			m.allowList = append(m.allowList, new)
+			addToList(m.allowList, new)
 		}
 	}
 
