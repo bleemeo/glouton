@@ -41,6 +41,7 @@ type Store struct {
 	resetRuleCallback func(map[string]string)
 	lock              sync.Mutex
 	notifeeLock       sync.Mutex
+	resetRuleLock     sync.Mutex
 }
 
 // New create a return a store. Store should be Close()d before leaving.
@@ -103,6 +104,9 @@ func (s *Store) RemoveNotifiee(id int) {
 
 //SetResetRuleCallback sets the resetRuleCallbacks.
 func (s *Store) SetResetRuleCallback(fc func(map[string]string)) {
+	s.resetRuleLock.Lock()
+	defer s.resetRuleLock.Unlock()
+
 	s.resetRuleCallback = fc
 }
 
@@ -304,7 +308,9 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 		length := len(s.points[metric.metricID])
 
 		if created && s.resetRuleCallback != nil {
+			s.resetRuleLock.Lock()
 			s.resetRuleCallback(metric.labels)
+			s.resetRuleLock.Unlock()
 		}
 
 		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {

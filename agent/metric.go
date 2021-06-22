@@ -758,7 +758,7 @@ func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
-	fmt.Fprintf(file, "# Allow list (%d entry)\n", len(m.allowList))
+	fmt.Fprintf(file, "# Allow list (%d entries)\n", len(m.allowList))
 
 	for _, r := range m.allowList {
 		for _, val := range r {
@@ -766,7 +766,7 @@ func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
 		}
 	}
 
-	fmt.Fprintf(file, "\n# Deny list (%d entry)\n", len(m.denyList))
+	fmt.Fprintf(file, "\n# Deny list (%d entries)\n", len(m.denyList))
 
 	for _, r := range m.denyList {
 		for _, val := range r {

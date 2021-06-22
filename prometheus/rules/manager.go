@@ -17,6 +17,7 @@
 package rules
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
 	"fmt"
@@ -25,7 +26,6 @@ import (
 	"glouton/types"
 	"os"
 	"runtime"
-	"strings"
 	"sync"
 	"time"
 
@@ -215,7 +215,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		agr.inactiveSince = time.Time{}
 		agr.disabledUntil = time.Time{}
 
-		if state == rules.StateInactive && time.Since(rm.agentStarted) < promAlertTime {
+		if state == rules.StatePending && time.Since(rm.agentStarted) < promAlertTime {
 			return nil, nil
 		}
 
@@ -254,7 +254,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		}
 	}
 
-	return nil, nil
+	return generatedPoint, nil
 }
 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
@@ -339,10 +339,56 @@ func (rm *Manager) ResetInactiveRules(labels map[string]string) {
 			continue
 		}
 
-		if strings.Contains(val.promql, labels[types.LabelName]) {
-			val.disabledUntil = now
+		if now.Add(15 * time.Second).Before(val.disabledUntil) {
+			val.disabledUntil = now.Add(15 * time.Second)
 		}
 	}
+}
+
+func (rm *Manager) DiagnosticZip(zipFile *zip.Writer) error {
+	file, err := zipFile.Create("alertings-recording-rules.txt")
+	if err != nil {
+		return err
+	}
+
+	rm.l.Lock()
+	defer rm.l.Unlock()
+
+	fmt.Fprintf(file, "# Recording rules (%d entries)\n", len(rm.recordingRules))
+
+	for _, gr := range rm.recordingRules {
+		fmt.Fprintf(file, "# group %s\n", gr.Name())
+
+		for _, r := range gr.Rules() {
+			fmt.Fprintf(file, "%s\n", r.String())
+		}
+	}
+
+	activeAlertingRules := 0
+
+	for _, r := range rm.alertingRules {
+		if r.inactiveSince.IsZero() {
+			activeAlertingRules++
+		}
+	}
+
+	fmt.Fprintf(file, "# Active Alerting rules (%d entries)\n", activeAlertingRules)
+
+	for _, r := range rm.alertingRules {
+		if r.inactiveSince.IsZero() {
+			fmt.Fprintf(file, "%s\n", r.string())
+		}
+	}
+
+	fmt.Fprintf(file, "\n# Inactive Alerting Rules (%d entries)\n", len(rm.alertingRules)-activeAlertingRules)
+
+	for _, r := range rm.alertingRules {
+		if !r.inactiveSince.IsZero() {
+			fmt.Fprintf(file, "%s\n", r.string())
+		}
+	}
+
+	return nil
 }
 
 func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, severity string, logger log.Logger) error {
@@ -358,6 +404,11 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 	agr.rules[threshold] = newRule
 
 	return nil
+}
+
+func (agr *ruleGroup) string() string {
+	return fmt.Sprintf("id=%s query=%s Threshold_low_Warning=%s Threshold_high_Warning=%s Threshold_low_Critical=%s Threshold_high_Critical=%s",
+		agr.id, agr.promql, agr.rules["low_warning"], agr.rules["high_warning"], agr.rules["low_critical"], agr.rules["high_critical"])
 }
 
 func statusFromThreshold(s string) types.Status {

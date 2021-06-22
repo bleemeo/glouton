@@ -1748,6 +1748,28 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
+	err = a.metricFilter.DiagnosticZip(zipFile)
+	if err != nil {
+		return err
+	}
+
+	err = a.rulesManager.DiagnosticZip(zipFile)
+	if err != nil {
+		return err
+	}
+
+	if a.bleemeoConnector != nil {
+		err = a.bleemeoConnector.DiagnosticZip(zipFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	err = a.discovery.DiagnosticZip(zipFile)
+	if err != nil {
+		return err
+	}
+
 	file, err = zipFile.Create("containers.txt")
 	if err != nil {
 		return err
