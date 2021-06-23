@@ -720,7 +720,7 @@ func (a *agent) run() { //nolint:gocyclo
 		Threshold:          a.threshold,
 		StaticCDNURL:       a.config.String("web.static_cdn_url"),
 		DiagnosticPage:     a.DiagnosticPage,
-		DiagnosticZip:      a.DiagnosticZip,
+		DiagnosticZip:      a.writeDiagnosticZip,
 		MetricFormat:       a.metricFormat,
 	}
 
@@ -1619,10 +1619,38 @@ func (a *agent) DiagnosticPage() string {
 	return builder.String()
 }
 
-func (a *agent) DiagnosticZip(w io.Writer) error {
+func (a *agent) writeDiagnosticZip(w io.Writer) error {
 	zipFile := zip.NewWriter(w)
 	defer zipFile.Close()
 
+	type Diagnosticer interface {
+		DiagnosticZip(zipFile *zip.Writer) error
+	}
+
+	modules := []Diagnosticer{
+		a,
+		a.metricFilter,
+		a.discovery,
+	}
+
+	if a.bleemeoConnector != nil {
+		modules = append(modules, a.bleemeoConnector)
+	}
+
+	if a.monitorManager != nil {
+		modules = append(modules, a.monitorManager)
+	}
+
+	for _, m := range modules {
+		if err := m.DiagnosticZip(zipFile); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 	file, err := zipFile.Create("diagnostic.txt")
 	if err != nil {
 		return err
@@ -1656,30 +1684,6 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 	}
 
 	_, err = file.Write(logger.Buffer())
-	if err != nil {
-		return err
-	}
-
-	err = a.metricFilter.DiagnosticZip(zipFile)
-	if err != nil {
-		return err
-	}
-
-	if a.bleemeoConnector != nil {
-		err = a.bleemeoConnector.DiagnosticZip(zipFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	if a.monitorManager != nil {
-		err = a.monitorManager.DiagnosticZip(zipFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = a.discovery.DiagnosticZip(zipFile)
 	if err != nil {
 		return err
 	}

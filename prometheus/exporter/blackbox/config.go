@@ -220,7 +220,7 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 	return manager, nil
 }
 
-// Targets returns list of configured targets
+// DiagnosticZip add diagnostic information.
 func (m *RegisterManager) DiagnosticZip(zipFile *zip.Writer) error {
 	m.l.Lock()
 	targets := m.targets
