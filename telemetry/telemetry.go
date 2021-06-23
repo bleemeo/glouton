@@ -81,10 +81,9 @@ func (t Telemetry) PostInformation(ctx context.Context, url string, facts map[st
 
 	if err != nil {
 		logger.V(1).Printf("failed when we post on telemetry: %v", err)
+		return
 	}
 
-	if resp != nil {
-		logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
-		defer resp.Body.Close()
-	}
+	logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
+	defer resp.Body.Close()
 }
