@@ -24,6 +24,7 @@ import (
 	"glouton/logger"
 	"glouton/store"
 	"glouton/types"
+	"math"
 	"os"
 	"runtime"
 	"sync"
@@ -64,8 +65,9 @@ type ruleGroup struct {
 	inactiveSince time.Time
 	disabledUntil time.Time
 
-	id     string
-	promql string
+	id          string
+	promql      string
+	isUserAlert bool
 }
 
 //nolint: gochecknoglobals
@@ -172,7 +174,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 	var generatedPoint *types.MetricPoint = nil
 
-	if !agr.inactiveSince.IsZero() {
+	if !agr.inactiveSince.IsZero() && !agr.isUserAlert {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
 			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.id)
 			agr.disabledUntil = now.Add(10 * time.Minute)
@@ -205,6 +207,15 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		state := rule.State()
 
 		if queryable.Count() == 0 {
+			if agr.isUserAlert {
+				return &types.MetricPoint{
+					Point: types.Point{
+						Time:  now,
+						Value: math.NaN(),
+					},
+				}, nil
+			}
+
 			if agr.inactiveSince.IsZero() {
 				agr.inactiveSince = now
 			}
@@ -264,6 +275,7 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 		disabledUntil: time.Time{},
 		id:            metric.LabelsText,
 		promql:        metric.PromQLQuery,
+		isUserAlert:   metric.IsUserPromQLAlert,
 	}
 
 	if metric.Threshold.LowWarning != nil {
@@ -407,8 +419,8 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 }
 
 func (agr *ruleGroup) string() string {
-	return fmt.Sprintf("id=%s query=%s Threshold_low_Warning=%s Threshold_high_Warning=%s Threshold_low_Critical=%s Threshold_high_Critical=%s",
-		agr.id, agr.promql, agr.rules["low_warning"], agr.rules["high_warning"], agr.rules["low_critical"], agr.rules["high_critical"])
+	return fmt.Sprintf("id=%s query=%s inactive_since=%v disabled_until=%v is_user_promql_alert=%v Threshold_low_Warning=%s Threshold_high_Warning=%s Threshold_low_Critical=%s Threshold_high_Critical=%s",
+		agr.id, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.rules["low_warning"], agr.rules["high_warning"], agr.rules["low_critical"], agr.rules["high_critical"])
 }
 
 func statusFromThreshold(s string) types.Status {

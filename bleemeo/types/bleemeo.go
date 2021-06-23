@@ -123,8 +123,9 @@ type Metric struct {
 	StatusOf    string            `json:"status_of,omitempty"`
 	Threshold
 	threshold.Unit
-	DeactivatedAt time.Time `json:"deactivated_at,omitempty"`
-	PromQLQuery   string    `json:"promql_query"`
+	DeactivatedAt     time.Time `json:"deactivated_at,omitempty"`
+	PromQLQuery       string    `json:"promql_query"`
+	IsUserPromQLAlert bool      `json:"is_user_promql_alert"`
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if
