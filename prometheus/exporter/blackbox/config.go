@@ -17,6 +17,7 @@
 package blackbox
 
 import (
+	"archive/zip"
 	"errors"
 	"fmt"
 	"glouton/logger"
@@ -219,6 +220,24 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 	return manager, nil
 }
 
+// Targets returns list of configured targets
+func (m *RegisterManager) DiagnosticZip(zipFile *zip.Writer) error {
+	m.l.Lock()
+	targets := m.targets
+	m.l.Unlock()
+
+	file, err := zipFile.Create("blackbox.txt")
+	if err != nil {
+		return err
+	}
+
+	for _, t := range targets {
+		fmt.Fprintf(file, "url=%s labels=%v\n", t.collector.URL, t.labels)
+	}
+
+	return nil
+}
+
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
 func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	// it is easier to keep only the static monitors and rebuild the dynamic config
@@ -248,7 +267,9 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 		}
 	}
 
+	m.l.Lock()
 	m.targets = newTargets
+	m.l.Unlock()
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")
 

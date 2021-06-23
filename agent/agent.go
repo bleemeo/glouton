@@ -109,6 +109,7 @@ type agent struct {
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
 	metricFilter           *metricFilter
+	monitorManager         *blackbox.RegisterManager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -688,14 +689,12 @@ func (a *agent) run() { //nolint:gocyclo
 		DynamicJobName: "discovered-exporters",
 	}
 
-	var monitorManager *blackbox.RegisterManager
-
 	if a.config.Bool("blackbox.enabled") {
 		logger.V(1).Println("Starting blackbox_exporter...")
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
 
-		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -779,7 +778,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Store:                   filteredStore,
 			Acc:                     acc,
 			Discovery:               a.discovery,
-			MonitorManager:          monitorManager,
+			MonitorManager:          a.monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
 			UpdateThresholds:        a.UpdateThresholds,
 			UpdateUnits:             a.threshold.SetUnits,
@@ -1668,6 +1667,13 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 
 	if a.bleemeoConnector != nil {
 		err = a.bleemeoConnector.DiagnosticZip(zipFile)
+		if err != nil {
+			return err
+		}
+	}
+
+	if a.monitorManager != nil {
+		err = a.monitorManager.DiagnosticZip(zipFile)
 		if err != nil {
 			return err
 		}
