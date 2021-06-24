@@ -21,6 +21,8 @@ import (
 	"context"
 	"encoding/json"
 	"glouton/logger"
+	"io"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
@@ -85,5 +87,11 @@ func (t Telemetry) PostInformation(ctx context.Context, url string, facts map[st
 	}
 
 	logger.V(1).Printf("telemetry response Satus: %s", resp.Status)
-	defer resp.Body.Close()
+
+	defer func() {
+		// Ensure we read the whole response to avoid "Connection reset by peer" on server
+		// and ensure HTTP connection can be resused
+		_, _ = io.Copy(ioutil.Discard, resp.Body)
+		resp.Body.Close()
+	}()
 }
