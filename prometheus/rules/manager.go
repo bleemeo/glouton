@@ -89,7 +89,7 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 		MaxSamples:         50000000,
 		Timeout:            2 * time.Minute,
 		ActiveQueryTracker: nil,
-		LookbackDelta:      5 * time.Minute,
+		LookbackDelta:      promAlertTime,
 	})
 
 	mgrOptions := &rules.ManagerOptions{
@@ -252,7 +252,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 			},
 		}
 
-		if state == rules.StatePending {
+		if state == rules.StatePending || state == rules.StateInactive {
 			statusCode = statusFromThreshold("ok")
 			newPoint.Value = float64(statusCode.NagiosCode())
 			newPoint.Annotations.Status.CurrentStatus = statusCode
@@ -411,7 +411,7 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 
 	newRule := rules.NewAlertingRule(metricName+"_"+threshold,
 		newExp, promAlertTime, labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{labels.Label{Name: "severity", Value: severity}},
-		labels.Labels{}, false, log.With(logger, "alerting_rule", metricName+"_"+threshold))
+		labels.Labels{}, true, log.With(logger, "alerting_rule", metricName+"_"+threshold))
 
 	agr.rules[threshold] = newRule
 
