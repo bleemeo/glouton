@@ -694,7 +694,7 @@ func (a *agent) run() { //nolint:gocyclo
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.config.String("blackbox.user_agent"), a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}

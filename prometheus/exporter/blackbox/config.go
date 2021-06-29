@@ -48,11 +48,14 @@ type yamlConfigTarget struct {
 	ModuleName string `yaml:"module"`
 }
 
-func defaultModule() bbConf.Module {
+func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
 			IPProtocol:         "ip4",
 			IPProtocolFallback: true,
+			Headers: map[string]string{
+				"User-Agent": userAgent,
+			},
 		},
 		DNS: bbConf.DNSProbe{
 			IPProtocol:         "ip4",
@@ -74,8 +77,8 @@ func defaultModule() bbConf.Module {
 	}
 }
 
-func genCollectorFromDynamicTarget(monitor types.Monitor) (*collectorWithLabels, error) {
-	mod := defaultModule()
+func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*collectorWithLabels, error) {
+	mod := defaultModule(userAgent)
 
 	url, err := url.Parse(monitor.URL)
 	if err != nil {
@@ -157,9 +160,29 @@ func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
 	}
 }
 
+// set user-agent on HTTP prober is not already set.
+func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
+	for k, m := range modules {
+		if m.Prober != "http" {
+			continue
+		}
+
+		if m.HTTP.Headers == nil {
+			m.HTTP.Headers = make(map[string]string)
+		}
+
+		if m.HTTP.Headers["User-Agent"] != "" {
+			continue
+		}
+
+		m.HTTP.Headers["User-Agent"] = userAgent
+		modules[k] = m
+	}
+}
+
 // New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func New(registry *registry.Registry, externalConf interface{}, metricFormat types.MetricFormat) (*RegisterManager, error) {
+func New(registry *registry.Registry, externalConf interface{}, userAgent string, metricFormat types.MetricFormat) (*RegisterManager, error) {
 	conf := yamlConfig{}
 
 	// read static config
@@ -174,6 +197,8 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 		logger.V(1).Printf("blackbox_exporter: Cannot parse blackbox_exporter config: %v", err)
 		return nil, err
 	}
+
+	setUserAgent(conf.Modules, userAgent)
 
 	for idx, v := range conf.Modules {
 		// override user timeouts when too high or undefined. This is important !
@@ -211,6 +236,7 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 		registry:      registry,
 		scraperName:   conf.ScraperName,
 		metricFormat:  metricFormat,
+		userAgent:     userAgent,
 	}
 
 	if err := manager.updateRegistrations(); err != nil {
@@ -253,7 +279,7 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	}
 
 	for _, monitor := range monitors {
-		collector, err := genCollectorFromDynamicTarget(monitor)
+		collector, err := genCollectorFromDynamicTarget(monitor, m.userAgent)
 		if err != nil {
 			return err
 		}

@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/logger"
+	"glouton/version"
 	"io/ioutil"
 	"os"
 	"strconv"
@@ -38,6 +39,7 @@ func defaultConfig() map[string]interface{} {
 		"blackbox.enabled":           true,
 		"blackbox.scraper_name":      "",
 		"blackbox.scraper_send_uuid": true,
+		"blackbox.user_agent":        version.UserAgent(),
 		"blackbox.targets":           []interface{}{},
 		"blackbox.modules": map[string]interface{}{
 			"http": map[string]interface{}{
