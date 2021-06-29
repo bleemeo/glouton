@@ -835,7 +835,7 @@ func (a *agent) run() { //nolint:gocyclo
 		softPeriodsFromInterface(tmp),
 	)
 
-	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig["disk_monitor"]) {
+	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
 		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.StringList("disk_ignore")) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {

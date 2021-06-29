@@ -33,154 +33,155 @@ var errUpdateFromEnv = errors.New("update from environment variable is not suppo
 var errDeprecatedEnv = errors.New("environement variable is deprecated")
 var errSettingsDeprecated = errors.New("setting is deprecated ")
 
-//nolint:gochecknoglobals
-var defaultConfig = map[string]interface{}{
-	"blackbox.enabled":           true,
-	"blackbox.scraper_name":      "",
-	"blackbox.scraper_send_uuid": true,
-	"blackbox.targets":           []interface{}{},
-	"blackbox.modules": map[string]interface{}{
-		"http": map[string]interface{}{
-			"prober": "http",
+func defaultConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"blackbox.enabled":           true,
+		"blackbox.scraper_name":      "",
+		"blackbox.scraper_send_uuid": true,
+		"blackbox.targets":           []interface{}{},
+		"blackbox.modules": map[string]interface{}{
 			"http": map[string]interface{}{
-				// we default to IPv4 as the ip_protocol_fallback option does not
-				// retry a request with a different IP version, but only has an
-				// effect when resolving the target
-				"preferred_ip_protocol": "ip4",
+				"prober": "http",
+				"http": map[string]interface{}{
+					// we default to IPv4 as the ip_protocol_fallback option does not
+					// retry a request with a different IP version, but only has an
+					// effect when resolving the target
+					"preferred_ip_protocol": "ip4",
+				},
 			},
 		},
-	},
-	"agent.cloudimage_creation_file": "cloudimage_creation",
-	"agent.facts_file":               "facts.yaml",
-	"agent.http_debug.enabled":       false,
-	"agent.http_debug.bind_address":  "localhost:6060",
-	"agent.installation_format":      "manual",
-	"agent.netstat_file":             "netstat.out",
-	"agent.process_exporter.enabled": true,
-	"agent.public_ip_indicator":      "https://myip.bleemeo.com",
-	"agent.state_file":               "state.json",
-	"agent.deprecated_state_file":    "",
-	"agent.upgrade_file":             "upgrade",
-	"agent.metrics_format":           "Bleemeo",
-	"agent.node_exporter.enabled":    true,
-	"agent.node_exporter.collectors": []string{
-		"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev",
-	},
-	"agent.windows_exporter.enabled":               true,
-	"agent.windows_exporter.collectors":            []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp"},
-	"bleemeo.account_id":                           "",
-	"bleemeo.api_base":                             "https://api.bleemeo.com/",
-	"bleemeo.api_ssl_insecure":                     false,
-	"bleemeo.container_registration_delay_seconds": 30,
-	"bleemeo.enabled":                              true,
-	"bleemeo.initial_agent_name":                   "",
-	"bleemeo.mqtt.cafile":                          "",
-	"bleemeo.mqtt.host":                            "mqtt.bleemeo.com",
-	"bleemeo.mqtt.port":                            8883,
-	"bleemeo.mqtt.ssl_insecure":                    false,
-	"bleemeo.mqtt.ssl":                             true,
-	"bleemeo.registration_key":                     "",
-	"bleemeo.sentry.dsn":                           "",
-	"config_files": []string{ // This settings could not be overridden by configuration files
-		"/etc/glouton/glouton.conf",
-		"/etc/glouton/conf.d",
-		"etc/glouton.conf",
-		"etc/conf.d",
-		"C:\\ProgramData\\glouton\\glouton.conf",
-		"C:\\ProgramData\\glouton\\conf.d",
-	},
-	"container.pid_namespace_host": false,
-	"container.type":               "",
-	"df.host_mount_point":          "",
-	"df.ignore_fs_type": []string{
-		"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$",
-		"tmpfs",
-		"efivarfs",
-		".*gvfs.*",
-	},
-	"df.path_ignore": []interface{}{
-		"/var/lib/docker/aufs",
-		"/var/lib/docker/overlay",
-		"/var/lib/docker/overlay2",
-		"/var/lib/docker/devicemapper",
-		"/var/lib/docker/vfs",
-		"/var/lib/docker/btrfs",
-		"/var/lib/docker/zfs",
-		"/var/lib/docker/plugins",
-		"/var/lib/docker/containers",
-		"/snap",
-		"/run/docker/runtime-runc",
-	},
-	"disk_ignore": []string{
-		"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$",
-		"^dm-[0-9]+$",
-		// Ignore partition
-		"^(hd|sd|vd|xvd|fio|rssd)[a-z][0-9]+$",
-		"^(mmcblk|nvme[0-9]n|drbd|rbd|skd|rsxx)[0-9]p[0-9]+$",
-	},
-	"disk_monitor": []string{
-		"^(hd|sd|vd|xvd)[a-z]$",
-		"^mmcblk[0-9]$",
-		"^nvme[0-9]n[0-9]$",
-		"^fio[a-z]$",
-		"^drbd[0-9]$",
-		"^rbd[0-9]$",
-		"^rssd[a-z]$",
-		"^skd[0-9]$",
-		"^rsxx[0-9]$",
-		"^[A-Z]:$",
-	},
-	"influxdb.db_name":                 "glouton",
-	"influxdb.enabled":                 false,
-	"influxdb.host":                    "localhost",
-	"influxdb.port":                    8086,
-	"influxdb.tags":                    map[string]string{},
-	"jmx.enabled":                      true,
-	"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
-	"jmxtrans.file_permission":         "0640",
-	"jmxtrans.graphite_port":           2004,
-	"kubernetes.enabled":               false,
-	"kubernetes.nodename":              "",
-	"kubernetes.kubeconfig":            "",
-	"logging.buffer.head_size":         150,
-	"logging.buffer.tail_size":         1000,
-	"logging.level":                    "INFO",
-	"logging.output":                   "console",
-	"logging.package_levels":           "",
-	"metric.prometheus.targets":        []interface{}{},
-	"metric.include_default_metrics":   true,
-	"metric.allow_metrics":             []interface{}{},
-	"metric.deny_metrics":              []interface{}{},
-	"metric.softstatus_period_default": 5 * 60,
-	"metric.softstatus_period": map[string]interface{}{
-		"system_pending_updates":          86400,
-		"system_pending_security_updates": 86400,
-		"time_elapsed_since_last_data":    0,
-		"time_drift":                      0,
-	},
-	"network_interface_blacklist":     []interface{}{"docker", "lo", "veth", "virbr", "vnet", "isatap"},
-	"nrpe.enabled":                    false,
-	"nrpe.address":                    "0.0.0.0",
-	"nrpe.port":                       5666,
-	"nrpe.ssl":                        true,
-	"nrpe.conf_paths":                 []interface{}{"/etc/nagios/nrpe.cfg"},
-	"service_ignore_check":            []interface{}{},
-	"service_ignore_metrics":          []interface{}{},
-	"service":                         []interface{}{},
-	"stack":                           "",
-	"tags":                            []string{},
-	"telegraf.docker_metrics_enabled": true,
-	"telegraf.statsd.address":         "127.0.0.1",
-	"telegraf.statsd.enabled":         true,
-	"telegraf.statsd.port":            8125,
-	"thresholds":                      map[string]interface{}{},
-	"web.enabled":                     true,
-	"web.listener.address":            "127.0.0.1",
-	"web.listener.port":               8015,
-	"web.static_cdn_url":              "/static/",
-	"zabbix.enabled":                  false,
-	"zabbix.address":                  "127.0.0.1",
-	"zabbix.port":                     10050,
+		"agent.cloudimage_creation_file": "cloudimage_creation",
+		"agent.facts_file":               "facts.yaml",
+		"agent.http_debug.enabled":       false,
+		"agent.http_debug.bind_address":  "localhost:6060",
+		"agent.installation_format":      "manual",
+		"agent.netstat_file":             "netstat.out",
+		"agent.process_exporter.enabled": true,
+		"agent.public_ip_indicator":      "https://myip.bleemeo.com",
+		"agent.state_file":               "state.json",
+		"agent.deprecated_state_file":    "",
+		"agent.upgrade_file":             "upgrade",
+		"agent.metrics_format":           "Bleemeo",
+		"agent.node_exporter.enabled":    true,
+		"agent.node_exporter.collectors": []string{
+			"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev",
+		},
+		"agent.windows_exporter.enabled":               true,
+		"agent.windows_exporter.collectors":            []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp"},
+		"bleemeo.account_id":                           "",
+		"bleemeo.api_base":                             "https://api.bleemeo.com/",
+		"bleemeo.api_ssl_insecure":                     false,
+		"bleemeo.container_registration_delay_seconds": 30,
+		"bleemeo.enabled":                              true,
+		"bleemeo.initial_agent_name":                   "",
+		"bleemeo.mqtt.cafile":                          "",
+		"bleemeo.mqtt.host":                            "mqtt.bleemeo.com",
+		"bleemeo.mqtt.port":                            8883,
+		"bleemeo.mqtt.ssl_insecure":                    false,
+		"bleemeo.mqtt.ssl":                             true,
+		"bleemeo.registration_key":                     "",
+		"bleemeo.sentry.dsn":                           "",
+		"config_files": []string{ // This settings could not be overridden by configuration files
+			"/etc/glouton/glouton.conf",
+			"/etc/glouton/conf.d",
+			"etc/glouton.conf",
+			"etc/conf.d",
+			"C:\\ProgramData\\glouton\\glouton.conf",
+			"C:\\ProgramData\\glouton\\conf.d",
+		},
+		"container.pid_namespace_host": false,
+		"container.type":               "",
+		"df.host_mount_point":          "",
+		"df.ignore_fs_type": []string{
+			"^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$",
+			"tmpfs",
+			"efivarfs",
+			".*gvfs.*",
+		},
+		"df.path_ignore": []interface{}{
+			"/var/lib/docker/aufs",
+			"/var/lib/docker/overlay",
+			"/var/lib/docker/overlay2",
+			"/var/lib/docker/devicemapper",
+			"/var/lib/docker/vfs",
+			"/var/lib/docker/btrfs",
+			"/var/lib/docker/zfs",
+			"/var/lib/docker/plugins",
+			"/var/lib/docker/containers",
+			"/snap",
+			"/run/docker/runtime-runc",
+		},
+		"disk_ignore": []string{
+			"^(ram|loop|fd|(h|s|v|xv)d[a-z]|nvme\\d+n\\d+p)\\d+$",
+			"^dm-[0-9]+$",
+			// Ignore partition
+			"^(hd|sd|vd|xvd|fio|rssd)[a-z][0-9]+$",
+			"^(mmcblk|nvme[0-9]n|drbd|rbd|skd|rsxx)[0-9]p[0-9]+$",
+		},
+		"disk_monitor": []string{
+			"^(hd|sd|vd|xvd)[a-z]$",
+			"^mmcblk[0-9]$",
+			"^nvme[0-9]n[0-9]$",
+			"^fio[a-z]$",
+			"^drbd[0-9]$",
+			"^rbd[0-9]$",
+			"^rssd[a-z]$",
+			"^skd[0-9]$",
+			"^rsxx[0-9]$",
+			"^[A-Z]:$",
+		},
+		"influxdb.db_name":                 "glouton",
+		"influxdb.enabled":                 false,
+		"influxdb.host":                    "localhost",
+		"influxdb.port":                    8086,
+		"influxdb.tags":                    map[string]string{},
+		"jmx.enabled":                      true,
+		"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
+		"jmxtrans.file_permission":         "0640",
+		"jmxtrans.graphite_port":           2004,
+		"kubernetes.enabled":               false,
+		"kubernetes.nodename":              "",
+		"kubernetes.kubeconfig":            "",
+		"logging.buffer.head_size":         150,
+		"logging.buffer.tail_size":         1000,
+		"logging.level":                    "INFO",
+		"logging.output":                   "console",
+		"logging.package_levels":           "",
+		"metric.prometheus.targets":        []interface{}{},
+		"metric.include_default_metrics":   true,
+		"metric.allow_metrics":             []interface{}{},
+		"metric.deny_metrics":              []interface{}{},
+		"metric.softstatus_period_default": 5 * 60,
+		"metric.softstatus_period": map[string]interface{}{
+			"system_pending_updates":          86400,
+			"system_pending_security_updates": 86400,
+			"time_elapsed_since_last_data":    0,
+			"time_drift":                      0,
+		},
+		"network_interface_blacklist":     []interface{}{"docker", "lo", "veth", "virbr", "vnet", "isatap"},
+		"nrpe.enabled":                    false,
+		"nrpe.address":                    "0.0.0.0",
+		"nrpe.port":                       5666,
+		"nrpe.ssl":                        true,
+		"nrpe.conf_paths":                 []interface{}{"/etc/nagios/nrpe.cfg"},
+		"service_ignore_check":            []interface{}{},
+		"service_ignore_metrics":          []interface{}{},
+		"service":                         []interface{}{},
+		"stack":                           "",
+		"tags":                            []string{},
+		"telegraf.docker_metrics_enabled": true,
+		"telegraf.statsd.address":         "127.0.0.1",
+		"telegraf.statsd.enabled":         true,
+		"telegraf.statsd.port":            8125,
+		"thresholds":                      map[string]interface{}{},
+		"web.enabled":                     true,
+		"web.listener.address":            "127.0.0.1",
+		"web.listener.port":               8015,
+		"web.static_cdn_url":              "/static/",
+		"zabbix.enabled":                  false,
+		"zabbix.address":                  "127.0.0.1",
+		"zabbix.port":                     10050,
+	}
 }
 
 func configLoadFile(filePath string, cfg *config.Configuration) error {
@@ -198,7 +199,7 @@ func configLoadFile(filePath string, cfg *config.Configuration) error {
 }
 
 func loadDefault(cfg *config.Configuration) {
-	for key, value := range defaultConfig {
+	for key, value := range defaultConfig() {
 		if _, ok := cfg.Get(key); !ok {
 			cfg.Set(key, value)
 		}
@@ -312,7 +313,7 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		"BLEEMEO_AGENT_MQTT_SSL":         "bleemeo.mqtt.ssl",
 	}
 	for oldEnv, key := range deprecatedEnvNames {
-		value := defaultConfig[key]
+		value := defaultConfig()[key]
 
 		found, err := loadEnvironmentVariable(cfg, key, oldEnv, value)
 		if err != nil {
@@ -324,7 +325,7 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 		}
 	}
 
-	for key, value := range defaultConfig {
+	for key, value := range defaultConfig() {
 		if found, err := loadEnvironmentVariable(cfg, key, keyToBleemeoEnvironemntName(key), value); err != nil {
 			return nil, err
 		} else if found {
@@ -378,7 +379,7 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configuration, warnings []error, finalError error) {
 	cfg = &config.Configuration{}
 
-	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironemntName("config_files"), defaultConfig["config_files"]); err != nil {
+	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironemntName("config_files"), defaultConfig()["config_files"]); err != nil {
 		return cfg, nil, err
 	}
 
@@ -387,7 +388,7 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 	}
 
 	if _, ok := cfg.Get("config_files"); !ok {
-		cfg.Set("config_files", defaultConfig["config_files"])
+		cfg.Set("config_files", defaultConfig()["config_files"])
 	}
 
 	for _, filename := range cfg.StringList("config_files") {
