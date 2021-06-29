@@ -35,6 +35,9 @@ import (
 // agentStatusName is the name of the special metrics used to store the agent connection status.
 const agentStatusName = "agent_status"
 
+const stringFalse = "False"
+const sttringTrue = "True"
+
 var (
 	errRetryLater     = errors.New("metric registration should be retried later")
 	errAttemptToSpoof = errors.New("attempt to spoof another agent (or missing label)")
@@ -486,13 +489,13 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
 		"agent":  agentID,
-		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of,promql_query",
+		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of,promql_query,is_user_promql_alert",
 	}
 
 	if fetchInactive {
-		params["active"] = "False"
+		params["active"] = stringFalse
 	} else {
-		params["active"] = "True"
+		params["active"] = sttringTrue
 	}
 
 	result, err := s.client.Iter(s.ctx, "metric", params)
@@ -582,7 +585,7 @@ func (s *Synchronizer) metricUpdateInactiveList(metrics []types.Metric, allowLis
 		"v1/metric/",
 		map[string]string{
 			"fields":    "id",
-			"active":    "False",
+			"active":    stringFalse,
 			"agent":     s.agentID,
 			"page_size": "0",
 		},
@@ -619,7 +622,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 		params := map[string]string{
 			"labels_text": common.LabelsToText(metric.Labels(), metric.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo),
 			"agent":       agentID,
-			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query",
+			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query,is_user_promql_alert",
 		}
 
 		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels()) {
@@ -672,7 +675,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		var metric metricPayload
 
 		params := map[string]string{
-			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query",
+			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,promql_query,is_user_promql_alert",
 		}
 
 		_, err := s.client.Do(
@@ -754,7 +757,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 	monitors := s.option.Cache.Monitors()
 
 	params := map[string]string{
-		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent",
+		"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of,agent,promql_query,is_user_promql_alert",
 	}
 	regCountBeforeUpdate := 30
 	errorCount := 0
@@ -1080,7 +1083,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 		if maxTime.After(remoteMetric.DeactivatedAt.Add(10 * time.Second)) {
 			logger.V(2).Printf("Mark active the metric %v (uuid %s)", remoteMetric.LabelsText, remoteMetric.ID)
 
-			updates["active"] = "True"
+			updates["active"] = sttringTrue
 			remoteMetric.DeactivatedAt = time.Time{}
 		}
 	}
@@ -1201,7 +1204,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 			"PATCH",
 			fmt.Sprintf("v1/metric/%s/", v.ID),
 			map[string]string{"fields": "active"},
-			map[string]string{"active": "False"},
+			map[string]string{"active": stringFalse},
 			nil,
 		)
 		if err != nil && client.IsNotFound(err) {

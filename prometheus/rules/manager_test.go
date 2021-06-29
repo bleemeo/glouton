@@ -44,7 +44,7 @@ func Test_manager(t *testing.T) {
 	}{
 		{
 			Name:        "No points",
-			Description: "No points in the store should not create any points. Another point.",
+			Description: "No points in the store should not create any points.",
 			Points:      []types.MetricPoint{},
 			Rules: []bleemeoTypes.Metric{
 				{
@@ -65,7 +65,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-8 * time.Minute),
+						Time:  now.Add(-10 * time.Minute),
 						Value: 25,
 					},
 					Labels: map[string]string{
@@ -74,7 +74,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
+						Time:  now.Add(-5 * time.Minute),
 						Value: 25,
 					},
 					Labels: map[string]string{
@@ -676,22 +676,29 @@ func Test_manager(t *testing.T) {
 	}
 
 	for _, test := range tests {
+		test := test
 		store := store.New()
 		ruleManager := NewManager(ctx, store, now.Add(-13*time.Minute))
-		store.PushPoints(test.Points)
 		resPoints := []types.MetricPoint{}
+
+		store.PushPoints(test.Points)
 
 		store.AddNotifiee(func(mp []types.MetricPoint) {
 			resPoints = append(resPoints, mp...)
 		})
 
 		for _, r := range test.Rules {
-			ruleManager.addAlertingRule(r)
+			err := ruleManager.addAlertingRule(r)
+			if err != nil {
+				t.Error(err)
+
+				return
+			}
 		}
 
 		t.Run(test.Name, func(t *testing.T) {
-			for i := 0; i < 7; i++ {
-				ruleManager.Run(ctx, now.Add(time.Duration(-1*(7-i))*time.Minute))
+			for i := -7; i < 0; i++ {
+				ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
 			}
 
 			eq := cmp.Diff(test.Want, resPoints)
@@ -716,7 +723,7 @@ func Test_NaN(t *testing.T) {
 		resPoints = append(resPoints, mp...)
 	})
 
-	ruleManager.addAlertingRule(bleemeoTypes.Metric{
+	err := ruleManager.addAlertingRule(bleemeoTypes.Metric{
 		LabelsText: metricName,
 		Threshold: bleemeoTypes.Threshold{
 			HighWarning:  &thresholds[0],
@@ -725,6 +732,11 @@ func Test_NaN(t *testing.T) {
 		PromQLQuery:       metricName,
 		IsUserPromQLAlert: true,
 	})
+	if err != nil {
+		t.Error(err)
+
+		return
+	}
 
 	ruleManager.Run(ctx, now)
 
@@ -739,85 +751,90 @@ func Test_NaN(t *testing.T) {
 	}
 }
 
-func Test_No_Points_On_Start(t *testing.T) {
-	store := store.New()
-	ctx := context.Background()
-	now := time.Now()
-	ruleManager := NewManager(ctx, store, now)
-	resPoints := []types.MetricPoint{}
-	metricName := "node_cpu_seconds_global"
-	thresholds := []float64{50, 500}
+// func Test_No_Points_On_Start(t *testing.T) {
+// 	store := store.New()
+// 	ctx := context.Background()
+// 	now := time.Now().Truncate(time.Second)
+// 	ruleManager := NewManager(ctx, store, now)
+// 	resPoints := []types.MetricPoint{}
+// 	metricName := "node_cpu_seconds_global"
+// 	thresholds := []float64{50, 500}
 
-	store.AddNotifiee(func(mp []types.MetricPoint) {
-		resPoints = append(resPoints, mp...)
-	})
+// 	store.AddNotifiee(func(mp []types.MetricPoint) {
+// 		resPoints = append(resPoints, mp...)
+// 	})
 
-	store.PushPoints([]types.MetricPoint{
-		{
-			Point: types.Point{
-				Time:  now.Add(-10 * time.Minute),
-				Value: 150,
-			},
-		},
-		{
-			Point: types.Point{
-				Time:  now.Add(-5 * time.Minute),
-				Value: 150,
-			},
-		},
-		{
-			Point: types.Point{
-				Time:  now.Add(-2 * time.Minute),
-				Value: 150,
-			},
-		},
-	})
+// 	store.PushPoints([]types.MetricPoint{
+// 		{
+// 			Point: types.Point{
+// 				Time:  now.Add(-10 * time.Minute),
+// 				Value: 150,
+// 			},
+// 		},
+// 		{
+// 			Point: types.Point{
+// 				Time:  now.Add(-5 * time.Minute),
+// 				Value: 150,
+// 			},
+// 		},
+// 		{
+// 			Point: types.Point{
+// 				Time:  now.Add(-2 * time.Minute),
+// 				Value: 150,
+// 			},
+// 		},
+// 	})
 
-	ruleManager.addAlertingRule(bleemeoTypes.Metric{
-		LabelsText: metricName,
-		Threshold: bleemeoTypes.Threshold{
-			HighWarning:  &thresholds[0],
-			HighCritical: &thresholds[1],
-		},
-		PromQLQuery:       metricName,
-		IsUserPromQLAlert: true,
-	})
+// 	err := ruleManager.addAlertingRule(bleemeoTypes.Metric{
+// 		LabelsText: metricName,
+// 		Threshold: bleemeoTypes.Threshold{
+// 			HighWarning:  &thresholds[0],
+// 			HighCritical: &thresholds[1],
+// 		},
+// 		PromQLQuery:       metricName,
+// 		IsUserPromQLAlert: true,
+// 	})
+// 	if err != nil {
+// 		t.Error(err)
 
-	want := []types.MetricPoint{
-		{
-			Point: types.Point{
-				Time:  now.Add(-2 * time.Minute),
-				Value: 0,
-			},
-			Annotations: types.MetricAnnotations{
-				Status: types.StatusDescription{
-					CurrentStatus:     types.StatusOk,
-					StatusDescription: "",
-				},
-			},
-		},
-		{
-			Point: types.Point{
-				Time:  now.Add(-1 * time.Minute),
-				Value: 0,
-			},
-			Annotations: types.MetricAnnotations{
-				Status: types.StatusDescription{
-					CurrentStatus:     types.StatusOk,
-					StatusDescription: "",
-				},
-			},
-		},
-	}
+// 		return
+// 	}
 
-	ruleManager.Run(ctx, now)
+// 	want := []types.MetricPoint{
+// 		{
+// 			Point: types.Point{
+// 				Time:  now.Add(-2 * time.Minute),
+// 				Value: 0,
+// 			},
+// 			Annotations: types.MetricAnnotations{
+// 				Status: types.StatusDescription{
+// 					CurrentStatus:     types.StatusOk,
+// 					StatusDescription: "",
+// 				},
+// 			},
+// 		},
+// 		{
+// 			Point: types.Point{
+// 				Time:  now.Add(-1 * time.Minute),
+// 				Value: 0,
+// 			},
+// 			Annotations: types.MetricAnnotations{
+// 				Status: types.StatusDescription{
+// 					CurrentStatus:     types.StatusOk,
+// 					StatusDescription: "",
+// 				},
+// 			},
+// 		},
+// 	}
 
-	res := cmp.Diff(want, resPoints)
+// 	ruleManager.Run(ctx, now)
 
-	if res != "" {
+// 	res := cmp.Diff(want, resPoints)
 
-	}
-}
+// 	if res != "" {
+// 		t.Error(res)
+// 	}
+// }
 
 func Test_Rebuild_Rules(t *testing.T) {
 	store := store.New()
@@ -854,35 +871,4 @@ func Test_Rebuild_Rules(t *testing.T) {
 	if len(ruleManager.alertingRules) != len(points) {
 		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(points), len(ruleManager.alertingRules))
 	}
-
 }
-
-/*
-{
-			Name:        "Threshold Crossed for < 5min after start does not send points",
-			Description: "Threshold cross for less than 5 minutes after start should not send Ok.",
-			Points: []types.MetricPoint{
-				{
-					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
-						Value: 150,
-					},
-					Labels: map[string]string{
-						types.LabelName: metricName,
-					},
-				},
-			},
-			Rules: []bleemeoTypes.Metric{
-				{
-					LabelsText: metricName,
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
-					},
-					PromQLQuery:       metricName,
-					IsUserPromQLAlert: false,
-				},
-			},
-			Want: []types.MetricPoint{},
-		},
-*/

@@ -166,19 +166,21 @@ func newAPI() *mockAPI {
 	api.AddResource("metric", &genericResource{
 		Type: metricPayload{},
 		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
-			var data map[string]string
+			var data map[string]interface{}
 
 			metricPtr, _ := valuePtr.(*metricPayload)
 
 			err := json.NewDecoder(bytes.NewReader(body)).Decode(&data)
-			if boolText, ok := data["active"]; ok {
-				switch strings.ToLower(boolText) {
-				case "true":
-					metricPtr.DeactivatedAt = time.Time{}
-				case "false":
-					metricPtr.DeactivatedAt = time.Now()
-				default:
+			if _, ok := data["active"]; ok {
+				boolText, ok := data["active"].(string)
+				if !ok {
 					return fmt.Errorf("%w %v", errUnknownBool, boolText)
+				}
+
+				if boolText == "True" {
+					metricPtr.DeactivatedAt = time.Time{}
+				} else {
+					metricPtr.DeactivatedAt = time.Now()
 				}
 			}
 
