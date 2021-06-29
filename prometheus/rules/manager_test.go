@@ -35,13 +35,154 @@ func Test_manager(t *testing.T) {
 	metricName := "node_cpu_seconds_global"
 
 	tests := []struct {
-		Name   string
+		Name        string
+		Description string
+
 		Points []types.MetricPoint
 		Rules  []bleemeoTypes.Metric
-		want   []types.MetricPoint
+		Want   []types.MetricPoint
 	}{
 		{
-			Name: "basic warning",
+			Name:        "No points",
+			Description: "No points in the store should not create any points. Another point.",
+			Points:      []types.MetricPoint{},
+			Rules: []bleemeoTypes.Metric{
+				{
+					LabelsText: metricName,
+					Threshold: bleemeoTypes.Threshold{
+						HighWarning:  &thresholds[0],
+						HighCritical: &thresholds[1],
+					},
+					PromQLQuery:       metricName,
+					IsUserPromQLAlert: false,
+				},
+			},
+			Want: []types.MetricPoint{},
+		},
+		{
+			Name:        "No points above threshold",
+			Description: "No points above threshold create Ok point starting 5 minutes after manager creation",
+			Points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now.Add(-8 * time.Minute),
+						Value: 25,
+					},
+					Labels: map[string]string{
+						types.LabelName: metricName,
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 25,
+					},
+					Labels: map[string]string{
+						types.LabelName: metricName,
+					},
+				},
+			},
+			Rules: []bleemeoTypes.Metric{
+				{
+					LabelsText: metricName,
+					Threshold: bleemeoTypes.Threshold{
+						HighWarning:  &thresholds[0],
+						HighCritical: &thresholds[1],
+					},
+					PromQLQuery:       metricName,
+					IsUserPromQLAlert: false,
+				},
+			},
+			Want: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now.Add(-7 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-6 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-5 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-3 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-2 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-1 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:        "Warning threshold crossed",
+			Description: "Warning threshold crossed should create Warning points",
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
@@ -61,15 +202,6 @@ func Test_manager(t *testing.T) {
 						types.LabelName: metricName,
 					},
 				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-10 * time.Second),
-						Value: 101,
-					},
-					Labels: map[string]string{
-						types.LabelName: metricName,
-					},
-				},
 			},
 			Rules: []bleemeoTypes.Metric{
 				{
@@ -82,7 +214,79 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: true,
 				},
 			},
-			want: []types.MetricPoint{
+			Want: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now.Add(-7 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-6 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-5 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-3 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-2 * time.Minute),
+						Value: 1,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusWarning,
+							StatusDescription: "",
+						},
+					},
+				},
 				{
 					Point: types.Point{
 						Time:  now.Add(-1 * time.Minute),
@@ -93,11 +297,13 @@ func Test_manager(t *testing.T) {
 							CurrentStatus:     types.StatusWarning,
 							StatusDescription: "",
 						},
-					}},
+					},
+				},
 			},
 		},
 		{
-			Name: "basic critical",
+			Name:        "Critical threshold crossed",
+			Description: "Critical threshold crossed should create Critical points",
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
@@ -117,10 +323,131 @@ func Test_manager(t *testing.T) {
 						types.LabelName: metricName,
 					},
 				},
+			},
+			Rules: []bleemeoTypes.Metric{
+				{
+					LabelsText: metricName,
+					Threshold: bleemeoTypes.Threshold{
+						HighWarning:  &thresholds[0],
+						HighCritical: &thresholds[1],
+					},
+					PromQLQuery:       metricName,
+					IsUserPromQLAlert: true,
+				},
+			},
+			Want: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-10 * time.Second),
-						Value: 1001,
+						Time:  now.Add(-7 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-6 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-5 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-3 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-2 * time.Minute),
+						Value: 2,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-1 * time.Minute),
+						Value: 2,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusCritical,
+							StatusDescription: "",
+						},
+					},
+				},
+			},
+		},
+		{
+			Name:        "Critical threshold followed by warning",
+			Description: "Critical threshold crossed for 5 minutes then warning should create a Critical point and Warning Points",
+			Points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now.Add(-9 * time.Minute),
+						Value: 800,
+					},
+					Labels: map[string]string{
+						types.LabelName: metricName,
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-5 * time.Minute),
+						Value: 700,
+					},
+					Labels: map[string]string{
+						types.LabelName: metricName,
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-1 * time.Minute),
+						Value: 130,
 					},
 					Labels: map[string]string{
 						types.LabelName: metricName,
@@ -138,10 +465,70 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: true,
 				},
 			},
-			want: []types.MetricPoint{
+			Want: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
+						Time:  now.Add(-7 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-6 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-5 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-3 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-2 * time.Minute),
 						Value: 2,
 					},
 					Annotations: types.MetricAnnotations{
@@ -149,16 +536,39 @@ func Test_manager(t *testing.T) {
 							CurrentStatus:     types.StatusCritical,
 							StatusDescription: "",
 						},
-					}},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-1 * time.Minute),
+						Value: 1,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusWarning,
+							StatusDescription: "",
+						},
+					},
+				},
 			},
 		},
 		{
-			Name: "Rule with no new points after 2 minutes runs every 10 minutes",
+			Name:        "Threshold crossed for < 4min should create an ok point",
+			Description: "Threshold not crossed for a minute then crossed for < 4min should create an ok point",
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-2 * time.Minute),
-						Value: 1000,
+						Time:  now.Add(-8 * time.Minute),
+						Value: 20,
+					},
+					Labels: map[string]string{
+						types.LabelName: metricName,
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 120,
 					},
 					Labels: map[string]string{
 						types.LabelName: metricName,
@@ -176,39 +586,98 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: false,
 				},
 			},
-			want: []types.MetricPoint{},
-		},
-		{
-			Name: "Critical < 5min after start does not send points",
-			Points: []types.MetricPoint{
+			Want: []types.MetricPoint{
 				{
 					Point: types.Point{
 						Time:  now.Add(-7 * time.Minute),
-						Value: 1000,
+						Value: 0,
 					},
-					Labels: map[string]string{
-						types.LabelName: metricName,
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
 					},
 				},
-			},
-			Rules: []bleemeoTypes.Metric{
 				{
-					LabelsText: metricName,
-					Threshold: bleemeoTypes.Threshold{
-						HighWarning:  &thresholds[0],
-						HighCritical: &thresholds[1],
+					Point: types.Point{
+						Time:  now.Add(-6 * time.Minute),
+						Value: 0,
 					},
-					PromQLQuery:       metricName,
-					IsUserPromQLAlert: false,
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-5 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-3 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-2 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
+				},
+				{
+					Point: types.Point{
+						Time:  now.Add(-1 * time.Minute),
+						Value: 0,
+					},
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus:     types.StatusOk,
+							StatusDescription: "",
+						},
+					},
 				},
 			},
-			want: []types.MetricPoint{},
 		},
 	}
 
 	for _, test := range tests {
 		store := store.New()
-		ruleManager := NewManager(ctx, store)
+		ruleManager := NewManager(ctx, store, now.Add(-13*time.Minute))
 		store.PushPoints(test.Points)
 		resPoints := []types.MetricPoint{}
 
@@ -221,14 +690,14 @@ func Test_manager(t *testing.T) {
 		}
 
 		t.Run(test.Name, func(t *testing.T) {
-			for i := 0; i < 6; i++ {
-				ruleManager.Run(ctx, now.Add(time.Duration(-1*(6-i))*time.Minute))
+			for i := 0; i < 7; i++ {
+				ruleManager.Run(ctx, now.Add(time.Duration(-1*(7-i))*time.Minute))
 			}
 
-			eq := cmp.Diff(test.want, resPoints)
+			eq := cmp.Diff(test.Want, resPoints)
 
 			if eq != "" {
-				t.Errorf("Base time => %v\n%s", now, eq)
+				t.Errorf("\nBase time for this test => %v\n%s", now, eq)
 			}
 		})
 	}
@@ -237,11 +706,11 @@ func Test_manager(t *testing.T) {
 func Test_NaN(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
-	ruleManager := NewManager(ctx, store)
+	now := time.Now()
+	ruleManager := NewManager(ctx, store, now)
 	resPoints := []types.MetricPoint{}
 	metricName := "node_cpu_seconds_global"
 	thresholds := []float64{50, 500}
-	now := time.Now()
 
 	store.AddNotifiee(func(mp []types.MetricPoint) {
 		resPoints = append(resPoints, mp...)
@@ -268,5 +737,152 @@ func Test_NaN(t *testing.T) {
 	if !math.IsNaN(resPoints[0].Point.Value) {
 		t.Errorf("Unexpected value in generated point: Expected NaN, got %f. Full res: %v", resPoints[0].Value, resPoints)
 	}
+}
+
+func Test_No_Points_On_Start(t *testing.T) {
+	store := store.New()
+	ctx := context.Background()
+	now := time.Now()
+	ruleManager := NewManager(ctx, store, now)
+	resPoints := []types.MetricPoint{}
+	metricName := "node_cpu_seconds_global"
+	thresholds := []float64{50, 500}
+
+	store.AddNotifiee(func(mp []types.MetricPoint) {
+		resPoints = append(resPoints, mp...)
+	})
+
+	store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now.Add(-10 * time.Minute),
+				Value: 150,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-5 * time.Minute),
+				Value: 150,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-2 * time.Minute),
+				Value: 150,
+			},
+		},
+	})
+
+	ruleManager.addAlertingRule(bleemeoTypes.Metric{
+		LabelsText: metricName,
+		Threshold: bleemeoTypes.Threshold{
+			HighWarning:  &thresholds[0],
+			HighCritical: &thresholds[1],
+		},
+		PromQLQuery:       metricName,
+		IsUserPromQLAlert: true,
+	})
+
+	want := []types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now.Add(-2 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-1 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+	}
+
+	ruleManager.Run(ctx, now)
+
+	res := cmp.Diff(want, resPoints)
+
+	if res != "" {
+
+	}
+}
+
+func Test_Rebuild_Rules(t *testing.T) {
+	store := store.New()
+	ctx := context.Background()
+	now := time.Now()
+	ruleManager := NewManager(ctx, store, now)
+	thresholds := []float64{50, 500}
+	points := []bleemeoTypes.Metric{
+		{
+			LabelsText: "node_cpu_seconds_global",
+			Threshold: bleemeoTypes.Threshold{
+				HighWarning:  &thresholds[0],
+				HighCritical: &thresholds[1],
+			},
+			PromQLQuery:       "node_cpu_seconds_global",
+			IsUserPromQLAlert: false,
+		},
+		{
+			LabelsText: "cpu_counter",
+			Threshold: bleemeoTypes.Threshold{
+				HighWarning:  &thresholds[0],
+				HighCritical: &thresholds[1],
+			},
+			PromQLQuery:       "cpu_counter",
+			IsUserPromQLAlert: false,
+		},
+	}
+
+	err := ruleManager.RebuildAlertingRules(points)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if len(ruleManager.alertingRules) != len(points) {
+		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(points), len(ruleManager.alertingRules))
+	}
 
 }
+
+/*
+{
+			Name:        "Threshold Crossed for < 5min after start does not send points",
+			Description: "Threshold cross for less than 5 minutes after start should not send Ok.",
+			Points: []types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  now.Add(-4 * time.Minute),
+						Value: 150,
+					},
+					Labels: map[string]string{
+						types.LabelName: metricName,
+					},
+				},
+			},
+			Rules: []bleemeoTypes.Metric{
+				{
+					LabelsText: metricName,
+					Threshold: bleemeoTypes.Threshold{
+						HighWarning:  &thresholds[0],
+						HighCritical: &thresholds[1],
+					},
+					PromQLQuery:       metricName,
+					IsUserPromQLAlert: false,
+				},
+			},
+			Want: []types.MetricPoint{},
+		},
+*/

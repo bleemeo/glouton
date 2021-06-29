@@ -38,7 +38,7 @@ type Store struct {
 	metrics           map[int]metric
 	points            map[int][]types.Point
 	notifyCallbacks   map[int]func([]types.MetricPoint)
-	resetRuleCallback func(map[string]string)
+	resetRuleCallback func()
 	lock              sync.Mutex
 	notifeeLock       sync.Mutex
 	resetRuleLock     sync.Mutex
@@ -103,7 +103,7 @@ func (s *Store) RemoveNotifiee(id int) {
 }
 
 //SetResetRuleCallback sets the resetRuleCallbacks.
-func (s *Store) SetResetRuleCallback(fc func(map[string]string)) {
+func (s *Store) SetResetRuleCallback(fc func()) {
 	s.resetRuleLock.Lock()
 	defer s.resetRuleLock.Unlock()
 
@@ -301,16 +301,15 @@ func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.Me
 // The points must not be mutated after this call.
 func (s *Store) PushPoints(points []types.MetricPoint) {
 	dedupPoints := make([]types.MetricPoint, 0, len(points))
+	newMetrics := false
 
 	s.lock.Lock()
 	for _, point := range points {
 		metric, created := s.metricGetOrCreate(point.Labels, point.Annotations)
 		length := len(s.points[metric.metricID])
 
-		if created && s.resetRuleCallback != nil {
-			s.resetRuleLock.Lock()
-			s.resetRuleCallback(metric.labels)
-			s.resetRuleLock.Unlock()
+		if created {
+			newMetrics = true
 		}
 
 		if length > 0 && s.points[metric.metricID][length-1].Time.Equal(point.Time) {
@@ -320,7 +319,14 @@ func (s *Store) PushPoints(points []types.MetricPoint) {
 		s.points[metric.metricID] = append(s.points[metric.metricID], point.Point)
 		dedupPoints = append(dedupPoints, point)
 	}
+
 	s.lock.Unlock()
+
+	if newMetrics && s.resetRuleCallback != nil {
+		s.resetRuleLock.Lock()
+		s.resetRuleCallback()
+		s.resetRuleLock.Unlock()
+	}
 
 	s.notifeeLock.Lock()
 

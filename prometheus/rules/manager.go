@@ -81,7 +81,7 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, store *store.Store) *Manager {
+func NewManager(ctx context.Context, store *store.Store, created time.Time) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -137,7 +137,7 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 		alertingRules:  nil,
 		engine:         engine,
 		logger:         promLogger,
-		agentStarted:   time.Now(),
+		agentStarted:   created,
 	}
 
 	return &rm
@@ -226,7 +226,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		agr.inactiveSince = time.Time{}
 		agr.disabledUntil = time.Time{}
 
-		if state == rules.StatePending && time.Since(rm.agentStarted) < promAlertTime {
+		if time.Since(rm.agentStarted) < promAlertTime {
 			return nil, nil
 		}
 
@@ -343,7 +343,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 	return nil
 }
 
-func (rm *Manager) ResetInactiveRules(labels map[string]string) {
+func (rm *Manager) ResetInactiveRules() {
 	now := time.Now().Truncate(time.Second)
 
 	for _, val := range rm.alertingRules {
