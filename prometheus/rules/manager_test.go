@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//nolint
 package rules
 
 import (
@@ -33,6 +34,144 @@ func Test_manager(t *testing.T) {
 	now := time.Now().Truncate(time.Second)
 	thresholds := []float64{50, 500}
 	metricName := "node_cpu_seconds_global"
+	okPoints := []types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now.Add(-7 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-6 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-5 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-4 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-3 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-2 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-1 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "",
+				},
+			},
+		},
+	}
+	warningPoints := []types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now.Add(-2 * time.Minute),
+				Value: 1,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusWarning,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-1 * time.Minute),
+				Value: 1,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusWarning,
+					StatusDescription: "",
+				},
+			},
+		},
+	}
+	criticalPoints := []types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now.Add(-2 * time.Minute),
+				Value: 2,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: "",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(-1 * time.Minute),
+				Value: 2,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: "",
+				},
+			},
+		},
+	}
 
 	tests := []struct {
 		Name        string
@@ -93,92 +232,7 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: false,
 				},
 			},
-			Want: []types.MetricPoint{
-				{
-					Point: types.Point{
-						Time:  now.Add(-7 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-6 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-3 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-2 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-			},
+			Want: okPoints,
 		},
 		{
 			Name:        "Warning threshold crossed",
@@ -214,92 +268,15 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: true,
 				},
 			},
-			Want: []types.MetricPoint{
-				{
-					Point: types.Point{
-						Time:  now.Add(-7 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-6 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-3 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-2 * time.Minute),
-						Value: 1,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusWarning,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
-						Value: 1,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusWarning,
-							StatusDescription: "",
-						},
-					},
-				},
-			},
+			Want: func() []types.MetricPoint {
+				res := make([]types.MetricPoint, 5)
+
+				copy(res, okPoints)
+
+				res = append(res, warningPoints...)
+
+				return res
+			}(),
 		},
 		{
 			Name:        "Critical threshold crossed",
@@ -335,92 +312,15 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: true,
 				},
 			},
-			Want: []types.MetricPoint{
-				{
-					Point: types.Point{
-						Time:  now.Add(-7 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-6 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-3 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-2 * time.Minute),
-						Value: 2,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
-						Value: 2,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "",
-						},
-					},
-				},
-			},
+			Want: func() []types.MetricPoint {
+				res := make([]types.MetricPoint, 5)
+
+				copy(res, okPoints)
+
+				res = append(res, criticalPoints...)
+
+				return res
+			}(),
 		},
 		{
 			Name:        "Critical threshold followed by warning",
@@ -586,92 +486,7 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: false,
 				},
 			},
-			Want: []types.MetricPoint{
-				{
-					Point: types.Point{
-						Time:  now.Add(-7 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-6 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-3 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-2 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-			},
+			Want: okPoints,
 		},
 	}
 
@@ -701,7 +516,7 @@ func Test_manager(t *testing.T) {
 				ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
 			}
 
-			eq := cmp.Diff(test.Want, resPoints)
+			eq := cmp.Diff(resPoints, test.Want)
 
 			if eq != "" {
 				t.Errorf("\nBase time for this test => %v\n%s", now, eq)

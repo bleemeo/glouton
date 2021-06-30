@@ -37,6 +37,7 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
+	"github.com/prometheus/prometheus/storage"
 )
 
 // promAlertTime represents the duration for which the alerting rule
@@ -169,11 +170,7 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	}
 }
 
-func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
-	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
-
-	var generatedPoint *types.MetricPoint = nil
-
+func (agr *ruleGroup) checkInactive(now time.Time) (toReturn bool) {
 	if !agr.inactiveSince.IsZero() && !agr.isUserAlert {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
 			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.id)
@@ -184,8 +181,20 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.id, agr.inactiveSince.Format(time.RFC3339))
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		} else {
-			return nil, nil
+			return true
 		}
+	}
+
+	return false
+}
+
+func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
+	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
+
+	var generatedPoint *types.MetricPoint = nil
+
+	if agr.checkInactive(now) {
+		return nil, nil
 	}
 
 	for _, val := range thresholdOrder {
@@ -230,42 +239,51 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 			return nil, nil
 		}
 
-		statusCode := statusFromThreshold(val)
-		status := types.StatusDescription{
-			CurrentStatus:     statusCode,
-			StatusDescription: "",
-		}
-
-		if statusCode == types.StatusUnknown {
-			return nil, fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
-		}
-
 		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
 
-		newPoint := types.MetricPoint{
-			Point: types.Point{
-				Time:  now,
-				Value: float64(statusCode.NagiosCode()),
-			},
-			Annotations: types.MetricAnnotations{
-				Status: status,
-			},
-		}
-
-		if state == rules.StatePending || state == rules.StateInactive {
-			statusCode = statusFromThreshold("ok")
-			newPoint.Value = float64(statusCode.NagiosCode())
-			newPoint.Annotations.Status.CurrentStatus = statusCode
+		newPoint, err := generateNewPoint(val, rule, state, now)
+		if err != nil {
+			return nil, err
 		}
 
 		if state == rules.StateFiring {
-			return &newPoint, nil
+			return newPoint, nil
 		} else if generatedPoint == nil {
-			generatedPoint = &newPoint
+			generatedPoint = newPoint
 		}
 	}
 
 	return generatedPoint, nil
+}
+
+func generateNewPoint(threshold string, rule storage.Labels, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
+	statusCode := statusFromThreshold(threshold)
+	status := types.StatusDescription{
+		CurrentStatus:     statusCode,
+		StatusDescription: "",
+	}
+
+	if statusCode == types.StatusUnknown {
+		return nil, fmt.Errorf("%w for metric %s", errUnknownState, rule.Labels().String())
+	}
+
+	newPoint := types.MetricPoint{
+		Point: types.Point{
+			Time:  now,
+			Value: float64(statusCode.NagiosCode()),
+		},
+		Annotations: types.MetricAnnotations{
+			Status: status,
+		},
+	}
+
+	if state == rules.StatePending || state == rules.StateInactive {
+		statusCode = statusFromThreshold("ok")
+		newPoint.Value = float64(statusCode.NagiosCode())
+		newPoint.Annotations.Status.CurrentStatus = statusCode
+	}
+
+	return &newPoint, nil
 }
 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
