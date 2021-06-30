@@ -14,7 +14,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint
 package rules
 
 import (
@@ -37,7 +36,7 @@ func Test_manager(t *testing.T) {
 	okPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now.Add(-7 * time.Minute),
+				Time:  now,
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
@@ -49,7 +48,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-6 * time.Minute),
+				Time:  now.Add(1 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
@@ -61,7 +60,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-5 * time.Minute),
+				Time:  now.Add(2 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
@@ -73,7 +72,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-4 * time.Minute),
+				Time:  now.Add(3 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
@@ -85,7 +84,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-3 * time.Minute),
+				Time:  now.Add(4 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
@@ -97,7 +96,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-2 * time.Minute),
+				Time:  now.Add(5 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
@@ -109,7 +108,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-1 * time.Minute),
+				Time:  now.Add(6 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
@@ -123,7 +122,7 @@ func Test_manager(t *testing.T) {
 	warningPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now.Add(-2 * time.Minute),
+				Time:  now.Add(5 * time.Minute),
 				Value: 1,
 			},
 			Annotations: types.MetricAnnotations{
@@ -135,7 +134,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-1 * time.Minute),
+				Time:  now.Add(6 * time.Minute),
 				Value: 1,
 			},
 			Annotations: types.MetricAnnotations{
@@ -149,7 +148,7 @@ func Test_manager(t *testing.T) {
 	criticalPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now.Add(-2 * time.Minute),
+				Time:  now.Add(5 * time.Minute),
 				Value: 2,
 			},
 			Annotations: types.MetricAnnotations{
@@ -161,7 +160,7 @@ func Test_manager(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(-1 * time.Minute),
+				Time:  now.Add(6 * time.Minute),
 				Value: 2,
 			},
 			Annotations: types.MetricAnnotations{
@@ -204,7 +203,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-10 * time.Minute),
+						Time:  now.Add(-1 * time.Minute),
 						Value: 25,
 					},
 					Labels: map[string]string{
@@ -213,7 +212,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
+						Time:  now.Add(3 * time.Minute),
 						Value: 25,
 					},
 					Labels: map[string]string{
@@ -240,7 +239,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-10 * time.Minute),
+						Time:  now.Add(-1 * time.Minute),
 						Value: 120,
 					},
 					Labels: map[string]string{
@@ -249,7 +248,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
+						Time:  now.Add(4 * time.Minute),
 						Value: 110,
 					},
 					Labels: map[string]string{
@@ -284,7 +283,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-10 * time.Minute),
+						Time:  now.Add(-1 * time.Minute),
 						Value: 800,
 					},
 					Labels: map[string]string{
@@ -293,7 +292,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
+						Time:  now.Add(4 * time.Minute),
 						Value: 1100,
 					},
 					Labels: map[string]string{
@@ -328,7 +327,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-9 * time.Minute),
+						Time:  now.Add(-1 * time.Minute),
 						Value: 800,
 					},
 					Labels: map[string]string{
@@ -337,7 +336,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
+						Time:  now.Add(4 * time.Minute),
 						Value: 700,
 					},
 					Labels: map[string]string{
@@ -346,7 +345,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
+						Time:  now.Add(6 * time.Minute),
 						Value: 130,
 					},
 					Labels: map[string]string{
@@ -365,92 +364,16 @@ func Test_manager(t *testing.T) {
 					IsUserPromQLAlert: true,
 				},
 			},
-			Want: []types.MetricPoint{
-				{
-					Point: types.Point{
-						Time:  now.Add(-7 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-6 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-5 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-3 * time.Minute),
-						Value: 0,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusOk,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-2 * time.Minute),
-						Value: 2,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusCritical,
-							StatusDescription: "",
-						},
-					},
-				},
-				{
-					Point: types.Point{
-						Time:  now.Add(-1 * time.Minute),
-						Value: 1,
-					},
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusWarning,
-							StatusDescription: "",
-						},
-					},
-				},
-			},
+			Want: func() []types.MetricPoint {
+				res := make([]types.MetricPoint, 5)
+
+				copy(res, okPoints)
+
+				res = append(res, criticalPoints[0])
+				res = append(res, warningPoints[1])
+
+				return res
+			}(),
 		},
 		{
 			Name:        "Threshold crossed for < 4min should create an ok point",
@@ -458,7 +381,7 @@ func Test_manager(t *testing.T) {
 			Points: []types.MetricPoint{
 				{
 					Point: types.Point{
-						Time:  now.Add(-8 * time.Minute),
+						Time:  now.Add(-1 * time.Minute),
 						Value: 20,
 					},
 					Labels: map[string]string{
@@ -467,7 +390,7 @@ func Test_manager(t *testing.T) {
 				},
 				{
 					Point: types.Point{
-						Time:  now.Add(-4 * time.Minute),
+						Time:  now.Add(4 * time.Minute),
 						Value: 120,
 					},
 					Labels: map[string]string{
@@ -493,7 +416,7 @@ func Test_manager(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		store := store.New()
-		ruleManager := NewManager(ctx, store, now.Add(-13*time.Minute))
+		ruleManager := NewManager(ctx, store, now.Add(-7*time.Minute))
 		resPoints := []types.MetricPoint{}
 
 		store.PushPoints(test.Points)
@@ -512,7 +435,7 @@ func Test_manager(t *testing.T) {
 		}
 
 		t.Run(test.Name, func(t *testing.T) {
-			for i := -7; i < 0; i++ {
+			for i := 0; i < 7; i++ {
 				ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
 			}
 
