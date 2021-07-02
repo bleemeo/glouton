@@ -36,7 +36,7 @@ import (
 const agentStatusName = "agent_status"
 
 const stringFalse = "False"
-const sttringTrue = "True"
+const stringTrue = "True"
 
 var (
 	errRetryLater     = errors.New("metric registration should be retried later")
@@ -495,7 +495,7 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool
 	if fetchInactive {
 		params["active"] = stringFalse
 	} else {
-		params["active"] = sttringTrue
+		params["active"] = stringTrue
 	}
 
 	result, err := s.client.Iter(s.ctx, "metric", params)
@@ -1083,7 +1083,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 		if maxTime.After(remoteMetric.DeactivatedAt.Add(10 * time.Second)) {
 			logger.V(2).Printf("Mark active the metric %v (uuid %s)", remoteMetric.LabelsText, remoteMetric.ID)
 
-			updates["active"] = sttringTrue
+			updates["active"] = stringTrue
 			remoteMetric.DeactivatedAt = time.Time{}
 		}
 	}

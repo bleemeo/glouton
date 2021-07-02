@@ -581,6 +581,9 @@ func (r *Registry) runOnce() time.Duration {
 
 	r.countRunOnce++
 
+	ctx, cancel := context.WithTimeout(context.Background(), r.currentDelay)
+	defer cancel()
+
 	gatherers := make([]labeledGatherer, 0, len(r.registrations))
 
 	for _, reg := range r.registrations {
@@ -638,9 +641,6 @@ func (r *Registry) runOnce() time.Duration {
 	}
 
 	if r.RulesCallback != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), r.currentDelay)
-		defer cancel()
-
 		r.RulesCallback(ctx, t0)
 	}
 

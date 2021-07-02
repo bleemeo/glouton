@@ -171,16 +171,15 @@ func newAPI() *mockAPI {
 			metricPtr, _ := valuePtr.(*metricPayload)
 
 			err := json.NewDecoder(bytes.NewReader(body)).Decode(&data)
-			if _, ok := data["active"]; ok {
-				boolText, ok := data["active"].(string)
-				if !ok {
-					return fmt.Errorf("%w %v", errUnknownBool, boolText)
-				}
 
-				if boolText == "True" {
+			if boolText, ok := data["active"].(string); ok {
+				switch strings.ToLower(boolText) {
+				case "true":
 					metricPtr.DeactivatedAt = time.Time{}
-				} else {
+				case "false":
 					metricPtr.DeactivatedAt = time.Now()
+				default:
+					return fmt.Errorf("%w %v", errUnknownBool, boolText)
 				}
 			}
 

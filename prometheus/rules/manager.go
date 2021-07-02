@@ -90,7 +90,7 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time) *Man
 		MaxSamples:         50000000,
 		Timeout:            2 * time.Minute,
 		ActiveQueryTracker: nil,
-		LookbackDelta:      promAlertTime,
+		LookbackDelta:      5 * time.Minute,
 	})
 
 	mgrOptions := &rules.ManagerOptions{
@@ -170,7 +170,7 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	}
 }
 
-func (agr *ruleGroup) checkInactive(now time.Time) (toReturn bool) {
+func (agr *ruleGroup) shouldSkip(now time.Time) bool {
 	if !agr.inactiveSince.IsZero() && !agr.isUserAlert {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
 			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.id)
@@ -193,7 +193,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 	var generatedPoint *types.MetricPoint = nil
 
-	if agr.checkInactive(now) {
+	if agr.shouldSkip(now) {
 		return nil, nil
 	}
 
@@ -339,7 +339,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 	rm.alertingRules = []*ruleGroup{}
 
 	for _, val := range metricsList {
-		if len(val.PromQLQuery) == 0 || (val.Threshold.LowCritical == nil && val.Threshold.HighCritical == nil && val.Threshold.LowWarning == nil && val.Threshold.HighWarning == nil) {
+		if len(val.PromQLQuery) == 0 || val.ToInternalThreshold().IsZero() {
 			continue
 		}
 
@@ -369,8 +369,10 @@ func (rm *Manager) ResetInactiveRules() {
 			continue
 		}
 
-		if now.Add(15 * time.Second).Before(val.disabledUntil) {
-			val.disabledUntil = now.Add(15 * time.Second)
+		// The bleemeo connector uses 15 seconds as a synchronization time,
+		// thus we add a bit a leeway in the disabled countdown.
+		if now.Add(17 * time.Second).Before(val.disabledUntil) {
+			val.disabledUntil = now.Add(17 * time.Second)
 		}
 	}
 }
@@ -406,7 +408,7 @@ func (rm *Manager) DiagnosticZip(zipFile *zip.Writer) error {
 
 	for _, r := range rm.alertingRules {
 		if r.inactiveSince.IsZero() {
-			fmt.Fprintf(file, "%s\n", r.string())
+			fmt.Fprintf(file, "%s\n", r.String())
 		}
 	}
 
@@ -414,7 +416,7 @@ func (rm *Manager) DiagnosticZip(zipFile *zip.Writer) error {
 
 	for _, r := range rm.alertingRules {
 		if !r.inactiveSince.IsZero() {
-			fmt.Fprintf(file, "%s\n", r.string())
+			fmt.Fprintf(file, "%s\n", r.String())
 		}
 	}
 
@@ -428,7 +430,7 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 	}
 
 	newRule := rules.NewAlertingRule(metricName+"_"+threshold,
-		newExp, promAlertTime, labels.Labels{labels.Label{Name: types.LabelName, Value: metricName}}, labels.Labels{labels.Label{Name: "severity", Value: severity}},
+		newExp, promAlertTime, nil, labels.Labels{labels.Label{Name: "severity", Value: severity}},
 		labels.Labels{}, true, log.With(logger, "alerting_rule", metricName+"_"+threshold))
 
 	agr.rules[threshold] = newRule
@@ -436,7 +438,7 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 	return nil
 }
 
-func (agr *ruleGroup) string() string {
+func (agr *ruleGroup) String() string {
 	return fmt.Sprintf("id=%s query=%s inactive_since=%v disabled_until=%v is_user_promql_alert=%v Threshold_low_Warning=%s Threshold_high_Warning=%s Threshold_low_Critical=%s Threshold_high_Critical=%s",
 		agr.id, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.rules["low_warning"], agr.rules["high_warning"], agr.rules["low_critical"], agr.rules["high_critical"])
 }
