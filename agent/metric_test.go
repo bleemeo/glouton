@@ -24,6 +24,7 @@ import (
 	"glouton/types"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -563,6 +564,100 @@ metric:
 	if len(mf.allowList) != 2 {
 		t.Errorf("Unexpected number of matchers: expected 2, got %d", len(mf.allowList))
 	}
+}
+
+func Test_newMetricFilter(t *testing.T) {
+	tests := []struct {
+		name                 string
+		configAllow          []string
+		configDeny           []string
+		configIncludeDefault bool
+		metricFormat         types.MetricFormat
+		metrics              []labels.Labels
+		want                 []labels.Labels
+	}{
+		{
+			name: "mix RE and NRE",
+			configAllow: []string{
+				`{__name__!~"cpu_.*", mountpoint="/home"}`,
+				`{__name__=~"cpu_.*"}`,
+			},
+			configIncludeDefault: false,
+			metricFormat:         types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+		},
+		{
+			name: "don't duplicate metrics",
+			configAllow: []string{
+				`{__name__=~"cpu_.*"}`,
+			},
+			configIncludeDefault: true,
+			metricFormat:         types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg := &config.Configuration{}
+
+			cfg.Set("metric.allow_metrics", tt.configAllow)
+			cfg.Set("metric.deny_metrics", tt.configDeny)
+			cfg.Set("metric.include_default_metrics", tt.configIncludeDefault)
+
+			filter, err := newMetricFilter(cfg, tt.metricFormat)
+			if err != nil {
+				t.Errorf("newMetricFilter() error = %v", err)
+				return
+			}
+
+			t0 := time.Now()
+			points := makePointsFromLabels(tt.metrics, t0)
+			want := makePointsFromLabels(tt.want, t0)
+			got := filter.FilterPoints(points)
+
+			if diff := cmp.Diff(got, want); diff != "" {
+				t.Errorf("FilterPoints(): %s", diff)
+			}
+		})
+	}
+}
+
+func makePointsFromLabels(input []labels.Labels, t0 time.Time) []types.MetricPoint {
+	points := make([]types.MetricPoint, 0, len(input))
+	for _, lbls := range input {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{
+				Time:  t0,
+				Value: 42,
+			},
+			Labels: lbls.Map(),
+		})
+	}
+
+	return points
 }
 
 func listFromMap(m map[labels.Matcher][]matcher.Matchers) []matcher.Matchers {
