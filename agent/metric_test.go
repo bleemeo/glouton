@@ -29,10 +29,12 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
+	"github.com/prometheus/prometheus/promql/parser"
 )
 
 const basicConf = `
 metric:
+  include_default_metrics: false
   allow_metrics:
     - cpu*
     - pro*
@@ -72,22 +74,6 @@ metric:
   include_default_metrics: true
 `
 
-//golint: gochecknoglobals
-var goodPoint = map[string]string{
-	"__name__":        "node_cpu_seconds_global",
-	"label_not_read":  "value_not_read",
-	"scrape_instance": "localhost:2113",
-	"scrape_job":      "my_application123",
-}
-
-//golint: gochecknoglobals
-var badPoint = map[string]string{
-	"__name__":        "cpu_used_status",
-	"label_not_read":  "value_not_read",
-	"scrape_instance": "localhost:2113",
-	"scrape_job":      "my_application123",
-}
-
 func Test_Basic_Build(t *testing.T) {
 	cfg := config.Configuration{}
 
@@ -97,13 +83,12 @@ func Test_Basic_Build(t *testing.T) {
 		return
 	}
 
+	cpuMatcher, _ := parser.ParseMetricSelector("{__name__=~\"cpu.*\"}")
+	proMatcher, _ := parser.ParseMetricSelector("{__name__=~\"pro.*\"}")
+
 	want := metricFilter{
 		allowList: map[labels.Matcher][]matcher.Matchers{
-			{
-				Name:  types.LabelName,
-				Type:  labels.MatchRegexp,
-				Value: "cpu.*",
-			}: {
+			*cpuMatcher[0]: {
 				{
 					&labels.Matcher{
 						Name:  types.LabelName,
@@ -112,11 +97,7 @@ func Test_Basic_Build(t *testing.T) {
 					},
 				},
 			},
-			{
-				Name:  types.LabelName,
-				Type:  labels.MatchRegexp,
-				Value: "pro.*",
-			}: {
+			*proMatcher[0]: {
 				{
 
 					&labels.Matcher{
@@ -192,38 +173,20 @@ func Test_Basic_Build(t *testing.T) {
 		return
 	}
 
-	fmt.Println("Before")
-	for key := range new.allowList {
-		fmt.Printf("%v %s\n", key, key.GetRegexString())
-	}
-	fmt.Println("want")
-	for key := range new.allowList {
-		fmt.Printf("%v %s\n", key, key.GetRegexString())
-	}
-	fmt.Println("end")
+	got := sortMatchers(listFromMap(new.allowList))
+	wanted := sortMatchers(listFromMap(want.allowList))
 
-	new.allowList = sortMatchers(new.allowList)
-	want.allowList = sortMatchers(want.allowList)
-
-	fmt.Println("After")
-	for key := range new.allowList {
-		fmt.Printf("%v %s\n", key, key.GetRegexString())
-	}
-
-	fmt.Println("want")
-	for key := range new.allowList {
-		fmt.Printf("%v %s\n", key, key.GetRegexString())
-	}
-	fmt.Println("end")
-
-	res := cmp.Diff(new.allowList, want.allowList, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	res := cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("Generated allow list does not match the expected output: %s", res)
+		t.Errorf("Generated allow list does not match the expected output:\n%s", res)
 	}
 
-	res = cmp.Diff(new.denyList, want.denyList, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	got = sortMatchers(listFromMap(new.denyList))
+	wanted = sortMatchers(listFromMap(want.denyList))
+
+	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}), cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
-		t.Errorf("Generated deny list does not match the expected output: %s", res)
+		t.Errorf("Generated deny list does not match the expected output:\n%s", res)
 	}
 }
 
@@ -241,7 +204,7 @@ func Test_basic_build_default(t *testing.T) {
 		t.Error(err)
 	}
 
-	wantLen := len(bleemeoDefaultSystemMetrics) + len(commonDefaultSystemMetrics) + len(defaultServiceMetrics)
+	wantLen := len(bleemeoDefaultSystemMetrics) + len(commonDefaultSystemMetrics)
 
 	if len(filter.allowList) != wantLen {
 		t.Errorf("Unexpected number of matcher: expected %d, got %d", wantLen, len(filter.allowList))
@@ -492,7 +455,7 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		cmpopts.IgnoreUnexported(dto.LabelPair{}))
 
 	if res != "" {
-		t.Errorf("got() != expected(): %s", res)
+		t.Errorf("got() != expected():\n%s", res)
 	}
 }
 
@@ -557,65 +520,81 @@ func Test_RebuildDynamicList(t *testing.T) {
 	allowListWant[*new2.Get(types.LabelName)] = append(allowListWant[*new2.Get(types.LabelName)], new2)
 	denyListWant[*new3.Get(types.LabelName)] = append(denyListWant[*new3.Get(types.LabelName)], new3)
 
-	allowListWant = sortMatchers(allowListWant)
-	denyListWant = sortMatchers(denyListWant)
-
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %w", err)
 	}
 
-	mf.allowList = sortMatchers(mf.allowList)
-	mf.denyList = sortMatchers(mf.denyList)
+	got := sortMatchers(listFromMap(mf.allowList))
+	wanted := sortMatchers(listFromMap(allowListWant))
 
-	res := cmp.Diff(mf.allowList, allowListWant, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	res := cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
 		t.Errorf("got != expected for allowList: %s", res)
 	}
 
-	res = cmp.Diff(mf.denyList, denyListWant, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	got = sortMatchers(listFromMap(mf.denyList))
+	wanted = sortMatchers(listFromMap(denyListWant))
+
+	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
 	if res != "" {
 		t.Errorf("got != expected for denyList: %s", res)
 	}
 }
 
-func sortMatchers(list map[labels.Matcher][]matcher.Matchers) map[labels.Matcher][]matcher.Matchers {
-	keyList := []string{}
-	orderedKey := make(map[labels.Matcher][]matcher.Matchers)
+func TestDontDuplicateKeys(t *testing.T) {
+	cfg := config.Configuration{}
 
-	for key := range list {
-		keyList = append(keyList, key.Value)
+	err := cfg.LoadByte([]byte(`
+metric:
+  include_default_metrics: false
+  allow_metrics:
+    - cpu*
+    - cpu*
+    - pro
+    - pro
+`))
+	if err != nil {
+		t.Error(err)
 	}
 
-	for _, keyVal := range keyList {
-		for k, l := range list {
-			if k.Value != keyVal {
-				continue
+	mf, _ := newMetricFilter(&cfg, types.MetricFormatBleemeo)
+
+	if len(mf.allowList) != 2 {
+		t.Errorf("Unexpected number of matchers: expected 2, got %d", len(mf.allowList))
+	}
+}
+
+func listFromMap(m map[labels.Matcher][]matcher.Matchers) []matcher.Matchers {
+	res := []matcher.Matchers{}
+
+	for _, val := range m {
+		res = append(res, val...)
+	}
+
+	return res
+}
+
+func sortMatchers(list []matcher.Matchers) []matcher.Matchers {
+	nameList := []string{}
+	orderedList := []matcher.Matchers{}
+
+	for _, val := range list {
+		nameList = append(nameList, val[0].Value)
+	}
+
+	sort.Strings(nameList)
+
+	for _, val := range nameList {
+		for _, v := range list {
+			if v[0].Value == val {
+				orderedList = append(orderedList, v)
+				break
 			}
-
-			orderedList := []matcher.Matchers{}
-			nameList := []string{}
-
-			for _, val := range l {
-				nameList = append(nameList, val[0].Value)
-			}
-
-			sort.Strings(nameList)
-
-			for _, val := range nameList {
-				for _, v := range l {
-					if v[0].Value == val {
-						orderedList = append(orderedList, v)
-						break
-					}
-				}
-			}
-
-			orderedKey[k] = orderedList
 		}
 	}
 
-	return orderedKey
+	return orderedList
 }
 
 func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
@@ -630,6 +609,22 @@ func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
 	}
 
 	return list
+}
+
+//nolint: gochecknoglobals
+var goodPoint = map[string]string{
+	"__name__":        "node_cpu_seconds_global",
+	"label_not_read":  "value_not_read",
+	"scrape_instance": "localhost:2113",
+	"scrape_job":      "my_application123",
+}
+
+//nolint: gochecknoglobals
+var badPoint = map[string]string{
+	"__name__":        "cpu_used_status",
+	"label_not_read":  "value_not_read",
+	"scrape_instance": "localhost:2113",
+	"scrape_job":      "my_application123",
 }
 
 func Benchmark_filters_no_match(b *testing.B) {
@@ -707,33 +702,25 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 
 	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
 
-	goodPoint := []types.MetricPoint{
+	list100 := []types.MetricPoint{
 		{
-			Labels: map[string]string{
-				"__name__":        "node_cpu_seconds_global",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
+			Labels: goodPoint,
 		},
 	}
 
-	list100 := goodPoint
-
 	list100 = append(list100, generatePoints(99, badPoint)...)
 
-	list10 := goodPoint
+	list10 := []types.MetricPoint{
+		{
+			Labels: goodPoint,
+		},
+	}
 
 	list10 = append(list10, generatePoints(9, badPoint)...)
 
 	list1 := []types.MetricPoint{
 		{
-			Labels: map[string]string{
-				"__name__":        "node_cpu_seconds_global",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
+			Labels: goodPoint,
 		},
 	}
 
@@ -780,7 +767,6 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 			metricFilter.FilterPoints(cop)
 		}
 	})
-
 }
 
 func Benchmark_filters_one_match_middle(b *testing.B) {
@@ -796,12 +782,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 	list100 := generatePoints(49, badPoint)
 
 	list100 = append(list100, types.MetricPoint{
-		Labels: map[string]string{
-			"__name__":        "node_cpu_seconds_global",
-			"label_not_read":  "value_not_read",
-			"scrape_instance": "localhost:2113",
-			"scrape_job":      "my_application123",
-		},
+		Labels: goodPoint,
 	})
 
 	list100 = append(list100, generatePoints(50, badPoint)...)
@@ -809,12 +790,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 	list10 := generatePoints(4, badPoint)
 
 	list10 = append(list10, types.MetricPoint{
-		Labels: map[string]string{
-			"__name__":        "node_cpu_seconds_global",
-			"label_not_read":  "value_not_read",
-			"scrape_instance": "localhost:2113",
-			"scrape_job":      "my_application123",
-		},
+		Labels: goodPoint,
 	})
 
 	list10 = append(list10, generatePoints(5, badPoint)...)
@@ -863,23 +839,13 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 	list100 := generatePoints(99, badPoint)
 
 	list100 = append(list100, types.MetricPoint{
-		Labels: map[string]string{
-			"__name__":        "node_cpu_seconds_global",
-			"label_not_read":  "value_not_read",
-			"scrape_instance": "localhost:2113",
-			"scrape_job":      "my_application123",
-		},
+		Labels: goodPoint,
 	})
 
 	list10 := generatePoints(9, badPoint)
 
 	list10 = append(list10, types.MetricPoint{
-		Labels: map[string]string{
-			"__name__":        "node_cpu_seconds_global",
-			"label_not_read":  "value_not_read",
-			"scrape_instance": "localhost:2113",
-			"scrape_job":      "my_application123",
-		},
+		Labels: goodPoint,
 	})
 
 	b.ResetTimer()
@@ -923,63 +889,13 @@ func Benchmark_filters_all(b *testing.B) {
 
 	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
 
-	list := []types.MetricPoint{}
+	list100 := generatePoints(100, goodPoint)
 
-	for i := 0; i < b.N; i++ {
-		new := types.MetricPoint{
-			Labels: map[string]string{
-				"__name__":        "node_cpu_seconds_global",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
-		}
-
-		list = append(list, new)
-	}
-
-	list100 := generatePoints(100, map[string]string{
-		"__name__":        "node_cpu_seconds_global",
-		"label_not_read":  "value_not_read",
-		"scrape_instance": "localhost:2113",
-		"scrape_job":      "my_application123",
-	})
-
-	list10 := generatePoints(10, map[string]string{
-		"__name__":        "node_cpu_seconds_global",
-		"label_not_read":  "value_not_read",
-		"scrape_instance": "localhost:2113",
-		"scrape_job":      "my_application123",
-	})
-
-	list1 := []types.MetricPoint{
-		{
-			Labels: map[string]string{
-				"__name__":        "node_cpu_seconds_global",
-				"label_not_read":  "value_not_read",
-				"scrape_instance": "localhost:2113",
-				"scrape_job":      "my_application123",
-			},
-		},
-	}
+	list10 := generatePoints(10, goodPoint)
 
 	b.ResetTimer()
 
-	b.Run("Benchmark_filters_no_match_1", func(b *testing.B) {
-		cop := make([]types.MetricPoint, len(list1))
-
-		b.ResetTimer()
-
-		for i := 0; i < b.N; i++ {
-			b.StopTimer()
-			copy(cop, list1)
-			b.StartTimer()
-
-			metricFilter.FilterPoints(cop)
-		}
-	})
-
-	b.Run("Benchmark_filters_no_match_10", func(b *testing.B) {
+	b.Run("Benchmark_filters_all_10", func(b *testing.B) {
 		cop := make([]types.MetricPoint, len(list10))
 
 		b.ResetTimer()
@@ -993,7 +909,7 @@ func Benchmark_filters_all(b *testing.B) {
 		}
 	})
 
-	b.Run("Benchmark_filters_no_match_100", func(b *testing.B) {
+	b.Run("Benchmark_filters_all_100", func(b *testing.B) {
 		cop := make([]types.MetricPoint, len(list100))
 
 		b.ResetTimer()

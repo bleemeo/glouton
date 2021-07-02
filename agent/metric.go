@@ -50,7 +50,6 @@ var commonDefaultSystemMetrics []string = []string{
 
 	// Key Processes
 	"process_context_switch",
-	"process_context_switch",
 	"process_cpu_system",
 	"process_cpu_user",
 	"process_io_read_bytes",
@@ -662,11 +661,31 @@ func buildMatcherList(config *config.Configuration, listType string) map[labels.
 }
 
 func addToList(metricList map[labels.Matcher][]matcher.Matchers, new matcher.Matchers) {
-	if metricList[*new.Get(types.LabelName)] == nil {
-		metricList[*new.Get(types.LabelName)] = []matcher.Matchers{new}
-	} else {
-		metricList[*new.Get(types.LabelName)] = append(metricList[*new.Get(types.LabelName)], new)
+	newName := new.Get(types.LabelName)
+
+	if newName.Type == labels.MatchEqual || newName.Type == labels.MatchNotEqual {
+		if metricList[*newName] == nil {
+			metricList[*newName] = []matcher.Matchers{new}
+		} else {
+			metricList[*newName] = append(metricList[*newName], new)
+		}
+
+		return
 	}
+
+	for key := range metricList {
+		if key.Type == labels.MatchEqual || key.Type == labels.MatchNotEqual {
+			continue
+		}
+
+		if key.Value == newName.Value {
+			metricList[key] = append(metricList[key], new)
+
+			return
+		}
+	}
+
+	metricList[*newName] = []matcher.Matchers{new}
 }
 
 func addScrappersList(config *config.Configuration, metricList map[labels.Matcher][]matcher.Matchers,
@@ -802,7 +821,9 @@ func newMetricFilter(config *config.Configuration, metricFormat types.MetricForm
 func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName string) []matcher.Matchers {
 	// Matchers are used as key, thus a metric name can match multiple labels (eg: cpu* and cpu_process_count).
 	// We aggregate all possible matchers based on the name, thus reducing the number of total matchers checked for each point.
-	matchers := []matcher.Matchers{}
+	// This is used as a way to reduce complexity and calls in the filtersFamily function:
+	// Nested points increased the complexity of the filters.
+	matchers := make([]matcher.Matchers, 0, len(list))
 
 	for key := range list {
 		if key.Matches(labelName) {
@@ -827,20 +848,20 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 
 	if len(m.denyList) != 0 {
 		for _, point := range points {
-			denyVals := getMatchersList(m.denyList, point.Labels[types.LabelName])
-
-			if denyVals == nil {
-				continue
-			}
-
 			didMatch := false
 
-			for _, denyVal := range denyVals {
-				matched := denyVal.MatchesPoint(point)
-				if matched {
-					didMatch = true
+			for key, denyVals := range m.denyList {
+				if !key.Matches(point.Labels[types.LabelName]) {
+					continue
+				}
 
-					break
+				for _, denyVal := range denyVals {
+					matched := denyVal.MatchesPoint(point)
+					if matched {
+						didMatch = true
+
+						break
+					}
 				}
 			}
 
@@ -855,18 +876,18 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	}
 
 	for _, point := range points {
-		allowVals := getMatchersList(m.allowList, point.Labels[types.LabelName])
+		for key, allowVals := range m.allowList {
+			if !key.Matches(point.Labels[types.LabelName]) {
+				continue
+			}
 
-		if allowVals == nil {
-			continue
-		}
+			for _, allowVal := range allowVals {
+				if allowVal.MatchesPoint(point) {
+					points[i] = point
+					i++
 
-		for _, allowVal := range allowVals {
-			if allowVal.MatchesPoint(point) {
-				points[i] = point
-				i++
-
-				break
+					break
+				}
 			}
 		}
 	}
@@ -889,18 +910,18 @@ func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 
 	if len(m.denyList) > 0 {
 		for _, metric := range mt {
-			denyVals := getMatchersList(m.denyList, metric.Labels()[types.LabelName])
-
-			if denyVals == nil {
-				continue
-			}
-
 			didMatch := false
 
-			for _, denyVal := range denyVals {
-				if denyVal.MatchesLabels(metric.Labels()) {
-					didMatch = true
-					break
+			for key, denyVals := range m.denyList {
+				if !key.Matches(metric.Labels()[types.LabelName]) {
+					continue
+				}
+
+				for _, denyVal := range denyVals {
+					if denyVal.MatchesLabels(metric.Labels()) {
+						didMatch = true
+						break
+					}
 				}
 			}
 
@@ -915,18 +936,18 @@ func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 	}
 
 	for _, metric := range mt {
-		allowVals := getMatchersList(m.allowList, metric.Labels()[types.LabelName])
+		for key, allowVals := range m.allowList {
+			if !key.Matches(metric.Labels()[types.LabelName]) {
+				continue
+			}
 
-		if allowVals == nil {
-			continue
-		}
+			for _, allowVal := range allowVals {
+				if allowVal.MatchesLabels(metric.Labels()) {
+					mt[i] = metric
+					i++
 
-		for _, allowVal := range allowVals {
-			if allowVal.MatchesLabels(metric.Labels()) {
-				mt[i] = metric
-				i++
-
-				break
+					break
+				}
 			}
 		}
 	}
@@ -938,15 +959,10 @@ func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 
 func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 	i := 0
+	denyVals := getMatchersList(m.denyList, *f.Name)
 
-	if len(m.denyList) > 0 {
+	if len(m.denyList) > 0 && denyVals != nil {
 		for _, metric := range f.Metric {
-			denyVals := getMatchersList(m.denyList, *f.Name)
-
-			if denyVals == nil {
-				continue
-			}
-
 			didMatch := false
 
 			for _, denyVal := range denyVals {
@@ -966,13 +982,9 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 		i = 0
 	}
 
+	allowVals := getMatchersList(m.allowList, *f.Name)
+
 	for _, metric := range f.Metric {
-		allowVals := getMatchersList(m.allowList, *f.Name)
-
-		if allowVals == nil {
-			continue
-		}
-
 		for _, allowVal := range allowVals {
 			if allowVal.MatchesMetric(*f.Name, metric) {
 				f.Metric[i] = metric
@@ -982,6 +994,8 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 			}
 		}
 	}
+
+	f.Metric = f.Metric[:i]
 }
 
 func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily {
@@ -1054,17 +1068,17 @@ func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Match
 	}
 
 	if m.includeDefaultMetrics {
-		m.rebuildDefaultMetrics(services)
+		err := m.rebuildDefaultMetrics(services)
+		if err != nil {
+			errors = append(errors, err)
+		}
 	}
 
 	return allowList, errors
 }
 
-//FIXME: While this perfectly works for services, what happens with services that "aren't"?
-// Kubernetes, key process, docker, prometheus.
 func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service) error {
 	for _, val := range services {
-		logger.V(0).Printf("Service: name=%s, type=%s", val.Name, val.ServiceType)
 		defaults := defaultServiceMetrics[val.ServiceType]
 
 		if defaults == nil {
