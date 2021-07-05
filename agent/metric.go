@@ -674,7 +674,7 @@ func addToList(metricList map[labels.Matcher][]matcher.Matchers, new matcher.Mat
 	}
 
 	for key := range metricList {
-		if key.Type == labels.MatchEqual || key.Type == labels.MatchNotEqual {
+		if key.Type != newName.Type {
 			continue
 		}
 
@@ -823,16 +823,12 @@ func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName strin
 	// We aggregate all possible matchers based on the name, thus reducing the number of total matchers checked for each point.
 	// This is used as a way to reduce complexity and calls in the filtersFamily function:
 	// Nested points increased the complexity of the filters.
-	matchers := make([]matcher.Matchers, 0, len(list))
+	matchers := []matcher.Matchers{}
 
 	for key := range list {
 		if key.Matches(labelName) {
 			matchers = append(matchers, list[key]...)
 		}
-	}
-
-	if len(matchers) == 0 {
-		matchers = nil
 	}
 
 	return matchers
@@ -863,6 +859,10 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 						break
 					}
 				}
+
+				if didMatch {
+					break
+				}
 			}
 
 			if !didMatch {
@@ -876,6 +876,8 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	}
 
 	for _, point := range points {
+		didMatch := false
+
 		for key, allowVals := range m.allowList {
 			if !key.Matches(point.Labels[types.LabelName]) {
 				continue
@@ -885,9 +887,14 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 				if allowVal.MatchesPoint(point) {
 					points[i] = point
 					i++
+					didMatch = true
 
 					break
 				}
+			}
+
+			if didMatch {
+				break
 			}
 		}
 	}
@@ -961,7 +968,7 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 	i := 0
 	denyVals := getMatchersList(m.denyList, *f.Name)
 
-	if len(m.denyList) > 0 && denyVals != nil {
+	if len(denyVals) > 0 {
 		for _, metric := range f.Metric {
 			didMatch := false
 
@@ -1080,10 +1087,6 @@ func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Match
 func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service) error {
 	for _, val := range services {
 		defaults := defaultServiceMetrics[val.ServiceType]
-
-		if defaults == nil {
-			continue
-		}
 
 		for _, val := range defaults {
 			new, err := matcher.NormalizeMetric(val)

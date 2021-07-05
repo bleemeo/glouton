@@ -613,6 +613,97 @@ func Test_newMetricFilter(t *testing.T) {
 				}),
 			},
 		},
+		{
+			name: "Merge EQ",
+			configAllow: []string{
+				`{__name__="cpu_used", mountpoint="/mnt"}`,
+				`{__name__="cpu_used", mountpoint="/home"}`,
+			},
+			configIncludeDefault: false,
+			metricFormat:         types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/home",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/home",
+				}),
+			},
+		},
+		{
+			name: "Merge RE",
+			configAllow: []string{
+				`{__name__=~"cpu_.*", mountpoint="/mnt"}`,
+				`{__name__=~"cpu_.*", mountpoint="/home"}`,
+			},
+			configIncludeDefault: false,
+			metricFormat:         types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/home",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/home",
+				}),
+			},
+		},
+		{
+			name: "Merge NRE",
+			configAllow: []string{
+				`{__name__!~"cpu_.*", mountpoint="/mnt"}`,
+				`{__name__!~"cpu_.*", mountpoint="/home"}`,
+			},
+			configIncludeDefault: false,
+			metricFormat:         types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/home",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__": "cpu_used",
+				}),
+			},
+		},
 	}
 
 	for _, tt := range tests {
