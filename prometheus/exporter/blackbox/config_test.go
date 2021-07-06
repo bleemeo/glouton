@@ -67,7 +67,7 @@ func TestConfigParsing(t *testing.T) {
 
 	registry := &registry.Registry{}
 
-	bbManager, err := New(registry, blackboxConf, types.MetricFormatPrometheus)
+	bbManager, err := New(registry, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,6 +86,9 @@ func TestConfigParsing(t *testing.T) {
 					NoFollowRedirects:  true,
 					IPProtocol:         "ip4",
 					IPProtocolFallback: false,
+					Headers: map[string]string{
+						"User-Agent": "dummy-user-agent",
+					},
 				},
 				DNS:  bbConf.DefaultDNSProbe,
 				ICMP: bbConf.DefaultICMPProbe,
@@ -125,6 +128,9 @@ func TestConfigParsing(t *testing.T) {
 					NoFollowRedirects:  true,
 					IPProtocol:         "ip4",
 					IPProtocolFallback: false,
+					Headers: map[string]string{
+						"User-Agent": "dummy-user-agent",
+					},
 				},
 				DNS:  bbConf.DefaultDNSProbe,
 				ICMP: bbConf.DefaultICMPProbe,
@@ -160,7 +166,7 @@ func TestNoTargetsConfigParsing(t *testing.T) {
 		t.Fatalf("Couldn't parse the yaml configuration")
 	}
 
-	bbManager, err := New(nil, blackboxConf, types.MetricFormatPrometheus)
+	bbManager, err := New(nil, blackboxConf, "dummy-user-agent", types.MetricFormatPrometheus)
 	if err != nil {
 		t.Fatal(err)
 	}

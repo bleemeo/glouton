@@ -42,5 +42,6 @@ type RegisterManager struct {
 	registrations map[int]gathererWithConfigTarget
 	registry      *registry.Registry
 	metricFormat  types.MetricFormat
+	userAgent     string
 	l             sync.Mutex
 }

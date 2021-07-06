@@ -65,6 +65,7 @@ import (
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/common"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/rules"
@@ -667,6 +668,20 @@ func (a *agent) run() { //nolint:gocyclo
 
 	var targets []*scrapper.Target
 
+	var snmpTargets []*scrapper.Target
+
+	if snmpCfg, found := a.config.Get("metric.prometheus.snmp"); found {
+		if configList, ok := snmpCfg.([]interface{}); ok {
+			snmpTargets = prometheusConfigToURLs(snmp.MigratedTargets(configList))
+		}
+	}
+
+	for _, target := range snmpTargets {
+		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
+			logger.Printf("Unable to add Snmp scrapper for target %s: %v", target.URL.String(), err)
+		}
+	}
+
 	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
 		targets = prometheusConfigToURLs(promCfg)
 	}
@@ -694,7 +709,7 @@ func (a *agent) run() { //nolint:gocyclo
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
 
-		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.config.String("blackbox.user_agent"), a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -835,7 +850,7 @@ func (a *agent) run() { //nolint:gocyclo
 		softPeriodsFromInterface(tmp),
 	)
 
-	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig["disk_monitor"]) {
+	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
 		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.StringList("disk_ignore")) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
