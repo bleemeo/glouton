@@ -18,22 +18,39 @@ package snmp
 
 import (
 	"fmt"
+	"glouton/logger"
+	"glouton/prometheus/scrapper"
+	"glouton/types"
+	"net/url"
 )
 
-func MigratedTargets(vMap []interface{}) (cfg interface{}) {
-	var migratedTargets []interface{}
-
+func ConfigToURLs(vMap []interface{}, address string, port string) (result []*scrapper.Target) {
 	for dict := range vMap {
 		tmp := vMap[dict].(map[string]interface{})
-		u := fmt.Sprintf("http://localhost:9116/snmp?module=%s&target=%s", tmp["module"], tmp["target"])
+		urlText := fmt.Sprintf("http://%s:%s/snmp?module=%s&target=%s", address, port, tmp["module"], tmp["target"])
 
-		migratedTargets = append(migratedTargets, map[string]interface{}{
-			"url":  u,
-			"name": tmp["name"],
-		})
+		u, err := url.Parse(urlText)
+		if err != nil {
+			logger.Printf("ignoring invalid exporter config: %v", err)
+			continue
+		}
+
+		name, _ := tmp["name"].(string)
+
+		target := &scrapper.Target{
+			ExtraLabels: map[string]string{
+				types.LabelMetaScrapeJob: name,
+				// HostPort could be empty, but this ExtraLabels is used by Registry which
+				// correctly handle empty value value (drop the label).
+				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
+			},
+			URL:       u,
+			AllowList: []string{},
+			DenyList:  []string{},
+		}
+
+		result = append(result, target)
 	}
 
-	return migratedTargets
+	return result
 }
-
-// execute snmp exporter

@@ -672,7 +672,9 @@ func (a *agent) run() { //nolint:gocyclo
 
 	if snmpCfg, found := a.config.Get("metric.prometheus.snmp"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {
-			snmpTargets = prometheusConfigToURLs(snmp.MigratedTargets(configList))
+			address, _ := a.config.Get("metric.prometheus.adress.snmp")
+			port, _ := a.config.Get("metric.prometheus.port.snmp")
+			snmpTargets = snmp.ConfigToURLs(configList, address.(string), port.(string))
 		}
 	}
 
