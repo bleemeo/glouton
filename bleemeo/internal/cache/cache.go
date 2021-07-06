@@ -346,9 +346,20 @@ func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
+	oldMetrics := c.data.Metrics
+
 	c.data.Metrics = metrics
 	c.cachedMetricLookup = nil
 	c.dirty = true
+
+	for _, oldM := range oldMetrics {
+		for _, newM := range c.data.Metrics {
+			if oldM.ID == newM.ID {
+				newM.FirstSeenAt = oldM.FirstSeenAt
+				break
+			}
+		}
+	}
 }
 
 // Metrics returns a (copy) of the Metrics.

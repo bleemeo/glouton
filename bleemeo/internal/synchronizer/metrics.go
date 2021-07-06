@@ -107,7 +107,7 @@ type metricPayload struct {
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
-func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
+func (mp metricPayload) metricFromAPI(FirstSeenAt time.Time) bleemeoTypes.Metric {
 	if mp.LabelsText == "" {
 		mp.Labels = map[string]string{
 			types.LabelName: mp.Name,
@@ -124,6 +124,8 @@ func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 	} else {
 		mp.Labels = types.TextToLabels(mp.LabelsText)
 	}
+
+	mp.Metric.FirstSeenAt = FirstSeenAt
 
 	return mp.Metric
 }
@@ -487,6 +489,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 
 // metricsListWithAgentID fetches the list of all metrics for a given agent, and returns a UUID:metric mapping.
 func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
+	now := time.Now().Truncate(time.Second)
 	params := map[string]string{
 		"agent":  agentID,
 		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of,promql_query,is_user_promql_alert",
@@ -531,7 +534,7 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool
 			}
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI()
+		metricsByUUID[metric.ID] = metric.metricFromAPI(now)
 	}
 
 	return metricsByUUID, nil
@@ -612,6 +615,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 	}
 
 	metricsByUUID := s.option.Cache.MetricsByUUID()
+	now := time.Now().Truncate(time.Second)
 
 	for _, metric := range metrics {
 		agentID := s.agentID
@@ -653,7 +657,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 				}
 			}
 
-			metricsByUUID[metric.ID] = metric.metricFromAPI()
+			metricsByUUID[metric.ID] = metric.metricFromAPI(now)
 		}
 	}
 
@@ -670,6 +674,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 
 func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 	metricsByUUID := s.option.Cache.MetricsByUUID()
+	now := time.Now().Truncate(time.Second)
 
 	for _, key := range requests {
 		var metric metricPayload
@@ -694,7 +699,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 			return err
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI()
+		metricsByUUID[metric.ID] = metric.metricFromAPI(now)
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
@@ -928,6 +933,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	annotations := metric.Annotations()
 	key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
 	remoteMetric, remoteFound := registeredMetricsByKey[key]
+	now := time.Now().Truncate(time.Second)
 
 	if remoteFound {
 		result, err := s.metricUpdateOne(metric, remoteMetric)
@@ -1021,8 +1027,8 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	}
 
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
-	registeredMetricsByKey[key] = result.metricFromAPI()
-	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
+	registeredMetricsByKey[key] = result.metricFromAPI(now)
+	registeredMetricsByUUID[result.ID] = result.metricFromAPI(now)
 
 	return nil
 }
@@ -1164,6 +1170,7 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	duplicatedKey := make(map[string]bool)
 	localByMetricKey := make(map[string]types.Metric, len(localMetrics))
+	now := time.Now().Truncate(time.Second)
 
 	for _, v := range localMetrics {
 		labels := v.Labels()
@@ -1173,6 +1180,13 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	for k, v := range registeredMetrics {
+		if now.Sub(v.FirstSeenAt) < 6*time.Minute {
+			continue
+		} else {
+			if v.PromQLQuery != "" {
+				logger.V(0).Printf("tried to remove %d, but not really inactive yet", v.LabelsText)
+			}
+		}
 		if !v.DeactivatedAt.IsZero() {
 			if s.now().Sub(v.DeactivatedAt) > 200*24*time.Hour {
 				delete(registeredMetrics, k)

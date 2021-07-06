@@ -126,6 +126,7 @@ type Metric struct {
 	DeactivatedAt     time.Time `json:"deactivated_at,omitempty"`
 	PromQLQuery       string    `json:"promql_query"`
 	IsUserPromQLAlert bool      `json:"is_user_promql_alert"`
+	FirstSeenAt        time.Time
 }
 
 // FailureKind is the kind of failure to register a metric. Used to know if

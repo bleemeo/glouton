@@ -439,8 +439,18 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 }
 
 func (agr *ruleGroup) String() string {
-	return fmt.Sprintf("id=%s query=%s inactive_since=%v disabled_until=%v is_user_promql_alert=%v Threshold_low_Warning=%s Threshold_high_Warning=%s Threshold_low_Critical=%s Threshold_high_Critical=%s",
-		agr.id, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.rules["low_warning"], agr.rules["high_warning"], agr.rules["low_critical"], agr.rules["high_critical"])
+	return fmt.Sprintf("id=%s query=%#v inactive_since=%v disabled_until=%v is_user_promql_alert=%v\n%v",
+		agr.id, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.Query())
+}
+
+func (agr *ruleGroup) Query() string {
+	res := ""
+
+	for key, val := range agr.rules {
+		res += fmt.Sprintf("\tThreshold_%s: %s\n", key, val.Query().String())
+	}
+
+	return res
 }
 
 func statusFromThreshold(s string) types.Status {
