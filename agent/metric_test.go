@@ -449,8 +449,6 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 
 	got := new.FilterFamilies(fm)
 
-	fmt.Println(got)
-
 	res := cmp.Diff(got, want,
 		cmpopts.IgnoreUnexported(dto.MetricFamily{}), cmpopts.IgnoreUnexported(dto.Metric{}),
 		cmpopts.IgnoreUnexported(dto.LabelPair{}))
@@ -663,6 +661,10 @@ func Test_newMetricFilter(t *testing.T) {
 					"mountpoint": "/home",
 				}),
 				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/test",
+				}),
+				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
 				}),
 			},
@@ -697,10 +699,47 @@ func Test_newMetricFilter(t *testing.T) {
 				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
 				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "memory_used",
+					"mountpoint": "/home",
+				}),
 			},
 			want: []labels.Labels{
 				labels.FromMap(map[string]string{
+					"__name__":   "memory_used",
+					"mountpoint": "/home",
+				}),
+			},
+		},
+		{
+			name: "Merge NEQ",
+			configAllow: []string{
+				`{__name__!="cpu_used", mountpoint="/mnt"}`,
+				`{__name__!="cpu_used", mountpoint="/home"}`,
+			},
+			configIncludeDefault: false,
+			metricFormat:         types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/home",
+				}),
+				labels.FromMap(map[string]string{
 					"__name__": "cpu_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "memory_used",
+					"mountpoint": "/home",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "memory_used",
+					"mountpoint": "/home",
 				}),
 			},
 		},
