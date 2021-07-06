@@ -256,51 +256,6 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 	return warnings
 }
 
-func migrateMetricsSnmp(cfg *config.Configuration) (warnings []error) {
-	v, ok := cfg.Get("metric.prometheus.snmp")
-	if ok {
-		var migratedTargets []interface{}
-
-		if vMap, ok := v.(map[string]interface{}); ok {
-			for key, dict := range vMap {
-				if tmp, ok := dict.(map[string]interface{}); ok {
-					if t, ok := tmp["target"].(string); ok {
-						warnings = append(warnings, fmt.Errorf("%w: metrics.snmp. See https://docs.bleemeo.com/metrics-sources/snmp", errSettingsDeprecated))
-
-						m, ok := tmp["module"].(string)
-						if !ok {
-							m = "if_mib"
-						}
-
-						migratedTargets = append(migratedTargets, map[string]interface{}{
-							"target": t,
-							"name":   key,
-							"module": m,
-						})
-
-						cfg.Delete(fmt.Sprintf("metric.prometheus.snmp.%s", key))
-					}
-				}
-			}
-		}
-
-		if len(migratedTargets) > 0 {
-			existing, _ := cfg.Get("metric.prometheus.snmp")
-			targets, _ := existing.([]interface{})
-			targets = append(targets, migratedTargets...)
-
-			cfg.Set("metric.prometheus.snmp", targets)
-		}
-	}
-
-	_, found := cfg.Get("metric.prometheus.snmp.include_default_metrics")
-	if found {
-		warnings = append(warnings, fmt.Errorf("%w: metrics.prometheus.snmp.include_default_metrics. This option does not exists anymore and has not effects", errSettingsDeprecated))
-	}
-
-	return warnings
-}
-
 func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 	// metrics.prometheus was renamed metrics.prometheus.scrapper
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
@@ -346,7 +301,6 @@ func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 // The list returned are actually warnings, not errors.
 func migrate(cfg *config.Configuration) (warnings []error) {
 	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
-	warnings = append(warnings, migrateMetricsSnmp(cfg)...)
 	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
 
 	return warnings
