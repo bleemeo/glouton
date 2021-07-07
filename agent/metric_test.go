@@ -22,6 +22,7 @@ import (
 	"glouton/discovery"
 	"glouton/prometheus/matcher"
 	"glouton/types"
+	"reflect"
 	"sort"
 	"testing"
 	"time"
@@ -764,19 +765,38 @@ func Test_newMetricFilter(t *testing.T) {
 			}
 
 			t0 := time.Now()
+			metrics := makeMetricsFromLabels(tt.metrics)
 			points := makePointsFromLabels(tt.metrics, t0)
-			want := makePointsFromLabels(tt.want, t0)
-			got := filter.FilterPoints(points)
+			families := makeFamiliesFromLabels(tt.metrics)
+			wantMetrics := makeMetricsFromLabels(tt.want)
+			wantPoints := makePointsFromLabels(tt.want, t0)
+			wantFamilies := makeFamiliesFromLabels(tt.want)
+			gotMetrics := filter.filterMetrics(metrics)
+			gotPoints := filter.FilterPoints(points)
+			gotFamilies := filter.FilterFamilies(families)
 
-			if diff := cmp.Diff(got, want); diff != "" {
+			if !reflect.DeepEqual(wantMetrics, gotMetrics) {
+				t.Errorf("FilterMetrics(): Expected %v, got %v", wantMetrics, gotMetrics)
+			}
+			// if diff := cmp.Diff(gotMetrics, wantMetrics, cmpopts.IgnoreInterfaces(gotMetrics)); diff != "" {
+			// 	t.Errorf("FilterMetrics(): %s", diff)
+			// }
+
+			if diff := cmp.Diff(gotPoints, wantPoints); diff != "" {
 				t.Errorf("FilterPoints(): %s", diff)
 			}
+
+			if diff := cmp.Diff(gotFamilies, wantFamilies); diff != "" {
+				t.Errorf("FilterFamilies(): %s", diff)
+			}
+
 		})
 	}
 }
 
 func makePointsFromLabels(input []labels.Labels, t0 time.Time) []types.MetricPoint {
 	points := make([]types.MetricPoint, 0, len(input))
+
 	for _, lbls := range input {
 		points = append(points, types.MetricPoint{
 			Point: types.Point{
@@ -788,6 +808,100 @@ func makePointsFromLabels(input []labels.Labels, t0 time.Time) []types.MetricPoi
 	}
 
 	return points
+}
+
+func makeFamiliesFromLabels(input []labels.Labels) []*dto.MetricFamily {
+	families := []*dto.MetricFamily{}
+	fam := make(map[string]bool)
+	orderedFam := []string{}
+
+	for _, lbls := range input {
+		fam[lbls.Get("__name__")] = true
+	}
+
+	for k := range fam {
+		orderedFam = append(orderedFam, k)
+	}
+
+	sort.Strings(orderedFam)
+
+	for _, famName := range orderedFam {
+		family := dto.MetricFamily{}
+
+		name := famName
+
+		family.Name = &name
+		families = append(families, &family)
+	}
+
+	for _, lbls := range input {
+		new := dto.Metric{}
+
+		new.Label = labelstoDtolabels(lbls)
+
+		for _, fam := range families {
+			if *fam.Name == lbls.Get("__name__") {
+				fam.Metric = append(fam.Metric, &new)
+
+				break
+			}
+		}
+	}
+
+	return families
+}
+
+func makeMetricsFromLabels(input []labels.Labels) []types.Metric {
+	res := make([]types.Metric, 0, len(input))
+	for _, lbls := range input {
+		new := fakeMetric{labels: lbls.Map()}
+
+		res = append(res, new)
+	}
+
+	return res
+}
+
+type fakeMetric struct {
+	labels map[string]string
+}
+
+// Labels returns all label of the metric.
+func (m fakeMetric) Labels() map[string]string {
+	labels := make(map[string]string)
+
+	for k, v := range m.labels {
+		labels[k] = v
+	}
+
+	return labels
+}
+
+// Annotations returns all annotations of the metric.
+func (m fakeMetric) Annotations() types.MetricAnnotations {
+	return types.MetricAnnotations{}
+}
+
+// Points returns points between the two given time range (boundary are included).
+func (m fakeMetric) Points(start, end time.Time) (result []types.Point, err error) {
+	return nil, nil
+}
+
+func labelstoDtolabels(lb labels.Labels) []*dto.LabelPair {
+	new := []*dto.LabelPair{}
+
+	for _, val := range lb {
+		if val.Name == "__name__" {
+			continue
+		}
+
+		new = append(new, &dto.LabelPair{
+			Name:  &val.Name,
+			Value: &val.Value,
+		})
+	}
+
+	return new
 }
 
 func listFromMap(m map[labels.Matcher][]matcher.Matchers) []matcher.Matchers {

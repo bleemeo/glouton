@@ -909,7 +909,7 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 	return points
 }
 
-func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
+func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 	i := 0
 
 	m.l.Lock()
@@ -943,6 +943,8 @@ func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 	}
 
 	for _, metric := range mt {
+		didMatch := false
+
 		for key, allowVals := range m.allowList {
 			if !key.Matches(metric.Labels()[types.LabelName]) {
 				continue
@@ -951,10 +953,15 @@ func (m *metricFilter) filterMetric(mt []types.Metric) []types.Metric {
 			for _, allowVal := range allowVals {
 				if allowVal.MatchesLabels(metric.Labels()) {
 					mt[i] = metric
+					didMatch = true
 					i++
 
 					break
 				}
+			}
+
+			if didMatch {
+				break
 			}
 		}
 	}
