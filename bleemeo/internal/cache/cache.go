@@ -353,9 +353,9 @@ func (c *Cache) SetMetrics(metrics []bleemeoTypes.Metric) {
 	c.dirty = true
 
 	for _, oldM := range oldMetrics {
-		for _, newM := range c.data.Metrics {
+		for i, newM := range c.data.Metrics {
 			if oldM.ID == newM.ID {
-				newM.FirstSeenAt = oldM.FirstSeenAt
+				c.data.Metrics[i].FirstSeenAt = oldM.FirstSeenAt
 				break
 			}
 		}
