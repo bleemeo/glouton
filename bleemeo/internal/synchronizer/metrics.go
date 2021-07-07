@@ -1182,11 +1182,8 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 	for k, v := range registeredMetrics {
 		if now.Sub(v.FirstSeenAt) < 6*time.Minute {
 			continue
-		} else {
-			if v.PromQLQuery != "" {
-				logger.V(0).Printf("tried to remove %d, but not really inactive yet", v.LabelsText)
-			}
 		}
+
 		if !v.DeactivatedAt.IsZero() {
 			if s.now().Sub(v.DeactivatedAt) > 200*24*time.Hour {
 				delete(registeredMetrics, k)
