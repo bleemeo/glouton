@@ -70,17 +70,20 @@ var (
 		LabelsText:    "__name__=\"some_metric_1\",label=\"value\"",
 		Labels:        map[string]string{"__name__": "some_metric_1", "label": "value"},
 		DeactivatedAt: time.Time{},
+		FirstSeenAt:   time.Unix(0, 0),
 	}
 	newMetric2 bleemeoTypes.Metric = bleemeoTypes.Metric{
-		ID:         "055af752-5c01-4abc-9bb2-9d64032ef970",
-		LabelsText: "__name__=\"some_metric_2\",label=\"another_value !\"",
-		Labels:     map[string]string{"__name__": "some_metric_2", "label": "another_value !"},
+		ID:          "055af752-5c01-4abc-9bb2-9d64032ef970",
+		LabelsText:  "__name__=\"some_metric_2\",label=\"another_value !\"",
+		Labels:      map[string]string{"__name__": "some_metric_2", "label": "another_value !"},
+		FirstSeenAt: time.Unix(0, 0),
 	}
 	newMetricActiveMonitor bleemeoTypes.Metric = bleemeoTypes.Metric{
-		ID:         "52b9c46e-00b9-4e80-a852-781426a3a193",
-		LabelsText: "__name__=\"probe_whatever\",instance=\"http://bleemeo.com\"",
-		Labels:     map[string]string{"__name__": "probe_whatever", "instance": "http://bleemeo.com"},
-		ServiceID:  newMonitor.ID,
+		ID:          "52b9c46e-00b9-4e80-a852-781426a3a193",
+		LabelsText:  "__name__=\"probe_whatever\",instance=\"http://bleemeo.com\"",
+		Labels:      map[string]string{"__name__": "probe_whatever", "instance": "http://bleemeo.com"},
+		ServiceID:   newMonitor.ID,
+		FirstSeenAt: time.Unix(0, 0),
 	}
 	newMetrics []bleemeoTypes.Metric = []bleemeoTypes.Metric{newMetric1, newMetric2, newMetricActiveMonitor}
 
@@ -710,13 +713,16 @@ func TestSync(t *testing.T) {
 
 	for _, v := range newMetrics {
 		syncedMetric, present := syncedMetrics[v.ID]
+		// The firstSeenAt is reset as this is not the point of this test.
+		syncedMetric.FirstSeenAt = time.Unix(0, 0)
+		v.FirstSeenAt = time.Unix(0, 0)
 
 		if !present {
 			t.Fatalf("missing metric %s", v.ID)
 		}
 
 		if !reflect.DeepEqual(v, syncedMetric) {
-			t.Fatalf("got invalid metrics %v, want %v", syncedMetric, v)
+			t.Fatalf("got invalid metrics :\n%v\nwant :\n%v", syncedMetric, v)
 		}
 	}
 

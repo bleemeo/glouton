@@ -107,7 +107,7 @@ type metricPayload struct {
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
-func (mp metricPayload) metricFromAPI(FirstSeenAt time.Time) bleemeoTypes.Metric {
+func (mp metricPayload) metricFromAPI(firstSeenAt time.Time) bleemeoTypes.Metric {
 	if mp.LabelsText == "" {
 		mp.Labels = map[string]string{
 			types.LabelName: mp.Name,
@@ -125,7 +125,7 @@ func (mp metricPayload) metricFromAPI(FirstSeenAt time.Time) bleemeoTypes.Metric
 		mp.Labels = types.TextToLabels(mp.LabelsText)
 	}
 
-	mp.Metric.FirstSeenAt = FirstSeenAt
+	mp.Metric.FirstSeenAt = firstSeenAt
 
 	return mp.Metric
 }
@@ -1167,20 +1167,23 @@ func (s *Synchronizer) metricDeleteFromLocal() error {
 	return nil
 }
 
-func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
-	duplicatedKey := make(map[string]bool)
-	localByMetricKey := make(map[string]types.Metric, len(localMetrics))
-	now := time.Now().Truncate(time.Second)
-
+func (s *Synchronizer) localMetricToMap(localMetrics []types.Metric, localByMetricKey map[string]types.Metric) {
 	for _, v := range localMetrics {
 		labels := v.Labels()
 		key := common.LabelsToText(labels, v.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo)
 		localByMetricKey[key] = v
 	}
+}
+
+func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
+	duplicatedKey := make(map[string]bool)
+	localByMetricKey := make(map[string]types.Metric, len(localMetrics))
+
+	s.localMetricToMap(localMetrics, localByMetricKey)
 
 	registeredMetrics := s.option.Cache.MetricsByUUID()
 	for k, v := range registeredMetrics {
-		if now.Sub(v.FirstSeenAt) < 6*time.Minute {
+		if s.now().Sub(v.FirstSeenAt) < 6*time.Minute {
 			continue
 		}
 
