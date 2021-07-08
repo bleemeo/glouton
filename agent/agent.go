@@ -670,11 +670,10 @@ func (a *agent) run() { //nolint:gocyclo
 
 	var snmpTargets []*scrapper.Target
 
-	if snmpCfg, found := a.config.Get("metric.prometheus.snmp"); found {
+	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {
-			address, _ := a.config.Get("metric.prometheus.address.snmp")
-			port, _ := a.config.Get("metric.prometheus.port.snmp")
-			snmpTargets = snmp.ConfigToURLs(configList, address.(string), port.(string))
+			address, _ := a.config.Get("metric.snmp.exporter_address")
+			snmpTargets = snmp.ConfigToURLs(configList, address.(string))
 		}
 	}
 

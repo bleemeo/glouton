@@ -24,10 +24,10 @@ import (
 	"net/url"
 )
 
-func ConfigToURLs(vMap []interface{}, address string, port string) (result []*scrapper.Target) {
+func ConfigToURLs(vMap []interface{}, address string) (result []*scrapper.Target) {
 	for dict := range vMap {
 		tmp := vMap[dict].(map[string]interface{})
-		urlText := fmt.Sprintf("http://%s:%s/snmp?module=%s&target=%s", address, port, tmp["module"], tmp["target"])
+		urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", address, tmp["module"], tmp["target"])
 
 		u, err := url.Parse(urlText)
 		if err != nil {
