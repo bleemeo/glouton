@@ -34,6 +34,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 type mockMetric struct {
@@ -1309,4 +1311,124 @@ func Test_httpResponseToMetricFailureKind(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_MergeFirstSeenAt(t *testing.T) {
+	state, err := state.Load("not_found")
+	now := time.Now().Add(-10 * time.Minute).Truncate(time.Second)
+
+	if err != nil {
+		t.Errorf("%v", err)
+
+		return
+	}
+
+	cache := cache.Load(state)
+
+	want := []bleemeoTypes.Metric{
+		{
+			ID:          "1",
+			LabelsText:  "2",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "2",
+			LabelsText:  "1",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "3",
+			LabelsText:  "4",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "4",
+			LabelsText:  "3",
+			FirstSeenAt: now,
+		},
+		{
+			ID:          "5",
+			LabelsText:  "6",
+			FirstSeenAt: now,
+		},
+	}
+
+	cache.SetMetrics(want)
+
+	metrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "1",
+				LabelsText:  "2",
+				FirstSeenAt: now.Add(5 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "2",
+				LabelsText:  "1",
+				FirstSeenAt: now.Add(4 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "3",
+				LabelsText:  "4",
+				FirstSeenAt: now.Add(3 * time.Minute),
+			},
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:          "5",
+				LabelsText:  "6",
+				FirstSeenAt: now.Add(2 * time.Minute),
+			},
+		},
+	}
+
+	metricsMap := cache.MetricLookupFromList()
+
+	for _, val := range metrics {
+		new := val.metricFromAPI(metricsMap)
+
+		metricsMap[new.LabelsText] = new
+	}
+
+	got := []bleemeoTypes.Metric{}
+
+	for _, val := range metricsMap {
+		got = append(got, val)
+	}
+
+	got = sortList(got)
+	want = sortList(want)
+
+	res := cmp.Diff(got, want)
+
+	if res != "" {
+		t.Errorf("FirstSeenAt Merge did not occur correctly:\n%s", res)
+	}
+}
+
+func sortList(list []bleemeoTypes.Metric) []bleemeoTypes.Metric {
+	new := make([]bleemeoTypes.Metric, 0, len(list))
+	orderedNames := make([]string, 0, len(list))
+
+	for _, val := range list {
+		orderedNames = append(orderedNames, val.LabelsText)
+	}
+
+	sort.Strings(orderedNames)
+
+	for _, name := range orderedNames {
+		for _, val := range list {
+			if val.LabelsText == name {
+				new = append(new, val)
+
+				break
+			}
+		}
+	}
+
+	return new
 }

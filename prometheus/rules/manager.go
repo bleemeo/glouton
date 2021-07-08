@@ -44,6 +44,11 @@ import (
 // should exceed the threshold to be considered fired.
 const promAlertTime = 5 * time.Minute
 
+// minResetTime is the minimum time used by the inactive checks.
+// The bleemeo connector uses 15 seconds as a synchronization time,
+// thus we add a bit a leeway in the disabled countdown.
+const minResetTime = 17 * time.Second
+
 var errUnknownState = errors.New("unknown state for metric")
 
 //Manager is a wrapper handling everything related to prometheus recording
@@ -369,10 +374,8 @@ func (rm *Manager) ResetInactiveRules() {
 			continue
 		}
 
-		// The bleemeo connector uses 15 seconds as a synchronization time,
-		// thus we add a bit a leeway in the disabled countdown.
-		if now.Add(17 * time.Second).Before(val.disabledUntil) {
-			val.disabledUntil = now.Add(17 * time.Second)
+		if now.Add(minResetTime).Before(val.disabledUntil) {
+			val.disabledUntil = now.Add(minResetTime)
 		}
 	}
 }
