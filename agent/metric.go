@@ -1113,6 +1113,9 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	denyList := make(map[string]matcher.Matchers)
 	errors := merge.MultiError{}
 
+	m.l.Lock()
+	defer m.l.Unlock()
+
 	var registeredLabels map[string]map[string]string
 
 	var containersLabels map[string]map[string]string
@@ -1149,9 +1152,6 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 
 		allowList[val+"_status"] = new
 	}
-
-	m.l.Lock()
-	defer m.l.Unlock()
 
 	m.allowList = m.staticAllowList
 
