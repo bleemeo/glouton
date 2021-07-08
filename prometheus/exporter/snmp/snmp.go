@@ -43,6 +43,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*scrapper.Target
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
 				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
+				types.LabelSnmpTarget:       tmp["target"].(string),
 			},
 			URL:       u,
 			AllowList: []string{},
