@@ -903,8 +903,9 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 			for _, allowVal := range allowVals {
 				if allowVal.MatchesPoint(point) {
 					points[i] = point
-					i++
 					didMatch = true
+
+					i++
 
 					break
 				}
@@ -916,14 +917,19 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 		}
 	}
 
-	duration := time.Since(start)
-	if duration > filterLogDuration {
-		logger.V(2).Printf("filtering points took %v with %d points in and %d points out", duration, len(points), i)
-	}
+	checkMaxDuration(start, points, i)
 
 	points = points[:i]
 
 	return points
+}
+
+func checkMaxDuration(start time.Time, points []types.MetricPoint, i int) {
+	duration := time.Since(start)
+
+	if duration > filterLogDuration {
+		logger.V(2).Printf("filtering points took %v with %d points in and %d points out", duration, len(points), i)
+	}
 }
 
 func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {

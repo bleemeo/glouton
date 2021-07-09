@@ -866,7 +866,6 @@ func Test_newMetricFilter(t *testing.T) {
 			if diff := cmp.Diff(gotFamilies, wantFamilies); diff != "" {
 				t.Errorf("FilterFamilies(): %s", diff)
 			}
-
 		})
 	}
 }
@@ -930,6 +929,7 @@ func makeFamiliesFromLabels(input []labels.Labels) []*dto.MetricFamily {
 
 func makeMetricsFromLabels(input []labels.Labels) []types.Metric {
 	res := make([]types.Metric, 0, len(input))
+
 	for _, lbls := range input {
 		new := fakeMetric{labels: lbls.Map()}
 
