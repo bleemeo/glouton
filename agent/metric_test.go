@@ -1366,7 +1366,7 @@ metric:
 
 	got := make(map[string]matcher.Matchers)
 
-	err := metricFilter.rebuildDefaultMetrics(services, got)
+	err = metricFilter.rebuildDefaultMetrics(services, got)
 	if err != nil {
 		t.Error(err)
 
