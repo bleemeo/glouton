@@ -42,6 +42,22 @@ type Agent struct {
 	Tags            []Tag     `json:"tags"`
 }
 
+// AgentType is an AgentType object on Bleemeo API.
+type AgentType struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
+}
+
+// AgentSnmp is an Agent object on Bleemeo API.
+type AgentSnmp struct {
+	ID          string    `json:"id"`
+	Fqdn        string    `json:"fqdn"`
+	AccountID   string    `json:"account"`
+	CreatedAt   time.Time `json:"created_at"`
+	AgentTypeID string    `json:"agent_type"`
+}
+
 // Tag is an Tag object on Bleemeo API.
 type Tag struct {
 	ID           string `json:"id,omitempty"`

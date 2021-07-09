@@ -60,6 +60,7 @@ type Synchronizer struct {
 	maintenanceMode         bool
 	lastMetricCount         int
 	agentID                 string
+	//	SNMPAgentID             map[string]string
 
 	// An edge case occurs when an agent is spawned while the maintenance mode is enabled on the backend:
 	// the agent cannot register agent_status, thus the MQTT connector cannot start, and we cannot receive

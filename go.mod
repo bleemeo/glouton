@@ -29,6 +29,7 @@ require (
 	github.com/google/go-cmp v0.5.4
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/google/uuid v1.1.2
 	github.com/googleapis/gnostic v0.5.2 // indirect
 	github.com/grobie/gomemcache v0.0.0-20180201122607-1f779c573665
 	github.com/hodgesds/perf-utils v0.2.5 // indirect

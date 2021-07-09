@@ -18,13 +18,14 @@ package snmp
 
 import (
 	"fmt"
+	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
 	"net/url"
 )
 
-func ConfigToURLs(vMap []interface{}, address string) (result []*scrapper.Target) {
+func ConfigToURLs(vMap []interface{}, address string) (result []*bleemeoTypes.SNMPTarget) {
 	for dict := range vMap {
 		tmp := vMap[dict].(map[string]interface{})
 		urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", address, tmp["module"], tmp["target"])
@@ -36,16 +37,33 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*scrapper.Target
 		}
 
 		name, _ := tmp["name"].(string)
+		address, _ := tmp["target"].(string)
+		deviceType, _ := tmp["type"].(string)
 
+		target := &bleemeoTypes.SNMPTarget{
+			Name:    name,
+			Address: address,
+			Type:    deviceType,
+			URL:     u,
+		}
+
+		result = append(result, target)
+	}
+
+	return result
+}
+
+func GenerateScrapperTargets(snmpTargets []*bleemeoTypes.SNMPTarget) (result []*scrapper.Target) {
+	for _, t := range snmpTargets {
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob: name,
+				types.LabelMetaScrapeJob: t.Name,
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
-				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
-				types.LabelSnmpTarget:       tmp["target"].(string),
+				types.LabelMetaScrapeInstance: scrapper.HostPort(t.URL),
+				types.LabelSnmpTarget:         t.Address,
 			},
-			URL:       u,
+			URL:       t.URL,
 			AllowList: []string{},
 			DenyList:  []string{},
 		}

@@ -22,6 +22,7 @@ import (
 	"glouton/facts"
 	"glouton/threshold"
 	"glouton/types"
+	"net/url"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -129,4 +130,12 @@ func (r DisableReason) String() string {
 	default:
 		return "unspecified reason"
 	}
+}
+
+//SNMPTarget represents a snmp config instance.
+type SNMPTarget struct {
+	Name    string
+	Address string
+	Type    string
+	URL     *url.URL
 }

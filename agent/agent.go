@@ -668,16 +668,21 @@ func (a *agent) run() { //nolint:gocyclo
 
 	var targets []*scrapper.Target
 
-	var snmpTargets []*scrapper.Target
+	var scrapperSNMPTargets []*scrapper.Target
 
 	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {
 			address, _ := a.config.Get("metric.snmp.exporter_address")
-			snmpTargets = snmp.ConfigToURLs(configList, address.(string))
+			snmpTargets := snmp.ConfigToURLs(configList, address.(string))
+
+			if a.bleemeoConnector != nil {
+				// use bleemeoConnector to create a snmp agent "SnmpAgent(snmpTargets)"
+			}
+			scrapperSNMPTargets = snmp.GenerateScrapperTargets(snmpTargets)
 		}
 	}
 
-	for _, target := range snmpTargets {
+	for _, target := range scrapperSNMPTargets {
 		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
 			logger.Printf("Unable to add Snmp scrapper for target %s: %v", target.URL.String(), err)
 		}
