@@ -678,6 +678,7 @@ func (a *agent) run() { //nolint:gocyclo
 			if a.bleemeoConnector != nil {
 				// use bleemeoConnector to create a snmp agent "SnmpAgent(snmpTargets)"
 			}
+
 			scrapperSNMPTargets = snmp.GenerateScrapperTargets(snmpTargets)
 		}
 	}

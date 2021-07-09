@@ -38,13 +38,13 @@ func (s *Synchronizer) SnmpAgent(target types.SNMPTarget) error {
 
 	for _, a := range agentList {
 		if a.Fqdn == target.Address {
-			exist = true
 			/*
 				err := s.updateSnmpAgent(a.ID)
 				if err != nil {
 					return err
 				}
 			*/
+			exist = true
 		}
 	}
 
@@ -101,9 +101,9 @@ func (s *Synchronizer) getAgentType(name string) (id string, err error) {
 		return "", err
 	}
 
-	for idx := range agentType {
-		if agentType[idx].Name == name {
-			id = agentType[idx].ID
+	for _, a := range agentType {
+		if a.Name == name {
+			id = a.ID
 			break
 		}
 	}
