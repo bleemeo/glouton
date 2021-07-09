@@ -780,7 +780,7 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 	m.staticAllowList = buildMatcherList(config, "allow")
 
 	if len(m.staticAllowList) > 0 {
-		logger.V(0).Println("Your allow list may not be compatible with your plan. Please check your allowed metrics for your plan if you encounter any problem.")
+		logger.V(1).Println("Your allow list may not be compatible with your plan. Please check your allowed metrics for your plan if you encounter any problem.")
 	}
 
 	m.staticDenyList = buildMatcherList(config, "deny")
@@ -1105,7 +1105,7 @@ func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Match
 	}
 
 	if m.includeDefaultMetrics {
-		err := m.rebuildDefaultMetrics(services)
+		err := m.rebuildDefaultMetrics(services, allowList)
 		if err != nil {
 			errors = append(errors, err)
 		}
@@ -1114,7 +1114,7 @@ func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Match
 	return allowList, errors
 }
 
-func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service) error {
+func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list map[string]matcher.Matchers) error {
 	for _, val := range services {
 		defaults := defaultServiceMetrics[val.ServiceType]
 
@@ -1124,7 +1124,7 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service) error
 				return err
 			}
 
-			addToList(m.allowList, new)
+			list[val] = new
 		}
 	}
 

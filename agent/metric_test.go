@@ -1339,3 +1339,67 @@ func Benchmark_filters_all(b *testing.B) {
 		}
 	})
 }
+
+func Test_RebuildDefaultMetrics(t *testing.T) {
+	cfg := config.Configuration{}
+
+	err := cfg.LoadByte([]byte(`
+metric:
+  include_default_metrics: false
+`))
+	if err != nil {
+		t.Error(err)
+
+		return
+	}
+
+	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+
+	services := []discovery.Service{
+		{
+			ServiceType: discovery.PostfixService,
+		},
+		{
+			ServiceType: discovery.UWSGIService,
+		},
+	}
+
+	got := make(map[string]matcher.Matchers)
+
+	err := metricFilter.rebuildDefaultMetrics(services, got)
+	if err != nil {
+		t.Error(err)
+
+		return
+	}
+
+	want := map[string]matcher.Matchers{
+		"postfix_status": {
+			{
+				Name:  "__name__",
+				Type:  labels.MatchEqual,
+				Value: "postfix_status",
+			},
+		},
+		"postfix_queue_size": {
+			{
+				Name:  "__name__",
+				Type:  labels.MatchEqual,
+				Value: "postfix_queue_size",
+			},
+		},
+		"uwsgi_status": {
+			{
+				Name:  "__name__",
+				Type:  labels.MatchEqual,
+				Value: "uwsgi_status",
+			},
+		},
+	}
+
+	res := cmp.Diff(got, want, cmpopts.IgnoreUnexported(labels.Matcher{}))
+
+	if res != "" {
+		t.Errorf("rebuildDefaultMetrics():\n%s", res)
+	}
+}
