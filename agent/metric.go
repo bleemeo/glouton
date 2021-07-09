@@ -808,15 +808,21 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
 	for key, val := range m.staticAllowList {
-		m.allowList[key] = make([]matcher.Matchers, 0, len(val))
-		copy(m.allowList[key], val)
+		m.allowList[key] = make([]matcher.Matchers, len(val))
+
+		for i, matchers := range val {
+			m.allowList[key][i] = matchers
+		}
 	}
 
 	m.denyList = map[labels.Matcher][]matcher.Matchers{}
 
 	for key, val := range m.staticDenyList {
-		m.denyList[key] = make([]matcher.Matchers, 0, len(val))
-		copy(m.denyList[key], val)
+		m.denyList[key] = make([]matcher.Matchers, len(val))
+
+		for i, matchers := range val {
+			m.denyList[key][i] = matchers
+		}
 	}
 
 	return nil
@@ -1167,8 +1173,11 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
 	for key, val := range m.staticAllowList {
-		m.allowList[key] = make([]matcher.Matchers, 0, len(val))
-		copy(m.allowList[key], val)
+		m.allowList[key] = make([]matcher.Matchers, len(val))
+
+		for i, matchers := range val {
+			m.allowList[key][i] = matchers
+		}
 	}
 
 	for _, val := range allowList {
@@ -1178,8 +1187,11 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	m.denyList = map[labels.Matcher][]matcher.Matchers{}
 
 	for key, val := range m.staticDenyList {
-		m.denyList[key] = make([]matcher.Matchers, 0, len(val))
-		copy(m.denyList[key], val)
+		m.denyList[key] = make([]matcher.Matchers, len(val))
+
+		for i, matchers := range val {
+			m.denyList[key][i] = matchers
+		}
 	}
 
 	for _, val := range denyList {
