@@ -775,7 +775,7 @@ func Test_newMetricFilter(t *testing.T) {
 				`{__name__!="cpu_used", mountpoint="/home"}`,
 			},
 			configDeny: []string{
-				`node_cpu_seconds_global{mode="system"}`,
+				`{__name__=~"node_cpu_seconds_.*",mode="system"}`,
 				"process_count",
 			},
 			configIncludeDefault: false,
@@ -804,8 +804,20 @@ func Test_newMetricFilter(t *testing.T) {
 					"__name__":   "memory_used",
 					"mountpoint": "/home",
 				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "process_count",
+					"mountpoint": "/mnt",
+				}),
 			},
 			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "node_cpu_seconds_global",
+					"mode":     "user",
+				}),
 				labels.FromMap(map[string]string{
 					"__name__":   "memory_used",
 					"mountpoint": "/home",
@@ -844,7 +856,7 @@ func Test_newMetricFilter(t *testing.T) {
 			gotFamilies := filter.FilterFamilies(families)
 
 			if !reflect.DeepEqual(wantMetrics, gotMetrics) {
-				t.Errorf("FilterMetrics(): Expected %v, got %v", wantMetrics, gotMetrics)
+				t.Errorf("FilterMetrics(): Expected :\n%v\ngot:\n%v", wantMetrics, gotMetrics)
 			}
 
 			if diff := cmp.Diff(gotPoints, wantPoints); diff != "" {
