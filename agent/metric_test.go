@@ -540,6 +540,28 @@ func Test_RebuildDynamicList(t *testing.T) {
 	if res != "" {
 		t.Errorf("got != expected for denyList: %s", res)
 	}
+
+	//Rebuild is done twice to make sure the build is effectively cleared and rebuild
+	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
+	if err != nil {
+		t.Errorf("Unexpected error: %w", err)
+	}
+
+	got = sortMatchers(listFromMap(mf.allowList))
+	wanted = sortMatchers(listFromMap(allowListWant))
+
+	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	if res != "" {
+		t.Errorf("got != expected for second allowList: %s", res)
+	}
+
+	got = sortMatchers(listFromMap(mf.denyList))
+	wanted = sortMatchers(listFromMap(denyListWant))
+
+	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
+	if res != "" {
+		t.Errorf("got != expected for second denyList: %s", res)
+	}
 }
 
 func TestDontDuplicateKeys(t *testing.T) {
@@ -744,6 +766,52 @@ func Test_newMetricFilter(t *testing.T) {
 				}),
 			},
 		},
+		{
+			name: "Mix all filters",
+			configAllow: []string{
+				"cpu_*",
+				"process_used",
+				`node_cpu_seconds_global{mode=~"nice|user|system"}`,
+				`{__name__!="cpu_used", mountpoint="/home"}`,
+			},
+			configDeny: []string{
+				`node_cpu_seconds_global{mode="system"}`,
+				"process_count",
+			},
+			configIncludeDefault: false,
+			metricFormat:         types.MetricFormatBleemeo,
+			metrics: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "cpu_used",
+					"mountpoint": "/mnt",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "memory_used",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "node_cpu_seconds_global",
+					"mode":     "system",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "node_cpu_seconds_global",
+					"mode":     "user",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__": "node_cpu_seconds_global",
+					"mode":     "wait",
+				}),
+				labels.FromMap(map[string]string{
+					"__name__":   "memory_used",
+					"mountpoint": "/home",
+				}),
+			},
+			want: []labels.Labels{
+				labels.FromMap(map[string]string{
+					"__name__":   "memory_used",
+					"mountpoint": "/home",
+				}),
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -778,9 +846,6 @@ func Test_newMetricFilter(t *testing.T) {
 			if !reflect.DeepEqual(wantMetrics, gotMetrics) {
 				t.Errorf("FilterMetrics(): Expected %v, got %v", wantMetrics, gotMetrics)
 			}
-			// if diff := cmp.Diff(gotMetrics, wantMetrics, cmpopts.IgnoreInterfaces(gotMetrics)); diff != "" {
-			// 	t.Errorf("FilterMetrics(): %s", diff)
-			// }
 
 			if diff := cmp.Diff(gotPoints, wantPoints); diff != "" {
 				t.Errorf("FilterPoints(): %s", diff)
