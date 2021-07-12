@@ -25,6 +25,7 @@ import (
 )
 
 //SNMPTarget represents a snmp config instance.
+//nolint: golint
 type SNMPTarget struct {
 	Name    string
 	Address string
