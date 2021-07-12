@@ -682,10 +682,6 @@ func sleepToAlign(interval time.Duration) {
 // pushPoint add a new point to the list of pushed point with a specified TTL.
 // As for AddMetricPointFunction, points should not be mutated after the call.
 func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
-	if len(points) > 0 {
-		points = r.Filter.FilterPoints(points)
-	}
-
 	r.l.Lock()
 
 	for r.blockPushPoint {
