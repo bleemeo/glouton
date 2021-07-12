@@ -510,6 +510,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		{name: "agent", method: s.syncAgent, skipOnlyEssential: true},
 		{name: "facts", method: s.syncFacts},
 		{name: "containers", method: s.syncContainers},
+		{name: "snmp", method: s.syncSNMP},
 		{name: "services", method: s.syncServices},
 		{name: "monitors", method: s.syncMonitors, skipOnlyEssential: true},
 		{name: "metrics", method: s.syncMetrics},
@@ -615,6 +616,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 		syncMethods["info"] = fullSync
 		syncMethods["agent"] = fullSync
 		syncMethods["monitors"] = fullSync
+		syncMethods["snmp"] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {

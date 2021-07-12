@@ -670,14 +670,12 @@ func (a *agent) run() { //nolint:gocyclo
 
 	var scrapperSNMPTargets []*scrapper.Target
 
+	var snmpTargets []*snmp.SNMPTarget
+
 	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {
-			address, _ := a.config.Get("metric.snmp.exporter_address")
-			snmpTargets := snmp.ConfigToURLs(configList, address.(string))
-
-			if a.bleemeoConnector != nil {
-				// use bleemeoConnector to create a snmp agent "SnmpAgent(snmpTargets)"
-			}
+			address := a.config.String("metric.snmp.exporter_address")
+			snmpTargets = snmp.ConfigToURLs(configList, address)
 
 			scrapperSNMPTargets = snmp.GenerateScrapperTargets(snmpTargets)
 		}
@@ -685,7 +683,7 @@ func (a *agent) run() { //nolint:gocyclo
 
 	for _, target := range scrapperSNMPTargets {
 		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
-			logger.Printf("Unable to add Snmp scrapper for target %s: %v", target.URL.String(), err)
+			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
@@ -701,14 +699,14 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.gathererRegistry.AddDefaultCollector()
 
-	if _, found := a.config.Get("metric.pull"); found {
-		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
-		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
-	}
-
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
 		DynamicJobName: "discovered-exporters",
+	}
+
+	if _, found := a.config.Get("metric.pull"); found {
+		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
+		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
 	}
 
 	if a.config.Bool("blackbox.enabled") {
@@ -798,6 +796,7 @@ func (a *agent) run() { //nolint:gocyclo
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
 			Store:                   filteredStore,
+			SNMP:                    snmpTargets,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,

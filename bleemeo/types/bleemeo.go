@@ -49,15 +49,6 @@ type AgentType struct {
 	DisplayName string `json:"display_name"`
 }
 
-// AgentSnmp is an Agent object on Bleemeo API.
-type AgentSnmp struct {
-	ID          string    `json:"id"`
-	Fqdn        string    `json:"fqdn"`
-	AccountID   string    `json:"account"`
-	CreatedAt   time.Time `json:"created_at"`
-	AgentTypeID string    `json:"agent_type"`
-}
-
 // Tag is an Tag object on Bleemeo API.
 type Tag struct {
 	ID           string `json:"id,omitempty"`
@@ -76,6 +67,7 @@ type AccountConfig struct {
 	LiveProcessResolution   int    `json:"live_process_resolution"`
 	LiveProcess             bool   `json:"live_process"`
 	DockerIntegration       bool   `json:"docker_integration"`
+	SNMPIntergration        bool   `json:"snmp_integration"`
 }
 
 // Service is a Service object on Bleemeo API.
@@ -103,6 +95,16 @@ type Container struct {
 
 	InspectHash          string    `json:",omitempty"`
 	GloutonLastUpdatedAt time.Time `json:",omitempty"`
+}
+
+type SNMP struct {
+	ID              string `json:"id"`
+	AccountID       string `json:"account"`
+	DisplayName     string `json:"display_name"`
+	Fqdn            string `json:"fqdn"`
+	AgentTypeID     string `json:"agent_type"`
+	Abstracted      bool   `json:"abstracted"`
+	InitialPassword string `json:"initial_password"`
 }
 
 // Threshold is the threshold of a metrics. We use pointer to float to support

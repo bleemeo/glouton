@@ -43,6 +43,7 @@ type data struct {
 	AccountID               string
 	Facts                   []bleemeoTypes.AgentFact
 	Containers              []bleemeoTypes.Container
+	SNMP                    []bleemeoTypes.SNMP
 	Metrics                 []bleemeoTypes.Metric
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
@@ -106,6 +107,15 @@ func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	defer c.l.Unlock()
 
 	c.data.Containers = containers
+	c.dirty = true
+}
+
+// SetSNMP update SNMP agent list.
+func (c *Cache) SetSNMPs(snmp []bleemeoTypes.SNMP) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.SNMP = snmp
 	c.dirty = true
 }
 
@@ -297,6 +307,31 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 	result := make(map[string]bleemeoTypes.Container)
 
 	for _, v := range c.data.Containers {
+		result[v.ID] = v
+	}
+
+	return result
+}
+
+// SNMPs returns a (copy) of the list of SNMP agent.
+func (c *Cache) SNMPs() (snmp []bleemeoTypes.SNMP) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.SNMP, len(c.data.SNMP))
+	copy(result, c.data.SNMP)
+
+	return result
+}
+
+// SNMPsByUUID returns a map snmp.id => snmp.
+func (c *Cache) SNMPsByUUID() map[string]bleemeoTypes.SNMP {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]bleemeoTypes.SNMP)
+
+	for _, v := range c.data.SNMP {
 		result[v.ID] = v
 	}
 

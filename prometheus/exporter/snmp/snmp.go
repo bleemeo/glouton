@@ -18,14 +18,21 @@ package snmp
 
 import (
 	"fmt"
-	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
 	"net/url"
 )
 
-func ConfigToURLs(vMap []interface{}, address string) (result []*bleemeoTypes.SNMPTarget) {
+//SNMPTarget represents a snmp config instance.
+type SNMPTarget struct {
+	Name    string
+	Address string
+	Type    string
+	URL     *url.URL
+}
+
+func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
 	for dict := range vMap {
 		tmp := vMap[dict].(map[string]interface{})
 		urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", address, tmp["module"], tmp["target"])
@@ -40,7 +47,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*bleemeoTypes.SN
 		address, _ := tmp["target"].(string)
 		deviceType, _ := tmp["type"].(string)
 
-		target := &bleemeoTypes.SNMPTarget{
+		target := &SNMPTarget{
 			Name:    name,
 			Address: address,
 			Type:    deviceType,
@@ -53,7 +60,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*bleemeoTypes.SN
 	return result
 }
 
-func GenerateScrapperTargets(snmpTargets []*bleemeoTypes.SNMPTarget) (result []*scrapper.Target) {
+func GenerateScrapperTargets(snmpTargets []*SNMPTarget) (result []*scrapper.Target) {
 	for _, t := range snmpTargets {
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
@@ -61,7 +68,7 @@ func GenerateScrapperTargets(snmpTargets []*bleemeoTypes.SNMPTarget) (result []*
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
 				types.LabelMetaScrapeInstance: scrapper.HostPort(t.URL),
-				types.LabelSnmpTarget:         t.Address,
+				types.LabelSNMPTarget:         t.Address,
 			},
 			URL:       t.URL,
 			AllowList: []string{},

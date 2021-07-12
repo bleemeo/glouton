@@ -17,117 +17,185 @@
 package synchronizer
 
 import (
+	"encoding/json"
+	"fmt"
 	"glouton/bleemeo/types"
+	"glouton/logger"
+	"glouton/prometheus/exporter/snmp"
 
 	"github.com/google/uuid"
 )
 
-func (s *Synchronizer) SnmpAgent(target types.SNMPTarget) error {
-	agentTypeID, err := s.getAgentType("snmp")
-	if err != nil {
-		return err
+// TODO the deletion need to be done
+
+func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
+	var snmpTargets []*snmp.SNMPTarget
+
+	if s.option.Cache.CurrentAccountConfig().SNMPIntergration {
+		snmpTargets = s.option.SNMP
 	}
 
-	agentList, err := s.getAgentList()
-
-	if err != nil {
-		return err
+	if s.successiveErrors == 3 {
+		// After 3 error, try to force a full synchronization to see if it solve the issue.
+		fullSync = true
 	}
 
-	exist := false
-
-	for _, a := range agentList {
-		if a.Fqdn == target.Address {
-			/*
-				err := s.updateSnmpAgent(a.ID)
-				if err != nil {
-					return err
-				}
-			*/
-			exist = true
+	if fullSync {
+		err := s.snmpUpdateList()
+		if err != nil {
+			return err
 		}
 	}
 
-	if !exist {
-		return s.createSNMPAgent(agentList[0].AccountID, agentTypeID, target)
+	if onlyEssential {
+		// no essential snmp, skip registering.
+		return nil
 	}
 
-	return nil
-}
-
-func (s *Synchronizer) createSNMPAgent(accountID string, agentTypeID string, target types.SNMPTarget) error {
-	payload := map[string]string{
-		"account":          accountID,
-		"initial_password": uuid.New().String(),
-		"display_name":     target.Name,
-		"fqdn":             target.Address,
-		"agent_type":       agentTypeID,
-		"abstracted":       "True",
-		//		"device_type":      target.Type,
-	}
-
-	var response types.AgentSnmp
-
-	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", nil, payload, &response)
-	if err != nil {
+	if err := s.snmpRegisterAndUpdate(snmpTargets); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (s *Synchronizer) getAgentList() (agents []types.AgentSnmp, err error) {
+func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) error {
+	remoteSNMPs := s.option.Cache.SNMPs()
+	remoteIndexByName := make(map[string]int, len(remoteSNMPs))
+
+	for i, v := range remoteSNMPs {
+		remoteIndexByName[v.Fqdn] = i
+	}
+
 	params := map[string]string{
-		"fields": "id,created_at,account,fqdn,display_name,agent_type",
+		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password",
 	}
 
-	_, err = s.client.Do(s.ctx, "GET", "v1/agent/", params, nil, &agents)
-	if err != nil {
-		return nil, err
+	//	newDelayedSNMP := make(map[string]time.Time, len(s.delayedSNMP))
+
+	agentTypeID := s.getAgentType("snmp")
+
+	for _, snmp := range localTargets {
+		/*
+			if s.delayedSNMPCheck(newDelayedSNMP, snmp) {
+				continue
+			}
+		*/
+		payload := types.SNMP{
+			AccountID:       s.option.Cache.AccountID(),
+			DisplayName:     snmp.Name,
+			Fqdn:            snmp.Address,
+			AgentTypeID:     agentTypeID,
+			Abstracted:      true,
+			InitialPassword: uuid.New().String(),
+		}
+
+		name := snmp.Address
+		if len(name) > apiContainerNameLength {
+			name = name[:apiContainerNameLength]
+		}
+
+		remoteIndex, remoteFound := remoteIndexByName[name]
+
+		var remoteSNMP types.SNMP
+
+		if remoteFound {
+			remoteSNMP = remoteSNMPs[remoteIndex]
+			if remoteSNMP.DisplayName == snmp.Name {
+				return nil
+			}
+		}
+
+		err := s.remoteRegisterSNMP(remoteFound, &remoteSNMP, &remoteSNMPs, params, payload, remoteIndex)
+
+		if err != nil {
+			return err
+		}
 	}
 
-	return agents, nil
+	s.option.Cache.SetSNMPs(remoteSNMPs)
+	//	s.delayedSNMP = newDelayedSNMP
+
+	return nil
 }
 
-func (s *Synchronizer) getAgentType(name string) (id string, err error) {
-	var agentType []types.AgentType
+func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.SNMP,
+	remoteSNMPs *[]types.SNMP, params map[string]string, payload types.SNMP, remoteIndex int) error {
+	var result types.SNMP
 
+	if remoteFound {
+		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/agent/%s/", remoteSNMP.ID), params, payload, &result)
+		if err != nil {
+			return err
+		}
+
+		logger.V(2).Printf("SNMP agent %v updated with UUID %s", result.DisplayName, result.ID)
+		(*remoteSNMPs)[remoteIndex] = result
+	} else {
+		_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
+		if err != nil {
+			return err
+		}
+
+		logger.V(2).Printf("SNMP agent %v registered with UUID %s", result.DisplayName, result.ID)
+		*remoteSNMPs = append(*remoteSNMPs, result)
+	}
+
+	return nil
+}
+
+func (s *Synchronizer) snmpUpdateList() error {
+	params := map[string]string{
+		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password",
+	}
+
+	result, err := s.client.Iter(s.ctx, "agent", params)
+	if err != nil {
+		return err
+	}
+
+	snmps := make([]types.SNMP, len(result))
+
+	for i, jsonMessage := range result {
+		var snmp types.SNMP
+
+		if err := json.Unmarshal(jsonMessage, &snmp); err != nil {
+			continue
+		}
+
+		snmps[i] = snmp
+	}
+
+	s.option.Cache.SetSNMPs(snmps)
+
+	return nil
+}
+
+func (s *Synchronizer) getAgentType(name string) (id string) {
 	params := map[string]string{
 		"fields": "id,name,display_name",
 	}
 
-	_, err = s.client.Do(s.ctx, "GET", "v1/agenttype/", params, nil, &agentType)
-	if err != nil {
-		return "", err
+	result, _ := s.client.Iter(s.ctx, "agenttype", params)
+
+	agentTypes := make([]types.AgentType, len(result))
+
+	for i, jsonMessage := range result {
+		var agentType types.AgentType
+
+		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
+			continue
+		}
+
+		agentTypes[i] = agentType
 	}
 
-	for _, a := range agentType {
+	for _, a := range agentTypes {
 		if a.Name == name {
 			id = a.ID
 			break
 		}
 	}
 
-	return id, nil
+	return id
 }
-
-/*
-func (s *Synchronizer) updateSnmpAgent(ID string, target types.SNMPTarget) error {
-	var agent []types.AgentSnmp
-
-	params := map[string]string{
-		"fields": "id,created_at,account,fqdn,display_name,agent_type",
-	}
-	// need to change the data type maybe use an update only of the display_name
-	data := map[string]string{
-		"display_name": target.Name,
-	}
-
-	_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", ID), params, data, &agent)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-*/

@@ -20,9 +20,9 @@ import (
 	"context"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/threshold"
 	"glouton/types"
-	"net/url"
 	"time"
 
 	"github.com/influxdata/telegraf"
@@ -35,6 +35,7 @@ type GlobalOption struct {
 	Facts                   FactProvider
 	Process                 ProcessProvider
 	Docker                  DockerProvider
+	SNMP                    []*snmp.SNMPTarget
 	Store                   Store
 	Acc                     telegraf.Accumulator
 	Discovery               discovery.PersistentDiscoverer
@@ -130,12 +131,4 @@ func (r DisableReason) String() string {
 	default:
 		return "unspecified reason"
 	}
-}
-
-//SNMPTarget represents a snmp config instance.
-type SNMPTarget struct {
-	Name    string
-	Address string
-	Type    string
-	URL     *url.URL
 }

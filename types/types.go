@@ -105,7 +105,7 @@ const (
 	LabelItem                 = "item"
 	LabelScraperUUID          = "scraper_uuid"
 	LabelScraper              = "scraper"
-	LabelSnmpTarget           = "snmp_target"
+	LabelSNMPTarget           = "snmp_target"
 	LabelInstance             = "instance"
 	LabelContainerName        = "container_name"
 	LabelScrapeJob            = "scrape_job"

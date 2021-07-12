@@ -24,7 +24,7 @@ import (
 
 func (s *Synchronizer) getAccountConfig(uuid string) (config types.AccountConfig, err error) {
 	params := map[string]string{
-		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,",
+		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration",
 	}
 
 	config.LiveProcess = true // default value
