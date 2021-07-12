@@ -589,6 +589,10 @@ func runFakeAPI() *mockAPI {
 		return paginatedList([]interface{}{}), http.StatusOK, nil
 	})
 
+	api.Handle("/v1/agenttype/", func(r *http.Request) (interface{}, int, error) {
+		return paginatedList([]interface{}{}), http.StatusOK, nil
+	})
+
 	api.Handle("/v1/service/", func(r *http.Request) (interface{}, int, error) {
 		return paginatedList([]interface{}{newMonitor}), http.StatusOK, nil
 	})
