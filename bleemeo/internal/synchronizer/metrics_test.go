@@ -1386,17 +1386,14 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 		},
 	}
 
-	metricsMap := cache.MetricLookupFromList()
+	got := []bleemeoTypes.Metric{}
+	metricsByUUID := cache.MetricsByUUID()
 
 	for _, val := range metrics {
-		new := val.metricFromAPI(metricsMap)
-
-		metricsMap[new.LabelsText] = new
+		metricsByUUID[val.ID] = val.metricFromAPI(metricsByUUID[val.ID].FirstSeenAt)
 	}
 
-	got := []bleemeoTypes.Metric{}
-
-	for _, val := range metricsMap {
+	for _, val := range metricsByUUID {
 		got = append(got, val)
 	}
 

@@ -112,7 +112,7 @@ type metricPayload struct {
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
-func (mp metricPayload) metricFromAPI(metricMap map[string]bleemeoTypes.Metric) bleemeoTypes.Metric {
+func (mp metricPayload) metricFromAPI(lastTime time.Time) bleemeoTypes.Metric {
 	if mp.LabelsText == "" {
 		mp.Labels = map[string]string{
 			types.LabelName: mp.Name,
@@ -130,8 +130,8 @@ func (mp metricPayload) metricFromAPI(metricMap map[string]bleemeoTypes.Metric) 
 		mp.Labels = types.TextToLabels(mp.LabelsText)
 	}
 
-	if old, ok := metricMap[mp.LabelsText]; ok {
-		mp.Metric.FirstSeenAt = old.FirstSeenAt
+	if !lastTime.IsZero() {
+		mp.Metric.FirstSeenAt = lastTime
 	} else {
 		mp.Metric.FirstSeenAt = time.Now().Truncate(time.Second)
 	}
@@ -542,7 +542,7 @@ func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool
 			}
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(s.option.Cache.MetricLookupFromList())
+		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	return metricsByUUID, nil
@@ -664,7 +664,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 				}
 			}
 
-			metricsByUUID[metric.ID] = metric.metricFromAPI(s.option.Cache.MetricLookupFromList())
+			metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
 		}
 	}
 
@@ -705,7 +705,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 			return err
 		}
 
-		metricsByUUID[metric.ID] = metric.metricFromAPI(s.option.Cache.MetricLookupFromList())
+		metricsByUUID[metric.ID] = metric.metricFromAPI(metricsByUUID[metric.ID].FirstSeenAt)
 	}
 
 	metrics := make([]bleemeoTypes.Metric, 0, len(metricsByUUID))
@@ -1032,8 +1032,8 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	}
 
 	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
-	registeredMetricsByKey[key] = result.metricFromAPI(s.option.Cache.MetricLookupFromList())
-	registeredMetricsByUUID[result.ID] = result.metricFromAPI(s.option.Cache.MetricLookupFromList())
+	registeredMetricsByKey[key] = result.metricFromAPI(registeredMetricsByKey[key].FirstSeenAt)
+	registeredMetricsByUUID[result.ID] = result.metricFromAPI(registeredMetricsByUUID[result.ID].FirstSeenAt)
 
 	return nil
 }

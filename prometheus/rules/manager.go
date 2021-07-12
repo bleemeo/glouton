@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"glouton/logger"
 	"glouton/store"
+	"glouton/threshold"
 	"glouton/types"
 	"math"
 	"os"
@@ -49,6 +50,11 @@ const promAlertTime = 5 * time.Minute
 // thus we add a bit a leeway in the disabled countdown.
 const minResetTime = 17 * time.Second
 
+const lowWarningState = "low_warning"
+const highWarningState = "high_warning"
+const lowCriticalState = "low_critical"
+const highCriticalState = "high_critical"
+
 var errUnknownState = errors.New("unknown state for metric")
 
 //Manager is a wrapper handling everything related to prometheus recording
@@ -57,7 +63,7 @@ type Manager struct {
 	// store implements both appendable and queryable.
 	store          *store.Store
 	recordingRules []*rules.Group
-	alertingRules  []*ruleGroup
+	alertingRules  map[string]*ruleGroup
 
 	engine *promql.Engine
 	logger log.Logger
@@ -73,7 +79,9 @@ type ruleGroup struct {
 
 	id          string
 	promql      string
+	thresholds  threshold.Threshold
 	isUserAlert bool
+	labels      map[string]string
 }
 
 //nolint: gochecknoglobals
@@ -140,7 +148,7 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time) *Man
 	rm := Manager{
 		store:          store,
 		recordingRules: []*rules.Group{defaultGroup},
-		alertingRules:  nil,
+		alertingRules:  map[string]*ruleGroup{},
 		engine:         engine,
 		logger:         promLogger,
 		agentStarted:   created,
@@ -194,7 +202,7 @@ func (agr *ruleGroup) shouldSkip(now time.Time) bool {
 }
 
 func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
-	thresholdOrder := []string{"high_critical", "low_critical", "high_warning", "low_warning"}
+	thresholdOrder := []string{highCriticalState, lowCriticalState, highWarningState, lowWarningState}
 
 	var generatedPoint *types.MetricPoint = nil
 
@@ -227,6 +235,12 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 						Time:  now,
 						Value: math.NaN(),
 					},
+					Labels: agr.labels,
+					Annotations: types.MetricAnnotations{
+						Status: types.StatusDescription{
+							CurrentStatus: types.StatusUnknown,
+						},
+					},
 				}, nil
 			}
 
@@ -240,13 +254,13 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		agr.inactiveSince = time.Time{}
 		agr.disabledUntil = time.Time{}
 
-		if time.Since(rm.agentStarted) < promAlertTime {
+		if time.Since(rm.agentStarted) < promAlertTime && state == rules.StateFiring {
 			return nil, nil
 		}
 
 		logger.V(2).Printf("metric state for %s previous state=%v, new state=%v", rule.Name(), prevState, state)
 
-		newPoint, err := generateNewPoint(val, rule, state, now)
+		newPoint, err := agr.generateNewPoint(val, rule, state, now)
 		if err != nil {
 			return nil, err
 		}
@@ -261,7 +275,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 	return generatedPoint, nil
 }
 
-func generateNewPoint(threshold string, rule storage.Labels, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
+func (agr *ruleGroup) generateNewPoint(threshold string, rule storage.Labels, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
 	statusCode := statusFromThreshold(threshold)
 	status := types.StatusDescription{
 		CurrentStatus:     statusCode,
@@ -277,6 +291,7 @@ func generateNewPoint(threshold string, rule storage.Labels, state rules.AlertSt
 			Time:  now,
 			Value: float64(statusCode.NagiosCode()),
 		},
+		Labels: agr.labels,
 		Annotations: types.MetricAnnotations{
 			Status: status,
 		},
@@ -298,40 +313,46 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 		disabledUntil: time.Time{},
 		id:            metric.LabelsText,
 		promql:        metric.PromQLQuery,
+		thresholds:    metric.Threshold.ToInternalThreshold(),
+		labels:        metric.Labels,
 		isUserAlert:   metric.IsUserPromQLAlert,
 	}
 
 	if metric.Threshold.LowWarning != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowWarning), metric.Labels[types.LabelName], "low_warning", "warning", rm.logger)
+		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowWarning), metric.Labels[types.LabelName], lowWarningState, "warning", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
 
 	if metric.Threshold.HighWarning != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighWarning), metric.Labels[types.LabelName], "high_warning", "warning", rm.logger)
+		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighWarning), metric.Labels[types.LabelName], highWarningState, "warning", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
 
 	if metric.Threshold.LowCritical != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowCritical), metric.Labels[types.LabelName], "low_critical", "critical", rm.logger)
+		err := newGroup.newRule(fmt.Sprintf("(%s) < %f", metric.PromQLQuery, *metric.Threshold.LowCritical), metric.Labels[types.LabelName], lowCriticalState, "critical", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
 
 	if metric.Threshold.HighCritical != nil {
-		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighCritical), metric.Labels[types.LabelName], "high_critical", "critical", rm.logger)
+		err := newGroup.newRule(fmt.Sprintf("(%s) > %f", metric.PromQLQuery, *metric.Threshold.HighCritical), metric.Labels[types.LabelName], highCriticalState, "critical", rm.logger)
 		if err != nil {
 			return err
 		}
 	}
 
-	rm.alertingRules = append(rm.alertingRules, newGroup)
+	rm.alertingRules[newGroup.id] = newGroup
 
 	return nil
+}
+
+func (agr *ruleGroup) Equal(threshold threshold.Threshold) bool {
+	return agr.thresholds.Equal(threshold)
 }
 
 //RebuildAlertingRules rebuild the alerting rules list from a bleemeo api metric list.
@@ -341,24 +362,21 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 
 	old := rm.alertingRules
 
-	rm.alertingRules = []*ruleGroup{}
+	rm.alertingRules = make(map[string]*ruleGroup)
 
 	for _, val := range metricsList {
 		if len(val.PromQLQuery) == 0 || val.ToInternalThreshold().IsZero() {
 			continue
 		}
 
-		err := rm.addAlertingRule(val)
-		if err != nil {
-			return err
-		}
-	}
+		prevInstance, ok := old[val.LabelsText]
 
-	for _, val := range old {
-		for _, newVal := range rm.alertingRules {
-			if newVal.id == val.id {
-				newVal.inactiveSince = val.inactiveSince
-				newVal.disabledUntil = val.disabledUntil
+		if ok && prevInstance.promql == val.PromQLQuery && prevInstance.Equal(val.Threshold.ToInternalThreshold()) {
+			rm.alertingRules[val.ID] = prevInstance
+		} else {
+			err := rm.addAlertingRule(val)
+			if err != nil {
+				return err
 			}
 		}
 	}
@@ -460,11 +478,11 @@ func statusFromThreshold(s string) types.Status {
 	switch s {
 	case "ok":
 		return types.StatusOk
-	case "low_warning":
-	case "high_warning":
+	case lowWarningState:
+	case highWarningState:
 		return types.StatusWarning
-	case "low_critical":
-	case "high_critical":
+	case lowCriticalState:
+	case highCriticalState:
 		return types.StatusCritical
 	default:
 		return types.StatusUnknown
