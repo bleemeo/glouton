@@ -38,7 +38,6 @@ import (
 	"github.com/prometheus/prometheus/promql"
 	"github.com/prometheus/prometheus/promql/parser"
 	"github.com/prometheus/prometheus/rules"
-	"github.com/prometheus/prometheus/storage"
 )
 
 // promAlertTime represents the duration for which the alerting rule
@@ -238,7 +237,8 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 					Labels: agr.labels,
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
-							CurrentStatus: types.StatusUnknown,
+							CurrentStatus:     types.StatusUnknown,
+							StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
 						},
 					},
 				}, nil
@@ -275,11 +275,19 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 	return generatedPoint, nil
 }
 
-func (agr *ruleGroup) generateNewPoint(threshold string, rule storage.Labels, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
+func (agr *ruleGroup) generateNewPoint(threshold string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
 	statusCode := statusFromThreshold(threshold)
+	alerts := rule.ActiveAlerts()
+
+	desc := ""
+
+	if len(alerts) != 0 {
+		desc = fmt.Sprintf("Current Value: %f. Threshold (%f) exeeded for the last 5 minutes", alerts[0].Value, agr.thresholdFromString(threshold))
+	}
+
 	status := types.StatusDescription{
 		CurrentStatus:     statusCode,
-		StatusDescription: "",
+		StatusDescription: desc,
 	}
 
 	if statusCode == types.StatusUnknown {
@@ -304,6 +312,21 @@ func (agr *ruleGroup) generateNewPoint(threshold string, rule storage.Labels, st
 	}
 
 	return &newPoint, nil
+}
+
+func (agr *ruleGroup) thresholdFromString(threshold string) float64 {
+	switch threshold {
+	case highCriticalState:
+		return agr.thresholds.HighCritical
+	case lowCriticalState:
+		return agr.thresholds.LowCritical
+	case highWarningState:
+		return agr.thresholds.HighWarning
+	case lowWarningState:
+		return agr.thresholds.LowWarning
+	default:
+		return agr.thresholds.HighCritical
+	}
 }
 
 func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
@@ -376,7 +399,10 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 		} else {
 			err := rm.addAlertingRule(val)
 			if err != nil {
-				return err
+				val.PromQLQuery = "creates_unknown_status"
+				val.IsUserPromQLAlert = true
+
+				rm.addAlertingRule(val)
 			}
 		}
 	}
