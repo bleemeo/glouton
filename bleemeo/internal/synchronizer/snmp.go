@@ -60,29 +60,34 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 }
 
 func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) error {
-	remoteSNMPs := s.option.Cache.SNMPs()
-	remoteIndexByName := make(map[string]int, len(remoteSNMPs))
+	remoteAgentList := s.option.Cache.AgentList()
+	remoteIndexByFqdn := make(map[string]int, len(remoteAgentList))
 
-	for i, v := range remoteSNMPs {
-		remoteIndexByName[v.Fqdn] = i
+	agentTypeID, err := s.getAgentType("snmp")
+
+	if err != nil {
+		return err
 	}
 
 	params := map[string]string{
-		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password",
+		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags",
 	}
 
-	//	newDelayedSNMP := make(map[string]time.Time, len(s.delayedSNMP))
+	var agent types.PayloadSNMPAgent
 
-	agentTypeID := s.getAgentType("snmp")
+	for i, v := range remoteAgentList {
+		_, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/agent/%s/", v.ID), params, nil, &agent)
+		if err != nil {
+			return err
+		}
+
+		if agent.AgentTypeID == agentTypeID {
+			remoteIndexByFqdn[agent.Fqdn] = i
+		}
+	}
 
 	for _, snmp := range localTargets {
-		/*
-			if s.delayedSNMPCheck(newDelayedSNMP, snmp) {
-				continue
-			}
-		*/
-		payload := types.SNMP{
-			AccountID:       s.option.Cache.AccountID(),
+		payload := types.PayloadSNMPAgent{
 			DisplayName:     snmp.Name,
 			Fqdn:            snmp.Address,
 			AgentTypeID:     agentTypeID,
@@ -90,38 +95,30 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 			InitialPassword: uuid.New().String(),
 		}
 
-		name := snmp.Address
-		if len(name) > apiContainerNameLength {
-			name = name[:apiContainerNameLength]
-		}
+		address := snmp.Address
+		remoteIndex, remoteFound := remoteIndexByFqdn[address]
 
-		remoteIndex, remoteFound := remoteIndexByName[name]
-
-		var remoteSNMP types.SNMP
+		var remoteSNMP types.PayloadSNMPAgent
 
 		if remoteFound {
-			remoteSNMP = remoteSNMPs[remoteIndex]
-			if remoteSNMP.DisplayName == snmp.Name {
-				return nil
-			}
+			remoteSNMP.Agent = remoteAgentList[remoteIndex]
 		}
 
-		err := s.remoteRegisterSNMP(remoteFound, &remoteSNMP, &remoteSNMPs, params, payload, remoteIndex)
+		err := s.remoteRegisterSNMP(remoteFound, &remoteSNMP, &remoteAgentList, params, payload, remoteIndex)
 
 		if err != nil {
 			return err
 		}
 	}
 
-	s.option.Cache.SetSNMPs(remoteSNMPs)
-	//	s.delayedSNMP = newDelayedSNMP
+	s.option.Cache.SetAgentList(remoteAgentList)
 
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.SNMP,
-	remoteSNMPs *[]types.SNMP, params map[string]string, payload types.SNMP, remoteIndex int) error {
-	var result types.SNMP
+func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.PayloadSNMPAgent,
+	remoteSNMPs *[]types.Agent, params map[string]string, payload types.PayloadSNMPAgent, remoteIndex int) error {
+	var result types.Agent
 
 	if remoteFound {
 		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/agent/%s/", remoteSNMP.ID), params, payload, &result)
@@ -129,7 +126,7 @@ func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.SN
 			return err
 		}
 
-		logger.V(2).Printf("SNMP agent %v updated with UUID %s", result.DisplayName, result.ID)
+		logger.V(2).Printf("SNMP agent %v updated with UUID %s", payload.DisplayName, result.ID)
 		(*remoteSNMPs)[remoteIndex] = result
 	} else {
 		_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
@@ -137,7 +134,7 @@ func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.SN
 			return err
 		}
 
-		logger.V(2).Printf("SNMP agent %v registered with UUID %s", result.DisplayName, result.ID)
+		logger.V(2).Printf("SNMP agent %v registered with UUID %s", payload.DisplayName, result.ID)
 		*remoteSNMPs = append(*remoteSNMPs, result)
 	}
 
@@ -146,7 +143,7 @@ func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.SN
 
 func (s *Synchronizer) snmpUpdateList() error {
 	params := map[string]string{
-		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password",
+		"fields": "id,created_at,account,next_config_at,current_config,tags",
 	}
 
 	result, err := s.client.Iter(s.ctx, "agent", params)
@@ -154,10 +151,10 @@ func (s *Synchronizer) snmpUpdateList() error {
 		return err
 	}
 
-	snmps := make([]types.SNMP, len(result))
+	snmps := make([]types.Agent, len(result))
 
 	for i, jsonMessage := range result {
-		var snmp types.SNMP
+		var snmp types.Agent
 
 		if err := json.Unmarshal(jsonMessage, &snmp); err != nil {
 			continue
@@ -166,17 +163,21 @@ func (s *Synchronizer) snmpUpdateList() error {
 		snmps[i] = snmp
 	}
 
-	s.option.Cache.SetSNMPs(snmps)
+	s.option.Cache.SetAgentList(snmps)
 
 	return nil
 }
 
-func (s *Synchronizer) getAgentType(name string) (id string) {
+func (s *Synchronizer) getAgentType(name string) (id string, err error) {
 	params := map[string]string{
 		"fields": "id,name,display_name",
 	}
 
-	result, _ := s.client.Iter(s.ctx, "agenttype", params)
+	result, err := s.client.Iter(s.ctx, "agenttype", params)
+
+	if err != nil {
+		return "", err
+	}
 
 	agentTypes := make([]types.AgentType, len(result))
 
@@ -197,5 +198,5 @@ func (s *Synchronizer) getAgentType(name string) (id string) {
 		}
 	}
 
-	return id
+	return id, nil
 }

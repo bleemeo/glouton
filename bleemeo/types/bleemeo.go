@@ -97,9 +97,8 @@ type Container struct {
 	GloutonLastUpdatedAt time.Time `json:",omitempty"`
 }
 
-type SNMP struct {
-	ID              string `json:"id"`
-	AccountID       string `json:"account"`
+type PayloadSNMPAgent struct {
+	Agent
 	DisplayName     string `json:"display_name"`
 	Fqdn            string `json:"fqdn"`
 	AgentTypeID     string `json:"agent_type"`
