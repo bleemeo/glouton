@@ -18,6 +18,7 @@ package rules
 
 import (
 	"context"
+	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/store"
 	"glouton/types"
@@ -498,20 +499,118 @@ func Test_NaN(t *testing.T) {
 func Test_Rebuild_Rules(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
-	now := time.Now()
-	ruleManager := NewManager(ctx, store, now)
+	now := time.Now().Truncate(time.Second)
+	ruleManager := NewManager(ctx, store, now.Add(time.Duration(-6*time.Minute)))
 	thresholds := []float64{50, 500}
+
+	store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 700,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(4 * time.Minute),
+				Value: 700,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+	})
+
+	want := []types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(1 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+				},
+			},
+		}, {
+			Point: types.Point{
+				Time:  now.Add(2 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(3 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(4 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+				},
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(5 * time.Minute),
+				Value: 2,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusCritical,
+					StatusDescription: "Current Value: 700.00. Threshold (500.000000) exeeded for the last 5 minutes",
+				},
+			},
+		},
+	}
+
 	points := []bleemeoTypes.Metric{
 		{
-			LabelsText: "node_cpu_seconds_global",
+			ID:         "NODE-ID",
+			LabelsText: metricName,
 			Threshold: bleemeoTypes.Threshold{
 				HighWarning:  &thresholds[0],
 				HighCritical: &thresholds[1],
 			},
-			PromQLQuery:       "node_cpu_seconds_global",
+			PromQLQuery:       metricName,
 			IsUserPromQLAlert: false,
 		},
 		{
+			ID:         "CPU-ID",
 			LabelsText: "cpu_counter",
 			Threshold: bleemeoTypes.Threshold{
 				HighWarning:  &thresholds[0],
@@ -522,13 +621,42 @@ func Test_Rebuild_Rules(t *testing.T) {
 		},
 	}
 
+	resPoints := []types.MetricPoint{}
+
+	store.AddNotifiee(func(mp []types.MetricPoint) {
+		resPoints = append(resPoints, mp...)
+	})
+
 	err := ruleManager.RebuildAlertingRules(points)
 	if err != nil {
 		t.Error(err)
+
+		return
 	}
+
+	for i := 0; i < 5; i++ {
+		ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
+	}
+
+	err = ruleManager.RebuildAlertingRules(points)
+	if err != nil {
+		t.Error(err)
+
+		return
+	}
+
+	fmt.Println("Number of points: ", len(resPoints), resPoints)
+
+	ruleManager.Run(ctx, now.Add(5*time.Minute))
 
 	if len(ruleManager.alertingRules) != len(points) {
 		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(points), len(ruleManager.alertingRules))
+	}
+
+	res := cmp.Diff(resPoints, want)
+
+	if res != "" {
+		t.Errorf("RebuildRules(): \n%s\n", res)
 	}
 }
 
@@ -559,7 +687,6 @@ func Test_ManagerStart(t *testing.T) {
 				types.LabelName: metricName,
 			},
 		},
-
 		{
 			Point: types.Point{
 				Time:  now.Add(3 * time.Minute),

@@ -282,7 +282,13 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 	desc := ""
 
 	if len(alerts) != 0 {
-		desc = fmt.Sprintf("Current Value: %s. Threshold (%f) exeeded for the last 5 minutes", threshold.FormatValue(alerts[0].Value, threshold.Unit{}), agr.thresholdFromString(thresholdType))
+		exceeded := ""
+
+		if state != rules.StateFiring {
+			exceeded = "not "
+		}
+
+		desc = fmt.Sprintf("Current Value: %s. Threshold (%f) %sexeeded for the last 5 minutes", threshold.FormatValue(alerts[0].Value, threshold.Unit{}), agr.thresholdFromString(thresholdType), exceeded)
 	}
 
 	status := types.StatusDescription{
