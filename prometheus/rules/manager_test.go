@@ -28,11 +28,12 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
+const metricName = "node_cpu_seconds_global"
+
 func Test_manager(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
 	thresholds := []float64{50, 500}
-	metricName := "node_cpu_seconds_global"
 	okPoints := []types.MetricPoint{
 		{
 			Point: types.Point{
@@ -439,6 +440,12 @@ func Test_manager(t *testing.T) {
 				ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
 			}
 
+			// Description are dynamically generated; as the results points are
+			// copied from a shared result point list, we reset the description
+			for i := range resPoints {
+				resPoints[i].Annotations.Status.StatusDescription = ""
+			}
+
 			eq := cmp.Diff(resPoints, test.Want)
 
 			if eq != "" {
@@ -454,7 +461,6 @@ func Test_NaN(t *testing.T) {
 	now := time.Now()
 	ruleManager := NewManager(ctx, store, now)
 	resPoints := []types.MetricPoint{}
-	metricName := "node_cpu_seconds_global"
 	thresholds := []float64{50, 500}
 
 	store.AddNotifiee(func(mp []types.MetricPoint) {
@@ -523,5 +529,87 @@ func Test_Rebuild_Rules(t *testing.T) {
 
 	if len(ruleManager.alertingRules) != len(points) {
 		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(points), len(ruleManager.alertingRules))
+	}
+}
+
+func Test_ManagerStart(t *testing.T) {
+	store := store.New()
+	ctx := context.Background()
+	now := time.Now().Truncate(time.Second)
+	ruleManager := NewManager(ctx, store, now.Add(5*time.Minute))
+	thresholds := []float64{50, 500}
+	resPoints := []types.MetricPoint{}
+
+	store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  now,
+				Value: 700,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(2 * time.Minute),
+				Value: 800,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+
+		{
+			Point: types.Point{
+				Time:  now.Add(3 * time.Minute),
+				Value: 800,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  now.Add(4 * time.Minute),
+				Value: 800,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+	})
+
+	points := []bleemeoTypes.Metric{
+		{
+			LabelsText: metricName,
+			Threshold: bleemeoTypes.Threshold{
+				HighWarning:  &thresholds[0],
+				HighCritical: &thresholds[1],
+			},
+			PromQLQuery:       metricName,
+			IsUserPromQLAlert: false,
+		},
+	}
+
+	store.AddNotifiee(func(mp []types.MetricPoint) {
+		resPoints = append(resPoints, mp...)
+	})
+
+	err := ruleManager.RebuildAlertingRules(points)
+	if err != nil {
+		t.Error(err)
+	}
+
+	now = now.Add(5 * time.Minute)
+
+	for i := 0; i < 1; i++ {
+		ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
+	}
+
+	//Manager should not create critical or warning points 5 minute after start,
+	//as we do provide a way for prometheus to know previous values before start.
+	if len(resPoints) != 0 {
+		t.Errorf("Unexpected number of points generated: expected 0, got %d:\n%v", len(resPoints), resPoints)
 	}
 }

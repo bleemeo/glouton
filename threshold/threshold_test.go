@@ -188,7 +188,7 @@ func TestFormatValue(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		got := formatValue(c.value, c.unit)
+		got := FormatValue(c.value, c.unit)
 		if got != c.want {
 			t.Errorf("formatValue(%v, %v) == %v, want %v", c.value, c.unit, got, c.want)
 		}

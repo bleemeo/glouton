@@ -76,7 +76,7 @@ type ruleGroup struct {
 	inactiveSince time.Time
 	disabledUntil time.Time
 
-	id          string
+	labelsText  string
 	promql      string
 	thresholds  threshold.Threshold
 	isUserAlert bool
@@ -185,12 +185,12 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 func (agr *ruleGroup) shouldSkip(now time.Time) bool {
 	if !agr.inactiveSince.IsZero() && !agr.isUserAlert {
 		if agr.disabledUntil.IsZero() && now.After(agr.inactiveSince.Add(2*time.Minute)) {
-			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.id)
+			logger.V(2).Printf("rule %s has been disabled for the last 2 minutes. retrying this metric in 10 minutes", agr.labelsText)
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		}
 
 		if now.After(agr.disabledUntil) {
-			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.id, agr.inactiveSince.Format(time.RFC3339))
+			logger.V(2).Printf("Inactive rule %s will be re executed. Time since inactive: %s", agr.labelsText, agr.inactiveSince.Format(time.RFC3339))
 			agr.disabledUntil = now.Add(10 * time.Minute)
 		} else {
 			return true
@@ -254,7 +254,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		agr.inactiveSince = time.Time{}
 		agr.disabledUntil = time.Time{}
 
-		if time.Since(rm.agentStarted) < promAlertTime && state == rules.StateFiring {
+		if time.Since(rm.agentStarted) < promAlertTime {
 			return nil, nil
 		}
 
@@ -275,14 +275,14 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 	return generatedPoint, nil
 }
 
-func (agr *ruleGroup) generateNewPoint(threshold string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
-	statusCode := statusFromThreshold(threshold)
+func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
+	statusCode := statusFromThreshold(thresholdType)
 	alerts := rule.ActiveAlerts()
 
 	desc := ""
 
 	if len(alerts) != 0 {
-		desc = fmt.Sprintf("Current Value: %f. Threshold (%f) exeeded for the last 5 minutes", alerts[0].Value, agr.thresholdFromString(threshold))
+		desc = fmt.Sprintf("Current Value: %s. Threshold (%f) exeeded for the last 5 minutes", threshold.FormatValue(alerts[0].Value, threshold.Unit{}), agr.thresholdFromString(thresholdType))
 	}
 
 	status := types.StatusDescription{
@@ -334,7 +334,7 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 		rules:         make(map[string]*rules.AlertingRule, 4),
 		inactiveSince: time.Time{},
 		disabledUntil: time.Time{},
-		id:            metric.LabelsText,
+		labelsText:    metric.LabelsText,
 		promql:        metric.PromQLQuery,
 		thresholds:    metric.Threshold.ToInternalThreshold(),
 		labels:        metric.Labels,
@@ -369,7 +369,7 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 		}
 	}
 
-	rm.alertingRules[newGroup.id] = newGroup
+	rm.alertingRules[newGroup.labelsText] = newGroup
 
 	return nil
 }
@@ -402,7 +402,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 				val.PromQLQuery = "creates_unknown_status"
 				val.IsUserPromQLAlert = true
 
-				rm.addAlertingRule(val)
+				_ = rm.addAlertingRule(val)
 			}
 		}
 	}
@@ -487,7 +487,7 @@ func (agr *ruleGroup) newRule(exp string, metricName string, threshold string, s
 
 func (agr *ruleGroup) String() string {
 	return fmt.Sprintf("id=%s query=%#v inactive_since=%v disabled_until=%v is_user_promql_alert=%v\n%v",
-		agr.id, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.Query())
+		agr.labelsText, agr.promql, agr.inactiveSince, agr.disabledUntil, agr.isUserAlert, agr.Query())
 }
 
 func (agr *ruleGroup) Query() string {
