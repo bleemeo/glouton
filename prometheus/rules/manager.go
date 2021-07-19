@@ -81,6 +81,7 @@ type ruleGroup struct {
 	thresholds  threshold.Threshold
 	isUserAlert bool
 	labels      map[string]string
+	isError     string
 }
 
 //nolint: gochecknoglobals
@@ -238,7 +239,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 					Annotations: types.MetricAnnotations{
 						Status: types.StatusDescription{
 							CurrentStatus:     types.StatusUnknown,
-							StatusDescription: "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared",
+							StatusDescription: agr.unknownDescription(),
 						},
 					},
 				}, nil
@@ -275,11 +276,19 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 	return generatedPoint, nil
 }
 
+func (agr *ruleGroup) unknownDescription() string {
+	if agr.isError != "" {
+		return "Invalid PromQL: " + agr.isError
+	}
+
+	return "PromQL read zero points. The PromQL may be incorrect or the source measurement may have disappeared"
+}
+
 func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.AlertingRule, state rules.AlertState, now time.Time) (*types.MetricPoint, error) {
 	statusCode := statusFromThreshold(thresholdType)
 	alerts := rule.ActiveAlerts()
 
-	desc := ""
+	desc := "Current value: none."
 
 	if len(alerts) != 0 {
 		exceeded := ""
@@ -288,7 +297,10 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 			exceeded = "not "
 		}
 
-		desc = fmt.Sprintf("Current Value: %s. Threshold (%f) %sexeeded for the last 5 minutes", threshold.FormatValue(alerts[0].Value, threshold.Unit{}), agr.thresholdFromString(thresholdType), exceeded)
+		desc = fmt.Sprintf("Current value: %s. Threshold (%s) %sexeeded for the last %s",
+			threshold.FormatValue(alerts[0].Value, threshold.Unit{}),
+			threshold.FormatValue(agr.lowestThreshold(), threshold.Unit{}),
+			exceeded, promAlertTime.String())
 	}
 
 	status := types.StatusDescription{
@@ -320,6 +332,23 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 	return &newPoint, nil
 }
 
+func (agr *ruleGroup) lowestThreshold() float64 {
+	orderToPrint := []string{lowWarningState, highWarningState, lowCriticalState, highCriticalState}
+
+	for _, thr := range orderToPrint {
+		_, ok := agr.rules[thr]
+		if !ok {
+			continue
+		}
+
+		return agr.thresholdFromString(thr)
+	}
+
+	logger.V(2).Printf("An unknown error occurred: not threshold found for rule %s\n", agr.labelsText)
+
+	return 0
+}
+
 func (agr *ruleGroup) thresholdFromString(threshold string) float64 {
 	switch threshold {
 	case highCriticalState:
@@ -335,7 +364,7 @@ func (agr *ruleGroup) thresholdFromString(threshold string) float64 {
 	}
 }
 
-func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
+func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric, isError string) error {
 	newGroup := &ruleGroup{
 		rules:         make(map[string]*rules.AlertingRule, 4),
 		inactiveSince: time.Time{},
@@ -345,6 +374,7 @@ func (rm *Manager) addAlertingRule(metric bleemeoTypes.Metric) error {
 		thresholds:    metric.Threshold.ToInternalThreshold(),
 		labels:        metric.Labels,
 		isUserAlert:   metric.IsUserPromQLAlert,
+		isError:       isError,
 	}
 
 	if metric.Threshold.LowWarning != nil {
@@ -403,12 +433,12 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 		if ok && prevInstance.promql == val.PromQLQuery && prevInstance.Equal(val.Threshold.ToInternalThreshold()) {
 			rm.alertingRules[val.ID] = prevInstance
 		} else {
-			err := rm.addAlertingRule(val)
+			err := rm.addAlertingRule(val, "")
 			if err != nil {
 				val.PromQLQuery = "creates_unknown_status"
 				val.IsUserPromQLAlert = true
 
-				_ = rm.addAlertingRule(val)
+				_ = rm.addAlertingRule(val, err.Error())
 			}
 		}
 	}

@@ -23,6 +23,7 @@ import (
 	"glouton/store"
 	"glouton/types"
 	"math"
+	"strings"
 	"testing"
 	"time"
 
@@ -428,7 +429,7 @@ func Test_manager(t *testing.T) {
 		})
 
 		for _, r := range test.Rules {
-			err := ruleManager.addAlertingRule(r)
+			err := ruleManager.addAlertingRule(r, "")
 			if err != nil {
 				t.Error(err)
 
@@ -441,9 +442,12 @@ func Test_manager(t *testing.T) {
 				ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
 			}
 
-			// Description are dynamically generated; as the results points are
-			// copied from a shared result point list, we reset the description
+			// Description are not fully tested, only the common prefix.
+			// Completely testing them would require too much copy/paste in test.
 			for i := range resPoints {
+				if !strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "Current value:") {
+					t.Errorf("Got point was not formatted correctly: got %s, expected start with \"Current value:\"", resPoints[i].Annotations.Status.StatusDescription)
+				}
 				resPoints[i].Annotations.Status.StatusDescription = ""
 			}
 
@@ -476,10 +480,9 @@ func Test_NaN(t *testing.T) {
 		},
 		PromQLQuery:       metricName,
 		IsUserPromQLAlert: true,
-	})
+	}, "")
 	if err != nil {
 		t.Error(err)
-
 		return
 	}
 
@@ -500,7 +503,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
-	ruleManager := NewManager(ctx, store, now.Add(time.Duration(-6*time.Minute)))
+	ruleManager := NewManager(ctx, store, now.Add(-6*time.Minute))
 	thresholds := []float64{50, 500}
 
 	store.PushPoints([]types.MetricPoint{
@@ -533,7 +536,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
@@ -545,7 +548,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
 				},
 			},
 		}, {
@@ -556,7 +559,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
@@ -568,7 +571,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
@@ -580,7 +583,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current Value: 700.00. Threshold (500.000000) not exeeded for the last 5 minutes",
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
@@ -592,7 +595,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
-					StatusDescription: "Current Value: 700.00. Threshold (500.000000) exeeded for the last 5 minutes",
+					StatusDescription: "Current value: 700.00. Threshold (50.00) exeeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
@@ -663,15 +666,16 @@ func Test_Rebuild_Rules(t *testing.T) {
 func Test_ManagerStart(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
-	now := time.Now().Truncate(time.Second)
-	ruleManager := NewManager(ctx, store, now.Add(5*time.Minute))
+	t0 := time.Now().Truncate(time.Second)
+	t5 := t0.Add(5 * time.Minute)
+	ruleManager := NewManager(ctx, store, t5)
 	thresholds := []float64{50, 500}
 	resPoints := []types.MetricPoint{}
 
 	store.PushPoints([]types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now,
+				Time:  t0,
 				Value: 700,
 			},
 			Labels: map[string]string{
@@ -680,7 +684,7 @@ func Test_ManagerStart(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(2 * time.Minute),
+				Time:  t0.Add(2 * time.Minute),
 				Value: 800,
 			},
 			Labels: map[string]string{
@@ -689,7 +693,7 @@ func Test_ManagerStart(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(3 * time.Minute),
+				Time:  t0.Add(3 * time.Minute),
 				Value: 800,
 			},
 			Labels: map[string]string{
@@ -698,7 +702,7 @@ func Test_ManagerStart(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(4 * time.Minute),
+				Time:  t0.Add(4 * time.Minute),
 				Value: 800,
 			},
 			Labels: map[string]string{
@@ -728,10 +732,8 @@ func Test_ManagerStart(t *testing.T) {
 		t.Error(err)
 	}
 
-	now = now.Add(5 * time.Minute)
-
 	for i := 0; i < 1; i++ {
-		ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
+		ruleManager.Run(ctx, t5.Add(time.Duration(i)*time.Minute))
 	}
 
 	//Manager should not create critical or warning points 5 minute after start,
