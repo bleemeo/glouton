@@ -222,6 +222,22 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		return nil, nil
 	}
 
+	if agr.isError != "" {
+		return &types.MetricPoint{
+			Point: types.Point{
+				Time:  now,
+				Value: math.NaN(),
+			},
+			Labels: agr.labels,
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusUnknown,
+					StatusDescription: agr.unknownDescription(),
+				},
+			},
+		}, nil
+	}
+
 	for _, val := range thresholdOrder {
 		rule := agr.rules[val]
 
@@ -447,7 +463,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 		} else {
 			err := rm.addAlertingRule(val, "")
 			if err != nil {
-				val.PromQLQuery = "creates_unknown_status"
+				val.PromQLQuery = "not_used"
 				val.IsUserPromQLAlert = true
 
 				_ = rm.addAlertingRule(val, err.Error())
