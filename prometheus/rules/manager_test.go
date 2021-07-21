@@ -663,7 +663,11 @@ func Test_Rebuild_Rules(t *testing.T) {
 	}
 }
 
-func Test_ManagerStart(t *testing.T) {
+// This test is handling cases where on glouton start we have alert rules
+// already in the pending state (value already exceeded threshold).
+// We should NOT send Ok points for the first 5 minutes, as to make sure Prometheus
+// can properly evaluate rules and their actual state.
+func Test_GloutonStart(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
@@ -737,7 +741,7 @@ func Test_ManagerStart(t *testing.T) {
 	}
 
 	//Manager should not create critical or warning points 5 minute after start,
-	//as we do provide a way for prometheus to know previous values before start.
+	//as we do not provide a way for prometheus to know previous values before start.
 	if len(resPoints) != 0 {
 		t.Errorf("Unexpected number of points generated: expected 0, got %d:\n%v", len(resPoints), resPoints)
 	}

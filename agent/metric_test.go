@@ -521,7 +521,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 	allowListWant[*m2.Get(types.LabelName)] = append(allowListWant[*m2.Get(types.LabelName)], m2)
 	denyListWant[*m3.Get(types.LabelName)] = append(denyListWant[*m3.Get(types.LabelName)], m3)
 
-	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
+	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %w", err)
 	}

@@ -157,6 +157,18 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time) *Man
 	return &rm
 }
 
+//Metriclist returns a list of all alerting rules metric names.
+// This is used for dynamic generation of filters.
+func (rm *Manager) MetricList() []string {
+	res := make([]string, 0, len(rm.alertingRules))
+
+	for _, r := range rm.alertingRules {
+		res = append(res, r.labels[types.LabelName])
+	}
+
+	return res
+}
+
 func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	res := []types.MetricPoint{}
 
