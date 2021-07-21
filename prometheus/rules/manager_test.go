@@ -671,8 +671,7 @@ func Test_GloutonStart(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
-	t5 := t0.Add(5 * time.Minute)
-	ruleManager := NewManager(ctx, store, t5)
+	ruleManager := NewManager(ctx, store, t0)
 	thresholds := []float64{50, 500}
 	resPoints := []types.MetricPoint{}
 
@@ -715,7 +714,7 @@ func Test_GloutonStart(t *testing.T) {
 		},
 	})
 
-	points := []bleemeoTypes.Metric{
+	metricList := []bleemeoTypes.Metric{
 		{
 			LabelsText: metricName,
 			Threshold: bleemeoTypes.Threshold{
@@ -731,17 +730,19 @@ func Test_GloutonStart(t *testing.T) {
 		resPoints = append(resPoints, mp...)
 	})
 
-	err := ruleManager.RebuildAlertingRules(points)
+	err := ruleManager.RebuildAlertingRules(metricList)
 	if err != nil {
 		t.Error(err)
 	}
 
-	for i := 0; i < 1; i++ {
-		ruleManager.Run(ctx, t5.Add(time.Duration(i)*time.Minute))
+	for i := 0; i < 6; i++ {
+		ruleManager.Run(ctx, t0.Add(time.Duration(i)*time.Minute))
 	}
 
-	//Manager should not create critical or warning points 5 minute after start,
+	//Manager should not create ok points for the next 5 minutes after start,
 	//as we do not provide a way for prometheus to know previous values before start.
+	// This test should be changed in the future if we implement a persistent store,
+	// as critical and warning points would be allowed.
 	if len(resPoints) != 0 {
 		t.Errorf("Unexpected number of points generated: expected 0, got %d:\n%v", len(resPoints), resPoints)
 	}

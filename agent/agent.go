@@ -1692,6 +1692,7 @@ func (a *agent) writeDiagnosticZip(w io.Writer) error {
 		a,
 		a.metricFilter,
 		a.discovery,
+		a.rulesManager,
 	}
 
 	if a.bleemeoConnector != nil {
@@ -1745,28 +1746,6 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 	}
 
 	_, err = file.Write(logger.Buffer())
-	if err != nil {
-		return err
-	}
-
-	err = a.metricFilter.DiagnosticZip(zipFile)
-	if err != nil {
-		return err
-	}
-
-	err = a.rulesManager.DiagnosticZip(zipFile)
-	if err != nil {
-		return err
-	}
-
-	if a.bleemeoConnector != nil {
-		err = a.bleemeoConnector.DiagnosticZip(zipFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = a.discovery.DiagnosticZip(zipFile)
 	if err != nil {
 		return err
 	}
