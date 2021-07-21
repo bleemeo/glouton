@@ -1185,18 +1185,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
-	for _, val := range alertMetrics {
-		new, err := matcher.NormalizeMetric(val)
-		if err != nil {
-			errors = append(errors, err)
-			continue
-		}
-
-		allowList[val] = new
-	}
-
-	m.l.Lock()
-	defer m.l.Unlock()
+	allowList, errors = m.rebuildThresholdsMetric(allowList, thresholdMetricNames, alertMetrics, errors)
 
 	for key, val := range m.staticAllowList {
 		m.allowList[key] = make([]matcher.Matchers, len(val))
@@ -1229,6 +1218,30 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	}
 
 	return errors
+}
+
+func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, alertMetrics []string, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
+	for _, val := range thresholdMetricNames {
+		new, err := matcher.NormalizeMetric(val + "_status")
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		allowList[val+"_status"] = new
+	}
+
+	for _, val := range alertMetrics {
+		new, err := matcher.NormalizeMetric(val)
+		if err != nil {
+			errors = append(errors, err)
+			continue
+		}
+
+		allowList[val] = new
+	}
+
+	return allowList, errors
 }
 
 func addNewSource(cLabels map[string]string, extraLabels map[string]string) (map[string]matcher.Matchers, map[string]matcher.Matchers, error) {

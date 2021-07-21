@@ -569,7 +569,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
 
-	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetric)
+	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
