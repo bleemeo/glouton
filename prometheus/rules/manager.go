@@ -25,7 +25,6 @@ import (
 	"glouton/store"
 	"glouton/threshold"
 	"glouton/types"
-	"math"
 	"os"
 	"runtime"
 	"sync"
@@ -226,7 +225,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		return &types.MetricPoint{
 			Point: types.Point{
 				Time:  now,
-				Value: math.NaN(),
+				Value: float64(types.StatusUnknown.NagiosCode()),
 			},
 			Labels: agr.labels,
 			Annotations: types.MetricAnnotations{
@@ -261,7 +260,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 				return &types.MetricPoint{
 					Point: types.Point{
 						Time:  now,
-						Value: math.NaN(),
+						Value: float64(types.StatusUnknown.NagiosCode()),
 					},
 					Labels: agr.labels,
 					Annotations: types.MetricAnnotations{

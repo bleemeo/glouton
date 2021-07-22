@@ -22,7 +22,6 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/store"
 	"glouton/types"
-	"math"
 	"strings"
 	"testing"
 	"time"
@@ -414,6 +413,34 @@ func Test_manager(t *testing.T) {
 			},
 			Want: okPoints,
 		},
+		{
+			Name:        "",
+			Description: "",
+			Points:      []types.MetricPoint{},
+			Rules: []bleemeoTypes.Metric{
+				{
+					LabelsText: metricName,
+					Threshold: bleemeoTypes.Threshold{
+						HighWarning:  &thresholds[0],
+						HighCritical: &thresholds[1],
+					},
+					PromQLQuery:       metricName,
+					IsUserPromQLAlert: true,
+				},
+			},
+			Want: func() []types.MetricPoint {
+				res := make([]types.MetricPoint, 7)
+
+				copy(res, okPoints)
+
+				for i := range res {
+					res[i].Point.Value = 3
+					res[i].Annotations.Status.CurrentStatus = types.StatusUnknown
+				}
+
+				return res
+			}(),
+		},
 	}
 
 	for _, test := range tests {
@@ -445,7 +472,8 @@ func Test_manager(t *testing.T) {
 			// Description are not fully tested, only the common prefix.
 			// Completely testing them would require too much copy/paste in test.
 			for i := range resPoints {
-				if !strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "Current value:") {
+				if !strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "Current value:") &&
+					!strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "PromQL read zero point") {
 					t.Errorf("Got point was not formatted correctly: got %s, expected start with \"Current value:\"", resPoints[i].Annotations.Status.StatusDescription)
 				}
 				resPoints[i].Annotations.Status.StatusDescription = ""
@@ -457,45 +485,6 @@ func Test_manager(t *testing.T) {
 				t.Errorf("\nBase time for this test => %v\n%s", now, eq)
 			}
 		})
-	}
-}
-
-func Test_NaN(t *testing.T) {
-	store := store.New()
-	ctx := context.Background()
-	now := time.Now()
-	ruleManager := NewManager(ctx, store, now)
-	resPoints := []types.MetricPoint{}
-	thresholds := []float64{50, 500}
-
-	store.AddNotifiee(func(mp []types.MetricPoint) {
-		resPoints = append(resPoints, mp...)
-	})
-
-	err := ruleManager.addAlertingRule(bleemeoTypes.Metric{
-		LabelsText: metricName,
-		Threshold: bleemeoTypes.Threshold{
-			HighWarning:  &thresholds[0],
-			HighCritical: &thresholds[1],
-		},
-		PromQLQuery:       metricName,
-		IsUserPromQLAlert: true,
-	}, "")
-	if err != nil {
-		t.Error(err)
-		return
-	}
-
-	ruleManager.Run(ctx, now)
-
-	if len(resPoints) != 1 {
-		t.Errorf("Unexpected number of points; expected 1, got %d", len(resPoints))
-
-		return
-	}
-
-	if !math.IsNaN(resPoints[0].Point.Value) {
-		t.Errorf("Unexpected value in generated point: Expected NaN, got %f. Full res: %v", resPoints[0].Value, resPoints)
 	}
 }
 
