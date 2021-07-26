@@ -71,6 +71,7 @@ import (
 	"glouton/prometheus/scrapper"
 	"glouton/store"
 	"glouton/task"
+	"glouton/telemetry"
 	"glouton/threshold"
 	"glouton/types"
 	"glouton/version"
@@ -79,6 +80,7 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
 )
 
@@ -738,6 +740,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.netstatWatcher, "Netstat file watcher"},
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
+		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 	}
 
 	if a.config.Bool("web.enabled") {
@@ -977,6 +980,43 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 
 		pusher.PushPoints(points)
 	}
+}
+
+func (a *agent) sendToTelemetry(ctx context.Context) error {
+	if a.config.Bool("agent.telemetry.enabled") {
+		select {
+		case <-time.After(2*time.Minute + time.Duration(rand.Intn(5))*time.Minute):
+		case <-ctx.Done():
+			return nil
+		}
+
+		for {
+			facts, err := a.factProvider.Facts(ctx, time.Hour)
+			if err != nil {
+				logger.V(2).Printf("error facts load %v", err)
+				continue
+			}
+
+			tlm := telemetry.FromState(a.state)
+
+			if tlm.ID == "" {
+				var t telemetry.Telemetry
+				t.ID = uuid.New().String()
+				t.SaveState(a.state)
+				tlm = t
+			}
+
+			tlm.PostInformation(ctx, a.config.String("agent.telemetry.address"), facts)
+
+			select {
+			case <-time.After(24 * time.Hour):
+			case <-ctx.Done():
+				return nil
+			}
+		}
+	}
+
+	return nil
 }
 
 func (a *agent) minuteMetric(ctx context.Context) error {
