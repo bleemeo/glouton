@@ -324,20 +324,6 @@ func (c *Cache) AgentList() (snmp []bleemeoTypes.Agent) {
 	return result
 }
 
-// SNMPsByUUID returns a map snmp.id => snmp.
-func (c *Cache) SNMPsByUUID() map[string]bleemeoTypes.Agent {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	result := make(map[string]bleemeoTypes.Agent)
-
-	for _, v := range c.data.Agents {
-		result[v.ID] = v
-	}
-
-	return result
-}
-
 // SetMetricRegistrationsFail update the Metric list.
 func (c *Cache) SetMetricRegistrationsFail(registrations []bleemeoTypes.MetricRegistration) {
 	c.l.Lock()

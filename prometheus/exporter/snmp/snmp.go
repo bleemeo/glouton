@@ -27,10 +27,10 @@ import (
 //SNMPTarget represents a snmp config instance.
 //nolint: golint
 type SNMPTarget struct {
-	Name    string
-	Address string
-	Type    string
-	URL     *url.URL
+	InitialName string
+	Address     string
+	Type        string
+	URL         *url.URL
 }
 
 func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
@@ -44,15 +44,15 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
 			continue
 		}
 
-		name, _ := tmp["name"].(string)
+		name, _ := tmp["initial_name"].(string)
 		address, _ := tmp["target"].(string)
 		deviceType, _ := tmp["type"].(string)
 
 		target := &SNMPTarget{
-			Name:    name,
-			Address: address,
-			Type:    deviceType,
-			URL:     u,
+			InitialName: name,
+			Address:     address,
+			Type:        deviceType,
+			URL:         u,
 		}
 
 		result = append(result, target)
@@ -65,7 +65,7 @@ func GenerateScrapperTargets(snmpTargets []*SNMPTarget) (result []*scrapper.Targ
 	for _, t := range snmpTargets {
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
-				types.LabelMetaScrapeJob: t.Name,
+				types.LabelMetaScrapeJob: t.InitialName,
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
 				types.LabelMetaScrapeInstance: scrapper.HostPort(t.URL),

@@ -97,15 +97,6 @@ type Container struct {
 	GloutonLastUpdatedAt time.Time `json:",omitempty"`
 }
 
-type PayloadSNMPAgent struct {
-	Agent
-	DisplayName     string `json:"display_name"`
-	Fqdn            string `json:"fqdn"`
-	AgentTypeID     string `json:"agent_type"`
-	Abstracted      bool   `json:"abstracted"`
-	InitialPassword string `json:"initial_password"`
-}
-
 // Threshold is the threshold of a metrics. We use pointer to float to support
 // null value in JSON.
 type Threshold struct {

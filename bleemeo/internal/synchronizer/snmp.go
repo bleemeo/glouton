@@ -26,6 +26,15 @@ import (
 	"github.com/google/uuid"
 )
 
+type PayloadSNMPAgent struct {
+	types.Agent
+	DisplayName     string `json:"display_name"`
+	Fqdn            string `json:"fqdn"`
+	AgentTypeID     string `json:"agent_type"`
+	Abstracted      bool   `json:"abstracted"`
+	InitialPassword string `json:"initial_password"`
+}
+
 // TODO the deletion need to be done
 
 func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
@@ -41,7 +50,7 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 	}
 
 	if fullSync {
-		err := s.snmpUpdateList()
+		err := s.agentUpdateList()
 		if err != nil {
 			return err
 		}
@@ -73,7 +82,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags",
 	}
 
-	var agent types.PayloadSNMPAgent
+	var agent PayloadSNMPAgent
 
 	for i, v := range remoteAgentList {
 		_, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/agent/%s/", v.ID), params, nil, &agent)
@@ -87,8 +96,8 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 	}
 
 	for _, snmp := range localTargets {
-		payload := types.PayloadSNMPAgent{
-			DisplayName:     snmp.Name,
+		payload := PayloadSNMPAgent{
+			DisplayName:     snmp.InitialName,
 			Fqdn:            snmp.Address,
 			AgentTypeID:     agentTypeID,
 			Abstracted:      true,
@@ -98,10 +107,13 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 		address := snmp.Address
 		remoteIndex, remoteFound := remoteIndexByFqdn[address]
 
-		var remoteSNMP types.PayloadSNMPAgent
+		var remoteSNMP PayloadSNMPAgent
 
 		if remoteFound {
 			remoteSNMP.Agent = remoteAgentList[remoteIndex]
+			if payload.Fqdn == remoteSNMP.Fqdn {
+				continue
+			}
 		}
 
 		err := s.remoteRegisterSNMP(remoteFound, &remoteSNMP, &remoteAgentList, params, payload, remoteIndex)
@@ -116,8 +128,8 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.PayloadSNMPAgent,
-	remoteSNMPs *[]types.Agent, params map[string]string, payload types.PayloadSNMPAgent, remoteIndex int) error {
+func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *PayloadSNMPAgent,
+	remoteSNMPs *[]types.Agent, params map[string]string, payload PayloadSNMPAgent, remoteIndex int) error {
 	var result types.Agent
 
 	if remoteFound {
@@ -141,7 +153,7 @@ func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *types.Pa
 	return nil
 }
 
-func (s *Synchronizer) snmpUpdateList() error {
+func (s *Synchronizer) agentUpdateList() error {
 	params := map[string]string{
 		"fields": "id,created_at,account,next_config_at,current_config,tags",
 	}
