@@ -446,7 +446,7 @@ func Test_manager(t *testing.T) {
 	for _, test := range tests {
 		test := test
 		store := store.New()
-		ruleManager := NewManager(ctx, store, now.Add(-7*time.Minute))
+		ruleManager := NewManager(ctx, store, now.Add(-7*time.Minute), 15*time.Second)
 		resPoints := []types.MetricPoint{}
 
 		store.PushPoints(test.Points)
@@ -492,7 +492,7 @@ func Test_Rebuild_Rules(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
 	now := time.Now().Truncate(time.Second)
-	ruleManager := NewManager(ctx, store, now.Add(-6*time.Minute))
+	ruleManager := NewManager(ctx, store, now.Add(-6*time.Minute), 15*time.Second)
 	thresholds := []float64{50, 500}
 
 	store.PushPoints([]types.MetricPoint{
@@ -660,7 +660,7 @@ func Test_GloutonStart(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
 	t0 := time.Now().Truncate(time.Second)
-	ruleManager := NewManager(ctx, store, t0)
+	ruleManager := NewManager(ctx, store, t0, 15*time.Second)
 	thresholds := []float64{50, 500}
 	resPoints := []types.MetricPoint{}
 

@@ -66,8 +66,9 @@ type Manager struct {
 	engine *promql.Engine
 	logger log.Logger
 
-	l            sync.Mutex
-	agentStarted time.Time
+	l                sync.Mutex
+	agentStarted     time.Time
+	metricResolution time.Duration
 }
 
 type ruleGroup struct {
@@ -94,7 +95,7 @@ var (
 	}
 )
 
-func NewManager(ctx context.Context, store *store.Store, created time.Time) *Manager {
+func NewManager(ctx context.Context, store *store.Store, created time.Time, metricResolution time.Duration) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
 	engine := promql.NewEngine(promql.EngineOpts{
 		Logger:             log.With(promLogger, "component", "query engine"),
@@ -144,13 +145,19 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time) *Man
 		Opts:          mgrOptions,
 	})
 
+	//minResTime is the minimum time before actually sending
+	// any alerting points. Some metrics can a take bit of time before
+	// first points creation; we do not want them to be labelled as unknown on start.
+	minResTime := metricResolution*2 + 10*time.Second
+
 	rm := Manager{
-		store:          store,
-		recordingRules: []*rules.Group{defaultGroup},
-		alertingRules:  map[string]*ruleGroup{},
-		engine:         engine,
-		logger:         promLogger,
-		agentStarted:   created,
+		store:            store,
+		recordingRules:   []*rules.Group{defaultGroup},
+		alertingRules:    map[string]*ruleGroup{},
+		engine:           engine,
+		logger:           promLogger,
+		agentStarted:     created,
+		metricResolution: minResTime,
 	}
 
 	return &rm
@@ -255,34 +262,14 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 		state := rule.State()
 
-		if queryable.Count() == 0 {
-			if agr.isUserAlert {
-				return &types.MetricPoint{
-					Point: types.Point{
-						Time:  now,
-						Value: float64(types.StatusUnknown.NagiosCode()),
-					},
-					Labels: agr.labels,
-					Annotations: types.MetricAnnotations{
-						Status: types.StatusDescription{
-							CurrentStatus:     types.StatusUnknown,
-							StatusDescription: agr.unknownDescription(),
-						},
-					},
-				}, nil
-			}
-
-			if agr.inactiveSince.IsZero() {
-				agr.inactiveSince = now
-			}
-
-			return nil, nil
+		if point, ret := agr.checkNoPoint(queryable, now, rm.agentStarted, rm.metricResolution); ret {
+			return point, nil
 		}
 
 		agr.inactiveSince = time.Time{}
 		agr.disabledUntil = time.Time{}
 
-		if time.Since(rm.agentStarted) < promAlertTime {
+		if state != rules.StateInactive && time.Since(rm.agentStarted) < promAlertTime {
 			return nil, nil
 		}
 
@@ -301,6 +288,34 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 	}
 
 	return generatedPoint, nil
+}
+
+func (agr *ruleGroup) checkNoPoint(queryable *store.CountingQueryable, now time.Time, agentStart time.Time, metricRes time.Duration) (*types.MetricPoint, bool) {
+	if queryable.Count() == 0 {
+		if agr.isUserAlert && time.Since(agentStart) > metricRes {
+			return &types.MetricPoint{
+				Point: types.Point{
+					Time:  now,
+					Value: float64(types.StatusUnknown.NagiosCode()),
+				},
+				Labels: agr.labels,
+				Annotations: types.MetricAnnotations{
+					Status: types.StatusDescription{
+						CurrentStatus:     types.StatusUnknown,
+						StatusDescription: agr.unknownDescription(),
+					},
+				},
+			}, true
+		}
+
+		if agr.inactiveSince.IsZero() {
+			agr.inactiveSince = now
+		}
+
+		return nil, true
+	}
+
+	return nil, false
 }
 
 func (agr *ruleGroup) unknownDescription() string {

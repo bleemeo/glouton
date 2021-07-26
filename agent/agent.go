@@ -565,7 +565,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 	a.metricFilter = mFilter
 	a.store = store.New()
 
-	a.rulesManager = rules.NewManager(ctx, a.store, time.Now())
+	a.rulesManager = rules.NewManager(ctx, a.store, time.Now().Truncate(time.Second), a.metricResolution)
 
 	a.store.SetResetRuleCallback(a.rulesManager.ResetInactiveRules)
 
