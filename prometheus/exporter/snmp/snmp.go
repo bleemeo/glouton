@@ -34,9 +34,26 @@ type SNMPTarget struct {
 }
 
 func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
-	for dict := range vMap {
-		tmp := vMap[dict].(map[string]interface{})
-		urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", address, tmp["module"], tmp["target"])
+	for _, iMap := range vMap {
+		tmp, ok := iMap.(map[string]interface{})
+
+		if !ok {
+			return result
+		}
+
+		module, ok := tmp["module"].(string)
+
+		if !ok {
+			module = "if_mib"
+		}
+
+		target, ok := tmp["target"].(string)
+
+		if !ok {
+			fmt.Println("Warning: target is absent from the snmp configuration. the scrap URL will not work.")
+		}
+
+		urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", address, module, target)
 
 		u, err := url.Parse(urlText)
 		if err != nil {
@@ -44,18 +61,14 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
 			continue
 		}
 
-		name, _ := tmp["initial_name"].(string)
-		address, _ := tmp["target"].(string)
-		deviceType, _ := tmp["type"].(string)
-
-		target := &SNMPTarget{
-			InitialName: name,
-			Address:     address,
-			Type:        deviceType,
+		t := &SNMPTarget{
+			InitialName: tmp["initial_name"].(string),
+			Address:     target,
+			Type:        tmp["type"].(string),
 			URL:         u,
 		}
 
-		result = append(result, target)
+		result = append(result, t)
 	}
 
 	return result
