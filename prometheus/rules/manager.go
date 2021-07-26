@@ -163,10 +163,21 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time, metr
 	return &rm
 }
 
+//UpdateMetricResolution updates the metric resolution time.
+func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
+	rm.l.Lock()
+	defer rm.l.Unlock()
+
+	rm.metricResolution = metricResolution*2 + 10*time.Second
+}
+
 //Metriclist returns a list of all alerting rules metric names.
 // This is used for dynamic generation of filters.
 func (rm *Manager) MetricList() []string {
 	res := make([]string, 0, len(rm.alertingRules))
+
+	rm.l.Lock()
+	defer rm.l.Unlock()
 
 	for _, r := range rm.alertingRules {
 		res = append(res, r.labels[types.LabelName])

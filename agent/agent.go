@@ -373,6 +373,9 @@ func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
 func (a *agent) updateMetricResolution(resolution time.Duration) {
 	a.l.Lock()
 	a.metricResolution = resolution
+
+	a.rulesManager.UpdateMetricResolution(resolution)
+
 	a.l.Unlock()
 
 	a.gathererRegistry.UpdateDelay(resolution)
