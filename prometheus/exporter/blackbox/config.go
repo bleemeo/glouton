@@ -281,7 +281,9 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	for _, monitor := range monitors {
 		collector, err := genCollectorFromDynamicTarget(monitor, m.userAgent)
 		if err != nil {
-			return err
+			logger.V(1).Printf("Monitor with URL %s is ignored: %v", monitor.URL, err)
+
+			continue
 		}
 
 		newTargets = append(newTargets, *collector)

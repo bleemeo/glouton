@@ -557,7 +557,7 @@ func (a *agent) run() { //nolint:gocyclo
 	a.store = store.New()
 	rulesManager := rules.NewManager(ctx, a.store)
 
-	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetric)
+	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
