@@ -16,7 +16,7 @@ export const gaugesBarPrometheusLinux = [
     metrics: [
       {
         query:
-          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+          "(1-node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)*100",
       },
     ],
     unit: UNIT_PERCENTAGE,
@@ -48,7 +48,7 @@ export const gaugesBarPrometheusWindows = [
     metrics: [
       {
         query:
-          '(1-sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m])))*100',
+          '(1-sum(irate(windows_cpu_time_global{mode="idle"}[1m]))/sum(irate(windows_cpu_time_global[1m])))*100',
       },
     ],
     unit: UNIT_PERCENTAGE,
@@ -58,7 +58,7 @@ export const gaugesBarPrometheusWindows = [
     metrics: [
       {
         query:
-          "(node_memory_MemTotal_bytes - node_memory_MemFree_bytes - node_memory_Cached_bytes - node_memory_Buffers_bytes)/node_memory_MemTotal_bytes*100",
+          "(1-windows_memory_available_bytes/windows_cs_physical_memory_bytes)*100",
       },
     ],
     unit: UNIT_PERCENTAGE,
@@ -67,17 +67,17 @@ export const gaugesBarPrometheusWindows = [
     title: "IO",
     metrics: [
       {
-        query: "irate(node_disk_io_time_seconds_total[1m])*100",
+        query: "100-irate(windows_logical_disk_idle_seconds_total[1m])*100",
       },
     ],
     unit: UNIT_PERCENTAGE,
   },
   {
-    title: "/",
+    title: "C:",
     metrics: [
       {
         query:
-          '(1-node_filesystem_avail_bytes{mountpoint="/"}/node_filesystem_size_bytes{mountpoint="/"})*100',
+          '(1-windows_logical_disk_free_bytes{volume="C:"}/windows_logical_disk_size_bytes{volume="C:"})*100',
       },
     ],
     unit: UNIT_PERCENTAGE,
@@ -493,49 +493,31 @@ export const widgetsPrometheusWindows = [
     metrics: [
       {
         query:
-          'sum(irate(node_cpu_seconds_total{mode="steal"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
-        color: "#c49c94",
-        legend: "steal",
-      },
-      {
-        query:
-          'sum(irate(node_cpu_seconds_total{mode="softirq"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+          'sum(irate(windows_cpu_time_global{mode="dpc"}[1m]))/sum(irate(windows_cpu_time_global[1m]))*100',
         color: "#f7b6d2",
-        legend: "softirq",
+        legend: "dpc",
       },
       {
         query:
-          'sum(irate(node_cpu_seconds_total{mode="irq"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+          'sum(irate(windows_cpu_time_global{mode="interrupt"}[1m]))/sum(irate(windows_cpu_time_global[1m]))*100',
         color: "#c5b0d5",
         legend: "interrupt",
       },
       {
         query:
-          'sum(irate(node_cpu_seconds_total{mode="system"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+          'sum(irate(windows_cpu_time_global{mode="privileged"}[1m]))/sum(irate(windows_cpu_time_global[1m]))*100',
         color: "#ff7f0e",
-        legend: "system",
+        legend: "privileged",
       },
       {
         query:
-          'sum(irate(node_cpu_seconds_total{mode="user"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+          'sum(irate(windows_cpu_time_global{mode="user"}[1m]))/sum(irate(windows_cpu_time_global[1m]))*100',
         color: "#aec7e8",
         legend: "user",
       },
       {
         query:
-          'sum(irate(node_cpu_seconds_total{mode="nice"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
-        color: "#9edae5",
-        legend: "nice",
-      },
-      {
-        query:
-          'sum(irate(node_cpu_seconds_total{mode="iowait"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
-        color: "#d62728",
-        legend: "wait",
-      },
-      {
-        query:
-          'sum(irate(node_cpu_seconds_total{mode="idle"}[1m]))/sum(irate(node_cpu_seconds_total[1m]))*100',
+          'sum(irate(windows_cpu_time_global{mode="idle"}[1m]))/sum(irate(windows_cpu_time_global[1m]))*100',
         color: "#98df8a",
         legend: "idle",
       },
@@ -548,22 +530,18 @@ export const widgetsPrometheusWindows = [
     metrics: [
       {
         query:
-          "node_memory_MemTotal_bytes - node_memory_MemFree_bytes -  node_memory_Cached_bytes - node_memory_Buffers_bytes",
+          "windows_cs_physical_memory_bytes - windows_memory_available_bytes",
         color: "#aec7e8",
         legend: "used",
       },
       {
-        query: "node_memory_Buffers_bytes",
-        color: "#c7c7c7",
-        legend: "buffered",
-      },
-      {
-        query: "node_memory_Cached_bytes",
+        query: "windows_memory_standby_cache_bytes",
         color: "#dbdb8d",
         legend: "cached",
       },
       {
-        query: "node_memory_MemFree_bytes",
+        query:
+          "windows_memory_available_bytes - windows_memory_standby_cache_bytes",
         color: "#98df8a",
         legend: "free",
       },
@@ -575,8 +553,8 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_PERCENTAGE,
     metrics: [
       {
-        query: "irate(node_disk_io_time_seconds_total[1m])*100",
-        legend: "{{ device }}",
+        query: "100-irate(windows_logical_disk_idle_seconds_total[1m])*100",
+        legend: "{{ volume }}",
       },
     ],
   },
@@ -586,8 +564,8 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_BYTE,
     metrics: [
       {
-        query: "irate(node_disk_read_bytes_total[1m])",
-        legend: "{{ device }}",
+        query: "irate(windows_logical_disk_read_bytes_total[1m])",
+        legend: "{{ volume }}",
       },
     ],
   },
@@ -597,8 +575,8 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_BYTE,
     metrics: [
       {
-        query: "irate(node_disk_written_bytes_total[1m])",
-        legend: "{{ device }}",
+        query: "irate(windows_logical_disk_write_bytes_total[1m])",
+        legend: "{{ volume }}",
       },
     ],
   },
@@ -608,8 +586,8 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_disk_reads_completed_total[1m])",
-        legend: "{{ device }}",
+        query: "irate(windows_logical_disk_reads_total[1m])",
+        legend: "{{ volume }}",
       },
     ],
   },
@@ -619,8 +597,8 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_disk_writes_completed_total[1m])",
-        legend: "{{ device }}",
+        query: "irate(windows_logical_disk_writes_total[1m])",
+        legend: "{{ volume }}",
       },
     ],
   },
@@ -630,12 +608,12 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_network_receive_bytes_total[1m])",
-        legend: "received from {{ device }}",
+        query: "irate(windows_net_packets_received_total[1m])",
+        legend: "received from {{ nic }}",
       },
       {
-        query: "irate(node_network_transmit_bytes_total[1m])",
-        legend: "sent from {{ device }}",
+        query: "irate(windows_net_packets_sent_total[1m])",
+        legend: "sent from {{ nic }}",
       },
     ],
   },
@@ -645,12 +623,12 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_NUMBER,
     metrics: [
       {
-        query: "irate(node_network_receive_errs_total[1m])",
-        legend: "received from {{ device }}",
+        query: "irate(windows_net_packets_received_errors[1m])",
+        legend: "received from {{ nic }}",
       },
       {
-        query: "irate(node_network_transmit_errs_total[1m])",
-        legend: "sent from {{ device }}",
+        query: "irate(windows_net_packets_outbound_errors[1m])",
+        legend: "sent from {{ nic }}",
       },
     ],
   },
@@ -660,8 +638,9 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_PERCENTAGE,
     metrics: [
       {
-        query: "(1-node_filesystem_avail_bytes/node_filesystem_size_bytes)*100",
-        legend: "{{ mountpoint }}",
+        query:
+          "(1-windows_logical_disk_free_bytes/windows_logical_disk_size_bytes)*100",
+        legend: "{{ volume }}",
       },
     ],
   },
@@ -671,7 +650,8 @@ export const widgetsPrometheusWindows = [
     unit: UNIT_PERCENTAGE,
     metrics: [
       {
-        query: "(1-node_memory_SwapFree_bytes/node_memory_SwapTotal_bytes)*100",
+        query:
+          "(1-windows_os_paging_free_bytes/windows_os_paging_limit_bytes)*100",
         legend: "usage",
       },
     ],

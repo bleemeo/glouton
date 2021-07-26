@@ -21,6 +21,7 @@ import (
 	"glouton/logger"
 	"glouton/store"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/go-kit/kit/log"
@@ -42,9 +43,15 @@ type Manager struct {
 }
 
 //nolint: gochecknoglobals
-var defaultRecordingRules = map[string]string{
-	"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",
-}
+var (
+	defaultLinuxRecordingRules = map[string]string{
+		"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",
+	}
+	defaultWindowsRecordingRules = map[string]string{
+		"windows_cpu_time_global":            "sum(windows_cpu_time_total) without(core)",
+		"windows_memory_standby_cache_bytes": "windows_memory_standby_cache_core_bytes+windows_memory_standby_cache_normal_priority_bytes+windows_memory_standby_cache_reserve_bytes",
+	}
+)
 
 func NewManager(ctx context.Context, store *store.Store) *Manager {
 	promLogger := log.NewLogfmtLogger(log.NewSyncWriter(os.Stderr))
@@ -74,7 +81,12 @@ func NewManager(ctx context.Context, store *store.Store) *Manager {
 
 	defaultGroupRules := []rules.Rule{}
 
-	for metricName, val := range defaultRecordingRules {
+	defaultRules := defaultLinuxRecordingRules
+	if runtime.GOOS == "windows" {
+		defaultRules = defaultWindowsRecordingRules
+	}
+
+	for metricName, val := range defaultRules {
 		exp, err := parser.ParseExpr(val)
 		if err != nil {
 			logger.V(0).Printf("An error occurred while parsing expression %s: %v. This rule was not registered", val, err)

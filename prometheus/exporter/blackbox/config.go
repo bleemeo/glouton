@@ -17,6 +17,7 @@
 package blackbox
 
 import (
+	"archive/zip"
 	"errors"
 	"fmt"
 	"glouton/logger"
@@ -47,11 +48,14 @@ type yamlConfigTarget struct {
 	ModuleName string `yaml:"module"`
 }
 
-func defaultModule() bbConf.Module {
+func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
 			IPProtocol:         "ip4",
 			IPProtocolFallback: true,
+			Headers: map[string]string{
+				"User-Agent": userAgent,
+			},
 		},
 		DNS: bbConf.DNSProbe{
 			IPProtocol:         "ip4",
@@ -73,8 +77,8 @@ func defaultModule() bbConf.Module {
 	}
 }
 
-func genCollectorFromDynamicTarget(monitor types.Monitor) (*collectorWithLabels, error) {
-	mod := defaultModule()
+func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*collectorWithLabels, error) {
+	mod := defaultModule(userAgent)
 
 	url, err := url.Parse(monitor.URL)
 	if err != nil {
@@ -156,9 +160,29 @@ func genCollectorFromStaticTarget(ct configTarget) collectorWithLabels {
 	}
 }
 
+// set user-agent on HTTP prober is not already set.
+func setUserAgent(modules map[string]bbConf.Module, userAgent string) {
+	for k, m := range modules {
+		if m.Prober != "http" {
+			continue
+		}
+
+		if m.HTTP.Headers == nil {
+			m.HTTP.Headers = make(map[string]string)
+		}
+
+		if m.HTTP.Headers["User-Agent"] != "" {
+			continue
+		}
+
+		m.HTTP.Headers["User-Agent"] = userAgent
+		modules[k] = m
+	}
+}
+
 // New sets the static part of blackbox configuration (aka. targets that must be scrapped no matter what).
 // This completely resets the configuration.
-func New(registry *registry.Registry, externalConf interface{}, metricFormat types.MetricFormat) (*RegisterManager, error) {
+func New(registry *registry.Registry, externalConf interface{}, userAgent string, metricFormat types.MetricFormat) (*RegisterManager, error) {
 	conf := yamlConfig{}
 
 	// read static config
@@ -173,6 +197,8 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 		logger.V(1).Printf("blackbox_exporter: Cannot parse blackbox_exporter config: %v", err)
 		return nil, err
 	}
+
+	setUserAgent(conf.Modules, userAgent)
 
 	for idx, v := range conf.Modules {
 		// override user timeouts when too high or undefined. This is important !
@@ -210,6 +236,7 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 		registry:      registry,
 		scraperName:   conf.ScraperName,
 		metricFormat:  metricFormat,
+		userAgent:     userAgent,
 	}
 
 	if err := manager.updateRegistrations(); err != nil {
@@ -217,6 +244,24 @@ func New(registry *registry.Registry, externalConf interface{}, metricFormat typ
 	}
 
 	return manager, nil
+}
+
+// DiagnosticZip add diagnostic information.
+func (m *RegisterManager) DiagnosticZip(zipFile *zip.Writer) error {
+	m.l.Lock()
+	targets := m.targets
+	m.l.Unlock()
+
+	file, err := zipFile.Create("blackbox.txt")
+	if err != nil {
+		return err
+	}
+
+	for _, t := range targets {
+		fmt.Fprintf(file, "url=%s labels=%v\n", t.collector.URL, t.labels)
+	}
+
+	return nil
 }
 
 // UpdateDynamicTargets generates a config we can ingest into blackbox (from the dynamic probes).
@@ -234,9 +279,11 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 	}
 
 	for _, monitor := range monitors {
-		collector, err := genCollectorFromDynamicTarget(monitor)
+		collector, err := genCollectorFromDynamicTarget(monitor, m.userAgent)
 		if err != nil {
-			return err
+			logger.V(1).Printf("Monitor with URL %s is ignored: %v", monitor.URL, err)
+
+			continue
 		}
 
 		newTargets = append(newTargets, *collector)
@@ -248,7 +295,9 @@ func (m *RegisterManager) UpdateDynamicTargets(monitors []types.Monitor) error {
 		}
 	}
 
+	m.l.Lock()
 	m.targets = newTargets
+	m.l.Unlock()
 
 	logger.V(2).Println("blackbox_exporter: Internal configuration successfully updated.")
 

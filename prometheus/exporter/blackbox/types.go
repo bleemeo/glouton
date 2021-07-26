@@ -3,6 +3,7 @@ package blackbox
 import (
 	"glouton/prometheus/registry"
 	"glouton/types"
+	"sync"
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
@@ -41,4 +42,6 @@ type RegisterManager struct {
 	registrations map[int]gathererWithConfigTarget
 	registry      *registry.Registry
 	metricFormat  types.MetricFormat
+	userAgent     string
+	l             sync.Mutex
 }

@@ -111,6 +111,7 @@ type agent struct {
 	lastHealCheck          time.Time
 	lastContainerEventTime time.Time
 	metricFilter           *metricFilter
+	monitorManager         *blackbox.RegisterManager
 
 	triggerHandler            *debouncer.Debouncer
 	triggerLock               sync.Mutex
@@ -555,8 +556,9 @@ func (a *agent) run() { //nolint:gocyclo
 
 	a.metricFilter = mFilter
 	a.store = store.New()
-	a.store.SetFilterCallback(mFilter.FilterPoints)
 	rulesManager := rules.NewManager(ctx, a.store)
+
+	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
 	a.gathererRegistry = &registry.Registry{
 		Option: registry.Option{
@@ -689,14 +691,12 @@ func (a *agent) run() { //nolint:gocyclo
 		DynamicJobName: "discovered-exporters",
 	}
 
-	var monitorManager *blackbox.RegisterManager
-
 	if a.config.Bool("blackbox.enabled") {
 		logger.V(1).Println("Starting blackbox_exporter...")
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
 
-		monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.metricFormat)
+		a.monitorManager, err = blackbox.New(a.gathererRegistry, blackboxConf, a.config.String("blackbox.user_agent"), a.metricFormat)
 		if err != nil {
 			logger.V(0).Printf("Couldn't start blackbox_exporter: %v\nMonitors will not be able to run on this agent.", err)
 		}
@@ -722,7 +722,7 @@ func (a *agent) run() { //nolint:gocyclo
 		Threshold:          a.threshold,
 		StaticCDNURL:       a.config.String("web.static_cdn_url"),
 		DiagnosticPage:     a.DiagnosticPage,
-		DiagnosticZip:      a.DiagnosticZip,
+		DiagnosticZip:      a.writeDiagnosticZip,
 		MetricFormat:       a.metricFormat,
 	}
 
@@ -778,10 +778,10 @@ func (a *agent) run() { //nolint:gocyclo
 			Facts:                   a.factProvider,
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
-			Store:                   a.store,
+			Store:                   filteredStore,
 			Acc:                     acc,
 			Discovery:               a.discovery,
-			MonitorManager:          monitorManager,
+			MonitorManager:          a.monitorManager,
 			UpdateMetricResolution:  a.updateMetricResolution,
 			UpdateThresholds:        a.UpdateThresholds,
 			UpdateUnits:             a.threshold.SetUnits,
@@ -791,11 +791,6 @@ func (a *agent) run() { //nolint:gocyclo
 		})
 		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
-
-		if a.metricFormat == types.MetricFormatPrometheus {
-			logger.Printf("Prometheus format is not yet supported with Bleemeo")
-			return
-		}
 	}
 
 	if a.config.Bool("nrpe.enabled") {
@@ -843,7 +838,7 @@ func (a *agent) run() { //nolint:gocyclo
 		softPeriodsFromInterface(tmp),
 	)
 
-	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig["disk_monitor"]) {
+	if !reflect.DeepEqual(a.config.StringList("disk_monitor"), defaultConfig()["disk_monitor"]) {
 		if a.metricFormat == types.MetricFormatBleemeo && len(a.config.StringList("disk_ignore")) > 0 {
 			logger.Printf("Warning: both \"disk_monitor\" and \"disk_ignore\" are set. Only \"disk_ignore\" will be used")
 		} else if a.metricFormat != types.MetricFormatBleemeo {
@@ -1664,10 +1659,38 @@ func (a *agent) DiagnosticPage() string {
 	return builder.String()
 }
 
-func (a *agent) DiagnosticZip(w io.Writer) error {
+func (a *agent) writeDiagnosticZip(w io.Writer) error {
 	zipFile := zip.NewWriter(w)
 	defer zipFile.Close()
 
+	type Diagnosticer interface {
+		DiagnosticZip(zipFile *zip.Writer) error
+	}
+
+	modules := []Diagnosticer{
+		a,
+		a.metricFilter,
+		a.discovery,
+	}
+
+	if a.bleemeoConnector != nil {
+		modules = append(modules, a.bleemeoConnector)
+	}
+
+	if a.monitorManager != nil {
+		modules = append(modules, a.monitorManager)
+	}
+
+	for _, m := range modules {
+		if err := m.DiagnosticZip(zipFile); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 	file, err := zipFile.Create("diagnostic.txt")
 	if err != nil {
 		return err
@@ -1701,18 +1724,6 @@ func (a *agent) DiagnosticZip(w io.Writer) error {
 	}
 
 	_, err = file.Write(logger.Buffer())
-	if err != nil {
-		return err
-	}
-
-	if a.bleemeoConnector != nil {
-		err = a.bleemeoConnector.DiagnosticZip(zipFile)
-		if err != nil {
-			return err
-		}
-	}
-
-	err = a.discovery.DiagnosticZip(zipFile)
 	if err != nil {
 		return err
 	}
