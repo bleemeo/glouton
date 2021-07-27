@@ -232,6 +232,7 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 
 	currentAccountConfig := s.option.Cache.CurrentAccountConfig()
 	accountConfigs := s.option.Cache.AccountConfigs()
+	agents := s.option.Cache.AgentsByUUID()
 	monitors := s.option.Cache.MonitorsByAgentUUID()
 
 	for _, m := range input {
@@ -239,16 +240,21 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
 
 		if m.Annotations().BleemeoAgentID != "" {
-			monitor, present := monitors[bleemeoTypes.AgentID(m.Annotations().BleemeoAgentID)]
-			if !present {
-				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", m.Annotations().BleemeoAgentID)
-				continue
-			}
+			_, present := agents[m.Annotations().BleemeoAgentID]
+			accountConfig := s.option.Cache.CurrentAccountConfig()
 
-			accountConfig, present := accountConfigs[monitor.AccountConfig]
 			if !present {
-				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
-				continue
+				monitor, present := monitors[bleemeoTypes.AgentID(m.Annotations().BleemeoAgentID)]
+				if !present {
+					logger.V(2).Printf("mqtt: missing monitor for agent '%s'", m.Annotations().BleemeoAgentID)
+					continue
+				}
+
+				accountConfig, present = accountConfigs[monitor.AccountConfig]
+				if !present {
+					logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
+					continue
+				}
 			}
 
 			whitelist = accountConfig.MetricsAgentWhitelistMap()

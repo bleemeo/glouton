@@ -185,7 +185,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeAgentUUID},
+			SourceLabels: model.LabelNames{types.LabelMetaBleemeoTargetAgentUUID},
 			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
 		},
@@ -772,8 +772,8 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 		ContainerID: promLabels.Get(types.LabelMetaContainerID),
 	}
 
-	// annotate the metric if it comes from a probe
-	agentID := promLabels.Get(types.LabelMetaProbeAgentUUID)
+	// annotate the metric if it comes from a bleemeo target (probe, snmp)
+	agentID := promLabels.Get(types.LabelMetaBleemeoTargetAgentUUID)
 	if agentID != "" {
 		annotations.BleemeoAgentID = agentID
 	}

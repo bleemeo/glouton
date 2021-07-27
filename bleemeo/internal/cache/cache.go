@@ -314,12 +314,26 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 }
 
 // AgentList returns a (copy) of the list of agent.
-func (c *Cache) AgentList() (snmp []bleemeoTypes.Agent) {
+func (c *Cache) AgentList() []bleemeoTypes.Agent {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	result := make([]bleemeoTypes.Agent, len(c.data.Agents))
 	copy(result, c.data.Agents)
+
+	return result
+}
+
+// AgentsByUUID returns a map agent.id => agent.
+func (c *Cache) AgentsByUUID() map[string]bleemeoTypes.Agent {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]bleemeoTypes.Agent)
+
+	for _, v := range c.data.Agents {
+		result[v.ID] = v
+	}
 
 	return result
 }

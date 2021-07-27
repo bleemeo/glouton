@@ -50,7 +50,7 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 	}
 
 	if fullSync {
-		err := s.agentUpdateList()
+		err := s.agentsUpdateList()
 		if err != nil {
 			return err
 		}
@@ -153,7 +153,7 @@ func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *PayloadS
 	return nil
 }
 
-func (s *Synchronizer) agentUpdateList() error {
+func (s *Synchronizer) agentsUpdateList() error {
 	params := map[string]string{
 		"fields": "id,created_at,account,next_config_at,current_config,tags",
 	}
@@ -163,19 +163,19 @@ func (s *Synchronizer) agentUpdateList() error {
 		return err
 	}
 
-	snmps := make([]types.Agent, len(result))
+	agents := make([]types.Agent, len(result))
 
 	for i, jsonMessage := range result {
-		var snmp types.Agent
+		var agent types.Agent
 
-		if err := json.Unmarshal(jsonMessage, &snmp); err != nil {
+		if err := json.Unmarshal(jsonMessage, &agent); err != nil {
 			continue
 		}
 
-		snmps[i] = snmp
+		agents[i] = agent
 	}
 
-	s.option.Cache.SetAgentList(snmps)
+	s.option.Cache.SetAgentList(agents)
 
 	return nil
 }
