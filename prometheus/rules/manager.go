@@ -280,7 +280,8 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		agr.inactiveSince = time.Time{}
 		agr.disabledUntil = time.Time{}
 
-		if state != rules.StateInactive && time.Since(rm.agentStarted) < promAlertTime {
+		// we add 20 seconds to the promAlert time to compensate the delta between agent startup and first metrics
+		if state != rules.StateInactive && time.Since(rm.agentStarted) < promAlertTime+20*time.Second {
 			return nil, nil
 		}
 
