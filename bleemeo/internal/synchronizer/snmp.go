@@ -28,6 +28,10 @@ import (
 
 type PayloadSNMPAgent struct {
 	types.Agent
+	SNMPAgent
+}
+
+type SNMPAgent struct {
 	DisplayName     string `json:"display_name"`
 	Fqdn            string `json:"fqdn"`
 	AgentTypeID     string `json:"agent_type"`
@@ -96,7 +100,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 	}
 
 	for _, snmp := range localTargets {
-		payload := PayloadSNMPAgent{
+		payload := SNMPAgent{
 			DisplayName:     snmp.InitialName,
 			Fqdn:            snmp.Address,
 			AgentTypeID:     agentTypeID,
@@ -129,7 +133,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 }
 
 func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *PayloadSNMPAgent,
-	remoteSNMPs *[]types.Agent, params map[string]string, payload PayloadSNMPAgent, remoteIndex int) error {
+	remoteSNMPs *[]types.Agent, params map[string]string, payload SNMPAgent, remoteIndex int) error {
 	var result types.Agent
 
 	if remoteFound {
