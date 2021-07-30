@@ -68,6 +68,8 @@ func defaultConfig() map[string]interface{} {
 		"agent.node_exporter.collectors": []string{
 			"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev",
 		},
+		"agent.telemetry.enabled":                      true,
+		"agent.telemetry.address":                      "https://telemetry.bleemeo.com/v1/telemetry/",
 		"agent.windows_exporter.enabled":               true,
 		"agent.windows_exporter.collectors":            []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp"},
 		"bleemeo.account_id":                           "",

@@ -59,3 +59,63 @@ UBUNTU_CODENAME=bionic
 		t.Errorf("decodeOsRelease(...) == %v, want %v", got, want)
 	}
 }
+
+func TestByteCountDecimalMaxEB(t *testing.T) {
+	in := uint64(5540000000000000000)
+
+	want := "4.81 EB"
+
+	got := byteCountDecimal(in)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
+	}
+}
+
+func TestByteCountDecimalB(t *testing.T) {
+	in := uint64(0)
+
+	want := "0 B"
+
+	got := byteCountDecimal(in)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
+	}
+}
+
+func TestByteCountDecimalKB(t *testing.T) {
+	in := uint64(1024)
+
+	want := "1.00 KB"
+
+	got := byteCountDecimal(in)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
+	}
+}
+
+func TestByteCountDecimalMB(t *testing.T) {
+	in := uint64(543288000)
+
+	want := "518.12 MB"
+
+	got := byteCountDecimal(in)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
+	}
+}
+
+func TestByteCountDecimalGB(t *testing.T) {
+	in := uint64(4432880000)
+
+	want := "4.13 GB"
+
+	got := byteCountDecimal(in)
+
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
+	}
+}

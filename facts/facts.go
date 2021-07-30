@@ -18,6 +18,7 @@ package facts
 
 import (
 	"context"
+	"fmt"
 	"glouton/logger"
 	"glouton/version"
 	"io"
@@ -32,6 +33,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
 	"gopkg.in/yaml.v3"
@@ -235,6 +237,19 @@ func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts["agent_version"] = version.Version
 	newFacts["fact_updated_at"] = time.Now().UTC().Format(time.RFC3339)
 
+	cpu, err := cpu.Info()
+
+	if err == nil && len(cpu) > 0 {
+		newFacts["cpu_model_name"] = cpu[0].ModelName
+		newFacts["cpu_cores"] = strconv.Itoa(len(cpu))
+	}
+
+	mem, err := mem.VirtualMemory()
+
+	if err == nil && mem != nil {
+		newFacts["memory"] = byteCountDecimal(mem.Total)
+	}
+
 	for _, c := range callbacks {
 		for k, v := range c(ctx, newFacts) {
 			newFacts[k] = v
@@ -402,4 +417,20 @@ func httpQuery(ctx context.Context, url string, headers []string) string {
 	}
 
 	return string(body)
+}
+
+func byteCountDecimal(b uint64) string {
+	const unit = 1024
+	if b < unit {
+		return fmt.Sprintf("%d B", b)
+	}
+
+	div, exp := int64(unit), 0
+
+	for n := b / unit; n >= unit; n /= unit {
+		div *= unit
+		exp++
+	}
+
+	return fmt.Sprintf("%.2f %cB", float64(b)/float64(div), "KMGTPE"[exp])
 }
