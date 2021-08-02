@@ -63,11 +63,9 @@ UBUNTU_CODENAME=bionic
 func TestByteCountDecimalMaxEB(t *testing.T) {
 	in := uint64(5540000000000000000)
 
-	want := "4.81 EB"
+	want := "4.81 EB" //nolint:ifshort
 
-	got := byteCountDecimal(in)
-
-	if !reflect.DeepEqual(got, want) {
+	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -75,11 +73,9 @@ func TestByteCountDecimalMaxEB(t *testing.T) {
 func TestByteCountDecimalB(t *testing.T) {
 	in := uint64(0)
 
-	want := "0 B"
+	want := "0 B" //nolint:ifshort
 
-	got := byteCountDecimal(in)
-
-	if !reflect.DeepEqual(got, want) {
+	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -87,11 +83,9 @@ func TestByteCountDecimalB(t *testing.T) {
 func TestByteCountDecimalKB(t *testing.T) {
 	in := uint64(1024)
 
-	want := "1.00 KB"
+	want := "1.00 KB" //nolint:ifshort
 
-	got := byteCountDecimal(in)
-
-	if !reflect.DeepEqual(got, want) {
+	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -99,11 +93,9 @@ func TestByteCountDecimalKB(t *testing.T) {
 func TestByteCountDecimalMB(t *testing.T) {
 	in := uint64(543288000)
 
-	want := "518.12 MB"
+	want := "518.12 MB" //nolint:ifshort
 
-	got := byteCountDecimal(in)
-
-	if !reflect.DeepEqual(got, want) {
+	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }
@@ -111,11 +103,9 @@ func TestByteCountDecimalMB(t *testing.T) {
 func TestByteCountDecimalGB(t *testing.T) {
 	in := uint64(4432880000)
 
-	want := "4.13 GB"
+	want := "4.13 GB" //nolint:ifshort
 
-	got := byteCountDecimal(in)
-
-	if !reflect.DeepEqual(got, want) {
+	if got := byteCountDecimal(in); !reflect.DeepEqual(got, want) {
 		t.Errorf("TEstbyteCountDecimal(...) == %s, want %s", got, want)
 	}
 }

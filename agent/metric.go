@@ -36,7 +36,7 @@ import (
 )
 
 //nolint:gochecknoglobals
-var commonDefaultSystemMetrics []string = []string{
+var commonDefaultSystemMetrics = []string{
 	"agent_status",
 	"system_pending_updates",
 	"system_pending_security_updates",
@@ -85,7 +85,7 @@ var commonDefaultSystemMetrics []string = []string{
 }
 
 //nolint:gochecknoglobals
-var promLinuxDefaultSystemMetrics []string = []string{
+var promLinuxDefaultSystemMetrics = []string{
 	"glouton_gatherer_execution_seconds_count",
 	"glouton_gatherer_execution_seconds_sum",
 	"node_load1",
@@ -114,7 +114,7 @@ var promLinuxDefaultSystemMetrics []string = []string{
 }
 
 //nolint:gochecknoglobals
-var promWindowsDefaultSystemMetrics []string = []string{
+var promWindowsDefaultSystemMetrics = []string{
 	"glouton_gatherer_execution_seconds_count",
 	"glouton_gatherer_execution_seconds_sum",
 	"windows_cpu_time_global",
@@ -140,7 +140,7 @@ var promWindowsDefaultSystemMetrics []string = []string{
 }
 
 //nolint:gochecknoglobals
-var bleemeoDefaultSystemMetrics []string = []string{
+var bleemeoDefaultSystemMetrics = []string{
 	// Operating system metrics
 	"agent_gather_time",
 	"cpu_idle",
@@ -623,7 +623,7 @@ const (
 	filterLogDuration = 50 * time.Millisecond
 )
 
-//metricFilter is a thread-safe holder of an allow / deny metrics list.
+// metricFilter is a thread-safe holder of an allow / deny metrics list.
 type metricFilter struct {
 
 	// staticList contains the matchers generated from static source (config file).
@@ -646,13 +646,14 @@ func buildMatcherList(config *config.Configuration, listType string) map[labels.
 	globalList := config.StringList("metric." + metricListType)
 
 	for _, str := range globalList {
-		new, err := matcher.NormalizeMetric(str)
+		matchers, err := matcher.NormalizeMetric(str)
 		if err != nil {
 			logger.V(2).Printf("An error occurred while normalizing metric: %w", err)
+
 			continue
 		}
 
-		addToList(metricList, new)
+		addToList(metricList, matchers)
 	}
 
 	addScrappersList(config, metricList, listType)
@@ -660,14 +661,14 @@ func buildMatcherList(config *config.Configuration, listType string) map[labels.
 	return metricList
 }
 
-func addToList(metricList map[labels.Matcher][]matcher.Matchers, new matcher.Matchers) {
-	newName := new.Get(types.LabelName)
+func addToList(metricList map[labels.Matcher][]matcher.Matchers, metrics matcher.Matchers) {
+	newName := metrics.Get(types.LabelName)
 
 	if newName.Type == labels.MatchEqual || newName.Type == labels.MatchNotEqual {
 		if metricList[*newName] == nil {
-			metricList[*newName] = []matcher.Matchers{new}
+			metricList[*newName] = []matcher.Matchers{metrics}
 		} else {
-			metricList[*newName] = append(metricList[*newName], new)
+			metricList[*newName] = append(metricList[*newName], metrics)
 		}
 
 		return
@@ -679,13 +680,13 @@ func addToList(metricList map[labels.Matcher][]matcher.Matchers, new matcher.Mat
 		}
 
 		if key.Value == newName.Value {
-			metricList[key] = append(metricList[key], new)
+			metricList[key] = append(metricList[key], metrics)
 
 			return
 		}
 	}
 
-	metricList[*newName] = []matcher.Matchers{new}
+	metricList[*newName] = []matcher.Matchers{metrics}
 }
 
 func addScrappersList(config *config.Configuration, metricList map[labels.Matcher][]matcher.Matchers,
@@ -703,29 +704,32 @@ func addScrappersList(config *config.Configuration, metricList map[labels.Matche
 		}
 
 		for _, val := range list {
-			new, err := matcher.NormalizeMetric(val)
+			matchers, err := matcher.NormalizeMetric(val)
 			if err != nil {
 				logger.V(2).Printf("Could not normalize metric %s with instance %s and job %s", val, t.ExtraLabels[types.LabelMetaScrapeInstance], t.ExtraLabels[types.LabelMetaScrapeJob])
+
 				continue
 			}
 
-			if new.Get(types.LabelScrapeInstance) == nil {
-				err := new.Add(types.LabelScrapeInstance, t.ExtraLabels[types.LabelMetaScrapeInstance], labels.MatchEqual)
+			if matchers.Get(types.LabelScrapeInstance) == nil {
+				err := matchers.Add(types.LabelScrapeInstance, t.ExtraLabels[types.LabelMetaScrapeInstance], labels.MatchEqual)
 				if err != nil {
 					logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeInstance, val)
+
 					continue
 				}
 			}
 
-			if new.Get(types.LabelScrapeJob) == nil {
-				err := new.Add(types.LabelScrapeJob, t.ExtraLabels[types.LabelMetaScrapeJob], labels.MatchEqual)
+			if matchers.Get(types.LabelScrapeJob) == nil {
+				err := matchers.Add(types.LabelScrapeJob, t.ExtraLabels[types.LabelMetaScrapeJob], labels.MatchEqual)
 				if err != nil {
 					logger.V(2).Printf("Could not add label %s to metric %s", types.LabelScrapeJob, val)
+
 					continue
 				}
 			}
 
-			addToList(metricList, new)
+			addToList(metricList, matchers)
 		}
 	}
 }
@@ -796,12 +800,12 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 	if m.includeDefaultMetrics {
 		defaultMetricsList := getDefaultMetrics(format)
 		for _, val := range defaultMetricsList {
-			new, err := matcher.NormalizeMetric(val)
+			matchers, err := matcher.NormalizeMetric(val)
 			if err != nil {
 				return err
 			}
 
-			addToList(m.staticAllowList, new)
+			addToList(m.staticAllowList, matchers)
 		}
 	}
 
@@ -829,10 +833,10 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 }
 
 func newMetricFilter(config *config.Configuration, metricFormat types.MetricFormat) (*metricFilter, error) {
-	new := metricFilter{}
-	err := new.buildList(config, metricFormat)
+	filter := metricFilter{}
+	err := filter.buildList(config, metricFormat)
 
-	return &new, err
+	return &filter, err
 }
 
 func getMatchersList(list map[labels.Matcher][]matcher.Matchers, labelName string) []matcher.Matchers {
@@ -925,9 +929,7 @@ func (m *metricFilter) FilterPoints(points []types.MetricPoint) []types.MetricPo
 }
 
 func checkMaxDuration(start time.Time, points []types.MetricPoint, i int) {
-	duration := time.Since(start)
-
-	if duration > filterLogDuration {
+	if duration := time.Since(start); duration > filterLogDuration {
 		logger.V(2).Printf("filtering points took %v with %d points in and %d points out", duration, len(points), i)
 	}
 }
@@ -950,6 +952,7 @@ func (m *metricFilter) filterMetrics(mt []types.Metric) []types.Metric {
 				for _, denyVal := range denyVals {
 					if denyVal.MatchesLabels(metric.Labels()) {
 						didMatch = true
+
 						break
 					}
 				}
@@ -1005,6 +1008,7 @@ func (m *metricFilter) filterFamily(f *dto.MetricFamily) {
 			for _, denyVal := range denyVals {
 				if denyVal.MatchesMetric(*f.Name, metric) {
 					didMatch = true
+
 					break
 				}
 			}
@@ -1058,8 +1062,7 @@ func (m *metricFilter) FilterFamilies(f []*dto.MetricFamily) []*dto.MetricFamily
 		}
 	}
 
-	duration := time.Since(start)
-	if duration > filterLogDuration {
+	if duration := time.Since(start); duration > filterLogDuration {
 		logger.V(2).Printf("filtering family took %v with %d points in and %d points out", duration, pointsIn, pointsOut)
 	}
 
@@ -1085,23 +1088,25 @@ func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Match
 			for _, val := range newMetrics {
 				metricName := service.Name + "_" + val.Name
 
-				new, err := matcher.NormalizeMetric(metricName)
+				matchers, err := matcher.NormalizeMetric(metricName)
 				if err != nil {
 					errors = append(errors, err)
+
 					continue
 				}
 
-				allowList[metricName] = new
+				allowList[metricName] = matchers
 			}
 		}
 
-		new, err := matcher.NormalizeMetric(service.Name + "_status")
+		matchers, err := matcher.NormalizeMetric(service.Name + "_status")
 		if err != nil {
 			errors = append(errors, err)
+
 			continue
 		}
 
-		allowList[service.Name+"_status"] = new
+		allowList[service.Name+"_status"] = matchers
 	}
 
 	if m.includeDefaultMetrics {
@@ -1119,12 +1124,12 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 		defaults := defaultServiceMetrics[val.ServiceType]
 
 		for _, val := range defaults {
-			new, err := matcher.NormalizeMetric(val)
+			matchers, err := matcher.NormalizeMetric(val)
 			if err != nil {
 				return err
 			}
 
-			list[val] = new
+			list[val] = matchers
 		}
 	}
 
@@ -1151,6 +1156,7 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 			allowMatchers, denyMatchers, err := addNewSource(containersLabels[key], val)
 			if err != nil {
 				errors = append(errors, err)
+
 				continue
 			}
 
@@ -1167,13 +1173,14 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
 
 	for _, val := range thresholdMetricNames {
-		new, err := matcher.NormalizeMetric(val + "_status")
+		matchers, err := matcher.NormalizeMetric(val + "_status")
 		if err != nil {
 			errors = append(errors, err)
+
 			continue
 		}
 
-		allowList[val+"_status"] = new
+		allowList[val+"_status"] = matchers
 	}
 
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
@@ -1225,7 +1232,6 @@ func addNewSource(cLabels map[string]string, extraLabels map[string]string) (map
 
 	allowMatchers, denyMatchers, err := newMatcherSource(allowList, denyList,
 		extraLabels[types.LabelMetaScrapeInstance], extraLabels[types.LabelMetaScrapeJob])
-
 	if err != nil {
 		return nil, nil, err
 	}

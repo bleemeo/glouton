@@ -50,7 +50,8 @@ func main() {
 	flag.Parse()
 
 	if *showVersion {
-		fmt.Println(versionPkg.Version)
+		fmt.Println(versionPkg.Version) //nolint:forbidigo
+
 		return
 	}
 

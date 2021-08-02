@@ -51,6 +51,7 @@ func (i Input) Gather(now time.Time) {
 	proc, err := i.ps.Processes(ctx, maxAge)
 	if err != nil {
 		logger.V(1).Printf("unable to gather process metrics: %v", err)
+
 		return
 	}
 

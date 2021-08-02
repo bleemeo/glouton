@@ -52,11 +52,13 @@ const (
 	errorNotFound errorType = "not_found"
 )
 
-var errorStartTime = errors.New("end timestamp must not be before start time")
-var errorPositiveInteger = errors.New("zero or negative query resolution step widths are not accepted. Try a positive integer")
-var errorMaxStep = errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
-var errorParseDuration = errors.New("cannot parse to a valid duration")
-var errorInvalidTimestamp = errors.New("cannot parse to a valid timestamp")
+var (
+	errorStartTime        = errors.New("end timestamp must not be before start time")
+	errorPositiveInteger  = errors.New("zero or negative query resolution step widths are not accepted. Try a positive integer")
+	errorMaxStep          = errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
+	errorParseDuration    = errors.New("cannot parse to a valid duration")
+	errorInvalidTimestamp = errors.New("cannot parse to a valid timestamp")
+)
 
 type PromQL struct {
 	CORSOrigin *regexp.Regexp
@@ -257,7 +259,7 @@ func (p *PromQL) queryRange(r *http.Request, st *store.Store) (result apiFuncRes
 
 	ctx = httputil.ContextFromRequest(ctx, r)
 
-	res := qry.Exec(ctx)
+	res := qry.Exec(ctx) //nolint:ifshort // false positive
 	if res.Err != nil {
 		return apiFuncResult{nil, returnAPIError(res.Err), res.Warnings, qry.Close}
 	}

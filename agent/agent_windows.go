@@ -40,11 +40,12 @@ func (ws *winService) Execute(args []string, req <-chan svc.ChangeRequest, statu
 	status <- svc.Status{State: svc.Running, Accepts: cmdsAccepted}
 loop:
 	for c := range req {
-		switch c.Cmd {
+		switch c.Cmd { //nolint:exhaustive
 		case svc.Interrogate:
 			status <- c.CurrentStatus
 		case svc.Stop, svc.Shutdown:
 			(*ws.cancelFunc)()
+
 			break loop
 		default:
 			logger.V(1).Printf("unexpected control request #%d", c)
@@ -78,6 +79,7 @@ func (a *agent) initOSSpecificParts() {
 	s, err := wmi.InitializeSWbemServices(wmi.DefaultClient)
 	if err != nil {
 		logger.V(1).Printf("WMI error, windows specific services may not start: %v", err)
+
 		return
 	}
 
@@ -90,6 +92,7 @@ func (a *agent) registerOSSpecificComponents() {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {
 			logger.V(0).Printf("Couldn't build configuration for windows_exporter: %v", err)
+
 			return
 		}
 

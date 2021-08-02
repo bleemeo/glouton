@@ -28,8 +28,10 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
-const fakeJobName = "jobname"
-const fakePodNamespace = "default"
+const (
+	fakeJobName      = "jobname"
+	fakePodNamespace = "default"
+)
 
 func TestListExporters(t *testing.T) {
 	mustParse := func(text string) *url.URL {

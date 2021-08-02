@@ -67,7 +67,7 @@ func StringToMetricFormat(input string) MetricFormat {
 }
 
 func (f MetricFormat) String() string {
-	switch f {
+	switch f { //nolint:exhaustive
 	case MetricFormatBleemeo:
 		return "Bleemeo"
 	case MetricFormatPrometheus:
@@ -85,7 +85,7 @@ const (
 	LabelName = "__name__"
 
 	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
-	// They are actually dropped by the metric registry and/or the
+	// They are actually dropped by the metric registry and/or the.
 	LabelMetaContainerName    = "__meta_container_name"
 	LabelMetaContainerID      = "__meta_container_id"
 	LabelMetaServiceName      = "__meta_service_name"
@@ -117,7 +117,7 @@ func (s Status) IsSet() bool {
 }
 
 func (s Status) String() string {
-	switch s {
+	switch s { //nolint:exhaustive
 	case StatusUnset:
 		return "unset"
 	case StatusOk:
@@ -133,7 +133,7 @@ func (s Status) String() string {
 
 // NagiosCode return the Nagios value for a Status.
 func (s Status) NagiosCode() int {
-	switch s {
+	switch s { //nolint:exhaustive
 	case StatusOk:
 		return 0
 	case StatusWarning:
@@ -248,6 +248,7 @@ func TextToLabels(text string) map[string]string {
 	labels, err := parser.ParseMetricSelector("{" + text + "}")
 	if err != nil {
 		logger.Printf("unable to decode labels %#v: %v", text, err)
+
 		return nil
 	}
 
@@ -259,7 +260,7 @@ func TextToLabels(text string) map[string]string {
 	return results
 }
 
-//Monitor represents a monitor instance.
+// Monitor represents a monitor instance.
 type Monitor struct {
 	ID                      string
 	MetricMonitorResolution int

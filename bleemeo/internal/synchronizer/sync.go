@@ -38,10 +38,12 @@ import (
 	"time"
 )
 
-var errFQDNNotSet = errors.New("unable to register, fqdn is not set")
-var errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
-var errBleemeoUndefined = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
-var errIncorrectStatusCode = errors.New("registration status code is")
+var (
+	errFQDNNotSet                 = errors.New("unable to register, fqdn is not set")
+	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
+	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
+	errIncorrectStatusCode        = errors.New("registration status code is")
+)
 
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
@@ -116,7 +118,7 @@ func New(option Option) *Synchronizer {
 }
 
 // Run run the Connector.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = s.now()
@@ -134,8 +136,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	}
 
 	if err := s.setClient(); err != nil {
-		//TODO: an error occurs with the linter as of v1.27. This is fixed in the latest updates.
-		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err) //nolint: goerr113
+		return fmt.Errorf("unable to create Bleemeo HTTP client. Is the API base URL correct ? (error is %w)", err)
 	}
 
 	// syncInfo early because MQTT connection will establish or not depending on it (maintenance & outdated agent).
@@ -241,7 +242,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		}
 	}
 
-	return nil
+	return nil //nolint:nilerr
 }
 
 // DiagnosticPage return useful information to troubleshoot issue.
@@ -253,6 +254,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
 	if err != nil {
 		fmt.Fprintf(builder, "Bad URL %#v: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+
 		return builder.String()
 	}
 
@@ -269,6 +271,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 		tmp, err := strconv.ParseInt(u.Port(), 10, 0)
 		if err != nil {
 			fmt.Fprintf(builder, "Bad URL %#v, invalid port: %v\n", s.option.Config.String("bleemeo.api_base"), err)
+
 			return builder.String()
 		}
 
@@ -465,7 +468,7 @@ func (s *Synchronizer) setClient() error {
 	return nil
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	if s.agentID == "" {
 		if err := s.register(); err != nil {
@@ -591,7 +594,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	return firstErr
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (s *Synchronizer) syncToPerform() map[string]bool {
 	s.l.Lock()
 	defer s.l.Unlock()
@@ -684,7 +687,7 @@ func (s *Synchronizer) checkDuplicated() error {
 			continue
 		}
 
-		new, ok := newFacts[name]
+		new, ok := newFacts[name] //nolint:predeclared
 		if !ok {
 			continue
 		}
@@ -797,7 +800,7 @@ func generatePassword(length int) string {
 		n := int(bigN.Int64())
 
 		if err != nil {
-			n = rand.Intn(len(letters))
+			n = rand.Intn(len(letters)) //nolint:gosec
 		}
 
 		b[i] = letters[n]

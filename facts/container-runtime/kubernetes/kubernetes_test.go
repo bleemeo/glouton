@@ -75,7 +75,7 @@ func (k *mockKubernetesClient) GetServerVersion(ctx context.Context) (*version.I
 	return k.versions.ServerVersion, nil
 }
 
-func TestKubernetes_Containers(t *testing.T) { // nolint: gocyclo
+func TestKubernetes_Containers(t *testing.T) { //nolint:gocyclo,cyclop
 	tests := []struct {
 		name          string
 		dir           string

@@ -164,7 +164,7 @@ func (s *statusState) setNewStatus(newStatus types.Status, now time.Time) (time.
 	criticalDuration := time.Duration(0)
 	warningDuration := time.Duration(0)
 
-	switch newStatus {
+	switch newStatus { //nolint:exhaustive
 	case types.StatusCritical:
 		if s.CriticalSince.IsZero() {
 			s.CriticalSince = now
@@ -504,6 +504,7 @@ func (p pusher) PushPoints(points []types.MetricPoint) {
 			threshold := p.registry.getThreshold(key)
 			if !threshold.IsZero() {
 				result = p.addPointWithThreshold(result, point, threshold, key)
+
 				continue
 			}
 		}

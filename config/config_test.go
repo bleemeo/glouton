@@ -315,6 +315,7 @@ func TestLoadEnv(t *testing.T) {
 	}
 	lookupEnv := func(envName string) (string, bool) {
 		value, ok := envs[envName]
+
 		return value, ok
 	}
 	cfg := Configuration{lookupEnv: lookupEnv}

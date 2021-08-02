@@ -50,9 +50,7 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-var (
-	errNotSupported = errors.New("service not supported by Prometheus collector")
-)
+var errNotSupported = errors.New("service not supported by Prometheus collector")
 
 // AddDefaultInputs adds system inputs to a collector.
 func AddDefaultInputs(coll *collector.Collector, inputsConfig inputs.CollectorConfig) error {
@@ -190,7 +188,7 @@ func serviceNeedUpdate(oldService, service Service) bool {
 	// We assume order of ListenAddresses is mostly stable. serviceEqual may return
 	// some false positive.
 	for i, old := range oldService.ListenAddresses {
-		new := service.ListenAddresses[i]
+		new := service.ListenAddresses[i] //nolint:predeclared
 		if old.Network() != new.Network() || old.String() != new.String() {
 			return true
 		}
@@ -232,7 +230,7 @@ func (d *Discovery) createPrometheusCollector(service Service) error {
 	return errNotSupported
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (d *Discovery) createInput(service Service) error {
 	if !service.Active {
 		return nil
@@ -240,6 +238,7 @@ func (d *Discovery) createInput(service Service) error {
 
 	if service.MetricsIgnored {
 		logger.V(2).Printf("The input associated to the service '%s' on container '%s' is ignored by the configuration", service.Name, service.ContainerID)
+
 		return nil
 	}
 
@@ -247,6 +246,7 @@ func (d *Discovery) createInput(service Service) error {
 		err := d.createPrometheusCollector(service)
 		if !errors.Is(err, errNotSupported) {
 			logger.V(2).Printf("Add collector for service %v on container %s", service.Name, service.ContainerID)
+
 			return err
 		}
 	}
@@ -256,7 +256,7 @@ func (d *Discovery) createInput(service Service) error {
 		input telegraf.Input
 	)
 
-	switch service.ServiceType {
+	switch service.ServiceType { //nolint:exhaustive
 	case ApacheService:
 		if ip, port := service.AddressPort(); ip != "" {
 			statusURL := fmt.Sprintf("http://%s:%d/server-status?auto", ip, port)

@@ -113,7 +113,7 @@ const (
 )
 
 func (r DisableReason) String() string {
-	switch r {
+	switch r { //nolint:exhaustive
 	case DisableDuplicatedAgent:
 		return "duplicated state.json"
 	case DisableTooManyErrors:

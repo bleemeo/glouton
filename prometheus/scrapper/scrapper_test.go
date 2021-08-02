@@ -23,11 +23,9 @@ import (
 
 func Test_Host_Port(t *testing.T) {
 	url, _ := url.Parse("https://example.com:8080")
-	want := "example.com:8080"
+	want := "example.com:8080" //nolint:ifshort
 
-	got := HostPort(url)
-
-	if got != want {
+	if got := HostPort(url); got != want {
 		t.Errorf("An error occurred: expected %s, got %s", want, got)
 	}
 }

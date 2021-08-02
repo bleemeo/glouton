@@ -21,13 +21,12 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
-	"math"
-	"net"
-	"time"
-
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
+	"math"
+	"net"
+	"time"
 )
 
 // NTPCheck perform a NTP check.

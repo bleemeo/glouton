@@ -37,7 +37,7 @@ import (
 const (
 	minimalThrottle = 15 * time.Second
 	maximalThrottle = 10 * time.Minute
-	// If the throttle delay is less than this, automatically retry the requests
+	// If the throttle delay is less than this, automatically retry the requests.
 	maxAutoRetryDelay = time.Minute
 )
 
@@ -223,7 +223,7 @@ func (c *HTTPClient) prepareRequest(method string, path string, params map[strin
 		bodyReader = bytes.NewReader(body)
 	}
 
-	req, err := http.NewRequest(method, u.String(), bodyReader)
+	req, err := http.NewRequest(method, u.String(), bodyReader) //nolint:noctx
 	if err != nil {
 		return nil, err
 	}
@@ -294,6 +294,7 @@ func (c *HTTPClient) Iter(ctx context.Context, resource string, params map[strin
 
 		if next == page.Next {
 			logger.V(1).Printf("next page is the same as current page: %s", page.Next)
+
 			break
 		}
 
@@ -334,6 +335,7 @@ func (c *HTTPClient) do(ctx context.Context, req *http.Request, result interface
 			if apiError, ok := err.(APIError); ok {
 				if apiError.StatusCode == 401 {
 					c.jwtToken = ""
+
 					return c.do(ctx, req, result, false, withAuth, forceInsecure)
 				}
 			}
@@ -369,7 +371,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 		"password": c.password,
 	})
 
-	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(body))
+	req, err := http.NewRequest("POST", u.String(), bytes.NewReader(body)) //nolint:noctx
 	if err != nil {
 		return "", err
 	}
@@ -385,6 +387,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 		if apiError, ok := err.(APIError); ok {
 			if apiError.StatusCode < 500 && apiError.StatusCode != 429 {
 				apiError.IsAuthError = true
+
 				return "", apiError
 			}
 		}
@@ -439,7 +442,6 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 	}
 
 	resp, err := client.Do(req)
-
 	if err != nil {
 		return 0, err
 	}

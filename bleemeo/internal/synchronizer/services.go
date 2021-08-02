@@ -160,11 +160,9 @@ func (s *Synchronizer) syncServices(fullSync bool, onlyEssential bool) error {
 		return err
 	}
 
-	if err := s.serviceDeleteFromLocal(localServices); err != nil {
-		return err
-	}
+	err = s.serviceDeleteFromLocal(localServices)
 
-	return nil
+	return err
 }
 
 func (s *Synchronizer) serviceUpdateList() error {
@@ -235,6 +233,7 @@ func (s *Synchronizer) serviceRegisterAndUpdate(localServices []discovery.Servic
 	for _, srv := range localServices {
 		if _, ok := s.delayedContainer[srv.ContainerID]; ok {
 			logger.V(2).Printf("Skip service %v due to delayedContainer", srv)
+
 			continue
 		}
 
@@ -346,6 +345,7 @@ func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service)
 		shortKey := serviceNameInstance{name: v.Label, instance: v.Instance}
 		if _, ok := shortToLongLookup[shortKey]; ok && !duplicatedKey[shortKey] {
 			duplicatedKey[shortKey] = true
+
 			continue
 		}
 
@@ -354,6 +354,7 @@ func (s *Synchronizer) serviceDeleteFromLocal(localServices []discovery.Service)
 		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/service/%s/", v.ID), nil, nil, nil)
 		if err != nil {
 			logger.V(1).Printf("Failed to delete service %v on Bleemeo API: %v", key, err)
+
 			continue
 		}
 

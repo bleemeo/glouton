@@ -39,7 +39,7 @@ func reflectSet(url string, input telegraf.Input) {
 
 // New initialise haproxy.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["haproxy"]
+	input, ok := telegraf_inputs.Inputs["haproxy"]
 	if ok {
 		haproxyInput := input()
 		// Telegraf does not export haproxy structure :(

@@ -28,7 +28,7 @@ import (
 
 // New initialise memcached.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["memcached"]
+	input, ok := telegraf_inputs.Inputs["memcached"]
 	if ok {
 		memcachedInput, ok := input().(*memcached.Memcached)
 		if ok {

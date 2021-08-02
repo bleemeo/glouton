@@ -229,6 +229,7 @@ func (r *Registry) init() {
 
 	if r.registrations != nil {
 		r.l.Unlock()
+
 		return
 	}
 
@@ -502,6 +503,7 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 
 	if r.currentDelay == delay {
 		r.l.Unlock()
+
 		return
 	}
 
@@ -841,6 +843,7 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 					l = replacer.Replace(l)
 					if !model.IsValidMetricName(model.LabelValue(l)) {
 						logger.V(2).Printf("label %#v is ignored since invalid for Prometheus", l)
+
 						continue
 					}
 				}
@@ -858,6 +861,7 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 		if err != nil {
 			logger.V(2).Printf("Ignoring metric %s due to %v", p.Labels["__name__"], err)
+
 			continue
 		}
 

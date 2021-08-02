@@ -22,28 +22,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"io/ioutil"
-	"log"
-	"math"
-	"math/rand"
-	"os"
-	"os/signal"
-	"path/filepath"
-	"reflect"
-	"regexp"
-	"runtime"
-	"sort"
-	"strconv"
-	"strings"
-	"sync"
-	"syscall"
-	"time"
-
 	"glouton/agent/state"
 	"glouton/api"
 	"glouton/bleemeo"
-	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/collector"
 	"glouton/config"
 	"glouton/debouncer"
@@ -51,14 +32,11 @@ import (
 	"glouton/discovery/promexporter"
 	"glouton/facts"
 	"glouton/facts/container-runtime/containerd"
-	dockerRuntime "glouton/facts/container-runtime/docker"
 	"glouton/facts/container-runtime/kubernetes"
 	"glouton/facts/container-runtime/merge"
-	crTypes "glouton/facts/container-runtime/types"
 	"glouton/influxdb"
 	"glouton/inputs"
 	"glouton/inputs/docker"
-	processInput "glouton/inputs/process"
 	"glouton/inputs/statsd"
 	"glouton/jmxtrans"
 	"glouton/logger"
@@ -76,9 +54,33 @@ import (
 	"glouton/types"
 	"glouton/version"
 	"glouton/zabbix"
-
+	"io"
+	"io/ioutil"
+	"log"
+	"math"
+	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"reflect"
+	"regexp"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"syscall"
+	"time"
+
+	bleemeoTypes "glouton/bleemeo/types"
+
+	dockerRuntime "glouton/facts/container-runtime/docker"
+
+	crTypes "glouton/facts/container-runtime/types"
+
+	processInput "glouton/inputs/process"
 
 	"github.com/google/uuid"
 	"gopkg.in/yaml.v3"
@@ -158,6 +160,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 	if err != nil {
 		logger.Printf("Error while loading configuration: %v", err)
+
 		return false
 	}
 
@@ -171,6 +174,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 	a.state, err = state.Load(statePath)
 	if err != nil {
 		logger.Printf("Error while loading state file: %v", err)
+
 		return false
 	}
 
@@ -182,6 +186,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 		oldState, err := state.Load(oldStatePath)
 		if err != nil {
 			logger.Printf("Error while loading state file: %v", err)
+
 			return false
 		}
 
@@ -211,6 +216,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 
 		if err != nil {
 			logger.Printf("State file is not writable, stopping agent: %v", err)
+
 			return false
 		}
 	} else if oldStatePath != "" {
@@ -236,7 +242,7 @@ func (a *agent) setupLogger() {
 	}
 
 	if err != nil {
-		fmt.Printf("Unable to use logging backend '%s': %v\n", a.config.String("logging.output"), err)
+		fmt.Printf("Unable to use logging backend '%s': %v\n", a.config.String("logging.output"), err) //nolint:forbidigo
 	}
 
 	if level := a.config.Int("logging.level"); level != 0 {
@@ -271,6 +277,7 @@ func Run(configFiles []string) {
 
 	if !agent.init(configFiles) {
 		os.Exit(1)
+
 		return
 	}
 
@@ -473,7 +480,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run() { //nolint:gocyclo
+func (a *agent) run() { //nolint:gocyclo,cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -606,9 +613,7 @@ func (a *agent) run() { //nolint:gocyclo
 		cancel()
 	}
 
-	var (
-		psLister facts.ProcessLister
-	)
+	var psLister facts.ProcessLister
 
 	useProc := a.config.String("container.type") == "" || a.config.Bool("container.pid_namespace_host")
 	if !useProc {
@@ -753,7 +758,7 @@ func (a *agent) run() { //nolint:gocyclo
 			logger.Printf("invalid permission %#v: %v", a.config.String("jmxtrans.file_permission"), err)
 			logger.Printf("using the default 0640")
 
-			perm = 0640
+			perm = 0o640
 		}
 
 		a.jmx = &jmxtrans.JMX{
@@ -850,11 +855,13 @@ func (a *agent) run() { //nolint:gocyclo
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {
 			logger.V(0).Printf("Unable to initialize system collector: %v", err)
+
 			return
 		}
 
 		if err = discovery.AddDefaultInputs(a.collector, conf); err != nil {
 			logger.Printf("Unable to initialize system collector: %v", err)
+
 			return
 		}
 	}
@@ -895,6 +902,7 @@ func (a *agent) run() { //nolint:gocyclo
 		for s := range c {
 			if s == syscall.SIGTERM || s == syscall.SIGINT || s == os.Interrupt {
 				cancel()
+
 				break
 			}
 
@@ -923,12 +931,14 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 	whitelistRE, err := common.CompileREs(a.config.StringList("disk_monitor"))
 	if err != nil {
 		logger.V(1).Printf("the whitelist for diskio regexp couldn't compile: %s", err)
+
 		return
 	}
 
 	blacklistRE, err := common.CompileREs(a.config.StringList("disk_ignore"))
 	if err != nil {
 		logger.V(1).Printf("the blacklist for diskio regexp couldn't compile: %s", err)
+
 		return
 	}
 
@@ -960,6 +970,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 		containers, err := a.containerRuntime.Containers(context.Background(), 2*time.Hour, false)
 		if err != nil {
 			logger.V(2).Printf("gather on DockerProvider failed: %v", err)
+
 			return
 		}
 
@@ -985,7 +996,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 func (a *agent) sendToTelemetry(ctx context.Context) error {
 	if a.config.Bool("agent.telemetry.enabled") {
 		select {
-		case <-time.After(2*time.Minute + time.Duration(rand.Intn(5))*time.Minute):
+		case <-time.After(2*time.Minute + time.Duration(rand.Intn(5))*time.Minute): //nolint:gosec
 		case <-ctx.Done():
 			return nil
 		}
@@ -994,6 +1005,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			facts, err := a.factProvider.Facts(ctx, time.Hour)
 			if err != nil {
 				logger.V(2).Printf("error facts load %v", err)
+
 				continue
 			}
 
@@ -1030,6 +1042,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 		service, err := a.discovery.Discovery(ctx, 2*time.Hour)
 		if err != nil {
 			logger.V(1).Printf("get service failed to every-minute metrics: %v", err)
+
 			continue
 		}
 
@@ -1038,11 +1051,12 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				continue
 			}
 
-			switch srv.ServiceType {
+			switch srv.ServiceType { //nolint:exhaustive
 			case discovery.PostfixService:
 				n, err := postfixQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
 					logger.V(1).Printf("Unabled to gather postfix queue size on %s: %v", srv, err)
+
 					continue
 				}
 
@@ -1073,6 +1087,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				n, err := eximQueueSize(ctx, srv, a.hostRootPath, a.containerRuntime)
 				if err != nil {
 					logger.V(1).Printf("Unabled to gather exim queue size on %s: %v", srv, err)
+
 					continue
 				}
 
@@ -1471,7 +1486,7 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	return
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
@@ -1502,7 +1517,6 @@ func (a *agent) handleTrigger(ctx context.Context) {
 			}
 
 			err := a.metricFilter.RebuildDynamicLists(a.dynamicScrapper, services, a.threshold.GetThresholdMetricNames())
-
 			if err != nil {
 				logger.V(2).Printf("Error during dynamic Filter rebuild: %v", err)
 			}
@@ -1576,6 +1590,7 @@ func (a *agent) deletedContainersCallback(containersID []string) {
 	metrics, err := a.store.Metrics(nil)
 	if err != nil {
 		logger.V(1).Printf("Unable to list metrics to cleanup after container deletion: %v", err)
+
 		return
 	}
 
@@ -1760,7 +1775,6 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 
 func yamlZip(zipFile *zip.Writer, a *agent) error {
 	file, err := zipFile.Create("config.yaml")
-
 	if err != nil {
 		return err
 	}
@@ -1833,6 +1847,7 @@ func parseIPOutput(content []byte) string {
 func setupContainer(hostRootPath string) {
 	if hostRootPath == "" {
 		logger.Printf("The agent is running in a container but GLOUTON_DF_HOST_MOUNT_POINT is unset. Some informations will be missing")
+
 		return
 	}
 
@@ -1881,6 +1896,7 @@ func prometheusConfigToURLs(cfg interface{}) (result []*scrapper.Target) {
 		u, err := url.Parse(uText)
 		if err != nil {
 			logger.Printf("ignoring invalid exporter config: %v", err)
+
 			continue
 		}
 

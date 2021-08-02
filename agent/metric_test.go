@@ -17,7 +17,6 @@
 package agent
 
 import (
-	"fmt"
 	"glouton/config"
 	"glouton/discovery"
 	"glouton/prometheus/matcher"
@@ -82,6 +81,7 @@ func Test_Basic_Build(t *testing.T) {
 	err := cfg.LoadByte([]byte(basicConf))
 	if err != nil {
 		t.Error(err)
+
 		return
 	}
 
@@ -168,14 +168,14 @@ func Test_Basic_Build(t *testing.T) {
 		},
 	}
 
-	new, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
-
+	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
+
 		return
 	}
 
-	got := sortMatchers(listFromMap(new.allowList))
+	got := sortMatchers(listFromMap(filter.allowList))
 	wanted := sortMatchers(listFromMap(want.allowList))
 
 	res := cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}))
@@ -183,7 +183,7 @@ func Test_Basic_Build(t *testing.T) {
 		t.Errorf("Generated allow list does not match the expected output:\n%s", res)
 	}
 
-	got = sortMatchers(listFromMap(new.denyList))
+	got = sortMatchers(listFromMap(filter.denyList))
 	wanted = sortMatchers(listFromMap(want.denyList))
 
 	res = cmp.Diff(got, wanted, cmpopts.IgnoreUnexported(labels.Matcher{}), cmpopts.IgnoreUnexported(labels.Matcher{}))
@@ -201,7 +201,6 @@ func Test_basic_build_default(t *testing.T) {
 	}
 
 	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
-
 	if err != nil {
 		t.Error(err)
 	}
@@ -219,13 +218,14 @@ func Test_Basic_FilterPoints(t *testing.T) {
 	err := cfg.LoadByte([]byte(basicConf))
 	if err != nil {
 		t.Error(err)
+
 		return
 	}
 
-	new, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
-
+	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
+
 		return
 	}
 
@@ -276,11 +276,11 @@ func Test_Basic_FilterPoints(t *testing.T) {
 
 	points = append(points, want...)
 
-	newPoints := new.FilterPoints(points)
+	newPoints := filter.FilterPoints(points)
 
 	if len(newPoints) != len(want) {
 		for _, val := range newPoints {
-			fmt.Println(val.Labels)
+			t.Log(val.Labels)
 		}
 
 		t.Errorf("Invalid length of result: expected %d, got %d", len(want), len(newPoints))
@@ -303,13 +303,14 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 	err := cfg.LoadByte([]byte(basicConf))
 	if err != nil {
 		t.Error(err)
+
 		return
 	}
 
-	new, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
-
+	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
+
 		return
 	}
 
@@ -448,7 +449,7 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		},
 	}
 
-	got := new.FilterFamilies(fm)
+	got := filter.FilterFamilies(fm)
 
 	res := cmp.Diff(got, want,
 		cmpopts.IgnoreUnexported(dto.MetricFamily{}), cmpopts.IgnoreUnexported(dto.Metric{}),
@@ -512,13 +513,13 @@ func Test_RebuildDynamicList(t *testing.T) {
 		denyListWant[key] = val
 	}
 
-	new, _ := matcher.NormalizeMetric("{__name__=\"something\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
-	new2, _ := matcher.NormalizeMetric("{__name__=\"else\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
-	new3, _ := matcher.NormalizeMetric("{__name__=\"other\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	m, _ := matcher.NormalizeMetric("{__name__=\"something\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	m2, _ := matcher.NormalizeMetric("{__name__=\"else\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
+	m3, _ := matcher.NormalizeMetric("{__name__=\"other\",scrape_instance=\"containerURL\",scrape_job=\"discovered-exporters\"}")
 
-	allowListWant[*new.Get(types.LabelName)] = append(allowListWant[*new.Get(types.LabelName)], new)
-	allowListWant[*new2.Get(types.LabelName)] = append(allowListWant[*new2.Get(types.LabelName)], new2)
-	denyListWant[*new3.Get(types.LabelName)] = append(denyListWant[*new3.Get(types.LabelName)], new3)
+	allowListWant[*m.Get(types.LabelName)] = append(allowListWant[*m.Get(types.LabelName)], m)
+	allowListWant[*m2.Get(types.LabelName)] = append(allowListWant[*m2.Get(types.LabelName)], m2)
+	denyListWant[*m3.Get(types.LabelName)] = append(denyListWant[*m3.Get(types.LabelName)], m3)
 
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
 	if err != nil {
@@ -541,7 +542,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 		t.Errorf("got != expected for denyList: %s", res)
 	}
 
-	//Rebuild is done twice to make sure the build is effectively cleared and rebuild
+	// Rebuild is done twice to make sure the build is effectively cleared and rebuild
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %w", err)
@@ -841,6 +842,7 @@ func Test_newMetricFilter(t *testing.T) {
 			filter, err := newMetricFilter(cfg, tt.metricFormat)
 			if err != nil {
 				t.Errorf("newMetricFilter() error = %v", err)
+
 				return
 			}
 
@@ -911,13 +913,13 @@ func makeFamiliesFromLabels(input []labels.Labels) []*dto.MetricFamily {
 	}
 
 	for _, lbls := range input {
-		new := dto.Metric{}
+		metric := dto.Metric{}
 
-		new.Label = labelstoDtolabels(lbls)
+		metric.Label = labelstoDtolabels(lbls)
 
 		for _, fam := range families {
 			if *fam.Name == lbls.Get("__name__") {
-				fam.Metric = append(fam.Metric, &new)
+				fam.Metric = append(fam.Metric, &metric)
 
 				break
 			}
@@ -931,9 +933,9 @@ func makeMetricsFromLabels(input []labels.Labels) []types.Metric {
 	res := make([]types.Metric, 0, len(input))
 
 	for _, lbls := range input {
-		new := fakeMetric{labels: lbls.Map()}
+		metric := fakeMetric{labels: lbls.Map()}
 
-		res = append(res, new)
+		res = append(res, metric)
 	}
 
 	return res
@@ -965,20 +967,22 @@ func (m fakeMetric) Points(start, end time.Time) (result []types.Point, err erro
 }
 
 func labelstoDtolabels(lb labels.Labels) []*dto.LabelPair {
-	new := []*dto.LabelPair{}
+	labelPair := []*dto.LabelPair{}
 
 	for _, val := range lb {
+		val := val
+
 		if val.Name == "__name__" {
 			continue
 		}
 
-		new = append(new, &dto.LabelPair{
+		labelPair = append(labelPair, &dto.LabelPair{
 			Name:  &val.Name,
 			Value: &val.Value,
 		})
 	}
 
-	return new
+	return labelPair
 }
 
 func listFromMap(m map[labels.Matcher][]matcher.Matchers) []matcher.Matchers {
@@ -1005,6 +1009,7 @@ func sortMatchers(list []matcher.Matchers) []matcher.Matchers {
 		for _, v := range list {
 			if v[0].Value == val {
 				orderedList = append(orderedList, v)
+
 				break
 			}
 		}
@@ -1017,11 +1022,11 @@ func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
 	list := make([]types.MetricPoint, nb)
 
 	for i := 0; i < nb; i++ {
-		new := types.MetricPoint{
+		point := types.MetricPoint{
 			Labels: lbls,
 		}
 
-		list = append(list, new)
+		list[i] = point
 	}
 
 	return list

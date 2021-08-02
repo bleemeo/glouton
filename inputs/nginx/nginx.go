@@ -27,7 +27,7 @@ import (
 
 // New initialise nginx.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["nginx"]
+	input, ok := telegraf_inputs.Inputs["nginx"]
 	if ok {
 		nginxInput, ok := input().(*nginx.Nginx)
 		if ok {

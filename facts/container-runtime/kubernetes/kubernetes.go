@@ -51,8 +51,10 @@ type Kubernetes struct {
 	podID2Pod      map[string]corev1.Pod
 }
 
-const caExpLabel = "kubernetes_ca_day_left"
-const certExpLabel = "kubernetes_certificate_day_left"
+const (
+	caExpLabel   = "kubernetes_ca_day_left"
+	certExpLabel = "kubernetes_certificate_day_left"
+)
 
 var errNoDecodedData = errors.New("no data decoded in raw certificate")
 
@@ -233,6 +235,7 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 
 	if err != nil {
 		multiErr = append(multiErr, err)
+
 		return points, multiErr
 	}
 
@@ -255,7 +258,7 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 
 func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
 	caPool := x509.NewCertPool()
-	tlsConfig := &tls.Config{}
+	tlsConfig := &tls.Config{} //nolint:gosec
 	caData := config.TLSClientConfig.CAData
 
 	var err error
@@ -302,11 +305,13 @@ func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time
 	if err != nil {
 		// Something went wrong with the TLS handshake, we consider the certificate as expired
 		logger.V(2).Println("An error occurred on TLS handshake:", err)
+
 		return createPointFromCertTime(time.Now(), certExpLabel, now)
 	}
 
 	if len(tlsConn.ConnectionState().PeerCertificates) == 0 {
 		logger.V(2).Println("No peer certificate could be found for tls dial.")
+
 		return types.MetricPoint{}, nil
 	}
 
@@ -321,13 +326,14 @@ func (k *Kubernetes) getCACertificateExpiration(config *rest.Config, now time.Ti
 	var err error
 
 	if caData == nil && config.TLSClientConfig.CAFile != "" {
-		//CAData takes precedence over CAFile, thus we only check CAFile if there is no CAData
+		// CAData takes precedence over CAFile, thus we only check CAFile if there is no CAData
 		caData, err = ioutil.ReadFile(config.TLSClientConfig.CAFile)
 		if err != nil {
 			return types.MetricPoint{}, err
 		}
 	} else if caData == nil {
 		logger.V(2).Printf("No certificate data found for Kubernetes API")
+
 		return types.MetricPoint{}, nil
 	}
 
@@ -437,9 +443,7 @@ func (k *Kubernetes) updatePods(ctx context.Context) error {
 }
 
 func kuberIDtoRuntimeID(containerID string) string {
-	if strings.HasPrefix(containerID, "docker://") {
-		containerID = strings.TrimPrefix(containerID, "docker://")
-	}
+	containerID = strings.TrimPrefix(containerID, "docker://")
 
 	if strings.HasPrefix(containerID, "containerd://") {
 		containerID = strings.TrimPrefix(containerID, "containerd://")
@@ -518,7 +522,6 @@ func getRestConfig(kubeConfig string) (*rest.Config, error) {
 
 func openConnection(ctx context.Context, kubeConfig string) (kubeClient, error) {
 	config, err := getRestConfig(kubeConfig)
-
 	if err != nil {
 		return nil, err
 	}
@@ -581,6 +584,7 @@ func (c wrappedContainer) ListenAddresses() (addresses []facts.ListenAddress, ex
 	for _, kc := range c.pod.Spec.Containers {
 		if kc.Name == name {
 			kubeContainer = kc
+
 			break
 		}
 	}

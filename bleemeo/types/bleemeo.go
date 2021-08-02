@@ -147,7 +147,7 @@ type MetricRegistration struct {
 
 // IsPermanentFailure tells whether the error is permanent and there is no need to quickly retry.
 func (kind FailureKind) IsPermanentFailure() bool {
-	switch kind {
+	switch kind { //nolint:exhaustive
 	case FailureAllowList, FailureTooManyMetric:
 		return true
 	default:
@@ -156,7 +156,7 @@ func (kind FailureKind) IsPermanentFailure() bool {
 }
 
 func (kind FailureKind) String() string {
-	switch kind {
+	switch kind { //nolint:exhaustive
 	case FailureAllowList:
 		return "not-allowed"
 	case FailureTooManyMetric:

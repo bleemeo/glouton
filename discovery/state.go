@@ -26,8 +26,10 @@ import (
 	"strings"
 )
 
-var errUnexpectedFormat = errors.New("unexpected format for old netstat key")
-var errIncorrectPartNumber = errors.New("incorrect number of parts")
+var (
+	errUnexpectedFormat    = errors.New("unexpected format for old netstat key")
+	errIncorrectPartNumber = errors.New("incorrect number of parts")
+)
 
 const stateKey = "DiscoveredServices"
 
@@ -132,6 +134,7 @@ func servicesFromState(state State) []Service {
 			srv, err := o.toService()
 			if err != nil {
 				logger.V(1).Printf("Unable to load old discovered_services: %v", err)
+
 				return make([]Service, 0)
 			}
 

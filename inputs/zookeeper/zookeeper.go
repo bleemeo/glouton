@@ -27,7 +27,7 @@ import (
 
 // New initialise the Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["zookeeper"]
+	input, ok := telegraf_inputs.Inputs["zookeeper"]
 	if ok {
 		zkInput, ok := input().(*zookeeper.Zookeeper)
 		if ok {

@@ -19,11 +19,10 @@
 package process
 
 import (
-	"time"
-
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/registry"
+	"time"
 )
 
 // RegisterExporter does nothing, process_exporter is not supported on this platform.

@@ -39,10 +39,10 @@ type diskIOTransformer struct {
 //
 // If blacklist is provided (not empty) it's used and whitelist is ignored.
 func New(whitelist []*regexp.Regexp, blacklist []*regexp.Regexp) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["diskio"]
+	input, ok := telegraf_inputs.Inputs["diskio"]
 
 	if ok {
-		diskioInput := input().(*diskio.DiskIO)
+		diskioInput, _ := input().(*diskio.DiskIO)
 		diskioInput.Log = internal.Logger{}
 		dt := diskIOTransformer{
 			whitelist: whitelist,
@@ -80,6 +80,7 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 		for _, r := range dt.blacklist {
 			if r.MatchString(item) {
 				match = false
+
 				break
 			}
 		}
@@ -87,6 +88,7 @@ func (dt diskIOTransformer) renameGlobal(originalContext internal.GatherContext)
 		for _, r := range dt.whitelist {
 			if r.MatchString(item) {
 				match = true
+
 				break
 			}
 		}

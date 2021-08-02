@@ -27,9 +27,9 @@ import (
 
 // New initialise swap.Input.
 func New() (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["swap"]
+	input, ok := telegraf_inputs.Inputs["swap"]
 	if ok {
-		swapInput := input().(*swap.SwapStats)
+		swapInput, _ := input().(*swap.SwapStats)
 		i = &internal.Input{
 			Input: swapInput,
 			Accumulator: internal.Accumulator{

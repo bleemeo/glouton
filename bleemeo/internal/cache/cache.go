@@ -24,8 +24,10 @@ import (
 	"sync"
 )
 
-const cacheVersion = 4
-const cacheKey = "CacheBleemeoConnector"
+const (
+	cacheVersion = 4
+	cacheKey     = "CacheBleemeoConnector"
+)
 
 // Cache store information about object registered in Bleemeo API.
 type Cache struct {
@@ -404,6 +406,7 @@ func (c *Cache) Save() {
 
 	if err := c.state.Set(cacheKey, c.data); err != nil {
 		logger.V(1).Printf("Unable to save Bleemeo connector cache: %v", err)
+
 		return
 	}
 

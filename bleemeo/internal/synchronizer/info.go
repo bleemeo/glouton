@@ -45,11 +45,13 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve global informations, got '%v'", err)
+
 		return nil
 	}
 
 	if statusCode >= 300 {
 		logger.V(2).Printf("Couldn't retrieve global informations, got HTTP status code %d", statusCode)
+
 		return nil
 	}
 

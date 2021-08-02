@@ -29,6 +29,7 @@ type mockState struct{}
 func (m mockState) Get(key string, result interface{}) error {
 	return nil
 }
+
 func (m mockState) Set(key string, object interface{}) error {
 	return nil
 }
@@ -82,6 +83,7 @@ func TestStateUpdate(t *testing.T) {
 			state = state.Update(step.status, 300*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
 			if state.CurrentStatus != step.want {
 				t.Errorf("case #%d offset %d: state.CurrentStatus == %v, want %v", i, step.timeOffsetSecond, state.CurrentStatus, step.want)
+
 				break
 			}
 		}
@@ -114,6 +116,7 @@ func TestStateUpdatePeriodChange(t *testing.T) {
 			state = state.Update(step.status, time.Duration(step.period)*time.Second, now.Add(time.Duration(step.timeOffsetSecond)*time.Second))
 			if state.CurrentStatus != step.want {
 				t.Errorf("case #%d offset %d: state.CurrentStatus == %v, want %v", i, step.timeOffsetSecond, state.CurrentStatus, step.want)
+
 				break
 			}
 		}

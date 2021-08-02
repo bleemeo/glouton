@@ -24,9 +24,11 @@ import (
 	"github.com/shirou/gopsutil/process"
 )
 
-var errUnknownUser = errors.New("user not found")
-var errNullPointer = errors.New("getProcCache return null-pointer")
-var errChangedInternal = errors.New("process-exporter changed its internal")
+var (
+	errUnknownUser     = errors.New("user not found")
+	errNullPointer     = errors.New("getProcCache return null-pointer")
+	errChangedInternal = errors.New("process-exporter changed its internal")
+)
 
 // See https://github.com/prometheus/procfs/blob/master/proc_stat.go for details on userHZ.
 const userHZ = 100
@@ -130,8 +132,8 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 		}
 
 		if p.procErr != nil {
-			//TODO: an error occurs with the linter as of v1.27. This is fixed in the latest updates.
-			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %w)", err) //nolint: goerr113
+			skippedProcesses = fmt.Errorf("Processes were skipped, the process list may be incomplete (last reason was %w)", err)
+
 			continue
 		}
 
@@ -254,9 +256,7 @@ type procValue struct {
 }
 
 func newProcValue(p proc.Proc) *procValue {
-	var (
-		result procValue
-	)
+	var result procValue
 
 	result.ID, result.IDErr = p.GetProcID()
 	if result.IDErr != nil {
@@ -340,7 +340,6 @@ func getProcCache(p proc.Proc) (unsafe.Pointer, error) {
 // ProcStat allow to fill nearly all fields from facts.Process.
 func getStat(p proc.Proc) (procfs.ProcStat, error) {
 	ptr, err := getProcCache(p)
-
 	if err != nil {
 		return procfs.ProcStat{}, err
 	}

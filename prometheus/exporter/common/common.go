@@ -25,6 +25,7 @@ func MergeREs(regexps []*regexp.Regexp) (string, error) {
 // e.g. ReFromPrefixes("eth"}) will match eth, eth0, ...
 func ReFromPrefix(prefix string) (string, error) {
 	re, err := syntax.Parse(prefix, syntax.Literal)
+
 	return "^" + re.String(), err
 }
 
@@ -33,6 +34,7 @@ func ReFromPrefix(prefix string) (string, error) {
 // Only "/" is supported (e.g. only unix).
 func ReFromPathPrefix(prefix string) (string, error) {
 	re, err := syntax.Parse(prefix, syntax.Literal)
+
 	return "^" + re.String() + "($|/)", err
 }
 

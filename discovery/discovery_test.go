@@ -28,9 +28,11 @@ import (
 	"github.com/influxdata/telegraf"
 )
 
-var errNotImplemented = errors.New("not implemented")
-var errNotCalled = errors.New("not called, want call")
-var errWantName = errors.New("want name")
+var (
+	errNotImplemented = errors.New("not implemented")
+	errNotCalled      = errors.New("not called, want call")
+	errWantName       = errors.New("want name")
+)
 
 type mockState struct {
 	DiscoveredService []Service
@@ -43,6 +45,7 @@ func (ms mockState) Set(key string, object interface{}) error {
 func (ms mockState) Get(key string, object interface{}) error {
 	if services, ok := object.(*[]Service); ok {
 		*services = ms.DiscoveredService
+
 		return nil
 	}
 
@@ -59,6 +62,7 @@ type mockCollector struct {
 func (m *mockCollector) AddInput(_ telegraf.Input, name string) (int, error) {
 	if name != m.ExpectedAddedName {
 		m.err = fmt.Errorf("AddInput(_, %s), %w=%s", name, errWantName, m.ExpectedAddedName)
+
 		return 0, m.err
 	}
 
@@ -70,6 +74,7 @@ func (m *mockCollector) AddInput(_ telegraf.Input, name string) (int, error) {
 func (m *mockCollector) RemoveInput(id int) {
 	if id != m.ExpectedRemoveID {
 		m.err = fmt.Errorf("RemoveInput(%d), %w=%d", id, errWantName, m.ExpectedRemoveID)
+
 		return
 	}
 

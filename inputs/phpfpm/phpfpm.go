@@ -39,7 +39,7 @@ func reflectSet(url string, input telegraf.Input) {
 
 // New initialise phpfpm.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["phpfpm"]
+	input, ok := telegraf_inputs.Inputs["phpfpm"]
 	if ok {
 		phpfpmInput := input()
 

@@ -20,14 +20,13 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"net/http"
-	"net/url"
-	"time"
-
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
 	"glouton/version"
+	"net/http"
+	"net/url"
+	"time"
 )
 
 // HTTPCheck perform a HTTP check.

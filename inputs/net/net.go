@@ -34,9 +34,9 @@ type netTransformer struct {
 //
 // blacklist contains a list of interface name prefix to ignore.
 func New(blacklist []string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["net"]
+	input, ok := telegraf_inputs.Inputs["net"]
 	if ok {
-		netInput := input().(*net.NetIOStats)
+		netInput, _ := input().(*net.NetIOStats)
 		netInput.IgnoreProtocolStats = true
 		nt := netTransformer{
 			blacklist,
@@ -63,12 +63,14 @@ func (nt netTransformer) renameGlobal(originalContext internal.GatherContext) (n
 
 	if !ok {
 		drop = true
+
 		return
 	}
 
 	for _, b := range nt.blacklist {
 		if strings.HasPrefix(item, b) {
 			drop = true
+
 			return
 		}
 	}

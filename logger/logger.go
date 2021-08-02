@@ -71,7 +71,7 @@ func (l Logger) Printf(fmtArg string, a ...interface{}) {
 // Println behave like fmt.Println.
 func (l Logger) Println(v ...interface{}) {
 	if l {
-		println(v...)
+		println(v...) //nolint:forbidigo
 	} else {
 		fmt.Fprintln(logBuffer, v...)
 	}
@@ -88,6 +88,7 @@ func printf(fmtArg string, a ...interface{}) {
 	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
 }
 
+//nolint:forbidigo,predeclared
 func println(v ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
@@ -152,6 +153,7 @@ func UseSyslog() error {
 		err := cfg.enableSyslog()
 		if err == nil {
 			cfg.useSyslog = true
+
 			return nil
 		}
 

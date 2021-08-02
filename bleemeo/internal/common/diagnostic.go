@@ -47,6 +47,7 @@ func DiagnosticTCP(host string, port int, tlsConfig *tls.Config) string {
 
 	if tlsConfig != nil {
 		diagnosticTLS(builder, tlsConfig, host, hostPort, conn)
+
 		return builder.String()
 	}
 
@@ -77,8 +78,7 @@ func diagnosticTLS(builder io.Writer, tlsConfig *tls.Config, host string, hostPo
 		errChannel <- tlsConn.Handshake()
 	}()
 
-	err := <-errChannel
-	if err != nil {
+	if err := <-errChannel; err != nil {
 		fmt.Fprintf(
 			builder,
 			"Glouton is NOT able to establish TLS connection to %s (%s): %v\n",
@@ -122,8 +122,8 @@ func DiagnosticHTTP(u string, tlsConfig *tls.Config) string {
 	defer cancel()
 
 	req = req.WithContext(ctx)
-	resp, err := cl.Do(req)
 
+	resp, err := cl.Do(req)
 	if err != nil {
 		return fmt.Sprintf("Glouton is NOT able to perform HTTP request to %#v: %v\n", u, err)
 	}

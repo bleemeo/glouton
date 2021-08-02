@@ -38,8 +38,7 @@ type ResolverRoot interface {
 	Query() QueryResolver
 }
 
-type DirectiveRoot struct {
-}
+type DirectiveRoot struct{}
 
 type ComplexityRoot struct {
 	AgentInfo struct {
@@ -5689,7 +5688,7 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 
 func (ec *executionContext) unmarshalInputLabelInput(ctx context.Context, obj interface{}) (LabelInput, error) {
 	var it LabelInput
-	var asMap = obj.(map[string]interface{})
+	asMap := obj.(map[string]interface{})
 
 	for k, v := range asMap {
 		switch k {
@@ -5717,7 +5716,7 @@ func (ec *executionContext) unmarshalInputLabelInput(ctx context.Context, obj in
 
 func (ec *executionContext) unmarshalInputMetricInput(ctx context.Context, obj interface{}) (MetricInput, error) {
 	var it MetricInput
-	var asMap = obj.(map[string]interface{})
+	asMap := obj.(map[string]interface{})
 
 	for k, v := range asMap {
 		switch k {
@@ -5737,7 +5736,7 @@ func (ec *executionContext) unmarshalInputMetricInput(ctx context.Context, obj i
 
 func (ec *executionContext) unmarshalInputPagination(ctx context.Context, obj interface{}) (Pagination, error) {
 	var it Pagination
-	var asMap = obj.(map[string]interface{})
+	asMap := obj.(map[string]interface{})
 
 	for k, v := range asMap {
 		switch k {

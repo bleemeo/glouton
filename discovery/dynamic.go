@@ -105,6 +105,7 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 	processes, err := dd.ps.Processes(ctx, time.Since(createTime))
 	if err != nil {
 		logger.V(1).Printf("unable to list processes: %v", err)
+
 		return "", ""
 	}
 
@@ -385,6 +386,7 @@ func (dd *DynamicDiscovery) updateListenAddresses(service *Service, di discovery
 	for _, a := range service.ListenAddresses {
 		if a.Network() == "unix" {
 			newListenAddresses = append(newListenAddresses, a)
+
 			continue
 		}
 
@@ -486,7 +488,7 @@ func (dd *DynamicDiscovery) guessJMX(service *Service, cmdLine []string) {
 		jmxOptions = append(jmxOptions, "-Dcassandra.jmx.local.port=")
 	}
 
-	switch service.ServiceType {
+	switch service.ServiceType { //nolint:exhaustive
 	case CassandraService, ElasticSearchService, ZookeeperService, BitBucketService,
 		JIRAService, ConfluenceService:
 		for _, arg := range cmdLine {
@@ -524,6 +526,7 @@ func serviceByCommand(cmdLine []string) (serviceName ServiceName, found bool) {
 
 	if name == "" {
 		found = false
+
 		return
 	}
 
@@ -573,6 +576,7 @@ func serviceByInterpreter(name string, cmdLine []string) (serviceName ServiceNam
 			for _, m := range candidate.CmdLineMustContains {
 				if !strings.Contains(flatCmdLine, m) {
 					match = false
+
 					break
 				}
 			}

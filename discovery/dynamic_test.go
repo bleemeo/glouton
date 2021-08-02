@@ -59,6 +59,7 @@ type mockContainerInfo struct {
 
 func (mci mockContainerInfo) CachedContainer(containerID string) (container facts.Container, found bool) {
 	c, ok := mci.containers[containerID]
+
 	return c, ok
 }
 
@@ -783,6 +784,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 
 		if len(srv) != 1 {
 			t.Errorf("Case %s: len(srv) == %v, want 1", c.testName, len(srv))
+
 			continue
 		}
 

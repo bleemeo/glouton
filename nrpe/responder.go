@@ -32,8 +32,10 @@ import (
 	"github.com/google/shlex"
 )
 
-var errContainsEmptyCommand = errors.New("NRPE: config file contains an empty command")
-var errUnreadable = errors.New("NRPE: Unable to read output")
+var (
+	errContainsEmptyCommand = errors.New("NRPE: config file contains an empty command")
+	errUnreadable           = errors.New("NRPE: Unable to read output")
+)
 
 type checkRegistry interface {
 	GetCheckNow(discovery.NameContainer) (discovery.CheckNow, error)
@@ -109,6 +111,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 	nrpeCommand, err := r.returnCommand(requestArgs)
 	if err != nil {
 		logger.V(1).Printf("Impossible to create the NRPE command : %s", err)
+
 		return "", 0, errUnreadable
 	}
 
@@ -128,6 +131,7 @@ func (r Responder) responseNRPEConf(ctx context.Context, requestArgs []string) (
 		nagiosCode = exitError.ExitCode()
 	} else if err != nil {
 		logger.V(1).Printf("NRPE command %s failed : %s", nrpeCommand, err)
+
 		return "", 0, errUnreadable
 	}
 
@@ -174,6 +178,7 @@ func readNRPEConf(nrpeConfPath []string) (map[string]string, bool) {
 		confBytes, err := ioutil.ReadFile(nrpeConfFile)
 		if err != nil {
 			logger.V(1).Printf("Impossible to read '%s' : %s", nrpeConfFile, err)
+
 			continue
 		}
 

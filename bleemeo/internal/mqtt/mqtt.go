@@ -42,11 +42,13 @@ import (
 
 var errNotPem = errors.New("not a PEM file")
 
-const maxPendingPoints = 100000
-const pointsBatchSize = 1000
-const minimalDelayBetweenConnect = 5 * time.Second
-const maximalDelayBetweenConnect = 10 * time.Minute
-const stableConnection = 5 * time.Minute
+const (
+	maxPendingPoints           = 100000
+	pointsBatchSize            = 1000
+	minimalDelayBetweenConnect = 5 * time.Second
+	maximalDelayBetweenConnect = 10 * time.Minute
+	stableConnection           = 5 * time.Minute
+)
 
 // Option are parameter for the MQTT client.
 type Option struct {
@@ -341,7 +343,7 @@ func (c *Client) tlsConfig() *tls.Config {
 		return nil
 	}
 
-	tlsConfig := &tls.Config{}
+	tlsConfig := &tls.Config{} //nolint:gosec
 
 	caFile := c.option.Config.String("bleemeo.mqtt.cafile")
 	if caFile != "" {
@@ -445,7 +447,7 @@ func (c *Client) run(ctx context.Context) error {
 
 	var topinfoSendAt time.Time
 
-	time.Sleep(time.Duration(rand.Intn(10000)) * time.Millisecond)
+	time.Sleep(time.Duration(rand.Intn(10000)) * time.Millisecond) //nolint:gosec
 
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
@@ -557,6 +559,7 @@ func (c *Client) sendPoints() {
 			buffer, err := c.encoder.Encode(agentPayload[i:end])
 			if err != nil {
 				logger.V(1).Printf("Unable to encode points: %v", err)
+
 				return
 			}
 
@@ -710,6 +713,7 @@ func (c *Client) sendConnectMessage() {
 	payload, err := json.Marshal(map[string]string{"public_ip": facts["public_ip"]})
 	if err != nil {
 		logger.V(2).Printf("Unable to encode connect message: %v", err)
+
 		return
 	}
 
@@ -726,6 +730,7 @@ type notificationPayload struct {
 func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
 	if len(msg.Payload()) > 1024*60 {
 		logger.V(1).Printf("Ignoring abnormally big MQTT message")
+
 		return
 	}
 
@@ -733,6 +738,7 @@ func (c *Client) onNotification(_ paho.Client, msg paho.Message) {
 
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		logger.V(1).Printf("Failed to decode MQTT message: %v", err)
+
 		return
 	}
 
@@ -786,6 +792,7 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second-time.Second)
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
+
 		return
 	}
 
@@ -794,6 +801,7 @@ func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig
 	compressed, err := c.encoder.Encode(topinfo)
 	if err != nil {
 		logger.V(1).Printf("Unable to encode topinfo: %v", err)
+
 		return
 	}
 
@@ -820,6 +828,7 @@ func (c *Client) waitPublishAndResend(mqttClient paho.Client, deadline time.Time
 				logger.V(2).Printf("MQTT publish on %s failed: %v", m.topic, m.token.Error())
 			} else {
 				c.lastReport = time.Now()
+
 				continue
 			}
 
@@ -875,12 +884,14 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 			monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]
 			if !present {
 				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", mp.Annotations.BleemeoAgentID)
+
 				continue
 			}
 
 			accountConfig, present := accountConfigs[monitor.AccountConfig]
 			if !present {
 				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
+
 				continue
 			}
 
@@ -905,6 +916,7 @@ func (c *Client) ready() bool {
 	cfg := c.option.Cache.CurrentAccountConfig()
 	if cfg.LiveProcessResolution == 0 || cfg.MetricAgentResolution == 0 {
 		logger.V(2).Printf("MQTT not ready, Agent as no configuration")
+
 		return false
 	}
 
@@ -919,7 +931,7 @@ func (c *Client) ready() bool {
 	return false
 }
 
-func (c *Client) connectionManager(ctx context.Context) { // nolint: gocyclo
+func (c *Client) connectionManager(ctx context.Context) { //nolint:gocyclo,cyclop
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 
@@ -955,6 +967,7 @@ mainLoop:
 
 				c.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
+
 				continue
 			}
 

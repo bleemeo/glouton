@@ -32,6 +32,7 @@ func NewProbeGatherer(gatherer prometheus.Gatherer) *ProbeGatherer {
 // GatherWithState().
 func (p *ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	logger.V(2).Println("Gather() called directly on a ProbeGatherer, this is a bug !")
+
 	return p.GatherWithState(GatherState{})
 }
 
@@ -64,6 +65,7 @@ func (p *ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily,
 		if *mf.Name == "probe_success" {
 			if len(mf.Metric) == 0 {
 				logger.V(2).Println("Invalid metric family 'probe_success', got 0 values inside")
+
 				break
 			}
 
@@ -93,6 +95,7 @@ type NonProbeGatherer struct {
 // GatherWithState().
 func (p NonProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	logger.V(2).Println("Gather() called directly on a NonProbeGatherer, this is a bug !")
+
 	return p.GatherWithState(GatherState{})
 }
 
