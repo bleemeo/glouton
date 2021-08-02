@@ -66,7 +66,7 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 
 // syncMonitors updates the list of monitors accessible to the agent.
 func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err error) {
-	if !s.option.Config.Bool("blackbox.enabled") {
+	if !s.option.Config.Bool("blackbox.enable") {
 		// prevent a tiny memory leak
 		s.pendingMonitorsUpdate = nil
 		return nil
