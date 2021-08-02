@@ -255,22 +255,37 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 	return warnings
 }
 
-func migrateEnabled(cfg *config.Configuration) {
+//getEnabledToMigrate is a function used to find all config entries
+// where `enabled` is used instead of `enable`.
+func getEnabledToMigrate(cfg *config.Configuration) []string {
 	keys := []string{
 		"agent.node_exporter.", "agent.windows_exporter.", "agent.http_debug.", "kubernetes.",
 		"blackbox.", "agent.process_exporter.", "web.", "bleemeo.", "jmx.", "nrpe.", "zabbix.",
 		"influxdb.", "telegraf.statsd.", "agent.telemetry.", "agent.node_exporter.",
 		"telegraf.docker_metrics_",
 	}
+	keyToMigrate := make([]string, 0, len(keys))
 
 	for _, key := range keys {
-		res, found := cfg.Get(key + "enabled")
+		_, found := cfg.Get(key + "enabled")
 
 		if found {
-			logger.V(0).Printf("%senabled is deprecated: please use %senable.", key)
-
-			cfg.Set(key+"enable", res)
+			keyToMigrate = append(keyToMigrate, key)
 		}
+	}
+
+	return keyToMigrate
+}
+
+func migrateEnabled(cfg *config.Configuration) {
+	keys := getEnabledToMigrate(cfg)
+
+	for _, key := range keys {
+		val, _ := cfg.Get(key + "enabled")
+
+		logger.V(0).Printf("%senabled is deprecated: please use %senable.", key, key)
+
+		cfg.Set(key+"enable", val)
 	}
 }
 

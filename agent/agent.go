@@ -741,6 +741,7 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
+		{a.sendDeprecatedAlerts, "Send deprecated warning points"},
 	}
 
 	if a.config.Bool("web.enable") {
@@ -1102,6 +1103,40 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 			}
 		}
 	}
+}
+
+func (a *agent) sendDeprecatedAlerts(ctx context.Context) error {
+	select {
+	case <-time.After(30 * time.Second):
+	case <-ctx.Done():
+		return nil
+	}
+
+	t0 := time.Now().Truncate(time.Second)
+	keyList := getEnabledToMigrate(a.config)
+	points := make([]types.MetricPoint, 0, len(keyList))
+
+	for _, key := range keyList {
+		points = append(points, types.MetricPoint{
+			Point: types.Point{
+				Value: float64(types.StatusWarning.NagiosCode()),
+				Time:  t0,
+			},
+			Labels: map[string]string{
+				types.LabelName: "deprecated_field_" + key + "enabled",
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					StatusDescription: fmt.Sprintf("%senabled is deprecated. Please use %senable", key, key),
+					CurrentStatus:     types.StatusWarning,
+				},
+			},
+		})
+	}
+
+	a.store.PushPoints(points)
+
+	return nil
 }
 
 func (a *agent) miscTasks(ctx context.Context) error {
