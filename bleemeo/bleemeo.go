@@ -106,6 +106,12 @@ func (c *Connector) ApplyCachedConfiguration() {
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}
 	}
+
+	currentConfig := c.cache.CurrentAccountConfig()
+
+	if c.option.UpdateMetricResolution != nil {
+		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
+	}
 }
 
 func (c *Connector) initMQTT(previousPoint []gloutonTypes.MetricPoint, first bool) error {

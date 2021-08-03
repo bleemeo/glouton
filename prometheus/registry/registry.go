@@ -511,7 +511,10 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 
 	logger.V(2).Printf("Change metric collector delay to %v", delay)
 
-	r.updateDelayC <- nil
+	select {
+	case r.updateDelayC <- nil:
+	default: // don't block
+	}
 }
 
 func (r *Registry) run(ctx context.Context) {
@@ -526,6 +529,15 @@ func (r *Registry) run(ctx context.Context) {
 
 	for {
 		r.runOnce()
+
+		// check if currentDelay change. we can miss updateDelayC message
+		r.l.Lock()
+		newDelay := r.currentDelay
+		r.l.Unlock()
+
+		if currentDelay != newDelay {
+			return
+		}
 
 		select {
 		case <-r.updateDelayC:

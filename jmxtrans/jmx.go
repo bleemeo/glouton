@@ -71,7 +71,12 @@ func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.D
 	j.metricResolution = metricResolution
 
 	if j.triggerConfigUpdate == nil {
-		j.triggerConfigUpdate = make(chan updateRequest)
+		// this means we are not yet started, Update config in this go-routing.
+		err := j.jmxConfig.UpdateConfig(j.services, j.metricResolution)
+
+		j.l.Unlock()
+
+		return err
 	}
 
 	if j.stopped {
