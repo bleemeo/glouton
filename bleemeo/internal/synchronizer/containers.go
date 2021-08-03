@@ -176,7 +176,7 @@ func (s *Synchronizer) containerUpdateList() error {
 func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Container) error {
 	factsMap, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 	if err != nil {
-		return nil //nolint:nilerr
+		return err
 	}
 
 	remoteContainers := s.option.Cache.Containers()

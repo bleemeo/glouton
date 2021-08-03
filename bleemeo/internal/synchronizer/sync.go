@@ -30,7 +30,6 @@ import (
 	"glouton/types"
 	"math"
 	"math/big"
-	"math/rand"
 	"net/url"
 	"strconv"
 	"strings"
@@ -743,7 +742,10 @@ func (s *Synchronizer) register() error {
 		return errBleemeoUndefined
 	}
 
-	password := generatePassword(20)
+	password, err := generatePassword(20)
+	if err != nil {
+		return err
+	}
 
 	var objectID struct {
 		ID string
@@ -791,7 +793,7 @@ func (s *Synchronizer) register() error {
 	return nil
 }
 
-func generatePassword(length int) string {
+func generatePassword(length int) (string, error) {
 	letters := []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#-_@%*:;$")
 	b := make([]rune, length)
 
@@ -800,11 +802,11 @@ func generatePassword(length int) string {
 		n := int(bigN.Int64())
 
 		if err != nil {
-			n = rand.Intn(len(letters)) //nolint:gosec
+			return "", err
 		}
 
 		b[i] = letters[n]
 	}
 
-	return string(b)
+	return string(b), nil
 }

@@ -258,7 +258,7 @@ func (k *Kubernetes) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 
 func (k *Kubernetes) getCertificateExpiration(config *rest.Config, now time.Time) (types.MetricPoint, error) {
 	caPool := x509.NewCertPool()
-	tlsConfig := &tls.Config{} //nolint:gosec
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	caData := config.TLSClientConfig.CAData
 
 	var err error

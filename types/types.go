@@ -67,11 +67,13 @@ func StringToMetricFormat(input string) MetricFormat {
 }
 
 func (f MetricFormat) String() string {
-	switch f { //nolint:exhaustive
+	switch f {
 	case MetricFormatBleemeo:
 		return "Bleemeo"
 	case MetricFormatPrometheus:
 		return "Prometheus"
+	case MetricFormatUnknown:
+		return "unknown" //nolint:goconst
 	default:
 		return "unknown"
 	}
@@ -133,13 +135,15 @@ func (s Status) String() string {
 
 // NagiosCode return the Nagios value for a Status.
 func (s Status) NagiosCode() int {
-	switch s { //nolint:exhaustive
+	switch s {
 	case StatusOk:
 		return 0
 	case StatusWarning:
 		return 1
 	case StatusCritical:
 		return 2
+	case StatusUnknown, StatusUnset:
+		return 3
 	default:
 		return 3
 	}

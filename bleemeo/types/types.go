@@ -113,7 +113,7 @@ const (
 )
 
 func (r DisableReason) String() string {
-	switch r { //nolint:exhaustive
+	switch r {
 	case DisableDuplicatedAgent:
 		return "duplicated state.json"
 	case DisableTooManyErrors:
@@ -126,6 +126,8 @@ func (r DisableReason) String() string {
 		return "authentication error with Bleemeo API"
 	case DisableTimeDrift:
 		return "local time is too different from actual time"
+	case NotDisabled:
+		return "not disabled"
 	default:
 		return "unspecified reason"
 	}

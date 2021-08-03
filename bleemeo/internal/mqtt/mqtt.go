@@ -343,7 +343,7 @@ func (c *Client) tlsConfig() *tls.Config {
 		return nil
 	}
 
-	tlsConfig := &tls.Config{} //nolint:gosec
+	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 
 	caFile := c.option.Config.String("bleemeo.mqtt.cafile")
 	if caFile != "" {
