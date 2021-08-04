@@ -107,6 +107,7 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
+	snmpTargets            []snmp.Target
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
@@ -677,14 +678,12 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	var scrapperSNMPTargets []*scrapper.Target
 
-	var snmpTargets []snmp.Target
-
 	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {
-			address := a.config.String("metric.snmp.exporter_address")
-			snmpTargets = snmp.ConfigToURLs(configList, address)
+			snmpExporterAddress := a.config.String("metric.snmp.exporter_address")
+			a.snmpTargets = snmp.ConfigToURLs(configList)
 
-			scrapperSNMPTargets = snmp.GenerateScrapperTargets(snmpTargets)
+			scrapperSNMPTargets = snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
 		}
 	}
 
@@ -804,7 +803,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
 			Store:                   filteredStore,
-			SNMP:                    snmpTargets,
+			SNMP:                    a.snmpTargets,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
@@ -1790,6 +1789,20 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 	}
 
 	err = yamlZip(zipFile, a)
+	if err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("snmp-targets.txt")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpTargets))
+
+	for _, t := range a.snmpTargets {
+		fmt.Fprintf(file, "initial_name=%s target=%s module=%s\n", t.InitialName, t.Address, t.Module())
+	}
 
 	return err
 }

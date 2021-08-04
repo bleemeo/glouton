@@ -29,18 +29,25 @@ type Target struct {
 	InitialName string
 	Address     string
 	Type        string
-	URL         *url.URL
 }
 
-func ConfigToURLs(vMap []interface{}, address string) (result []Target) {
+func (t Target) Module() string {
+	return "if_mib"
+}
+
+func (t Target) URL(snmpExporterAddress string) (*url.URL, error) {
+	urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", snmpExporterAddress, t.Module(), t.Address)
+
+	return url.Parse(urlText)
+}
+
+func ConfigToURLs(vMap []interface{}) (result []Target) {
 	for _, iMap := range vMap {
 		tmp, ok := iMap.(map[string]interface{})
 
 		if !ok {
 			continue
 		}
-
-		module := "if_mib"
 
 		target, ok := tmp["target"].(string)
 		if !ok {
@@ -54,19 +61,9 @@ func ConfigToURLs(vMap []interface{}, address string) (result []Target) {
 			initialName = target
 		}
 
-		urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", address, module, target)
-
-		u, err := url.Parse(urlText)
-		if err != nil {
-			logger.Printf("ignoring invalid exporter config: %v", err)
-
-			continue
-		}
-
 		t := Target{
 			InitialName: initialName,
 			Address:     target,
-			URL:         u,
 		}
 
 		result = append(result, t)
@@ -75,17 +72,22 @@ func ConfigToURLs(vMap []interface{}, address string) (result []Target) {
 	return result
 }
 
-func GenerateScrapperTargets(snmpTargets []Target) (result []*scrapper.Target) {
+func GenerateScrapperTargets(snmpTargets []Target, snmpExporterAddress string) (result []*scrapper.Target) {
 	for _, t := range snmpTargets {
+		u, err := t.URL(snmpExporterAddress)
+		if err != nil {
+			logger.Printf("ignoring invalid exporter config: %v", err)
+		}
+
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
 				types.LabelMetaScrapeJob: t.InitialName,
 				// HostPort could be empty, but this ExtraLabels is used by Registry which
 				// correctly handle empty value value (drop the label).
-				types.LabelMetaScrapeInstance: scrapper.HostPort(t.URL),
+				types.LabelMetaScrapeInstance: scrapper.HostPort(u),
 				types.LabelSNMPTarget:         t.Address,
 			},
-			URL:       t.URL,
+			URL:       u,
 			AllowList: []string{},
 			DenyList:  []string{},
 		}
