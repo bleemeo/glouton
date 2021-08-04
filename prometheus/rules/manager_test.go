@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/logger"
 	"glouton/store"
 	"glouton/types"
 	"strings"
@@ -491,14 +492,15 @@ func Test_manager(t *testing.T) {
 func Test_Rebuild_Rules(t *testing.T) {
 	store := store.New()
 	ctx := context.Background()
-	now := time.Now().Truncate(time.Second)
-	ruleManager := NewManager(ctx, store, now.Add(-6*time.Minute), 15*time.Second)
+	t1 := time.Now().Truncate(time.Second)
+	t0 := t1.Add(-7 * time.Minute)
+	ruleManager := NewManager(ctx, store, t0, 15*time.Second)
 	thresholds := []float64{50, 500}
 
 	store.PushPoints([]types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now,
+				Time:  t0.Add(-1 * time.Second),
 				Value: 700,
 			},
 			Labels: map[string]string{
@@ -507,7 +509,25 @@ func Test_Rebuild_Rules(t *testing.T) {
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(4 * time.Minute),
+				Time:  t0.Add(4 * time.Minute),
+				Value: 700,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  t0.Add(8 * time.Minute),
+				Value: 700,
+			},
+			Labels: map[string]string{
+				types.LabelName: metricName,
+			},
+		},
+		{
+			Point: types.Point{
+				Time:  t0.Add(11 * time.Minute),
 				Value: 700,
 			},
 			Labels: map[string]string{
@@ -519,78 +539,92 @@ func Test_Rebuild_Rules(t *testing.T) {
 	want := []types.MetricPoint{
 		{
 			Point: types.Point{
-				Time:  now,
+				Time:  t1,
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(1 * time.Minute),
+				Time:  t1.Add(time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
-				},
-			},
-		}, {
-			Point: types.Point{
-				Time:  now.Add(2 * time.Minute),
-				Value: 0,
-			},
-			Annotations: types.MetricAnnotations{
-				Status: types.StatusDescription{
-					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(3 * time.Minute),
+				Time:  t1.Add(2 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
+
 		{
 			Point: types.Point{
-				Time:  now.Add(4 * time.Minute),
+				Time:  t1.Add(3 * time.Minute),
 				Value: 0,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusOk,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) not exeeded for the last " + promAlertTime.String(),
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
 		{
 			Point: types.Point{
-				Time:  now.Add(5 * time.Minute),
+				Time:  t1.Add(4 * time.Minute),
+				Value: 0,
+			},
+			Annotations: types.MetricAnnotations{
+				Status: types.StatusDescription{
+					CurrentStatus:     types.StatusOk,
+					StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
+				},
+			},
+		},
+		// {
+		// 	Point: types.Point{
+		// 		Time:  t1.Add(5 * time.Minute),
+		// 		Value: 0,
+		// 	},
+		// 	Annotations: types.MetricAnnotations{
+		// 		Status: types.StatusDescription{
+		// 			CurrentStatus:     types.StatusOk,
+		// 			StatusDescription: "Current value: 700.00. Threshold (50.00) not exceeded for the last " + promAlertTime.String(),
+		// 		},
+		// 	},
+		// },
+		{
+			Point: types.Point{
+				Time:  t1.Add(5 * time.Minute),
 				Value: 2,
 			},
 			Annotations: types.MetricAnnotations{
 				Status: types.StatusDescription{
 					CurrentStatus:     types.StatusCritical,
-					StatusDescription: "Current value: 700.00. Threshold (50.00) exeeded for the last " + promAlertTime.String(),
+					StatusDescription: "Current value: 700.00. Threshold (50.00) exceeded for the last " + promAlertTime.String(),
 				},
 			},
 		},
 	}
 
-	points := []bleemeoTypes.Metric{
+	alertsRules := []bleemeoTypes.Metric{
 		{
 			ID:         "NODE-ID",
 			LabelsText: metricName,
@@ -601,16 +635,16 @@ func Test_Rebuild_Rules(t *testing.T) {
 			PromQLQuery:       metricName,
 			IsUserPromQLAlert: false,
 		},
-		{
-			ID:         "CPU-ID",
-			LabelsText: "cpu_counter",
-			Threshold: bleemeoTypes.Threshold{
-				HighWarning:  &thresholds[0],
-				HighCritical: &thresholds[1],
-			},
-			PromQLQuery:       "cpu_counter",
-			IsUserPromQLAlert: false,
-		},
+		// {
+		// 	ID:         "CPU-ID",
+		// 	LabelsText: "cpu_counter",
+		// 	Threshold: bleemeoTypes.Threshold{
+		// 		HighWarning:  &thresholds[0],
+		// 		HighCritical: &thresholds[1],
+		// 	},
+		// 	PromQLQuery:       "cpu_counter",
+		// 	IsUserPromQLAlert: false,
+		// },
 	}
 
 	resPoints := []types.MetricPoint{}
@@ -619,30 +653,34 @@ func Test_Rebuild_Rules(t *testing.T) {
 		resPoints = append(resPoints, mp...)
 	})
 
-	err := ruleManager.RebuildAlertingRules(points)
+	err := ruleManager.RebuildAlertingRules(alertsRules)
 	if err != nil {
 		t.Error(err)
 
 		return
 	}
+
+	logger.V(0).Printf("BASE TIME: %v", t1)
 
 	for i := 0; i < 5; i++ {
-		ruleManager.Run(ctx, now.Add(time.Duration(i)*time.Minute))
+		ruleManager.Run(ctx, t1.Add(time.Duration(i)*time.Minute))
 	}
 
-	err = ruleManager.RebuildAlertingRules(points)
+	err = ruleManager.RebuildAlertingRules(alertsRules)
 	if err != nil {
 		t.Error(err)
 
 		return
 	}
+
+	// this call to run should create another point.
+	// By doing so we can verify multiple calls to RebuildAlertingRules won't reset rules state.
+	ruleManager.Run(ctx, t1.Add(5*time.Minute))
 
 	fmt.Println("Number of points: ", len(resPoints), resPoints)
 
-	ruleManager.Run(ctx, now.Add(5*time.Minute))
-
-	if len(ruleManager.alertingRules) != len(points) {
-		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(points), len(ruleManager.alertingRules))
+	if len(ruleManager.alertingRules) != len(alertsRules) {
+		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(alertsRules), len(ruleManager.alertingRules))
 	}
 
 	res := cmp.Diff(resPoints, want)

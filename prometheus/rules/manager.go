@@ -197,6 +197,7 @@ func (rm *Manager) Run(ctx context.Context, now time.Time) {
 
 	for _, agr := range rm.alertingRules {
 		point, err := agr.runGroup(ctx, now, rm)
+
 		if err != nil {
 			logger.V(2).Printf("An error occurred while trying to execute rules: %w")
 		} else if point != nil {
@@ -351,7 +352,7 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 			exceeded = "not "
 		}
 
-		desc = fmt.Sprintf("Current value: %s. Threshold (%s) %sexeeded for the last %s",
+		desc = fmt.Sprintf("Current value: %s. Threshold (%s) %sexceeded for the last %s",
 			threshold.FormatValue(alerts[0].Value, threshold.Unit{}),
 			threshold.FormatValue(agr.lowestThreshold(), threshold.Unit{}),
 			exceeded, promAlertTime.String())
@@ -485,7 +486,7 @@ func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error
 		prevInstance, ok := old[val.LabelsText]
 
 		if ok && prevInstance.promql == val.PromQLQuery && prevInstance.Equal(val.Threshold.ToInternalThreshold()) {
-			rm.alertingRules[val.ID] = prevInstance
+			rm.alertingRules[prevInstance.labelsText] = prevInstance
 		} else {
 			err := rm.addAlertingRule(val, "")
 			if err != nil {
