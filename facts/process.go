@@ -149,6 +149,7 @@ func NewProcess(pslister ProcessLister, hostRootPath string, cr containerRuntime
 // It may use a cached value as old as maxAge.
 func (pp *ProcessProvider) Processes(ctx context.Context, maxAge time.Duration) (processes map[int]Process, err error) {
 	processes, _, err = pp.ProcessesWithTime(ctx, maxAge)
+
 	return
 }
 
@@ -218,7 +219,7 @@ func PsStat2Status(psStat string) string {
 	}
 }
 
-func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration) error { //nolint: gocyclo
+func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, maxAge time.Duration) error { //nolint:gocyclo,cyclop
 	// Process creation time is accurate up to 1/SC_CLK_TCK seconds,
 	// usually 1/100th of seconds.
 	// Process must be started at least 1/100th before t0.
@@ -368,6 +369,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					newProcessesMap[p.PID] = p
 				case err != nil:
 					logger.V(2).Printf("Error when querying container runtime for process %d (%s): %v", p.PID, p.Name, err)
+
 					fallthrough
 				default:
 					// Check another time because the process may have terminated while findContainerOfProcess is running
@@ -478,9 +480,8 @@ func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
 
 	total1 := pp.lastCPUtimes.Total()
 	total2 := cpuTimes.Total()
-	delta := total2 - total1
 
-	if delta >= 0 {
+	if delta := total2 - total1; delta >= 0 {
 		between0and100 := func(input float64) float64 {
 			if input < 0 {
 				return 0

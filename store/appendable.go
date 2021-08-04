@@ -28,7 +28,7 @@ type appender struct {
 	store *Store
 }
 
-//Appender returns a prometheus appender wrapping the in memory store.
+// Appender returns a prometheus appender wrapping the in memory store.
 func (s *Store) Appender() storage.Appender {
 	return appender{store: s}
 }

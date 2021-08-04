@@ -31,7 +31,7 @@ import (
 	"github.com/prometheus/prometheus/rules"
 )
 
-//Manager is a wrapper handling everything related to prometheus recording
+// Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
 type Manager struct {
 	// store implements both appendable and queryable.

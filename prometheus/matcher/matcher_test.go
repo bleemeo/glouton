@@ -121,7 +121,6 @@ func Test_NormalizeMetric(t *testing.T) {
 
 		t.Run(localTest.name, func(t *testing.T) {
 			got, err := NormalizeMetric(localTest.allowListString)
-
 			if err != nil {
 				t.Errorf("Invalid result Got error => %v ", err)
 			}
@@ -137,17 +136,15 @@ func Test_NormalizeMetric(t *testing.T) {
 func Test_Fail_NormalizeMetrics(t *testing.T) {
 	metric := "this*_should$_fail{scrape_instance=\"error\"}"
 
-	_, err := NormalizeMetric(metric)
-
-	if err == nil {
+	if _, err := NormalizeMetric(metric); err == nil {
 		t.Errorf("Invalid case not treated as error: expected metric %s to fail", metric)
 	}
 }
 
 func Test_Add_Same_Type(t *testing.T) {
 	m, _ := NormalizeMetric("cpu")
-	err := m.Add(types.LabelName, "cpu2", labels.MatchEqual)
 
+	err := m.Add(types.LabelName, "cpu2", labels.MatchEqual)
 	if err != nil {
 		t.Errorf("An error occurred: %v", err)
 	}
@@ -163,7 +160,7 @@ func Test_Add_Same_Type(t *testing.T) {
 
 func Test_Add_Different_Type(t *testing.T) {
 	m, _ := NormalizeMetric("cpu")
-	before := len(m)
+	before := len(m) //nolint:ifshort
 
 	err := m.Add(types.LabelName, "cpu2", labels.MatchRegexp)
 	if err != nil {
@@ -686,9 +683,8 @@ func Test_String(t *testing.T) {
 	_ = m.Add("test", "test", labels.MatchEqual)
 
 	want := "{__name__=\"cpu\",test=\"test\"}"
-	got := m.String()
 
-	if got != want {
+	if got := m.String(); got != want {
 		t.Errorf("Invalid value for string result: got %s want %s", got, want)
 	}
 }

@@ -55,6 +55,8 @@ func Test_reflection(t *testing.T) {
 }
 
 func testAllProcs(t *testing.T, source proc.Source) {
+	t.Helper()
+
 	myPID := os.Getpid()
 	foundMyself := false
 
@@ -77,6 +79,8 @@ func testAllProcs(t *testing.T, source proc.Source) {
 }
 
 func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Duration) {
+	t.Helper()
+
 	myPID := os.Getpid()
 	foundMyself := false
 
@@ -96,9 +100,11 @@ func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Durati
 	}
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func testProc(t *testing.T, procs proc.Iter) {
-	internalProc := procs.(*iter)
+	t.Helper()
+
+	internalProc, _ := procs.(*iter)
 	current := internalProc.procValue
 
 	if os.IsNotExist(current.procErr) {

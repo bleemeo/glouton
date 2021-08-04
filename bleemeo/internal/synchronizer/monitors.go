@@ -26,15 +26,17 @@ import (
 	"glouton/types"
 )
 
-var errMissingAccountConf = errors.New("missing account configuration")
-var errCannotParse = errors.New("couldn't parse monitor")
+var (
+	errMissingAccountConf = errors.New("missing account configuration")
+	errCannotParse        = errors.New("couldn't parse monitor")
+)
 
 type monitorOperation int
 
 const (
-	// Change allows to add or update a monitor
+	// Change allows to add or update a monitor.
 	Change monitorOperation = iota
-	// Delete specifies the monitor should be deleted
+	// Delete specifies the monitor should be deleted.
 	Delete
 )
 
@@ -69,6 +71,7 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 	if !s.option.Config.Bool("blackbox.enabled") {
 		// prevent a tiny memory leak
 		s.pendingMonitorsUpdate = nil
+
 		return nil
 	}
 
@@ -116,6 +119,7 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error {
 	if s.option.MonitorManager == (*blackbox.RegisterManager)(nil) {
 		logger.V(2).Println("blackbox_exporter is not configured, ApplyMonitorUpdate will not update its config.")
+
 		return nil
 	}
 
@@ -159,6 +163,7 @@ func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error 
 	// refresh blackbox collectors to meet the new configuration
 	if err := s.option.MonitorManager.UpdateDynamicTargets(processedMonitors); err != nil {
 		logger.V(1).Printf("Could not update blackbox_exporter")
+
 		return err
 	}
 
@@ -215,6 +220,7 @@ OuterBreak:
 					// nor moving numerous elements) deletion
 					currentMonitors[k] = currentMonitors[len(currentMonitors)-1]
 					currentMonitors = currentMonitors[:len(currentMonitors)-1]
+
 					continue OuterBreak
 				}
 			}
@@ -233,6 +239,7 @@ OuterBreak:
 			// we couldn't fetch that object ? let's skip it
 			if statusCode < 200 || statusCode >= 300 {
 				logger.V(2).Printf("probes: couldn't update service '%s', got HTTP %d", m.uuid, statusCode)
+
 				continue
 			}
 
@@ -251,6 +258,7 @@ OuterBreak:
 					}
 
 					currentMonitors[k] = result
+
 					continue OuterBreak
 				}
 			}

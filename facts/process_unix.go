@@ -29,7 +29,7 @@ import (
 )
 
 // Processes retrieves the list of all the current processes and their respective information.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	psutilProcesses, err := process.Processes()
 	if err != nil {

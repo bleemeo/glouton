@@ -62,7 +62,7 @@ func V(level int) Logger {
 // Printf behave like fmt.Printf.
 func (l Logger) Printf(fmtArg string, a ...interface{}) {
 	if l {
-		printf(fmtArg, a...)
+		loggerPrintf(fmtArg, a...)
 	} else {
 		fmt.Fprintf(logBuffer, fmtArg+"\n", a...)
 	}
@@ -71,13 +71,13 @@ func (l Logger) Printf(fmtArg string, a ...interface{}) {
 // Println behave like fmt.Println.
 func (l Logger) Println(v ...interface{}) {
 	if l {
-		println(v...)
+		loggerPrintln(v...)
 	} else {
 		fmt.Fprintln(logBuffer, v...)
 	}
 }
 
-func printf(fmtArg string, a ...interface{}) {
+func loggerPrintf(fmtArg string, a ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
@@ -88,7 +88,7 @@ func printf(fmtArg string, a ...interface{}) {
 	_, _ = fmt.Fprintf(cfg.teeWriter, fmtArg+"\n", a...)
 }
 
-func println(v ...interface{}) {
+func loggerPrintln(v ...interface{}) {
 	cfg.l.Lock()
 	defer cfg.l.Unlock()
 
@@ -101,7 +101,7 @@ func println(v ...interface{}) {
 
 // Printf behave like fmt.Printf.
 func Printf(fmt string, a ...interface{}) {
-	printf(fmt, a...)
+	loggerPrintf(fmt, a...)
 }
 
 type config struct {
@@ -152,6 +152,7 @@ func UseSyslog() error {
 		err := cfg.enableSyslog()
 		if err == nil {
 			cfg.useSyslog = true
+
 			return nil
 		}
 

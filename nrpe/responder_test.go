@@ -29,6 +29,7 @@ command[check_users]=/usr/local/nagios/libexec/check_users -w 5 -c 10
 pid_file=/var/run/nagios/nrpe.pid
 include=/etc/nagios/nrpe_local.cfg
 `
+
 const nrpeConf2 = `
 # NRPE Commands
 command[check_load]=/usr/local/nagios/libexec/check_load -r -w .15,.10,.05 -c .30,.25,.20
@@ -37,6 +38,7 @@ command[check_zombie_procs]=/usr/local/nagios/libexec/check_procs -w 5 -c 10 -s 
 connection_timeout=300
 dont_blame_nrpe=0
 `
+
 const nrpeConf3 = `
 # NRPE Commands
 command[check_users]=new command
@@ -46,6 +48,7 @@ command[check_zombie_procs]=new command again
 pid_file=/var/run/nagios/nrpe.pid
 dont_blame_nrpe=1
 `
+
 const nrpeConf4 = `
 dont_blame_nrpe=1
 `

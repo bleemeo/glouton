@@ -190,7 +190,7 @@ func TestDerive(t *testing.T) {
 		}
 
 		for _, c := range cases {
-			got := fields[c.name].(float64)
+			got, _ := fields[c.name].(float64)
 			if math.Abs(got-c.value) > 0.001 {
 				t.Errorf("fields[%#v] == %v, want %v", c.name, fields[c.name], c.value)
 			}
@@ -283,7 +283,7 @@ func TestDeriveFunc(t *testing.T) {
 		}
 
 		for _, c := range cases {
-			got := fields[c.name].(float64)
+			got, _ := fields[c.name].(float64)
 			if math.Abs(got-c.value) > 0.001 {
 				t.Errorf("fields[%#v] == %v, want %v", c.name, fields[c.name], c.value)
 			}
@@ -360,7 +360,7 @@ func TestDeriveMultipleTag(t *testing.T) {
 			t.Errorf("len(fields) == %v, want %v", len(fields), 1)
 		}
 
-		got := fields["io_reads"].(float64)
+		got, _ := fields["io_reads"].(float64)
 
 		if math.Abs(got-want) > 0.001 {
 			t.Errorf("fields[%#v] == %v, want %v", "io_reads", fields["io_reads"], want)
@@ -515,6 +515,7 @@ func TestRenameCallback(t *testing.T) {
 				labels["service_name"] = "mysql_1"
 				labels["service"] = "mysql"
 				annotations.BleemeoItem = "somevalue"
+
 				return labels, annotations
 			},
 		},
@@ -574,6 +575,7 @@ func TestRenameCallback2(t *testing.T) {
 			newContext.Annotations = types.MetricAnnotations{
 				BleemeoItem: "dbname",
 			}
+
 			return newContext, false
 		},
 		RenameCallbacks: []RenameCallback{
@@ -585,6 +587,7 @@ func TestRenameCallback2(t *testing.T) {
 				} else {
 					annotations.BleemeoItem = labels[types.LabelContainerName]
 				}
+
 				return labels, annotations
 			},
 		},
@@ -639,12 +642,14 @@ func TestLabelsMutation(t *testing.T) {
 				Tags:        make(map[string]string),
 			}
 			newContext.Tags["db"] = "dbname"
+
 			return newContext, false
 		},
 		RenameCallbacks: []RenameCallback{
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
 				labels["service"] = "postgresql"
 				labels[types.LabelContainerName] = "name"
+
 				return labels, annotations
 			},
 		},

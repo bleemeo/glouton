@@ -69,7 +69,7 @@ func (r *rotatingLogs) open() error {
 		}
 	}
 
-	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0755)
+	fd, err := os.OpenFile(filename, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o755)
 	if err != nil {
 		return err
 	}

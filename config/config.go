@@ -100,7 +100,7 @@ func (c *Configuration) LoadEnv(key string, varType ValueType, envName string) (
 		return
 	}
 
-	switch varType {
+	switch varType { //nolint:exhaustive
 	case TypeString:
 		c.Set(key, value)
 	case TypeStringList:
@@ -155,6 +155,7 @@ func deleteCfg(root map[string]interface{}, keyPart []string) {
 
 	if len(keyPart) == 1 {
 		delete(root, key)
+
 		return
 	}
 
@@ -305,6 +306,7 @@ func (c *Configuration) Bool(key string) bool {
 // Get return the given key as interface{}.
 func (c *Configuration) Get(key string) (result interface{}, found bool) {
 	keyPart := strings.Split(key, ".")
+
 	return get(c.rawValues, keyPart)
 }
 
@@ -389,6 +391,7 @@ func merge(root map[string]interface{}, newValue map[string]interface{}) {
 			if oldV, ok := root[k]; ok {
 				if oldMap, ok := oldV.(map[string]interface{}); ok {
 					merge(oldMap, newMap)
+
 					continue
 				}
 			}
@@ -432,6 +435,7 @@ func setValue(root map[string]interface{}, keyPart []string, value interface{}) 
 
 	if len(keyPart) == 1 {
 		root[key] = value
+
 		return
 	}
 

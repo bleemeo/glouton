@@ -8,10 +8,26 @@ linters:
     - funlen
     - gomnd # too picky. For example it say that all service port in our known services list is a magic number (even if present only once)
     - godox # too many TODO in code, but should be removed and TODO fixed :)
-    - testpackage # Require to review all our tests. Should be done
     - nestif # Too many error for now, which would require significant refactor.
     - gocognit
+    - tagliatelle # Check struct tags. Too many errors we can't fix.
+    - exhaustivestruct # This linter is meant to be used only for special cases.
+    - wrapcheck # Too many errors, which would require to refactor most returned errors.
+    - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
+    - gci # Conflicts with gofumpt.
+    # Requires to review all our tests. Should be done
+    - paralleltest
+    - tparallel
+    - testpackage
+    # disable deprecated & replaced linter
+    - maligned
+    - golint
+    - interfacer
+    - scopelint
 linters-settings:
   gocyclo:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
     min-complexity: 15
+  cyclop:
+    # same as gocyclo
+    max-complexity: 15

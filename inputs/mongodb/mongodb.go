@@ -27,7 +27,7 @@ import (
 
 // New initialise mongodb.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["mongodb"]
+	input, ok := telegraf_inputs.Inputs["mongodb"]
 	if ok {
 		mongodbInput, ok := input().(*mongodb.MongoDB)
 		if ok {

@@ -30,9 +30,11 @@ import (
 	"time"
 )
 
-var errUpdateFromEnv = errors.New("update from environment variable is not supported")
-var errDeprecatedEnv = errors.New("environement variable is deprecated")
-var errSettingsDeprecated = errors.New("setting is deprecated ")
+var (
+	errUpdateFromEnv      = errors.New("update from environment variable is not supported")
+	errDeprecatedEnv      = errors.New("environement variable is deprecated")
+	errSettingsDeprecated = errors.New("setting is deprecated ")
+)
 
 func defaultConfig() map[string]interface{} {
 	return map[string]interface{}{
@@ -405,6 +407,7 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 
 		if err != nil {
 			finalError = err
+
 			continue
 		}
 
@@ -463,6 +466,7 @@ func convertToString(rawValue interface{}) string {
 		return strconv.FormatInt(int64(value), 10)
 	case []interface{}, []string, map[string]interface{}, map[interface{}]interface{}, []map[string]interface{}:
 		b, _ := json.Marshal(rawValue)
+
 		return string(b)
 	default:
 		return fmt.Sprintf("%v", rawValue)
@@ -477,6 +481,7 @@ func confFieldToSliceMap(input interface{}, confType string) []map[string]string
 	inputMap, ok := input.([]interface{})
 	if !ok {
 		logger.Printf("%s in configuration file is not a list", confType)
+
 		return nil
 	}
 
@@ -486,6 +491,7 @@ func confFieldToSliceMap(input interface{}, confType string) []map[string]string
 		vMap, ok := convertToMap(v)
 		if !ok {
 			logger.Printf("%s entry #%d is not a map, ignoring, %#v", confType, i, v)
+
 			continue
 		}
 
@@ -509,6 +515,7 @@ func softPeriodsFromInterface(input interface{}) map[string]time.Duration {
 	inputMap, ok := convertToMap(input)
 	if !ok {
 		logger.Printf("softstatus period in configuration file is not a map")
+
 		return nil
 	}
 

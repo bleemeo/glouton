@@ -18,13 +18,12 @@ package check
 
 import (
 	"context"
-	"net"
-	"sync"
-	"time"
-
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
+	"net"
+	"sync"
+	"time"
 )
 
 // baseCheck perform a service.
@@ -69,6 +68,7 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		for _, v := range tcpAddresses {
 			if v == mainTCPAddress {
 				found = true
+
 				break
 			}
 		}
@@ -331,6 +331,7 @@ func (bc *baseCheck) openSocketOnce(ctx context.Context, addr string) (longSleep
 		err := conn.SetDeadline(time.Now().Add(time.Second))
 		if err != nil {
 			logger.V(2).Printf("Unable to SetDeadline() for %#v: %v", addr, err)
+
 			return false
 		}
 

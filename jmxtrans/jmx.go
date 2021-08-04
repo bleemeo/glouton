@@ -34,8 +34,10 @@ const (
 	graphitePrefix = "jmxtrans"
 )
 
-var errJmxAlreadyStopped = errors.New("JMX is already stopped, can't update config")
-var errJmxStopping = errors.New("JMX is stopping, can't update config")
+var (
+	errJmxAlreadyStopped = errors.New("JMX is already stopped, can't update config")
+	errJmxStopping       = errors.New("JMX is stopping, can't update config")
+)
 
 // JMX allow to gather metrics from JVM using JMX
 // It use jmxtrans to achieve this goal.
@@ -71,11 +73,17 @@ func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.D
 	j.metricResolution = metricResolution
 
 	if j.triggerConfigUpdate == nil {
-		j.triggerConfigUpdate = make(chan updateRequest)
+		// this means we are not yet started, Update config in this go-routing.
+		err := j.jmxConfig.UpdateConfig(j.services, j.metricResolution)
+
+		j.l.Unlock()
+
+		return err
 	}
 
 	if j.stopped {
 		j.l.Unlock()
+
 		return errJmxAlreadyStopped
 	}
 
@@ -88,7 +96,7 @@ func (j *JMX) UpdateConfig(services []discovery.Service, metricResolution time.D
 }
 
 // Run configure jmxtrans to send metrics to a local graphite server.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (j *JMX) Run(ctx context.Context) error {
 	j.l.Lock()
 
@@ -237,6 +245,7 @@ func (j *JMX) runServer(ctx context.Context) error {
 
 		if errNet, ok := err.(net.Error); ok && errNet.Timeout() {
 			err = nil
+
 			continue
 		}
 
@@ -267,6 +276,7 @@ func (j *JMX) runServer(ctx context.Context) error {
 func (j *JMX) writeConfig(content []byte) error {
 	if content == nil {
 		logger.V(2).Printf("jmxtrans is not yet configured")
+
 		return nil
 	}
 
@@ -281,12 +291,13 @@ func (j *JMX) writeConfig(content []byte) error {
 
 	if bytes.Equal(currentContent, content) {
 		logger.V(1).Printf("jmxtrans configuration is up-to-date")
+
 		return nil
 	}
 
 	perm := j.OutputConfigurationPermission
 	if perm == 0 {
-		perm = 0640
+		perm = 0o640
 	}
 
 	err = ioutil.WriteFile(j.OutputConfigurationFile, content, perm)

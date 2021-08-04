@@ -24,16 +24,15 @@ import (
 	"net/url"
 )
 
-//SNMPTarget represents a snmp config instance.
-//nolint: golint
-type SNMPTarget struct {
+// Target represents a snmp config instance.
+type Target struct {
 	InitialName string
 	Address     string
 	Type        string
 	URL         *url.URL
 }
 
-func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
+func ConfigToURLs(vMap []interface{}, address string) (result []*Target) {
 	for _, iMap := range vMap {
 		tmp, ok := iMap.(map[string]interface{})
 
@@ -46,6 +45,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
 
 		if !ok {
 			logger.Printf("Warning: target is absent from the snmp configuration. the scrap URL will not work.")
+
 			continue
 		}
 
@@ -54,10 +54,11 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
 		u, err := url.Parse(urlText)
 		if err != nil {
 			logger.Printf("ignoring invalid exporter config: %v", err)
+
 			continue
 		}
 
-		t := &SNMPTarget{
+		t := &Target{
 			InitialName: tmp["initial_name"].(string),
 			Address:     target,
 			URL:         u,
@@ -69,7 +70,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*SNMPTarget) {
 	return result
 }
 
-func GenerateScrapperTargets(snmpTargets []*SNMPTarget) (result []*scrapper.Target) {
+func GenerateScrapperTargets(snmpTargets []*Target) (result []*scrapper.Target) {
 	for _, t := range snmpTargets {
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{

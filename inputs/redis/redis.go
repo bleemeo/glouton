@@ -27,7 +27,7 @@ import (
 
 // New initialise redis.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["redis"]
+	input, ok := telegraf_inputs.Inputs["redis"]
 	if ok {
 		redisInput, ok := input().(*redis.Redis)
 		if ok {

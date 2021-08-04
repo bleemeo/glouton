@@ -138,6 +138,7 @@ func (uf updateFacter) fromUpdateNotifierFile(context.Context) (pendingUpdates i
 	content, err := ioutil.ReadFile(updateFile)
 	if err != nil {
 		logger.V(2).Printf("Unable to read file %#v: %v", updateFile, err)
+
 		return -1, -1
 	}
 
@@ -151,6 +152,7 @@ func (uf updateFacter) fromAPTCheck(ctx context.Context) (pendingUpdates int, pe
 	content, err := cmd.CombinedOutput()
 	if err != nil {
 		logger.V(2).Printf("Unable to execute apt-check: %v", err)
+
 		return -1, -1
 	}
 
@@ -164,6 +166,7 @@ func (uf updateFacter) fromAPTGet(ctx context.Context) (pendingUpdates int, pend
 	content, err := cmd.CombinedOutput()
 	if err != nil {
 		logger.V(2).Printf("Unable to execute apt-get: %v", err)
+
 		return -1, -1
 	}
 
@@ -177,6 +180,7 @@ func (uf updateFacter) fromDNF(ctx context.Context) (pendingUpdates int, pending
 	content, err := cmd.CombinedOutput()
 	if err != nil {
 		logger.V(2).Printf("Unable to execute dnf %v", err)
+
 		return -1, -1
 	}
 
@@ -190,6 +194,7 @@ func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pending
 	content, err := cmd.CombinedOutput()
 	if err != nil {
 		logger.V(2).Printf("Unable to execute yum: %v", err)
+
 		return -1, -1
 	}
 
@@ -199,6 +204,7 @@ func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pending
 	contentSecurity, err := cmd.CombinedOutput()
 	if err != nil {
 		logger.V(2).Printf("Unable to execute yum: %v", err)
+
 		return -1, -1
 	}
 
@@ -238,6 +244,7 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 		pendingUpdates, pendingSecurityUpdates = m(ctx)
 		if pendingUpdates != -1 || pendingSecurityUpdates != -1 {
 			logger.V(4).Printf("Pending updates calculated with method %d: %d, %d", i, pendingUpdates, pendingSecurityUpdates)
+
 			break
 		}
 	}

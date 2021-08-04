@@ -42,7 +42,7 @@ type SNMPAgent struct {
 // TODO the deletion need to be done
 
 func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
-	var snmpTargets []*snmp.SNMPTarget
+	var snmpTargets []*snmp.Target
 
 	if s.option.Cache.CurrentAccountConfig().SNMPIntergration {
 		snmpTargets = s.option.SNMP
@@ -65,19 +65,14 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 		return nil
 	}
 
-	if err := s.snmpRegisterAndUpdate(snmpTargets); err != nil {
-		return err
-	}
-
-	return nil
+	return s.snmpRegisterAndUpdate(snmpTargets)
 }
 
-func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) error {
+func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error {
 	remoteAgentList := s.option.Cache.AgentList()
 	remoteIndexByFqdn := make(map[string]int, len(remoteAgentList))
 
 	agentTypeID, err := s.getAgentType("snmp")
-
 	if err != nil {
 		return err
 	}
@@ -121,7 +116,6 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.SNMPTarget) er
 		}
 
 		err := s.remoteRegisterSNMP(remoteFound, &remoteSNMP, &remoteAgentList, params, payload, remoteIndex)
-
 		if err != nil {
 			return err
 		}
@@ -190,7 +184,6 @@ func (s *Synchronizer) getAgentType(name string) (id string, err error) {
 	}
 
 	result, err := s.client.Iter(s.ctx, "agenttype", params)
-
 	if err != nil {
 		return "", err
 	}
@@ -210,6 +203,7 @@ func (s *Synchronizer) getAgentType(name string) (id string, err error) {
 	for _, a := range agentTypes {
 		if a.Name == name {
 			id = a.ID
+
 			break
 		}
 	}

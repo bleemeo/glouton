@@ -22,17 +22,14 @@ package store
 import (
 	"context"
 	"errors"
+	"glouton/logger"
+	"glouton/types"
 	"reflect"
 	"sync"
 	"time"
-
-	"glouton/logger"
-	"glouton/types"
 )
 
-var (
-	errDeletedMetric = errors.New("metric was deleted")
-)
+var errDeletedMetric = errors.New("metric was deleted")
 
 // Store implement an interface to retrieve metrics and metric points.
 //
@@ -326,25 +323,25 @@ type store interface {
 	PushPoints(points []types.MetricPoint)
 }
 
-//FilteredStore is a store wrapper that intercepts all call to pushPoints and execute filters on points.
+// FilteredStore is a store wrapper that intercepts all call to pushPoints and execute filters on points.
 type FilteredStore struct {
 	store                store
 	filterCallback       func([]types.MetricPoint) []types.MetricPoint
 	filterMetricCallback func([]types.Metric) []types.Metric
 }
 
-//NewFilteredStore initializes a new filtered store.
+// NewFilteredStore initializes a new filtered store.
 func NewFilteredStore(store store, fc func([]types.MetricPoint) []types.MetricPoint, fmc func([]types.Metric) []types.Metric) *FilteredStore {
-	new := &FilteredStore{
+	filteredStore := &FilteredStore{
 		store:                store,
 		filterCallback:       nil,
 		filterMetricCallback: nil,
 	}
 
-	new.filterMetricCallback = fmc
-	new.filterCallback = fc
+	filteredStore.filterMetricCallback = fmc
+	filteredStore.filterCallback = fc
 
-	return new
+	return filteredStore
 }
 
 // PushPoints wraps the store PushPoints function. It precedes the call with filterCallback.

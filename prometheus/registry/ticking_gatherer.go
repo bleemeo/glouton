@@ -12,14 +12,14 @@ type tickingGathererState int
 
 const (
 	// Initialized is the initial state, no gather() calls have been received yet, the next gather() calls will succeed,
-	// so that metric collection can start as soon as possible
+	// so that metric collection can start as soon as possible.
 	Initialized tickingGathererState = iota
 	// FirstRun is used when one gather() call have been received, do not gather() anymore until startTime is reached, at which
-	// point we will enter the Running state
+	// point we will enter the Running state.
 	FirstRun
-	// Running is used when Tick has been started, normal operating mode
+	// Running is used when Tick has been started, normal operating mode.
 	Running
-	// Stopped is used when Tick has been stopped, using this gatherer will no longer work
+	// Stopped is used when Tick has been stopped, using this gatherer will no longer work.
 	Stopped
 )
 
@@ -95,6 +95,7 @@ func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamil
 			return g.gatherNow(state)
 		default:
 		}
+	case Stopped:
 	}
 
 	return nil, nil

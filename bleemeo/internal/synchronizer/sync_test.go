@@ -29,7 +29,7 @@ import (
 )
 
 const (
-	// fixed "random" values are enought for tests
+	// fixed "random" values are enought for tests.
 	accountID        string = "9da59f53-1d90-4441-ae58-42c661cfea83"
 	registrationKey  string = "e2c22e59-0621-49e6-b5dd-bdb02cbac9f1"
 	activeMonitorURL string = "http://bleemeo.com"
@@ -37,13 +37,15 @@ const (
 	jwtToken string = "{\"token\":\"blebleble\"}"
 )
 
-var errUnknownURLFormat = errors.New("unknown URL format")
-var errUnknownResource = errors.New("unknown resource")
-var errUnknownBool = errors.New("unknown boolean")
-var errUnknownRequestType = errors.New("type of request unknown")
-var errIncorrectID = errors.New("incorrect id")
-var errInvalidAccountID = errors.New("invalid accountId supplied")
-var errInvalidAuthHeader = errors.New("invalid authorization header")
+var (
+	errUnknownURLFormat   = errors.New("unknown URL format")
+	errUnknownResource    = errors.New("unknown resource")
+	errUnknownBool        = errors.New("unknown boolean")
+	errUnknownRequestType = errors.New("type of request unknown")
+	errIncorrectID        = errors.New("incorrect id")
+	errInvalidAccountID   = errors.New("invalid accountId supplied")
+	errInvalidAuthHeader  = errors.New("invalid authorization header")
+)
 
 // this is a go limitation, these are constants but we have to treat them as variables
 //nolint:gochecknoglobals
@@ -102,8 +104,8 @@ var (
 	}
 	newAgentTypes []bleemeoTypes.AgentType = []bleemeoTypes.AgentType{newAgentType1, newAgentType2}
 
-	uuidRegexp  *regexp.Regexp = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
-	errNotFound                = errors.New("not found")
+	uuidRegexp  = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
+	errNotFound = errors.New("not found")
 )
 
 // getUUID returns the UUID stored in the HTTP query path, if any.
@@ -181,7 +183,7 @@ func newAPI() *mockAPI {
 		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
 			var data map[string]string
 
-			metricPtr := valuePtr.(*metricPayload)
+			metricPtr, _ := valuePtr.(*metricPayload)
 
 			err := json.NewDecoder(bytes.NewReader(body)).Decode(&data)
 			if boolText, ok := data["active"]; ok {
@@ -306,6 +308,8 @@ func (api *mockAPI) ResetCount() {
 }
 
 func (api *mockAPI) ShowRequest(t *testing.T, max int) {
+	t.Helper()
+
 	for i, req := range api.RequestList {
 		if i >= max {
 			break
@@ -354,7 +358,7 @@ func (api *mockAPI) Server() *httptest.Server {
 	return httptest.NewServer(api.serveMux)
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 	part := strings.Split(r.URL.Path, "/")
 	if len(part) < 4 || part[1] != "v1" || len(part) > 5 {
@@ -570,11 +574,13 @@ func runFakeAPI() *mockAPI {
 
 			if values["account"] != accountID {
 				err := fmt.Errorf("%w, got %v, want %v", errInvalidAccountID, values["account"], accountID)
+
 				return nil, http.StatusInternalServerError, err
 			}
 
 			if r.Header.Get("Authorization") != basicAuth {
 				err := fmt.Errorf("%w, got %v, want %v", errInvalidAuthHeader, r.Header.Get("Authorization"), basicAuth)
+
 				return nil, http.StatusInternalServerError, err
 			}
 

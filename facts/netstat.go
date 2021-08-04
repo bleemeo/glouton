@@ -79,7 +79,8 @@ func (np NetstatProvider) mergeNetstats(netstat map[int][]ListenAddress, dynamic
 		}
 
 		address := c.Laddr.IP
-		protocol := ""
+
+		var protocol string
 
 		switch {
 		case c.Type == syscall.SOCK_STREAM:
@@ -116,7 +117,6 @@ func (np NetstatProvider) cleanRecycledPIDs(netstat map[int][]ListenAddress, pro
 	}
 }
 
-//nolint:gochecknoglobals
 var (
 	netstatRE = regexp.MustCompile(
 		`(?P<protocol>udp6?|tcp6?)\s+\d+\s+\d+\s+(?P<address>[0-9a-f.:]+):(?P<port>\d+)\s+[0-9a-f.:*]+\s+(LISTEN)?\s+(?P<pid>\d+)/(?P<program>.*)$`,
@@ -230,15 +230,16 @@ func addAddress(addresses []ListenAddress, newAddr ListenAddress) []ListenAddres
 			}
 
 			_, otherPortStr, err := net.SplitHostPort(v.String())
-
 			if err != nil {
 				logger.V(1).Printf("unable to split host/port for %#v: %v", v.String(), err)
+
 				return addresses
 			}
 
 			otherPort, err := strconv.ParseInt(otherPortStr, 10, 0)
 			if err != nil {
 				logger.V(1).Printf("unable to parse port %#v: %v", otherPortStr, err)
+
 				return addresses
 			}
 

@@ -229,6 +229,7 @@ func (r *Registry) init() {
 
 	if r.registrations != nil {
 		r.l.Unlock()
+
 		return
 	}
 
@@ -502,6 +503,7 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 
 	if r.currentDelay == delay {
 		r.l.Unlock()
+
 		return
 	}
 
@@ -511,7 +513,10 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 
 	logger.V(2).Printf("Change metric collector delay to %v", delay)
 
-	r.updateDelayC <- nil
+	select {
+	case r.updateDelayC <- nil:
+	default: // don't block
+	}
 }
 
 func (r *Registry) run(ctx context.Context) {
@@ -526,6 +531,15 @@ func (r *Registry) run(ctx context.Context) {
 
 	for {
 		r.runOnce()
+
+		// check if currentDelay change. we can miss updateDelayC message
+		r.l.Lock()
+		newDelay := r.currentDelay
+		r.l.Unlock()
+
+		if currentDelay != newDelay {
+			return
+		}
 
 		select {
 		case <-r.updateDelayC:
@@ -841,6 +855,7 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 					l = replacer.Replace(l)
 					if !model.IsValidMetricName(model.LabelValue(l)) {
 						logger.V(2).Printf("label %#v is ignored since invalid for Prometheus", l)
+
 						continue
 					}
 				}
@@ -858,6 +873,7 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 		)
 		if err != nil {
 			logger.V(2).Printf("Ignoring metric %s due to %v", p.Labels["__name__"], err)
+
 			continue
 		}
 

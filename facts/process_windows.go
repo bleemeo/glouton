@@ -29,9 +29,11 @@ import (
 	"golang.org/x/sys/windows"
 )
 
-var errCannotRetrieveInfo = errors.New("cannot retrieve the command line informations for the process")
-var errCannotRetrieveToken = errors.New("cannot retrieve the token for the process")
-var errCannotRetrieveUserToken = errors.New("cannot retrieve the user token for the process")
+var (
+	errCannotRetrieveInfo      = errors.New("cannot retrieve the command line informations for the process")
+	errCannotRetrieveToken     = errors.New("cannot retrieve the token for the process")
+	errCannotRetrieveUserToken = errors.New("cannot retrieve the user token for the process")
+)
 
 //nolint:gochecknoglobals
 var (
@@ -55,6 +57,7 @@ const (
 func windowsTimeToTime(t int64) time.Time {
 	// set the starting point to the unix epoch.
 	t -= 116444736000000000
+
 	return time.Unix(t/10000000, (t%10000000)*100)
 }
 
@@ -72,11 +75,13 @@ func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 
 	if ret >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
 		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
+
 		return nil, nil
 	}
 
 	if bufLen == 0 {
 		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed: empty buffer requested")
+
 		return nil, nil
 	}
 
@@ -90,6 +95,7 @@ func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (proc
 	// the return value isn't a success type or an informational type (according to https://docs.microsoft.com/en-us/windows-hardware/drivers/kernel/using-ntstatus-values)
 	if r >= 0x80000000 && ret != StatusInfoLengthMismatch && ret != StatusBufferTooSmall && ret != StatusBufferOverflow {
 		logger.V(1).Printf("facts/process: NtQuerySystemInformation failed (error code %d): %v", ret, err)
+
 		return nil, nil
 	}
 

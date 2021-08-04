@@ -124,7 +124,7 @@ func convertToFloat(value interface{}) (valueFloat float64, err error) {
 			valueFloat = 0.0
 		}
 	default:
-		var valueType = reflect.TypeOf(value)
+		valueType := reflect.TypeOf(value)
 		err = fmt.Errorf("%w: %v", errUnsupportedType, valueType)
 	}
 
@@ -136,7 +136,7 @@ func rateAsFloat(pastPoint, currentPoint metricPoint) (value float64, err error)
 	switch pastValue := pastPoint.Value.(type) {
 	case uint64:
 		// Special case here. If pastPoint if bigger that currentPoint, the unsigned int will overflow.
-		currentValue := currentPoint.Value.(uint64)
+		currentValue, _ := currentPoint.Value.(uint64)
 		if pastValue > currentValue {
 			value = -float64(pastValue - currentValue)
 		} else {
@@ -248,6 +248,7 @@ func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoi
 		return 0, false
 	default:
 		a.AddError(err)
+
 		return 0, false
 	}
 }
@@ -268,7 +269,7 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 	}
 
 	if a.RenameGlobal != nil {
-		drop := false
+		var drop bool
 		currentContext, drop = a.RenameGlobal(currentContext)
 
 		if drop {
@@ -397,5 +398,6 @@ func (a *Accumulator) SetPrecision(precision time.Duration) {
 // metrics/batches.
 func (a *Accumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
 	a.AddError(errNotImplemented)
+
 	return nil
 }

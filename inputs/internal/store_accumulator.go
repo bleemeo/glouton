@@ -89,5 +89,6 @@ func (a *StoreAccumulator) SetPrecision(precision time.Duration) {
 // metrics/batches.
 func (a *StoreAccumulator) WithTracking(maxTracked int) telegraf.TrackingAccumulator {
 	a.AddError(errNotImplemented)
+
 	return nil
 }

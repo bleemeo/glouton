@@ -56,6 +56,7 @@ func Test_parsePostfix(t *testing.T) {
 			gotN, err := parsePostfix(tt.output)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parsePostfix() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 

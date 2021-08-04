@@ -26,10 +26,11 @@ import (
 	"strings"
 )
 
-var errRunInContainer = errors.New("can't gather the postfix running on host because Glouton run in a container")
-var errUnexpectedOutput = errors.New("postqueue output don't contains expected output")
+var (
+	errRunInContainer   = errors.New("can't gather the postfix running on host because Glouton run in a container")
+	errUnexpectedOutput = errors.New("postqueue output don't contains expected output")
+)
 
-//nolint:gochecknoglobals
 var (
 	postfixRECount = regexp.MustCompile(
 		`-- \d+ Kbytes in (\d+) Request.`,

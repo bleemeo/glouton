@@ -43,6 +43,7 @@ func setCollector(collectorName []string) {
 	for _, name := range collectorName {
 		if collectorState[name] == nil {
 			unknown = append(unknown, name)
+
 			continue
 		}
 

@@ -20,6 +20,11 @@ import (
 	"archive/zip"
 	"context"
 	"fmt"
+	"glouton/bleemeo/internal/cache"
+	"glouton/bleemeo/internal/mqtt"
+	"glouton/bleemeo/internal/synchronizer"
+	"glouton/bleemeo/types"
+	"glouton/logger"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -27,11 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"glouton/bleemeo/internal/cache"
-	"glouton/bleemeo/internal/mqtt"
-	"glouton/bleemeo/internal/synchronizer"
-	"glouton/bleemeo/types"
-	"glouton/logger"
 	gloutonTypes "glouton/types"
 )
 
@@ -105,6 +105,12 @@ func (c *Connector) ApplyCachedConfiguration() {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}
+	}
+
+	currentConfig := c.cache.CurrentAccountConfig()
+
+	if c.option.UpdateMetricResolution != nil && currentConfig.MetricAgentResolution != 0 {
+		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
 	}
 }
 
@@ -409,9 +415,7 @@ func (c *Connector) DiagnosticPage() string {
 		)
 	}
 
-	now := time.Now()
-
-	if c.disabledUntil.After(now) {
+	if now := time.Now(); c.disabledUntil.After(now) {
 		fmt.Fprintf(builder, "The Bleemeo connector is currently disabled until %v due to '%v'\n", c.disabledUntil, c.disableReason)
 	}
 
@@ -643,15 +647,13 @@ func (c *Connector) clearDisable(reasonToClear types.DisableReason) {
 		c.disabledUntil = time.Now()
 	}
 
-	mqtt := c.mqtt
-
 	c.l.Unlock()
 	c.sync.ClearDisable(reasonToClear, 0)
 
-	if mqtt != nil {
-		mqttDisableDelay := time.Duration(0)
+	if mqtt := c.mqtt; mqtt != nil {
+		var mqttDisableDelay time.Duration
 
-		switch reasonToClear {
+		switch reasonToClear { //nolint:exhaustive
 		case types.DisableTooManyErrors:
 			mqttDisableDelay = 20 * time.Second
 		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:
@@ -691,9 +693,9 @@ func (c *Connector) disableMqtt(mqtt *mqtt.Client, reason types.DisableReason, u
 	if mqtt != nil {
 		// delay to apply between re-enabling the synchronizer and the mqtt client. The goal is to allow for
 		// the synchronizer to disable mqtt again before mqtt have time to reconnect or send metrics.
-		mqttDisableDelay := time.Duration(0)
+		var mqttDisableDelay time.Duration
 
-		switch reason {
+		switch reason { //nolint:exhaustive
 		case types.DisableTooManyErrors:
 			mqttDisableDelay = 20 * time.Second
 		case types.DisableAgentTooOld, types.DisableDuplicatedAgent, types.DisableAuthenticationError, types.DisableTimeDrift:

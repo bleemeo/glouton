@@ -26,13 +26,15 @@ import (
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
-const metricName0 = "MetricPoint0"
-const metricName1 = "MetricPoint1"
-const metricName2 = "MetricPoint2"
-const metricName3 = "MetricPoint3"
-const metricName4 = "MetricPoint4"
-const metricName5 = "MetricPoint5"
-const metricName49 = "MetricPoint49"
+const (
+	metricName0  = "MetricPoint0"
+	metricName1  = "MetricPoint1"
+	metricName2  = "MetricPoint2"
+	metricName3  = "MetricPoint3"
+	metricName4  = "MetricPoint4"
+	metricName5  = "MetricPoint5"
+	metricName49 = "MetricPoint49"
+)
 
 func TestConvertMetricPoint(t *testing.T) {
 	metricPoint1 := types.MetricPoint{
@@ -123,7 +125,7 @@ func TestConvertMetricPoint(t *testing.T) {
 	}
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func TestAddPoints(t *testing.T) {
 	var client Client
 

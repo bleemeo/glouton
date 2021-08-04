@@ -73,6 +73,7 @@ func TestTopinfoEncoding(t *testing.T) {
 
 	if diff := cmp.Diff(topinfo, decoded); diff != "" {
 		t.Errorf("decoded does not match: %v", diff)
+
 		return
 	}
 

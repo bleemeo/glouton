@@ -27,7 +27,7 @@ import (
 
 // New initialise rabbitmq.Input.
 func New(url string, username string, password string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["rabbitmq"]
+	input, ok := telegraf_inputs.Inputs["rabbitmq"]
 	if ok {
 		rabbitmqInput, ok := input().(*rabbitmq.RabbitMQ)
 		if ok {

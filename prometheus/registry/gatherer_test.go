@@ -254,6 +254,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 			got, err := g.GatherPoints(time.Now(), GatherState{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("labeledGatherer.GatherPoints() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 

@@ -43,7 +43,7 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	input, ok := telegraf_inputs.Inputs["disk"]
 
 	if ok {
-		diskInput := input().(*disk.DiskStats)
+		diskInput, _ := input().(*disk.DiskStats)
 		diskInput.IgnoreFS = []string{
 			"tmpfs", "devtmpfs", "devfs", "overlay", "aufs", "squashfs",
 		}
@@ -78,6 +78,7 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 
 	if !ok {
 		drop = true
+
 		return
 	}
 
@@ -92,6 +93,7 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 		// partition don't start with mountPoint, so it's a parition
 		// which is only inside the container. Ignore it
 		drop = true
+
 		return
 	}
 
@@ -103,6 +105,7 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 	for _, v := range dt.blacklist {
 		if v == item || strings.HasPrefix(item, v+"/") {
 			drop = true
+
 			return
 		}
 	}
