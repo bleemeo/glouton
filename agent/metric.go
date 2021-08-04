@@ -24,6 +24,7 @@ import (
 	"glouton/facts/container-runtime/merge"
 	"glouton/jmxtrans"
 	"glouton/logger"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/matcher"
 	"glouton/types"
 	"runtime"
@@ -213,6 +214,18 @@ var bleemeoDefaultSystemMetrics = []string{
 	"system_load15",
 	"uptime",
 	"users_logged",
+}
+
+//nolint:gochecknoglobals
+var snmpMetrics = []string{
+	"sysUpTime",
+	"ifOperStatus",
+	"ifInOctets",
+	"ifOutOctets",
+	"ifInErrors",
+	"ifOutErrors",
+	"total_interfaces",
+	"connected_interfaces",
 }
 
 //nolint:gochecknoglobals
@@ -777,17 +790,23 @@ func (m *metricFilter) DiagnosticZip(zipFile *zip.Writer) error {
 	return nil
 }
 
-func (m *metricFilter) buildList(config *config.Configuration, format types.MetricFormat) error {
+func (m *metricFilter) buildList(config *config.Configuration, snmpTargets []snmp.Target, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	m.staticAllowList = buildMatcherList(config, "allow")
-
-	if len(m.staticAllowList) > 0 {
-		logger.V(1).Println("Your allow list may not be compatible with your plan. Please check your allowed metrics for your plan if you encounter any problem.")
-	}
-
 	m.staticDenyList = buildMatcherList(config, "deny")
+
+	if len(snmpTargets) > 0 {
+		for _, val := range snmpMetrics {
+			matchers, err := matcher.NormalizeMetric(val)
+			if err != nil {
+				return err
+			}
+
+			addToList(m.staticAllowList, matchers)
+		}
+	}
 
 	_, found := config.Get("metric.include_default_metrics")
 
@@ -832,9 +851,9 @@ func (m *metricFilter) buildList(config *config.Configuration, format types.Metr
 	return nil
 }
 
-func newMetricFilter(config *config.Configuration, metricFormat types.MetricFormat) (*metricFilter, error) {
+func newMetricFilter(config *config.Configuration, snmpTargets []snmp.Target, metricFormat types.MetricFormat) (*metricFilter, error) {
 	filter := metricFilter{}
-	err := filter.buildList(config, metricFormat)
+	err := filter.buildList(config, snmpTargets, metricFormat)
 
 	return &filter, err
 }

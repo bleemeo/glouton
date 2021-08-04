@@ -168,7 +168,7 @@ func Test_Basic_Build(t *testing.T) {
 		},
 	}
 
-	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(&cfg, nil, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 
@@ -200,7 +200,7 @@ func Test_basic_build_default(t *testing.T) {
 		t.Error(err)
 	}
 
-	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(&cfg, nil, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 	}
@@ -222,7 +222,7 @@ func Test_Basic_FilterPoints(t *testing.T) {
 		return
 	}
 
-	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(&cfg, nil, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 
@@ -307,7 +307,7 @@ func Test_Basic_FilterFamilies(t *testing.T) {
 		return
 	}
 
-	filter, err := newMetricFilter(&cfg, types.MetricFormatBleemeo)
+	filter, err := newMetricFilter(&cfg, nil, types.MetricFormatBleemeo)
 	if err != nil {
 		t.Error(err)
 
@@ -482,7 +482,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 		t.Error(err)
 	}
 
-	mf, _ := newMetricFilter(&cfg, types.MetricFormatBleemeo)
+	mf, _ := newMetricFilter(&cfg, nil, types.MetricFormatBleemeo)
 
 	d := fakeScrapper{
 		name: "jobname",
@@ -581,7 +581,7 @@ metric:
 		t.Error(err)
 	}
 
-	mf, _ := newMetricFilter(&cfg, types.MetricFormatBleemeo)
+	mf, _ := newMetricFilter(&cfg, nil, types.MetricFormatBleemeo)
 
 	if len(mf.allowList) != 2 {
 		t.Errorf("Unexpected number of matchers: expected 2, got %d", len(mf.allowList))
@@ -839,7 +839,7 @@ func Test_newMetricFilter(t *testing.T) {
 			cfg.Set("metric.deny_metrics", tt.configDeny)
 			cfg.Set("metric.include_default_metrics", tt.configIncludeDefault)
 
-			filter, err := newMetricFilter(cfg, tt.metricFormat)
+			filter, err := newMetricFilter(cfg, nil, tt.metricFormat)
 			if err != nil {
 				t.Errorf("newMetricFilter() error = %v", err)
 
@@ -1056,7 +1056,7 @@ func Benchmark_filters_no_match(b *testing.B) {
 		b.Error(err)
 	}
 
-	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(&cfg, nil, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(100, badPoint)
 
@@ -1121,7 +1121,7 @@ func Benchmark_filters_one_match_first(b *testing.B) {
 		b.Error(err)
 	}
 
-	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(&cfg, nil, types.MetricFormatPrometheus)
 
 	list100 := []types.MetricPoint{
 		{
@@ -1198,7 +1198,7 @@ func Benchmark_filters_one_match_middle(b *testing.B) {
 		b.Error(err)
 	}
 
-	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(&cfg, nil, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(49, badPoint)
 
@@ -1255,7 +1255,7 @@ func Benchmark_filters_one_match_last(b *testing.B) {
 		b.Error(err)
 	}
 
-	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(&cfg, nil, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(99, badPoint)
 
@@ -1308,7 +1308,7 @@ func Benchmark_filters_all(b *testing.B) {
 		b.Error(err)
 	}
 
-	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(&cfg, nil, types.MetricFormatPrometheus)
 
 	list100 := generatePoints(100, goodPoint)
 
@@ -1358,7 +1358,7 @@ metric:
 		return
 	}
 
-	metricFilter, _ := newMetricFilter(&cfg, types.MetricFormatPrometheus)
+	metricFilter, _ := newMetricFilter(&cfg, nil, types.MetricFormatPrometheus)
 
 	services := []discovery.Service{
 		{

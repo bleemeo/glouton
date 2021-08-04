@@ -558,7 +558,24 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		}()
 	}
 
-	mFilter, err := newMetricFilter(a.config, a.metricFormat)
+	var targets []*scrapper.Target
+
+	var scrapperSNMPTargets []*scrapper.Target
+
+	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
+		if configList, ok := snmpCfg.([]interface{}); ok {
+			snmpExporterAddress := a.config.String("metric.snmp.exporter_address")
+			a.snmpTargets = snmp.ConfigToURLs(configList)
+
+			scrapperSNMPTargets = snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
+		}
+	}
+
+	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
+		targets = prometheusConfigToURLs(promCfg)
+	}
+
+	mFilter, err := newMetricFilter(a.config, a.snmpTargets, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -674,27 +691,10 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		a.metricFormat,
 	)
 
-	var targets []*scrapper.Target
-
-	var scrapperSNMPTargets []*scrapper.Target
-
-	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
-		if configList, ok := snmpCfg.([]interface{}); ok {
-			snmpExporterAddress := a.config.String("metric.snmp.exporter_address")
-			a.snmpTargets = snmp.ConfigToURLs(configList)
-
-			scrapperSNMPTargets = snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
-		}
-	}
-
 	for _, target := range scrapperSNMPTargets {
 		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
 		}
-	}
-
-	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(promCfg)
 	}
 
 	for _, target := range targets {
