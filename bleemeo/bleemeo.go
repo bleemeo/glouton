@@ -109,7 +109,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 
 	currentConfig := c.cache.CurrentAccountConfig()
 
-	if c.option.UpdateMetricResolution != nil {
+	if c.option.UpdateMetricResolution != nil && currentConfig.MetricAgentResolution != 0 {
 		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
 	}
 }
