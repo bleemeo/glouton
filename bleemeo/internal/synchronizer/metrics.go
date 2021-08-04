@@ -478,21 +478,22 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 		units[key] = m.Unit
 	}
 
+	// RebuildAlertingRule can change Metrics list. We need to execute it before
+	// UpdateThresholds as currently thresholds invokes a.rulesManager.MetricList()
+	// resulting in using obsolete values.
+	if s.option.RebuildAlertingRules != nil {
+		err := s.option.RebuildAlertingRules(s.option.Cache.Metrics())
+		if err != nil {
+			logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
+		}
+	}
+
 	if s.option.UpdateThresholds != nil {
 		s.option.UpdateThresholds(thresholds, firstUpdate)
 	}
 
 	if s.option.UpdateUnits != nil {
 		s.option.UpdateUnits(units)
-	}
-
-	metricsList := s.option.Cache.Metrics()
-
-	if s.option.RebuildAlertingRules != nil {
-		err := s.option.RebuildAlertingRules(metricsList)
-		if err != nil {
-			logger.V(2).Printf("An error occurred while rebuilding alerting rules: %v", err)
-		}
 	}
 }
 
