@@ -677,7 +677,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	var scrapperSNMPTargets []*scrapper.Target
 
-	var snmpTargets []*snmp.Target
+	var snmpTargets []snmp.Target
 
 	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {

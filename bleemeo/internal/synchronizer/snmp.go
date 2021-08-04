@@ -42,7 +42,7 @@ type SNMPAgent struct {
 // TODO the deletion need to be done
 
 func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
-	var snmpTargets []*snmp.Target
+	var snmpTargets []snmp.Target
 
 	if s.option.Cache.CurrentAccountConfig().SNMPIntergration {
 		snmpTargets = s.option.SNMP
@@ -68,7 +68,7 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 	return s.snmpRegisterAndUpdate(snmpTargets)
 }
 
-func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error {
+func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 	remoteAgentList := s.option.Cache.AgentList()
 	remoteIndexByFqdn := make(map[string]int, len(remoteAgentList))
 

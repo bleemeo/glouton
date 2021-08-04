@@ -32,7 +32,7 @@ type Target struct {
 	URL         *url.URL
 }
 
-func ConfigToURLs(vMap []interface{}, address string) (result []*Target) {
+func ConfigToURLs(vMap []interface{}, address string) (result []Target) {
 	for _, iMap := range vMap {
 		tmp, ok := iMap.(map[string]interface{})
 
@@ -63,7 +63,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*Target) {
 			continue
 		}
 
-		t := &Target{
+		t := Target{
 			InitialName: initialName,
 			Address:     target,
 			URL:         u,
@@ -75,7 +75,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*Target) {
 	return result
 }
 
-func GenerateScrapperTargets(snmpTargets []*Target) (result []*scrapper.Target) {
+func GenerateScrapperTargets(snmpTargets []Target) (result []*scrapper.Target) {
 	for _, t := range snmpTargets {
 		target := &scrapper.Target{
 			ExtraLabels: map[string]string{
