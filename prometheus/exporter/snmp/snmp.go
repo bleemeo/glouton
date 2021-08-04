@@ -41,12 +41,17 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*Target) {
 		}
 
 		module := "if_mib"
-		target, ok := tmp["target"].(string)
 
+		target, ok := tmp["target"].(string)
 		if !ok {
 			logger.Printf("Warning: target is absent from the snmp configuration. the scrap URL will not work.")
 
 			continue
+		}
+
+		initialName, ok := tmp["initial_name"].(string)
+		if !ok {
+			initialName = target
 		}
 
 		urlText := fmt.Sprintf("%s/snmp?module=%s&target=%s", address, module, target)
@@ -59,7 +64,7 @@ func ConfigToURLs(vMap []interface{}, address string) (result []*Target) {
 		}
 
 		t := &Target{
-			InitialName: tmp["initial_name"].(string),
+			InitialName: initialName,
 			Address:     target,
 			URL:         u,
 		}
