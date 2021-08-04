@@ -113,6 +113,7 @@ func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, ma
 	routes, err := netlink.RouteGet(net.ParseIP("8.8.8.8"))
 	if err != nil || len(routes) == 0 {
 		logger.V(1).Printf("unable to run ip route get: %v", err)
+
 		return
 	}
 
@@ -129,6 +130,7 @@ func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, ma
 
 func bytesToString(buffer []byte) string {
 	n := bytes.IndexByte(buffer, 0)
+
 	return string(buffer[:n])
 }
 

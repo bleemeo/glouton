@@ -150,6 +150,8 @@ func (kind FailureKind) IsPermanentFailure() bool {
 	switch kind {
 	case FailureAllowList, FailureTooManyMetric:
 		return true
+	case FailureUnknown:
+		return false
 	default:
 		return false
 	}
@@ -161,6 +163,8 @@ func (kind FailureKind) String() string {
 		return "not-allowed"
 	case FailureTooManyMetric:
 		return "too-many-metric"
+	case FailureUnknown:
+		return "unknown"
 	default:
 		return "unknown"
 	}

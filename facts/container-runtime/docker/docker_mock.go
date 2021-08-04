@@ -25,9 +25,11 @@ type MockDockerClient struct {
 	TopCallCount int
 }
 
-var errNotFound = errors.New("not found")
-var errNotImplemented = errors.New("not implemented")
-var errContainerTopMissingArg = errors.New("ContainerTop called without empty arg or waux")
+var (
+	errNotFound               = errors.New("not found")
+	errNotImplemented         = errors.New("not implemented")
+	errContainerTopMissingArg = errors.New("ContainerTop called without empty arg or waux")
+)
 
 // ContainerExecAttach is not implemented.
 func (cl *MockDockerClient) ContainerExecAttach(ctx context.Context, execID string, config dockerTypes.ExecStartCheck) (dockerTypes.HijackedResponse, error) {

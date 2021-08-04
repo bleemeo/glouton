@@ -174,7 +174,7 @@ func (d *Discovery) LastUpdate() time.Time {
 }
 
 // DiagnosticZip add to a zipfile useful diagnostic information.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
 	d.l.Lock()
 	defer d.l.Unlock()
@@ -360,7 +360,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 	return nil
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverride map[NameContainer]map[string]string) map[NameContainer]Service {
 	servicesMap := make(map[NameContainer]Service)
 
@@ -451,6 +451,7 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 
 				if _, port := service.AddressPort(); port == 0 {
 					logger.V(1).Printf("Bad custom service definition for service %s, port %#v is invalid", service.Name)
+
 					continue
 				}
 			}
@@ -461,11 +462,13 @@ func applyOveride(discoveredServicesMap map[NameContainer]Service, servicesOverr
 
 			if service.ExtraAttributes["check_type"] == customCheckNagios && service.ExtraAttributes["check_command"] == "" {
 				logger.V(1).Printf("Bad custom service definition for service %s, check_type is nagios but no check_command set", service.Name)
+
 				continue
 			}
 
 			if service.ExtraAttributes["check_type"] != customCheckNagios && service.ExtraAttributes["port"] == "" {
 				logger.V(1).Printf("Bad custom service definition for service %s, port is unknown so I don't known how to check it", service.Name)
+
 				continue
 			}
 		}

@@ -126,6 +126,8 @@ func (r DisableReason) String() string {
 		return "authentication error with Bleemeo API"
 	case DisableTimeDrift:
 		return "local time is too different from actual time"
+	case NotDisabled:
+		return "not disabled"
 	default:
 		return "unspecified reason"
 	}

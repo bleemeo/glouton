@@ -71,6 +71,8 @@ func getMockNetstat() []psutilNet.ConnectionStat {
 }
 
 func cmpAddresses(t *testing.T, msgPrefix string, got []ListenAddress, want []ListenAddress) {
+	t.Helper()
+
 	if len(got) != len(want) {
 		t.Errorf("%s == %v, want %v", msgPrefix, got, want)
 	}
@@ -152,6 +154,7 @@ func TestDecodeNetstatFile(t *testing.T) {
 		}
 	}
 }
+
 func TestMergeNetstats(t *testing.T) {
 	netstat := decodeNetstatFile(fileContent)
 	mockNetstat := getMockNetstat()
@@ -219,7 +222,7 @@ func TestCleanRecycledPIDs(t *testing.T) {
 		NumThreads:    5,
 	}
 
-	fmt.Println(modTime.Before(createTime))
+	t.Log(modTime.Before(createTime))
 	np.cleanRecycledPIDs(netstat, mockProcesses, modTime)
 
 	_, ok := netstat[323667]

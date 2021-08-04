@@ -73,7 +73,7 @@ func string2TopBody(input string) containerTypes.ContainerTopOKBody {
 	return procList
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func TestDocker_Containers(t *testing.T) {
 	tests := []struct {
 		name string
@@ -194,6 +194,7 @@ func TestDocker_Containers(t *testing.T) {
 			cl, err := NewDockerMock(tt.dir)
 			if err != nil {
 				t.Error(err)
+
 				return
 			}
 
@@ -609,6 +610,7 @@ func TestDocker_ContainerFromCGroup(t *testing.T) {
 			cl, err := NewDockerMock(tt.dir)
 			if err != nil {
 				t.Error(err)
+
 				return
 			}
 
@@ -791,7 +793,6 @@ func TestDocker_Processes(t *testing.T) {
 
 			querier := d.ProcessWithCache()
 			procs, err := querier.Processes(ctx)
-
 			if err != nil {
 				t.Error(err)
 			}
@@ -958,6 +959,7 @@ func TestContainer_ListenAddresses(t *testing.T) {
 			for _, c := range containers {
 				if c.ContainerName() == tt.containerName {
 					container = c
+
 					break
 				}
 			}
@@ -1012,7 +1014,8 @@ func TestDecodeDocker(t *testing.T) {
 			Processes: [][]string{
 				{
 					"root", "5017", "4988", "0", "15:15", "pts/29", "00:00:00",
-					"python3 -c import docker;print(docker.Client(version=\"1.21\").top(\"test\"))"},
+					"python3 -c import docker;print(docker.Client(version=\"1.21\").top(\"test\"))",
+				},
 			},
 			Titles: []string{
 				"UID", "PID", "PPID", "C", "STIME", "TTY", "TIME", "CMD",
@@ -1023,7 +1026,8 @@ func TestDecodeDocker(t *testing.T) {
 			Processes: [][]string{
 				{"root", "28554", "39.0", "0.1", "85640", "28496", "pts/0", "Ss+", "11:43", "0:00", "python3 -c import docker;print(docker.APIClient(version=\"1.21\").top(\"test\", ps_args=\"waux\"))"},
 			},
-			Titles: []string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"}},
+			Titles: []string{"USER", "PID", "%CPU", "%MEM", "VSZ", "RSS", "TTY", "STAT", "START", "TIME", "COMMAND"},
+		},
 	}
 	for i, c := range cases {
 		got := decodeDocker(c, facts.FakeContainer{FakeID: "theDockerID", FakeContainerName: "theDockerName"})

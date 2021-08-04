@@ -99,6 +99,7 @@ func (dd *Debouncer) shouldTrigger(fromTimer bool) bool {
 
 	if dd.trigger && discoveryAgo >= dd.delay {
 		dd.trigger = false
+
 		return true
 	}
 

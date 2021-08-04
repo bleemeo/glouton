@@ -209,9 +209,11 @@ func (f *FactProvider) primaryAddress(ctx context.Context) (ipAddress string, ma
 	switch {
 	case err != nil:
 		logger.V(1).Printf("unable to read wmi informations: %v", err)
+
 		return "", ""
 	case len(route) == 0:
 		logger.V(1).Printf("the WMI request returned 0 result")
+
 		return "", ""
 	}
 

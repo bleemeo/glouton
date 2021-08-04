@@ -49,6 +49,7 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 		tmp, err := url.Parse(u)
 		if err != nil {
 			logger.Printf("ignoring invalid URL %v: %v", u, err)
+
 			continue
 		}
 
@@ -148,6 +149,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 		id, err := d.Registry.RegisterGatherer(t, nil, t.ExtraLabels, true)
 		if err != nil {
 			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)
+
 			continue
 		}
 
@@ -173,12 +175,12 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 	}
 }
 
-//GetRegisteredLabels returns a copy of registeredLabels.
+// GetRegisteredLabels returns a copy of registeredLabels.
 func (d *DynamicScrapper) GetRegisteredLabels() map[string]map[string]string {
 	return copyMap(d.registeredLabels)
 }
 
-//GetContainersLabels returns a copy of containersLabels.
+// GetContainersLabels returns a copy of containersLabels.
 func (d *DynamicScrapper) GetContainersLabels() map[string]map[string]string {
 	return copyMap(d.containersLabels)
 }
@@ -187,12 +189,12 @@ func copyMap(toCopy map[string]map[string]string) map[string]map[string]string {
 	copyMap := make(map[string]map[string]string)
 
 	for key, value := range toCopy {
-		new := make(map[string]string)
+		newMap := make(map[string]string)
 		for key2, value2 := range value {
-			new[key2] = value2
+			newMap[key2] = value2
 		}
 
-		copyMap[key] = new
+		copyMap[key] = newMap
 	}
 
 	return copyMap

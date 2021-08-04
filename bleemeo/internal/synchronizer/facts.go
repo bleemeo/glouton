@@ -150,6 +150,7 @@ func (s *Synchronizer) factDeleteFromLocal(localFacts map[string]string) error {
 		localValue, ok := localFacts[v.Key]
 		if ok && localValue == v.Value && !duplicatedKey[v.Key] {
 			duplicatedKey[v.Key] = true
+
 			continue
 		}
 

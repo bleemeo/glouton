@@ -93,8 +93,7 @@ func (d *Docker) RuntimeFact(ctx context.Context, currentFact map[string]string)
 	d.l.Lock()
 	defer d.l.Unlock()
 
-	_, err := d.ensureClient(ctx)
-	if err != nil {
+	if _, err := d.ensureClient(ctx); err != nil {
 		return nil
 	}
 
@@ -208,6 +207,7 @@ func (d *Docker) Run(ctx context.Context) error {
 		case <-time.After(time.Duration(sleepDelay) * time.Second):
 		case <-ctx.Done():
 			close(d.notifyC)
+
 			return nil
 		}
 	}
@@ -308,7 +308,7 @@ func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) 
 	return cl, nil
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (d *Docker) run(ctx context.Context) error {
 	d.l.Lock()
 
@@ -406,6 +406,7 @@ func (d *Docker) run(ctx context.Context) error {
 					_, err := d.updateContainer(ctx, cl, actorID)
 					if err != nil {
 						logger.V(1).Printf("Update of container %v failed (will assume container is removed): %v", actorID, err)
+
 						continue
 					}
 				}
@@ -414,7 +415,7 @@ func (d *Docker) run(ctx context.Context) error {
 
 				event.Container = d.containers[actorID]
 
-				switch event.Type {
+				switch event.Type { //nolint:exhaustive
 				case facts.EventTypeDelete:
 					delete(d.containers, event.ContainerID)
 				case facts.EventTypeStop:
@@ -440,7 +441,7 @@ func (d *Docker) run(ctx context.Context) error {
 	}
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (d *Docker) updateContainers(ctx context.Context) error {
 	cl, err := d.getClient(ctx)
 	if err != nil {
@@ -766,6 +767,7 @@ func (c dockerContainer) Command() []string {
 
 	return c.inspect.Config.Cmd
 }
+
 func (c dockerContainer) ContainerJSON() string {
 	result, err := json.Marshal(c.inspect)
 	if err != nil {
@@ -774,6 +776,7 @@ func (c dockerContainer) ContainerJSON() string {
 
 	return string(result)
 }
+
 func (c dockerContainer) ContainerName() string {
 	if c.inspect.Name[0] == '/' {
 		return c.inspect.Name[1:]
@@ -781,6 +784,7 @@ func (c dockerContainer) ContainerName() string {
 
 	return c.inspect.Name
 }
+
 func (c dockerContainer) CreatedAt() time.Time {
 	var result time.Time
 
@@ -791,6 +795,7 @@ func (c dockerContainer) CreatedAt() time.Time {
 
 	return result
 }
+
 func (c dockerContainer) Environment() map[string]string {
 	if c.inspect.Config == nil {
 		return make(map[string]string)
@@ -809,6 +814,7 @@ func (c dockerContainer) Environment() map[string]string {
 
 	return results
 }
+
 func (c dockerContainer) FinishedAt() time.Time {
 	var result time.Time
 
@@ -823,6 +829,7 @@ func (c dockerContainer) FinishedAt() time.Time {
 
 	return result
 }
+
 func (c dockerContainer) Health() (facts.ContainerHealth, string) {
 	if c.inspect.State == nil {
 		return facts.ContainerHealthUnknown, "container don't have State"
@@ -870,6 +877,7 @@ func (c dockerContainer) ImageName() string {
 
 	return c.inspect.Config.Image
 }
+
 func (c dockerContainer) Labels() map[string]string {
 	if c.inspect.Config == nil {
 		return nil
@@ -877,6 +885,7 @@ func (c dockerContainer) Labels() map[string]string {
 
 	return c.inspect.Config.Labels
 }
+
 func (c dockerContainer) ListenAddresses() (addresses []facts.ListenAddress, explicit bool) {
 	exposedPorts := make([]facts.ListenAddress, 0)
 
@@ -913,21 +922,25 @@ func (c dockerContainer) ListenAddresses() (addresses []facts.ListenAddress, exp
 
 	return exposedPorts, explicit
 }
+
 func (c dockerContainer) PodName() string {
 	// Get the POD namespace from Docker labels if k8s API not available
 	labels := c.Labels()
 
 	return labels["io.kubernetes.pod.name"]
 }
+
 func (c dockerContainer) PodNamespace() string {
 	// Get the POD namespace from Docker labels if k8s API not available
 	labels := c.Labels()
 
 	return labels["io.kubernetes.pod.namespace"]
 }
+
 func (c dockerContainer) PrimaryAddress() string {
 	return c.primaryAddress
 }
+
 func (c dockerContainer) StartedAt() time.Time {
 	var result time.Time
 
@@ -942,6 +955,7 @@ func (c dockerContainer) StartedAt() time.Time {
 
 	return result
 }
+
 func (c dockerContainer) State() facts.ContainerState {
 	if c.inspect.State == nil {
 		return facts.ContainerUnknown
@@ -953,15 +967,13 @@ func (c dockerContainer) State() facts.ContainerState {
 
 	return dockerStatus2State(c.inspect.State.Status)
 }
+
 func (c dockerContainer) StoppedAndReplaced() bool {
 	return false
 }
 
-var (
-	//nolint:gochecknoglobals
-	dockerCGroupRE = regexp.MustCompile(
-		`(?m:^\d+:[^:]+:(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])([0-9a-fA-F]+)(\.scope)?$)`,
-	)
+var dockerCGroupRE = regexp.MustCompile(
+	`(?m:^\d+:[^:]+:(/kubepods/.*pod[0-9a-fA-F-]+/|.*/docker[-/])([0-9a-fA-F]+)(\.scope)?$)`,
 )
 
 type dockerProcessQuerier struct {
@@ -991,6 +1003,7 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 		_, err := d.d.Containers(ctx, 0, false)
 		if err != nil {
 			d.containers = make(map[string]dockerContainer)
+
 			return err
 		}
 
@@ -1092,7 +1105,7 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	return top, topWaux, err
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.Process {
 	userIndex := -1
 	pidIndex := -1
@@ -1190,7 +1203,7 @@ func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.P
 	return processes
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func psTime2Second(psTime string) (int, error) {
 	if strings.Count(psTime, ":") == 1 {
 		// format is MM:SS
@@ -1321,6 +1334,7 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 		_, err := d.d.Containers(ctx, 0, false)
 		if err != nil {
 			d.containers = make(map[string]dockerContainer)
+
 			return nil, err
 		}
 

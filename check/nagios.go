@@ -19,10 +19,9 @@ package check
 import (
 	"context"
 	"fmt"
-	"os/exec"
-
 	"glouton/inputs"
 	"glouton/types"
+	"os/exec"
 
 	"github.com/google/shlex"
 )

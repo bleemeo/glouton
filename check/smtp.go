@@ -19,13 +19,12 @@ package check
 import (
 	"context"
 	"fmt"
-	"net"
-	"net/smtp"
-	"time"
-
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
+	"net"
+	"net/smtp"
+	"time"
 )
 
 // SMTPCheck perform a SMTP check.

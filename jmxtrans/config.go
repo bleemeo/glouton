@@ -195,6 +195,7 @@ func (cfg *jmxtransConfig) CurrentConfig() []byte {
 	result, err := json.Marshal(rootConfig)
 	if err != nil {
 		logger.V(1).Printf("unable to marshal jmxtrans config: %v", err)
+
 		return nil
 	}
 

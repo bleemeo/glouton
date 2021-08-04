@@ -17,11 +17,10 @@
 package cpu
 
 import (
-	"runtime"
-	"strings"
-
 	"glouton/inputs"
 	"glouton/inputs/internal"
+	"runtime"
+	"strings"
 
 	"github.com/influxdata/telegraf"
 	telegraf_inputs "github.com/influxdata/telegraf/plugins/inputs"
@@ -30,9 +29,9 @@ import (
 
 // New initialise cpu.Input.
 func New() (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["cpu"]
+	input, ok := telegraf_inputs.Inputs["cpu"]
 	if ok {
-		cpuInput := input().(*cpu.CPUStats)
+		cpuInput, _ := input().(*cpu.CPUStats)
 		// were we to change this, we should consider returning "interrupt' metrics on Windows
 		// (see the comment below)
 		cpuInput.PerCPU = false
@@ -67,7 +66,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 	)
 
 	for metricName, value := range fields {
-		finalMetricName := strings.Replace(metricName, "usage_", "", -1)
+		finalMetricName := strings.ReplaceAll(metricName, "usage_", "")
 		if finalMetricName == "irq" {
 			finalMetricName = "interrupt"
 		} else if finalMetricName == "iowait" {

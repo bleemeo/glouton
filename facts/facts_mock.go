@@ -35,12 +35,12 @@ func NewMockFacter() *FactProviderMock {
 
 // Facts returns the list of facts for this system.
 func (f *FactProviderMock) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
-	copy := make(map[string]string, len(f.facts))
+	cpy := make(map[string]string, len(f.facts))
 	for k, v := range f.facts {
-		copy[k] = v
+		cpy[k] = v
 	}
 
-	return copy, nil
+	return cpy, nil
 }
 
 // SetFact override/add a manual facts

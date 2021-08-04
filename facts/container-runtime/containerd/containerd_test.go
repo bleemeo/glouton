@@ -61,7 +61,7 @@ func TestContainerd_RuntimeFact(t *testing.T) {
 	}
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func TestContainerd_Containers(t *testing.T) {
 	tests := []struct {
 		name string
@@ -135,6 +135,7 @@ func TestContainerd_Containers(t *testing.T) {
 			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
 			if err != nil {
 				t.Error(err)
+
 				return
 			}
 
@@ -469,6 +470,7 @@ func TestContainerd_ContainerFromCGroup(t *testing.T) {
 			cl, err := NewMockFromFile(filepath.Join(tt.dir, "containerd.json"))
 			if err != nil {
 				t.Error(err)
+
 				return
 			}
 

@@ -28,9 +28,9 @@ import (
 
 // New initialise mem.Input.
 func New() (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["mem"]
+	input, ok := telegraf_inputs.Inputs["mem"]
 	if ok {
-		memInput := input().(*mem.MemStats)
+		memInput, _ := input().(*mem.MemStats)
 
 		if err := memInput.Init(); err != nil {
 			return nil, fmt.Errorf("init: %w", err)

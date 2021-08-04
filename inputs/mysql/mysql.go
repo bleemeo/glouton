@@ -28,7 +28,7 @@ import (
 
 // New initialise mysql.Input.
 func New(server string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["mysql"]
+	input, ok := telegraf_inputs.Inputs["mysql"]
 	if ok {
 		mysqlInput, ok := input().(*mysql.Mysql)
 		if ok {
@@ -115,6 +115,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 				"stmt_reset", "stmt_send_long_data", "truncate", "unlock_tables", "update", "update_multi",
 				"xa_commit", "xa_end", "xa_prepare", "xa_recover", "xa_rollback", "xa_start":
 				newFields[metricName] = value
+
 				continue
 			default:
 				// ignore all other
@@ -127,6 +128,7 @@ func transformMetrics(originalContext internal.GatherContext, currentContext int
 			switch handler {
 			case "commit", "delete", "rollback", "update", "write":
 				newFields[metricName] = value
+
 				continue
 			default:
 				// ignore all other

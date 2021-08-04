@@ -28,7 +28,7 @@ import (
 // If the valueSecond exceed max, max is used instead of valueSecond.
 // factor should be less than 1.
 func JitterDelay(valueSecond float64, factor float64, maxSecond float64) time.Duration {
-	scale := rand.Float64() * 2 * factor
+	scale := rand.Float64() * 2 * factor //nolint:gosec
 	scale += 1 - factor
 
 	if valueSecond > maxSecond {

@@ -20,15 +20,14 @@ package api
 
 import (
 	"context"
-	"math"
-	"sort"
-	"strings"
-	"time"
-
 	"glouton/facts"
 	"glouton/logger"
 	"glouton/threshold"
 	"glouton/types"
+	"math"
+	"sort"
+	"strings"
+	"time"
 
 	"github.com/vektah/gqlparser/gqlerror"
 )
@@ -66,6 +65,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 				newMetrics, err := r.api.DB.Metrics(metricFilters)
 				if err != nil {
 					logger.V(2).Printf("Can not retrieve metrics: %v", err)
+
 					return nil, gqlerror.Errorf("Can not retrieve metrics")
 				}
 
@@ -78,6 +78,7 @@ func (r *queryResolver) Metrics(ctx context.Context, metricsFilter []*MetricInpu
 		metrics, err = r.api.DB.Metrics(map[string]string{})
 		if err != nil {
 			logger.V(2).Printf("Can not retrieve metrics: %v", err)
+
 			return nil, gqlerror.Errorf("Can not retrieve metrics")
 		}
 	}
@@ -121,6 +122,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 				newMetrics, err := r.api.DB.Metrics(metricFilters)
 				if err != nil {
 					logger.V(2).Printf("Can not retrieve metrics: %v", err)
+
 					return nil, gqlerror.Errorf("Can not retrieve metrics")
 				}
 
@@ -131,8 +133,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 		return nil, gqlerror.Errorf("Can not retrieve points for every metrics")
 	}
 
-	finalStart := ""
-	finalEnd := ""
+	var finalStart, finalEnd string
 
 	if minutes != 0 {
 		finalEnd = time.Now().UTC().Format(time.RFC3339)
@@ -160,6 +161,7 @@ func (r *queryResolver) Points(ctx context.Context, metricsFilter []*MetricInput
 		points, err := metric.Points(timeStart, timeEnd)
 		if err != nil {
 			logger.V(2).Printf("Can not retrieve points: %v", err)
+
 			return nil, gqlerror.Errorf("Can not retrieve points")
 		}
 
@@ -214,6 +216,7 @@ func (r *queryResolver) Containers(ctx context.Context, input *Pagination, allCo
 	containers, err := r.api.ContainerRuntime.Containers(ctx, time.Hour, false)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve containers: %v", err)
+
 		return nil, gqlerror.Errorf("Can not retrieve containers")
 	}
 
@@ -308,6 +311,7 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 		metrics, err := r.api.DB.Metrics(metricFilters)
 		if err != nil {
 			logger.V(2).Printf("Can not retrieve metrics: %v", err)
+
 			return c, gqlerror.Errorf("Can not retrieve metrics")
 		}
 
@@ -315,6 +319,7 @@ func (r *queryResolver) containerInformation(container facts.Container, c *Conta
 			points, err := metrics[0].Points(time.Now().UTC().Add(-15*time.Minute), time.Now().UTC())
 			if err != nil {
 				logger.V(2).Printf("Can not retrieve points: %v", err)
+
 				return c, gqlerror.Errorf("Can not retrieve points")
 			}
 
@@ -354,6 +359,7 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 	topInfo, err := r.api.PsFact.TopInfo(ctx, time.Second*15)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve processes: %v", err)
+
 		return nil, gqlerror.Errorf("Can not retrieve processes")
 	}
 
@@ -405,8 +411,10 @@ func (r *queryResolver) Processes(ctx context.Context, containerID *string) (*To
 		Used:  topInfo.Swap.Used,
 	}
 
-	return &Topinfo{Time: time.Unix(topInfo.Time, topInfo.Time), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
-		CPU: cpuRes, Memory: memoryRes, Swap: swapRes, Processes: processesRes}, nil
+	return &Topinfo{
+		Time: time.Unix(topInfo.Time, topInfo.Time), Uptime: topInfo.Uptime, Loads: topInfo.Loads, Users: topInfo.Users,
+		CPU: cpuRes, Memory: memoryRes, Swap: swapRes, Processes: processesRes,
+	}, nil
 }
 
 // Facts returns a list of facts discovered by agent.
@@ -418,6 +426,7 @@ func (r *queryResolver) Facts(ctx context.Context) ([]*Fact, error) {
 	facts, err := r.api.FactProvider.Facts(ctx, time.Hour)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve facts: %v", err)
+
 		return nil, gqlerror.Errorf("Can not retrieve facts")
 	}
 
@@ -444,6 +453,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 	services, err := r.api.Disccovery.Discovery(ctx, time.Hour)
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve facts: %v", err)
+
 		return nil, gqlerror.Errorf("Can not retrieve facts")
 	}
 
@@ -469,6 +479,7 @@ func (r *queryResolver) Services(ctx context.Context, isActive bool) ([]*Service
 			metrics, err := r.api.DB.Metrics(map[string]string{types.LabelName: service.Name + "_status"})
 			if err != nil {
 				logger.V(2).Printf("Can not retrieve services: %v", err)
+
 				return nil, gqlerror.Errorf("Can not retrieve services")
 			}
 
@@ -533,6 +544,7 @@ func (r *queryResolver) AgentStatus(ctx context.Context) (*AgentStatus, error) {
 	metrics, err := r.api.DB.Metrics(map[string]string{})
 	if err != nil {
 		logger.V(2).Printf("Can not retrieve metrics: %v", err)
+
 		return nil, gqlerror.Errorf("Can not retrieve metrics from agent status")
 	}
 

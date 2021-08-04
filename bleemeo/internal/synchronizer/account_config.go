@@ -18,7 +18,6 @@ package synchronizer
 
 import (
 	"fmt"
-
 	"glouton/bleemeo/types"
 )
 

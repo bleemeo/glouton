@@ -85,9 +85,11 @@ type fakeMetric struct {
 func (m fakeMetric) Points(time.Time, time.Time) ([]types.Point, error) {
 	return nil, errNotImplemented
 }
+
 func (m fakeMetric) Annotations() types.MetricAnnotations {
 	return types.MetricAnnotations{}
 }
+
 func (m fakeMetric) Labels() map[string]string {
 	return map[string]string{
 		types.LabelName: m.label,
@@ -242,12 +244,14 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 			monitor, present := monitors[bleemeoTypes.AgentID(m.Annotations().BleemeoAgentID)]
 			if !present {
 				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", m.Annotations().BleemeoAgentID)
+
 				continue
 			}
 
 			accountConfig, present := accountConfigs[monitor.AccountConfig]
 			if !present {
 				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
+
 				continue
 			}
 
@@ -321,7 +325,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
@@ -433,6 +437,7 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 		err := s.metricUpdateAll(false)
 		if err != nil {
 			s.UpdateMetrics(*pendingMetricsUpdate...)
+
 			return err
 		}
 	} else if len(*pendingMetricsUpdate) > 0 {
@@ -440,6 +445,7 @@ func (s *Synchronizer) metricUpdatePendingOrSync(fullSync bool, pendingMetricsUp
 
 		if err := s.metricUpdateListUUID(*pendingMetricsUpdate); err != nil {
 			s.UpdateMetrics(*pendingMetricsUpdate...)
+
 			return err
 		}
 	}
@@ -670,6 +676,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		)
 		if err != nil && client.IsNotFound(err) {
 			delete(metricsByUUID, key)
+
 			continue
 		} else if err != nil {
 			return err
@@ -717,7 +724,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	return nil
 }
 
-func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error { // nolint: gocyclo
+func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error { //nolint:gocyclo,cyclop
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
@@ -807,6 +814,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 			err := s.metricRegisterAndUpdateOne(metric, registeredMetricsByUUID, registeredMetricsByKey, containersByContainerID, servicesByKey, params, monitors)
 			if err != nil && errors.Is(err, errRetryLater) && state < metricPassRetry {
 				retryMetrics = append(retryMetrics, metric)
+
 				continue metricLoop
 			}
 
@@ -937,7 +945,6 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 	)
 
 	err := statusOfEmpty(annotations, labels, &payload, &registeredMetricsByKey, s)
-
 	if err != nil {
 		return err
 	}
@@ -1046,7 +1053,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 	if !remoteMetric.DeactivatedAt.IsZero() {
 		points, err := metric.Points(s.now().Add(-10*time.Minute), s.now())
 		if err != nil {
-			return remoteMetric, nil // assume not seen, we don't re-activate this metric
+			return remoteMetric, nil //nolint:nilerr // assume not seen, we don't re-activate this metric
 		}
 
 		if len(points) == 0 {
@@ -1190,6 +1197,7 @@ func (s *Synchronizer) metricDeactivate(localMetrics []types.Metric) error {
 		)
 		if err != nil && client.IsNotFound(err) {
 			delete(registeredMetrics, k)
+
 			continue
 		}
 

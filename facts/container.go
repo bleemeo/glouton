@@ -73,6 +73,8 @@ func (st ContainerState) String() string {
 		return "stopped"
 	case ContainerRestarting:
 		return "restarting"
+	case ContainerUnknown:
+		return "unknown"
 	default:
 		return "unknown"
 	}
@@ -121,10 +123,8 @@ const (
 	EventTypeHealth
 )
 
-var (
-	// ErrContainerDoesNotExists is the default error value when a container does not exists.
-	ErrContainerDoesNotExists = errors.New("the container doesn't exist but process seems to belong to a container")
-)
+// ErrContainerDoesNotExists is the default error value when a container does not exists.
+var ErrContainerDoesNotExists = errors.New("the container doesn't exist but process seems to belong to a container")
 
 type containerRuntime interface {
 	ProcessWithCache() ContainerRuntimeProcessQuerier
@@ -192,6 +192,7 @@ func string2Boolean(s string, defaultValue bool) (bool, bool) {
 // ContainerIgnoredFromLabels return true if a container is ignored by Glouton.
 func ContainerIgnoredFromLabels(labels map[string]string) bool {
 	e, _ := containerEnabledFromLabels(labels)
+
 	return !e
 }
 
@@ -284,65 +285,84 @@ func (c FakeContainer) RuntimeName() string {
 
 	return c.FakeRuntimeName
 }
+
 func (c FakeContainer) Annotations() map[string]string {
 	return c.FakeAnnotations
 }
+
 func (c FakeContainer) Command() []string {
 	return c.FakeCommand
 }
+
 func (c FakeContainer) ContainerJSON() string {
 	return c.FakeContainerJSON
 }
+
 func (c FakeContainer) ContainerName() string {
 	return c.FakeContainerName
 }
+
 func (c FakeContainer) CreatedAt() time.Time {
 	return c.FakeCreatedAt
 }
+
 func (c FakeContainer) Environment() map[string]string {
 	return c.FakeEnvironment
 }
+
 func (c FakeContainer) FinishedAt() time.Time {
 	return c.FakeFinishedAt
 }
+
 func (c FakeContainer) Health() (ContainerHealth, string) {
 	return c.FakeHealth, c.FakeHealthMessage
 }
+
 func (c FakeContainer) ID() string {
 	return c.FakeID
 }
+
 func (c FakeContainer) ImageID() string {
 	return c.FakeImageID
 }
+
 func (c FakeContainer) ImageName() string {
 	return c.FakeImageName
 }
+
 func (c FakeContainer) Labels() map[string]string {
 	return c.FakeLabels
 }
+
 func (c FakeContainer) ListenAddresses() (addresses []ListenAddress, explicit bool) {
 	return c.FakeListenAddresses, c.FakeListenAddressesExplicit
 }
+
 func (c FakeContainer) PodName() string {
 	return c.FakePodName
 }
+
 func (c FakeContainer) PodNamespace() string {
 	return c.FakePodNamespace
 }
+
 func (c FakeContainer) PrimaryAddress() string {
 	return c.FakePrimaryAddress
 }
+
 func (c FakeContainer) StartedAt() time.Time {
 	return c.FakeStartedAt
 }
+
 func (c FakeContainer) State() ContainerState {
 	return c.FakeState
 }
+
 func (c FakeContainer) StoppedAndReplaced() bool {
 	return c.FakeStoppedAndReplaced
 }
 
-func (c FakeContainer) Diff(other Container) string { // nolint: gocyclo
+func (c FakeContainer) Diff(other Container) string { //nolint:gocyclo,cyclop
 	diffs := []string{}
 
 	if diff := cmp.Diff(other.Annotations(), c.FakeAnnotations); c.FakeAnnotations != nil && diff != "" {

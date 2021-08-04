@@ -240,6 +240,7 @@ func (e *Exporter) init() {
 	colErrs, _, err := e.grouper.Update(e.Source.AllProcs())
 	if err != nil {
 		logger.V(1).Printf("Unable to read processes information: %v", err)
+
 		return
 	}
 

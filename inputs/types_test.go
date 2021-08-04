@@ -15,6 +15,7 @@ type mockStore struct {
 func (s *mockStore) PushPoints(points []types.MetricPoint) {
 	s.points = append(s.points, points...)
 }
+
 func (s mockStore) getByName(name string) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, 1)
 

@@ -27,7 +27,7 @@ import (
 
 // New initialise elasticsearch.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["elasticsearch"]
+	input, ok := telegraf_inputs.Inputs["elasticsearch"]
 	if ok {
 		elasticsearchInput, ok := input().(*elasticsearch.Elasticsearch)
 		if ok {

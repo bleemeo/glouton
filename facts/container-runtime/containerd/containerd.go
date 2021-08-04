@@ -102,7 +102,7 @@ func (c *Containerd) RuntimeFact(ctx context.Context, currentFact map[string]str
 
 // Metrics return metrics in a format similar to the one returned by Telegraf docker input.
 // Note that Metrics will never open the connection to ContainerD and will return empty points if not connected.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (c *Containerd) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	now := time.Now()
 
@@ -441,7 +441,7 @@ func (c *Containerd) ContainerLastKill(containerID string) time.Time {
 	return time.Time{}
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (c *Containerd) run(ctx context.Context) error {
 	c.l.Lock()
 
@@ -509,7 +509,7 @@ func (c *Containerd) run(ctx context.Context) error {
 				gloutonEvent.Container = container
 			}
 
-			switch gloutonEvent.Type {
+			switch gloutonEvent.Type { //nolint:exhaustive
 			case facts.EventTypeDelete:
 				delete(c.containers, gloutonEvent.ContainerID)
 			case facts.EventTypeStop:
@@ -554,8 +554,8 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 		}
 
 		ctx := namespaces.WithNamespace(ctx, ns)
-		err := addContainersInfo(ctx, containers, cl, ns, ignoredID)
 
+		err := addContainersInfo(ctx, containers, cl, ns, ignoredID)
 		if err != nil {
 			return err
 		}
@@ -582,7 +582,6 @@ func (c *Containerd) updateContainers(ctx context.Context) error {
 
 func addContainersInfo(ctx context.Context, containers map[string]containerObject, cl containerdClient, ns string, ignoredID map[string]bool) error {
 	list, err := cl.Containers(ctx)
-
 	if err != nil {
 		return fmt.Errorf("listing containers failed: %w", err)
 	}
@@ -595,6 +594,7 @@ func addContainersInfo(ctx context.Context, containers map[string]containerObjec
 
 		if info.Spec == nil {
 			logger.V(2).Printf("container %s/%s has no spec", ns, cont.ID())
+
 			continue
 		}
 
@@ -890,6 +890,8 @@ func (c containerObject) State() facts.ContainerState {
 		return facts.ContainerRunning
 	case containerd.Stopped:
 		return facts.ContainerStopped
+	case containerd.Unknown:
+		return facts.ContainerUnknown
 	default:
 		return facts.ContainerUnknown
 	}
@@ -919,17 +921,15 @@ func isContainerdRunning() bool {
 	return false
 }
 
-var (
-	//nolint:gochecknoglobals
-	cgroupRE = regexp.MustCompile(
-		`(?m:^\d+:(cpu,cpuacct|memory):(.*)$)`,
-	)
+var cgroupRE = regexp.MustCompile(
+	`(?m:^\d+:(cpu,cpuacct|memory):(.*)$)`,
 )
 
 type namespaceContainer struct {
 	namespace string
 	container containerd.Container
 }
+
 type containerdProcessQuerier struct {
 	c                     *Containerd
 	containersUpdated     bool
@@ -947,6 +947,7 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 
 	for _, submatches := range cgroupRE.FindAllStringSubmatch(cgroupData, -1) {
 		cgroupPath = submatches[2]
+
 		break
 	}
 
@@ -982,9 +983,8 @@ func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string)
 	// cgroupPath usually ends with /$namespace/$name. Since we use $namespace/$name as key,
 	// try direct access first.
 	part := strings.Split(cgroupPath, "/")
-	size := len(part)
 
-	if size > 2 {
+	if size := len(part); size > 2 {
 		candidate := fmt.Sprintf("%s/%s", part[size-2], part[size-1])
 
 		container, ok := q.c.containers[candidate]
@@ -1131,7 +1131,7 @@ type metricValue struct {
 	values             map[string]uint64
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func rateFromMetricValue(gloutonIDToName map[string]string, pastValues []metricValue, newValues []metricValue) []types.MetricPoint {
 	memUsage, err := mem.VirtualMemory()
 	if err != nil {

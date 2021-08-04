@@ -61,6 +61,7 @@ type mockProcessQuerier struct {
 func (m *mockProcessQuerier) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	return m.processesResult, nil
 }
+
 func (m *mockProcessQuerier) PidExists(pid int32) (bool, error) {
 	for _, p := range m.processesResult {
 		if p.PID == int(pid) {
@@ -70,6 +71,7 @@ func (m *mockProcessQuerier) PidExists(pid int32) (bool, error) {
 
 	return false, nil
 }
+
 func (m *mockProcessQuerier) CGroupFromPID(pid int) (string, error) {
 	m.CGroupCalls = append(m.CGroupCalls, pid)
 
@@ -424,8 +426,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 		t.Errorf("len(pp.processe) == %v, want %v", len(pp.processes), len(cases))
 	}
 
-	wantPID := []int{1, 101, 102}
-	if !reflect.DeepEqual(cr.ContainerFromPIDCalls, wantPID) {
+	if wantPID := []int{1, 101, 102}; !reflect.DeepEqual(cr.ContainerFromPIDCalls, wantPID) {
 		t.Errorf("ContainerFromPIDCalls = %v, want %v", cr.ContainerFromPIDCalls, wantPID)
 	}
 
@@ -439,7 +440,7 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 
 // TestUpdateProcessesOptimization check that ContainerRuntime is not called too much
 // In case of Processes updates, reuse as much as existing information as possible.
-func TestUpdateProcessesOptimization(t *testing.T) { // nolint: gocyclo
+func TestUpdateProcessesOptimization(t *testing.T) { //nolint:gocyclo,cyclop
 	now := time.Now()
 	t0 := now.Add(-time.Hour)
 	t1 := now.Add(time.Minute)

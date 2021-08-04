@@ -70,6 +70,7 @@ func TestMergeREs(t *testing.T) {
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
 				t.Fatalf("failed to compile %#v: %v", got, err)
+
 				return
 			}
 
@@ -155,12 +156,14 @@ func TestReFromREs(t *testing.T) {
 			got, err := common.ReFromREs(tt.args.input)
 			if err != nil {
 				t.Errorf("ReFromREs failed: %v", err)
+
 				return
 			}
 
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
 				t.Errorf("failed to compile %#v: %v", got, err)
+
 				return
 			}
 
@@ -234,12 +237,14 @@ func TestReFromPrefixes(t *testing.T) {
 			got, err := common.ReFromPrefix(tt.args.prefix)
 			if err != nil {
 				t.Errorf("ReFromREs failed: %v", err)
+
 				return
 			}
 
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
 				t.Errorf("failed to compile %#v: %v", got, err)
+
 				return
 			}
 
@@ -299,12 +304,14 @@ func TestReFromPathPrefix(t *testing.T) {
 			got, err := common.ReFromPathPrefix(tt.args.prefix)
 			if err != nil {
 				t.Errorf("ReFromREs failed: %v", err)
+
 				return
 			}
 
 			gotRE, err := regexp.Compile(got)
 			if err != nil {
 				t.Errorf("failed to compile %#v: %v", got, err)
+
 				return
 			}
 

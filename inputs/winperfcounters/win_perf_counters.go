@@ -36,8 +36,10 @@ import (
 	"github.com/shirou/gopsutil/mem"
 )
 
-var errCannotFindParsedConfig = errors.New("cannot find in the win_perfs_counters config")
-var errMultipleInstanceNotSupported = errors.New("running multiple win_perfs_counters instances simultaneously is not currently supported")
+var (
+	errCannotFindParsedConfig       = errors.New("cannot find in the win_perfs_counters config")
+	errMultipleInstanceNotSupported = errors.New("running multiple win_perfs_counters instances simultaneously is not currently supported")
+)
 
 const (
 	diskIOModuleName    string = "win_diskio"
@@ -227,6 +229,7 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 		for _, r := range c.option.IODiskWhitelist {
 			if r.MatchString(instance) {
 				drop = false
+
 				break
 			}
 		}

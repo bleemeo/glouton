@@ -179,6 +179,7 @@ func TestEncode(t *testing.T) {
 
 		if !bytes.Equal(got, c.ReplyRaw) {
 			t.Errorf("encodeV%d(%v) == %v, want %v", c.Version, inPacket, got, c.ReplyRaw)
+
 			break
 		}
 
@@ -196,9 +197,11 @@ type ReaderWriter struct {
 func (rw ReaderWriter) Read(b []byte) (int, error) {
 	return rw.reader.Read(b)
 }
+
 func (rw ReaderWriter) Write(b []byte) (int, error) {
 	return rw.writer.Write(b)
 }
+
 func (rw ReaderWriter) Close() error {
 	return nil
 }
@@ -225,6 +228,7 @@ func TestHandleConnection(t *testing.T) {
 		got := socket.writer.Bytes()
 		if !bytes.Equal(got, c.ReplyRaw) {
 			t.Errorf("handleConnection([case %s]) == %v, want %v", c.Description, got, c.ReplyRaw)
+
 			break
 		}
 	}

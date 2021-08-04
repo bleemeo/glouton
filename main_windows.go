@@ -25,7 +25,7 @@ import (
 
 //nolint:gochecknoglobals
 var (
-	// flags related to the installation
+	// flags related to the installation.
 	postInstall       = flag.Bool("post-install", false, "Run the post-install step")
 	basedir           = flag.String("basedir", "", "Base directory of configuration, state file and logs")
 	configFileSubpath = flag.String("config-file-subpath", "", "Path of the config file used to store the account id and registration key, relative to basedir")
@@ -33,6 +33,7 @@ var (
 	registration      = flag.String("registration-key", "", "Registration key of your account")
 )
 
+//nolint:forbidigo
 func OSDependentMain() {
 	if !*postInstall {
 		return
@@ -42,20 +43,22 @@ func OSDependentMain() {
 
 	if *configFileSubpath == "" || *basedir == "" {
 		fmt.Println("No config file specified, cannot install the agent configuration")
+
 		return
 	}
 
 	configFilePath := filepath.Join(*basedir, *configFileSubpath)
 
-	_, err := os.Stat(configFilePath)
-	if err == nil {
+	if _, err := os.Stat(configFilePath); err == nil {
 		fmt.Println("The config file already exists, doing nothing")
+
 		return
 	}
 
 	fd, err := os.Create(configFilePath)
 	if err != nil {
 		fmt.Printf("Couldn't open the config file: %v.\n", err)
+
 		return
 	}
 

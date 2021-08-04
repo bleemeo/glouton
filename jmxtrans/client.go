@@ -19,6 +19,7 @@ package jmxtrans
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"glouton/discovery"
 	"glouton/logger"
@@ -91,6 +92,7 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 		err := c.Connection.SetDeadline(time.Now().Add(3 * time.Second))
 		if err != nil {
 			logger.V(1).Printf("setdeadline error on jmxtrans connection: %v", err)
+
 			break
 		}
 
@@ -100,7 +102,7 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 				continue
 			}
 
-			if err != io.EOF {
+			if errors.Is(err, io.EOF) {
 				logger.V(1).Printf("read error on jmxtrans connection: %v", err)
 			}
 
@@ -115,6 +117,7 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 			if i == len(lines)-1 {
 				// last line is not yet terminated, re-add it to buffer.
 				buffer = line
+
 				continue
 			}
 
@@ -130,7 +133,7 @@ func (c *jmxtransClient) Run(ctx context.Context) {
 	c.Connection.Close()
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func (c *jmxtransClient) processLine(line string) {
 	parts := strings.Split(line, " ")
 	if len(parts) != 3 {
@@ -182,24 +185,28 @@ func (c *jmxtransClient) processLine(line string) {
 
 	if linePrefix != graphitePrefix {
 		logger.V(2).Printf("wrong line prefix %#v", linePrefix)
+
 		return
 	}
 
 	service, ok := c.Config.GetService(md5Service)
 	if !ok {
 		logger.V(2).Printf("service not found for hash %s", md5Service)
+
 		return
 	}
 
 	metrics, usedInRatio := c.Config.GetMetrics(md5Service, md5Bean, attr)
 	if len(metrics) == 0 {
 		logger.V(5).Printf("metric not found for %s, %s, %s", md5Service, md5Bean, attr)
+
 		return
 	}
 
 	for _, metric := range metrics {
 		name := fmt.Sprintf("%s_%s", service.Name, metric.Name)
-		item := ""
+
+		var item string
 
 		switch {
 		case service.ContainerName != "" && typeNames != "":
@@ -376,6 +383,7 @@ func (c *jmxtransClient) flush() {
 
 		if divisor.Timestamp.IsZero() || math.Abs(point.Timestamp.Sub(divisor.Timestamp).Seconds()) > 1 {
 			logger.V(2).Printf("can't compute ratio for metric %s due to missing or outdated divisor value", key.Name)
+
 			continue
 		}
 

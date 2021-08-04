@@ -13,6 +13,7 @@ require (
 	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327
 	github.com/containerd/containerd v1.4.3
 	github.com/containerd/typeurl v0.0.0-20180627222232-a93fcdb778cd
+	github.com/daixiang0/gci v0.2.9 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.2.1-0.20200121105743-0d940dd29fd2
@@ -84,5 +85,6 @@ require (
 	k8s.io/api v0.20.1
 	k8s.io/apimachinery v0.20.1
 	k8s.io/client-go v0.20.1
+	mvdan.cc/gofumpt v0.1.1 // indirect
 	sigs.k8s.io/yaml v1.2.0
 )

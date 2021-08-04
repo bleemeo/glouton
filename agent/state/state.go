@@ -112,7 +112,7 @@ func (s *State) save() error {
 }
 
 func (s *State) saveTo(path string) error {
-	w, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0600)
+	w, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600)
 	if err != nil {
 		return err
 	}
@@ -162,8 +162,7 @@ func (s *State) Delete(key string) error {
 
 	delete(s.data, key)
 
-	err := s.saveIfPossible()
-	if err != nil {
+	if err := s.saveIfPossible(); err != nil {
 		logger.Printf("Unable to save state.json: %v", err)
 	}
 

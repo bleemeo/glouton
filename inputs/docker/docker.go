@@ -31,7 +31,7 @@ import (
 
 // New initialise docker.Input.
 func New(dockerAddress string, dockerRuntime crTypes.RuntimeInterface) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["docker"]
+	input, ok := telegraf_inputs.Inputs["docker"]
 	if ok {
 		dockerInput, ok := input().(*docker.Docker)
 		if ok {
@@ -84,6 +84,7 @@ func (r renamer) renameGlobal(originalContext internal.GatherContext) (newContex
 	c, ok := r.dockerRuntime.CachedContainer(newContext.Annotations.ContainerID)
 	if !ok || facts.ContainerIgnored(c) {
 		drop = true
+
 		return
 	}
 

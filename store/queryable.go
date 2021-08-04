@@ -30,7 +30,7 @@ import (
 
 var errNotImplemented = errors.New("not implemented")
 
-//Querier returns a storage.Querier to read from memory store.
+// Querier returns a storage.Querier to read from memory store.
 func (s *Store) Querier(ctx context.Context, mint, maxt int64) (storage.Querier, error) {
 	return querier{store: s, mint: mint, maxt: maxt}, nil
 }
@@ -71,6 +71,7 @@ outerLoop:
 	sort.Slice(metrics, func(i, j int) bool {
 		lblsA := labels.FromMap(metrics[i].labels)
 		lblsB := labels.FromMap(metrics[j].labels)
+
 		return labels.Compare(lblsA, lblsB) < 0
 	})
 
@@ -110,6 +111,7 @@ func (i *seriesIter) Next() bool {
 		points, err := metric.Points(i.mint, i.maxt)
 		if err != nil && !errors.Is(err, errDeletedMetric) {
 			i.err = err
+
 			return false
 		}
 

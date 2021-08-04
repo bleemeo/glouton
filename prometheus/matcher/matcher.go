@@ -57,7 +57,7 @@ func NormalizeMetric(metric string) (Matchers, error) {
 	return m, nil
 }
 
-//Get returns a matcher with the specided label as Name.
+// Get returns a matcher with the specided label as Name.
 // nil will be returned if not matcher were found.
 func (m *Matchers) Get(label string) *labels.Matcher {
 	for _, val := range *m {
@@ -69,14 +69,14 @@ func (m *Matchers) Get(label string) *labels.Matcher {
 	return nil
 }
 
-//Add will add a new matcher to the metric.
+// Add will add a new matcher to the metric.
 func (m *Matchers) Add(label string, value string, labelType labels.MatchType) error {
-	new, err := labels.NewMatcher(labelType, label, value)
+	matcher, err := labels.NewMatcher(labelType, label, value)
 	if err != nil {
 		return err
 	}
 
-	*m = append(*m, new)
+	*m = append(*m, matcher)
 
 	return nil
 }

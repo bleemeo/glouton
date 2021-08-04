@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	// Number of line keep at the head/bottom of the buffer
+	// Number of line keep at the head/bottom of the buffer.
 	defaultHeadCount = 30
 	defaultTailCount = 30
 )
@@ -29,6 +29,7 @@ func (b *buffer) Write(input []byte) (int, error) {
 func (b *buffer) SetCapacity(headSize int, tailSize int) {
 	if headSize <= 0 || tailSize <= 0 {
 		V(1).Printf("invalid capacity size for log buffer: head=%d, tail=%d", headSize, tailSize)
+
 		return
 	}
 

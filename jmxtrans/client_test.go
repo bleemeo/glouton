@@ -48,6 +48,7 @@ type fakeConfig struct {
 
 func (c fakeConfig) GetService(sha256Service string) (discovery.Service, bool) {
 	r, ok := c.Services[sha256Service]
+
 	return r, ok
 }
 

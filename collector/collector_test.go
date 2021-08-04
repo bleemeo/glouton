@@ -34,6 +34,7 @@ func (m *mockInput) Description() string {
 
 func (m *mockInput) Gather(acc telegraf.Accumulator) error {
 	m.GatherCallCount++
+
 	return nil
 }
 

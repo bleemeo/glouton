@@ -43,9 +43,11 @@ type mockMetric struct {
 func (m mockMetric) Labels() map[string]string {
 	return map[string]string{types.LabelName: m.Name}
 }
+
 func (m mockMetric) Annotations() types.MetricAnnotations {
 	return types.MetricAnnotations{}
 }
+
 func (m mockMetric) Points(start, end time.Time) ([]types.Point, error) {
 	return nil, errNotImplemented
 }
@@ -116,6 +118,8 @@ type metricTestHelper struct {
 }
 
 func newMetricHelper(t *testing.T) *metricTestHelper {
+	t.Helper()
+
 	helper := &metricTestHelper{
 		t:     t,
 		api:   newAPI(),
@@ -160,8 +164,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	helper.s.startedAt = helper.mt.Now()
 	helper.s.nextFullSync = helper.mt.Now()
 
-	err := helper.s.setClient()
-	if err != nil {
+	if err := helper.s.setClient(); err != nil {
 		panic(err)
 	}
 
@@ -270,7 +273,7 @@ func (res runResult) CheckAllowError(name string, wantFull bool) {
 // Agent start and register metrics
 // Some metrics disapear => mark inative
 // Some re-appear and some new => mark active & register.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func TestMetricSimpleSync(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -390,6 +393,7 @@ func TestMetricSimpleSync(t *testing.T) {
 	for _, m := range metrics {
 		if m.DeactivatedAt.IsZero() && m.Name != agentStatusName {
 			t.Errorf("%v should be deactivated", m)
+
 			break
 		} else if !m.DeactivatedAt.IsZero() && m.Name == agentStatusName {
 			t.Errorf("%v should not be deactivated", m)
@@ -437,6 +441,7 @@ func TestMetricSimpleSync(t *testing.T) {
 			}
 		} else if m.DeactivatedAt.IsZero() {
 			t.Errorf("%v should be deactivated", m)
+
 			break
 		}
 
@@ -451,7 +456,7 @@ func TestMetricSimpleSync(t *testing.T) {
 }
 
 // TestMetricDeleted test that Glouton can update metrics deleted on Bleemeo.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func TestMetricDeleted(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -567,6 +572,7 @@ func TestMetricDeleted(t *testing.T) {
 	for _, m := range metrics {
 		if m.DeactivatedAt.IsZero() && m.Name != agentStatusName {
 			t.Errorf("%v should be deactivated", m)
+
 			break
 		} else if !m.DeactivatedAt.IsZero() && m.Name == agentStatusName {
 			t.Errorf("%v should not be deactivated", m)
@@ -672,7 +678,7 @@ func TestMetricUnknownError(t *testing.T) {
 
 	// API always reject registering "deny-me" metric
 	helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
-		metric := valuePtr.(*metricPayload)
+		metric, _ := valuePtr.(*metricPayload)
 		if metric.Name == "deny-me" {
 			return errClient{
 				body:       "no information about whether the error is permanent or not",
@@ -769,7 +775,7 @@ func TestMetricUnknownError(t *testing.T) {
 }
 
 // TestMetricPermanentError test that Glouton handle permanent failure metric from Bleemeo correctly.
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func TestMetricPermanentError(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -791,7 +797,7 @@ func TestMetricPermanentError(t *testing.T) {
 
 			// API always reject registering "deny-me" metric
 			helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
-				metric := valuePtr.(*metricPayload)
+				metric, _ := valuePtr.(*metricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
 					return errClient{
 						body:       tt.content,
@@ -947,7 +953,7 @@ func TestMetricPermanentError(t *testing.T) {
 }
 
 // TestMetricTooMany test that Glouton handle too many non-standard metric correctly.
-func TestMetricTooMany(t *testing.T) { // nolint: gocyclo
+func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 	helper := newMetricHelper(t)
 	defer helper.Close()
 
@@ -962,7 +968,7 @@ func TestMetricTooMany(t *testing.T) { // nolint: gocyclo
 			}
 		}
 
-		metric := valuePtr.(*metricPayload)
+		metric, _ := valuePtr.(*metricPayload)
 
 		if metric.DeactivatedAt.IsZero() {
 			metrics := helper.Metrics()

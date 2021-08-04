@@ -59,6 +59,7 @@ func (r *Runtime) CachedContainer(containerID string) (c facts.Container, found 
 
 	if cr == nil {
 		logger.V(2).Printf("CachedContainer: can't route container %s to a container runtime", containerID)
+
 		return nil, false
 	}
 
@@ -71,6 +72,7 @@ func (r *Runtime) ContainerLastKill(containerID string) time.Time {
 
 	if cr == nil {
 		logger.V(2).Printf("ContainerLastKill: can't route container %s to a container runtime", containerID)
+
 		return time.Time{}
 	}
 
@@ -83,6 +85,7 @@ func (r *Runtime) Exec(ctx context.Context, containerID string, cmd []string) ([
 
 	if cr == nil {
 		logger.V(2).Printf("Exec: can't route container %s to a container runtime", containerID)
+
 		return nil, errNoRuntimeAvailable
 	}
 
@@ -97,7 +100,6 @@ func (r *Runtime) Containers(ctx context.Context, maxAge time.Duration, includeI
 
 	for i, cr := range r.Runtimes {
 		list, err := cr.Containers(ctx, maxAge, true)
-
 		if err != nil {
 			errs = append(errs, err)
 
@@ -285,7 +287,7 @@ func (r *Runtime) RuntimeFact(ctx context.Context, currentFact map[string]string
 func (r *Runtime) Metrics(ctx context.Context) ([]types.MetricPoint, error) {
 	points := make([]types.MetricPoint, 0)
 
-	var errors MultiError = nil
+	var errors MultiError
 
 	for _, runtime := range r.Runtimes {
 		runtimePoints, err := runtime.Metrics(ctx)
@@ -388,7 +390,7 @@ func (m mergeProcessQuerier) ContainerFromPID(ctx context.Context, parentContain
 	return nil, nil
 }
 
-//MultiError is a type containing multiple errors. It implements the error interface.
+// MultiError is a type containing multiple errors. It implements the error interface.
 type MultiError []error
 
 func (errs MultiError) Error() string {

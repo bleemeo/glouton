@@ -24,7 +24,7 @@ import (
 	"strings"
 )
 
-//JmxMetric represents a jmx Metric.
+// JmxMetric represents a jmx Metric.
 type JmxMetric struct {
 	Name      string
 	MBean     string
@@ -316,7 +316,7 @@ var cassandraDetailedTableMetrics = []JmxMetric{
 	},
 }
 
-//GetJMXMetrics parses the jmx info and returns a list of JmxMetric struct.
+// GetJMXMetrics parses the jmx info and returns a list of JmxMetric struct.
 func GetJMXMetrics(service discovery.Service) []JmxMetric {
 	var result []JmxMetric
 

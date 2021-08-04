@@ -18,7 +18,6 @@ package zabbix
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"reflect"
 	"testing"
@@ -86,7 +85,7 @@ func TestSplitData(t *testing.T) {
 		gotKey, gotArgs, err := splitData(c.in)
 		if gotKey != c.wantKey || !reflect.DeepEqual(gotArgs, c.wantArgs) {
 			t.Errorf("splitData(%v) == %v+%v, want %v+%v", c.in, gotKey, gotArgs, c.wantKey, c.wantArgs)
-			fmt.Println(err, len(gotArgs))
+			t.Log(err, len(gotArgs))
 		}
 	}
 }
@@ -131,6 +130,7 @@ func TestEncode(t *testing.T) {
 		got, err := encodeReply(c.ReplyString, c.ReplyError)
 		if !bytes.Equal(got, c.ReplyRaw) {
 			t.Errorf("encodev1(%#v, %#v) == %v, want %v", c.ReplyString, c.ReplyError, got, c.ReplyRaw)
+
 			break
 		}
 
@@ -148,9 +148,11 @@ type ReaderWriter struct {
 func (rw ReaderWriter) Read(b []byte) (int, error) {
 	return rw.reader.Read(b)
 }
+
 func (rw ReaderWriter) Write(b []byte) (int, error) {
 	return rw.writer.Write(b)
 }
+
 func (rw ReaderWriter) Close() error {
 	return nil
 }
@@ -172,6 +174,7 @@ func TestHandleConnection(t *testing.T) {
 		got := socket.writer.Bytes()
 		if !bytes.Equal(got, c.ReplyRaw) {
 			t.Errorf("handleConnection([case %s]) writes %v, want %v", c.Description, got, c.ReplyRaw)
+
 			break
 		}
 	}

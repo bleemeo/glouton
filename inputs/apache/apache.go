@@ -28,7 +28,7 @@ import (
 
 // New initialise apache.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["apache"]
+	input, ok := telegraf_inputs.Inputs["apache"]
 	if ok {
 		apacheInput, ok := input().(*apache.Apache)
 		if ok {

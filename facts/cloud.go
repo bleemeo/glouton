@@ -59,7 +59,7 @@ type azureInterfaceIP6 struct {
 
 type azureNetworkInterface struct {
 	IPv4 azureInterfaceIP4 `json:"ipv4"`
-	//IPv6       azureInterfaceIP6 `json:"ipv6"`
+	// IPv6       azureInterfaceIP6 `json:"ipv6"`
 	MacAddress string `json:"macAddress"`
 }
 
@@ -103,6 +103,7 @@ func parseAzureFacts(inst azureInstance, facts map[string]string) {
 			prefix, err := strconv.Atoi(sub.Prefix)
 			if err != nil {
 				logger.V(2).Printf("facts: couldn't parse azure network subnets: %v", err)
+
 				return
 			}
 
@@ -175,6 +176,7 @@ func azureFacts(ctx context.Context, facts map[string]string) (found bool) {
 	err := json.Unmarshal([]byte(instanceData), &inst)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't parse azure instance informations, some facts may be missing on your dashboard: %v", err)
+
 		return false
 	}
 
@@ -237,6 +239,7 @@ func parseGceFacts(projectID int64, inst gceInstance, facts map[string]string) {
 		maskSplitted := strings.Split(network.Mask, ".")
 		if len(maskSplitted) != 4 {
 			logger.V(2).Printf("Couldn't parse the network mask %s", network.Mask)
+
 			continue
 		}
 
@@ -247,6 +250,7 @@ func parseGceFacts(projectID int64, inst gceInstance, facts map[string]string) {
 
 		if err1 != nil || err2 != nil || err3 != nil || err4 != nil {
 			logger.V(2).Printf("Couldn't parse the network mask %s", network.Mask)
+
 			continue
 		}
 
@@ -300,6 +304,7 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 	projectID, err := strconv.ParseInt(projectIDStr, 0, 64)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't retrieve your google cloud project ID, some facts may be missing on your dashboard: %v", err)
+
 		return false
 	}
 
@@ -314,6 +319,7 @@ func gceFacts(ctx context.Context, facts map[string]string) (found bool) {
 	err = json.Unmarshal([]byte(instanceData), &inst)
 	if err != nil {
 		logger.V(2).Printf("facts: couldn't parse google cloud instance informations, some facts may be missing on your dashboard: %v", err)
+
 		return false
 	}
 

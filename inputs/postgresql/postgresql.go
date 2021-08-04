@@ -27,7 +27,7 @@ import (
 
 // New initialise postgresql.Input.
 func New(url string) (i telegraf.Input, err error) {
-	var input, ok = telegraf_inputs.Inputs["postgresql"]
+	input, ok := telegraf_inputs.Inputs["postgresql"]
 	if ok {
 		postgresqlInput, ok := input().(*postgresql.Postgresql)
 		if ok {

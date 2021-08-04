@@ -87,6 +87,7 @@ func (d *Discovery) createCheck(service Service) {
 
 	if service.CheckIgnored {
 		logger.V(2).Printf("The check associated to the service '%s' on container '%s' is ignored by the configuration", service.Name, service.ContainerID)
+
 		return
 	}
 
@@ -118,7 +119,7 @@ func (d *Discovery) createCheck(service Service) {
 	labels := service.LabelsOfStatus()
 	annotations := service.AnnotationsOfStatus()
 
-	switch service.ServiceType {
+	switch service.ServiceType { //nolint:exhaustive
 	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
 	case ApacheService, InfluxDBService, NginxService, SquidService:
@@ -160,7 +161,7 @@ func createCheckType(service Service, d *Discovery, di discoveryInfo, primaryAdd
 func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
 	var tcpSend, tcpExpect, tcpClose []byte
 
-	switch service.ServiceType {
+	switch service.ServiceType { //nolint:exhaustive
 	case DovecoteService:
 		tcpSend = []byte("001 NOOP\n")
 		tcpExpect = []byte("001 OK")
@@ -197,12 +198,14 @@ func (d *Discovery) createTCPCheck(service Service, di discoveryInfo, primaryAdd
 func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
 	if primaryAddress == "" {
 		d.createTCPCheck(service, di, primaryAddress, tcpAddresses, labels, annotations)
+
 		return
 	}
 
 	u, err := url.Parse(fmt.Sprintf("http://%s", primaryAddress))
 	if err != nil {
 		logger.V(2).Printf("can't parse URL \"%s\" ? This shouldn't happen: %v", fmt.Sprintf("http://%s", primaryAddress), err)
+
 		return
 	}
 

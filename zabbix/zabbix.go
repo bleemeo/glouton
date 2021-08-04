@@ -30,15 +30,17 @@ import (
 	"time"
 )
 
-var ErrUnmatchedOpeningBracket = errors.New("unmatched opening bracket")
-var ErrUnmatchedClosingBracket = errors.New("unmatched closing bracket")
-var ErrClosingBracketNotAllowed = errors.New("character ] is not allowed in unquoted parameter string")
-var ErrMissingClosingBracket = errors.New("missing closing bracket at the end")
-var ErrIllegalBraces = errors.New("illegal braces")
-var ErrCommaButNotArgs = errors.New("comma but no arguments detected")
-var ErrMultiArrayNotAllowed = errors.New("multi-level arrays are not allowed")
-var ErrQuotedParamContainsUnquoted = errors.New("quoted parameter cannot contain unquoted part")
-var errWrongHeader = errors.New("wrong packet header")
+var (
+	ErrUnmatchedOpeningBracket     = errors.New("unmatched opening bracket")
+	ErrUnmatchedClosingBracket     = errors.New("unmatched closing bracket")
+	ErrClosingBracketNotAllowed    = errors.New("character ] is not allowed in unquoted parameter string")
+	ErrMissingClosingBracket       = errors.New("missing closing bracket at the end")
+	ErrIllegalBraces               = errors.New("illegal braces")
+	ErrCommaButNotArgs             = errors.New("comma but no arguments detected")
+	ErrMultiArrayNotAllowed        = errors.New("multi-level arrays are not allowed")
+	ErrQuotedParamContainsUnquoted = errors.New("quoted parameter cannot contain unquoted part")
+	errWrongHeader                 = errors.New("wrong packet header")
+)
 
 // Server is a Zabbix server than use Callback for reply to queries.
 type Server struct {
@@ -107,12 +109,14 @@ func decode(r io.Reader) (packetStruct, error) {
 
 	if !bytes.Equal(header, []byte("ZBXD")) {
 		err = errWrongHeader
+
 		return decodedPacket, err
 	}
 
 	err = binary.Read(buf, binary.LittleEndian, &decodedPacket.version)
 	if err != nil {
 		err = fmt.Errorf("binary.Read failed for packet_version: %w", err)
+
 		return decodedPacket, err
 	}
 
@@ -121,6 +125,7 @@ func decode(r io.Reader) (packetStruct, error) {
 	err = binary.Read(buf, binary.LittleEndian, &dataLength)
 	if err != nil {
 		err = fmt.Errorf("binary.Read failed for packet_version: %w", err)
+
 		return decodedPacket, err
 	}
 
@@ -129,6 +134,7 @@ func decode(r io.Reader) (packetStruct, error) {
 	_, err = r.Read(packetData)
 	if err != nil {
 		err = fmt.Errorf("r.Read failed for data: %w", err)
+
 		return decodedPacket, err
 	}
 
@@ -138,7 +144,7 @@ func decode(r io.Reader) (packetStruct, error) {
 	return decodedPacket, err
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func splitData(request string) (string, []string, error) {
 	var args []string
 
@@ -155,7 +161,7 @@ func splitData(request string) (string, []string, error) {
 		return request, args, nil
 	}
 
-	newrequest := strings.Replace(request, " ", "", -1)
+	newrequest := strings.ReplaceAll(request, " ", "")
 	key := newrequest[0:i]
 
 	if string(newrequest[len(newrequest)-1]) != "]" {
@@ -220,7 +226,7 @@ func splitData(request string) (string, []string, error) {
 					}
 
 					if string(joinArgs[j]) == `"` {
-						args = append(args, strings.Replace(joinArgs[j+1:k-1], `\`, "", -1))
+						args = append(args, strings.ReplaceAll(joinArgs[j+1:k-1], `\`, ""))
 						j = k + 1
 
 						continue
@@ -239,6 +245,7 @@ func splitData(request string) (string, []string, error) {
 
 	if inBrackets {
 		err := ErrUnmatchedOpeningBracket
+
 		return key, args, err
 	}
 
@@ -253,6 +260,7 @@ func splitData(request string) (string, []string, error) {
 			}
 			if string(joinArgs[j]) == `"` {
 				args = append(args, joinArgs[j+1:len(joinArgs)-1])
+
 				return key, args, nil
 			}
 		}
@@ -268,11 +276,11 @@ func encodeReply(message string, inputError error) ([]byte, error) {
 		message = fmt.Sprintf("ZBX_NOTSUPPORTED\x00%s.", inputError)
 	}
 
-	var dataLength = int64(len(message))
+	dataLength := int64(len(message))
 
 	encodedPacket := make([]byte, 13+dataLength)
 
-	copy(encodedPacket[0:4], []byte("ZBXD"))
+	copy(encodedPacket[0:4], "ZBXD")
 
 	encodedPacket[4] = 1 // version
 
@@ -281,16 +289,17 @@ func encodeReply(message string, inputError error) ([]byte, error) {
 	err := binary.Write(buf, binary.LittleEndian, &dataLength)
 	if err != nil {
 		err = fmt.Errorf("binary.Write failed for data_length: %w", err)
+
 		return encodedPacket, err
 	}
 
 	copy(encodedPacket[5:13], buf.Bytes())
-	copy(encodedPacket[13:], []byte(message))
+	copy(encodedPacket[13:], message)
 
 	return encodedPacket, nil
 }
 
-//Run starts a connection with a zabbix server.
+// Run starts a connection with a zabbix server.
 func (s Server) Run(ctx context.Context) error {
 	tcpAdress, err := net.ResolveTCPAddr("tcp", s.bindAddress)
 	if err != nil {
@@ -328,12 +337,14 @@ func (s Server) Run(ctx context.Context) error {
 
 		if err != nil {
 			logger.V(1).Printf("Zabbix accept failed: %v", err)
+
 			continue
 		}
 
 		err = c.SetDeadline(time.Now().Add(time.Second * 10))
 		if err != nil {
 			logger.V(1).Printf("Zabbix: setDeadline on connection failed: %v", err)
+
 			continue
 		}
 

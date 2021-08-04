@@ -142,6 +142,7 @@ func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConf
 
 	return false
 }
+
 func gathererInArray(value gathererWithConfigTarget, iterable []collectorWithLabels) bool {
 	for _, arrayValue := range iterable {
 		// see inMap() above

@@ -83,6 +83,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 	url, err := url.Parse(monitor.URL)
 	if err != nil {
 		logger.V(2).Printf("Invalid URL: '%s'", monitor.URL)
+
 		return nil, err
 	}
 
@@ -190,11 +191,13 @@ func New(registry *registry.Registry, externalConf interface{}, userAgent string
 	marshalled, err := yaml.Marshal(externalConf)
 	if err != nil {
 		logger.V(1).Printf("blackbox_exporter: Couldn't marshal blackbox_exporter configuration")
+
 		return nil, err
 	}
 
 	if err = yaml.Unmarshal(marshalled, &conf); err != nil {
 		logger.V(1).Printf("blackbox_exporter: Cannot parse blackbox_exporter config: %v", err)
+
 		return nil, err
 	}
 

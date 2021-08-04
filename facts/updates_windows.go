@@ -31,30 +31,35 @@ func countUpdates(updateDispatcher *ole.IDispatch, query string) (res int, succe
 	searchResultPtr, err := updateDispatcher.CallMethod("Search", query)
 	if err != nil {
 		logger.V(2).Printf("Couldn't search the updates: %v", err)
+
 		return
 	}
 
 	searchResult := searchResultPtr.ToIDispatch()
 	if searchResult == nil {
 		logger.V(2).Printf("Couldn't create an ISearchResult: %v", err)
+
 		return
 	}
 
 	updatesCollectionPtr, err := searchResult.GetProperty("Updates")
 	if err != nil {
 		logger.V(2).Printf("Couldn't search the updates: %v", err)
+
 		return
 	}
 
 	updatesCollection := updatesCollectionPtr.ToIDispatch()
 	if updatesCollection == nil {
 		logger.V(2).Printf("Couldn't create an IUpdateCollection: %v", err)
+
 		return
 	}
 
 	countVariant, err := updatesCollection.GetProperty("Count")
 	if err != nil {
 		logger.V(2).Printf("Couldn't retrieve the collection count on the interface IUpdateCollection: %v", err)
+
 		return
 	}
 
@@ -84,6 +89,7 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 
 		if len(splits) != 2 {
 			logger.V(2).Printf("Couldn't retrieve Windows Update informations: got %d values, expected 2 in %v", len(splits), splits)
+
 			return
 		}
 
@@ -92,6 +98,7 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 
 		if err1 != nil || err2 != nil {
 			logger.V(2).Printf("Couldn't retrieve Windows Update informations: cannot parse the file with content %v", splits)
+
 			return
 		}
 
@@ -103,6 +110,7 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 	err = connection.Initialize()
 	if err != nil {
 		logger.V(2).Printf("Couldn't instantiate an OLE connection: %v", err)
+
 		return
 	}
 
@@ -111,24 +119,28 @@ func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, 
 	errs := connection.Load("Microsoft.Update.Session")
 	if errs != nil {
 		logger.V(2).Printf("Couldn't load the 'Microsoft.Update.Session' COM object: %v", errs)
+
 		return
 	}
 
 	dispatch, err := connection.Dispatch()
 	if err != nil {
 		logger.V(2).Printf("Couldn't create an OLE dispatcher: %v", err)
+
 		return
 	}
 
 	updateSearcherPtr, err := dispatch.Call("CreateUpdateSearcher")
 	if err != nil {
 		logger.V(2).Printf("Couldn't create an IUpdateSearcher: %v", err)
+
 		return
 	}
 
 	updateSearcher := updateSearcherPtr.ToIDispatch()
 	if updateSearcher == nil {
 		logger.V(2).Printf("Couldn't create an IUpdateSearcher: %v", err)
+
 		return
 	}
 

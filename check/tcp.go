@@ -20,14 +20,13 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"glouton/inputs"
+	"glouton/logger"
+	"glouton/types"
 	"io"
 	"net"
 	"strconv"
 	"time"
-
-	"glouton/inputs"
-	"glouton/logger"
-	"glouton/types"
 )
 
 // TCPCheck perform a TCP check.
@@ -75,7 +74,7 @@ func (tc *TCPCheck) doCheck(ctx context.Context) types.StatusDescription {
 	return checkTCP(ctx, tc.mainAddress, tc.send, tc.expect, tc.closeMsg)
 }
 
-//nolint: gocyclo
+//nolint:gocyclo,cyclop
 func checkTCP(ctx context.Context, address string, send []byte, expect []byte, closeMsg []byte) types.StatusDescription {
 	_, portStr, err := net.SplitHostPort(address)
 	if err != nil {

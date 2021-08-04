@@ -13,9 +13,7 @@ import (
 	"github.com/containerd/containerd/oci"
 )
 
-var (
-	createRedis = flag.Bool("create-redis", false, "Create a Redis container in example namespace")
-)
+var createRedis = flag.Bool("create-redis", false, "Create a Redis container in example namespace")
 
 func main() {
 	flag.Parse()

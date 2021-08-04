@@ -108,6 +108,7 @@ func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 		localContainers, err = s.option.Docker.Containers(s.ctx, 2*time.Minute, false)
 		if err != nil {
 			logger.V(1).Printf("Unable to list containers: %v", err)
+
 			return nil
 		}
 	}
@@ -134,11 +135,9 @@ func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 		return err
 	}
 
-	if err := s.containerDeleteFromLocal(localContainers); err != nil {
-		return err
-	}
+	err := s.containerDeleteFromLocal(localContainers)
 
-	return nil
+	return err
 }
 
 func (s *Synchronizer) containerUpdateList() error {
@@ -177,7 +176,7 @@ func (s *Synchronizer) containerUpdateList() error {
 func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Container) error {
 	factsMap, err := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 	if err != nil {
-		return nil
+		return err
 	}
 
 	remoteContainers := s.option.Cache.Containers()
@@ -259,7 +258,6 @@ func (s *Synchronizer) containerRegisterAndUpdate(localContainers []facts.Contai
 		}
 
 		err := s.remoteRegister(remoteFound, &remoteContainer, &remoteContainers, params, payload, remoteIndex)
-
 		if err != nil {
 			return err
 		}
@@ -278,6 +276,7 @@ func (s *Synchronizer) delayedContainerCheck(newDelayedContainer map[string]time
 		enable, explicit := facts.ContainerEnabled(container)
 		if !enable || !explicit {
 			newDelayedContainer[container.ID()] = container.CreatedAt().Add(delay)
+
 			return true
 		}
 	}
@@ -327,12 +326,14 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 	for k, v := range registeredContainers {
 		if _, ok := localByContainerID[v.ContainerID]; ok && !duplicatedKey[v.ContainerID] {
 			duplicatedKey[v.ContainerID] = true
+
 			continue
 		}
 
 		_, err := s.client.Do(s.ctx, "DELETE", fmt.Sprintf("v1/container/%s/", v.ID), nil, nil, nil)
 		if err != nil {
 			logger.V(1).Printf("Failed to delete container %v on Bleemeo API: %v", v.Name, err)
+
 			continue
 		}
 

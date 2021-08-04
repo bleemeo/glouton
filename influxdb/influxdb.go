@@ -29,8 +29,10 @@ import (
 	influxDBClient "github.com/influxdata/influxdb1-client/v2"
 )
 
-const defaultMaxPendingPoints = 100000
-const defaultBatchSize = 1000
+const (
+	defaultMaxPendingPoints = 100000
+	defaultBatchSize        = 1000
+)
 
 // Client is an influxdb client for Bleemeo Cloud platform.
 type Client struct {
@@ -91,7 +93,6 @@ func (c *Client) doConnect() error {
 		Command: fmt.Sprintf("CREATE DATABASE %s", c.dataBaseName),
 	}
 	answer, err := c.influxClient.Query(query)
-
 	// If the query creation failed
 	if err != nil {
 		return err
@@ -117,7 +118,7 @@ func (c *Client) doConnect() error {
 // connect tries to connect the influxDB client to the server and create the database.
 // connect retries this operation after a delay if it fails.
 func (c *Client) connect(ctx context.Context) {
-	var sleepDelay = 10 * time.Second
+	sleepDelay := 10 * time.Second
 
 	for ctx.Err() == nil {
 		err := c.doConnect()
@@ -127,6 +128,7 @@ func (c *Client) connect(ctx context.Context) {
 			select {
 			case <-ctx.Done():
 				logger.V(2).Printf("The context is ended, stop trying to connect to the influxdb server")
+
 				return
 			case <-time.After(sleepDelay):
 			}
@@ -134,6 +136,7 @@ func (c *Client) connect(ctx context.Context) {
 			sleepDelay = time.Duration(math.Min(sleepDelay.Seconds()*2, 300)) * time.Second
 		} else {
 			logger.V(1).Printf("Connexion to the influxdb server '%s' succed", c.serverAddress)
+
 			return
 		}
 	}
@@ -188,13 +191,14 @@ func (c *Client) convertPendingPoints() {
 
 	if len(points) >= c.maxBatchSize {
 		logger.V(2).Printf("The influxDBBatchPoint is already full")
+
 		return
 	}
 
 	for i, metricPoint := range c.gloutonPendingPoints {
 		pt, err := convertMetricPoint(metricPoint, c.additionalTags)
 		if err != nil {
-			fmt.Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels[types.LabelName])
+			logger.V(2).Printf("Error: impossible to create an influxMetricPoint, the %s metric won't be sent to the influxdb server", metricPoint.Labels[types.LabelName])
 			nbFailConversion++
 
 			continue
@@ -219,11 +223,11 @@ func (c *Client) convertPendingPoints() {
 func (c *Client) sendPoints() {
 	if c.influxClient == nil {
 		logger.Printf("influxdbClient is not initialized, impossible to send points to the influxdb server")
+
 		return
 	}
 
 	err := c.influxClient.Write(c.influxDBBatchPoints)
-
 	// If the write function failed we don't refresh the batchPoint and we update c.sendPointState
 	if err != nil {
 		if c.sendPointsState.err != nil {
