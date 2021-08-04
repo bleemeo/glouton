@@ -983,16 +983,6 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 			return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, scaperID, s.agentID)
 		}
 
-		for _, monitor := range monitors {
-			if monitor.AgentID == metric.Annotations().BleemeoAgentID {
-				payload.Agent = monitor.AgentID
-				payload.ServiceID = monitor.ID
-				found = true
-
-				break
-			}
-		}
-
 		if !found {
 			agents := s.option.Cache.AgentsByUUID()
 			for _, agent := range agents {
@@ -1002,6 +992,16 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 
 					break
 				}
+			}
+		}
+
+		for _, monitor := range monitors {
+			if monitor.AgentID == metric.Annotations().BleemeoAgentID {
+				payload.Agent = monitor.AgentID
+				payload.ServiceID = monitor.ID
+				found = true
+
+				break
 			}
 		}
 
