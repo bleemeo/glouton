@@ -1400,15 +1400,13 @@ func Test_MergeFirstSeenAt(t *testing.T) {
 	got = sortList(got)
 	want = sortList(want)
 
-	res := cmp.Diff(got, want)
-
-	if res != "" {
+	if res := cmp.Diff(got, want); res != "" {
 		t.Errorf("FirstSeenAt Merge did not occur correctly:\n%s", res)
 	}
 }
 
 func sortList(list []bleemeoTypes.Metric) []bleemeoTypes.Metric {
-	new := make([]bleemeoTypes.Metric, 0, len(list))
+	newList := make([]bleemeoTypes.Metric, 0, len(list))
 	orderedNames := make([]string, 0, len(list))
 
 	for _, val := range list {
@@ -1420,12 +1418,12 @@ func sortList(list []bleemeoTypes.Metric) []bleemeoTypes.Metric {
 	for _, name := range orderedNames {
 		for _, val := range list {
 			if val.LabelsText == name {
-				new = append(new, val)
+				newList = append(newList, val)
 
 				break
 			}
 		}
 	}
 
-	return new
+	return newList
 }

@@ -1222,23 +1222,25 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 
 func (m *metricFilter) rebuildThresholdsMetric(allowList map[string]matcher.Matchers, thresholdMetricNames []string, alertMetrics []string, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
 	for _, val := range thresholdMetricNames {
-		new, err := matcher.NormalizeMetric(val + "_status")
+		newMetric, err := matcher.NormalizeMetric(val + "_status")
 		if err != nil {
 			errors = append(errors, err)
+
 			continue
 		}
 
-		allowList[val+"_status"] = new
+		allowList[val+"_status"] = newMetric
 	}
 
 	for _, val := range alertMetrics {
-		new, err := matcher.NormalizeMetric(val)
+		newMetric, err := matcher.NormalizeMetric(val)
 		if err != nil {
 			errors = append(errors, err)
+
 			continue
 		}
 
-		allowList[val] = new
+		allowList[val] = newMetric
 	}
 
 	return allowList, errors

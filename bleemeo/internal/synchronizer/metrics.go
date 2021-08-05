@@ -36,9 +36,10 @@ import (
 const agentStatusName = "agent_status"
 
 const stringFalse = "False"
+
 const stringTrue = "True"
 
-//Graceperiod is the minimum time for which the agent should not deactivate
+// Graceperiod is the minimum time for which the agent should not deactivate
 // a metric between firstSeen and now. 6 Minutes is the minimum time,
 // as the prometheus alert time is 5 minutes.
 const GracePeriod = 6 * time.Minute

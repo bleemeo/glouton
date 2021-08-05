@@ -49,13 +49,16 @@ const promAlertTime = 5 * time.Minute
 const minResetTime = 17 * time.Second
 
 const lowWarningState = "low_warning"
+
 const highWarningState = "high_warning"
+
 const lowCriticalState = "low_critical"
+
 const highCriticalState = "high_critical"
 
 var errUnknownState = errors.New("unknown state for metric")
 
-//Manager is a wrapper handling everything related to prometheus recording
+// Manager is a wrapper handling everything related to prometheus recording
 // and alerting rules.
 type Manager struct {
 	// store implements both appendable and queryable.
@@ -145,7 +148,7 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time, metr
 		Opts:          mgrOptions,
 	})
 
-	//minResTime is the minimum time before actually sending
+	// minResTime is the minimum time before actually sending
 	// any alerting points. Some metrics can a take bit of time before
 	// first points creation; we do not want them to be labelled as unknown on start.
 	minResTime := metricResolution*2 + 10*time.Second
@@ -163,7 +166,7 @@ func NewManager(ctx context.Context, store *store.Store, created time.Time, metr
 	return &rm
 }
 
-//UpdateMetricResolution updates the metric resolution time.
+// UpdateMetricResolution updates the metric resolution time.
 func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 	rm.l.Lock()
 	defer rm.l.Unlock()
@@ -171,7 +174,7 @@ func (rm *Manager) UpdateMetricResolution(metricResolution time.Duration) {
 	rm.metricResolution = metricResolution*2 + 10*time.Second
 }
 
-//Metriclist returns a list of all alerting rules metric names.
+// Metriclist returns a list of all alerting rules metric names.
 // This is used for dynamic generation of filters.
 func (rm *Manager) MetricList() []string {
 	res := make([]string, 0, len(rm.alertingRules))
@@ -186,6 +189,7 @@ func (rm *Manager) MetricList() []string {
 	return res
 }
 
+//nolint: ifshort
 func (rm *Manager) Run(ctx context.Context, now time.Time) {
 	res := []types.MetricPoint{}
 
@@ -234,7 +238,7 @@ func (agr *ruleGroup) shouldSkip(now time.Time) bool {
 func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) (*types.MetricPoint, error) {
 	thresholdOrder := []string{highCriticalState, lowCriticalState, highWarningState, lowWarningState}
 
-	var generatedPoint *types.MetricPoint = nil
+	var generatedPoint *types.MetricPoint
 
 	if agr.shouldSkip(now) {
 		return nil, nil
@@ -264,10 +268,9 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		}
 
 		prevState := rule.State()
-
 		queryable := &store.CountingQueryable{Queryable: rm.store}
-		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
 
+		_, err := rule.Eval(ctx, now, rules.EngineQueryFunc(rm.engine, queryable), nil)
 		if err != nil {
 			return nil, err
 		}
@@ -469,7 +472,7 @@ func (agr *ruleGroup) Equal(threshold threshold.Threshold) bool {
 	return agr.thresholds.Equal(threshold)
 }
 
-//RebuildAlertingRules rebuild the alerting rules list from a bleemeo api metric list.
+// RebuildAlertingRules rebuild the alerting rules list from a bleemeo api metric list.
 func (rm *Manager) RebuildAlertingRules(metricsList []bleemeoTypes.Metric) error {
 	rm.l.Lock()
 	defer rm.l.Unlock()

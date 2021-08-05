@@ -102,7 +102,7 @@ func (s *Store) RemoveNotifiee(id int) {
 	delete(s.notifyCallbacks, id)
 }
 
-//SetResetRuleCallback sets the resetRuleCallbacks.
+// SetResetRuleCallback sets the resetRuleCallbacks.
 func (s *Store) SetResetRuleCallback(fc func()) {
 	s.resetRuleLock.Lock()
 	defer s.resetRuleLock.Unlock()

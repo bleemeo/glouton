@@ -271,5 +271,6 @@ type wrapIterator struct {
 
 func (i wrapIterator) At() (int64, float64) {
 	atomic.AddInt32(i.count, 1)
+
 	return i.Iterator.At()
 }

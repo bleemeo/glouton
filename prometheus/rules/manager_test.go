@@ -18,7 +18,6 @@ package rules
 
 import (
 	"context"
-	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/store"
@@ -236,7 +235,7 @@ func Test_manager(t *testing.T) {
 			},
 			Want: okPoints,
 		},
-		{
+		{ //nolint: dupl
 			Name:        "Warning threshold crossed",
 			Description: "Warning threshold crossed should create Warning points",
 			Points: []types.MetricPoint{
@@ -271,16 +270,16 @@ func Test_manager(t *testing.T) {
 				},
 			},
 			Want: func() []types.MetricPoint {
-				res := make([]types.MetricPoint, 5)
+				res := []types.MetricPoint{}
 
-				copy(res, okPoints)
+				res = append(res, okPoints[0:5]...)
 
 				res = append(res, warningPoints...)
 
 				return res
 			}(),
 		},
-		{
+		{ //nolint: dupl
 			Name:        "Critical threshold crossed",
 			Description: "Critical threshold crossed should create Critical points",
 			Points: []types.MetricPoint{
@@ -315,9 +314,9 @@ func Test_manager(t *testing.T) {
 				},
 			},
 			Want: func() []types.MetricPoint {
-				res := make([]types.MetricPoint, 5)
+				res := []types.MetricPoint{}
 
-				copy(res, okPoints)
+				res = append(res, okPoints[0:5]...)
 
 				res = append(res, criticalPoints...)
 
@@ -368,10 +367,9 @@ func Test_manager(t *testing.T) {
 				},
 			},
 			Want: func() []types.MetricPoint {
-				res := make([]types.MetricPoint, 5)
+				res := []types.MetricPoint{}
 
-				copy(res, okPoints)
-
+				res = append(res, okPoints[0:5]...)
 				res = append(res, criticalPoints[0])
 				res = append(res, warningPoints[1])
 
@@ -677,8 +675,6 @@ func Test_Rebuild_Rules(t *testing.T) {
 	// By doing so we can verify multiple calls to RebuildAlertingRules won't reset rules state.
 	ruleManager.Run(ctx, t1.Add(5*time.Minute))
 
-	fmt.Println("Number of points: ", len(resPoints), resPoints)
-
 	if len(ruleManager.alertingRules) != len(alertsRules) {
 		t.Errorf("Unexpected number of points: expected %d, got %d\n", len(alertsRules), len(ruleManager.alertingRules))
 	}
@@ -766,8 +762,8 @@ func Test_GloutonStart(t *testing.T) {
 		ruleManager.Run(ctx, t0.Add(time.Duration(i)*time.Minute))
 	}
 
-	//Manager should not create ok points for the next 5 minutes after start,
-	//as we do not provide a way for prometheus to know previous values before start.
+	// Manager should not create ok points for the next 5 minutes after start,
+	// as we do not provide a way for prometheus to know previous values before start.
 	// This test should be changed in the future if we implement a persistent store,
 	// as critical and warning points would be allowed.
 	if len(resPoints) != 0 {

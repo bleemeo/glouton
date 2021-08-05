@@ -542,7 +542,7 @@ func Test_RebuildDynamicList(t *testing.T) {
 		t.Errorf("got != expected for denyList: %s", res)
 	}
 
-	//Rebuild is done twice to make sure the build is effectively cleared and rebuild
+	// Rebuild is done twice to make sure the build is effectively cleared and rebuild
 	err = mf.RebuildDynamicLists(&d, []discovery.Service{}, []string{}, []string{})
 	if err != nil {
 		t.Errorf("Unexpected error: %w", err)

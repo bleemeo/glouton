@@ -399,7 +399,7 @@ func (r *Registry) run(save bool) {
 	}
 }
 
-//FormatValue takes a float value and a unit and transforms it to a standard format.
+// FormatValue takes a float value and a unit and transforms it to a standard format.
 func FormatValue(value float64, unit Unit) string {
 	switch unit.UnitType {
 	case UnitTypeUnit:

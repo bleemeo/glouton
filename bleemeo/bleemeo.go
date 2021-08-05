@@ -32,11 +32,6 @@ import (
 	"sync"
 	"time"
 
-	"glouton/bleemeo/internal/cache"
-	"glouton/bleemeo/internal/mqtt"
-	"glouton/bleemeo/internal/synchronizer"
-	"glouton/bleemeo/types"
-	"glouton/logger"
 	gloutonTypes "glouton/types"
 )
 
