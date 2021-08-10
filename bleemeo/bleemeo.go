@@ -25,6 +25,7 @@ import (
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	"io"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -500,7 +501,42 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 		}
 	}
 
+	file, err := zipFile.Create("bleemeo-cache.txt")
+	if err != nil {
+		return err
+	}
+
+	c.diagnosticCache(file)
+
 	return nil
+}
+
+func (c *Connector) diagnosticCache(file io.Writer) {
+	metrics := c.cache.Metrics()
+	activeMetrics := 0
+
+	for _, m := range metrics {
+		if m.DeactivatedAt.IsZero() {
+			activeMetrics++
+		}
+	}
+
+	accountConfigs := c.cache.AccountConfigs()
+
+	fmt.Fprintf(file, "\n# Cache known %d account config\n", len(accountConfigs))
+
+	for _, ac := range accountConfigs {
+		fmt.Fprintf(file, "%#v\n", ac)
+	}
+
+	fmt.Fprintf(file, "# And current account config is\n")
+	fmt.Fprintf(file, "%#v\n", c.cache.CurrentAccountConfig())
+
+	fmt.Fprintf(file, "\n# Cache known %d metrics and %d active metrics\n", len(metrics), activeMetrics)
+	fmt.Fprintf(file, "\n# Cache known %d facts\n", len(c.cache.Facts()))
+	fmt.Fprintf(file, "\n# Cache known %d services\n", len(c.cache.Services()))
+	fmt.Fprintf(file, "\n# Cache known %d containers\n", len(c.cache.Containers()))
+	fmt.Fprintf(file, "\n# Cache known %d monitors\n", len(c.cache.Monitors()))
 }
 
 // Tags returns the Tags set on Bleemeo Cloud platform.
