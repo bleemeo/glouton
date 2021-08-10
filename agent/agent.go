@@ -1119,7 +1119,7 @@ func (a *agent) sendDeprecatedAlerts(ctx context.Context) error {
 
 		if len(desc) == 0 {
 			status = types.StatusOk
-			desc = "configuration returned no deprecated warnings."
+			desc = "configuration returned no warnings."
 		}
 
 		a.store.PushPoints([]types.MetricPoint{
@@ -1129,7 +1129,7 @@ func (a *agent) sendDeprecatedAlerts(ctx context.Context) error {
 					Time:  t0,
 				},
 				Labels: map[string]string{
-					types.LabelName: "config_deprecated",
+					types.LabelName: "agent_config_warning",
 				},
 				Annotations: types.MetricAnnotations{
 					Status: types.StatusDescription{
