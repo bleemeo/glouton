@@ -111,12 +111,31 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 
 	s.option.Cache.SetMonitors(monitors)
 
-	return s.ApplyMonitorUpdate(true)
+	needConfigUpdate := false
+	configs := s.option.Cache.AccountConfigsByUUID()
+
+	for _, m := range monitors {
+		if _, ok := configs[m.AccountConfig]; !ok {
+			needConfigUpdate = true
+
+			break
+		}
+	}
+
+	if needConfigUpdate {
+		s.l.Lock()
+
+		s.forceSync[syncMethodAccountConfig] = true
+
+		s.l.Unlock()
+	}
+
+	return s.ApplyMonitorUpdate()
 }
 
 // ApplyMonitorUpdate preprocesses monitors and updates blackbox target list.
 // `forceAccountConfigsReload` determine whether account configurations should be updated via the API.
-func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error {
+func (s *Synchronizer) ApplyMonitorUpdate() error {
 	if s.option.MonitorManager == (*blackbox.RegisterManager)(nil) {
 		logger.V(2).Println("blackbox_exporter is not configured, ApplyMonitorUpdate will not update its config.")
 
@@ -125,20 +144,7 @@ func (s *Synchronizer) ApplyMonitorUpdate(forceAccountConfigsReload bool) error 
 
 	monitors := s.option.Cache.Monitors()
 
-	if forceAccountConfigsReload {
-		// get the list of needed account configurations
-		uuids := make([]string, 0, len(monitors))
-
-		for _, m := range monitors {
-			uuids = append(uuids, m.AccountConfig)
-		}
-
-		if err := s.updateAccountConfigsFromList(uuids); err != nil {
-			return err
-		}
-	}
-
-	accountConfigs := s.option.Cache.AccountConfigs()
+	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	processedMonitors := make([]types.Monitor, 0, len(monitors))
 
 	for _, monitor := range monitors {

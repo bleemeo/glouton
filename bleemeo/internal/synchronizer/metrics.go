@@ -233,7 +233,7 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
 
 	currentAccountConfig := s.option.Cache.CurrentAccountConfig()
-	accountConfigs := s.option.Cache.AccountConfigs()
+	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	agents := s.option.Cache.AgentsByUUID()
 	monitors := s.option.Cache.MonitorsByAgentUUID()
 

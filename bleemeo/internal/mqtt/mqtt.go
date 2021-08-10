@@ -868,7 +868,7 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
 	currentAccountConfig := c.option.Cache.CurrentAccountConfig()
-	accountConfigs := c.option.Cache.AccountConfigs()
+	accountConfigs := c.option.Cache.AccountConfigsByUUID()
 	monitors := c.option.Cache.MonitorsByAgentUUID()
 
 	for _, mp := range input {

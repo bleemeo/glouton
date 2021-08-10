@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	cacheVersion = 5
+	cacheVersion = 6
 	cacheKey     = "CacheBleemeoConnector"
 )
 
@@ -50,14 +50,9 @@ type data struct {
 	Metrics                 []bleemeoTypes.Metric
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
-	// AccountConfig groups the configuration of other accounts, something we may need for probes.
-	// mapping config UUID -> Config
-	AccountConfigs map[string]bleemeoTypes.AccountConfig
-	// In contrast, CurrentAccountConfig stores the configuration of the account in which this
-	// agent is registered.
-	CurrentAccountConfig bleemeoTypes.AccountConfig
-	Services             []bleemeoTypes.Service
-	Monitors             []bleemeoTypes.Monitor
+	AccountConfigs          []bleemeoTypes.AccountConfig
+	Services                []bleemeoTypes.Service
+	Monitors                []bleemeoTypes.Monitor
 }
 
 // dataVersion1 contains fields that have been deleted since the version 1 of the state file, but that we
@@ -67,6 +62,11 @@ type data struct {
 // See Load() for more details on the transformations we will apply to parse old versions.
 type dataVersion1 struct {
 	AccountConfig bleemeoTypes.AccountConfig
+}
+
+// dataVersion5, like dataVersion1, only contains fields from V5 that we need to read.
+type dataVersion5 struct {
+	CurrentAccountConfig bleemeoTypes.AccountConfig
 }
 
 // SetAccountID update the AccountID.
@@ -157,26 +157,28 @@ func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.dirty = true
 }
 
-// SetCurrentAccountConfig updates the AccountConfig of this agent.
-func (c *Cache) SetCurrentAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.data.CurrentAccountConfig = accountConfig
-	c.dirty = true
-}
-
-// CurrentAccountConfig returns our own AccountConfig.
+// CurrentAccountConfig returns our own AccountConfig. If the
+// configuration isn't found and a default is used.
 func (c *Cache) CurrentAccountConfig() bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	return c.data.CurrentAccountConfig
+	for _, ac := range c.data.AccountConfigs {
+		if ac.ID == c.data.Agent.CurrentConfigID {
+			return ac
+		}
+	}
+
+	return bleemeoTypes.AccountConfig{
+		Name:                  "default",
+		LiveProcess:           true,
+		MetricAgentResolution: 10,
+	}
 }
 
 // SetAccountConfigs updates all the external accounts configurations we care about
 // (in particular, this is necessary for the monitors).
-func (c *Cache) SetAccountConfigs(configs map[string]bleemeoTypes.AccountConfig) {
+func (c *Cache) SetAccountConfigs(configs []bleemeoTypes.AccountConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -184,13 +186,13 @@ func (c *Cache) SetAccountConfigs(configs map[string]bleemeoTypes.AccountConfig)
 }
 
 // AccountConfigs returns the mapping between the accoutn config UUID and  list of external account configurations.
-func (c *Cache) AccountConfigs() map[string]bleemeoTypes.AccountConfig {
+func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	result := make(map[string]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
-	for k, v := range c.data.AccountConfigs {
-		result[k] = v
+	for _, v := range c.data.AccountConfigs {
+		result[v.ID] = v
 	}
 
 	return result
@@ -486,6 +488,7 @@ func Load(state bleemeoTypes.State) *Cache {
 		2: upgradeV2,
 		3: upgradeV3,
 		4: upgradeV4,
+		5: upgradeV5,
 	}
 
 	upgradeCount := 0
@@ -540,7 +543,7 @@ func upgradeV1(state bleemeoTypes.State, newData data) data {
 	var oldCache dataVersion1
 
 	if err := state.Get(cacheKey, &oldCache); err == nil {
-		newData.CurrentAccountConfig = oldCache.AccountConfig
+		newData.AccountConfigs = []bleemeoTypes.AccountConfig{oldCache.AccountConfig}
 	}
 
 	newData.Version = 2
@@ -592,6 +595,32 @@ func upgradeV4(_ bleemeoTypes.State, newData data) data {
 	}
 
 	newData.Version = 5
+
+	return newData
+}
+
+func upgradeV5(state bleemeoTypes.State, newData data) data {
+	// Version 6 dropped the CurrentAccountConfig and store all config in
+	// AccountConfigs.
+	var oldCache dataVersion5
+
+	if err := state.Get(cacheKey, &oldCache); err == nil {
+		found := false
+
+		for _, ac := range newData.AccountConfigs {
+			if ac.ID == oldCache.CurrentAccountConfig.ID {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			newData.AccountConfigs = append(newData.AccountConfigs, oldCache.CurrentAccountConfig)
+		}
+	}
+
+	newData.Version = 6
 
 	return newData
 }

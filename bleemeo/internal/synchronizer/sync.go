@@ -45,14 +45,15 @@ var (
 )
 
 const (
-	syncMethodInfo      = "info"
-	syncMethodAgent     = "agent"
-	syncMethodMonitor   = "monitor"
-	syncMethodSNMP      = "snmp"
-	syncMethodFact      = "facts"
-	syncMethodService   = "service"
-	syncMethodContainer = "container"
-	syncMethodMetric    = "metric"
+	syncMethodInfo          = "info"
+	syncMethodAgent         = "agent"
+	syncMethodAccountConfig = "accountconfig"
+	syncMethodMonitor       = "monitor"
+	syncMethodSNMP          = "snmp"
+	syncMethodFact          = "facts"
+	syncMethodService       = "service"
+	syncMethodContainer     = "container"
+	syncMethodMetric        = "metric"
 )
 
 // Synchronizer synchronize object with Bleemeo.
@@ -326,6 +327,7 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 
 	s.forceSync[syncMethodInfo] = true
 	s.forceSync[syncMethodAgent] = true
+	s.forceSync[syncMethodAccountConfig] = true
 
 	if !immediate {
 		return
@@ -375,6 +377,7 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
+	s.forceSync[syncMethodAccountConfig] = true
 	s.forceSync[syncMethodMonitor] = true
 }
 
@@ -520,6 +523,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 	}{
 		{name: syncMethodInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
 		{name: syncMethodAgent, method: s.syncAgent, skipOnlyEssential: true},
+		{name: syncMethodAccountConfig, method: s.syncAccountConfig, skipOnlyEssential: true},
 		{name: syncMethodFact, method: s.syncFacts},
 		{name: syncMethodContainer, method: s.syncContainers},
 		{name: syncMethodSNMP, method: s.syncSNMP},
@@ -627,6 +631,7 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	if fullSync {
 		syncMethods[syncMethodInfo] = fullSync
 		syncMethods[syncMethodAgent] = fullSync
+		syncMethods[syncMethodAccountConfig] = fullSync
 		syncMethods[syncMethodMonitor] = fullSync
 		syncMethods[syncMethodSNMP] = fullSync
 	}

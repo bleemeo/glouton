@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
-	"reflect"
 )
 
 var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Cloud platform. Please contact support@bleemeo.com about this issue")
@@ -87,20 +86,6 @@ func (s *Synchronizer) syncMainAgent() error {
 			s.option.Config.String("bleemeo.account_id"),
 			agent.AccountID,
 		)
-	}
-
-	config, err := s.getAccountConfig(agent.CurrentConfigID)
-	if err != nil {
-		return err
-	}
-
-	currentConfig := s.option.Cache.CurrentAccountConfig()
-	if !reflect.DeepEqual(currentConfig, config) {
-		s.option.Cache.SetCurrentAccountConfig(config)
-
-		if s.option.UpdateConfigCallback != nil {
-			s.option.UpdateConfigCallback()
-		}
 	}
 
 	return nil

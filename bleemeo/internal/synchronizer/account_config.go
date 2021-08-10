@@ -17,42 +17,48 @@
 package synchronizer
 
 import (
-	"fmt"
+	"encoding/json"
 	"glouton/bleemeo/types"
+	"reflect"
 )
 
-func (s *Synchronizer) getAccountConfig(uuid string) (config types.AccountConfig, err error) {
+func (s *Synchronizer) syncAccountConfig(fullSync bool, onlyEssential bool) error {
+	if fullSync {
+		currentConfig := s.option.Cache.CurrentAccountConfig()
+
+		if err := s.accoungConfigUpdateList(); err != nil {
+			return err
+		}
+
+		newConfig := s.option.Cache.CurrentAccountConfig()
+		if !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
+			s.option.UpdateConfigCallback()
+		}
+	}
+
+	return nil
+}
+
+func (s *Synchronizer) accoungConfigUpdateList() error {
 	params := map[string]string{
 		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration",
 	}
 
-	config.LiveProcess = true // default value
-
-	_, err = s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/accountconfig/%s/", uuid), params, nil, &config)
+	result, err := s.client.Iter(s.ctx, "accountconfig", params)
 	if err != nil {
-		return
+		return err
 	}
 
-	return
-}
+	configs := make([]types.AccountConfig, len(result))
 
-// We assume the numbers of account configs (<10) to be low enough that it is acceptable to reload
-// every single one when adding/removing a monitor.
-func (s *Synchronizer) updateAccountConfigsFromList(uuids []string) error {
-	configs := make(map[string]types.AccountConfig, 1)
+	for i, jsonMessage := range result {
+		var config types.AccountConfig
 
-	for _, uuid := range uuids {
-		// We already loaded this config in a previous iteration of this loop, let's not do it again
-		if _, present := configs[uuid]; present {
+		if err := json.Unmarshal(jsonMessage, &config); err != nil {
 			continue
 		}
 
-		ac, err := s.getAccountConfig(uuid)
-		if err != nil {
-			return err
-		}
-
-		configs[uuid] = ac
+		configs[i] = config
 	}
 
 	s.option.Cache.SetAccountConfigs(configs)

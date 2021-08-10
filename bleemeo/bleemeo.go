@@ -102,7 +102,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	c.sync.UpdateUnitsAndThresholds(true)
 
 	if c.option.Config.Bool("blackbox.enabled") {
-		if err := c.sync.ApplyMonitorUpdate(false); err != nil {
+		if err := c.sync.ApplyMonitorUpdate(); err != nil {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}
@@ -546,7 +546,7 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 		}
 	}
 
-	accountConfigs := c.cache.AccountConfigs()
+	accountConfigs := c.cache.AccountConfigsByUUID()
 
 	fmt.Fprintf(file, "\n# Cache known %d account config\n", len(accountConfigs))
 
