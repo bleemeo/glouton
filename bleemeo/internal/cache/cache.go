@@ -46,6 +46,7 @@ type data struct {
 	Facts                   []bleemeoTypes.AgentFact
 	Containers              []bleemeoTypes.Container
 	Agents                  []bleemeoTypes.Agent
+	AgentTypes              []bleemeoTypes.AgentType
 	Metrics                 []bleemeoTypes.Metric
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
@@ -118,6 +119,15 @@ func (c *Cache) SetAgentList(agentList []bleemeoTypes.Agent) {
 	defer c.l.Unlock()
 
 	c.data.Agents = agentList
+	c.dirty = true
+}
+
+// SetAgentList update agent list.
+func (c *Cache) SetAgentTypes(agentTypes []bleemeoTypes.AgentType) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.AgentTypes = agentTypes
 	c.dirty = true
 }
 
@@ -315,8 +325,8 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 	return result
 }
 
-// AgentList returns a (copy) of the list of agent.
-func (c *Cache) AgentList() []bleemeoTypes.Agent {
+// Agents returns a (copy) of the list of agent.
+func (c *Cache) Agents() []bleemeoTypes.Agent {
 	c.l.Lock()
 	defer c.l.Unlock()
 
@@ -336,6 +346,17 @@ func (c *Cache) AgentsByUUID() map[string]bleemeoTypes.Agent {
 	for _, v := range c.data.Agents {
 		result[v.ID] = v
 	}
+
+	return result
+}
+
+// AgentTypes returns a (copy) of the list of agent types.
+func (c *Cache) AgentTypes() []bleemeoTypes.AgentType {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.AgentType, len(c.data.AgentTypes))
+	copy(result, c.data.AgentTypes)
 
 	return result
 }

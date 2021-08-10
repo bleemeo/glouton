@@ -512,6 +512,31 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 }
 
 func (c *Connector) diagnosticCache(file io.Writer) {
+	agents := c.cache.Agents()
+	agentTypes := c.cache.AgentTypes()
+
+	fmt.Fprintf(file, "# Cache known %d agents\n", len(agents))
+
+	for _, a := range agents {
+		agentTypeName := ""
+
+		for _, t := range agentTypes {
+			if t.ID == a.AgentType {
+				agentTypeName = t.DisplayName
+
+				break
+			}
+		}
+
+		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentConfigID)
+	}
+
+	fmt.Fprintf(file, "\n# Cache known %d agent types\n", len(agentTypes))
+
+	for _, t := range agentTypes {
+		fmt.Fprintf(file, "id=%s name=%s display_name=%s\n", t.ID, t.Name, t.DisplayName)
+	}
+
 	metrics := c.cache.Metrics()
 	activeMetrics := 0
 

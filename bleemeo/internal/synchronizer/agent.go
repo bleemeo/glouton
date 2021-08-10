@@ -17,6 +17,7 @@
 package synchronizer
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"glouton/bleemeo/types"
@@ -29,6 +30,28 @@ var errNoConfig = errors.New("agent don't have any configuration on Bleemeo Clou
 const apiTagsLength = 100
 
 func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
+	if err := s.syncMainAgent(); err != nil {
+		return err
+	}
+
+	if onlyEssential {
+		return nil
+	}
+
+	if fullSync {
+		if err := s.agentTypesUpdateList(); err != nil {
+			return err
+		}
+
+		if err := s.agentsUpdateList(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *Synchronizer) syncMainAgent() error {
 	var agent types.Agent
 
 	params := map[string]string{
@@ -79,6 +102,60 @@ func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
 			s.option.UpdateConfigCallback()
 		}
 	}
+
+	return nil
+}
+
+func (s *Synchronizer) agentsUpdateList() error {
+	params := map[string]string{
+		"fields": "id,created_at,account,next_config_at,current_config,tags,agent_type,fqdn,display_name",
+	}
+
+	result, err := s.client.Iter(s.ctx, "agent", params)
+	if err != nil {
+		return err
+	}
+
+	agents := make([]types.Agent, len(result))
+
+	for i, jsonMessage := range result {
+		var agent types.Agent
+
+		if err := json.Unmarshal(jsonMessage, &agent); err != nil {
+			continue
+		}
+
+		agents[i] = agent
+	}
+
+	s.option.Cache.SetAgentList(agents)
+
+	return nil
+}
+
+func (s *Synchronizer) agentTypesUpdateList() error {
+	params := map[string]string{
+		"fields": "id,name,display_name",
+	}
+
+	result, err := s.client.Iter(s.ctx, "agenttype", params)
+	if err != nil {
+		return err
+	}
+
+	agentTypes := make([]types.AgentType, len(result))
+
+	for i, jsonMessage := range result {
+		var agentType types.AgentType
+
+		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
+			continue
+		}
+
+		agentTypes[i] = agentType
+	}
+
+	s.option.Cache.SetAgentTypes(agentTypes)
 
 	return nil
 }

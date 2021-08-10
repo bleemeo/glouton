@@ -17,7 +17,6 @@
 package synchronizer
 
 import (
-	"encoding/json"
 	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
@@ -26,15 +25,8 @@ import (
 	"github.com/google/uuid"
 )
 
-type PayloadSNMPAgent struct {
+type payloadSNMPAgent struct {
 	types.Agent
-	SNMPAgent
-}
-
-type SNMPAgent struct {
-	DisplayName     string `json:"display_name"`
-	Fqdn            string `json:"fqdn"`
-	AgentTypeID     string `json:"agent_type"`
 	Abstracted      bool   `json:"abstracted"`
 	InitialPassword string `json:"initial_password"`
 }
@@ -42,22 +34,8 @@ type SNMPAgent struct {
 // TODO the deletion need to be done
 
 func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
-	var snmpTargets []snmp.Target
-
-	if s.option.Cache.CurrentAccountConfig().SNMPIntergration {
-		snmpTargets = s.option.SNMP
-	}
-
-	if s.successiveErrors == 3 {
-		// After 3 error, try to force a full synchronization to see if it solve the issue.
-		fullSync = true
-	}
-
-	if fullSync {
-		err := s.agentsUpdateList()
-		if err != nil {
-			return err
-		}
+	if !s.option.Cache.CurrentAccountConfig().SNMPIntergration {
+		return nil
 	}
 
 	if onlyEssential {
@@ -65,23 +43,23 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 		return nil
 	}
 
-	return s.snmpRegisterAndUpdate(snmpTargets)
+	return s.snmpRegisterAndUpdate(s.option.SNMP)
 }
 
 func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
-	remoteAgentList := s.option.Cache.AgentList()
+	remoteAgentList := s.option.Cache.Agents()
 	remoteIndexByFqdn := make(map[string]int, len(remoteAgentList))
 
-	agentTypeID, err := s.getAgentType("snmp")
-	if err != nil {
-		return err
+	agentTypeID, found := s.getAgentType(types.AgentTypeSNMP)
+	if !found {
+		return errRetryLater
 	}
 
 	params := map[string]string{
 		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags",
 	}
 
-	var agent PayloadSNMPAgent
+	var agent payloadSNMPAgent
 
 	for i, v := range remoteAgentList {
 		_, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/agent/%s/", v.ID), params, nil, &agent)
@@ -89,33 +67,31 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 			return err
 		}
 
-		if agent.AgentTypeID == agentTypeID {
-			remoteIndexByFqdn[agent.Fqdn] = i
+		if agent.AgentType == agentTypeID {
+			remoteIndexByFqdn[agent.FQDN] = i
 		}
 	}
 
 	for _, snmp := range localTargets {
-		payload := SNMPAgent{
-			DisplayName:     snmp.InitialName,
-			Fqdn:            snmp.Address,
-			AgentTypeID:     agentTypeID,
+		payload := payloadSNMPAgent{
+			Agent: types.Agent{
+				FQDN:        snmp.Address,
+				DisplayName: snmp.InitialName,
+				AgentType:   agentTypeID,
+				Tags:        []types.Tag{},
+			},
 			Abstracted:      true,
 			InitialPassword: uuid.New().String(),
 		}
 
 		address := snmp.Address
-		remoteIndex, remoteFound := remoteIndexByFqdn[address]
-
-		var remoteSNMP PayloadSNMPAgent
+		_, remoteFound := remoteIndexByFqdn[address]
 
 		if remoteFound {
-			remoteSNMP.Agent = remoteAgentList[remoteIndex]
-			if payload.Fqdn == remoteSNMP.Fqdn {
-				continue
-			}
+			continue
 		}
 
-		err := s.remoteRegisterSNMP(remoteFound, &remoteSNMP, &remoteAgentList, params, payload, remoteIndex)
+		err := s.remoteRegisterSNMP(&remoteAgentList, params, payload)
 		if err != nil {
 			return err
 		}
@@ -126,87 +102,28 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(remoteFound bool, remoteSNMP *PayloadSNMPAgent,
-	remoteSNMPs *[]types.Agent, params map[string]string, payload SNMPAgent, remoteIndex int) error {
+func (s *Synchronizer) remoteRegisterSNMP(remoteSNMPs *[]types.Agent, params map[string]string, payload payloadSNMPAgent) error {
 	var result types.Agent
 
-	if remoteFound {
-		_, err := s.client.Do(s.ctx, "PUT", fmt.Sprintf("v1/agent/%s/", remoteSNMP.ID), params, payload, &result)
-		if err != nil {
-			return err
-		}
-
-		logger.V(2).Printf("SNMP agent %v updated with UUID %s", payload.DisplayName, result.ID)
-		(*remoteSNMPs)[remoteIndex] = result
-	} else {
-		_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
-		if err != nil {
-			return err
-		}
-
-		logger.V(2).Printf("SNMP agent %v registered with UUID %s", payload.DisplayName, result.ID)
-		*remoteSNMPs = append(*remoteSNMPs, result)
-	}
-
-	return nil
-}
-
-func (s *Synchronizer) agentsUpdateList() error {
-	params := map[string]string{
-		"fields": "id,created_at,account,next_config_at,current_config,tags",
-	}
-
-	result, err := s.client.Iter(s.ctx, "agent", params)
+	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)
 	if err != nil {
 		return err
 	}
 
-	agents := make([]types.Agent, len(result))
-
-	for i, jsonMessage := range result {
-		var agent types.Agent
-
-		if err := json.Unmarshal(jsonMessage, &agent); err != nil {
-			continue
-		}
-
-		agents[i] = agent
-	}
-
-	s.option.Cache.SetAgentList(agents)
+	logger.V(2).Printf("SNMP agent %v registered with UUID %s", payload.DisplayName, result.ID)
+	*remoteSNMPs = append(*remoteSNMPs, result)
 
 	return nil
 }
 
-func (s *Synchronizer) getAgentType(name string) (id string, err error) {
-	params := map[string]string{
-		"fields": "id,name,display_name",
-	}
-
-	result, err := s.client.Iter(s.ctx, "agenttype", params)
-	if err != nil {
-		return "", err
-	}
-
-	agentTypes := make([]types.AgentType, len(result))
-
-	for i, jsonMessage := range result {
-		var agentType types.AgentType
-
-		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
-			continue
-		}
-
-		agentTypes[i] = agentType
-	}
+func (s *Synchronizer) getAgentType(name string) (id string, found bool) {
+	agentTypes := s.option.Cache.AgentTypes()
 
 	for _, a := range agentTypes {
 		if a.Name == name {
-			id = a.ID
-
-			break
+			return a.ID, true
 		}
 	}
 
-	return id, nil
+	return "", false
 }

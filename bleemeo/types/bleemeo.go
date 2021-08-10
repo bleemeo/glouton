@@ -25,6 +25,8 @@ import (
 	"time"
 )
 
+const AgentTypeSNMP = "snmp"
+
 // AgentFact is an agent facts.
 type AgentFact struct {
 	ID    string
@@ -40,6 +42,9 @@ type Agent struct {
 	NextConfigAt    time.Time `json:"next_config_at"`
 	CurrentConfigID string    `json:"current_config"`
 	Tags            []Tag     `json:"tags"`
+	AgentType       string    `json:"agent_type"`
+	FQDN            string    `json:"fqdn"`
+	DisplayName     string    `json:"display_name"`
 }
 
 // AgentType is an AgentType object on Bleemeo API.
