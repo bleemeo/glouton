@@ -346,7 +346,7 @@ func (agr *ruleGroup) generateNewPoint(thresholdType string, rule *rules.Alertin
 	statusCode := statusFromThreshold(thresholdType)
 	alerts := rule.ActiveAlerts()
 
-	desc := "Current value: none."
+	desc := "Current value is within the thresholds."
 
 	if len(alerts) != 0 {
 		exceeded := ""

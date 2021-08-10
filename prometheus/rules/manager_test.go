@@ -472,6 +472,7 @@ func Test_manager(t *testing.T) {
 			// Completely testing them would require too much copy/paste in test.
 			for i := range resPoints {
 				if !strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "Current value:") &&
+					resPoints[i].Annotations.Status.StatusDescription != "Current value is within the thresholds." &&
 					!strings.HasPrefix(resPoints[i].Annotations.Status.StatusDescription, "PromQL read zero point") {
 					t.Errorf("Got point was not formatted correctly: got %s, expected start with \"Current value:\"", resPoints[i].Annotations.Status.StatusDescription)
 				}

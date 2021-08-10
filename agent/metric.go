@@ -1172,17 +1172,6 @@ func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []
 
 	allowList, errors = m.rebuildServicesMetrics(allowList, services, errors)
 
-	for _, val := range thresholdMetricNames {
-		matchers, err := matcher.NormalizeMetric(val + "_status")
-		if err != nil {
-			errors = append(errors, err)
-
-			continue
-		}
-
-		allowList[val+"_status"] = matchers
-	}
-
 	m.allowList = map[labels.Matcher][]matcher.Matchers{}
 
 	allowList, errors = m.rebuildThresholdsMetric(allowList, thresholdMetricNames, alertMetrics, errors)
