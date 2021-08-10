@@ -277,18 +277,18 @@ func getEnabledToMigrate(cfg *config.Configuration) []string {
 	return keyToMigrate
 }
 
-func migrateEnabled(cfg *config.Configuration) {
+func migrateEnabled(cfg *config.Configuration) (warnings []error) {
 	keys := getEnabledToMigrate(cfg)
 
 	for _, key := range keys {
 		val, _ := cfg.Get(key + "enabled")
 
-		logger.V(0).Printf("%senabled is deprecated: please use %senable.", key, key)
-
 		cfg.Set(key+"enable", val)
 
-		cfg.AddWarning(fmt.Sprintf("%senabled is deprecated. Please use %senable", key, key))
+		warnings = append(warnings, fmt.Errorf("%w: %senabled. Please use %senable", errSettingsDeprecated, key, key))
 	}
+
+	return warnings
 }
 
 func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
@@ -335,10 +335,13 @@ func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 // migrate upgrade the configuration when Glouton change it settings
 // The list returned are actually warnings, not errors.
 func migrate(cfg *config.Configuration) (warnings []error) {
-	migrateEnabled(cfg)
-
+	warnings = append(warnings, migrateEnabled(cfg)...)
 	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
 	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
+
+	for _, warning := range warnings {
+		cfg.AddWarning(warning.Error())
+	}
 
 	return warnings
 }

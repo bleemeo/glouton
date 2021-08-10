@@ -1106,8 +1106,6 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 }
 
 func (a *agent) sendDeprecatedAlerts(ctx context.Context) error {
-	desc := strings.Join(a.config.GetWarnings(), "\n")
-
 	for {
 		select {
 		case <-time.After(time.Minute):
@@ -1115,12 +1113,19 @@ func (a *agent) sendDeprecatedAlerts(ctx context.Context) error {
 			return nil
 		}
 
+		desc := strings.Join(a.config.GetWarnings(), "\n")
+		status := types.StatusWarning
 		t0 := time.Now().Truncate(time.Second)
+
+		if len(desc) == 0 {
+			status = types.StatusOk
+			desc = "configuration returned no deprecated warnings."
+		}
 
 		a.store.PushPoints([]types.MetricPoint{
 			{
 				Point: types.Point{
-					Value: float64(types.StatusWarning.NagiosCode()),
+					Value: float64(status.NagiosCode()),
 					Time:  t0,
 				},
 				Labels: map[string]string{
@@ -1129,7 +1134,7 @@ func (a *agent) sendDeprecatedAlerts(ctx context.Context) error {
 				Annotations: types.MetricAnnotations{
 					Status: types.StatusDescription{
 						StatusDescription: desc,
-						CurrentStatus:     types.StatusWarning,
+						CurrentStatus:     status,
 					},
 				},
 			},
