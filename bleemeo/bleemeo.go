@@ -383,6 +383,36 @@ func (c *Connector) RelabelHook(labels map[string]string) (newLabel map[string]s
 
 	labels[gloutonTypes.LabelMetaBleemeoUUID] = agentID
 
+	if labels[gloutonTypes.LabelMetaSNMPTarget] != "" {
+		var (
+			snmpTypeID string
+			found      bool
+		)
+
+		for _, t := range c.cache.AgentTypes() {
+			if t.Name == types.AgentTypeSNMP {
+				snmpTypeID = t.ID
+
+				break
+			}
+		}
+
+		for _, a := range c.cache.Agents() {
+			if a.AgentType == snmpTypeID && a.FQDN == labels[gloutonTypes.LabelMetaSNMPTarget] {
+				labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = a.ID
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			// set retryLater which will cause metrics from the gatherer to be ignored.
+			// This hook will be automatically re-called every 2 minutes.
+			return labels, true
+		}
+	}
+
 	return labels, false
 }
 
