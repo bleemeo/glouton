@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"glouton/logger"
 	"sync"
 	"time"
@@ -33,11 +34,14 @@ func NewProbeGatherer(gatherer prometheus.Gatherer) *ProbeGatherer {
 func (p *ProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	logger.V(2).Println("Gather() called directly on a ProbeGatherer, this is a bug !")
 
-	return p.GatherWithState(GatherState{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return p.GatherWithState(ctx, GatherState{})
 }
 
 // GatherWithState uses the specified gather state along the gatherer to retrieve a set of metrics.
-func (p *ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+func (p *ProbeGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	if state.QueryType == NoProbe {
 		return nil, nil
 	}
@@ -56,7 +60,7 @@ func (p *ProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily,
 	}
 
 	if cg, ok := p.g.(GathererWithState); ok {
-		mfs, err = cg.GatherWithState(state)
+		mfs, err = cg.GatherWithState(ctx, state)
 	} else {
 		mfs, err = p.g.Gather()
 	}
@@ -96,17 +100,20 @@ type NonProbeGatherer struct {
 func (p NonProbeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	logger.V(2).Println("Gather() called directly on a NonProbeGatherer, this is a bug !")
 
-	return p.GatherWithState(GatherState{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return p.GatherWithState(ctx, GatherState{})
 }
 
 // GatherWithState uses the specified gather state along the gatherer to retrieve a set of metrics.
-func (p NonProbeGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+func (p NonProbeGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	if state.QueryType == OnlyProbes {
 		return nil, nil
 	}
 
 	if cg, ok := p.G.(GathererWithState); ok {
-		return cg.GatherWithState(state)
+		return cg.GatherWithState(ctx, state)
 	}
 
 	return p.G.Gather()

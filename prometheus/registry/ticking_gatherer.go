@@ -1,6 +1,7 @@
 package registry
 
 import (
+	"context"
 	"sync"
 	"time"
 
@@ -64,13 +65,16 @@ func (g *TickingGatherer) Stop() {
 
 // Gather implements prometheus.Gather.
 func (g *TickingGatherer) Gather() ([]*dto.MetricFamily, error) {
-	return g.GatherWithState(GatherState{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return g.GatherWithState(ctx, GatherState{})
 }
 
 // GatherWithState implements GathererWithState.
-func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+func (g *TickingGatherer) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	if state.NoTick {
-		return g.gatherNow(state)
+		return g.gatherNow(ctx, state)
 	}
 
 	g.l.Lock()
@@ -80,19 +84,19 @@ func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamil
 	case Initialized:
 		g.state = FirstRun
 
-		return g.gatherNow(state)
+		return g.gatherNow(ctx, state)
 	case FirstRun:
 		if time.Now().After(g.startTime) {
 			// we are now synced with the date of creation of the object, start the ticker and run immediately
 			g.state = Running
 			g.Ticker = time.NewTicker(g.rate)
 
-			return g.gatherNow(state)
+			return g.gatherNow(ctx, state)
 		}
 	case Running:
 		select {
 		case <-g.Ticker.C:
-			return g.gatherNow(state)
+			return g.gatherNow(ctx, state)
 		default:
 		}
 	case Stopped:
@@ -101,9 +105,9 @@ func (g *TickingGatherer) GatherWithState(state GatherState) ([]*dto.MetricFamil
 	return nil, nil
 }
 
-func (g *TickingGatherer) gatherNow(state GatherState) ([]*dto.MetricFamily, error) {
+func (g *TickingGatherer) gatherNow(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	if cg, ok := g.gatherer.(GathererWithState); ok {
-		return cg.GatherWithState(state)
+		return cg.GatherWithState(ctx, state)
 	}
 
 	return g.gatherer.Gather()

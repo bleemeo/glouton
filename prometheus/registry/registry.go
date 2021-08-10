@@ -416,11 +416,14 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 
 // Gather implements prometheus.Gatherer.
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
-	return r.GatherWithState(GatherState{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return r.GatherWithState(ctx, GatherState{})
 }
 
 // GatherWithState implements GathererGatherWithState.
-func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	r.init()
 	r.l.Lock()
 
@@ -439,7 +442,7 @@ func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, erro
 	r.l.Unlock()
 
 	t0 := time.Now().Truncate(time.Millisecond)
-	mfs, err := gatherers.GatherWithState(state)
+	mfs, err := gatherers.GatherWithState(ctx, state)
 
 	if r.metricGatherExporterTime != nil {
 		r.metricGatherExporterTime.Observe(time.Since(t0).Seconds())
@@ -474,7 +477,7 @@ func (r *Registry) AddDefaultCollector() {
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(r, r.Filter)
+		wrapper := NewGathererWithStateWrapper(req.Context(), r, r.Filter)
 
 		state := GatherStateFromMap(req.URL.Query())
 		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
@@ -598,6 +601,9 @@ func (r *Registry) runOnce() time.Duration {
 
 	r.countRunOnce++
 
+	ctx, cancel := context.WithTimeout(context.Background(), r.currentDelay)
+	defer cancel()
+
 	gatherers := make([]labeledGatherer, 0, len(r.registrations))
 
 	for id, reg := range r.registrations {
@@ -622,7 +628,7 @@ func (r *Registry) runOnce() time.Duration {
 
 	var err error
 
-	points, err = labeledGatherers(gatherers).GatherPoints(t0, GatherState{QueryType: All})
+	points, err = labeledGatherers(gatherers).GatherPoints(ctx, t0, GatherState{QueryType: All})
 	if err != nil {
 		if len(points) == 0 {
 			logger.Printf("Gather of metrics failed: %v", err)
