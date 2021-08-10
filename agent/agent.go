@@ -367,7 +367,7 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
-	a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 	a.store.DropAllMetrics()
 }
 
@@ -590,7 +590,6 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		Option: registry.Option{
 			PushPoint:             a.store,
 			FQDN:                  fqdn,
-			BleemeoAgentID:        a.BleemeoAgentID(),
 			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
@@ -814,7 +813,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			BlackboxScraperName:     scaperName,
 		})
-		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 

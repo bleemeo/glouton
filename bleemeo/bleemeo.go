@@ -373,6 +373,18 @@ func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
 }
 
+func (c *Connector) RelabelHook(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	agentID := c.AgentID()
+
+	if agentID == "" {
+		return labels, false
+	}
+
+	labels[gloutonTypes.LabelMetaBleemeoUUID] = agentID
+
+	return labels, false
+}
+
 // DiagnosticPage return useful information to troubleshoot issue.
 func (c *Connector) DiagnosticPage() string {
 	builder := &strings.Builder{}
