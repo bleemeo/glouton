@@ -129,6 +129,7 @@ type MonitorHTTPOptions struct {
 // Metric is a Metric object on Bleemeo API.
 type Metric struct {
 	ID          string            `json:"id"`
+	AgentID     string            `json:"agent,omitempty"`
 	LabelsText  string            `json:"labels_text,omitempty"`
 	Labels      map[string]string `json:"-"`
 	ServiceID   string            `json:"service,omitempty"`

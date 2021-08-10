@@ -661,12 +661,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 				}
 			}
 
-			bleemeoAgentID := c.option.AgentID
-
-			if p.Annotations.BleemeoAgentID != "" {
-				// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-				bleemeoAgentID = bleemeoTypes.AgentID(p.Annotations.BleemeoAgentID)
-			}
+			bleemeoAgentID := bleemeoTypes.AgentID(m.AgentID)
 
 			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
 		} else {
@@ -879,6 +874,8 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	for _, mp := range input {
 		// retrieve the appropriate configuration for the metric
 		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+
+		// TODO: snmp metric should use the correct AgentConfig
 
 		if mp.Annotations.BleemeoAgentID != "" {
 			monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]

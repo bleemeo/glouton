@@ -99,9 +99,8 @@ func (m fakeMetric) Labels() map[string]string {
 
 type metricPayload struct {
 	bleemeoTypes.Metric
-	Name  string `json:"label,omitempty"`
-	Item  string `json:"item,omitempty"`
-	Agent string `json:"agent"`
+	Name string `json:"label,omitempty"`
+	Item string `json:"item,omitempty"`
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
@@ -241,6 +240,8 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	for _, m := range input {
 		// retrieve the appropriate configuration for the metric
 		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+
+		// TODO: snmp metric should use the correct AgentConfig
 
 		if m.Annotations().BleemeoAgentID != "" {
 			_, present := agents[m.Annotations().BleemeoAgentID]
@@ -484,7 +485,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
 		"agent":  agentID,
-		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
+		"fields": "id,agent,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
 	}
 
 	if fetchInactive {
@@ -617,7 +618,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 		params := map[string]string{
 			"labels_text": common.LabelsToText(metric.Labels(), metric.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo),
 			"agent":       agentID,
-			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+			"fields":      "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 
 		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels()) {
@@ -670,7 +671,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		var metric metricPayload
 
 		params := map[string]string{
-			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+			"fields": "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 
 		_, err := s.client.Do(
@@ -967,9 +968,9 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 	payload := metricPayload{
 		Metric: bleemeoTypes.Metric{
 			LabelsText: key,
+			AgentID:    s.agentID,
 		},
-		Name:  labels[types.LabelName],
-		Agent: s.agentID,
+		Name: labels[types.LabelName],
 	}
 
 	if s.option.MetricFormat == types.MetricFormatBleemeo {
@@ -1028,8 +1029,8 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 	}
 
 	// override the agent and service UUIDs when the metric is a probe's
-	if annotations.BleemeoAgentID != "" {
-		if err := s.prepareMetricPayloadOtherAgent(&payload, labels, annotations, monitors); err != nil {
+	if metric.Annotations().BleemeoAgentID != "" {
+		if err := s.prepareMetricPayloadOtherAgent(&payload, metric.Annotations().BleemeoAgentID, labels, monitors); err != nil {
 			return payload, err
 		}
 	}
@@ -1037,44 +1038,32 @@ func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetri
 	return payload, nil
 }
 
-func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *metricPayload, labels map[string]string, annotations types.MetricAnnotations, monitors []bleemeoTypes.Monitor) error {
-	found := false
-
+func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *metricPayload, agentID string, labels map[string]string, monitors []bleemeoTypes.Monitor) error {
 	if scaperID := labels[types.LabelScraperUUID]; scaperID != "" && scaperID != s.agentID {
 		return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, scaperID, s.agentID)
 	}
 
-	if !found {
-		agents := s.option.Cache.AgentsByUUID()
-		for _, agent := range agents {
-			if agent.ID == annotations.BleemeoItem {
-				payload.Agent = agent.ID
-				found = true
-
-				break
-			}
-		}
-	}
-
 	for _, monitor := range monitors {
-		if monitor.AgentID == annotations.BleemeoAgentID {
-			payload.Agent = monitor.AgentID
+		if monitor.AgentID == agentID {
+			payload.AgentID = monitor.AgentID
 			payload.ServiceID = monitor.ID
-			found = true
 
-			break
+			return nil
 		}
 	}
 
-	if !found {
-		// This is not an error: either this is a metric from a local monitor, and it should
-		// never be registred, or this is from a monitor that is not yet loaded, and it is
-		// not an issue per se as it will get registered when monitors are loaded, as it will
-		// trigger a metric synchronization.
-		return errIgnore
+	agent, found := s.option.Cache.AgentsByUUID()[agentID]
+	if found {
+		payload.AgentID = agent.ID
+
+		return nil
 	}
 
-	return nil
+	// This is not an error: either this is a metric from a local monitor, and it should
+	// never be registred, or this is from a monitor that is not yet loaded, and it is
+	// not an issue per se as it will get registered when monitors are loaded, as it will
+	// trigger a metric synchronization.
+	return errIgnore
 }
 
 func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {

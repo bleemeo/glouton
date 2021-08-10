@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	cacheVersion = 4
+	cacheVersion = 5
 	cacheKey     = "CacheBleemeoConnector"
 )
 
@@ -122,7 +122,7 @@ func (c *Cache) SetAgentList(agentList []bleemeoTypes.Agent) {
 	c.dirty = true
 }
 
-// SetAgentList update agent list.
+// SetSAgentList update agent list.
 func (c *Cache) SetAgentTypes(agentTypes []bleemeoTypes.AgentType) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -481,52 +481,49 @@ func Load(state bleemeoTypes.State) *Cache {
 		logger.V(1).Printf("Unable to load Bleemeo connector cache: %v", err)
 	}
 
-	switch newData.Version {
-	case 0:
-		logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
+	versionUpgrade := map[int]func(bleemeoTypes.State, data) data{
+		1: upgradeV1,
+		2: upgradeV2,
+		3: upgradeV3,
+		4: upgradeV4,
+	}
 
-		cache.data.Version = cacheVersion
-	case 1:
-		logger.V(1).Printf("Version 1 of the cache found, upgrading it.")
+	upgradeCount := 0
+	for newData.Version != cacheVersion {
+		if upgradeCount > cacheVersion {
+			logger.V(2).Printf("Too many try to upgrade cache version. Discarding cache content")
 
-		// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
-		// the addition of Monitors and AccountConfigs
-		var oldCache dataVersion1
+			newData = data{
+				Version: cacheVersion,
+			}
 
-		if err := state.Get(cacheKey, &oldCache); err == nil {
-			newData.CurrentAccountConfig = oldCache.AccountConfig
+			break
 		}
 
-		fallthrough
-	case 2:
-		logger.V(1).Printf("Version 2 of the cache found, upgrading it.")
+		if newData.Version == 0 {
+			logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
 
-		// well... containers had multiple fields renamed... lets drop it
-		newData.Containers = nil
-
-		fallthrough
-	case 3:
-		logger.V(1).Printf("Version 3 of cache found, upgrading it.")
-
-		// Version 4 stopped using "_item" to store Bleemeo item and use "item"
-		for i, m := range newData.Metrics {
-			labels := types.TextToLabels(m.LabelsText)
-			if v, ok := labels["_item"]; ok {
-				labels[types.LabelItem] = v
-				delete(labels, "_item")
-				newData.Metrics[i].LabelsText = types.LabelsToText(labels)
+			newData = data{
+				Version: cacheVersion,
 			}
 		}
 
-		fallthrough
-	case cacheVersion:
-		newData.Version = cacheVersion
-		cache.data = newData
-	default:
-		logger.V(2).Printf("Bleemeo connector cache is too recent. Discarding content")
+		upgradeFunc := versionUpgrade[newData.Version]
+		if upgradeFunc == nil {
+			logger.V(2).Printf("No upgrade path from version %d to %d. Discarding cache content", newData.Version, cacheVersion)
 
-		cache.data.Version = cacheVersion
+			newData = data{
+				Version: cacheVersion,
+			}
+		} else {
+			logger.V(1).Printf("Upgrading version %d of the cache", newData.Version)
+			newData = upgradeFunc(state, newData)
+		}
+
+		upgradeCount++
 	}
+
+	cache.data = newData
 
 	for i, m := range cache.data.Metrics {
 		m.Labels = types.TextToLabels(m.LabelsText)
@@ -535,4 +532,66 @@ func Load(state bleemeoTypes.State) *Cache {
 	}
 
 	return cache
+}
+
+func upgradeV1(state bleemeoTypes.State, newData data) data {
+	// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
+	// the addition of Monitors and AccountConfigs
+	var oldCache dataVersion1
+
+	if err := state.Get(cacheKey, &oldCache); err == nil {
+		newData.CurrentAccountConfig = oldCache.AccountConfig
+	}
+
+	newData.Version = 2
+
+	return newData
+}
+
+func upgradeV2(_ bleemeoTypes.State, newData data) data {
+	// well... containers had multiple fields renamed... lets drop it
+	newData.Containers = nil
+	newData.Version = 3
+
+	return newData
+}
+
+func upgradeV3(_ bleemeoTypes.State, newData data) data {
+	// Version 4 stopped using "_item" to store Bleemeo item and use "item"
+	for i, m := range newData.Metrics {
+		labels := types.TextToLabels(m.LabelsText)
+		if v, ok := labels["_item"]; ok {
+			labels[types.LabelItem] = v
+			delete(labels, "_item")
+			newData.Metrics[i].LabelsText = types.LabelsToText(labels)
+		}
+	}
+
+	newData.Version = 4
+
+	return newData
+}
+
+func upgradeV4(_ bleemeoTypes.State, newData data) data {
+	// Version 5 added "AgentID" on Metric object
+	// With version 4, only metric of monitor could belong to another agent
+	for i, m := range newData.Metrics {
+		for _, v := range newData.Monitors {
+			if m.ServiceID == v.ID {
+				m.AgentID = v.AgentID
+
+				break
+			}
+		}
+
+		if m.AgentID == "" {
+			m.AgentID = newData.Agent.ID
+		}
+
+		newData.Metrics[i] = m
+	}
+
+	newData.Version = 5
+
+	return newData
 }
