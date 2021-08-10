@@ -211,6 +211,14 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaSNMPTarget},
+			TargetLabel:  types.LabelSNMPTarget,
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
 			Regex:        relabel.MustNewRegexp("(.*)"),
 			SourceLabels: model.LabelNames{types.LabelMetaContainerName},
 			TargetLabel:  types.LabelContainerName,
@@ -828,6 +836,10 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 	agentID := promLabels.Get(types.LabelMetaBleemeoTargetAgentUUID)
 	if agentID != "" {
 		annotations.BleemeoAgentID = agentID
+	}
+
+	if snmpTarget := promLabels.Get(types.LabelMetaSNMPTarget); snmpTarget != "" {
+		annotations.SNMPTarget = snmpTarget
 	}
 
 	promLabels = relabel.Process(

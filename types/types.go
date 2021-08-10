@@ -88,6 +88,8 @@ const (
 
 	// Label starting with "__" are dropped after collections and are only accessible internally (e.g. not present on /metrics, on Bleemeo Cloud or in the local store)
 	// They are actually dropped by the metric registry.
+	// The label startings with "__" could be used to known from where a metrics come from and unlike label
+	// which don't start by "__", they can only be set by Glouton itself because it not a valid user defined label.
 	LabelMetaContainerName          = "__meta_container_name"
 	LabelMetaContainerID            = "__meta_container_id"
 	LabelMetaServiceName            = "__meta_service_name"
@@ -97,6 +99,7 @@ const (
 	LabelMetaPort                   = "__meta_port"
 	LabelMetaScrapeInstance         = "__meta_scrape_instance"
 	LabelMetaScrapeJob              = "__meta_scrape_job"
+	LabelMetaSNMPTarget             = "__meta_snmp_target"
 	LabelMetaBleemeoTargetAgentUUID = "__meta_bleemeo_target_agent_uuid"
 	LabelMetaBleemeoUUID            = "__meta_bleemeo_uuid"
 	LabelMetaProbeTarget            = "__meta_probe_target"
@@ -183,6 +186,7 @@ type MetricAnnotations struct {
 	ContainerID string
 	ServiceName string
 	StatusOf    string
+	SNMPTarget  string
 	// store the agent for which we want to emit the metric
 	BleemeoAgentID string
 	Status         StatusDescription
