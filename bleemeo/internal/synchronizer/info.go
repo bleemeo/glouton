@@ -66,7 +66,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 
 			// force syncing the version again when the synchronizer runs again
 			s.l.Lock()
-			s.forceSync["info"] = true
+			s.forceSync[syncMethodInfo] = true
 			s.l.Unlock()
 		}
 	}
@@ -86,7 +86,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 
 			// force syncing the version again when the synchronizer runs again
 			s.l.Lock()
-			s.forceSync["info"] = true
+			s.forceSync[syncMethodInfo] = true
 			s.l.Unlock()
 		}
 	}
@@ -168,5 +168,5 @@ func (s *Synchronizer) UpdateMaintenance() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["info"] = false
+	s.forceSync[syncMethodInfo] = false
 }

@@ -63,7 +63,7 @@ func (s *Synchronizer) UpdateMonitor(op string, uuid string) {
 	}
 
 	s.pendingMonitorsUpdate = append(s.pendingMonitorsUpdate, mu)
-	s.forceSync["monitors"] = false
+	s.forceSync[syncMethodMonitor] = false
 }
 
 // syncMonitors updates the list of monitors accessible to the agent.
@@ -84,8 +84,8 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 	if len(pendingMonitorsUpdate) > 5 {
 		fullSync = true
 		// force metric synchronization
-		if _, forceSync := s.forceSync["metrics"]; !forceSync {
-			s.forceSync["metrics"] = false
+		if _, forceSync := s.forceSync[syncMethodMetric]; !forceSync {
+			s.forceSync[syncMethodMetric] = false
 		}
 	}
 
@@ -207,7 +207,7 @@ func (s *Synchronizer) getListOfMonitorsFromAPI(pendingMonitorsUpdate []MonitorU
 
 	s.l.Lock()
 
-	_, forceSync := s.forceSync["metrics"]
+	_, forceSync := s.forceSync[syncMethodMetric]
 
 	s.l.Unlock()
 
@@ -252,7 +252,7 @@ OuterBreak:
 					// the added complexity.
 					if !forceSync {
 						s.l.Lock()
-						s.forceSync["metrics"] = false
+						s.forceSync[syncMethodMetric] = false
 						forceSync = true
 						s.l.Unlock()
 					}
