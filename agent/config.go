@@ -286,6 +286,8 @@ func migrateEnabled(cfg *config.Configuration) {
 		logger.V(0).Printf("%senabled is deprecated: please use %senable.", key, key)
 
 		cfg.Set(key+"enable", val)
+
+		cfg.AddWarning(fmt.Sprintf("%senabled is deprecated. Please use %senable", key, key))
 	}
 }
 

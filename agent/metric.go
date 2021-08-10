@@ -41,6 +41,7 @@ var commonDefaultSystemMetrics []string = []string{
 	"system_pending_updates",
 	"system_pending_security_updates",
 	"time_drift",
+	"config_deprecated",
 
 	// services metrics that are not classied as a service in common.serviceType
 
