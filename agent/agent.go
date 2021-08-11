@@ -877,7 +877,7 @@ func (a *agent) run() { //nolint:gocyclo
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
 				logger.Printf("The StatsD integration is now disabled. Restart the agent to try re-enabling it.")
-				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenabled to permanently disable StatsD integration or using an alternate port")
+				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenable to permanently disable StatsD integration or using an alternate port")
 			} else {
 				logger.Printf("Unable to create StatsD input: %v", err)
 			}
