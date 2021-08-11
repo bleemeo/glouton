@@ -257,7 +257,7 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 	return warnings
 }
 
-//getEnabledToMigrate is a function used to find all config entries
+// getEnabledToMigrate is a function used to find all config entries
 // where `enabled` is used instead of `enable`.
 func getEnabledToMigrate(cfg *config.Configuration) []string {
 	keys := []string{
