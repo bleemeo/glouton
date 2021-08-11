@@ -284,6 +284,7 @@ func migrateEnabled(cfg *config.Configuration) (warnings []error) {
 		val, _ := cfg.Get(key + "enabled")
 
 		cfg.Set(key+"enable", val)
+		cfg.Delete(key + "enabled")
 
 		warnings = append(warnings, fmt.Errorf("%w: %senabled. Please use %senable", errSettingsDeprecated, key, key))
 	}
@@ -338,10 +339,6 @@ func migrate(cfg *config.Configuration) (warnings []error) {
 	warnings = append(warnings, migrateEnabled(cfg)...)
 	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
 	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
-
-	for _, warning := range warnings {
-		cfg.AddWarning(warning.Error())
-	}
 
 	return warnings
 }
@@ -468,6 +465,10 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 	warnings = append(warnings, moreMarnings...)
 
 	loadDefault(cfg)
+
+	for _, warning := range warnings {
+		cfg.AddWarning(warning.Error())
+	}
 
 	return cfg, warnings, finalError
 }

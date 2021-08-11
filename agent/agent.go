@@ -741,7 +741,6 @@ func (a *agent) run() { //nolint:gocyclo
 		{a.miscTasks, "Miscelanous tasks"},
 		{a.minuteMetric, "Metrics every minute"},
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
-		{a.sendDeprecatedAlerts, "Send deprecated warning points"},
 	}
 
 	if a.config.Bool("web.enable") {
@@ -1101,16 +1100,6 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 					},
 				})
 			}
-		}
-	}
-}
-
-func (a *agent) sendDeprecatedAlerts(ctx context.Context) error {
-	for {
-		select {
-		case <-time.After(time.Minute):
-		case <-ctx.Done():
-			return nil
 		}
 
 		desc := strings.Join(a.config.GetWarnings(), "\n")
