@@ -400,10 +400,14 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 	for _, filename := range cfg.StringList("config_files") {
 		stat, err := os.Stat(filename)
 		if err != nil && os.IsNotExist(err) {
+			logger.V(2).Printf("config file: %s ignored since it does not exists", filename)
+
 			continue
 		}
 
 		if err != nil {
+			logger.V(2).Printf("config file: %s ignored due to %v", filename, err)
+
 			finalError = err
 
 			continue
@@ -411,12 +415,22 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 
 		if stat.IsDir() {
 			err = cfg.LoadDirectory(filename)
+
+			if err != nil {
+				logger.V(2).Printf("config file: directory %s have ignored some files due to %v", filename, err)
+			}
 		} else {
 			err = configLoadFile(filename, cfg)
+
+			if err != nil {
+				logger.V(2).Printf("config file: %s ignored due to %v", filename, err)
+			}
 		}
 
 		if err != nil {
 			finalError = err
+		} else {
+			logger.V(2).Printf("config file: %s loaded", filename)
 		}
 	}
 
