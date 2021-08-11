@@ -38,7 +38,7 @@ var (
 
 func defaultConfig() map[string]interface{} {
 	return map[string]interface{}{
-		"blackbox.enabled":           true,
+		"blackbox.enable":            true,
 		"blackbox.scraper_name":      "",
 		"blackbox.scraper_send_uuid": true,
 		"blackbox.user_agent":        version.UserAgent(),
@@ -56,29 +56,29 @@ func defaultConfig() map[string]interface{} {
 		},
 		"agent.cloudimage_creation_file": "cloudimage_creation",
 		"agent.facts_file":               "facts.yaml",
-		"agent.http_debug.enabled":       false,
+		"agent.http_debug.enable":        false,
 		"agent.http_debug.bind_address":  "localhost:6060",
 		"agent.installation_format":      "manual",
 		"agent.netstat_file":             "netstat.out",
-		"agent.process_exporter.enabled": true,
+		"agent.process_exporter.enable":  true,
 		"agent.public_ip_indicator":      "https://myip.bleemeo.com",
 		"agent.state_file":               "state.json",
 		"agent.deprecated_state_file":    "",
 		"agent.upgrade_file":             "upgrade",
 		"agent.metrics_format":           "Bleemeo",
-		"agent.node_exporter.enabled":    true,
+		"agent.node_exporter.enable":     true,
 		"agent.node_exporter.collectors": []string{
 			"cpu", "diskstats", "filesystem", "loadavg", "meminfo", "netdev",
 		},
-		"agent.telemetry.enabled":                      true,
+		"agent.telemetry.enable":                       true,
 		"agent.telemetry.address":                      "https://telemetry.bleemeo.com/v1/telemetry/",
-		"agent.windows_exporter.enabled":               true,
+		"agent.windows_exporter.enable":                true,
 		"agent.windows_exporter.collectors":            []string{"cpu", "cs", "logical_disk", "logon", "memory", "net", "os", "system", "tcp"},
 		"bleemeo.account_id":                           "",
 		"bleemeo.api_base":                             "https://api.bleemeo.com/",
 		"bleemeo.api_ssl_insecure":                     false,
 		"bleemeo.container_registration_delay_seconds": 30,
-		"bleemeo.enabled":                              true,
+		"bleemeo.enable":                               true,
 		"bleemeo.initial_agent_name":                   "",
 		"bleemeo.mqtt.cafile":                          "",
 		"bleemeo.mqtt.host":                            "mqtt.bleemeo.com",
@@ -137,15 +137,15 @@ func defaultConfig() map[string]interface{} {
 			"^[A-Z]:$",
 		},
 		"influxdb.db_name":                 "glouton",
-		"influxdb.enabled":                 false,
+		"influxdb.enable":                  false,
 		"influxdb.host":                    "localhost",
 		"influxdb.port":                    8086,
 		"influxdb.tags":                    map[string]string{},
-		"jmx.enabled":                      true,
+		"jmx.enable":                       true,
 		"jmxtrans.config_file":             "/var/lib/jmxtrans/glouton-generated.json",
 		"jmxtrans.file_permission":         "0640",
 		"jmxtrans.graphite_port":           2004,
-		"kubernetes.enabled":               false,
+		"kubernetes.enable":                false,
 		"kubernetes.nodename":              "",
 		"kubernetes.kubeconfig":            "",
 		"logging.buffer.head_size":         150,
@@ -164,29 +164,29 @@ func defaultConfig() map[string]interface{} {
 			"time_elapsed_since_last_data":    0,
 			"time_drift":                      0,
 		},
-		"network_interface_blacklist":     []interface{}{"docker", "lo", "veth", "virbr", "vnet", "isatap"},
-		"nrpe.enabled":                    false,
-		"nrpe.address":                    "0.0.0.0",
-		"nrpe.port":                       5666,
-		"nrpe.ssl":                        true,
-		"nrpe.conf_paths":                 []interface{}{"/etc/nagios/nrpe.cfg"},
-		"service_ignore_check":            []interface{}{},
-		"service_ignore_metrics":          []interface{}{},
-		"service":                         []interface{}{},
-		"stack":                           "",
-		"tags":                            []string{},
-		"telegraf.docker_metrics_enabled": true,
-		"telegraf.statsd.address":         "127.0.0.1",
-		"telegraf.statsd.enabled":         true,
-		"telegraf.statsd.port":            8125,
-		"thresholds":                      map[string]interface{}{},
-		"web.enabled":                     true,
-		"web.listener.address":            "127.0.0.1",
-		"web.listener.port":               8015,
-		"web.static_cdn_url":              "/static/",
-		"zabbix.enabled":                  false,
-		"zabbix.address":                  "127.0.0.1",
-		"zabbix.port":                     10050,
+		"network_interface_blacklist":    []interface{}{"docker", "lo", "veth", "virbr", "vnet", "isatap"},
+		"nrpe.enable":                    false,
+		"nrpe.address":                   "0.0.0.0",
+		"nrpe.port":                      5666,
+		"nrpe.ssl":                       true,
+		"nrpe.conf_paths":                []interface{}{"/etc/nagios/nrpe.cfg"},
+		"service_ignore_check":           []interface{}{},
+		"service_ignore_metrics":         []interface{}{},
+		"service":                        []interface{}{},
+		"stack":                          "",
+		"tags":                           []string{},
+		"telegraf.docker_metrics_enable": true,
+		"telegraf.statsd.address":        "127.0.0.1",
+		"telegraf.statsd.enable":         true,
+		"telegraf.statsd.port":           8125,
+		"thresholds":                     map[string]interface{}{},
+		"web.enable":                     true,
+		"web.listener.address":           "127.0.0.1",
+		"web.listener.port":              8015,
+		"web.static_cdn_url":             "/static/",
+		"zabbix.enable":                  false,
+		"zabbix.address":                 "127.0.0.1",
+		"zabbix.port":                    10050,
 	}
 }
 
@@ -257,6 +257,43 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 	return warnings
 }
 
+//getEnabledToMigrate is a function used to find all config entries
+// where `enabled` is used instead of `enable`.
+func getEnabledToMigrate(cfg *config.Configuration) []string {
+	keys := []string{
+		"agent.node_exporter.", "agent.windows_exporter.", "agent.http_debug.", "kubernetes.",
+		"blackbox.", "agent.process_exporter.", "web.", "bleemeo.", "jmx.", "nrpe.", "zabbix.",
+		"influxdb.", "telegraf.statsd.", "agent.telemetry.", "agent.node_exporter.",
+		"telegraf.docker_metrics_",
+	}
+	keyToMigrate := make([]string, 0, len(keys))
+
+	for _, key := range keys {
+		_, found := cfg.Get(key + "enabled")
+
+		if found {
+			keyToMigrate = append(keyToMigrate, key)
+		}
+	}
+
+	return keyToMigrate
+}
+
+func migrateEnabled(cfg *config.Configuration) (warnings []error) {
+	keys := getEnabledToMigrate(cfg)
+
+	for _, key := range keys {
+		val, _ := cfg.Get(key + "enabled")
+
+		cfg.Set(key+"enable", val)
+		cfg.Delete(key + "enabled")
+
+		warnings = append(warnings, fmt.Errorf("%w: %senabled. Please use %senable", errSettingsDeprecated, key, key))
+	}
+
+	return warnings
+}
+
 func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 	// metrics.prometheus was renamed metrics.prometheus.scrapper
 	// We guess that old path was used when metrics.prometheus.*.url exist and is a string
@@ -301,6 +338,7 @@ func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 // migrate upgrade the configuration when Glouton change it settings
 // The list returned are actually warnings, not errors.
 func migrate(cfg *config.Configuration) (warnings []error) {
+	warnings = append(warnings, migrateEnabled(cfg)...)
 	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
 	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
 
@@ -444,6 +482,10 @@ func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configurati
 	warnings = append(warnings, moreMarnings...)
 
 	loadDefault(cfg)
+
+	for _, warning := range warnings {
+		cfg.AddWarning(warning.Error())
+	}
 
 	return cfg, warnings, finalError
 }

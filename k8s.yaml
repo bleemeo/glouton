@@ -98,7 +98,7 @@ spec:
         env:
         - name: GLOUTON_CONFIG_FILES
           value: "/etc/glouton/glouton.conf,/etc/glouton/conf.d,/etc/glouton/conf-k8s.d"
-        - name: GLOUTON_KUBERNETES_ENABLED
+        - name: GLOUTON_KUBERNETES_ENABLE
           value: "True"
         - name: GLOUTON_KUBERNETES_NODENAME
           valueFrom:

@@ -88,7 +88,7 @@ func (a *agent) initOSSpecificParts() {
 }
 
 func (a *agent) registerOSSpecificComponents() {
-	if a.config.Bool("agent.windows_exporter.enabled") {
+	if a.config.Bool("agent.windows_exporter.enable") {
 		conf, err := a.buildCollectorsConfig()
 		if err != nil {
 			logger.V(0).Printf("Couldn't build configuration for windows_exporter: %v", err)

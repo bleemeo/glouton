@@ -137,7 +137,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	cfg.Set("bleemeo.api_base", helper.httpServer.URL)
 	cfg.Set("bleemeo.account_id", accountID)
 	cfg.Set("bleemeo.registration_key", registrationKey)
-	cfg.Set("blackbox.enabled", true)
+	cfg.Set("blackbox.enable", true)
 
 	cache := cache.Cache{}
 

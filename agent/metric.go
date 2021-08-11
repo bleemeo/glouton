@@ -41,6 +41,7 @@ var commonDefaultSystemMetrics = []string{
 	"system_pending_updates",
 	"system_pending_security_updates",
 	"time_drift",
+	"agent_config_warning",
 
 	// services metrics that are not classied as a service in common.serviceType
 
