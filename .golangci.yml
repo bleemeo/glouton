@@ -1,6 +1,7 @@
 run:
   skip-dirs:
     - work
+
 linters:
   enable-all: true
   disable:
@@ -24,6 +25,7 @@ linters:
     - golint
     - interfacer
     - scopelint
+
 linters-settings:
   gocyclo:
     # minimal code complexity to report, 30 by default (but we recommend 10-20)
@@ -31,3 +33,14 @@ linters-settings:
   cyclop:
     # same as gocyclo
     max-complexity: 15
+
+issues:
+  include: # the list of ids of default excludes to include
+    - EXC0005 # ineffective break statement
+    - EXC0009 # create files/directories with minimum permissions
+    # - EXC0011 # TODO: comment on exported function should be of the form | should have a package comment
+    # - EXC0012 # TODO: exported var/functions should have a comment
+    - EXC0013 # package comment should be of the form
+    - EXC0014 # comment on exported var should be of the form
+  max-issues-per-linter: 0
+  max-same-issues: 0

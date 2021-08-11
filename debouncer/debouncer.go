@@ -51,7 +51,6 @@ func (dd *Debouncer) Run(ctx context.Context) error {
 	for ctx.Err() == nil {
 		select {
 		case <-ctx.Done():
-			break
 		case <-dd.wakeC:
 			dd.run(ctx, false)
 		case <-dd.timer.C:
