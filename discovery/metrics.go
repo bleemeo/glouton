@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/collector"
+	"glouton/facts"
 	"glouton/inputs"
 	"glouton/inputs/apache"
 	"glouton/inputs/cpu"
@@ -153,6 +154,30 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 
 	for key, service := range services {
 		oldService, ok := oldServices[key]
+		serviceState := facts.ContainerRunning
+		oldServiceState := facts.ContainerRunning
+
+		if service.container != nil {
+			serviceState = service.container.State()
+		}
+
+		if oldService.container != nil {
+			oldServiceState = oldService.container.State()
+		}
+
+		if service.ContainerID != "" {
+			if serviceState == facts.ContainerStopped && oldServiceState == facts.ContainerRunning {
+				d.removeInput(key)
+			}
+
+			if serviceState == facts.ContainerRunning && oldServiceState == facts.ContainerStopped {
+				err = d.createInput(service)
+				if err != nil {
+					return
+				}
+			}
+		}
+
 		if !ok || serviceNeedUpdate(oldService, service) {
 			d.removeInput(key)
 

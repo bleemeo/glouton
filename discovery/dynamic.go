@@ -77,6 +77,8 @@ func (dd *DynamicDiscovery) Discovery(ctx context.Context, maxAge time.Duration)
 	if time.Since(dd.lastDiscoveryUpdate) >= maxAge {
 		err = dd.updateDiscovery(ctx, maxAge)
 		if err != nil {
+			logger.V(2).Printf("An error occurred while running discovery: %v", err)
+
 			return
 		}
 	}

@@ -321,7 +321,13 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 
 	for key, service := range d.discoveredServicesMap {
 		if service.ContainerID != "" {
-			if container, found := d.containerInfo.CachedContainer(service.ContainerID); !found || facts.ContainerIgnored(container) {
+			container, found := d.containerInfo.CachedContainer(service.ContainerID)
+
+			if found {
+				service.container = container
+			}
+
+			if !found || facts.ContainerIgnored(container) {
 				service.Active = false
 			} else if container.StoppedAndReplaced() {
 				service.Active = false
