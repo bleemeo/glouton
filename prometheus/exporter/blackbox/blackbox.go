@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -100,7 +101,7 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 
 	registry := prometheus.NewRegistry()
 
-	extLogger := logger.GoKitLoggerWrapper(logger.V(2))
+	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
 	start := time.Now()
 
 	// do all the actual work
