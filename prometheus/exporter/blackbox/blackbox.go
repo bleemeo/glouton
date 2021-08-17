@@ -18,6 +18,7 @@ package blackbox
 
 import (
 	"context"
+	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"reflect"
@@ -107,7 +108,9 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	// do all the actual work
 	success := probeFn(ctx, target.URL, target.Module, registry, extLogger)
 
-	duration := time.Since(start).Seconds()
+	end := time.Now()
+	duration := end.Sub(start)
+	_ = extLogger.Log("msg", fmt.Sprintf("check started at %s, ended at %s (duration %s)", start, end, duration))
 
 	mfs, err := registry.Gather()
 	if err != nil {
@@ -125,7 +128,7 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	if success {
 		successVal = 1
 	}
-	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration, target.Name)
+	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 

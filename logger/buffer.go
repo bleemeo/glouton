@@ -48,7 +48,7 @@ func (b *buffer) SetCapacity(headSize int, tailSize int) {
 }
 
 func (b *buffer) write(now time.Time, input []byte) (int, error) {
-	ts := now.Format("2006/01/02 15:04:05 ")
+	ts := now.Format("2006/01/02 15:04:05.999999999 ")
 	line := make([]byte, 0, len(ts)+len(input))
 	line = append(line, []byte(ts)...)
 	line = append(line, input...)
