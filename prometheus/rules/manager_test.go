@@ -18,6 +18,7 @@ package rules
 
 import (
 	"context"
+	"fmt"
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/store"
@@ -29,7 +30,10 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-const metricName = "node_cpu_seconds_global"
+const (
+	metricName  = "node_cpu_seconds_global"
+	alertLabels = "__name__=\"alert_on_cpu\""
+)
 
 func Test_manager(t *testing.T) {
 	ctx := context.Background()
@@ -769,5 +773,92 @@ func Test_GloutonStart(t *testing.T) {
 	// as critical and warning points would be allowed.
 	if len(resPoints) != 0 {
 		t.Errorf("Unexpected number of points generated: expected 0, got %d:\n%v", len(resPoints), resPoints)
+	}
+}
+
+// Test that metrics won't temporary change status on Glouton restart.
+// This test verify that a alert on metric like "cpu_used > 1" (assuming cpu_used is always more than 1%)
+// start in warning/critical and never send any Ok because the Prometheus rule is in pending 5 minutes
+// after startup.
+// This test mostly do the same as Test_GloutonStart, but with more realistic scenario.
+func Test_NotStatutsChangeOnStart(t *testing.T) {
+	for _, resolutionSecond := range []int{10, 30, 60} {
+		t.Run(fmt.Sprintf("resolution=%d", resolutionSecond), func(t *testing.T) {
+			store := store.New()
+			ctx := context.Background()
+			t0 := time.Now().Truncate(time.Second)
+
+			// we always boot the manager with 10 seconds resolution
+			ruleManager := NewManager(ctx, store, t0, 10*time.Second)
+
+			// The metric will be warning
+			thresholds := []float64{0, 100}
+			resPoints := []types.MetricPoint{}
+
+			metricList := []bleemeoTypes.Metric{
+				{
+					LabelsText: alertLabels,
+					Labels:     types.TextToLabels(alertLabels),
+					Threshold: bleemeoTypes.Threshold{
+						HighWarning:  &thresholds[0],
+						HighCritical: &thresholds[1],
+					},
+					PromQLQuery:       metricName,
+					IsUserPromQLAlert: false,
+				},
+			}
+
+			err := ruleManager.RebuildAlertingRules(metricList)
+			if err != nil {
+				t.Error(err)
+			}
+
+			ruleManager.UpdateMetricResolution(time.Duration(resolutionSecond) * time.Second)
+
+			store.AddNotifiee(func(mp []types.MetricPoint) {
+				resPoints = append(resPoints, mp...)
+			})
+
+			for currentTime := t0; currentTime.Before(t0.Add(7 * time.Minute)); currentTime = currentTime.Add(time.Second * time.Duration(resolutionSecond)) {
+				if !currentTime.Equal(t0) {
+					// cpu_used need two gather to be calulated, skip first point.
+					store.PushPoints([]types.MetricPoint{
+						{
+							Point: types.Point{
+								Time:  currentTime,
+								Value: 30,
+							},
+							Labels: map[string]string{
+								types.LabelName: metricName,
+							},
+						},
+					})
+				}
+
+				ruleManager.Run(ctx, currentTime)
+			}
+
+			var hadResult bool
+
+			// Manager should not create ok points since the metric is always in critical.
+			// This test might be changed in the future if we implement a persistent store,
+			// as it would allow to known the exact hold state of the Prometheus rule.
+			for _, p := range resPoints {
+				if p.Labels[types.LabelName] != alertLabels {
+					continue
+				}
+
+				if p.Annotations.Status.CurrentStatus == types.StatusWarning {
+					hadResult = true
+					continue
+				}
+
+				t.Errorf("point status = %v want %v", p.Annotations.Status.CurrentStatus, types.StatusCritical)
+			}
+
+			if !hadResult {
+				t.Errorf("rule never returned any points")
+			}
+		})
 	}
 }
