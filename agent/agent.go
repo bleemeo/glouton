@@ -1126,7 +1126,7 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 			desc = "configuration returned no warnings."
 		}
 
-		a.store.PushPoints([]types.MetricPoint{
+		a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
 			{
 				Point: types.Point{
 					Value: float64(status.NagiosCode()),
