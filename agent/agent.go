@@ -586,17 +586,23 @@ func (a *agent) run() { //nolint:cyclop
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
-	a.gathererRegistry = &registry.Registry{
-		Option: registry.Option{
+	a.gathererRegistry, err = registry.New(
+		registry.Option{
 			PushPoint:             a.store,
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
 			Filter:                mFilter,
-		},
-		RulesCallback: rulesManager.Run,
+			RulesCallback:         rulesManager.Run,
+		})
+	if err != nil {
+		logger.Printf("Unable to create the metrics registry: %v", err)
+		logger.Printf("The metrics registry is required for Glouton. Exiting.")
+
+		return
 	}
+
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 

@@ -244,7 +244,7 @@ func TestRegistry_Register(t *testing.T) {
 
 func TestRegistry_pushPoint(t *testing.T) {
 	reg := &Registry{
-		Option: Option{
+		option: Option{
 			Filter: &fakeFilter{},
 		},
 	}
@@ -492,7 +492,7 @@ func TestRegistry_runOnce(t *testing.T) {
 	)
 
 	regBleemeo := &Registry{
-		Option: Option{
+		option: Option{
 			MetricFormat: types.MetricFormatBleemeo,
 			PushPoint: pushFunction(func(points []types.MetricPoint) {
 				l.Lock()
@@ -512,7 +512,7 @@ func TestRegistry_runOnce(t *testing.T) {
 	regBleemeo.init()
 
 	regPrometheus := &Registry{
-		Option: Option{
+		option: Option{
 			MetricFormat: types.MetricFormatPrometheus,
 			PushPoint: pushFunction(func(points []types.MetricPoint) {
 				l.Lock()

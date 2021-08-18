@@ -90,7 +90,7 @@ type metricFilter interface {
 // * any points returned by a registered Gatherer when pushPoint option was set
 //   when gatherer was registered.
 type Registry struct {
-	Option
+	option Option
 
 	l sync.Mutex
 
@@ -113,7 +113,6 @@ type Registry struct {
 	lastPushedPointsCleanup    time.Time
 	currentDelay               time.Duration
 	updateDelayC               chan interface{}
-	RulesCallback              func()
 	relabelHook                RelabelHook
 }
 
@@ -124,6 +123,7 @@ type Option struct {
 	MetricFormat          types.MetricFormat
 	BlackboxSentScraperID bool
 	Filter                metricFilter
+	RulesCallback         func()
 }
 
 type registration struct {
@@ -244,6 +244,12 @@ func getDefaultRelabelConfig() []*relabel.Config {
 	}
 }
 
+func New(opt Option) (*Registry, error) {
+	return &Registry{
+		option: opt,
+	}, nil
+}
+
 func (r *Registry) init() {
 	r.l.Lock()
 
@@ -263,7 +269,7 @@ func (r *Registry) init() {
 	r.currentDelay = 10 * time.Second
 	r.updateDelayC = make(chan interface{})
 
-	if r.MetricFormat == types.MetricFormatBleemeo {
+	if r.option.MetricFormat == types.MetricFormatBleemeo {
 		r.metricLegacyGatherTime = prometheus.NewGauge(prometheus.GaugeOpts{
 			Help:      "Time of last metrics gather in seconds",
 			Namespace: "",
@@ -272,7 +278,7 @@ func (r *Registry) init() {
 		})
 
 		r.internalRegistry.MustRegister(r.metricLegacyGatherTime)
-	} else if r.MetricFormat == types.MetricFormatPrometheus {
+	} else if r.option.MetricFormat == types.MetricFormatPrometheus {
 		r.metricGatherBackgroundTime = prometheus.NewSummary(prometheus.SummaryOpts{
 			Help:      "Total metrics gathering time in seconds (either triggered by the /metrics exporter or the scheduled background task)",
 			Namespace: "glouton",
@@ -479,14 +485,14 @@ func (r *Registry) AddDefaultCollector() {
 	r.internalRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	r.internalRegistry.MustRegister(collectors.NewGoCollector())
 
-	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
+	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
 }
 
 // Exporter return an HTTP exporter.
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(req.Context(), r, r.Filter)
+		wrapper := NewGathererWithStateWrapper(req.Context(), r, r.option.Filter)
 
 		state := GatherStateFromMap(req.URL.Query())
 		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
@@ -499,7 +505,7 @@ func (r *Registry) Exporter() http.Handler {
 			ErrorLog:      prefixLogger("/metrics endpoint:"),
 		}).ServeHTTP(w, req)
 	}))
-	_, _ = r.RegisterGatherer(reg, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
+	_, _ = r.RegisterGatherer(reg, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
 
 	return handler
 }
@@ -656,7 +662,7 @@ func (r *Registry) runOnce() time.Duration {
 		r.metricGatherBackgroundTime.Observe(gatherTime.Seconds())
 	}
 
-	if r.MetricFormat == types.MetricFormatBleemeo {
+	if r.option.MetricFormat == types.MetricFormatBleemeo {
 		var metric dto.Metric
 
 		err := r.metricLegacyGatherTime.Write(&metric)
@@ -672,11 +678,11 @@ func (r *Registry) runOnce() time.Duration {
 	}
 
 	if len(points) > 0 {
-		r.PushPoint.PushPoints(points)
+		r.option.PushPoint.PushPoints(points)
 	}
 
-	if r.RulesCallback != nil {
-		r.RulesCallback()
+	if r.option.RulesCallback != nil {
+		r.option.RulesCallback()
 	}
 
 	r.l.Lock()
@@ -750,7 +756,7 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	for _, point := range points {
 		var skip bool
 
-		if r.MetricFormat == types.MetricFormatBleemeo {
+		if r.option.MetricFormat == types.MetricFormatBleemeo {
 			newLabelsMap := map[string]string{
 				types.LabelName: point.Labels[types.LabelName],
 			}
@@ -792,8 +798,8 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 
 	r.l.Unlock()
 
-	if r.PushPoint != nil {
-		r.PushPoint.PushPoints(points)
+	if r.option.PushPoint != nil {
+		r.option.PushPoint.PushPoints(points)
 	}
 
 	r.l.Lock()
@@ -808,17 +814,17 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 		result[k] = v
 	}
 
-	result[types.LabelMetaGloutonFQDN] = r.FQDN
-	result[types.LabelMetaGloutonPort] = r.GloutonPort
+	result[types.LabelMetaGloutonFQDN] = r.option.FQDN
+	result[types.LabelMetaGloutonPort] = r.option.GloutonPort
 
 	servicePort := result[types.LabelMetaServicePort]
 	if servicePort == "" {
-		servicePort = r.GloutonPort
+		servicePort = r.option.GloutonPort
 	}
 
 	result[types.LabelMetaPort] = servicePort
 
-	if r.BlackboxSentScraperID {
+	if r.option.BlackboxSentScraperID {
 		result[types.LabelMetaSendScraperUUID] = "yes"
 	}
 
