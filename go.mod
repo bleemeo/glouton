@@ -13,7 +13,6 @@ require (
 	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327
 	github.com/containerd/containerd v1.4.3
 	github.com/containerd/typeurl v0.0.0-20180627222232-a93fcdb778cd
-	github.com/daixiang0/gci v0.2.9 // indirect
 	github.com/dimchansky/utfbom v1.1.1 // indirect
 	github.com/docker/docker v17.12.0-ce-rc1.0.20200916142827-bd33bbf0497b+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.2.1-0.20200121105743-0d940dd29fd2
@@ -56,7 +55,6 @@ require (
 	github.com/prometheus/node_exporter v1.0.1
 	github.com/prometheus/procfs v0.2.0
 	github.com/prometheus/prometheus v1.8.2-0.20200805170718-983ebb4a5133 // 2.20.1
-	github.com/ramya-rao-a/go-outline v0.0.0-20210608161538-9736a4bde949 // indirect
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.20.11+incompatible
 	github.com/shopspring/decimal v1.2.0 // indirect
@@ -72,7 +70,8 @@ require (
 	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392 // indirect
 	golang.org/x/oauth2 v0.0.0-20201109201403-9fd604954f58 // indirect
 	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
-	golang.org/x/tools/gopls v0.7.0 // indirect
+	golang.org/x/text v0.3.6 // indirect
+	golang.org/x/tools v0.1.3-0.20210608163600-9ed039809d4c // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20201201144952-b05cb90ed32e // indirect
 	google.golang.org/grpc v1.33.2 // indirect
@@ -85,6 +84,5 @@ require (
 	k8s.io/api v0.20.1
 	k8s.io/apimachinery v0.20.1
 	k8s.io/client-go v0.20.1
-	mvdan.cc/gofumpt v0.1.1 // indirect
 	sigs.k8s.io/yaml v1.2.0
 )
