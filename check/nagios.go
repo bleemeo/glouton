@@ -48,12 +48,12 @@ func NewNagios(nagiosCommand string, persitentAddresses []string, persistentConn
 		mainTCPAddress = persitentAddresses[0]
 	}
 
-	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, nc.doCheck, labels, annotations, acc)
+	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, nc.nagiosMainCheck, labels, annotations, acc)
 
 	return nc
 }
 
-func (nc *NagiosCheck) doCheck(ctx context.Context) types.StatusDescription {
+func (nc *NagiosCheck) nagiosMainCheck(ctx context.Context) types.StatusDescription {
 	part, err := shlex.Split(nc.nagiosCommand)
 	if err != nil {
 		return types.StatusDescription{
