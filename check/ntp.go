@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
@@ -46,7 +47,7 @@ func NewNTP(address string, persitentAddresses []string, persistentConnection bo
 		mainAddress: address,
 	}
 
-	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.doCheck, labels, annotations, acc)
+	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.doCheck, labels, annotations, acc, facts.ContainerUnknown)
 
 	return nc
 }

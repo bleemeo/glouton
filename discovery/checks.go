@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"glouton/check"
+	"glouton/facts"
 	"glouton/logger"
 	"glouton/types"
 	"net"
@@ -61,7 +62,15 @@ func (d *Discovery) configureChecks(oldServices, services map[NameContainer]Serv
 
 	for key, service := range services {
 		oldService, ok := oldServices[key]
-		if !ok || serviceNeedUpdate(oldService, service) {
+		oldServiceState := facts.ContainerUnknown
+		serviceState := facts.ContainerUnknown
+
+		if oldService.container != nil && service.container != nil {
+			oldServiceState = oldService.container.State()
+			serviceState = service.container.State()
+		}
+
+		if !ok || serviceNeedUpdate(oldService, service, oldServiceState, serviceState) {
 			d.removeCheck(key)
 			d.createCheck(service)
 		}
@@ -118,6 +127,12 @@ func (d *Discovery) createCheck(service Service) {
 
 	labels := service.LabelsOfStatus()
 	annotations := service.AnnotationsOfStatus()
+
+	if service.container != nil && service.container.State() == facts.ContainerStopped {
+		d.createContainerStoppedCheck(service, primaryAddress, tcpAddresses, labels, annotations)
+
+		return
+	}
 
 	switch service.ServiceType { //nolint:exhaustive
 	case DovecoteService, MemcachedService, RabbitMQService, RedisService, ZookeeperService:
@@ -251,6 +266,12 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 	)
 
 	d.addCheck(httpCheck, service)
+}
+
+func (d *Discovery) createContainerStoppedCheck(service Service, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
+	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations, d.acc, service.container.State())
+
+	d.addCheck(containerCheck, service)
 }
 
 func (d *Discovery) createNagiosCheck(service Service, primaryAddress string, labels map[string]string, annotations types.MetricAnnotations) {

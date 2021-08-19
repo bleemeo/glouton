@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
@@ -61,7 +62,7 @@ func NewTCP(address string, tcpAddresses []string, persistentConnection bool, se
 		mainCheck = nil
 	}
 
-	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, labels, annotations, acc)
+	tc.baseCheck = newBase(address, tcpAddresses, persistentConnection, mainCheck, labels, annotations, acc, facts.ContainerUnknown)
 
 	return tc
 }

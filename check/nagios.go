@@ -19,6 +19,7 @@ package check
 import (
 	"context"
 	"fmt"
+	"glouton/facts"
 	"glouton/inputs"
 	"glouton/types"
 	"os/exec"
@@ -48,7 +49,7 @@ func NewNagios(nagiosCommand string, persitentAddresses []string, persistentConn
 		mainTCPAddress = persitentAddresses[0]
 	}
 
-	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, nc.doCheck, labels, annotations, acc)
+	nc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, nc.doCheck, labels, annotations, acc, facts.ContainerUnknown)
 
 	return nc
 }

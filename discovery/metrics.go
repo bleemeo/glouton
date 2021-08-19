@@ -165,25 +165,14 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 			oldServiceState = oldService.container.State()
 		}
 
-		if service.ContainerID != "" {
-			if serviceState == facts.ContainerStopped && oldServiceState == facts.ContainerRunning {
-				d.removeInput(key)
-			}
+		if !ok || serviceNeedUpdate(oldService, service, oldServiceState, serviceState) {
+			d.removeInput(key)
 
-			if serviceState == facts.ContainerRunning && oldServiceState == facts.ContainerStopped {
+			if serviceState != facts.ContainerStopped {
 				err = d.createInput(service)
 				if err != nil {
 					return
 				}
-			}
-		}
-
-		if !ok || serviceNeedUpdate(oldService, service) {
-			d.removeInput(key)
-
-			err = d.createInput(service)
-			if err != nil {
-				return
 			}
 		}
 	}
@@ -191,7 +180,7 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 	return nil
 }
 
-func serviceNeedUpdate(oldService, service Service) bool {
+func serviceNeedUpdate(oldService, service Service, oldServiceState facts.ContainerState, serviceState facts.ContainerState) bool {
 	switch {
 	case oldService.Name != service.Name,
 		oldService.ServiceType != service.ServiceType,
@@ -202,7 +191,8 @@ func serviceNeedUpdate(oldService, service Service) bool {
 		oldService.Stack != service.Stack,
 		oldService.Active != service.Active,
 		oldService.CheckIgnored != service.CheckIgnored,
-		oldService.MetricsIgnored != service.MetricsIgnored:
+		oldService.MetricsIgnored != service.MetricsIgnored,
+		oldServiceState != serviceState:
 		return true
 	case len(oldService.ListenAddresses) != len(service.ListenAddresses):
 		return true
