@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build windows
 // +build windows
 
 package agent
@@ -59,7 +60,7 @@ loop:
 func (a *agent) initOSSpecificParts() {
 	// IsAnInteractiveSession is deprecated but its remplacement (IsWindowsService)
 	// does not works and fail with an access denied error.
-	isInteractive, err := svc.IsAnInteractiveSession() // nolint: staticcheck
+	isInteractive, err := svc.IsAnInteractiveSession() //nolint:staticcheck
 	if err != nil {
 		logger.V(0).Println(err)
 		os.Exit(1)

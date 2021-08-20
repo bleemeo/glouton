@@ -36,7 +36,7 @@ const (
 	proberNameDNS  string = "dns"
 )
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	probeSuccessDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("", "", "probe_success"),

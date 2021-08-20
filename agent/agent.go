@@ -86,7 +86,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var errUnsupportedKey = errors.New("Unsupported item key") //nolint: stylecheck
+var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
 
 type agent struct {
 	taskRegistry *task.Registry
@@ -480,7 +480,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run() { //nolint:gocyclo,cyclop
+func (a *agent) run() { //nolint:cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -1513,7 +1513,7 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	return
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {

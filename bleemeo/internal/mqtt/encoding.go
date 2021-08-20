@@ -65,7 +65,7 @@ func (enc *mqttEncoder) Decode(input []byte, obj interface{}) error {
 		return err
 	}
 
-	_, err = io.Copy(ioutil.Discard, decoder) // nolint: gosec
+	_, err = io.Copy(ioutil.Discard, decoder) //nolint:gosec
 	if err != nil {
 		return err
 	}

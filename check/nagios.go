@@ -69,7 +69,7 @@ func (nc *NagiosCheck) nagiosMainCheck(ctx context.Context) types.StatusDescript
 		}
 	}
 
-	cmd := exec.Command(part[0], part[1:]...) // nolint: gosec
+	cmd := exec.Command(part[0], part[1:]...) //nolint:gosec
 	output, err := cmd.CombinedOutput()
 	result := types.StatusDescription{
 		CurrentStatus:     types.StatusOk,

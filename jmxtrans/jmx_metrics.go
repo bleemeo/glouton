@@ -37,7 +37,7 @@ type JmxMetric struct {
 	Ratio     string
 }
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var defaultGenericMetrics = []JmxMetric{
 	{
 		Name:      "jvm_heap_used",
@@ -78,7 +78,7 @@ var defaultGenericMetrics = []JmxMetric{
 	},
 }
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var defaultServiceMetrics = map[discovery.ServiceName][]JmxMetric{
 	discovery.CassandraService: {
 		{
@@ -271,7 +271,7 @@ var defaultServiceMetrics = map[discovery.ServiceName][]JmxMetric{
 	},
 }
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var cassandraDetailedTableMetrics = []JmxMetric{
 	{
 		Name:      "bloom_filter_false_ratio",

@@ -1032,7 +1032,7 @@ func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
 	return list
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var goodPoint = map[string]string{
 	"__name__":        "node_cpu_seconds_global",
 	"label_not_read":  "value_not_read",
@@ -1040,7 +1040,7 @@ var goodPoint = map[string]string{
 	"scrape_job":      "my_application123",
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var badPoint = map[string]string{
 	"__name__":        "cpu_used_status",
 	"label_not_read":  "value_not_read",

@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package process
@@ -101,7 +102,7 @@ func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Durati
 	}
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func testProc(t *testing.T, procs proc.Iter) {
 	t.Helper()
 

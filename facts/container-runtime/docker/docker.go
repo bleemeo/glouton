@@ -308,7 +308,7 @@ func (d *Docker) ensureClient(ctx context.Context) (cl dockerClient, err error) 
 	return cl, nil
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (d *Docker) run(ctx context.Context) error {
 	d.l.Lock()
 
@@ -441,7 +441,7 @@ func (d *Docker) run(ctx context.Context) error {
 	}
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (d *Docker) updateContainers(ctx context.Context) error {
 	cl, err := d.getClient(ctx)
 	if err != nil {
@@ -1105,7 +1105,7 @@ func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (cont
 	return top, topWaux, err
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.Process {
 	userIndex := -1
 	pidIndex := -1
@@ -1203,7 +1203,7 @@ func decodeDocker(top container.ContainerTopOKBody, c facts.Container) []facts.P
 	return processes
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func psTime2Second(psTime string) (int, error) {
 	if strings.Count(psTime, ":") == 1 {
 		// format is MM:SS

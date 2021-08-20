@@ -42,7 +42,7 @@ type Manager struct {
 	engine *promql.Engine
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	defaultLinuxRecordingRules = map[string]string{
 		"node_cpu_seconds_global": "sum(node_cpu_seconds_total) without (cpu)",

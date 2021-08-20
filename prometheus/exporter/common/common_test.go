@@ -1,4 +1,4 @@
-// nolint: scopelint
+//nolint:scopelint
 package common_test
 
 import (
