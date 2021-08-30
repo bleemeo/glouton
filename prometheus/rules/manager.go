@@ -285,7 +285,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 		agr.disabledUntil = time.Time{}
 
 		// we add 20 seconds to the promAlert time to compensate the delta between agent startup and first metrics
-		if state != rules.StateInactive && time.Since(rm.agentStarted) < promAlertTime+20*time.Second {
+		if state != rules.StateInactive && now.Sub(rm.agentStarted) < promAlertTime+20*time.Second {
 			return nil, nil
 		}
 
@@ -298,7 +298,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 		if state == rules.StateFiring {
 			return newPoint, nil
-		} else if generatedPoint == nil {
+		} else if generatedPoint == nil || newPoint.Annotations.Status.CurrentStatus > generatedPoint.Annotations.Status.CurrentStatus {
 			generatedPoint = newPoint
 		}
 	}
@@ -308,7 +308,7 @@ func (agr *ruleGroup) runGroup(ctx context.Context, now time.Time, rm *Manager) 
 
 func (agr *ruleGroup) checkNoPoint(queryable *store.CountingQueryable, now time.Time, agentStart time.Time, metricRes time.Duration) (*types.MetricPoint, bool) {
 	if queryable.Count() == 0 {
-		if agr.isUserAlert && time.Since(agentStart) > metricRes {
+		if agr.isUserAlert && now.Sub(agentStart) > metricRes {
 			return &types.MetricPoint{
 				Point: types.Point{
 					Time:  now,

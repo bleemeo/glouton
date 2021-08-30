@@ -474,6 +474,13 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 	units := make(map[threshold.MetricNameItem]threshold.Unit)
 
 	for _, m := range s.option.Cache.Metrics() {
+		// Old treshold behavior, useless with the new alerting rule functionality.
+		// While this is not a problem per say, adding alertin rules to old thresholds
+		// create more filters for nothing (${rule}_status).
+		if m.IsUserPromQLAlert {
+			continue
+		}
+
 		key := threshold.MetricNameItem{Name: m.Labels[types.LabelName], Item: m.Labels[types.LabelItem]}
 		thresholds[key] = m.Threshold.ToInternalThreshold()
 		units[key] = m.Unit

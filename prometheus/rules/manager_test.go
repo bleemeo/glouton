@@ -32,7 +32,7 @@ import (
 
 const (
 	metricName  = "node_cpu_seconds_global"
-	alertLabels = "__name__=\"alert_on_cpu\""
+	alertLabels = "alert_on_cpu"
 )
 
 func Test_manager(t *testing.T) {
@@ -797,8 +797,8 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 
 			metricList := []bleemeoTypes.Metric{
 				{
-					LabelsText: alertLabels,
-					Labels:     types.TextToLabels(alertLabels),
+					LabelsText: "__name__=\"" + alertLabels + "\"",
+					Labels:     types.TextToLabels("__name__=\"" + alertLabels + "\""),
 					Threshold: bleemeoTypes.Threshold{
 						HighWarning:  &thresholds[0],
 						HighCritical: &thresholds[1],
@@ -821,7 +821,7 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 
 			for currentTime := t0; currentTime.Before(t0.Add(7 * time.Minute)); currentTime = currentTime.Add(time.Second * time.Duration(resolutionSecond)) {
 				if !currentTime.Equal(t0) {
-					// cpu_used need two gather to be calulated, skip first point.
+					// cpu_used need two gather to be calculated, skip first point.
 					store.PushPoints([]types.MetricPoint{
 						{
 							Point: types.Point{
@@ -833,6 +833,10 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 							},
 						},
 					})
+				}
+
+				if currentTime.Sub(t0) > 6*time.Minute {
+					logger.V(0).Printf("Number of points: %d", len(resPoints))
 				}
 
 				ruleManager.Run(ctx, currentTime)
@@ -850,6 +854,7 @@ func Test_NotStatutsChangeOnStart(t *testing.T) {
 
 				if p.Annotations.Status.CurrentStatus == types.StatusWarning {
 					hadResult = true
+
 					continue
 				}
 
