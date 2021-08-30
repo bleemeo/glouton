@@ -17,6 +17,7 @@
 package store
 
 import (
+	"context"
 	"glouton/types"
 	"time"
 
@@ -29,7 +30,7 @@ type appender struct {
 }
 
 // Appender returns a prometheus appender wrapping the in memory store.
-func (s *Store) Appender() storage.Appender {
+func (s *Store) Appender(ctx context.Context) storage.Appender {
 	return appender{store: s}
 }
 

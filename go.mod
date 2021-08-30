@@ -7,7 +7,7 @@ require (
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/Microsoft/hcsshim v0.8.10 // indirect
 	github.com/Microsoft/hcsshim/test v0.0.0-20201222193524-bf55dadfbdf1 // indirect
-	github.com/StackExchange/wmi v0.0.0-20190523213315-cbe66965904d
+	github.com/StackExchange/wmi v1.2.1
 	github.com/agnivade/levenshtein v1.1.0 // indirect
 	github.com/alecthomas/units v0.0.0-20201120081800-1786d5ef83d4 // indirect
 	github.com/containerd/cgroups v0.0.0-20201119153540-4cbc285b3327
@@ -21,7 +21,7 @@ require (
 	github.com/go-chi/chi v4.1.1+incompatible
 	github.com/go-kit/kit v0.10.0
 	github.com/go-logr/logr v0.3.0 // indirect
-	github.com/go-ole/go-ole v1.2.4
+	github.com/go-ole/go-ole v1.2.5
 	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/gogo/googleapis v1.4.0 // indirect
 	github.com/gogo/protobuf v1.3.1
@@ -40,21 +40,20 @@ require (
 	github.com/json-iterator/go v1.1.10
 	github.com/mdlayher/netlink v1.1.1 // indirect
 	github.com/mdlayher/wifi v0.0.0-20200527114002-84f0b9457fdd // indirect
-	github.com/miekg/dns v1.1.35 // indirect
 	github.com/mitchellh/mapstructure v1.4.0 // indirect
 	github.com/ncabatoff/process-exporter v0.7.2
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.1
 	github.com/opencontainers/runtime-spec v1.0.2
 	github.com/opencontainers/selinux v1.8.0 // indirect
-	github.com/prometheus-community/windows_exporter v0.15.0
-	github.com/prometheus/blackbox_exporter v0.18.0
-	github.com/prometheus/client_golang v1.7.1
+	github.com/prometheus-community/windows_exporter v0.16.0
+	github.com/prometheus/blackbox_exporter v0.19.0
+	github.com/prometheus/client_golang v1.10.0
 	github.com/prometheus/client_model v0.2.0
-	github.com/prometheus/common v0.11.1
+	github.com/prometheus/common v0.23.0
 	github.com/prometheus/node_exporter v1.0.1
-	github.com/prometheus/procfs v0.2.0
-	github.com/prometheus/prometheus v1.8.2-0.20200805170718-983ebb4a5133 // 2.20.1
+	github.com/prometheus/procfs v0.6.0
+	github.com/prometheus/prometheus v1.8.2-0.20200911110723-e83ef207b6c2 // 2.20.1
 	github.com/rs/cors v1.7.0
 	github.com/shirou/gopsutil v3.20.11+incompatible
 	github.com/shopspring/decimal v1.2.0 // indirect
@@ -64,13 +63,10 @@ require (
 	github.com/tidwall/match v1.0.2 // indirect
 	github.com/vektah/gqlparser v1.3.1
 	github.com/vektah/gqlparser/v2 v2.1.0
-	github.com/vishvananda/netlink v1.1.0
-	github.com/vishvananda/netns v0.0.0-20200728191858-db3c7e526aae // indirect
+	github.com/vishvananda/netlink v1.1.1-0.20201029203352-d40f9887b852
 	go.opencensus.io v0.22.5 // indirect
-	golang.org/x/crypto v0.0.0-20201124201722-c8d3bf9c5392 // indirect
 	golang.org/x/oauth2 v0.0.0-20201109201403-9fd604954f58 // indirect
 	golang.org/x/sys v0.0.0-20210510120138-977fb7262007
-	golang.org/x/text v0.3.6 // indirect
 	golang.org/x/tools v0.1.3-0.20210608163600-9ed039809d4c // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20201201144952-b05cb90ed32e // indirect
@@ -78,8 +74,7 @@ require (
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/ini.v1 v1.62.0
 	gopkg.in/mgo.v2 v2.0.0-20190816093944-a6b53ec6cb22 // indirect
-	gopkg.in/yaml.v2 v2.4.0 // indirect
-	gopkg.in/yaml.v3 v3.0.0-20200615113413-eeeca48fe776
+	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 	gotest.tools/v3 v3.0.3 // indirect
 	k8s.io/api v0.20.1
 	k8s.io/apimachinery v0.20.1
