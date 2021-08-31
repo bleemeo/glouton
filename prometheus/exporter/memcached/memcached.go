@@ -16,20 +16,13 @@ package memcached
 
 import (
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/grobie/gomemcache/memcache"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
-	"github.com/prometheus/common/version"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
@@ -807,57 +800,4 @@ func firstError(errors ...error) error {
 	}
 
 	return nil
-}
-
-func main() { //nolint:deadcode,unused
-	var (
-		address       = kingpin.Flag("memcached.address", "Memcached server address.").Default("localhost:11211").String()
-		timeout       = kingpin.Flag("memcached.timeout", "memcached connect timeout.").Default("1s").Duration()
-		pidFile       = kingpin.Flag("memcached.pid-file", "Optional path to a file containing the memcached PID for additional metrics.").Default("").String()
-		listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9150").String()
-		metricsPath   = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-	)
-
-	log.AddFlags(kingpin.CommandLine)
-
-	kingpin.Version(version.Print("memcached_exporter"))
-	kingpin.HelpFlag.Short('h')
-	kingpin.Parse()
-
-	log.Infoln("Starting memcached_exporter", version.Info())
-	log.Infoln("Build context", version.BuildContext())
-
-	prometheus.MustRegister(NewExporter(*address, *timeout))
-
-	if *pidFile != "" {
-		procExporter := prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{
-			PidFn: func() (int, error) {
-				content, err := ioutil.ReadFile(*pidFile)
-				if err != nil {
-					return 0, fmt.Errorf("can't read pid file %q: %w", *pidFile, err)
-				}
-				value, err := strconv.Atoi(strings.TrimSpace(string(content)))
-				if err != nil {
-					return 0, fmt.Errorf("can't parse pid file %q: %w", *pidFile, err)
-				}
-
-				return value, nil
-			},
-			Namespace: namespace,
-		})
-		prometheus.MustRegister(procExporter)
-	}
-
-	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		_, _ = w.Write([]byte(`<html>
-             <head><title>Memcached Exporter</title></head>
-             <body>
-             <h1>Memcached Exporter</h1>
-             <p><a href='` + *metricsPath + `'>Metrics</a></p>
-             </body>
-             </html>`))
-	})
-	log.Infoln("Starting HTTP server on", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }
