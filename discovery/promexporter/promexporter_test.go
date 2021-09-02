@@ -99,8 +99,8 @@ func TestListExporters(t *testing.T) {
 						"prometheus.io/scrape": "true",
 					},
 					ExtraLabels: map[string]string{
-						"kubernetes.pod.namespace":    fakePodNamespace,
-						"kubernetes.pod.name":         "my_pod-1234",
+						types.LabelK8SNamespace:       fakePodNamespace,
+						types.LabelK8SPODName:         "my_pod-1234",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},
@@ -164,8 +164,8 @@ func TestListExporters(t *testing.T) {
 						"prometheus.io/port":   "8080",
 					},
 					ExtraLabels: map[string]string{
-						"kubernetes.pod.namespace":    fakePodNamespace,
-						"kubernetes.pod.name":         "sample2-1234",
+						types.LabelK8SNamespace:       fakePodNamespace,
+						types.LabelK8SPODName:         "sample2-1234",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample2:8080",
 					},
@@ -339,8 +339,8 @@ func TestListExporters(t *testing.T) {
 						"glouton.include_default_metrics": "1",
 					},
 					ExtraLabels: map[string]string{
-						"kubernetes.pod.namespace":    fakePodNamespace,
-						"kubernetes.pod.name":         "my_pod-1234",
+						types.LabelK8SNamespace:       fakePodNamespace,
+						types.LabelK8SPODName:         "my_pod-1234",
 						types.LabelMetaScrapeJob:      fakeJobName,
 						types.LabelMetaScrapeInstance: "sample:9102",
 					},

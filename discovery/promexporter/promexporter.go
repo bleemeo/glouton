@@ -62,8 +62,8 @@ func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrappe
 		podName := c.PodName()
 
 		if podName != "" {
-			labels["kubernetes.pod.namespace"] = ns
-			labels["kubernetes.pod.name"] = podName
+			labels[types.LabelK8SNamespace] = ns
+			labels[types.LabelK8SPODName] = podName
 		} else {
 			labels[types.LabelContainerName] = c.ContainerName()
 		}
