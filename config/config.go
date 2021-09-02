@@ -41,6 +41,12 @@ type Configuration struct {
 	warnings []string
 }
 
+// MockLookupEnv could be used to fake environment lookup. Useful for testing.
+// Use nil as lookup function to switch back to real implementation.
+func (c *Configuration) MockLookupEnv(fun func(string) (string, bool)) {
+	c.lookupEnv = fun
+}
+
 // LoadDirectory will read all *.conf file within given directory.
 //
 // File are read in lexicographic order (e.g. 00-initial.conf is read before 99-override.conf)

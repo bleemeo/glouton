@@ -33,7 +33,7 @@ import (
 var (
 	errUpdateFromEnv      = errors.New("update from environment variable is not supported")
 	errDeprecatedEnv      = errors.New("environement variable is deprecated")
-	errSettingsDeprecated = errors.New("setting is deprecated ")
+	errSettingsDeprecated = errors.New("setting is deprecated")
 )
 
 func defaultConfig() map[string]interface{} {
@@ -257,38 +257,42 @@ func migrateScrapper(cfg *config.Configuration, deprecatedPath string, correctPa
 	return warnings
 }
 
-// getEnabledToMigrate is a function used to find all config entries
-// where `enabled` is used instead of `enable`.
-func getEnabledToMigrate(cfg *config.Configuration) []string {
-	keys := []string{
-		"agent.node_exporter.", "agent.windows_exporter.", "agent.http_debug.", "kubernetes.",
-		"blackbox.", "agent.process_exporter.", "web.", "bleemeo.", "jmx.", "nrpe.", "zabbix.",
-		"influxdb.", "telegraf.statsd.", "agent.telemetry.", "agent.node_exporter.",
-		"telegraf.docker_metrics_",
+// movedKeys return all keys that are migration. The map is old key => new key.
+func movedKeys() map[string]string {
+	keys := map[string]string{
+		"agent.windows_exporter.enabled":  "agent.windows_exporter.enable",
+		"agent.http_debug.enabled":        "agent.http_debug.enable",
+		"kubernetes.enabled":              "kubernetes.enable",
+		"blackbox.enabled":                "blackbox.enable",
+		"agent.process_exporter.enabled":  "agent.process_exporter.enable",
+		"web.enabled":                     "web.enable",
+		"bleemeo.enabled":                 "bleemeo.enable",
+		"jmx.enabled":                     "jmx.enable",
+		"nrpe.enabled":                    "nrpe.enable",
+		"zabbix.enabled":                  "zabbix.enable",
+		"influxdb.enabled":                "influxdb.enable",
+		"telegraf.statsd.enabled":         "telegraf.statsd.enable",
+		"agent.telemetry.enabled":         "agent.telemetry.enable",
+		"agent.node_exporter.enabled":     "agent.node_exporter.enable",
+		"telegraf.docker_metrics_enabled": "telegraf.docker_metrics_enable",
 	}
-	keyToMigrate := make([]string, 0, len(keys))
 
-	for _, key := range keys {
-		_, found := cfg.Get(key + "enabled")
-
-		if found {
-			keyToMigrate = append(keyToMigrate, key)
-		}
-	}
-
-	return keyToMigrate
+	return keys
 }
 
-func migrateEnabled(cfg *config.Configuration) (warnings []error) {
-	keys := getEnabledToMigrate(cfg)
+func migrateMovedKeys(cfg *config.Configuration) (warnings []error) {
+	keys := movedKeys()
 
-	for _, key := range keys {
-		val, _ := cfg.Get(key + "enabled")
+	for oldKey, newKey := range keys {
+		val, found := cfg.Get(oldKey)
+		if !found {
+			continue
+		}
 
-		cfg.Set(key+"enable", val)
-		cfg.Delete(key + "enabled")
+		cfg.Set(newKey, val)
+		cfg.Delete(oldKey)
 
-		warnings = append(warnings, fmt.Errorf("%w: %senabled. Please use %senable", errSettingsDeprecated, key, key))
+		warnings = append(warnings, fmt.Errorf("%w: %s. Please use %s", errSettingsDeprecated, oldKey, newKey))
 	}
 
 	return warnings
@@ -338,7 +342,7 @@ func migrateMetricsPrometheus(cfg *config.Configuration) (warnings []error) {
 // migrate upgrade the configuration when Glouton change it settings
 // The list returned are actually warnings, not errors.
 func migrate(cfg *config.Configuration) (warnings []error) {
-	warnings = append(warnings, migrateEnabled(cfg)...)
+	warnings = append(warnings, migrateMovedKeys(cfg)...)
 	warnings = append(warnings, migrateMetricsPrometheus(cfg)...)
 	warnings = append(warnings, migrateScrapperMetrics(cfg)...)
 
@@ -366,6 +370,22 @@ func loadEnvironmentVariables(cfg *config.Configuration) (warnings []error, err 
 
 		if found {
 			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, oldEnv, keyToEnvironemntName(key)))
+		}
+	}
+
+	for oldKey, newKey := range movedKeys() {
+		value := defaultConfig()[newKey]
+
+		if found, err := loadEnvironmentVariable(cfg, newKey, keyToBleemeoEnvironemntName(oldKey), value); err != nil {
+			return nil, err
+		} else if found {
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToBleemeoEnvironemntName(oldKey), keyToEnvironemntName(newKey)))
+		}
+
+		if found, err := loadEnvironmentVariable(cfg, newKey, keyToEnvironemntName(oldKey), value); err != nil {
+			return nil, err
+		} else if found {
+			warnings = append(warnings, fmt.Errorf("%w: %s, use %s instead", errDeprecatedEnv, keyToEnvironemntName(oldKey), keyToEnvironemntName(newKey)))
 		}
 	}
 
@@ -420,8 +440,10 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	return found, nil
 }
 
-func (a *agent) loadConfiguration(configFiles []string) (cfg *config.Configuration, warnings []error, finalError error) {
+func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg *config.Configuration, warnings []error, finalError error) {
 	cfg = &config.Configuration{}
+
+	cfg.MockLookupEnv(mockLookupEnv)
 
 	if _, err := loadEnvironmentVariable(cfg, "config_files", keyToEnvironemntName("config_files"), defaultConfig()["config_files"]); err != nil {
 		return cfg, nil, err

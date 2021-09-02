@@ -21,6 +21,9 @@ import (
 	"glouton/config"
 	"reflect"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func Test_confFieldToSliceMap(t *testing.T) {
@@ -235,7 +238,6 @@ func Test_migrate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config.Configuration{}
-
 			if err := configLoadFile(tt.cfgFilename, cfg); err != nil {
 				t.Error(err)
 			}
@@ -247,6 +249,164 @@ func Test_migrate(t *testing.T) {
 			}
 
 			_ = migrate(cfg)
+
+			for _, key := range tt.absentKeys {
+				if v, ok := cfg.Get(key); ok {
+					t.Errorf("Get(%v) = %v, want absent", key, v)
+				}
+			}
+
+			for key, want := range tt.wantKeys {
+				if got, ok := cfg.Get(key); !ok {
+					t.Errorf("Get(%v) = nil, want present", key)
+				} else if !reflect.DeepEqual(got, want) {
+					t.Errorf("Get(%v) = %#v, want %#v", key, got, want)
+				}
+			}
+		})
+	}
+}
+
+func Test_loadConfiguration(t *testing.T) {
+	tests := []struct {
+		name        string
+		configFiles []string
+		envs        map[string]string
+		wantKeys    map[string]interface{}
+		absentKeys  []string
+		wantErr     bool
+		warnings    []string
+	}{
+		{
+			name: "migration file",
+			configFiles: []string{
+				"testdata/old-prometheus-targets.conf",
+			},
+			absentKeys: []string{"metric.prometheus.test1"},
+			wantKeys: map[string]interface{}{
+				"metric.prometheus.targets": []interface{}{
+					map[string]interface{}{
+						"name": "test1",
+						"url":  "http://localhost:9090/metrics",
+					},
+				},
+			},
+			warnings: []string{
+				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
+			},
+		},
+		{
+			name: "new file",
+			configFiles: []string{
+				"testdata/new-prometheus-targets.conf",
+			},
+			absentKeys: []string{"metric.prometheus.test1"},
+			wantKeys: map[string]interface{}{
+				"metric.prometheus.targets": []interface{}{
+					map[string]interface{}{
+						"name": "test1",
+						"url":  "http://localhost:9090/metrics",
+					},
+				},
+			},
+			warnings: nil,
+		},
+		{
+			name: "enabled renamed",
+			configFiles: []string{
+				"testdata/enabled.conf",
+			},
+			absentKeys: []string{"agent.windows_exporter.enabled", "telegraf.docker_metrics_enabled", "web.enabled"},
+			wantKeys: map[string]interface{}{
+				"agent.windows_exporter.enable":  true,
+				"telegraf.docker_metrics_enable": true,
+			},
+			warnings: []string{
+				"setting is deprecated: agent.windows_exporter.enabled. Please use agent.windows_exporter.enable",
+				"setting is deprecated: telegraf.docker_metrics_enabled. Please use telegraf.docker_metrics_enable",
+			},
+		},
+		{
+			name: "folder",
+			configFiles: []string{
+				"testdata/folder1",
+			},
+			absentKeys: []string{"bleemeo.enabled"},
+			wantKeys: map[string]interface{}{
+				"bleemeo.enable":     false,
+				"bleemeo.account_id": "second",
+			},
+			warnings: []string{
+				"setting is deprecated: bleemeo.enabled. Please use bleemeo.enable",
+			},
+		},
+		{
+			name: "deprecated envs",
+			configFiles: []string{
+				"testdata/empty.conf",
+			},
+			envs: map[string]string{
+				"BLEEMEO_AGENT_ACCOUNT":      "the-account-id",
+				"GLOUTON_KUBERNETES_ENABLED": "true",
+			},
+			absentKeys: []string{"kubernetes.enabled"},
+			wantKeys: map[string]interface{}{
+				"bleemeo.account_id": "the-account-id",
+				"kubernetes.enable":  true,
+			},
+			warnings: []string{
+				"environement variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
+				"environement variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
+			},
+		},
+		{
+			name: "bleemeo-agent envs",
+			configFiles: []string{
+				"testdata/empty.conf",
+			},
+			envs: map[string]string{
+				"BLEEMEO_AGENT_KUBERNETES_ENABLE": "true",
+				"BLEEMEO_AGENT_BLEEMEO_ENABLED":   "true",
+			},
+			absentKeys: []string{"kubernetes.enabled", "bleemeo.enabled"},
+			wantKeys: map[string]interface{}{
+				"bleemeo.enable":    true,
+				"kubernetes.enable": true,
+			},
+			warnings: []string{
+				"environement variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
+				"environement variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lookupEnv := func(envName string) (string, bool) {
+				value, ok := tt.envs[envName]
+
+				return value, ok
+			}
+
+			cfg, warnings, err := loadConfiguration(tt.configFiles, lookupEnv)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("loadConfiguration() error = %v, wantErr %v", err, tt.wantErr)
+
+				return
+			}
+
+			warningsString := make([]string, 0, len(warnings))
+
+			for _, v := range warnings {
+				warningsString = append(warningsString, v.Error())
+			}
+
+			lessString := func(x string, y string) bool {
+				return x < y
+			}
+
+			if diff := cmp.Diff(warningsString, tt.warnings, cmpopts.SortSlices(lessString), cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("warnings: %s", diff)
+			}
 
 			for _, key := range tt.absentKeys {
 				if v, ok := cfg.Get(key); ok {

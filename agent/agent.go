@@ -153,7 +153,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(context.Background())
-	cfg, warnings, err := a.loadConfiguration(configFiles)
+	cfg, warnings, err := loadConfiguration(configFiles, nil)
 	a.config = cfg
 
 	a.setupLogger()
