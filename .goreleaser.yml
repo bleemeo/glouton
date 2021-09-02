@@ -40,8 +40,8 @@ nfpms:
   description: |
     Bleemeo agent
       Bleemeo is a solution of Monitoring as a Service.
-      This package contains the agent which send metric to
-      the SaaS platform
+      This package contains the agent which sends metrics to
+      the SaaS platform.
   license: Apache 2.0
   formats:
   - deb
@@ -57,7 +57,7 @@ nfpms:
     dst: /usr/sbin/glouton-netstat
   - src: bin/glouton-gather-facts
     dst: /usr/sbin/glouton-gather-facts
-  # Config files
+  # Global config files
   - src: etc/glouton.conf
     dst: /etc/glouton/glouton.conf
     type: config
@@ -70,6 +70,28 @@ nfpms:
   - src: packaging/common/glouton.cron.hourly
     dst: /etc/cron.hourly/glouton
     type: config
+  # Debian config files
+  - src: packaging/deb/glouton-06-distribution.conf
+    dst: /etc/glouton/conf.d/06-distribution.conf
+    type: config
+    packager: deb
+  - src: packaging/deb/glouton.apt.conf
+    dst: /etc/apt/apt.conf.d/05glouton
+    type: config
+    packager: deb
+  # RPM config files
+  - src: packaging/rpm/glouton.yum.action
+    dst: /etc/yum/post-actions/glouton.action
+    type: config
+    packager: rpm
+  - src: packaging/rpm/glouton-06-distribution.conf
+    dst: /etc/glouton/conf.d/06-distribution.conf
+    type: config
+    packager: rpm
+  - src: packaging/rpm/glouton-dnf-plugin.py
+    dst: /usr/lib/python3.6/site-packages/dnf-plugins/glouton.py
+    type: config
+    packager: rpm
   empty_folders:
   - /etc/glouton/conf.d
   - /var/lib/glouton
@@ -78,27 +100,14 @@ nfpms:
     preremove: "packaging/scripts/preremove.sh"
     postremove: "packaging/scripts/postremove.sh"
   overrides:
-    deb:
-      contents:
-      - src: packaging/deb/glouton-06-distribution.conf
-        dst: /etc/glouton/conf.d/06-distribution.conf
-        type: config
-      - src: packaging/deb/glouton.apt.conf
-        dst: /etc/apt/apt.conf.d/05glouton
-        type: config
     rpm:
       recommends:
+      - sudo
+      - ca-certificates
+      - net-tools
+      - cron
       - yum-plugin-post-transaction-actions
-      contents:
-      - src: packaging/rpm/glouton.yum.action
-        dst: /etc/yum/post-actions/glouton.action
-        type: config
-      - src: packaging/rpm/glouton-06-distribution.conf
-        dst: /etc/glouton/conf.d/06-distribution.conf
-        type: config
-      - src: packaging/rpm/glouton-dnf-plugin.py
-        dst: /usr/lib/python3.6/site-packages/dnf-plugins/glouton.py
-        type: config
+
 dockers:
 - image_templates:
   - glouton:latest
