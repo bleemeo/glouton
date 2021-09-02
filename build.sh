@@ -54,7 +54,7 @@ elif [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" = "1" ]; then
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
       -v /var/run/docker.sock:/var/run/docker.sock \
       --entrypoint '' \
-      goreleaser/goreleaser:${GORELEASER_VERSION}-cgo sh -c 'go build -ldflags="-linkmode external -extldflags=-static" -race .'
+      goreleaser/goreleaser:${GORELEASER_VERSION} sh -c 'go build -ldflags="-linkmode external -extldflags=-static" -race .'
 else
    docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
