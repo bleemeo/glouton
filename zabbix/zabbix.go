@@ -144,7 +144,7 @@ func decode(r io.Reader) (packetStruct, error) {
 	return decodedPacket, err
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func splitData(request string) (string, []string, error) {
 	var args []string
 

@@ -133,12 +133,12 @@ type mockRequest struct {
 
 type paginatedList []interface{}
 
-type errClient struct {
+type clientError struct {
 	body       interface{}
 	statusCode int
 }
 
-func (e errClient) Error() string {
+func (e clientError) Error() string {
 	return fmt.Sprintf("client error %d: %v", e.statusCode, e.body)
 }
 
@@ -213,11 +213,11 @@ func (api *mockAPI) reply(w http.ResponseWriter, r *http.Request, h apiResponder
 		response, status, err = h(r)
 	}
 
-	var clientError errClient
-	if errors.As(err, &clientError) {
+	var clientErr clientError
+	if errors.As(err, &clientErr) {
 		err = nil
-		response = clientError.body
-		status = clientError.statusCode
+		response = clientErr.body
+		status = clientErr.statusCode
 	}
 
 	mr.Error = err
@@ -343,7 +343,7 @@ func (api *mockAPI) Server() *httptest.Server {
 	return httptest.NewServer(api.serveMux)
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 	part := strings.Split(r.URL.Path, "/")
 	if len(part) < 4 || part[1] != "v1" || len(part) > 5 {

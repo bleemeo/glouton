@@ -4,7 +4,7 @@ set -e
 
 USER_UID=$(id -u)
 
-LINTER_VERSION=v1.41.1
+LINTER_VERSION=v1.42
 
 
 if [ -e .build-cache ]; then

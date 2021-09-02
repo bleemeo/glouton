@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// nolint: scopelint
+//nolint:scopelint
 package agent
 
 import (
@@ -161,7 +161,7 @@ func Test_confFieldToSliceMap(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// nolint: scopelint
+			//nolint:scopelint
 			if got := confFieldToSliceMap(tt.args.input, tt.args.confType); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("confFieldToSliceMap() = %v, want %v", got, tt.want)
 			}

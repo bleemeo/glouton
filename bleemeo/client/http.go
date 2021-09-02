@@ -144,7 +144,7 @@ func NewClient(ctx context.Context, baseURL string, username string, password st
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
 			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: insecureTLS, //nolint: gosec
+				InsecureSkipVerify: insecureTLS, //nolint:gosec
 			},
 		},
 	}
@@ -435,7 +435,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 			Transport: &http.Transport{
 				Proxy: http.ProxyFromEnvironment,
 				TLSClientConfig: &tls.Config{
-					InsecureSkipVerify: true, //nolint: gosec
+					InsecureSkipVerify: true, //nolint:gosec
 				},
 			},
 		}

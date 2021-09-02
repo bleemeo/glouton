@@ -41,11 +41,11 @@ var (
 	errNotImplemented = errors.New("not implemented on fakeMetric")
 )
 
-type errNeedRegister struct {
+type needRegisterError struct {
 	remoteMetric bleemeoTypes.Metric
 }
 
-func (e errNeedRegister) Error() string {
+func (e needRegisterError) Error() string {
 	return fmt.Sprintf("metric %v was deleted from API, it need to be re-registered", e.remoteMetric.LabelsText)
 }
 
@@ -325,7 +325,7 @@ func (s *Synchronizer) findUnregisteredMetrics(metrics []types.Metric) []types.M
 	return result
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (s *Synchronizer) syncMetrics(fullSync bool, onlyEssential bool) error {
 	localMetrics, err := s.option.Store.Metrics(nil)
 	if err != nil {
@@ -724,7 +724,7 @@ func (s *Synchronizer) metricDeleteFromRemote(localMetrics []types.Metric, previ
 	return nil
 }
 
-func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error { //nolint:gocyclo,cyclop
+func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) error { //nolint:cyclop
 	registeredMetricsByUUID := s.option.Cache.MetricsByUUID()
 	registeredMetricsByKey := common.MetricLookupFromList(s.option.Cache.Metrics())
 
@@ -818,7 +818,7 @@ func (s *Synchronizer) metricRegisterAndUpdate(localMetrics []types.Metric) erro
 				continue metricLoop
 			}
 
-			if errReReg, ok := err.(errNeedRegister); ok && err != nil && state < metricPassRecreate {
+			if errReReg, ok := err.(needRegisterError); ok && err != nil && state < metricPassRecreate {
 				registerMetrics = append(registerMetrics, metric)
 
 				delete(registeredMetricsByUUID, errReReg.remoteMetric.ID)
@@ -1091,7 +1091,7 @@ func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeo
 			nil,
 		)
 		if err != nil && client.IsNotFound(err) {
-			return remoteMetric, errNeedRegister{remoteMetric: remoteMetric}
+			return remoteMetric, needRegisterError{remoteMetric: remoteMetric}
 		} else if err != nil {
 			return remoteMetric, err
 		}

@@ -408,10 +408,10 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			},
 		},
 		{
-			testName: "mosquitto-ubuntu-14.04",                                               // nolint: misspell
-			cmdLine:  []string{"/usr/sbin/mosquitto", "-c", "/etc/mosquitto/mosquitto.conf"}, // nolint: misspell
+			testName: "mosquitto-ubuntu-14.04",                                               //nolint:misspell
+			cmdLine:  []string{"/usr/sbin/mosquitto", "-c", "/etc/mosquitto/mosquitto.conf"}, //nolint:misspell
 			want: Service{
-				Name:            "mosquitto", // nolint: misspell
+				Name:            "mosquitto", //nolint:misspell
 				ServiceType:     MosquittoService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 1883}},
 				IPAddress:       "127.0.0.1",
@@ -622,7 +622,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 		},
 		{
 			testName: "service-install",
-			cmdLine:  []string{"apt", "install", "apache2", "redis-server", "postgresql", "mosquitto", "slapd", "squid3"}, // nolint: misspell
+			cmdLine:  []string{"apt", "install", "apache2", "redis-server", "postgresql", "mosquitto", "slapd", "squid3"}, //nolint:misspell
 			noMatch:  true,
 		},
 		{

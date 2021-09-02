@@ -74,7 +74,7 @@ func (tc *TCPCheck) tcpMainCheck(ctx context.Context) types.StatusDescription {
 	return checkTCP(ctx, tc.mainAddress, tc.send, tc.expect, tc.closeMsg)
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func checkTCP(ctx context.Context, address string, send []byte, expect []byte, closeMsg []byte) types.StatusDescription {
 	_, portStr, err := net.SplitHostPort(address)
 	if err != nil {

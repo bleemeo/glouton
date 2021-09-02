@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !windows
 // +build !windows
 
 package facts
@@ -29,7 +30,7 @@ import (
 )
 
 // Processes retrieves the list of all the current processes and their respective information.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (z PsutilLister) Processes(ctx context.Context, maxAge time.Duration) (processes []Process, err error) {
 	psutilProcesses, err := process.Processes()
 	if err != nil {
