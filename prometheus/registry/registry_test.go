@@ -25,6 +25,7 @@ import (
 	"context"
 	"glouton/types"
 	"reflect"
+	"sort"
 	"sync"
 	"testing"
 	"time"
@@ -267,6 +268,20 @@ func TestRegistry_pushPoint(t *testing.T) {
 					"dummy":    "value",
 				},
 			},
+			{
+				Point: types.Point{Value: 2.0, Time: t0},
+				Labels: map[string]string{
+					"__name__": "unfixable-name#~",
+					"item":     "something",
+				},
+			},
+			{
+				Point: types.Point{Value: 3.0, Time: t0},
+				Labels: map[string]string{
+					"__name__": "fixable-name.0",
+					"extra":    "label",
+				},
+			},
 		},
 	)
 
@@ -275,16 +290,36 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Error(err)
 	}
 
-	metricName := "point1"
+	metricName1 := "point1"
+	metricName2 := "fixable_name_0"
 	helpText := ""
 	dummyName := "dummy"
 	dummyValue := "value"
+	extraName := "extra"
+	extraValue := "label"
 	instanceIDName := types.LabelInstanceUUID
 	instanceIDValue := testAgentID
-	value := 1.0
+	value1 := 1.0
+	value2 := 3.0
 	want := []*dto.MetricFamily{
 		{
-			Name: &metricName,
+			Name: &metricName2,
+			Help: &helpText,
+			Type: dto.MetricType_UNTYPED.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: &extraName, Value: &extraValue},
+					},
+					Untyped: &dto.Untyped{
+						Value: &value2,
+					},
+					TimestampMs: &t0MS,
+				},
+			},
+		},
+		{
+			Name: &metricName1,
 			Help: &helpText,
 			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
@@ -293,7 +328,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 						{Name: &dummyName, Value: &dummyValue},
 					},
 					Untyped: &dto.Untyped{
-						Value: &value,
+						Value: &value1,
 					},
 					TimestampMs: &t0MS,
 				},
@@ -301,8 +336,12 @@ func TestRegistry_pushPoint(t *testing.T) {
 		},
 	}
 
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("reg.Gather() = %v, want %v", got, want)
+	sort.Slice(got, func(i, j int) bool {
+		return *got[i].Name < *got[j].Name
+	})
+
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Error(diff)
 	}
 
 	reg.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
@@ -339,7 +378,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 
 	want = []*dto.MetricFamily{
 		{
-			Name: &metricName,
+			Name: &metricName1,
 			Help: &helpText,
 			Type: dto.MetricType_UNTYPED.Enum(),
 			Metric: []*dto.Metric{
@@ -349,7 +388,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 						{Name: &instanceIDName, Value: &instanceIDValue},
 					},
 					Untyped: &dto.Untyped{
-						Value: &value,
+						Value: &value1,
 					},
 					TimestampMs: &t0MS,
 				},
