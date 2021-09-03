@@ -21,6 +21,7 @@ import (
 	"glouton/types"
 	"time"
 
+	"github.com/prometheus/prometheus/pkg/exemplar"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/storage"
 )
@@ -34,7 +35,7 @@ func (s *Store) Appender(ctx context.Context) storage.Appender {
 	return appender{store: s}
 }
 
-func (a appender) Add(l labels.Labels, t int64, v float64) (uint64, error) {
+func (a appender) Append(ref uint64, l labels.Labels, t int64, v float64) (uint64, error) {
 	labelsMap := make(map[string]string)
 
 	for _, lblv := range l {
@@ -55,14 +56,14 @@ func (a appender) Add(l labels.Labels, t int64, v float64) (uint64, error) {
 	return 0, nil
 }
 
-func (a appender) AddFast(ref uint64, t int64, v float64) error {
-	return errNotImplemented
-}
-
 func (a appender) Commit() error {
 	return nil
 }
 
 func (a appender) Rollback() error {
 	return errNotImplemented
+}
+
+func (a appender) AppendExemplar(ref uint64, l labels.Labels, e exemplar.Exemplar) (uint64, error) {
+	return 0, errNotImplemented
 }
