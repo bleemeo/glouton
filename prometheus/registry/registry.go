@@ -885,7 +885,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 func (c *pushCollector) Describe(chan<- *prometheus.Desc) {
 }
 
-// Collect collect non-pushed points from all registered collectors.
+// Collect collect pushed points.
 func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()

@@ -46,7 +46,7 @@ func NewNTP(address string, persitentAddresses []string, persistentConnection bo
 		mainAddress: address,
 	}
 
-	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.doCheck, labels, annotations, acc)
+	nc.baseCheck = newBase("", persitentAddresses, persistentConnection, nc.ntpMainCheck, labels, annotations, acc)
 
 	return nc
 }
@@ -108,7 +108,7 @@ func decodeLeapVersionMode(value uint8) (leapIndicator int, version int, mode in
 	return
 }
 
-func (nc *NTPCheck) doCheck(ctx context.Context) types.StatusDescription {
+func (nc *NTPCheck) ntpMainCheck(ctx context.Context) types.StatusDescription {
 	if nc.mainAddress == "" {
 		return types.StatusDescription{
 			CurrentStatus: types.StatusOk,

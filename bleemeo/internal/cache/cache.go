@@ -113,7 +113,7 @@ func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	c.dirty = true
 }
 
-// SetSAgentList update agent list.
+// SetAgentList update agent list.
 func (c *Cache) SetAgentList(agentList []bleemeoTypes.Agent) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -122,7 +122,7 @@ func (c *Cache) SetAgentList(agentList []bleemeoTypes.Agent) {
 	c.dirty = true
 }
 
-// SetSAgentList update agent list.
+// SetAgentTypes update agent list.
 func (c *Cache) SetAgentTypes(agentTypes []bleemeoTypes.AgentType) {
 	c.l.Lock()
 	defer c.l.Unlock()
@@ -185,7 +185,7 @@ func (c *Cache) SetAccountConfigs(configs []bleemeoTypes.AccountConfig) {
 	c.data.AccountConfigs = configs
 }
 
-// AccountConfigs returns the mapping between the accoutn config UUID and  list of external account configurations.
+// AccountConfigsByUUID returns the mapping between the accoutn config UUID and  list of external account configurations.
 func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()

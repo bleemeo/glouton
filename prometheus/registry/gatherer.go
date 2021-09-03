@@ -25,7 +25,7 @@ type queryType int
 const (
 	// NoProbe is the default value. Probes can be very costly as it involves network calls, hence it is disabled by default.
 	NoProbe queryType = iota
-	// Only probes specifies we only want data from the probes.
+	// OnlyProbes specifies we only want data from the probes.
 	OnlyProbes
 	// All specifies we want all the data, including probes.
 	All

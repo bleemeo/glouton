@@ -220,7 +220,7 @@ func TestHandleConnection(t *testing.T) {
 			context.TODO(),
 			socket,
 			func(ctx context.Context, command string) (string, int16, error) {
-				return c.ReplyString, c.ReplyCode, c.ReplyError // nolint:scopelint
+				return c.ReplyString, c.ReplyCode, c.ReplyError //nolint:scopelint
 			},
 			rndBytes,
 		)

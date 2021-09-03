@@ -1,4 +1,4 @@
-// nolint: scopelint
+//nolint:scopelint
 package agent
 
 import (
@@ -61,7 +61,7 @@ func TestParseIPOutput(t *testing.T) {
 	}
 }
 
-//nolint: dupl
+//nolint:dupl
 func Test_prometheusConfigToURLs(t *testing.T) {
 	mustParse := func(text string) *url.URL {
 		u, err := url.Parse(text)

@@ -206,7 +206,7 @@ func (s Service) AnnotationsOfStatus() types.MetricAnnotations {
 	return annotations
 }
 
-// nolint:gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	servicesDiscoveryInfo = map[ServiceName]discoveryInfo{
 		ApacheService: {

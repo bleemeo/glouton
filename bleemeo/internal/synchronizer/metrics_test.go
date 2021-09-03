@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// nolint: scopelint,goconst
+//nolint:scopelint,goconst
 package synchronizer
 
 import (
@@ -137,7 +137,7 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	cfg.Set("bleemeo.api_base", helper.httpServer.URL)
 	cfg.Set("bleemeo.account_id", accountID)
 	cfg.Set("bleemeo.registration_key", registrationKey)
-	cfg.Set("blackbox.enabled", true)
+	cfg.Set("blackbox.enable", true)
 
 	cache := cache.Cache{}
 
@@ -273,7 +273,7 @@ func (res runResult) CheckAllowError(name string, wantFull bool) {
 // Agent start and register metrics
 // Some metrics disapear => mark inative
 // Some re-appear and some new => mark active & register.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestMetricSimpleSync(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -456,7 +456,7 @@ func TestMetricSimpleSync(t *testing.T) {
 }
 
 // TestMetricDeleted test that Glouton can update metrics deleted on Bleemeo.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestMetricDeleted(t *testing.T) {
 	helper := newMetricHelper(t)
 	defer helper.Close()
@@ -680,7 +680,7 @@ func TestMetricUnknownError(t *testing.T) {
 	helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 		metric, _ := valuePtr.(*metricPayload)
 		if metric.Name == "deny-me" {
-			return errClient{
+			return clientError{
 				body:       "no information about whether the error is permanent or not",
 				statusCode: http.StatusBadRequest,
 			}
@@ -775,7 +775,7 @@ func TestMetricUnknownError(t *testing.T) {
 }
 
 // TestMetricPermanentError test that Glouton handle permanent failure metric from Bleemeo correctly.
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestMetricPermanentError(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -799,7 +799,7 @@ func TestMetricPermanentError(t *testing.T) {
 			helper.api.resources["metric"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
 				metric, _ := valuePtr.(*metricPayload)
 				if metric.Name == "deny-me" || metric.Name == "deny-me-also" {
-					return errClient{
+					return clientError{
 						body:       tt.content,
 						statusCode: http.StatusBadRequest,
 					}
@@ -953,7 +953,7 @@ func TestMetricPermanentError(t *testing.T) {
 }
 
 // TestMetricTooMany test that Glouton handle too many non-standard metric correctly.
-func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
+func TestMetricTooMany(t *testing.T) { //nolint:cyclop
 	helper := newMetricHelper(t)
 	defer helper.Close()
 
@@ -981,7 +981,7 @@ func TestMetricTooMany(t *testing.T) { //nolint:gocyclo,cyclop
 			}
 
 			if countActive >= 3 {
-				return errClient{
+				return clientError{
 					body:       `{"label":["Too many non standard metrics"]}`,
 					statusCode: http.StatusBadRequest,
 				}

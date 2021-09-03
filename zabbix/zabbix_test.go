@@ -167,7 +167,7 @@ func TestHandleConnection(t *testing.T) {
 		handleConnection(
 			socket,
 			func(key string, args []string) (string, error) {
-				return c.ReplyString, c.ReplyError //nolint: scopelint
+				return c.ReplyString, c.ReplyError //nolint:scopelint
 			},
 		)
 

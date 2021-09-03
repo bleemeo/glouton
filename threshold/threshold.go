@@ -317,8 +317,10 @@ func (r *Registry) GetThresholdMetricNames() []string {
 	r.l.Lock()
 	defer r.l.Unlock()
 
-	for key := range r.thresholds {
-		res = append(res, key.Name)
+	for key, val := range r.thresholds {
+		if !val.IsZero() {
+			res = append(res, key.Name)
+		}
 	}
 
 	return res

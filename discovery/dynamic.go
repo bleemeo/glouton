@@ -128,7 +128,7 @@ func (dd *DynamicDiscovery) ProcessServiceInfo(cmdLine []string, pid int, create
 	return "", ""
 }
 
-// nolint:gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	knownProcesses = map[string]ServiceName{
 		"apache2":      ApacheService,

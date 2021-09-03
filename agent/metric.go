@@ -42,6 +42,7 @@ var commonDefaultSystemMetrics = []string{
 	"system_pending_updates",
 	"system_pending_security_updates",
 	"time_drift",
+	"agent_config_warning",
 
 	// services metrics that are not classied as a service in common.serviceType
 
@@ -414,7 +415,7 @@ var defaultServiceMetrics map[discovery.ServiceName][]string = map[discovery.Ser
 	},
 
 	discovery.MosquittoService: {
-		"mosquitto_status", //nolint: misspell
+		"mosquitto_status", //nolint:misspell
 	},
 
 	discovery.MySQLService: {
@@ -1095,7 +1096,7 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors merge.MultiError) (map[string]matcher.Matchers, merge.MultiError) {
+func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors merge.MultiErrors) (map[string]matcher.Matchers, merge.MultiErrors) {
 	for _, service := range services {
 		if !service.Active {
 			continue
@@ -1158,7 +1159,7 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
-	errors := merge.MultiError{}
+	errors := merge.MultiErrors{}
 
 	m.l.Lock()
 	defer m.l.Unlock()

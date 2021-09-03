@@ -53,11 +53,11 @@ const (
 )
 
 var (
-	errorStartTime        = errors.New("end timestamp must not be before start time")
-	errorPositiveInteger  = errors.New("zero or negative query resolution step widths are not accepted. Try a positive integer")
-	errorMaxStep          = errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
-	errorParseDuration    = errors.New("cannot parse to a valid duration")
-	errorInvalidTimestamp = errors.New("cannot parse to a valid timestamp")
+	errStartTime        = errors.New("end timestamp must not be before start time")
+	errPositiveInteger  = errors.New("zero or negative query resolution step widths are not accepted. Try a positive integer")
+	errMaxStep          = errors.New("exceeded maximum resolution of 11,000 points per timeseries. Try decreasing the query resolution (?step=XX)")
+	errParseDuration    = errors.New("cannot parse to a valid duration")
+	errInvalidTimestamp = errors.New("cannot parse to a valid timestamp")
 )
 
 type PromQL struct {
@@ -155,14 +155,14 @@ func parseTime(s string) (time.Time, error) {
 		return t, nil
 	}
 
-	return time.Time{}, errorInvalidTimestamp
+	return time.Time{}, errInvalidTimestamp
 }
 
 func parseDuration(s string) (time.Duration, error) {
 	if d, err := strconv.ParseFloat(s, 64); err == nil {
 		ts := d * float64(time.Second)
 		if ts > float64(math.MaxInt64) || ts < float64(math.MinInt64) {
-			return 0, errorParseDuration
+			return 0, errParseDuration
 		}
 
 		return time.Duration(ts), nil
@@ -172,7 +172,7 @@ func parseDuration(s string) (time.Duration, error) {
 		return time.Duration(d), nil
 	}
 
-	return 0, errorParseDuration
+	return 0, errParseDuration
 }
 
 func returnAPIError(err error) *apiError {
@@ -208,7 +208,7 @@ func (p *PromQL) queryRange(r *http.Request, st *store.Store) (result apiFuncRes
 	}
 
 	if end.Before(start) {
-		return apiFuncResult{nil, &apiError{errorBadData, errorStartTime}, nil, nil}
+		return apiFuncResult{nil, &apiError{errorBadData, errStartTime}, nil, nil}
 	}
 
 	step, err := parseDuration(r.FormValue("step"))
@@ -219,13 +219,13 @@ func (p *PromQL) queryRange(r *http.Request, st *store.Store) (result apiFuncRes
 	}
 
 	if step <= 0 {
-		return apiFuncResult{nil, &apiError{errorBadData, errorPositiveInteger}, nil, nil}
+		return apiFuncResult{nil, &apiError{errorBadData, errPositiveInteger}, nil, nil}
 	}
 
 	// For safety, limit the number of returned points per timeseries.
 	// This is sufficient for 60s resolution for a week or 1h resolution for a year.
 	if end.Sub(start)/step > 11000 {
-		return apiFuncResult{nil, &apiError{errorBadData, errorMaxStep}, nil, nil}
+		return apiFuncResult{nil, &apiError{errorBadData, errMaxStep}, nil, nil}
 	}
 
 	ctx := r.Context()

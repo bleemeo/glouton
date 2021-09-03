@@ -12,25 +12,17 @@
 // limitations under the License.
 
 // Package memcached handles the memory caching related to exporters.
-//nolint
 package memcached
 
 import (
 	"errors"
-	"fmt"
-	"io/ioutil"
 	"net"
-	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/grobie/gomemcache/memcache"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/common/log"
-	"github.com/prometheus/common/version"
-	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 const (
@@ -39,7 +31,10 @@ const (
 	subsystemSlab       = "slab"
 )
 
-var errKeyNotFound = errors.New("key not found")
+var (
+	errKeyNotFound = errors.New("key not found")
+	errParseBool   = errors.New("failed parse a bool value")
+)
 
 // Exporter collects metrics from a memcached server.
 type Exporter struct {
@@ -508,26 +503,34 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	c, err := memcache.New(e.address)
 	if err != nil {
 		ch <- prometheus.MustNewConstMetric(e.up, prometheus.GaugeValue, 0)
+
 		log.Errorf("Failed to connect to memcached: %s", err)
+
 		return
 	}
+
 	c.Timeout = e.timeout
 
 	up := float64(1)
+
 	stats, err := c.Stats()
 	if err != nil {
 		log.Errorf("Failed to collect stats from memcached: %s", err)
+
 		up = 0
 	}
+
 	statsSettings, err := c.StatsSettings()
 	if err != nil {
 		log.Errorf("Could not query stats settings: %s", err)
+
 		up = 0
 	}
 
 	if err := e.parseStats(ch, stats); err != nil {
 		up = 0
 	}
+
 	if err := e.parseStatsSettings(ch, statsSettings); err != nil {
 		up = 0
 	}
@@ -535,7 +538,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 	ch <- prometheus.MustNewConstMetric(e.up, prometheus.GaugeValue, up)
 }
 
-func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]memcache.Stats) error {
+func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]memcache.Stats) error { //nolint:cyclop
 	// TODO(ts): Clean up and consolidate metric mappings.
 	itemsMetrics := map[string]*prometheus.Desc{
 		"crawler_reclaimed": e.itemsCrawlerReclaimed,
@@ -553,6 +556,7 @@ func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]me
 	}
 
 	var parseError error
+
 	for _, t := range stats {
 		s := t.Stats
 		ch <- prometheus.MustNewConstMetric(e.version, prometheus.GaugeValue, 1, s["version"])
@@ -566,6 +570,7 @@ func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]me
 				parseError = err
 			}
 		}
+
 		err := firstError(
 			e.parseAndNewMetric(ch, e.uptime, prometheus.CounterValue, s, "uptime"),
 			e.parseAndNewMetric(ch, e.commands, prometheus.CounterValue, s, "cas_badval", "cas", "badval"),
@@ -616,6 +621,7 @@ func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]me
 
 		for slab, u := range t.Items {
 			slab := strconv.Itoa(slab)
+
 			err := firstError(
 				e.parseAndNewMetric(ch, e.itemsNumber, prometheus.GaugeValue, u, "number", slab),
 				e.parseAndNewMetric(ch, e.itemsAge, prometheus.GaugeValue, u, "age", slab),
@@ -623,10 +629,12 @@ func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]me
 			if err != nil {
 				parseError = err
 			}
+
 			for m, d := range itemsMetrics {
 				if _, ok := u[m]; !ok {
 					continue
 				}
+
 				if err := e.parseAndNewMetric(ch, d, prometheus.CounterValue, u, m, slab); err != nil {
 					parseError = err
 				}
@@ -641,6 +649,7 @@ func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]me
 					parseError = err
 				}
 			}
+
 			if err := e.parseAndNewMetric(ch, e.slabsCommands, prometheus.CounterValue, v, "cas_badval", slab, "cas", "badval"); err != nil {
 				parseError = err
 			}
@@ -679,6 +688,7 @@ func (e *Exporter) parseStats(ch chan<- prometheus.Metric, stats map[net.Addr]me
 
 func (e *Exporter) parseStatsSettings(ch chan<- prometheus.Metric, statsSettings map[net.Addr]map[string]string) error {
 	var parseError error
+
 	for _, settings := range statsSettings {
 		if err := e.parseAndNewMetric(ch, e.maxConnections, prometheus.GaugeValue, settings, "maxconns"); err != nil {
 			parseError = err
@@ -700,6 +710,7 @@ func (e *Exporter) parseStatsSettings(ch chan<- prometheus.Metric, statsSettings
 			}
 		}
 	}
+
 	return parseError
 }
 
@@ -713,14 +724,14 @@ func (e *Exporter) parseBoolAndNewMetric(ch chan<- prometheus.Metric, desc *prom
 
 func (e *Exporter) extractValueAndNewMetric(ch chan<- prometheus.Metric, desc *prometheus.Desc, valueType prometheus.ValueType, f func(map[string]string, string) (float64, error), stats map[string]string, key string, labelValues ...string) error {
 	v, err := f(stats, key)
-	if err == errKeyNotFound {
+	if errors.Is(err, errKeyNotFound) {
 		return nil
-	}
-	if err != nil {
+	} else if err != nil {
 		return err
 	}
 
 	ch <- prometheus.MustNewConstMetric(desc, valueType, v, labelValues...)
+
 	return nil
 }
 
@@ -728,14 +739,17 @@ func parse(stats map[string]string, key string) (float64, error) {
 	value, ok := stats[key]
 	if !ok {
 		log.Debugf("Key not found: %s", key)
+
 		return 0, errKeyNotFound
 	}
 
 	v, err := strconv.ParseFloat(value, 64)
 	if err != nil {
 		log.Errorf("Failed to parse %s %q: %s", key, value, err)
+
 		return 0, err
 	}
+
 	return v, nil
 }
 
@@ -743,6 +757,7 @@ func parseBool(stats map[string]string, key string) (float64, error) {
 	value, ok := stats[key]
 	if !ok {
 		log.Debugf("Key not found: %s", key)
+
 		return 0, errKeyNotFound
 	}
 
@@ -753,22 +768,27 @@ func parseBool(stats map[string]string, key string) (float64, error) {
 		return 0, nil
 	default:
 		log.Errorf("Failed parse %s %q", key, value)
-		return 0, errors.New("failed parse a bool value")
+
+		return 0, errParseBool
 	}
 }
 
 func sum(stats map[string]string, keys ...string) (float64, error) {
 	s := 0.
+
 	for _, key := range keys {
 		if _, ok := stats[key]; !ok {
 			return 0, errKeyNotFound
 		}
+
 		v, err := strconv.ParseFloat(stats[key], 64)
 		if err != nil {
 			return 0, err
 		}
+
 		s += v
 	}
+
 	return s, nil
 }
 
@@ -778,54 +798,6 @@ func firstError(errors ...error) error {
 			return v
 		}
 	}
+
 	return nil
-}
-
-func main() {
-	var (
-		address       = kingpin.Flag("memcached.address", "Memcached server address.").Default("localhost:11211").String()
-		timeout       = kingpin.Flag("memcached.timeout", "memcached connect timeout.").Default("1s").Duration()
-		pidFile       = kingpin.Flag("memcached.pid-file", "Optional path to a file containing the memcached PID for additional metrics.").Default("").String()
-		listenAddress = kingpin.Flag("web.listen-address", "Address to listen on for web interface and telemetry.").Default(":9150").String()
-		metricsPath   = kingpin.Flag("web.telemetry-path", "Path under which to expose metrics.").Default("/metrics").String()
-	)
-	log.AddFlags(kingpin.CommandLine)
-	kingpin.Version(version.Print("memcached_exporter"))
-	kingpin.HelpFlag.Short('h')
-	kingpin.Parse()
-
-	log.Infoln("Starting memcached_exporter", version.Info())
-	log.Infoln("Build context", version.BuildContext())
-
-	prometheus.MustRegister(NewExporter(*address, *timeout))
-	if *pidFile != "" {
-		procExporter := prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{
-			PidFn: func() (int, error) {
-				content, err := ioutil.ReadFile(*pidFile)
-				if err != nil {
-					return 0, fmt.Errorf("can't read pid file %q: %s", *pidFile, err)
-				}
-				value, err := strconv.Atoi(strings.TrimSpace(string(content)))
-				if err != nil {
-					return 0, fmt.Errorf("can't parse pid file %q: %s", *pidFile, err)
-				}
-				return value, nil
-			},
-			Namespace: namespace,
-		})
-		prometheus.MustRegister(procExporter)
-	}
-
-	http.Handle(*metricsPath, promhttp.Handler())
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte(`<html>
-             <head><title>Memcached Exporter</title></head>
-             <body>
-             <h1>Memcached Exporter</h1>
-             <p><a href='` + *metricsPath + `'>Metrics</a></p>
-             </body>
-             </html>`))
-	})
-	log.Infoln("Starting HTTP server on", *listenAddress)
-	log.Fatal(http.ListenAndServe(*listenAddress, nil))
 }

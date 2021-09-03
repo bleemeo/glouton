@@ -78,12 +78,12 @@ func NewHTTP(urlValue string, httpHost string, persitentAddresses []string, pers
 		},
 	}
 
-	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, hc.doCheck, labels, annotations, acc)
+	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations, acc)
 
 	return hc
 }
 
-func (hc *HTTPCheck) doCheck(ctx context.Context) types.StatusDescription {
+func (hc *HTTPCheck) httpMainCheck(ctx context.Context) types.StatusDescription {
 	req, err := http.NewRequest("GET", hc.url, nil)
 	req.Header.Add("User-Agent", version.UserAgent())
 	req.Host = hc.httpHost

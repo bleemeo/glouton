@@ -18,11 +18,13 @@ package blackbox
 
 import (
 	"context"
+	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
 	"reflect"
 	"time"
 
+	"github.com/go-kit/kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -34,7 +36,7 @@ const (
 	proberNameDNS  string = "dns"
 )
 
-// nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	probeSuccessDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("", "", "probe_success"),
@@ -100,13 +102,15 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 
 	registry := prometheus.NewRegistry()
 
-	extLogger := logger.GoKitLoggerWrapper(logger.V(2))
+	extLogger := log.With(logger.GoKitLoggerWrapper(logger.V(2)), "url", target.URL)
 	start := time.Now()
 
 	// do all the actual work
 	success := probeFn(ctx, target.URL, target.Module, registry, extLogger)
 
-	duration := time.Since(start).Seconds()
+	end := time.Now()
+	duration := end.Sub(start)
+	_ = extLogger.Log("msg", fmt.Sprintf("check started at %s, ended at %s (duration %s)", start, end, duration))
 
 	mfs, err := registry.Gather()
 	if err != nil {
@@ -124,7 +128,7 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 	if success {
 		successVal = 1
 	}
-	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration, target.Name)
+	ch <- prometheus.MustNewConstMetric(probeDurationDesc, prometheus.GaugeValue, duration.Seconds(), target.Name)
 	ch <- prometheus.MustNewConstMetric(probeSuccessDesc, prometheus.GaugeValue, successVal, target.Name)
 }
 

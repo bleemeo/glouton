@@ -950,7 +950,7 @@ func (c *Client) ready() bool {
 	return false
 }
 
-func (c *Client) connectionManager(ctx context.Context) { //nolint:gocyclo,cyclop
+func (c *Client) connectionManager(ctx context.Context) { //nolint:cyclop
 	ticker := time.NewTicker(10 * time.Second)
 	defer ticker.Stop()
 

@@ -23,16 +23,16 @@ import (
 	versionPkg "glouton/version"
 	"strings"
 
-	_ "net/http/pprof" //nolint: gosec
+	_ "net/http/pprof" //nolint:gosec
 )
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	configFiles = flag.String("config", "", "Configuration files/dirs to load.")
 	showVersion = flag.Bool("version", false, "Show version and exit")
 )
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var (
 	version string
 	commit  string
