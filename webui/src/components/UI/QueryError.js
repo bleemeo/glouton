@@ -1,4 +1,5 @@
 import React from "react";
+import PropTypes from "prop-types";
 import Panel from "./Panel";
 import FaIcon from "./FaIcon";
 import A from "./A";
@@ -21,6 +22,11 @@ const QueryError = ({ style, noBorder }) => {
   );
   if (noBorder) return errorElement;
   else return <Panel>{errorElement}</Panel>;
+};
+
+QueryError.propTypes = {
+  style: PropTypes.object,
+  noBorder: PropTypes.boolean,
 };
 
 export default QueryError;
