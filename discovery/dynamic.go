@@ -50,6 +50,7 @@ type DynamicDiscovery struct {
 }
 
 type containerInfoProvider interface {
+	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
 	CachedContainer(containerID string) (c facts.Container, found bool)
 }
 
