@@ -29,7 +29,11 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/prometheus/prometheus/pkg/labels"
 )
+
+const defaultInterval = 0
 
 // listExporters return list of exporters based on containers labels/annotations.
 func (d *DynamicScrapper) listExporters(containers []facts.Container) []*scrapper.Target {
@@ -141,12 +145,14 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 		}
 
 		if id, ok := d.registeredID[t.URL.String()]; ok {
-			d.Registry.UnregisterGatherer(id)
+			d.Registry.Unregister(id)
 			delete(d.registeredID, t.URL.String())
 			delete(d.registeredLabels, t.URL.String())
 		}
 
-		id, err := d.Registry.RegisterGatherer(t, nil, t.ExtraLabels, true)
+		hash := labels.FromMap(t.ExtraLabels).Hash()
+
+		id, err := d.Registry.RegisterGatherer(hash, defaultInterval, t, nil, t.ExtraLabels, true)
 		if err != nil {
 			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)
 
@@ -169,7 +175,7 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 			continue
 		}
 
-		d.Registry.UnregisterGatherer(id)
+		d.Registry.Unregister(id)
 		delete(d.registeredID, u)
 		delete(d.registeredLabels, u)
 	}

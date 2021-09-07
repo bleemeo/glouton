@@ -40,7 +40,7 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 		return err
 	}
 
-	_, err = r.RegisterGatherer(reg, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
+	_, err = r.RegisterGatherer(baseJitter, defaultInterval, reg, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
 
 	return err
 }

@@ -27,6 +27,7 @@ import (
 	"github.com/go-kit/kit/log"
 	"github.com/prometheus/blackbox_exporter/prober"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 const (
@@ -171,20 +172,17 @@ func (m *RegisterManager) updateRegistrations() error {
 
 			var g prometheus.Gatherer = reg
 
-			// static targets are always probed, while dynamic targets are probed according to
-			// their refresh rates
-			if collectorFromConfig.collector.RefreshRate != 0 {
-				g = registry.NewTickingGatherer(g, collectorFromConfig.collector.CreationDate, collectorFromConfig.collector.RefreshRate)
-			}
-
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
-			g = registry.NewProbeGatherer(g)
+			g = registry.NewProbeGatherer(g, collectorFromConfig.collector.RefreshRate > time.Minute)
+
+			// TODO: the hash (jitter) should be a special value ? based on CreationDate ?
+			hash := labels.FromMap(collectorFromConfig.labels).Hash()
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer
 			// for each probe is the product of our unability to expose a "__meta_something"
 			// label while doing Collect(). We end up adding the meta labels statically at
 			// registration.
-			id, err := m.registry.RegisterGatherer(g, nil, collectorFromConfig.labels, true)
+			id, err := m.registry.RegisterGatherer(hash, collectorFromConfig.collector.RefreshRate, g, nil, collectorFromConfig.labels, true)
 			if err != nil {
 				return err
 			}
@@ -203,13 +201,7 @@ func (m *RegisterManager) updateRegistrations() error {
 		if gatherer.target.BleemeoAgentID != "" && !gathererInArray(gatherer, m.targets) {
 			logger.V(2).Printf("The probe for '%s' is now deactivated", gatherer.target.Name)
 
-			// if this is a ticking gatherer, we need to unregister it (this is breaking the
-			// abstraction, but adding an interface for this particular case seems overkill)
-			if cg, ok := gatherer.gatherer.(*registry.TickingGatherer); ok {
-				cg.Stop()
-			}
-
-			m.registry.UnregisterGatherer(idx)
+			m.registry.Unregister(idx)
 			delete(m.registrations, idx)
 		}
 	}

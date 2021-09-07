@@ -20,6 +20,7 @@
 package process
 
 import (
+	"context"
 	"glouton/types"
 	"time"
 
@@ -34,7 +35,7 @@ type pusher struct {
 	lastTime  map[string]time.Time
 }
 
-func (p *pusher) push(t0 time.Time) {
+func (p *pusher) push(_ context.Context, t0 time.Time) {
 	p.exporter.init()
 	p.exporter.l.Lock()
 	defer p.exporter.l.Unlock()

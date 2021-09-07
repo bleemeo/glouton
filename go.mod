@@ -12,10 +12,10 @@ require (
 	github.com/containerd/typeurl v1.0.2
 	github.com/docker/docker v20.10.8+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.5
-	github.com/ema/qdisc v0.0.0-20200603082823-62d0308e3e00 // indirect
 	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-kit/kit v0.11.0
+	github.com/go-kit/log v0.1.0
 	github.com/go-ole/go-ole v1.2.5
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.6
@@ -23,13 +23,11 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.3.0
 	github.com/grobie/gomemcache v0.0.0-20201204163352-08d7c80fcac6
-	github.com/hodgesds/perf-utils v0.2.5 // indirect
 	github.com/influxdata/influxdb1-client v0.0.0-20200827194710-b269163b24ab
 	github.com/influxdata/telegraf v1.19.3
 	github.com/influxdata/toml v0.0.0-20190415235208-270119a8ce65
 	github.com/json-iterator/go v1.1.11
 	github.com/mdlayher/netlink v1.4.1 // indirect
-	github.com/mdlayher/wifi v0.0.0-20200527114002-84f0b9457fdd // indirect
 	github.com/ncabatoff/process-exporter v0.7.5
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.1
