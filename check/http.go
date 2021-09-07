@@ -20,7 +20,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
@@ -79,7 +78,7 @@ func NewHTTP(urlValue string, httpHost string, persitentAddresses []string, pers
 		},
 	}
 
-	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations, acc, facts.ContainerUnknown)
+	hc.baseCheck = newBase(mainTCPAddress, persitentAddresses, persistentConnection, hc.httpMainCheck, labels, annotations, acc)
 
 	return hc
 }

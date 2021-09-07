@@ -269,7 +269,7 @@ func (d *Discovery) createHTTPCheck(service Service, di discoveryInfo, primaryAd
 }
 
 func (d *Discovery) createContainerStoppedCheck(service Service, primaryAddress string, tcpAddresses []string, labels map[string]string, annotations types.MetricAnnotations) {
-	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations, d.acc, service.container.State())
+	containerCheck := check.NewContainerStopped(primaryAddress, tcpAddresses, false, labels, annotations, d.acc)
 
 	d.addCheck(containerCheck, service)
 }

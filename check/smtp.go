@@ -19,7 +19,6 @@ package check
 import (
 	"context"
 	"fmt"
-	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
@@ -45,7 +44,7 @@ func NewSMTP(address string, persitentAddresses []string, persistentConnection b
 		mainAddress: address,
 	}
 
-	sc.baseCheck = newBase("", persitentAddresses, persistentConnection, sc.smtpMainCheck, labels, annotations, acc, facts.ContainerUnknown)
+	sc.baseCheck = newBase("", persitentAddresses, persistentConnection, sc.smtpMainCheck, labels, annotations, acc)
 
 	return sc
 }

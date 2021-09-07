@@ -17,19 +17,26 @@
 package check
 
 import (
-	"glouton/facts"
+	"context"
 	"glouton/inputs"
 	"glouton/types"
 )
 
-func NewContainerStopped(address string, tcpAddresses []string, persistenConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator, state facts.ContainerState) *ContainerCheck {
+func NewContainerStopped(address string, tcpAddresses []string, persistenConnection bool, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *ContainerCheck {
 	newCheck := &ContainerCheck{}
 
-	newCheck.baseCheck = newBase(address, tcpAddresses, persistenConnection, nil, labels, annotations, acc, state)
+	newCheck.baseCheck = newBase(address, tcpAddresses, persistenConnection, newCheck.containerStoppedCheck, labels, annotations, acc)
 
 	return newCheck
 }
 
 type ContainerCheck struct {
 	*baseCheck
+}
+
+func (c ContainerCheck) containerStoppedCheck(context.Context) types.StatusDescription {
+	return types.StatusDescription{
+		CurrentStatus:     types.StatusCritical,
+		StatusDescription: "Container is stopped.",
+	}
 }

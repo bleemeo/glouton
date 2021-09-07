@@ -18,7 +18,6 @@ package check
 
 import (
 	"context"
-	"glouton/facts"
 	"glouton/inputs"
 	"glouton/logger"
 	"glouton/types"
@@ -48,7 +47,6 @@ type baseCheck struct {
 	tcpAddresses   []string
 	mainCheck      func(ctx context.Context) types.StatusDescription
 	acc            inputs.AnnotationAccumulator
-	containerState facts.ContainerState
 
 	timer    *time.Timer
 	dialer   *net.Dialer
@@ -63,7 +61,7 @@ type baseCheck struct {
 	disabledPerstistent map[string]bool
 }
 
-func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator, state facts.ContainerState) *baseCheck {
+func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection bool, mainCheck func(context.Context) types.StatusDescription, labels map[string]string, annotations types.MetricAnnotations, acc inputs.AnnotationAccumulator) *baseCheck {
 	if mainTCPAddress != "" {
 		found := false
 
@@ -95,7 +93,6 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 		persistentConnection: persistentConnection,
 		mainCheck:            mainCheck,
 		acc:                  acc,
-		containerState:       state,
 
 		dialer:   &net.Dialer{},
 		timer:    time.NewTimer(0),
@@ -210,15 +207,6 @@ func (bc *baseCheck) doCheck(ctx context.Context) (result types.StatusDescriptio
 		if result = bc.mainCheck(ctx); result.CurrentStatus != types.StatusOk {
 			return result
 		}
-	}
-
-	if bc.containerState == facts.ContainerStopped {
-		result = types.StatusDescription{
-			CurrentStatus:     types.StatusCritical,
-			StatusDescription: "Container is stopped.",
-		}
-
-		return result
 	}
 
 	for _, addr := range bc.tcpAddresses {
