@@ -75,6 +75,12 @@ func (c *Collector) AddInput(input telegraf.Input, shortName string) (int, error
 	c.inputs[id] = input
 	c.inputNames[id] = shortName
 
+	if si, ok := input.(telegraf.Initializer); ok {
+		if err := si.Init(); err != nil {
+			return 0, err
+		}
+	}
+
 	if si, ok := input.(telegraf.ServiceInput); ok {
 		if err := si.Start(nil); err != nil {
 			return 0, err
