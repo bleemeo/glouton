@@ -45,6 +45,16 @@ func (i *Input) Start(acc telegraf.Accumulator) error {
 	return nil
 }
 
+// Init performs one time setup of the plugin and returns an error if the
+// configuration is invalid.
+func (i *Input) Init() error {
+	if si, ok := i.Input.(telegraf.Initializer); ok {
+		return si.Init()
+	}
+
+	return nil
+}
+
 // Stop stops the services and closes any necessary channels and connections.
 func (i *Input) Stop() {
 	if si, ok := i.Input.(telegraf.ServiceInput); ok {

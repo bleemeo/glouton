@@ -63,6 +63,16 @@ func (mci mockContainerInfo) CachedContainer(containerID string) (container fact
 	return c, ok
 }
 
+func (mci mockContainerInfo) Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error) {
+	res := make([]facts.Container, 0, len(mci.containers))
+
+	for _, v := range mci.containers {
+		res = append(res, v)
+	}
+
+	return res, nil
+}
+
 type mockFileReader struct {
 	contents map[string]string
 }

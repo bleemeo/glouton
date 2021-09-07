@@ -89,16 +89,26 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 
 	uri := monitor.URL
 
+	expectedContentRegex, err := bbConf.NewRegexp(monitor.ExpectedContent)
+	if err != nil {
+		return nil, err
+	}
+
+	forbiddenContentRegex, err := bbConf.NewRegexp(monitor.ForbiddenContent)
+	if err != nil {
+		return nil, err
+	}
+
 	switch url.Scheme {
 	case proberNameHTTP, "https":
 		// we default to ipv4, due to blackbox limitations with the protocol fallback
 		mod.Prober = proberNameHTTP
 		if monitor.ExpectedContent != "" {
-			mod.HTTP.FailIfBodyNotMatchesRegexp = []string{monitor.ExpectedContent}
+			mod.HTTP.FailIfBodyNotMatchesRegexp = []bbConf.Regexp{expectedContentRegex}
 		}
 
 		if monitor.ForbiddenContent != "" {
-			mod.HTTP.FailIfBodyMatchesRegexp = []string{monitor.ForbiddenContent}
+			mod.HTTP.FailIfBodyMatchesRegexp = []bbConf.Regexp{forbiddenContentRegex}
 		}
 
 		if monitor.ExpectedResponseCode != 0 {
