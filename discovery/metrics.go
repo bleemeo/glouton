@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/collector"
+	"glouton/facts"
 	"glouton/inputs"
 	"glouton/inputs/apache"
 	"glouton/inputs/cpu"
@@ -153,12 +154,25 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 
 	for key, service := range services {
 		oldService, ok := oldServices[key]
-		if !ok || serviceNeedUpdate(oldService, service) {
+		serviceState := facts.ContainerRunning
+		oldServiceState := facts.ContainerRunning
+
+		if service.container != nil {
+			serviceState = service.container.State()
+		}
+
+		if oldService.container != nil {
+			oldServiceState = oldService.container.State()
+		}
+
+		if !ok || serviceNeedUpdate(oldService, service, oldServiceState, serviceState) {
 			d.removeInput(key)
 
-			err = d.createInput(service)
-			if err != nil {
-				return
+			if serviceState != facts.ContainerStopped {
+				err = d.createInput(service)
+				if err != nil {
+					return
+				}
 			}
 		}
 	}
@@ -166,7 +180,7 @@ func (d *Discovery) configureMetricInputs(oldServices, services map[NameContaine
 	return nil
 }
 
-func serviceNeedUpdate(oldService, service Service) bool {
+func serviceNeedUpdate(oldService, service Service, oldServiceState facts.ContainerState, serviceState facts.ContainerState) bool {
 	switch {
 	case oldService.Name != service.Name,
 		oldService.ServiceType != service.ServiceType,
@@ -177,7 +191,8 @@ func serviceNeedUpdate(oldService, service Service) bool {
 		oldService.Stack != service.Stack,
 		oldService.Active != service.Active,
 		oldService.CheckIgnored != service.CheckIgnored,
-		oldService.MetricsIgnored != service.MetricsIgnored:
+		oldService.MetricsIgnored != service.MetricsIgnored,
+		oldServiceState != serviceState:
 		return true
 	case len(oldService.ListenAddresses) != len(service.ListenAddresses):
 		return true
