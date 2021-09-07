@@ -90,16 +90,16 @@ func (s *Synchronizer) factsUpdateList() error {
 		return err
 	}
 
-	facts := make([]types.AgentFact, len(result))
+	facts := make([]types.AgentFact, 0, len(result))
 
-	for i, jsonMessage := range result {
+	for _, jsonMessage := range result {
 		var fact types.AgentFact
 
 		if err := json.Unmarshal(jsonMessage, &fact); err != nil {
 			continue
 		}
 
-		facts[i] = fact
+		facts = append(facts, fact)
 	}
 
 	s.option.Cache.SetFacts(facts)

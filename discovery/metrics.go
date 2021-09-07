@@ -245,7 +245,7 @@ func (d *Discovery) createPrometheusCollector(service Service) error {
 	return errNotSupported
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (d *Discovery) createInput(service Service) error {
 	if !service.Active {
 		return nil

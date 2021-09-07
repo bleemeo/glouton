@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
@@ -447,8 +448,8 @@ func (l prefixLogger) Println(v ...interface{}) {
 func (r *Registry) AddDefaultCollector() {
 	r.init()
 
-	r.internalRegistry.MustRegister(prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}))
-	r.internalRegistry.MustRegister(prometheus.NewGoCollector())
+	r.internalRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
+	r.internalRegistry.MustRegister(collectors.NewGoCollector())
 
 	_, _ = r.RegisterGatherer(r.internalRegistry, nil, nil, r.MetricFormat == types.MetricFormatPrometheus)
 }
@@ -827,7 +828,7 @@ func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) 
 func (c *pushCollector) Describe(chan<- *prometheus.Desc) {
 }
 
-// Collect collect non-pushed points from all registered collectors.
+// Collect collect pushed points.
 func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 	c.l.Lock()
 	defer c.l.Unlock()

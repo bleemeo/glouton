@@ -18,6 +18,8 @@ builds:
   ignore:
   - goos: windows
     goarch: arm
+  - goos: windows
+    goarch: arm64
 archives:
 - replacements:
     darwin: Darwin
@@ -38,23 +40,58 @@ nfpms:
   description: |
     Bleemeo agent
       Bleemeo is a solution of Monitoring as a Service.
-      This package contains the agent which send metric to
-      the SaaS platform
+      This package contains the agent which sends metrics to
+      the SaaS platform.
   license: Apache 2.0
   formats:
   - deb
   - rpm
   bindir: /usr/sbin
-  files:
-    "packaging/common/glouton.service": "/lib/systemd/system/glouton.service"
-    "packaging/common/glouton-hook-package-modified": "/usr/lib/glouton/glouton-hook-package-modified"
-    "bin/glouton-netstat": "/usr/sbin/glouton-netstat"
-    "bin/glouton-gather-facts": "/usr/sbin/glouton-gather-facts"
-  config_files:
-    "etc/glouton.conf": "/etc/glouton/glouton.conf"
-    "packaging/common/glouton-05-system.conf": "/etc/glouton/conf.d/05-system.conf"
-    "packaging/common/glouton.sudoers": "/etc/sudoers.d/glouton"
-    "packaging/common/glouton.cron.hourly": "/etc/cron.hourly/glouton"
+  contents:
+  # Files
+  - src: packaging/common/glouton.service
+    dst: /lib/systemd/system/glouton.service
+  - src: packaging/common/glouton-hook-package-modified
+    dst: /usr/lib/glouton/glouton-hook-package-modified
+  - src: bin/glouton-netstat
+    dst: /usr/sbin/glouton-netstat
+  - src: bin/glouton-gather-facts
+    dst: /usr/sbin/glouton-gather-facts
+  # Global config files
+  - src: etc/glouton.conf
+    dst: /etc/glouton/glouton.conf
+    type: config
+  - src: packaging/common/glouton-05-system.conf
+    dst: /etc/glouton/conf.d/05-system.conf
+    type: config
+  - src: packaging/common/glouton.sudoers
+    dst: /etc/sudoers.d/glouton
+    type: config
+  - src: packaging/common/glouton.cron.hourly
+    dst: /etc/cron.hourly/glouton
+    type: config
+  # Debian config files
+  - src: packaging/deb/glouton-06-distribution.conf
+    dst: /etc/glouton/conf.d/06-distribution.conf
+    type: config
+    packager: deb
+  - src: packaging/deb/glouton.apt.conf
+    dst: /etc/apt/apt.conf.d/05glouton
+    type: config
+    packager: deb
+  # RPM config files
+  - src: packaging/rpm/glouton.yum.action
+    dst: /etc/yum/post-actions/glouton.action
+    type: config
+    packager: rpm
+  - src: packaging/rpm/glouton-06-distribution.conf
+    dst: /etc/glouton/conf.d/06-distribution.conf
+    type: config
+    packager: rpm
+  - src: packaging/rpm/glouton-dnf-plugin.py
+    dst: /usr/lib/python3.6/site-packages/dnf-plugins/glouton.py
+    type: config
+    packager: rpm
   empty_folders:
   - /etc/glouton/conf.d
   - /var/lib/glouton
@@ -63,17 +100,14 @@ nfpms:
     preremove: "packaging/scripts/preremove.sh"
     postremove: "packaging/scripts/postremove.sh"
   overrides:
-    deb:
-      config_files:
-        "packaging/deb/glouton-06-distribution.conf": "/etc/glouton/conf.d/06-distribution.conf"
-        "packaging/deb/glouton.apt.conf": "/etc/apt/apt.conf.d/05glouton"
     rpm:
       recommends:
+      - sudo
+      - ca-certificates
+      - net-tools
+      - cron
       - yum-plugin-post-transaction-actions
-      config_files:
-        "packaging/rpm/glouton.yum.action": "/etc/yum/post-actions/glouton.action"
-        "packaging/rpm/glouton-06-distribution.conf": "/etc/glouton/conf.d/06-distribution.conf"
-        "packaging/rpm/glouton-dnf-plugin.py": "/usr/lib/python3.6/site-packages/dnf-plugins/glouton.py"
+
 dockers:
 - image_templates:
   - glouton:latest

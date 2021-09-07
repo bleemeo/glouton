@@ -45,12 +45,12 @@ func NewSMTP(address string, persitentAddresses []string, persistentConnection b
 		mainAddress: address,
 	}
 
-	sc.baseCheck = newBase("", persitentAddresses, persistentConnection, sc.doCheck, labels, annotations, acc, facts.ContainerUnknown)
+	sc.baseCheck = newBase("", persitentAddresses, persistentConnection, sc.smtpMainCheck, labels, annotations, acc, facts.ContainerUnknown)
 
 	return sc
 }
 
-func (sc *SMTPCheck) doCheck(ctx context.Context) types.StatusDescription {
+func (sc *SMTPCheck) smtpMainCheck(ctx context.Context) types.StatusDescription {
 	if sc.mainAddress == "" {
 		return types.StatusDescription{
 			CurrentStatus: types.StatusOk,

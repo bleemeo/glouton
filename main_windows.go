@@ -33,6 +33,7 @@ var (
 	registration      = flag.String("registration-key", "", "Registration key of your account")
 )
 
+// OSDependentMain is the main function used on Windows.
 //nolint:forbidigo
 func OSDependentMain() {
 	if !*postInstall {

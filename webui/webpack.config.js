@@ -45,10 +45,12 @@ module.exports = (env, argv) => {
     },
     devServer: {
       port: 3015,
-      publicPath: "/",
+      devMiddleware: {
+        publicPath: "/",
+      },
     },
     resolve: {
-      extensions: [ '.tsx', '.ts', '.js' ],
+      extensions: ['.tsx', '.ts', '.js'],
     },
     plugins: plugins,
     module: {

@@ -30,7 +30,7 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/prometheus/pkg/labels"
-	"github.com/prometheus/prometheus/promql/parser"
+	promParser "github.com/prometheus/prometheus/promql/parser"
 )
 
 const basicConf = `
@@ -85,8 +85,8 @@ func Test_Basic_Build(t *testing.T) {
 		return
 	}
 
-	cpuMatcher, _ := parser.ParseMetricSelector("{__name__=~\"cpu.*\"}")
-	proMatcher, _ := parser.ParseMetricSelector("{__name__=~\"pro.*\"}")
+	cpuMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"cpu.*\"}")
+	proMatcher, _ := promParser.ParseMetricSelector("{__name__=~\"pro.*\"}")
 
 	want := metricFilter{
 		allowList: map[labels.Matcher][]matcher.Matchers{
@@ -1032,7 +1032,7 @@ func generatePoints(nb int, lbls map[string]string) []types.MetricPoint {
 	return list
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var goodPoint = map[string]string{
 	"__name__":        "node_cpu_seconds_global",
 	"label_not_read":  "value_not_read",
@@ -1040,7 +1040,7 @@ var goodPoint = map[string]string{
 	"scrape_job":      "my_application123",
 }
 
-//nolint: gochecknoglobals
+//nolint:gochecknoglobals
 var badPoint = map[string]string{
 	"__name__":        "cpu_used_status",
 	"label_not_read":  "value_not_read",

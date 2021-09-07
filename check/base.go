@@ -27,7 +27,7 @@ import (
 	"time"
 )
 
-// baseCheck perform a service.
+// baseCheck perform a service check.
 //
 // The check does:
 // * use mainCheck to perform the primary check (protocol specific)
@@ -39,7 +39,7 @@ import (
 // The check is run at the first of:
 // * One minute after last check
 // * 30 seconds after checks change to not Ok (to quickly recover from a service restart)
-// * (if persistentConnection is active) after a TCP connection is broken.
+// * (if persistentConnection is active) after a persistent TCP connection is broken.
 type baseCheck struct {
 	metricName     string
 	labels         map[string]string
@@ -108,13 +108,8 @@ func newBase(mainTCPAddress string, tcpAddresses []string, persistentConnection 
 	}
 }
 
-// Run execute the TCP check.
+// Run execute the service check. See structure comments for details.
 func (bc *baseCheck) Run(ctx context.Context) error {
-	// Open connectionS to address
-	// when openned, keep checking that port stay open
-	// when port goes from open to close, back to step 1
-	// If step 1 fail => trigger check
-	// trigger check every minutes (or 30 seconds)
 	for {
 		select {
 		case <-ctx.Done():

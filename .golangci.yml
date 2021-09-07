@@ -1,33 +1,63 @@
 run:
   skip-dirs:
     - work
+
 linters:
   enable-all: true
   disable:
-    - lll
+    # Base linters disabled for all projects.
     - funlen
-    - gomnd # too picky. For example it say that all service port in our known services list is a magic number (even if present only once)
+    - gomnd  # Too picky. For example it says that 1000 (used in number of ms in one second) is a magic number.
+    - exhaustivestruct # This linter is meant to be used only for special cases. It is not recommended to use it for all files in a project.
+    - gci # Conflicts with gofumpt.
+    
+    # Project specific disable.
+    - lll
     - godox # too many TODO in code, but should be removed and TODO fixed :)
     - nestif # Too many error for now, which would require significant refactor.
     - gocognit
     - tagliatelle # Check struct tags. Too many errors we can't fix.
-    - exhaustivestruct # This linter is meant to be used only for special cases.
     - wrapcheck # Too many errors, which would require to refactor most returned errors.
     - errorlint # Should be enabled, but it's difficult to test that we keep the same behavior with errors.As.
-    - gci # Conflicts with gofumpt.
     # Requires to review all our tests. Should be done
     - paralleltest
     - tparallel
     - testpackage
-    # disable deprecated & replaced linter
+
+    # Disable deprecated and replaced linter.
     - maligned
     - golint
     - interfacer
     - scopelint
+    - gocyclo
+
 linters-settings:
-  gocyclo:
-    # minimal code complexity to report, 30 by default (but we recommend 10-20)
-    min-complexity: 15
   cyclop:
-    # same as gocyclo
+    # The maximal code complexity to report.
     max-complexity: 15
+
+  nolintlint:
+    # Ensure that nolint directives don't have a leading space.
+    allow-leading-space: false
+    # Require nolint directives to mention the specific linter being suppressed.
+    require-specific: true
+
+  tagliatelle:
+    # Check struct tag name case.
+    case:
+      # Use the struct field name to check the name of the struct tag.
+      rules:
+        json: snake
+        yaml: snake
+
+issues:
+  include: # the list of ids of default excludes to include
+    - EXC0005 # ineffective break statement
+    - EXC0009 # create files/directories with minimum permissions
+    # - EXC0011 # TODO: should have a package comment|comment should be of the form
+    # - EXC0012 # TODO: exported var/functions should have a comment
+    - EXC0013 # package comment should be of the form
+    - EXC0014 # comment on exported var should be of the form
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

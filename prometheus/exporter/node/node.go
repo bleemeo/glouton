@@ -27,7 +27,7 @@ type Option struct {
 }
 
 //go:linkname collectorState github.com/prometheus/node_exporter/collector.collectorState
-var collectorState map[string]*bool // nolint: gochecknoglobals
+var collectorState map[string]*bool //nolint:gochecknoglobals
 
 func setCollector(collectorName []string) {
 	var unknown []string

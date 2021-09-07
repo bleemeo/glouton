@@ -152,9 +152,9 @@ func (s *Synchronizer) containerUpdateList() error {
 	}
 
 	containersByUUID := s.option.Cache.ContainersByUUID()
-	containers := make([]types.Container, len(result))
+	containers := make([]types.Container, 0, len(result))
 
-	for i, jsonMessage := range result {
+	for _, jsonMessage := range result {
 		var container containerPayload
 
 		if err := json.Unmarshal(jsonMessage, &container); err != nil {
@@ -165,7 +165,7 @@ func (s *Synchronizer) containerUpdateList() error {
 		container.FillInspectHash()
 		container.ContainerInspect = ""
 		container.GloutonLastUpdatedAt = containersByUUID[container.ID].GloutonLastUpdatedAt
-		containers[i] = container.compatibilityContainer()
+		containers = append(containers, container.compatibilityContainer())
 	}
 
 	s.option.Cache.SetContainers(containers)

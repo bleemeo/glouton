@@ -68,14 +68,8 @@ const AgentDetails = ({ facts }) => {
     );
   }
 
-  const {
-    isLoading,
-    error,
-    services,
-    tags,
-    agentInformation,
-    agentStatus,
-  } = useFetch(AGENT_DETAILS, null, 60000);
+  const { isLoading, error, services, tags, agentInformation, agentStatus } =
+    useFetch(AGENT_DETAILS, null, 60000);
   let tooltipType = "info";
   let problems = null;
   if (agentStatus) {

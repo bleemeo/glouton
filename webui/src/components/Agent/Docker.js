@@ -155,7 +155,15 @@ const Docker = ({ container, date }) => {
               </small>
             </div>
           </div>
-          <div style={{ position: "absolute", top: "0.5rem", right: "0.5rem" }}>
+          <div
+            style={{
+              position: "absolute",
+              top: "0.5rem",
+              right: "0.5rem",
+              width: "unset",
+              paddingRight: "unset",
+            }}
+          >
             <A
               onClick={() =>
                 setDockerInspect({

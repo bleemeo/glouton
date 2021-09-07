@@ -103,6 +103,8 @@ const (
 	LabelMetaProbeAgentUUID   = "__meta_probe_agent_uuid"
 	LabelMetaProbeScraperName = "__meta_probe_scraper_name"
 	LabelMetaSendScraperUUID  = "__meta_probe_send_agent_uuid"
+	LabelK8SPODName           = "kubernetes_pod_name"
+	LabelK8SNamespace         = "kubernetes_namespace"
 	LabelInstanceUUID         = "instance_uuid"
 	LabelItem                 = "item"
 	LabelScraperUUID          = "scraper_uuid"

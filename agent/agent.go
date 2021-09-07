@@ -86,7 +86,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var errUnsupportedKey = errors.New("Unsupported item key") //nolint: stylecheck
+var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
 
 type agent struct {
 	taskRegistry *task.Registry
@@ -153,7 +153,7 @@ func (a *agent) init(configFiles []string) (ok bool) {
 	a.l.Unlock()
 
 	a.taskRegistry = task.NewRegistry(context.Background())
-	cfg, warnings, err := a.loadConfiguration(configFiles)
+	cfg, warnings, err := loadConfiguration(configFiles, nil)
 	a.config = cfg
 
 	a.setupLogger()
@@ -480,7 +480,7 @@ func (a *agent) updateThresholds(thresholds map[threshold.MetricNameItem]thresho
 }
 
 // Run will start the agent. It will terminate when sigquit/sigterm/sigint is received.
-func (a *agent) run() { //nolint:gocyclo,cyclop
+func (a *agent) run() { //nolint:cyclop
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -547,7 +547,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	apiBindAddress := fmt.Sprintf("%s:%d", a.config.String("web.listener.address"), a.config.Int("web.listener.port"))
 
-	if a.config.Bool("agent.http_debug.enabled") {
+	if a.config.Bool("agent.http_debug.enable") {
 		go func() {
 			debugAddress := a.config.String("agent.http_debug.bind_address")
 
@@ -597,7 +597,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		},
 	}
 
-	if a.config.Bool("kubernetes.enabled") {
+	if a.config.Bool("kubernetes.enable") {
 		kube := &kubernetes.Kubernetes{
 			Runtime:    a.containerRuntime,
 			NodeName:   a.config.String("kubernetes.nodename"),
@@ -696,7 +696,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		DynamicJobName: "discovered-exporters",
 	}
 
-	if a.config.Bool("blackbox.enabled") {
+	if a.config.Bool("blackbox.enable") {
 		logger.V(1).Println("Starting blackbox_exporter...")
 		// the config is present, otherwise we would not be in this block
 		blackboxConf, _ := a.config.Get("blackbox")
@@ -711,7 +711,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 
 	promExporter := a.gathererRegistry.Exporter()
 
-	if a.config.Bool("agent.process_exporter.enabled") {
+	if a.config.Bool("agent.process_exporter.enable") {
 		process.RegisterExporter(a.gathererRegistry, psLister, dynamicDiscovery, a.metricFormat == types.MetricFormatBleemeo)
 	}
 
@@ -748,11 +748,11 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		{a.sendToTelemetry, "Send Facts information to our telemetry tool"},
 	}
 
-	if a.config.Bool("web.enabled") {
+	if a.config.Bool("web.enable") {
 		tasks = append(tasks, taskInfo{api.Run, "Local Web UI"})
 	}
 
-	if a.config.Bool("jmx.enabled") {
+	if a.config.Bool("jmx.enable") {
 		perm, err := strconv.ParseInt(a.config.String("jmxtrans.file_permission"), 8, 0)
 		if err != nil {
 			logger.Printf("invalid permission %#v: %v", a.config.String("jmxtrans.file_permission"), err)
@@ -771,7 +771,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		tasks = append(tasks, taskInfo{a.jmx.Run, "jmxtrans"})
 	}
 
-	if a.config.Bool("bleemeo.enabled") {
+	if a.config.Bool("bleemeo.enable") {
 		scaperName := a.config.String("blackbox.scraper_name")
 		if scaperName == "" {
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Int("web.listener.port"))
@@ -798,7 +798,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 
-	if a.config.Bool("nrpe.enabled") {
+	if a.config.Bool("nrpe.enable") {
 		nrpeConfFile := a.config.StringList("nrpe.conf_paths")
 		nrperesponse := nrpe.NewResponse(overrideServices, a.discovery, nrpeConfFile)
 		server := nrpe.New(
@@ -809,7 +809,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		tasks = append(tasks, taskInfo{server.Run, "NRPE server"})
 	}
 
-	if a.config.Bool("zabbix.enabled") {
+	if a.config.Bool("zabbix.enable") {
 		server := zabbix.New(
 			fmt.Sprintf("%s:%d", a.config.String("zabbix.address"), a.config.Int("zabbix.port")),
 			zabbixResponse,
@@ -817,7 +817,7 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		tasks = append(tasks, taskInfo{server.Run, "Zabbix server"})
 	}
 
-	if a.config.Bool("influxdb.enabled") {
+	if a.config.Bool("influxdb.enable") {
 		server := influxdb.New(
 			fmt.Sprintf("http://%s:%s", a.config.String("influxdb.host"), a.config.String("influxdb.port")),
 			a.config.String("influxdb.db_name"),
@@ -874,25 +874,25 @@ func (a *agent) run() { //nolint:gocyclo,cyclop
 		"Metric collector",
 	})
 
-	if a.config.Bool("telegraf.statsd.enabled") {
+	if a.config.Bool("telegraf.statsd.enable") {
 		input, err := statsd.New(fmt.Sprintf("%s:%d", a.config.String("telegraf.statsd.address"), a.config.Int("telegraf.statsd.port")))
 		if err != nil {
 			logger.Printf("Unable to create StatsD input: %v", err)
-			a.config.Set("telegraf.statsd.enabled", false)
+			a.config.Set("telegraf.statsd.enable", false)
 		} else if _, err = a.collector.AddInput(input, "statsd"); err != nil {
 			if strings.Contains(err.Error(), "address already in use") {
 				logger.Printf("Unable to listen on StatsD port because another program already use it")
 				logger.Printf("The StatsD integration is now disabled. Restart the agent to try re-enabling it.")
-				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenabled to permanently disable StatsD integration or using an alternate port")
+				logger.Printf("See https://docs.bleemeo.com/agent/configuration#telegrafstatsdenable to permanently disable StatsD integration or using an alternate port")
 			} else {
 				logger.Printf("Unable to create StatsD input: %v", err)
 			}
 
-			a.config.Set("telegraf.statsd.enabled", false)
+			a.config.Set("telegraf.statsd.enable", false)
 		}
 	}
 
-	a.factProvider.SetFact("statsd_enabled", a.config.String("telegraf.statsd.enabled"))
+	a.factProvider.SetFact("statsd_enable", a.config.String("telegraf.statsd.enable"))
 	a.factProvider.SetFact("metrics_format", a.metricFormat.String())
 
 	c := make(chan os.Signal, 1)
@@ -994,7 +994,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
 }
 
 func (a *agent) sendToTelemetry(ctx context.Context) error {
-	if a.config.Bool("agent.telemetry.enabled") {
+	if a.config.Bool("agent.telemetry.enable") {
 		select {
 		case <-time.After(2*time.Minute + time.Duration(rand.Intn(5))*time.Minute): //nolint:gosec
 		case <-ctx.Done():
@@ -1116,6 +1116,33 @@ func (a *agent) minuteMetric(ctx context.Context) error {
 				})
 			}
 		}
+
+		desc := strings.Join(a.config.GetWarnings(), "\n")
+		status := types.StatusWarning
+		t0 := time.Now().Truncate(time.Second)
+
+		if len(desc) == 0 {
+			status = types.StatusOk
+			desc = "configuration returned no warnings."
+		}
+
+		a.gathererRegistry.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+			{
+				Point: types.Point{
+					Value: float64(status.NagiosCode()),
+					Time:  t0,
+				},
+				Labels: map[string]string{
+					types.LabelName: "agent_config_warning",
+				},
+				Annotations: types.MetricAnnotations{
+					Status: types.StatusDescription{
+						StatusDescription: desc,
+						CurrentStatus:     status,
+					},
+				},
+			},
+		})
 	}
 }
 
@@ -1486,7 +1513,7 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 	return
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
@@ -1523,7 +1550,7 @@ func (a *agent) handleTrigger(ctx context.Context) {
 		}
 
 		hasConnection := a.dockerRuntime.IsRuntimeRunning(ctx)
-		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enabled") {
+		if hasConnection && !a.dockerInputPresent && a.config.Bool("telegraf.docker_metrics_enable") {
 			i, err := docker.New(a.dockerRuntime.ServerAddress(), a.dockerRuntime)
 			if err != nil {
 				logger.V(1).Printf("error when creating Docker input: %v", err)
@@ -1632,7 +1659,7 @@ func (a *agent) DiagnosticPage() string {
 		runtime.Version(),
 	)
 
-	if a.config.Bool("bleemeo.enabled") {
+	if a.config.Bool("bleemeo.enable") {
 		fmt.Fprintln(builder, "Glouton has Bleemeo connection enabled")
 
 		if a.bleemeoConnector == nil {

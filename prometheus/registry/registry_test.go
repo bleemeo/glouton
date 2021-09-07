@@ -18,7 +18,7 @@
 //
 // It support both pushed metrics (using AddMetricPointFunction) and pulled
 // metrics thought Collector or Gatherer
-//nolint: scopelint
+//nolint:scopelint
 package registry
 
 import (
@@ -93,7 +93,7 @@ func (g *fakeGatherer) Gather() ([]*dto.MetricFamily, error) {
 	return result, nil
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func TestRegistry_Register(t *testing.T) {
 	reg := &Registry{}
 

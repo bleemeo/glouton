@@ -29,7 +29,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/vektah/gqlparser/gqlerror"
+	"github.com/vektah/gqlparser/v2/gqlerror"
 )
 
 // Resolver is the api resolver.

@@ -14,6 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//go:build !windows
 // +build !windows
 
 package agent
@@ -27,7 +28,7 @@ func (a *agent) initOSSpecificParts() {
 }
 
 func (a *agent) registerOSSpecificComponents() {
-	if a.config.Bool("agent.node_exporter.enabled") {
+	if a.config.Bool("agent.node_exporter.enable") {
 		nodeOption := node.Option{
 			RootFS:            a.hostRootPath,
 			EnabledCollectors: a.config.StringList("agent.node_exporter.collectors"),

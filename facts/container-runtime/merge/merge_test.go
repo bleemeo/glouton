@@ -11,7 +11,7 @@ import (
 func Test_MultiError_Is(t *testing.T) {
 	tests := []struct {
 		name   string
-		errs   MultiError
+		errs   MultiErrors
 		target error
 		want   bool
 	}{
@@ -23,37 +23,37 @@ func Test_MultiError_Is(t *testing.T) {
 		},
 		{
 			name:   "empty",
-			errs:   MultiError{},
+			errs:   MultiErrors{},
 			target: facts.ErrContainerDoesNotExists,
 			want:   false,
 		},
 		{
 			name:   "unrelated error",
-			errs:   MultiError([]error{os.ErrClosed}),
+			errs:   MultiErrors([]error{os.ErrClosed}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   false,
 		},
 		{
 			name:   "matching error",
-			errs:   MultiError([]error{facts.ErrContainerDoesNotExists}),
+			errs:   MultiErrors([]error{facts.ErrContainerDoesNotExists}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},
 		{
 			name:   "multiple error",
-			errs:   MultiError([]error{os.ErrClosed, facts.ErrContainerDoesNotExists}),
+			errs:   MultiErrors([]error{os.ErrClosed, facts.ErrContainerDoesNotExists}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},
 		{
 			name:   "multiple error2",
-			errs:   MultiError([]error{facts.ErrContainerDoesNotExists, os.ErrClosed}),
+			errs:   MultiErrors([]error{facts.ErrContainerDoesNotExists, os.ErrClosed}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},
 		{
 			name:   "multiple wrapped error",
-			errs:   MultiError([]error{os.ErrInvalid, fmt.Errorf("wrapped %w", facts.ErrContainerDoesNotExists), os.ErrClosed}),
+			errs:   MultiErrors([]error{os.ErrInvalid, fmt.Errorf("wrapped %w", facts.ErrContainerDoesNotExists), os.ErrClosed}),
 			target: facts.ErrContainerDoesNotExists,
 			want:   true,
 		},

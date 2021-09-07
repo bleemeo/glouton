@@ -1,3 +1,4 @@
+//go:build linux
 // +build linux
 
 package process
@@ -9,6 +10,7 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -70,7 +72,7 @@ func testAllProcs(t *testing.T, source proc.Source) {
 	}
 
 	if err := procs.Close(); err != nil {
-		t.Error(err)
+		t.Errorf("An error occurred while trying to close the process: %v", err)
 	}
 
 	if !foundMyself {
@@ -100,18 +102,20 @@ func testProcessses(t *testing.T, source facts.ProcessLister, maxAge time.Durati
 	}
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func testProc(t *testing.T, procs proc.Iter) {
 	t.Helper()
 
 	internalProc, _ := procs.(*iter)
 	current := internalProc.procValue
 
-	if os.IsNotExist(current.procErr) {
-		return
-	}
-
 	if current.procErr != nil {
+		// [ESRCH] No process or process group can be found corresponding to that specified by pid.
+		// This error can happen when the processcurrent exist while opening it, but not anymore when you want to read it.
+		if os.IsNotExist(current.procErr) || strings.Contains(current.procErr.Error(), syscall.ESRCH.Error()) {
+			return
+		}
+
 		// skip overflow errors if we are in 32bits mode (we assume we are on a 64bits system).
 		// We do this because enumerating 64bits process when running in 32bits will fail,
 		// as the memory space of theses processes will overflow the capacity of uint,
@@ -120,7 +124,7 @@ func testProc(t *testing.T, procs proc.Iter) {
 			return
 		}
 
-		t.Error(current.procErr)
+		t.Errorf("An error occurred for the current process: %w", current.procErr)
 	}
 
 	if current.proc == nil {
@@ -129,7 +133,7 @@ func testProc(t *testing.T, procs proc.Iter) {
 
 	stat, err := getStat(current.proc)
 	if err != nil {
-		t.Error(err)
+		t.Errorf("Error on get stat: %v", err)
 	}
 
 	if stat.PID != procs.GetPid() {
@@ -147,11 +151,11 @@ func testProc(t *testing.T, procs proc.Iter) {
 
 	cmdline, err := current.getCmdline()
 	if err != nil {
-		if os.IsNotExist(err) {
+		if os.IsNotExist(err) || strings.Contains(current.procErr.Error(), syscall.ESRCH.Error()) {
 			return
 		}
 
-		t.Error(err)
+		t.Errorf("An error occurred while trying to get te command line from proc cache: %v", err)
 	}
 
 	if !reflect.DeepEqual(cmdline, static.Cmdline) {
@@ -164,6 +168,6 @@ func testProc(t *testing.T, procs proc.Iter) {
 
 	_, _, err = procs.GetMetrics()
 	if err != nil && !os.IsNotExist(err) {
-		t.Error(err)
+		t.Errorf("An error occurred wile trying to get Metrics: %v", err)
 	}
 }

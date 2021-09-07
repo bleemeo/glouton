@@ -155,7 +155,7 @@ func (f *FactProvider) updateFacts(ctx context.Context) {
 	f.lastFactsUpdate = time.Now()
 }
 
-//nolint:gocyclo,cyclop
+//nolint:cyclop
 func (f *FactProvider) fastUpdateFacts(ctx context.Context) map[string]string {
 	newFacts := make(map[string]string)
 

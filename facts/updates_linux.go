@@ -31,7 +31,7 @@ import (
 func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecurityUpdates int) {
 	pendingUpdates = -1
 	pendingSecurityUpdates = -1
-	re := regexp.MustCompile(`^(\d+) [\pL\s]+.$`)
+	re := regexp.MustCompile(`^(\d+) [\pL\s:]+.$`)
 	firstMatch := true
 
 	for _, line := range strings.Split(string(content), "\n") {
@@ -44,6 +44,10 @@ func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecuri
 			tmp, _ := strconv.ParseInt(match[1], 10, 0)
 			pendingSecurityUpdates = int(tmp)
 		}
+	}
+
+	if pendingUpdates != -1 && pendingSecurityUpdates == -1 {
+		pendingSecurityUpdates = 0
 	}
 
 	return pendingUpdates, pendingSecurityUpdates

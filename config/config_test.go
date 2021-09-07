@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-// nolint: scopelint
+//nolint:scopelint
 package config
 
 import (
@@ -215,7 +215,7 @@ func TestData(t *testing.T) {
 		{Key: "merged_dict.main", Want: "1"},
 		{Key: "merged_dict.first", Want: "yes"},
 		{Key: "sub_section.nested", Want: "<nil>"},
-		{Key: "telegraf.statsd.enabled", Want: "<nil>"},
+		{Key: "telegraf.statsd.enable", Want: "<nil>"},
 	}
 	for _, c := range cases {
 		got := cfg.String(c.Key)
@@ -306,12 +306,12 @@ func TestSet(t *testing.T) {
 
 func TestLoadEnv(t *testing.T) {
 	envs := map[string]string{
-		"ENV_NAME_1":        "something",
-		"AGENT_API_PORT":    "8015",
-		"AGENT_API_ENABLED": "yes",
-		"API_ENABLED":       "false",
-		"EXTRA_ENV":         "not-used",
-		"AGENT_TAGS":        "this-is,a-list,comma separated",
+		"ENV_NAME_1":       "something",
+		"AGENT_API_PORT":   "8015",
+		"AGENT_API_ENABLE": "yes",
+		"API_ENABLE":       "false",
+		"EXTRA_ENV":        "not-used",
+		"AGENT_TAGS":       "this-is,a-list,comma separated",
 	}
 	lookupEnv := func(envName string) (string, bool) {
 		value, ok := envs[envName]
@@ -345,15 +345,15 @@ func TestLoadEnv(t *testing.T) {
 			wantFound: false,
 		},
 		{
-			envName:   "API_ENABLED",
+			envName:   "API_ENABLE",
 			varType:   TypeBoolean,
-			key:       "api.enabled",
+			key:       "api.enable",
 			wantFound: true,
 		},
 		{
-			envName:   "AGENT_API_ENABLED",
+			envName:   "AGENT_API_ENABLE",
 			varType:   TypeBoolean,
-			key:       "api.enabled",
+			key:       "api.enable",
 			wantFound: true,
 		},
 		{
@@ -389,7 +389,7 @@ func TestLoadEnv(t *testing.T) {
 			wantFound: false,
 		},
 		{
-			key:       "api.enabled",
+			key:       "api.enable",
 			wantFound: true,
 			want:      true,
 		},
