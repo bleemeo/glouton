@@ -135,7 +135,7 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 
 // compareConfigTargets returns true if the monitors are identical, and false otherwise.
 func compareConfigTargets(a configTarget, b configTarget) bool {
-	return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && reflect.DeepEqual(a.Module, b.Module)
+	return a.BleemeoAgentID == b.BleemeoAgentID && a.URL == b.URL && a.RefreshRate == b.RefreshRate && reflect.DeepEqual(a.Module, b.Module)
 }
 
 func collectorInMap(value collectorWithLabels, iterable map[int]gathererWithConfigTarget) bool {
