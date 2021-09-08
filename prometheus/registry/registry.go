@@ -130,7 +130,7 @@ type registration struct {
 	originalJitterSeed        uint64
 	stopCallback              func()
 	includedInMetricsEndpoint bool
-	loop                      scrapeLoop
+	loop                      *scrapeLoop
 	gatherer                  labeledGatherer
 	relabelHookSkip           bool
 	lastRebalHookRetry        time.Time
@@ -145,11 +145,7 @@ type reschedule struct {
 // This type is used to have another Collecto() method private which only return pushed points.
 type pushCollector Registry
 
-var (
-	errToManyGatherers = errors.New("too many gatherers in the registry. Unable to find a new slot")
-	errNotImplemented  = errors.New("not implemented")
-	errMissingAppend   = errors.New("expected at least one Append()")
-)
+var errToManyGatherers = errors.New("too many gatherers in the registry. Unable to find a new slot")
 
 func getDefaultRelabelConfig() []*relabel.Config {
 	return []*relabel.Config{
@@ -432,7 +428,7 @@ func (r *Registry) addRegistration(reg *registration, startLoop bool) (int, erro
 			})
 		}
 
-		result := startScrapeLoop(
+		reg.loop = startScrapeLoop(
 			context.Background(),
 			r.currentDelay,
 			r.currentDelay*9/10,
@@ -443,7 +439,6 @@ func (r *Registry) addRegistration(reg *registration, startLoop bool) (int, erro
 				r.scrapeDone()
 			},
 		)
-		reg.loop = result
 	}
 
 	return id, nil
@@ -529,7 +524,7 @@ func (r *Registry) Unregister(id int) bool {
 		return false
 	}
 
-	if reg.loop.ptr != nil {
+	if reg.loop != nil {
 		r.l.Unlock()
 		reg.loop.stop()
 		r.l.Lock()
@@ -650,7 +645,7 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 			continue
 		}
 
-		if reg.loop.ptr == nil {
+		if reg.loop == nil {
 			continue
 		}
 

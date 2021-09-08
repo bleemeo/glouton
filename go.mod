@@ -15,7 +15,6 @@ require (
 	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-kit/kit v0.11.0
-	github.com/go-kit/log v0.1.0
 	github.com/go-ole/go-ole v1.2.5
 	github.com/gogo/protobuf v1.3.2
 	github.com/google/go-cmp v0.5.6
