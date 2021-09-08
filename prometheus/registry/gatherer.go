@@ -40,7 +40,8 @@ type GatherState struct {
 	QueryType queryType
 	// Shall TickingGatherer perform immediately the gathering (instead of its normal "ticking"
 	// operation mode) ?
-	NoTick bool
+	NoTick   bool
+	NoFilter bool
 }
 
 // GatherStateFromMap creates a GatherState from a state passed as a map.
@@ -55,6 +56,10 @@ func GatherStateFromMap(params map[string][]string) GatherState {
 	// TODO: add this in some user-facing documentation
 	if _, excludeMetrics := params["onlyMonitors"]; excludeMetrics {
 		state.QueryType = OnlyProbes
+	}
+
+	if _, noFilter := params["noFilter"]; noFilter {
+		state.NoFilter = true
 	}
 
 	return state
@@ -101,7 +106,9 @@ func (w *GathererWithStateWrapper) Gather() ([]*dto.MetricFamily, error) {
 		logger.V(2).Printf("Error during gather on /metrics: %v", err)
 	}
 
-	res = w.filter.FilterFamilies(res)
+	if !w.gatherState.NoFilter {
+		res = w.filter.FilterFamilies(res)
+	}
 
 	return res, err
 }
