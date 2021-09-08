@@ -56,13 +56,13 @@ type Connector struct {
 }
 
 // New create a new Connector.
-func New(option types.GlobalOption) *Connector {
-	c := &Connector{
+func New(option types.GlobalOption) (c *Connector, err error) {
+	c = &Connector{
 		option:      option,
 		cache:       cache.Load(option.State),
 		mqttRestart: make(chan interface{}, 1),
 	}
-	c.sync = synchronizer.New(synchronizer.Option{
+	c.sync, err = synchronizer.New(synchronizer.Option{
 		GlobalOption:                c.option,
 		Cache:                       c.cache,
 		UpdateConfigCallback:        c.updateConfig,
@@ -72,7 +72,7 @@ func New(option types.GlobalOption) *Connector {
 		IsMqttConnected:             c.Connected,
 	})
 
-	return c
+	return c, err
 }
 
 func (c *Connector) setInitialized() {

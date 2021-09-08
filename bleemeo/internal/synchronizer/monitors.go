@@ -24,6 +24,9 @@ import (
 	"glouton/logger"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/types"
+	"time"
+
+	"github.com/cespare/xxhash"
 )
 
 var (
@@ -146,6 +149,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	processedMonitors := make([]types.Monitor, 0, len(monitors))
+	agentIDHash := time.Duration(xxhash.Sum64String(s.agentID)%16000)*time.Millisecond - 8*time.Second
 
 	for _, monitor := range monitors {
 		// try to retrieve the account config associated with this monitor
@@ -154,10 +158,25 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 			return fmt.Errorf("%w '%s' for probe '%s'", errMissingAccountConf, monitor.AccountConfig, monitor.URL)
 		}
 
+		creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
+		if err != nil {
+			logger.V(1).Printf("Ignore monitor %s (id=%s) due to invalid created_at: %s", monitor.URL, monitor.ID, monitor.CreationDate)
+
+			continue
+		}
+
+		jitterCreationDate := creationDate.Add(agentIDHash)
+		if creationDate.Minute() != jitterCreationDate.Minute() {
+			// We want to kept the minute unchanged. This is required for monitor with
+			// resolution of 5 minutes because Bleemeo assume that the monitor metrics are
+			// send at the beginning of the minute after creationDate + N * 5 minutes.
+			jitterCreationDate = creationDate.Add(-agentIDHash)
+		}
+
 		processedMonitors = append(processedMonitors, types.Monitor{
 			ID:                      monitor.ID,
 			MetricMonitorResolution: conf.MetricMonitorResolution,
-			CreationDate:            monitor.CreationDate,
+			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,
 			BleemeoAgentID:          monitor.AgentID,
 			ExpectedContent:         monitor.ExpectedContent,

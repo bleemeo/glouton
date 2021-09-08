@@ -7,6 +7,7 @@ require (
 	github.com/AstromechZA/etcpwdparse v0.0.0-20170319193008-f0e5f0779716
 	github.com/StackExchange/wmi v1.2.1
 	github.com/agnivade/levenshtein v1.1.1 // indirect
+	github.com/cespare/xxhash v1.1.0
 	github.com/containerd/cgroups v1.0.1
 	github.com/containerd/containerd v1.5.5
 	github.com/containerd/typeurl v1.0.2

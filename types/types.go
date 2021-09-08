@@ -275,7 +275,7 @@ func TextToLabels(text string) map[string]string {
 type Monitor struct {
 	ID                      string
 	MetricMonitorResolution int
-	CreationDate            string
+	CreationDate            time.Time
 	URL                     string
 	BleemeoAgentID          string
 	ExpectedContent         string

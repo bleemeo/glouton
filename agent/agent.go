@@ -826,7 +826,7 @@ func (a *agent) run() { //nolint:cyclop
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
+		a.bleemeoConnector, err = bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.config,
 			State:                   a.state,
 			Facts:                   a.factProvider,
@@ -844,6 +844,12 @@ func (a *agent) run() { //nolint:cyclop
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			BlackboxScraperName:     scaperName,
 		})
+		if err != nil {
+			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
+
+			return
+		}
+
 		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}

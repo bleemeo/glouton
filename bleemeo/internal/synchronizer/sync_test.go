@@ -693,7 +693,7 @@ func TestSync(t *testing.T) {
 		},
 	})
 
-	s := New(Option{
+	s, err := New(Option{
 		Cache: &cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:                  cfg,
@@ -705,13 +705,16 @@ func TestSync(t *testing.T) {
 			NotifyFirstRegistration: func(ctx context.Context) {},
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	s.ctx = context.Background()
 
 	// necessary to prevent the sync to try to deactivate every metrics
 	s.startedAt = time.Now()
 
-	err := s.setClient()
+	err = s.setClient()
 	if err != nil {
 		t.Fatal(err)
 	}

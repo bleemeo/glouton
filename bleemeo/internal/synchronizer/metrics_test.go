@@ -147,7 +147,9 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 		UpdatedAt: helper.mt.Now(),
 	}
 
-	helper.s = New(Option{
+	var err error
+
+	helper.s, err = New(Option{
 		Cache: &cache,
 		GlobalOption: bleemeoTypes.GlobalOption{
 			Config:       cfg,
@@ -158,6 +160,9 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 			MetricFormat: types.MetricFormatBleemeo,
 		},
 	})
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	helper.s.now = helper.mt.Now
 	helper.s.ctx = context.Background()
