@@ -175,8 +175,15 @@ func (m *RegisterManager) updateRegistrations() error {
 			// wrap our gatherer in ProbeGatherer, to only collect metrics when necessary
 			g = registry.NewProbeGatherer(g, collectorFromConfig.collector.RefreshRate > time.Minute)
 
-			// TODO: the hash (jitter) should be a special value ? based on CreationDate ?
 			hash := labels.FromMap(collectorFromConfig.labels).Hash()
+
+			refreshRate := collectorFromConfig.collector.RefreshRate
+			creationDate := collectorFromConfig.collector.CreationDate
+
+			if refreshRate > 0 {
+				// We want public probe to run at known time
+				hash = uint64(creationDate.UnixNano()) % uint64(refreshRate)
+			}
 
 			// this weird "dance" where we create a registry and add it to the registererGatherer
 			// for each probe is the product of our unability to expose a "__meta_something"
@@ -185,6 +192,11 @@ func (m *RegisterManager) updateRegistrations() error {
 			id, err := m.registry.RegisterGatherer(hash, collectorFromConfig.collector.RefreshRate, g, nil, collectorFromConfig.labels, true)
 			if err != nil {
 				return err
+			}
+
+			if refreshRate > 0 && time.Since(creationDate) < refreshRate {
+				// For new monitor, trigger a schedule immediately
+				m.registry.ScheduleScrape(id, time.Now())
 			}
 
 			m.registrations[id] = gathererWithConfigTarget{

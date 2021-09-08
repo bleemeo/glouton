@@ -428,10 +428,15 @@ func (r *Registry) addRegistration(reg *registration, startLoop bool) (int, erro
 			})
 		}
 
+		interval := reg.originalInterval
+		if interval == 0 {
+			interval = r.currentDelay
+		}
+
 		reg.loop = startScrapeLoop(
 			context.Background(),
-			r.currentDelay,
-			r.currentDelay*9/10,
+			interval,
+			interval*9/10,
 			reg.originalJitterSeed,
 			func(ctx context.Context, t0 time.Time) {
 				r.scrapeStart()
@@ -442,6 +447,18 @@ func (r *Registry) addRegistration(reg *registration, startLoop bool) (int, erro
 	}
 
 	return id, nil
+}
+
+func (r *Registry) ScheduleScrape(id int, runAt time.Time) {
+	r.l.Lock()
+	reg := r.registrations[id]
+	r.l.Unlock()
+
+	if reg == nil {
+		return
+	}
+
+	r.scheduleUpdate(id, reg, runAt)
 }
 
 func (r *Registry) scheduleUpdate(id int, reg *registration, runAt time.Time) {
@@ -494,7 +511,7 @@ func (r *Registry) checkReschedule(ctx context.Context) time.Duration {
 	if firstInFuture == -1 {
 		r.reschedules = nil
 
-		return 30 * time.Second
+		return 10 * time.Second
 	}
 
 	if firstInFuture > 0 {
