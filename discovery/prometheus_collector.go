@@ -9,7 +9,10 @@ import (
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/prometheus/pkg/labels"
 )
+
+const defaultInterval = 0
 
 func (d *Discovery) createPrometheusMemcached(service Service) error {
 	ip, port := service.AddressPort()
@@ -21,7 +24,7 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 	address := fmt.Sprintf("%s:%d", ip, port)
 
 	collector := memcached.NewExporter(address, 5*time.Second)
-	labels := map[string]string{
+	lbls := map[string]string{
 		types.LabelMetaServiceName:   service.Name,
 		types.LabelMetaContainerID:   service.ContainerID,
 		types.LabelMetaContainerName: service.ContainerName,
@@ -45,7 +48,9 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 		runtime.GC()
 	}
 
-	id, err := d.metricRegistry.RegisterGatherer(reg, stopCallback, labels, d.metricFormat == types.MetricFormatPrometheus)
+	hash := labels.FromMap(lbls).Hash()
+
+	id, err := d.metricRegistry.RegisterGatherer(hash, defaultInterval, reg, stopCallback, lbls, d.metricFormat == types.MetricFormatPrometheus)
 	if err != nil {
 		return err
 	}

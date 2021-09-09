@@ -12,20 +12,25 @@ import (
 
 // ProbeGatherer is a specific gatherer that wraps probes, choose when to Gather() depending on the GatherState argument.
 type ProbeGatherer struct {
-	g prometheus.Gatherer
+	g                   prometheus.Gatherer
+	fastUpdateOnFailure bool
+	scheduleUpdate      func(runAt time.Time)
 
-	l       sync.Mutex
-	failing bool
-	// LastFailed tells us whether the last check was a falling edge (a new failure)
-	lastFailed     bool
-	lastFailedTime time.Time
+	l              sync.Mutex
+	successLastRun bool
 }
 
 // NewProbeGatherer creates a new ProbeGatherer with the prometheus gatherer specified.
-func NewProbeGatherer(gatherer prometheus.Gatherer) *ProbeGatherer {
+func NewProbeGatherer(gatherer prometheus.Gatherer, fastUpdateOnFailure bool) *ProbeGatherer {
 	return &ProbeGatherer{
-		g: gatherer,
+		g:                   gatherer,
+		fastUpdateOnFailure: fastUpdateOnFailure,
 	}
+}
+
+// SetScheduleUpdate is called by Registry because this gathered will be used.
+func (p *ProbeGatherer) SetScheduleUpdate(fun func(runAt time.Time)) {
+	p.scheduleUpdate = fun
 }
 
 // Gather some metrics with with an empty gatherer state.
@@ -53,16 +58,14 @@ func (p *ProbeGatherer) GatherWithState(ctx context.Context, state GatherState) 
 	p.l.Lock()
 	defer p.l.Unlock()
 
-	// when we see a new failure, we run the check again a minute later
-	if p.lastFailed && time.Since(p.lastFailedTime) > time.Minute {
-		// execute the query, do not wait for the next tick
-		state.NoTick = true
-	}
-
 	if cg, ok := p.g.(GathererWithState); ok {
 		mfs, err = cg.GatherWithState(ctx, state)
 	} else {
 		mfs, err = p.g.Gather()
+	}
+
+	if !state.FromScrapeLoop {
+		return mfs, err
 	}
 
 	for _, mf := range mfs {
@@ -75,12 +78,18 @@ func (p *ProbeGatherer) GatherWithState(ctx context.Context, state GatherState) 
 
 			success := mf.Metric[0].GetGauge().GetValue() == 1.
 
-			p.lastFailed = !success && !p.failing
-			p.failing = !success
+			if !success && p.successLastRun && p.fastUpdateOnFailure && p.scheduleUpdate != nil {
+				// we changed from Ok to not ok and fast update are activated. Schedule an
+				// update the next minute to quickly recover.
+				t0 := state.T0
+				if t0.IsZero() {
+					t0 = time.Now()
+				}
 
-			if p.lastFailed {
-				p.lastFailedTime = time.Now()
+				p.scheduleUpdate(t0.Add(time.Minute))
 			}
+
+			p.successLastRun = success
 		}
 	}
 

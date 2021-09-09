@@ -117,8 +117,8 @@ type Option struct {
 }
 
 // New return a new Synchronizer.
-func New(option Option) *Synchronizer {
-	return &Synchronizer{
+func New(option Option) (*Synchronizer, error) {
+	s := &Synchronizer{
 		option: option,
 		now:    time.Now,
 
@@ -126,6 +126,12 @@ func New(option Option) *Synchronizer {
 		nextFullSync:           time.Now(),
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
+
+	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
+		return nil, err
+	}
+
+	return s, nil
 }
 
 // Run run the Connector.
@@ -133,10 +139,6 @@ func New(option Option) *Synchronizer {
 func (s *Synchronizer) Run(ctx context.Context) error {
 	s.ctx = ctx
 	s.startedAt = s.now()
-
-	if err := s.option.State.Get("agent_uuid", &s.agentID); err != nil {
-		return err
-	}
 
 	firstSync := true
 

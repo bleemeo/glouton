@@ -84,7 +84,17 @@ import (
 	processInput "glouton/inputs/process"
 
 	"github.com/google/uuid"
+	"github.com/prometheus/prometheus/pkg/labels"
 	"gopkg.in/yaml.v3"
+)
+
+// Jitter define the aligned timestamp used for scrapping.
+// System collector use 0 (baseJitter here and in registry.go).
+// baseJitterPlus is a little after, useful for collector that need to re-read point of system collector.
+const (
+	baseJitter      = 0
+	baseJitterPlus  = 500000
+	defaultInterval = 0
 )
 
 var errUnsupportedKey = errors.New("Unsupported item key") //nolint:stylecheck
@@ -592,17 +602,28 @@ func (a *agent) run() { //nolint:cyclop
 
 	filteredStore := store.NewFilteredStore(a.store, mFilter.FilterPoints, mFilter.filterMetrics)
 
-	a.gathererRegistry = &registry.Registry{
-		Option: registry.Option{
+	a.gathererRegistry, err = registry.New(
+		registry.Option{
 			PushPoint:             a.store,
 			FQDN:                  fqdn,
 			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
 			Filter:                mFilter,
-		},
-		RulesCallback: rulesManager.Run,
+		})
+	if err != nil {
+		logger.Printf("Unable to create the metrics registry: %v", err)
+		logger.Printf("The metrics registry is required for Glouton. Exiting.")
+
+		return
 	}
+
+	if _, err := a.gathererRegistry.RegisterPushPointsCallback(baseJitterPlus, func(context.Context, time.Time) {
+		rulesManager.Run()
+	}); err != nil {
+		logger.Printf("unable to add recording rules metrics: %v", err)
+	}
+
 	a.threshold = threshold.New(a.state)
 	acc := &inputs.Accumulator{Pusher: a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))}
 
@@ -663,15 +684,22 @@ func (a *agent) run() { //nolint:cyclop
 	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
 
 	a.collector = collector.New(acc)
-	a.gathererRegistry.AddPushPointsCallback(a.collector.RunGather)
-
-	if a.metricFormat == types.MetricFormatBleemeo {
-		a.gathererRegistry.AddPushPointsCallback(processInput.Gather)
+	if _, err := a.gathererRegistry.RegisterPushPointsCallback(baseJitter, a.collector.RunGather); err != nil {
+		logger.Printf("unable to add system metrics: %v", err)
 	}
 
-	a.gathererRegistry.AddPushPointsCallback(
-		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5 * time.Minute))),
-	)
+	if a.metricFormat == types.MetricFormatBleemeo {
+		if _, err := a.gathererRegistry.RegisterPushPointsCallback(baseJitter, processInput.Gather); err != nil {
+			logger.Printf("unable to add processes metrics: %v", err)
+		}
+	}
+
+	if _, err := a.gathererRegistry.RegisterPushPointsCallback(
+		baseJitter,
+		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
+	); err != nil {
+		logger.Printf("unable to add miscGathere metrics: %v", err)
+	}
 
 	services, _ := a.config.Get("service")
 	servicesIgnoreCheck, _ := a.config.Get("service_ignore_check")
@@ -697,13 +725,16 @@ func (a *agent) run() { //nolint:cyclop
 	)
 
 	for _, target := range scrapperSNMPTargets {
-		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
+		hash := labels.FromMap(target.ExtraLabels).Hash()
+		// TODO: use the correct interval
+		if _, err := a.gathererRegistry.RegisterGatherer(hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
 	for _, target := range targets {
-		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
+		hash := labels.FromMap(target.ExtraLabels).Hash()
+		if _, err := a.gathererRegistry.RegisterGatherer(hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
@@ -801,7 +832,7 @@ func (a *agent) run() { //nolint:cyclop
 			scaperName = fmt.Sprintf("%s:%d", fqdn, a.config.Int("web.listener.port"))
 		}
 
-		a.bleemeoConnector = bleemeo.New(bleemeoTypes.GlobalOption{
+		a.bleemeoConnector, err = bleemeo.New(bleemeoTypes.GlobalOption{
 			Config:                  a.config,
 			State:                   a.state,
 			Facts:                   a.factProvider,
@@ -819,6 +850,12 @@ func (a *agent) run() { //nolint:cyclop
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			BlackboxScraperName:     scaperName,
 		})
+		if err != nil {
+			logger.Printf("unable to start Bleemeo SAAS connector: %v", err)
+
+			return
+		}
+
 		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
@@ -895,7 +932,7 @@ func (a *agent) run() { //nolint:cyclop
 	a.registerOSSpecificComponents()
 
 	tasks = append(tasks, taskInfo{
-		a.gathererRegistry.RunCollection,
+		a.gathererRegistry.Run,
 		"Metric collector",
 	})
 
@@ -983,16 +1020,16 @@ func (a *agent) buildCollectorsConfig() (conf inputs.CollectorConfig, err error)
 	}, nil
 }
 
-func (a *agent) miscGather(pusher types.PointPusher) func(time.Time) {
-	return func(t0 time.Time) {
-		points, err := a.containerRuntime.Metrics(context.Background())
+func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.Time) {
+	return func(ctx context.Context, t0 time.Time) {
+		points, err := a.containerRuntime.Metrics(ctx)
 		if err != nil {
 			logger.V(2).Printf("container Runtime metrics gather failed: %v", err)
 		}
 
 		// We don't really care about having up-to-date information because
 		// when containers are started/stopped, the information is updated anyway.
-		containers, err := a.containerRuntime.Containers(context.Background(), 2*time.Hour, false)
+		containers, err := a.containerRuntime.Containers(ctx, 2*time.Hour, false)
 		if err != nil {
 			logger.V(2).Printf("gather on DockerProvider failed: %v", err)
 

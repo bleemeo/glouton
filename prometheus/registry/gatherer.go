@@ -37,11 +37,10 @@ const (
 // please make sure that default values are sensible. For example, NoProbe *must* be the default queryType, as
 // we do not want queries on /metrics to always probe the collectors by default).
 type GatherState struct {
-	QueryType queryType
-	// Shall TickingGatherer perform immediately the gathering (instead of its normal "ticking"
-	// operation mode) ?
-	NoTick   bool
-	NoFilter bool
+	QueryType      queryType
+	FromScrapeLoop bool
+	T0             time.Time
+	NoFilter       bool
 }
 
 // GatherStateFromMap creates a GatherState from a state passed as a map.
@@ -68,6 +67,12 @@ func GatherStateFromMap(params map[string][]string) GatherState {
 // GathererWithState is a generalization of prometheus.Gather.
 type GathererWithState interface {
 	GatherWithState(context.Context, GatherState) ([]*dto.MetricFamily, error)
+}
+
+// GathererWithScheduleUpdate is a Gatherer that had a ScheduleUpdate (like Probe gatherer).
+// The ScheduleUpdate could be used to trigger an additional gather earlier than default scrape interval.
+type GathererWithScheduleUpdate interface {
+	SetScheduleUpdate(func(runAt time.Time))
 }
 
 // GathererWithStateWrapper is a wrapper around GathererWithState that allows to specify a state to forward
@@ -334,40 +339,4 @@ func (gs Gatherers) Gather() ([]*dto.MetricFamily, error) {
 	defer cancel()
 
 	return gs.GatherWithState(ctx, GatherState{})
-}
-
-type labeledGatherers []labeledGatherer
-
-// GatherPoints return samples as MetricPoint instead of Prometheus MetricFamily.
-func (gs labeledGatherers) GatherPoints(ctx context.Context, now time.Time, state GatherState) ([]types.MetricPoint, error) {
-	result := []types.MetricPoint{}
-
-	var errs prometheus.MultiError
-
-	wg := sync.WaitGroup{}
-	wg.Add(len(gs))
-
-	mutex := sync.Mutex{}
-
-	for _, g := range gs {
-		go func(g labeledGatherer) {
-			defer wg.Done()
-
-			points, err := g.GatherPoints(ctx, now, state)
-
-			mutex.Lock()
-
-			if err != nil {
-				errs = append(errs, err)
-			}
-
-			result = append(result, points...)
-
-			mutex.Unlock()
-		}(g)
-	}
-
-	wg.Wait()
-
-	return result, errs.MaybeUnwrap()
 }

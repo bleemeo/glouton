@@ -18,6 +18,7 @@
 package collector
 
 import (
+	"context"
 	"errors"
 	"glouton/inputs"
 	"glouton/logger"
@@ -108,7 +109,7 @@ func (c *Collector) RemoveInput(id int) {
 }
 
 // RunGather run one gather and send metric through the accumulator.
-func (c *Collector) RunGather(t0 time.Time) {
+func (c *Collector) RunGather(_ context.Context, t0 time.Time) {
 	c.runOnce(t0)
 }
 

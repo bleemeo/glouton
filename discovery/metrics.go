@@ -229,7 +229,7 @@ func (d *Discovery) removeInput(key NameContainer) {
 
 		if collector.gathererID == 0 {
 			d.coll.RemoveInput(collector.inputID)
-		} else if !d.metricRegistry.UnregisterGatherer(collector.gathererID) {
+		} else if !d.metricRegistry.Unregister(collector.gathererID) {
 			logger.V(2).Printf("The gatherer wasn't present")
 		}
 	}

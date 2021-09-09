@@ -129,17 +129,12 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 		uri = url.Host
 	}
 
-	creationDate, err := time.Parse(time.RFC3339, monitor.CreationDate)
-	if err != nil {
-		return nil, err
-	}
-
 	confTarget := configTarget{
 		Module:         mod,
 		Name:           monitor.URL,
 		BleemeoAgentID: monitor.BleemeoAgentID,
 		URL:            uri,
-		CreationDate:   creationDate,
+		CreationDate:   monitor.CreationDate,
 	}
 
 	if monitor.MetricMonitorResolution != 0 {

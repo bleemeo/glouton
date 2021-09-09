@@ -66,6 +66,8 @@ func (s *Synchronizer) syncMainAgent() error {
 		}
 	}
 
+	previousConfig := s.option.Cache.Agent().CurrentConfigID
+
 	_, err := s.client.Do(s.ctx, "PATCH", fmt.Sprintf("v1/agent/%s/", s.agentID), params, data, &agent)
 	if err != nil {
 		return err
@@ -75,6 +77,17 @@ func (s *Synchronizer) syncMainAgent() error {
 
 	if agent.CurrentConfigID == "" {
 		return errNoConfig
+	}
+
+	if previousConfig != agent.CurrentConfigID {
+		cfg := s.option.Cache.CurrentAccountConfig()
+
+		// If the config ID is empty, it means the configuration isn't (yet) loaded
+		// from Bleemeo, but should be soon.
+		// syncAccountConfig will take care of calling UpdateConfigCallback
+		if cfg.ID != "" && s.option.UpdateConfigCallback != nil {
+			s.option.UpdateConfigCallback()
+		}
 	}
 
 	s.option.Cache.SetAccountID(agent.AccountID)

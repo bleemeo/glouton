@@ -45,9 +45,7 @@ func New(ps processProvider, pusher types.PointPusher) Input {
 }
 
 // Gather send metrics to the PointPusher.
-func (i Input) Gather(now time.Time) {
-	ctx := context.Background()
-
+func (i Input) Gather(ctx context.Context, now time.Time) {
 	proc, err := i.ps.Processes(ctx, maxAge)
 	if err != nil {
 		logger.V(1).Printf("unable to gather process metrics: %v", err)
