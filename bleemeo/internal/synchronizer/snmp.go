@@ -17,7 +17,6 @@
 package synchronizer
 
 import (
-	"fmt"
 	"glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
@@ -59,14 +58,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 		"fields": "id,display_name,account,agent_type,abstracted,fqdn,initial_password,created_at,next_config_at,current_config,tags",
 	}
 
-	var agent payloadSNMPAgent
-
-	for i, v := range remoteAgentList {
-		_, err := s.client.Do(s.ctx, "GET", fmt.Sprintf("v1/agent/%s/", v.ID), params, nil, &agent)
-		if err != nil {
-			return err
-		}
-
+	for i, agent := range remoteAgentList {
 		if agent.AgentType == agentTypeID {
 			remoteIndexByFqdn[agent.FQDN] = i
 		}
