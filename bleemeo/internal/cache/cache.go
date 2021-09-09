@@ -25,7 +25,7 @@ import (
 )
 
 const (
-	cacheVersion = 4
+	cacheVersion = 6
 	cacheKey     = "CacheBleemeoConnector"
 )
 
@@ -45,17 +45,14 @@ type data struct {
 	AccountID               string
 	Facts                   []bleemeoTypes.AgentFact
 	Containers              []bleemeoTypes.Container
+	Agents                  []bleemeoTypes.Agent
+	AgentTypes              []bleemeoTypes.AgentType
 	Metrics                 []bleemeoTypes.Metric
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
-	// AccountConfig groups the configuration of other accounts, something we may need for probes.
-	// mapping config UUID -> Config
-	AccountConfigs map[string]bleemeoTypes.AccountConfig
-	// In contrast, CurrentAccountConfig stores the configuration of the account in which this
-	// agent is registered.
-	CurrentAccountConfig bleemeoTypes.AccountConfig
-	Services             []bleemeoTypes.Service
-	Monitors             []bleemeoTypes.Monitor
+	AccountConfigs          []bleemeoTypes.AccountConfig
+	Services                []bleemeoTypes.Service
+	Monitors                []bleemeoTypes.Monitor
 }
 
 // dataVersion1 contains fields that have been deleted since the version 1 of the state file, but that we
@@ -65,6 +62,11 @@ type data struct {
 // See Load() for more details on the transformations we will apply to parse old versions.
 type dataVersion1 struct {
 	AccountConfig bleemeoTypes.AccountConfig
+}
+
+// dataVersion5, like dataVersion1, only contains fields from V5 that we need to read.
+type dataVersion5 struct {
+	CurrentAccountConfig bleemeoTypes.AccountConfig
 }
 
 // SetAccountID update the AccountID.
@@ -111,6 +113,24 @@ func (c *Cache) SetContainers(containers []bleemeoTypes.Container) {
 	c.dirty = true
 }
 
+// SetAgentList update agent list.
+func (c *Cache) SetAgentList(agentList []bleemeoTypes.Agent) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.Agents = agentList
+	c.dirty = true
+}
+
+// SetAgentTypes update agent list.
+func (c *Cache) SetAgentTypes(agentTypes []bleemeoTypes.AgentType) {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	c.data.AgentTypes = agentTypes
+	c.dirty = true
+}
+
 // SetMonitors updates the list of monitors.
 func (c *Cache) SetMonitors(monitors []bleemeoTypes.Monitor) {
 	c.l.Lock()
@@ -137,40 +157,42 @@ func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 	c.dirty = true
 }
 
-// SetCurrentAccountConfig updates the AccountConfig of this agent.
-func (c *Cache) SetCurrentAccountConfig(accountConfig bleemeoTypes.AccountConfig) {
-	c.l.Lock()
-	defer c.l.Unlock()
-
-	c.data.CurrentAccountConfig = accountConfig
-	c.dirty = true
-}
-
-// CurrentAccountConfig returns our own AccountConfig.
+// CurrentAccountConfig returns our own AccountConfig. If the
+// configuration isn't found and a default is used.
 func (c *Cache) CurrentAccountConfig() bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	return c.data.CurrentAccountConfig
+	for _, ac := range c.data.AccountConfigs {
+		if ac.ID == c.data.Agent.CurrentConfigID {
+			return ac
+		}
+	}
+
+	return bleemeoTypes.AccountConfig{
+		Name:                  "default",
+		LiveProcess:           true,
+		MetricAgentResolution: 10,
+	}
 }
 
 // SetAccountConfigs updates all the external accounts configurations we care about
 // (in particular, this is necessary for the monitors).
-func (c *Cache) SetAccountConfigs(configs map[string]bleemeoTypes.AccountConfig) {
+func (c *Cache) SetAccountConfigs(configs []bleemeoTypes.AccountConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	c.data.AccountConfigs = configs
 }
 
-// AccountConfigs returns the mapping between the accoutn config UUID and  list of external account configurations.
-func (c *Cache) AccountConfigs() map[string]bleemeoTypes.AccountConfig {
+// AccountConfigsByUUID returns the mapping between the accoutn config UUID and  list of external account configurations.
+func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.AccountConfig {
 	c.l.Lock()
 	defer c.l.Unlock()
 
 	result := make(map[string]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
-	for k, v := range c.data.AccountConfigs {
-		result[k] = v
+	for _, v := range c.data.AccountConfigs {
+		result[v.ID] = v
 	}
 
 	return result
@@ -305,6 +327,42 @@ func (c *Cache) ContainersByUUID() map[string]bleemeoTypes.Container {
 	return result
 }
 
+// Agents returns a (copy) of the list of agent.
+func (c *Cache) Agents() []bleemeoTypes.Agent {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.Agent, len(c.data.Agents))
+	copy(result, c.data.Agents)
+
+	return result
+}
+
+// AgentsByUUID returns a map agent.id => agent.
+func (c *Cache) AgentsByUUID() map[string]bleemeoTypes.Agent {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]bleemeoTypes.Agent)
+
+	for _, v := range c.data.Agents {
+		result[v.ID] = v
+	}
+
+	return result
+}
+
+// AgentTypes returns a (copy) of the list of agent types.
+func (c *Cache) AgentTypes() []bleemeoTypes.AgentType {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.AgentType, len(c.data.AgentTypes))
+	copy(result, c.data.AgentTypes)
+
+	return result
+}
+
 // SetMetricRegistrationsFail update the Metric list.
 func (c *Cache) SetMetricRegistrationsFail(registrations []bleemeoTypes.MetricRegistration) {
 	c.l.Lock()
@@ -425,52 +483,50 @@ func Load(state bleemeoTypes.State) *Cache {
 		logger.V(1).Printf("Unable to load Bleemeo connector cache: %v", err)
 	}
 
-	switch newData.Version {
-	case 0:
-		logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
+	versionUpgrade := map[int]func(bleemeoTypes.State, data) data{
+		1: upgradeV1,
+		2: upgradeV2,
+		3: upgradeV3,
+		4: upgradeV4,
+		5: upgradeV5,
+	}
 
-		cache.data.Version = cacheVersion
-	case 1:
-		logger.V(1).Printf("Version 1 of the cache found, upgrading it.")
+	upgradeCount := 0
+	for newData.Version != cacheVersion {
+		if upgradeCount > cacheVersion {
+			logger.V(2).Printf("Too many try to upgrade cache version. Discarding cache content")
 
-		// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
-		// the addition of Monitors and AccountConfigs
-		var oldCache dataVersion1
+			newData = data{
+				Version: cacheVersion,
+			}
 
-		if err := state.Get(cacheKey, &oldCache); err == nil {
-			newData.CurrentAccountConfig = oldCache.AccountConfig
+			break
 		}
 
-		fallthrough
-	case 2:
-		logger.V(1).Printf("Version 2 of the cache found, upgrading it.")
+		if newData.Version == 0 {
+			logger.V(2).Printf("Bleemeo connector cache is too absent, starting with new empty cache")
 
-		// well... containers had multiple fields renamed... lets drop it
-		newData.Containers = nil
-
-		fallthrough
-	case 3:
-		logger.V(1).Printf("Version 3 of cache found, upgrading it.")
-
-		// Version 4 stopped using "_item" to store Bleemeo item and use "item"
-		for i, m := range newData.Metrics {
-			labels := types.TextToLabels(m.LabelsText)
-			if v, ok := labels["_item"]; ok {
-				labels[types.LabelItem] = v
-				delete(labels, "_item")
-				newData.Metrics[i].LabelsText = types.LabelsToText(labels)
+			newData = data{
+				Version: cacheVersion,
 			}
 		}
 
-		fallthrough
-	case cacheVersion:
-		newData.Version = cacheVersion
-		cache.data = newData
-	default:
-		logger.V(2).Printf("Bleemeo connector cache is too recent. Discarding content")
+		upgradeFunc := versionUpgrade[newData.Version]
+		if upgradeFunc == nil {
+			logger.V(2).Printf("No upgrade path from version %d to %d. Discarding cache content", newData.Version, cacheVersion)
 
-		cache.data.Version = cacheVersion
+			newData = data{
+				Version: cacheVersion,
+			}
+		} else {
+			logger.V(1).Printf("Upgrading version %d of the cache", newData.Version)
+			newData = upgradeFunc(state, newData)
+		}
+
+		upgradeCount++
 	}
+
+	cache.data = newData
 
 	for i, m := range cache.data.Metrics {
 		m.Labels = types.TextToLabels(m.LabelsText)
@@ -479,4 +535,92 @@ func Load(state bleemeoTypes.State) *Cache {
 	}
 
 	return cache
+}
+
+func upgradeV1(state bleemeoTypes.State, newData data) data {
+	// the main change between V1 and V2 was the renaming of AccoutConfig to CurrentAccountConfig, and
+	// the addition of Monitors and AccountConfigs
+	var oldCache dataVersion1
+
+	if err := state.Get(cacheKey, &oldCache); err == nil {
+		newData.AccountConfigs = []bleemeoTypes.AccountConfig{oldCache.AccountConfig}
+	}
+
+	newData.Version = 2
+
+	return newData
+}
+
+func upgradeV2(_ bleemeoTypes.State, newData data) data {
+	// well... containers had multiple fields renamed... lets drop it
+	newData.Containers = nil
+	newData.Version = 3
+
+	return newData
+}
+
+func upgradeV3(_ bleemeoTypes.State, newData data) data {
+	// Version 4 stopped using "_item" to store Bleemeo item and use "item"
+	for i, m := range newData.Metrics {
+		labels := types.TextToLabels(m.LabelsText)
+		if v, ok := labels["_item"]; ok {
+			labels[types.LabelItem] = v
+			delete(labels, "_item")
+			newData.Metrics[i].LabelsText = types.LabelsToText(labels)
+		}
+	}
+
+	newData.Version = 4
+
+	return newData
+}
+
+func upgradeV4(_ bleemeoTypes.State, newData data) data {
+	// Version 5 added "AgentID" on Metric object
+	// With version 4, only metric of monitor could belong to another agent
+	for i, m := range newData.Metrics {
+		for _, v := range newData.Monitors {
+			if m.ServiceID == v.ID {
+				m.AgentID = v.AgentID
+
+				break
+			}
+		}
+
+		if m.AgentID == "" {
+			m.AgentID = newData.Agent.ID
+		}
+
+		newData.Metrics[i] = m
+	}
+
+	newData.Version = 5
+
+	return newData
+}
+
+func upgradeV5(state bleemeoTypes.State, newData data) data {
+	// Version 6 dropped the CurrentAccountConfig and store all config in
+	// AccountConfigs.
+	var oldCache dataVersion5
+
+	if err := state.Get(cacheKey, &oldCache); err == nil {
+		found := false
+
+		for _, ac := range newData.AccountConfigs {
+			if ac.ID == oldCache.CurrentAccountConfig.ID {
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			newData.AccountConfigs = append(newData.AccountConfigs, oldCache.CurrentAccountConfig)
+		}
+	}
+
+	newData.Version = 6
+
+	return newData
 }

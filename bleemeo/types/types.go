@@ -20,6 +20,7 @@ import (
 	"context"
 	"glouton/discovery"
 	"glouton/facts"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/threshold"
 	"glouton/types"
 	"time"
@@ -34,6 +35,7 @@ type GlobalOption struct {
 	Facts                   FactProvider
 	Process                 ProcessProvider
 	Docker                  DockerProvider
+	SNMP                    []snmp.Target
 	Store                   Store
 	Acc                     telegraf.Accumulator
 	Discovery               discovery.PersistentDiscoverer

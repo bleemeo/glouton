@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"glouton/logger"
+	"glouton/prometheus/registry"
 	"glouton/version"
 	"io"
 	"io/ioutil"
@@ -32,6 +33,8 @@ import (
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
+
+const defaultGatherTimeout = 10 * time.Second
 
 var errIncorrectStatus = errors.New("incorrect status")
 
@@ -58,11 +61,18 @@ func HostPort(u *url.URL) string {
 
 // Gather implement prometheus.Gatherer.
 func (t *Target) Gather() ([]*dto.MetricFamily, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return t.GatherWithState(ctx, registry.GatherState{})
+}
+
+func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
 	u := t.URL
 
 	logger.V(2).Printf("Scrapping Prometheus exporter %s", u.String())
 
-	body, err := t.readAll()
+	body, err := t.readAll(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("read from %s: %w", u.String(), err)
 	}
@@ -85,7 +95,7 @@ func (t *Target) Gather() ([]*dto.MetricFamily, error) {
 	return result, nil
 }
 
-func (t *Target) readAll() ([]byte, error) {
+func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 	if t.URL.Scheme == "file" || t.URL.Scheme == "" {
 		return ioutil.ReadFile(t.URL.Path)
 	}
@@ -97,9 +107,6 @@ func (t *Target) readAll() ([]byte, error) {
 
 	req.Header.Add("Accept", "text/plain;version=0.0.4")
 	req.Header.Set("User-Agent", version.UserAgent())
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
 
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {

@@ -92,6 +92,18 @@ var (
 		AgentID: newAgent.ID,
 	}
 
+	newAgentType1 bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+		DisplayName: "A server monitored with Bleemeo agent",
+		ID:          "61zb6a83-d90a-4165-bf04-944e0b2g2a10",
+		Name:        "agent",
+	}
+	newAgentType2 bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+		DisplayName: "A server monitored with SNMP agent",
+		ID:          "823b6a83-d70a-4768-be64-50450b282a30",
+		Name:        "snmp",
+	}
+	newAgentTypes []bleemeoTypes.AgentType = []bleemeoTypes.AgentType{newAgentType1, newAgentType2}
+
 	uuidRegexp  = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
 	errNotFound = errors.New("not found")
 )
@@ -162,6 +174,9 @@ func newAPI() *mockAPI {
 	})
 	api.AddResource("agentfact", &genericResource{
 		Type: bleemeoTypes.AgentFact{},
+	})
+	api.AddResource("agenttype", &genericResource{
+		Type: bleemeoTypes.AgentType{},
 	})
 	api.AddResource("metric", &genericResource{
 		Type: metricPayload{},
@@ -593,6 +608,15 @@ func runFakeAPI() *mockAPI {
 
 	api.Handle("/v1/container/", func(r *http.Request) (interface{}, int, error) {
 		return paginatedList([]interface{}{}), http.StatusOK, nil
+	})
+
+	api.Handle("/v1/agenttype/", func(r *http.Request) (interface{}, int, error) {
+		results := make([]interface{}, len(newAgentTypes))
+		for i, m := range newAgentTypes {
+			results[i] = m
+		}
+
+		return paginatedList(results), http.StatusOK, nil
 	})
 
 	api.Handle("/v1/service/", func(r *http.Request) (interface{}, int, error) {

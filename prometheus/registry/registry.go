@@ -43,7 +43,16 @@ import (
 
 const (
 	pushedPointsCleanupInterval = 5 * time.Minute
+	hookRetryDelay              = 2 * time.Minute
 )
+
+// RelabelHook is a hook called just before applying relabeling.
+// This hook receive the full labels (including meta labels) and is allowed to
+// modify/add/delete them. The result (which should still include meta labels) is
+// processed by relabeling rules.
+// If the hook return retryLater, it means that hook can not processed the labels currently
+// and it registry should retry later. Points or gatherer associated will be dropped.
+type RelabelHook func(labels map[string]string) (newLabel map[string]string, retryLater bool)
 
 type pushFunction func(points []types.MetricPoint)
 
@@ -105,13 +114,13 @@ type Registry struct {
 	currentDelay               time.Duration
 	updateDelayC               chan interface{}
 	RulesCallback              func()
+	relabelHook                RelabelHook
 }
 
 type Option struct {
 	PushPoint             types.PointPusher
 	FQDN                  string
 	GloutonPort           string
-	BleemeoAgentID        string
 	MetricFormat          types.MetricFormat
 	BlackboxSentScraperID bool
 	Filter                metricFilter
@@ -122,6 +131,8 @@ type registration struct {
 	stopCallback        func()
 	pushPoints          bool
 	gatherer            labeledGatherer
+	skip                bool
+	lastHookRetry       time.Time
 }
 
 // This type is used to have another Collecto() method private which only return pushed points.
@@ -186,7 +197,7 @@ func getDefaultRelabelConfig() []*relabel.Config {
 		{
 			Action:       relabel.Replace,
 			Regex:        relabel.MustNewRegexp("(.+)"),
-			SourceLabels: model.LabelNames{types.LabelMetaProbeAgentUUID},
+			SourceLabels: model.LabelNames{types.LabelMetaBleemeoTargetAgentUUID},
 			TargetLabel:  types.LabelInstanceUUID,
 			Replacement:  "$1",
 		},
@@ -196,6 +207,14 @@ func getDefaultRelabelConfig() []*relabel.Config {
 			Regex:        relabel.MustNewRegexp("(.+)"),
 			SourceLabels: model.LabelNames{types.LabelMetaProbeTarget},
 			TargetLabel:  types.LabelInstance,
+			Replacement:  "$1",
+		},
+		{
+			Action:       relabel.Replace,
+			Separator:    ";",
+			Regex:        relabel.MustNewRegexp("(.+)"),
+			SourceLabels: model.LabelNames{types.LabelMetaSNMPTarget},
+			TargetLabel:  types.LabelSNMPTarget,
 			Replacement:  "$1",
 		},
 		{
@@ -299,9 +318,11 @@ func (r *Registry) AddPushPointsCallback(f func(time.Time)) {
 	r.pushUpdates = append(r.pushUpdates, f)
 }
 
-// UpdateBleemeoAgentID change the BleemeoAgentID and wait for all pending metrics emission.
+// UpdateRelabelHook change the hook used just before relabeling and wait for all pending metrics emission.
 // When this function return, it's guaratee that all call to r.PushPoint will use new labels.
-func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
+// The hook is assumed to be idempotent, that is for a given labels input the result is the same.
+// If the hook want break this idempotence, UpdateRelabelHook() should be re-called to force update of existings Gatherer.
+func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 	r.init()
 
 	r.l.Lock()
@@ -324,7 +345,7 @@ func (r *Registry) UpdateBleemeoAgentID(ctx context.Context, agentID string) {
 		r.condition.Wait()
 	}
 
-	r.BleemeoAgentID = agentID
+	r.relabelHook = hook
 
 	// Since the updated Agent ID may change metrics labels, drop pushed points
 	r.pushedPoints = make(map[string]types.MetricPoint)
@@ -404,17 +425,24 @@ func (r *Registry) UnregisterGatherer(id int) bool {
 
 // Gather implements prometheus.Gatherer.
 func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
-	return r.GatherWithState(GatherState{})
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return r.GatherWithState(ctx, GatherState{})
 }
 
 // GatherWithState implements GathererGatherWithState.
-func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, error) {
+func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	r.init()
 	r.l.Lock()
 
 	gatherers := make(Gatherers, 0, len(r.registrations)+1)
 
 	for _, reg := range r.registrations {
+		if reg.skip {
+			continue
+		}
+
 		gatherers = append(gatherers, reg.gatherer)
 	}
 
@@ -423,7 +451,7 @@ func (r *Registry) GatherWithState(state GatherState) ([]*dto.MetricFamily, erro
 	r.l.Unlock()
 
 	t0 := time.Now().Truncate(time.Millisecond)
-	mfs, err := gatherers.GatherWithState(state)
+	mfs, err := gatherers.GatherWithState(ctx, state)
 
 	if r.metricGatherExporterTime != nil {
 		r.metricGatherExporterTime.Observe(time.Since(t0).Seconds())
@@ -458,7 +486,7 @@ func (r *Registry) AddDefaultCollector() {
 func (r *Registry) Exporter() http.Handler {
 	reg := prometheus.NewRegistry()
 	handler := promhttp.InstrumentMetricHandler(reg, http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
-		wrapper := NewGathererWithStateWrapper(r, r.Filter)
+		wrapper := NewGathererWithStateWrapper(req.Context(), r, r.Filter)
 
 		state := GatherStateFromMap(req.URL.Query())
 		// queries on /metrics will always be performed immediately, as we do not want to miss metrics run perodically
@@ -582,10 +610,19 @@ func (r *Registry) runOnce() time.Duration {
 
 	r.countRunOnce++
 
+	ctx, cancel := context.WithTimeout(context.Background(), r.currentDelay)
+	defer cancel()
+
 	gatherers := make([]labeledGatherer, 0, len(r.registrations))
 
-	for _, reg := range r.registrations {
-		if reg.pushPoints {
+	for id, reg := range r.registrations {
+		if reg.skip && time.Since(reg.lastHookRetry) > hookRetryDelay {
+			reg := reg
+			r.setupGatherer(&reg, reg.gatherer.source)
+			r.registrations[id] = reg
+		}
+
+		if reg.pushPoints && !reg.skip {
 			gatherers = append(gatherers, reg.gatherer)
 		}
 	}
@@ -600,7 +637,7 @@ func (r *Registry) runOnce() time.Duration {
 
 	var err error
 
-	points, err = labeledGatherers(gatherers).GatherPoints(t0, GatherState{QueryType: All})
+	points, err = labeledGatherers(gatherers).GatherPoints(ctx, t0, GatherState{QueryType: All})
 	if err != nil {
 		if len(points) == 0 {
 			logger.Printf("Gather of metrics failed: %v", err)
@@ -708,28 +745,42 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	now := time.Now()
 	deadline := now.Add(ttl)
 
-	for i, point := range points {
-		var newLabelsMap map[string]string
+	n := 0
+
+	for _, point := range points {
+		var skip bool
 
 		if r.MetricFormat == types.MetricFormatBleemeo {
-			newLabelsMap = map[string]string{
+			newLabelsMap := map[string]string{
 				types.LabelName: point.Labels[types.LabelName],
 			}
 
 			if point.Annotations.BleemeoItem != "" {
 				newLabelsMap[types.LabelItem] = point.Annotations.BleemeoItem
 			}
+
+			point.Labels = newLabelsMap
 		} else {
-			extraLabels := r.addMetaLabels(point.Labels)
-			newLabels, _ := r.applyRelabel(extraLabels)
-			newLabelsMap = newLabels.Map()
+			point.Labels = r.addMetaLabels(point.Labels)
+
+			if r.relabelHook != nil {
+				point.Labels, skip = r.relabelHook(point.Labels)
+			}
+
+			newLabels, _ := r.applyRelabel(point.Labels)
+			point.Labels = newLabels.Map()
 		}
 
-		key := types.LabelsToText(newLabelsMap)
-		points[i].Labels = newLabelsMap
-		r.pushedPoints[key] = points[i]
-		r.pushedPointsExpiration[key] = deadline
+		if !skip {
+			key := types.LabelsToText(point.Labels)
+			points[n] = point
+			r.pushedPoints[key] = points[n]
+			r.pushedPointsExpiration[key] = deadline
+			n++
+		}
 	}
+
+	points = points[:n]
 
 	if now.Sub(r.lastPushedPointsCleanup) > pushedPointsCleanupInterval {
 		r.lastPushedPointsCleanup = now
@@ -762,19 +813,16 @@ func (r *Registry) addMetaLabels(input map[string]string) map[string]string {
 	result[types.LabelMetaGloutonFQDN] = r.FQDN
 	result[types.LabelMetaGloutonPort] = r.GloutonPort
 
-	if r.BleemeoAgentID != "" {
-		result[types.LabelMetaBleemeoUUID] = r.BleemeoAgentID
-		if r.BlackboxSentScraperID {
-			result[types.LabelMetaSendScraperUUID] = "yes"
-		}
-	}
-
 	servicePort := result[types.LabelMetaServicePort]
 	if servicePort == "" {
 		servicePort = r.GloutonPort
 	}
 
 	result[types.LabelMetaPort] = servicePort
+
+	if r.BlackboxSentScraperID {
+		result[types.LabelMetaSendScraperUUID] = "yes"
+	}
 
 	return result
 }
@@ -787,10 +835,14 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 		ContainerID: promLabels.Get(types.LabelMetaContainerID),
 	}
 
-	// annotate the metric if it comes from a probe
-	agentID := promLabels.Get(types.LabelMetaProbeAgentUUID)
+	// annotate the metric if it comes from a bleemeo target (probe, snmp)
+	agentID := promLabels.Get(types.LabelMetaBleemeoTargetAgentUUID)
 	if agentID != "" {
 		annotations.BleemeoAgentID = agentID
+	}
+
+	if snmpTarget := promLabels.Get(types.LabelMetaSNMPTarget); snmpTarget != "" {
+		annotations.SNMPTarget = snmpTarget
 	}
 
 	promLabels = relabel.Process(
@@ -819,6 +871,14 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 
 func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
 	extraLabels := r.addMetaLabels(reg.originalExtraLabels)
+
+	reg.skip = false
+
+	if r.relabelHook != nil {
+		extraLabels, reg.skip = r.relabelHook(extraLabels)
+		reg.lastHookRetry = time.Now()
+	}
+
 	promLabels, annotations := r.applyRelabel(extraLabels)
 	g := newLabeledGatherer(source, promLabels, annotations)
 	reg.gatherer = g

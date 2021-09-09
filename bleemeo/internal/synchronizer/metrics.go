@@ -37,6 +37,7 @@ const agentStatusName = "agent_status"
 
 var (
 	errRetryLater     = errors.New("metric registration should be retried laster")
+	errIgnore         = errors.New("metric registration fail but can be ignored (because it registration will be retried automatically)")
 	errAttemptToSpoof = errors.New("attempt to spoof another agent (or missing label)")
 	errNotImplemented = errors.New("not implemented on fakeMetric")
 )
@@ -98,9 +99,8 @@ func (m fakeMetric) Labels() map[string]string {
 
 type metricPayload struct {
 	bleemeoTypes.Metric
-	Name  string `json:"label,omitempty"`
-	Item  string `json:"item,omitempty"`
-	Agent string `json:"agent"`
+	Name string `json:"label,omitempty"`
+	Item string `json:"item,omitempty"`
 }
 
 // metricFromAPI convert a metricPayload received from API to a bleemeoTypes.Metric.
@@ -233,26 +233,34 @@ func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
 
 	currentAccountConfig := s.option.Cache.CurrentAccountConfig()
-	accountConfigs := s.option.Cache.AccountConfigs()
+	accountConfigs := s.option.Cache.AccountConfigsByUUID()
+	agents := s.option.Cache.AgentsByUUID()
 	monitors := s.option.Cache.MonitorsByAgentUUID()
 
 	for _, m := range input {
 		// retrieve the appropriate configuration for the metric
 		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
 
+		// TODO: snmp metric should use the correct AgentConfig
+
 		if m.Annotations().BleemeoAgentID != "" {
-			monitor, present := monitors[bleemeoTypes.AgentID(m.Annotations().BleemeoAgentID)]
+			_, present := agents[m.Annotations().BleemeoAgentID]
+			accountConfig := s.option.Cache.CurrentAccountConfig()
+
 			if !present {
-				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", m.Annotations().BleemeoAgentID)
+				monitor, present := monitors[bleemeoTypes.AgentID(m.Annotations().BleemeoAgentID)]
+				if !present {
+					logger.V(2).Printf("mqtt: missing monitor for agent '%s'", m.Annotations().BleemeoAgentID)
 
-				continue
-			}
+					continue
+				}
 
-			accountConfig, present := accountConfigs[monitor.AccountConfig]
-			if !present {
-				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
+				accountConfig, present = accountConfigs[monitor.AccountConfig]
+				if !present {
+					logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
 
-				continue
+					continue
+				}
 			}
 
 			whitelist = accountConfig.MetricsAgentWhitelistMap()
@@ -477,7 +485,7 @@ func (s *Synchronizer) UpdateUnitsAndThresholds(firstUpdate bool) {
 func (s *Synchronizer) metricsListWithAgentID(agentID string, fetchInactive bool) (map[string]bleemeoTypes.Metric, error) {
 	params := map[string]string{
 		"agent":  agentID,
-		"fields": "id,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
+		"fields": "id,agent,item,label,labels_text,unit,unit_text,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,service,container,status_of",
 	}
 
 	if fetchInactive {
@@ -610,7 +618,7 @@ func (s *Synchronizer) metricUpdateList(metrics []types.Metric) error {
 		params := map[string]string{
 			"labels_text": common.LabelsToText(metric.Labels(), metric.Annotations(), s.option.MetricFormat == types.MetricFormatBleemeo),
 			"agent":       agentID,
-			"fields":      "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+			"fields":      "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 
 		if s.option.MetricFormat == types.MetricFormatBleemeo && common.MetricOnlyHasItem(metric.Labels()) {
@@ -663,7 +671,7 @@ func (s *Synchronizer) metricUpdateListUUID(requests []string) error {
 		var metric metricPayload
 
 		params := map[string]string{
-			"fields": "id,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
+			"fields": "id,agent,label,item,labels_text,unit,unit_text,service,container,deactivated_at,threshold_low_warning,threshold_low_critical,threshold_high_warning,threshold_high_critical,status_of",
 		}
 
 		_, err := s.client.Do(
@@ -929,31 +937,75 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		return nil
 	}
 
+	payload, err := s.prepareMetricPayload(metric, registeredMetricsByKey, containersByContainerID, servicesByKey, monitors)
+	if errors.Is(err, errIgnore) {
+		return nil
+	}
+
+	if err != nil {
+		return err
+	}
+
+	var result metricPayload
+
+	_, err = s.client.Do(s.ctx, "POST", "v1/metric/", params, payload, &result)
+	if err != nil {
+		return err
+	}
+
+	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
+	registeredMetricsByKey[key] = result.metricFromAPI()
+	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
+
+	return nil
+}
+
+func (s *Synchronizer) prepareMetricPayload(metric types.Metric, registeredMetricsByKey map[string]bleemeoTypes.Metric, containersByContainerID map[string]bleemeoTypes.Container, servicesByKey map[serviceNameInstance]bleemeoTypes.Service, monitors []bleemeoTypes.Monitor) (metricPayload, error) {
+	labels := metric.Labels()
+	annotations := metric.Annotations()
+	key := common.LabelsToText(labels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+
 	payload := metricPayload{
 		Metric: bleemeoTypes.Metric{
 			LabelsText: key,
+			AgentID:    s.agentID,
 		},
-		Name:  labels[types.LabelName],
-		Agent: s.agentID,
+		Name: labels[types.LabelName],
 	}
 
-	truncateBleemeoPayload(s, &payload, annotations, labels)
+	if s.option.MetricFormat == types.MetricFormatBleemeo {
+		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
+		if common.MetricOnlyHasItem(labels) {
+			payload.LabelsText = ""
+		}
+	}
 
-	var (
-		containerName string
-		result        metricPayload
-	)
+	var containerName string
 
-	err := statusOfEmpty(annotations, labels, &payload, &registeredMetricsByKey, s)
-	if err != nil {
-		return err
+	if annotations.StatusOf != "" {
+		subLabels := make(map[string]string, len(labels))
+
+		for k, v := range labels {
+			subLabels[k] = v
+		}
+
+		subLabels[types.LabelName] = annotations.StatusOf
+
+		subKey := common.LabelsToText(subLabels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
+		metricStatusOf, ok := registeredMetricsByKey[subKey]
+
+		if !ok {
+			return payload, errRetryLater
+		}
+
+		payload.StatusOf = metricStatusOf.ID
 	}
 
 	if annotations.ContainerID != "" {
 		container, ok := containersByContainerID[annotations.ContainerID]
 		if !ok {
 			// No error. When container get registered we trigger a metric synchronization
-			return nil
+			return payload, errIgnore
 		}
 
 		containerName = container.Name
@@ -970,7 +1022,7 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 		service, ok := servicesByKey[srvKey]
 		if !ok {
 			// No error. When service get registered we trigger a metric synchronization
-			return nil
+			return payload, errIgnore
 		}
 
 		payload.ServiceID = service.ID
@@ -978,73 +1030,40 @@ func (s *Synchronizer) metricRegisterAndUpdateOne(metric types.Metric, registere
 
 	// override the agent and service UUIDs when the metric is a probe's
 	if metric.Annotations().BleemeoAgentID != "" {
-		found := false
-
-		if scaperID := metric.Labels()[types.LabelScraperUUID]; scaperID != "" && scaperID != s.agentID {
-			return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, scaperID, s.agentID)
+		if err := s.prepareMetricPayloadOtherAgent(&payload, metric.Annotations().BleemeoAgentID, labels, monitors); err != nil {
+			return payload, err
 		}
+	}
 
-		for _, monitor := range monitors {
-			if monitor.AgentID == metric.Annotations().BleemeoAgentID {
-				payload.Agent = monitor.AgentID
-				payload.ServiceID = monitor.ID
-				found = true
+	return payload, nil
+}
 
-				break
-			}
-		}
+func (s *Synchronizer) prepareMetricPayloadOtherAgent(payload *metricPayload, agentID string, labels map[string]string, monitors []bleemeoTypes.Monitor) error {
+	if scaperID := labels[types.LabelScraperUUID]; scaperID != "" && scaperID != s.agentID {
+		return fmt.Errorf("%w: %s, want %s", errAttemptToSpoof, scaperID, s.agentID)
+	}
 
-		if !found {
-			// This is not an error: either this is a metric from a local monitor, and it should
-			// never be registred, or this is from a monitor that is not yet loaded, and it is
-			// not an issue per se as it will get registered when monitors are loaded, as it will
-			// trigger a metric synchronization.
+	for _, monitor := range monitors {
+		if monitor.AgentID == agentID {
+			payload.AgentID = monitor.AgentID
+			payload.ServiceID = monitor.ID
+
 			return nil
 		}
 	}
 
-	_, err = s.client.Do(s.ctx, "POST", "v1/metric/", params, payload, &result)
-	if err != nil {
-		return err
+	agent, found := s.option.Cache.AgentsByUUID()[agentID]
+	if found {
+		payload.AgentID = agent.ID
+
+		return nil
 	}
 
-	logger.V(2).Printf("Metric %v registered with UUID %s", key, result.ID)
-	registeredMetricsByKey[key] = result.metricFromAPI()
-	registeredMetricsByUUID[result.ID] = result.metricFromAPI()
-
-	return nil
-}
-
-func truncateBleemeoPayload(s *Synchronizer, payload *metricPayload, annotations types.MetricAnnotations, labels map[string]string) {
-	if s.option.MetricFormat == types.MetricFormatBleemeo {
-		payload.Item = common.TruncateItem(annotations.BleemeoItem, annotations.ServiceName != "")
-		if common.MetricOnlyHasItem(labels) {
-			payload.LabelsText = ""
-		}
-	}
-}
-
-func statusOfEmpty(annotations types.MetricAnnotations, labels map[string]string, payload *metricPayload, registeredMetricsByKey *map[string]bleemeoTypes.Metric, s *Synchronizer) error {
-	if annotations.StatusOf != "" {
-		subLabels := make(map[string]string, len(labels))
-
-		for k, v := range labels {
-			subLabels[k] = v
-		}
-
-		subLabels[types.LabelName] = annotations.StatusOf
-
-		subKey := common.LabelsToText(subLabels, annotations, s.option.MetricFormat == types.MetricFormatBleemeo)
-		metricStatusOf, ok := (*registeredMetricsByKey)[subKey]
-
-		if !ok {
-			return errRetryLater
-		}
-
-		payload.StatusOf = metricStatusOf.ID
-	}
-
-	return nil
+	// This is not an error: either this is a metric from a local monitor, and it should
+	// never be registred, or this is from a monitor that is not yet loaded, and it is
+	// not an issue per se as it will get registered when monitors are loaded, as it will
+	// trigger a metric synchronization.
+	return errIgnore
 }
 
 func (s *Synchronizer) metricUpdateOne(metric types.Metric, remoteMetric bleemeoTypes.Metric) (bleemeoTypes.Metric, error) {

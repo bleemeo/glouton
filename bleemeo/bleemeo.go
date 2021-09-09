@@ -25,6 +25,7 @@ import (
 	"glouton/bleemeo/internal/synchronizer"
 	"glouton/bleemeo/types"
 	"glouton/logger"
+	"io"
 	"math/rand"
 	"runtime"
 	"sort"
@@ -101,7 +102,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	c.sync.UpdateUnitsAndThresholds(true)
 
 	if c.option.Config.Bool("blackbox.enable") {
-		if err := c.sync.ApplyMonitorUpdate(false); err != nil {
+		if err := c.sync.ApplyMonitorUpdate(); err != nil {
 			// we just log the error, as we will try to run the monitors later anyway
 			logger.V(2).Printf("Couldn't start probes now, will retry later: %v", err)
 		}
@@ -373,6 +374,48 @@ func (c *Connector) UpdateMonitors() {
 	c.sync.UpdateMonitors()
 }
 
+func (c *Connector) RelabelHook(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+	agentID := c.AgentID()
+
+	if agentID == "" {
+		return labels, false
+	}
+
+	labels[gloutonTypes.LabelMetaBleemeoUUID] = agentID
+
+	if labels[gloutonTypes.LabelMetaSNMPTarget] != "" {
+		var (
+			snmpTypeID string
+			found      bool
+		)
+
+		for _, t := range c.cache.AgentTypes() {
+			if t.Name == types.AgentTypeSNMP {
+				snmpTypeID = t.ID
+
+				break
+			}
+		}
+
+		for _, a := range c.cache.Agents() {
+			if a.AgentType == snmpTypeID && a.FQDN == labels[gloutonTypes.LabelMetaSNMPTarget] {
+				labels[gloutonTypes.LabelMetaBleemeoTargetAgentUUID] = a.ID
+				found = true
+
+				break
+			}
+		}
+
+		if !found {
+			// set retryLater which will cause metrics from the gatherer to be ignored.
+			// This hook will be automatically re-called every 2 minutes.
+			return labels, true
+		}
+	}
+
+	return labels, false
+}
+
 // DiagnosticPage return useful information to troubleshoot issue.
 func (c *Connector) DiagnosticPage() string {
 	builder := &strings.Builder{}
@@ -488,7 +531,67 @@ func (c *Connector) DiagnosticZip(zipFile *zip.Writer) error {
 		}
 	}
 
+	file, err := zipFile.Create("bleemeo-cache.txt")
+	if err != nil {
+		return err
+	}
+
+	c.diagnosticCache(file)
+
 	return nil
+}
+
+func (c *Connector) diagnosticCache(file io.Writer) {
+	agents := c.cache.Agents()
+	agentTypes := c.cache.AgentTypes()
+
+	fmt.Fprintf(file, "# Cache known %d agents\n", len(agents))
+
+	for _, a := range agents {
+		agentTypeName := ""
+
+		for _, t := range agentTypes {
+			if t.ID == a.AgentType {
+				agentTypeName = t.DisplayName
+
+				break
+			}
+		}
+
+		fmt.Fprintf(file, "id=%s fqdn=%s type=%s (%s) accountID=%s, config=%s\n", a.ID, a.FQDN, agentTypeName, a.AgentType, a.AccountID, a.CurrentConfigID)
+	}
+
+	fmt.Fprintf(file, "\n# Cache known %d agent types\n", len(agentTypes))
+
+	for _, t := range agentTypes {
+		fmt.Fprintf(file, "id=%s name=%s display_name=%s\n", t.ID, t.Name, t.DisplayName)
+	}
+
+	metrics := c.cache.Metrics()
+	activeMetrics := 0
+
+	for _, m := range metrics {
+		if m.DeactivatedAt.IsZero() {
+			activeMetrics++
+		}
+	}
+
+	accountConfigs := c.cache.AccountConfigsByUUID()
+
+	fmt.Fprintf(file, "\n# Cache known %d account config\n", len(accountConfigs))
+
+	for _, ac := range accountConfigs {
+		fmt.Fprintf(file, "%#v\n", ac)
+	}
+
+	fmt.Fprintf(file, "# And current account config is\n")
+	fmt.Fprintf(file, "%#v\n", c.cache.CurrentAccountConfig())
+
+	fmt.Fprintf(file, "\n# Cache known %d metrics and %d active metrics\n", len(metrics), activeMetrics)
+	fmt.Fprintf(file, "\n# Cache known %d facts\n", len(c.cache.Facts()))
+	fmt.Fprintf(file, "\n# Cache known %d services\n", len(c.cache.Services()))
+	fmt.Fprintf(file, "\n# Cache known %d containers\n", len(c.cache.Containers()))
+	fmt.Fprintf(file, "\n# Cache known %d monitors\n", len(c.cache.Monitors()))
 }
 
 // Tags returns the Tags set on Bleemeo Cloud platform.

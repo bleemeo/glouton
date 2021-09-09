@@ -209,13 +209,13 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 
 	for result.runCount = 0; result.runCount < maxLoop; result.runCount++ {
 		methods := h.s.syncToPerform()
-		if full, ok := methods["metrics"]; !ok && !forceFirst {
+		if full, ok := methods[syncMethodMetric]; !ok && !forceFirst {
 			break
 		} else if full {
 			result.didFull = true
 		}
 
-		err := h.s.syncMetrics(methods["metrics"], false)
+		err := h.s.syncMetrics(methods[syncMethodMetric], false)
 		result.lastErr = err
 
 		if err == nil {
@@ -227,7 +227,7 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 		h.mt.now = h.mt.Now().Add(timeStep)
 	}
 
-	_, result.stillWantSync = h.s.syncToPerform()["metrics"]
+	_, result.stillWantSync = h.s.syncToPerform()[syncMethodMetric]
 
 	return result
 }

@@ -2,6 +2,7 @@
 package registry
 
 import (
+	"context"
 	"glouton/types"
 	"reflect"
 	"testing"
@@ -251,7 +252,7 @@ func Test_labeledGatherer_GatherPoints(t *testing.T) {
 				annotations: tt.fields.annotations,
 			}
 
-			got, err := g.GatherPoints(time.Now(), GatherState{})
+			got, err := g.GatherPoints(context.Background(), time.Now(), GatherState{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("labeledGatherer.GatherPoints() error = %v, wantErr %v", err, tt.wantErr)
 

@@ -44,6 +44,18 @@ var (
 	errIncorrectStatusCode        = errors.New("registration status code is")
 )
 
+const (
+	syncMethodInfo          = "info"
+	syncMethodAgent         = "agent"
+	syncMethodAccountConfig = "accountconfig"
+	syncMethodMonitor       = "monitor"
+	syncMethodSNMP          = "snmp"
+	syncMethodFact          = "facts"
+	syncMethodService       = "service"
+	syncMethodContainer     = "container"
+	syncMethodMetric        = "metric"
+)
+
 // Synchronizer synchronize object with Bleemeo.
 type Synchronizer struct {
 	ctx    context.Context
@@ -313,16 +325,17 @@ func (s *Synchronizer) NotifyConfigUpdate(immediate bool) {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["info"] = true
-	s.forceSync["agent"] = true
+	s.forceSync[syncMethodInfo] = true
+	s.forceSync[syncMethodAgent] = true
+	s.forceSync[syncMethodAccountConfig] = true
 
 	if !immediate {
 		return
 	}
 
-	s.forceSync["metrics"] = true
-	s.forceSync["containers"] = true
-	s.forceSync["monitors"] = true
+	s.forceSync[syncMethodMetric] = true
+	s.forceSync[syncMethodContainer] = true
+	s.forceSync[syncMethodMonitor] = true
 }
 
 // UpdateMetrics request to update a specific metrics.
@@ -332,7 +345,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	if len(metricUUID) == 1 && metricUUID[0] == "" {
 		// We don't known the metric to update. Update all
-		s.forceSync["metrics"] = true
+		s.forceSync[syncMethodMetric] = true
 		s.pendingMetricsUpdate = nil
 
 		return
@@ -340,7 +353,7 @@ func (s *Synchronizer) UpdateMetrics(metricUUID ...string) {
 
 	s.pendingMetricsUpdate = append(s.pendingMetricsUpdate, metricUUID...)
 
-	s.forceSync["metrics"] = false
+	s.forceSync[syncMethodMetric] = false
 }
 
 // UpdateContainers request to update a containers.
@@ -348,7 +361,7 @@ func (s *Synchronizer) UpdateContainers() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["containers"] = false
+	s.forceSync[syncMethodContainer] = false
 }
 
 // UpdateInfo request to update a info, which include the time_drift.
@@ -356,7 +369,7 @@ func (s *Synchronizer) UpdateInfo() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["info"] = false
+	s.forceSync[syncMethodInfo] = false
 }
 
 // UpdateMonitors requests to update all the monitors.
@@ -364,7 +377,8 @@ func (s *Synchronizer) UpdateMonitors() {
 	s.l.Lock()
 	defer s.l.Unlock()
 
-	s.forceSync["monitors"] = true
+	s.forceSync[syncMethodAccountConfig] = true
+	s.forceSync[syncMethodMonitor] = true
 }
 
 func (s *Synchronizer) popPendingMetricsUpdate() []string {
@@ -507,13 +521,15 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		enabledInMaintenance bool
 		skipOnlyEssential    bool // should be true for method that ignore onlyEssential
 	}{
-		{name: "info", method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
-		{name: "agent", method: s.syncAgent, skipOnlyEssential: true},
-		{name: "facts", method: s.syncFacts},
-		{name: "containers", method: s.syncContainers},
-		{name: "services", method: s.syncServices},
-		{name: "monitors", method: s.syncMonitors, skipOnlyEssential: true},
-		{name: "metrics", method: s.syncMetrics},
+		{name: syncMethodInfo, method: s.syncInfo, enabledInMaintenance: true, skipOnlyEssential: true},
+		{name: syncMethodAgent, method: s.syncAgent, skipOnlyEssential: true},
+		{name: syncMethodAccountConfig, method: s.syncAccountConfig, skipOnlyEssential: true},
+		{name: syncMethodFact, method: s.syncFacts},
+		{name: syncMethodContainer, method: s.syncContainers},
+		{name: syncMethodSNMP, method: s.syncSNMP},
+		{name: syncMethodService, method: s.syncServices},
+		{name: syncMethodMonitor, method: s.syncMonitors, skipOnlyEssential: true},
+		{name: syncMethodMetric, method: s.syncMetrics},
 	}
 	startAt := s.now()
 
@@ -613,13 +629,15 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	localFacts, _ := s.option.Facts.Facts(s.ctx, 24*time.Hour)
 
 	if fullSync {
-		syncMethods["info"] = fullSync
-		syncMethods["agent"] = fullSync
-		syncMethods["monitors"] = fullSync
+		syncMethods[syncMethodInfo] = fullSync
+		syncMethods[syncMethodAgent] = fullSync
+		syncMethods[syncMethodAccountConfig] = fullSync
+		syncMethods[syncMethodMonitor] = fullSync
+		syncMethods[syncMethodSNMP] = fullSync
 	}
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
-		syncMethods["facts"] = fullSync
+		syncMethods[syncMethodFact] = fullSync
 	}
 
 	minDelayed := time.Time{}
@@ -631,33 +649,33 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 	}
 
 	if fullSync || s.lastSync.Before(s.option.Discovery.LastUpdate()) || (!minDelayed.IsZero() && s.now().After(minDelayed)) {
-		syncMethods["services"] = fullSync
-		syncMethods["containers"] = fullSync
+		syncMethods[syncMethodService] = fullSync
+		syncMethods[syncMethodContainer] = fullSync
 	}
 
-	if _, ok := syncMethods["services"]; ok {
+	if _, ok := syncMethods[syncMethodService]; ok {
 		// Metrics registration may need services to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = false
+		syncMethods[syncMethodMetric] = false
 	}
 
-	if _, ok := syncMethods["containers"]; ok {
+	if _, ok := syncMethods[syncMethodContainer]; ok {
 		// Metrics registration may need containers to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = false
+		syncMethods[syncMethodMetric] = false
 	}
 
-	if _, ok := syncMethods["monitors"]; ok {
+	if _, ok := syncMethods[syncMethodMonitor]; ok {
 		// Metrics registration may need monitors to be synced, trigger metrics synchronization
-		syncMethods["metrics"] = false
+		syncMethods[syncMethodMetric] = false
 	}
 
 	if fullSync || s.now().After(s.metricRetryAt) || s.lastSync.Before(s.option.Discovery.LastUpdate()) || s.lastMetricCount != s.option.Store.MetricsCount() {
-		syncMethods["metrics"] = fullSync
+		syncMethods[syncMethodMetric] = fullSync
 	}
 
 	// when the mqtt connector is not connected, we cannot receive notifications to get out of maintenance
 	// mode, so we poll more often.
 	if s.maintenanceMode && !s.option.IsMqttConnected() && s.now().After(s.lastMaintenanceSync.Add(15*time.Minute)) {
-		s.forceSync["info"] = false
+		s.forceSync[syncMethodInfo] = false
 
 		s.lastMaintenanceSync = s.now()
 	}

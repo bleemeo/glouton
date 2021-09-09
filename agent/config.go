@@ -154,6 +154,8 @@ func defaultConfig() map[string]interface{} {
 		"logging.output":                   "console",
 		"logging.package_levels":           "",
 		"metric.prometheus.targets":        []interface{}{},
+		"metric.snmp.exporter_address":     "http://localhost:9116",
+		"metric.snmp.targets":              []interface{}{},
 		"metric.include_default_metrics":   true,
 		"metric.allow_metrics":             []interface{}{},
 		"metric.deny_metrics":              []interface{}{},

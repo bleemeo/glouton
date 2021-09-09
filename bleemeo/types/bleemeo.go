@@ -25,6 +25,8 @@ import (
 	"time"
 )
 
+const AgentTypeSNMP = "snmp"
+
 // AgentFact is an agent facts.
 type AgentFact struct {
 	ID    string
@@ -40,6 +42,16 @@ type Agent struct {
 	NextConfigAt    time.Time `json:"next_config_at"`
 	CurrentConfigID string    `json:"current_config"`
 	Tags            []Tag     `json:"tags"`
+	AgentType       string    `json:"agent_type"`
+	FQDN            string    `json:"fqdn"`
+	DisplayName     string    `json:"display_name"`
+}
+
+// AgentType is an AgentType object on Bleemeo API.
+type AgentType struct {
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	DisplayName string `json:"display_name"`
 }
 
 // Tag is an Tag object on Bleemeo API.
@@ -60,6 +72,7 @@ type AccountConfig struct {
 	LiveProcessResolution   int    `json:"live_process_resolution"`
 	LiveProcess             bool   `json:"live_process"`
 	DockerIntegration       bool   `json:"docker_integration"`
+	SNMPIntergration        bool   `json:"snmp_integration"`
 }
 
 // Service is a Service object on Bleemeo API.
@@ -116,6 +129,7 @@ type MonitorHTTPOptions struct {
 // Metric is a Metric object on Bleemeo API.
 type Metric struct {
 	ID          string            `json:"id"`
+	AgentID     string            `json:"agent,omitempty"`
 	LabelsText  string            `json:"labels_text,omitempty"`
 	Labels      map[string]string `json:"-"`
 	ServiceID   string            `json:"service,omitempty"`

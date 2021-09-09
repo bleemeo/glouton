@@ -43,6 +43,7 @@ import (
 	"glouton/nrpe"
 	"glouton/prometheus/exporter/blackbox"
 	"glouton/prometheus/exporter/common"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/process"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/rules"
@@ -106,6 +107,7 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
+	snmpTargets            []snmp.Target
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
@@ -365,7 +367,7 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
-	a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 	a.store.DropAllMetrics()
 }
 
@@ -556,7 +558,30 @@ func (a *agent) run() { //nolint:cyclop
 		}()
 	}
 
-	mFilter, err := newMetricFilter(a.config, a.metricFormat)
+	var targets []*scrapper.Target
+
+	var scrapperSNMPTargets []*scrapper.Target
+
+	if snmpCfg, found := a.config.Get("metric.snmp.targets"); found {
+		if configList, ok := snmpCfg.([]interface{}); ok {
+			snmpExporterAddress := a.config.String("metric.snmp.exporter_address")
+			a.snmpTargets = snmp.ConfigToURLs(configList)
+
+			if len(a.snmpTargets) > 0 {
+				logger.V(1).Println("SNMP integration is currently in beta and not enabled in this version of Glouton.")
+
+				a.snmpTargets = nil
+			}
+
+			scrapperSNMPTargets = snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
+		}
+	}
+
+	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
+		targets = prometheusConfigToURLs(promCfg)
+	}
+
+	mFilter, err := newMetricFilter(a.config, a.snmpTargets, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -571,7 +596,6 @@ func (a *agent) run() { //nolint:cyclop
 		Option: registry.Option{
 			PushPoint:             a.store,
 			FQDN:                  fqdn,
-			BleemeoAgentID:        a.BleemeoAgentID(),
 			GloutonPort:           strconv.FormatInt(int64(a.config.Int("web.listener.port")), 10),
 			MetricFormat:          a.metricFormat,
 			BlackboxSentScraperID: a.config.Bool("blackbox.scraper_send_uuid"),
@@ -672,10 +696,10 @@ func (a *agent) run() { //nolint:cyclop
 		a.metricFormat,
 	)
 
-	var targets []*scrapper.Target
-
-	if promCfg, found := a.config.Get("metric.prometheus.targets"); found {
-		targets = prometheusConfigToURLs(promCfg)
+	for _, target := range scrapperSNMPTargets {
+		if _, err := a.gathererRegistry.RegisterGatherer(target, nil, target.ExtraLabels, true); err != nil {
+			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
+		}
 	}
 
 	for _, target := range targets {
@@ -686,14 +710,14 @@ func (a *agent) run() { //nolint:cyclop
 
 	a.gathererRegistry.AddDefaultCollector()
 
-	if _, found := a.config.Get("metric.pull"); found {
-		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
-		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
-	}
-
 	a.dynamicScrapper = &promexporter.DynamicScrapper{
 		Registry:       a.gathererRegistry,
 		DynamicJobName: "discovered-exporters",
+	}
+
+	if _, found := a.config.Get("metric.pull"); found {
+		logger.Printf("metric.pull is deprecated and not supported by Glouton.")
+		logger.Printf("For your custom metrics, please use Prometheus exporter & metric.prometheus")
 	}
 
 	if a.config.Bool("blackbox.enable") {
@@ -784,6 +808,7 @@ func (a *agent) run() { //nolint:cyclop
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
 			Store:                   filteredStore,
+			SNMP:                    a.snmpTargets,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
@@ -794,7 +819,7 @@ func (a *agent) run() { //nolint:cyclop
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
 			BlackboxScraperName:     scaperName,
 		})
-		a.gathererRegistry.UpdateBleemeoAgentID(ctx, a.BleemeoAgentID())
+		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 
@@ -1796,6 +1821,20 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 	}
 
 	err = yamlZip(zipFile, a)
+	if err != nil {
+		return err
+	}
+
+	file, err = zipFile.Create("snmp-targets.txt")
+	if err != nil {
+		return err
+	}
+
+	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpTargets))
+
+	for _, t := range a.snmpTargets {
+		fmt.Fprintf(file, "initial_name=%s target=%s module=%s\n", t.InitialName, t.Address, t.Module())
+	}
 
 	return err
 }

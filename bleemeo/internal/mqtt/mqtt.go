@@ -661,12 +661,7 @@ func (c *Client) preparePoints(registreredMetricByKey map[string]bleemeoTypes.Me
 				}
 			}
 
-			bleemeoAgentID := c.option.AgentID
-
-			if p.Annotations.BleemeoAgentID != "" {
-				// It's a monitor and the user wants to see it in his dashboard ! The agent ID is thus the ID of the "owner" of that monitor.
-				bleemeoAgentID = bleemeoTypes.AgentID(p.Annotations.BleemeoAgentID)
-			}
+			bleemeoAgentID := bleemeoTypes.AgentID(m.AgentID)
 
 			payload[bleemeoAgentID] = append(payload[bleemeoAgentID], value)
 		} else {
@@ -873,29 +868,14 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
 	currentAccountConfig := c.option.Cache.CurrentAccountConfig()
-	accountConfigs := c.option.Cache.AccountConfigs()
+	accountConfigs := c.option.Cache.AccountConfigsByUUID()
 	monitors := c.option.Cache.MonitorsByAgentUUID()
+	agents := c.option.Cache.AgentsByUUID()
 
 	for _, mp := range input {
-		// retrieve the appropriate configuration for the metric
-		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
-
-		if mp.Annotations.BleemeoAgentID != "" {
-			monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]
-			if !present {
-				logger.V(2).Printf("mqtt: missing monitor for agent '%s'", mp.Annotations.BleemeoAgentID)
-
-				continue
-			}
-
-			accountConfig, present := accountConfigs[monitor.AccountConfig]
-			if !present {
-				logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
-
-				continue
-			}
-
-			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		whitelist, found := c.whitelistForMetricPoint(mp, currentAccountConfig, accountConfigs, monitors, agents)
+		if !found {
+			continue
 		}
 
 		// json encoder can't encode NaN (JSON standard don't allow it).
@@ -910,6 +890,45 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	}
 
 	return result
+}
+
+func (c *Client) whitelistForMetricPoint(mp types.MetricPoint, currentAccountConfig bleemeoTypes.AccountConfig, accountConfigs map[string]bleemeoTypes.AccountConfig, monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor, agents map[string]bleemeoTypes.Agent) (map[string]bool, bool) {
+	// retrieve the appropriate configuration for the metric
+	whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+
+	// TODO: snmp metric should use the correct AgentConfig
+
+	if mp.Annotations.BleemeoAgentID != "" {
+		monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]
+		if present {
+			accountConfig, present := accountConfigs[monitor.AccountConfig]
+			if !present {
+				logger.V(2).Printf("mqtt: missing monitor's account configuration '%s'", monitor.AccountConfig)
+
+				return nil, false
+			}
+
+			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		} else {
+			agent, present := agents[mp.Annotations.BleemeoAgentID]
+			if !present {
+				logger.V(2).Printf("mqtt: missing agent '%s'", monitor.AccountConfig)
+
+				return nil, false
+			}
+
+			accountConfig, present := accountConfigs[agent.CurrentConfigID]
+			if !present {
+				logger.V(2).Printf("mqtt: missing agent's account configuration '%s'", agent.CurrentConfigID)
+
+				return nil, false
+			}
+
+			whitelist = accountConfig.MetricsAgentWhitelistMap()
+		}
+	}
+
+	return whitelist, true
 }
 
 func (c *Client) ready() bool {

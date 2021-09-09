@@ -355,7 +355,7 @@ func (s *Synchronizer) containerDeleteFromLocal(localContainers []facts.Containe
 		s.l.Lock()
 		defer s.l.Unlock()
 
-		s.forceSync["services"] = true
+		s.forceSync[syncMethodService] = true
 	}
 
 	return nil

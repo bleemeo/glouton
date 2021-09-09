@@ -22,7 +22,6 @@
 package registry
 
 import (
-	"context"
 	"glouton/types"
 	"reflect"
 	"sync"
@@ -35,6 +34,8 @@ import (
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
 )
+
+const testAgentID = "fcdc81a8-5bce-4305-8108-8e1e75439329"
 
 type fakeGatherer struct {
 	name      string
@@ -179,7 +180,11 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
-	reg.UpdateBleemeoAgentID(context.Background(), "fake-uuid")
+	reg.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	})
 
 	result, err := reg.Gather()
 	if err != nil {
@@ -190,7 +195,7 @@ func TestRegistry_Register(t *testing.T) {
 	dummyName := "dummy"
 	dummyValue := "value"
 	instanceIDName := types.LabelInstanceUUID
-	instanceIDValue := "fake-uuid"
+	instanceIDValue := testAgentID
 	value := 1.0
 	want := []*dto.MetricFamily{
 		{
@@ -270,7 +275,7 @@ func TestRegistry_pushPoint(t *testing.T) {
 	dummyName := "dummy"
 	dummyValue := "value"
 	instanceIDName := types.LabelInstanceUUID
-	instanceIDValue := "fake-uuid"
+	instanceIDValue := testAgentID
 	value := 1.0
 	want := []*dto.MetricFamily{
 		{
@@ -295,7 +300,11 @@ func TestRegistry_pushPoint(t *testing.T) {
 		t.Errorf("reg.Gather() = %v, want %v", got, want)
 	}
 
-	reg.UpdateBleemeoAgentID(context.Background(), "fake-uuid")
+	reg.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	})
 
 	got, err = reg.Gather()
 	if err != nil {
@@ -416,10 +425,10 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			name:   "blackbox_probe_icmp",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
-				types.LabelMetaProbeTarget:      "icmp://8.8.8.8",
-				types.LabelMetaProbeScraperName: "test",
-				types.LabelMetaProbeAgentUUID:   "c571f9cf-6f07-492a-9e86-b8d5f5027557",
-				types.LabelMetaBleemeoUUID:      "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelMetaProbeTarget:            "icmp://8.8.8.8",
+				types.LabelMetaProbeScraperName:       "test",
+				types.LabelMetaBleemeoTargetAgentUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+				types.LabelMetaBleemeoUUID:            "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
 				// necessary for some labels to be applied
 				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
 				types.LabelMetaSendScraperUUID:  "yes",
@@ -439,10 +448,10 @@ func TestRegistry_applyRelabel(t *testing.T) {
 			name:   "blackbox_probe_icmp_no_scraper_name",
 			fields: fields{relabelConfigs: getDefaultRelabelConfig()},
 			args: args{map[string]string{
-				types.LabelMetaProbeTarget:    "icmp://8.8.8.8",
-				types.LabelInstance:           "super-instance:1111",
-				types.LabelMetaProbeAgentUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
-				types.LabelMetaBleemeoUUID:    "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
+				types.LabelMetaProbeTarget:            "icmp://8.8.8.8",
+				types.LabelInstance:                   "super-instance:1111",
+				types.LabelMetaBleemeoTargetAgentUUID: "c571f9cf-6f07-492a-9e86-b8d5f5027557",
+				types.LabelMetaBleemeoUUID:            "a39e5a8e-34cf-4b15-87bd-4b9cdaa59c42",
 				// necessary for some labels to be applied
 				types.LabelMetaProbeServiceUUID: "dcb8e864-0a1f-4a67-b470-327ceb461b4e",
 				types.LabelMetaSendScraperUUID:  "yes",
@@ -490,12 +499,16 @@ func TestRegistry_runOnce(t *testing.T) {
 				bleemeoPoints = append(bleemeoPoints, points...)
 				l.Unlock()
 			}),
-			BleemeoAgentID: "fake-uuid",
-			FQDN:           "example.com",
-			GloutonPort:    "1234",
-			Filter:         &fakeFilter{},
+			FQDN:        "example.com",
+			GloutonPort: "1234",
+			Filter:      &fakeFilter{},
 		},
 	}
+	regBleemeo.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	})
 	regBleemeo.init()
 
 	regPrometheus := &Registry{
@@ -506,12 +519,16 @@ func TestRegistry_runOnce(t *testing.T) {
 				prometheusPoints = append(prometheusPoints, points...)
 				l.Unlock()
 			}),
-			BleemeoAgentID: "fake-uuid",
-			FQDN:           "example.com",
-			GloutonPort:    "1234",
-			Filter:         &fakeFilter{},
+			FQDN:        "example.com",
+			GloutonPort: "1234",
+			Filter:      &fakeFilter{},
 		},
 	}
+	regPrometheus.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+		labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+		return labels, false
+	})
 	regPrometheus.init()
 
 	gather1 := &fakeGatherer{name: "name1"}
@@ -568,7 +585,7 @@ func TestRegistry_runOnce(t *testing.T) {
 
 	want := []types.MetricPoint{
 		{Point: types.Point{Time: bleemeoT0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-		{Point: types.Point{Time: bleemeoT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": "fake-uuid"}},
+		{Point: types.Point{Time: bleemeoT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
 		{Point: types.Point{Time: bleemeoT0, Value: gatherTime.Seconds()}, Labels: map[string]string{"__name__": "agent_gather_time"}},
 	}
 
@@ -583,8 +600,8 @@ func TestRegistry_runOnce(t *testing.T) {
 	regPrometheus.runOnce()
 
 	want = []types.MetricPoint{
-		{Point: types.Point{Time: prometheusT0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "instance": "example.com:1234", "instance_uuid": "fake-uuid", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-		{Point: types.Point{Time: prometheusT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": "fake-uuid"}},
+		{Point: types.Point{Time: prometheusT0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "instance": "example.com:1234", "instance_uuid": testAgentID, "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+		{Point: types.Point{Time: prometheusT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
 	}
 
 	if diff := cmp.Diff(want, prometheusPoints); diff != "" {
