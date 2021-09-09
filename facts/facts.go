@@ -287,7 +287,7 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 		fqdn = hostname
 	}
 
-	if fqdn == "" {
+	if fqdn == "" || fqdn == hostname {
 		// With pure-Go resolver, it may happen. Perform what C-resolver seems to do
 		if addrs, err := net.DefaultResolver.LookupHost(ctx, hostname); err == nil && len(addrs) > 0 {
 			if names, err := net.DefaultResolver.LookupAddr(ctx, addrs[0]); err == nil && len(names) > 0 {
@@ -301,13 +301,15 @@ func getFQDN(ctx context.Context) (hostname string, fqdn string) {
 	}
 
 	switch fqdn {
-	case "", "localhost", "localhost.local", "localhost.localdomain":
+	case "":
+		fqdn = hostname
+	case "localhost", "localhost.local", "localhost.localdomain":
 		if hostname != "localhost" {
 			fqdn = hostname
 		}
 	}
 
-	return
+	return hostname, fqdn
 }
 
 func decodeOsRelease(data string) (map[string]string, error) {
