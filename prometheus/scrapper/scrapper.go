@@ -28,10 +28,13 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"time"
 
 	dto "github.com/prometheus/client_model/go"
 	"github.com/prometheus/common/expfmt"
 )
+
+const defaultGatherTimeout = 10 * time.Second
 
 var errIncorrectStatus = errors.New("incorrect status")
 
@@ -58,7 +61,10 @@ func HostPort(u *url.URL) string {
 
 // Gather implement prometheus.Gatherer.
 func (t *Target) Gather() ([]*dto.MetricFamily, error) {
-	return nil, nil
+	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
+	defer cancel()
+
+	return t.GatherWithState(ctx, registry.GatherState{})
 }
 
 func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState) ([]*dto.MetricFamily, error) {
