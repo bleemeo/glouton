@@ -10,7 +10,6 @@ import (
 	"reflect"
 	"runtime"
 	"strings"
-	"syscall"
 	"testing"
 	"time"
 
@@ -110,9 +109,7 @@ func testProc(t *testing.T, procs proc.Iter) {
 	current := internalProc.procValue
 
 	if current.procErr != nil {
-		// [ESRCH] No process or process group can be found corresponding to that specified by pid.
-		// This error can happen when the processcurrent exist while opening it, but not anymore when you want to read it.
-		if os.IsNotExist(current.procErr) || strings.Contains(current.procErr.Error(), syscall.ESRCH.Error()) {
+		if isProcNotExist(current.procErr) {
 			return
 		}
 
@@ -145,13 +142,13 @@ func testProc(t *testing.T, procs proc.Iter) {
 	}
 
 	static, err := procs.GetStatic()
-	if err != nil && os.IsNotExist(err) {
+	if err != nil && isProcNotExist(err) {
 		return
 	}
 
 	cmdline, err := current.getCmdline()
 	if err != nil {
-		if os.IsNotExist(err) || strings.Contains(current.procErr.Error(), syscall.ESRCH.Error()) {
+		if isProcNotExist(err) {
 			return
 		}
 
@@ -167,7 +164,7 @@ func testProc(t *testing.T, procs proc.Iter) {
 	}
 
 	_, _, err = procs.GetMetrics()
-	if err != nil && !os.IsNotExist(err) {
+	if err != nil && !isProcNotExist(err) {
 		t.Errorf("An error occurred wile trying to get Metrics: %v", err)
 	}
 }

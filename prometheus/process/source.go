@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 	"unsafe"
 
@@ -106,6 +107,16 @@ func (c *Processes) getPwdlookup() func(uid int) (string, error) {
 	}
 }
 
+func isProcNotExist(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// [ESRCH] No process or process group can be found corresponding to that specified by pid.
+	// This error can happen when the processcurrent exist while opening it, but not anymore when you want to read it.
+	return os.IsNotExist(err) || strings.Contains(err.Error(), syscall.ESRCH.Error())
+}
+
 // Processes lists all the processes.
 func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (processes []facts.Process, err error) {
 	procs, err := c.getProcs(maxAge)
@@ -128,7 +139,7 @@ func (c *Processes) Processes(ctx context.Context, maxAge time.Duration) (proces
 	var skippedProcesses error
 
 	for _, p := range procs {
-		if os.IsNotExist(p.procErr) {
+		if isProcNotExist(p.procErr) {
 			continue
 		}
 
