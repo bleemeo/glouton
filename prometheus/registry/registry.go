@@ -780,6 +780,8 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 		}
 	}
 
+	points = points[:n]
+
 	if now.Sub(r.lastPushedPointsCleanup) > pushedPointsCleanupInterval {
 		r.lastPushedPointsCleanup = now
 		for key, expiration := range r.pushedPointsExpiration {
