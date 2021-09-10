@@ -85,7 +85,7 @@ const (
 	PostgreSQLService    ServiceName = "postgresql"
 	RabbitMQService      ServiceName = "rabbitmq"
 	RedisService         ServiceName = "redis"
-	SaltMasterService    ServiceName = "salt-master"
+	SaltMasterService    ServiceName = "salt_master"
 	SquidService         ServiceName = "squid"
 	UWSGIService         ServiceName = "uwsgi"
 	VarnishService       ServiceName = "varnish"
