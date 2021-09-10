@@ -21,7 +21,9 @@ import (
 	"errors"
 	"fmt"
 	"glouton/config"
+	"glouton/discovery"
 	"glouton/logger"
+	"glouton/types"
 	"glouton/version"
 	"io/ioutil"
 	"os"
@@ -34,7 +36,72 @@ var (
 	errUpdateFromEnv      = errors.New("update from environment variable is not supported")
 	errDeprecatedEnv      = errors.New("environement variable is deprecated")
 	errSettingsDeprecated = errors.New("setting is deprecated")
+	ErrInvalidValue       = errors.New("invalid config value")
 )
+
+// Config is the structured configuration of the agent.
+// Currently not all settings are converted (and some still use old config.Get() method).
+// New settings should use Config.
+type Config struct {
+	Services Services
+}
+
+type Services []Service
+
+func (srvs Services) ToDiscoveryMap() map[discovery.NameContainer]discovery.ServiceOveride {
+	result := make(map[discovery.NameContainer]discovery.ServiceOveride, len(srvs))
+
+	for _, v := range srvs {
+		key := discovery.NameContainer{
+			Name:          v.ID,
+			ContainerName: v.Instance,
+		}
+		result[key] = discovery.ServiceOveride{
+			IgnoredPorts:   v.IgnoredPorts,
+			ExtraAttribute: v.ExtraAttribute,
+		}
+	}
+
+	return result
+}
+
+func (srvs Services) ToNRPEMap() map[string]discovery.NameContainer {
+	result := make(map[string]discovery.NameContainer)
+
+	for _, v := range srvs {
+		if v.NagiosNRPEName == "" {
+			continue
+		}
+
+		result[v.NagiosNRPEName] = discovery.NameContainer{
+			Name:          v.ID,
+			ContainerName: v.Instance,
+		}
+	}
+
+	return result
+}
+
+type Service struct {
+	ID             string
+	Instance       string
+	NagiosNRPEName string
+	IgnoredPorts   []int
+	ExtraAttribute map[string]string
+}
+
+// Name return a human name of this service.
+func (srv Service) Name() string {
+	if srv.ID == "" {
+		return "unknown service (ID is absent)"
+	}
+
+	if srv.Instance == "" {
+		return srv.ID
+	}
+
+	return fmt.Sprintf("%s on %s", srv.ID, srv.Instance)
+}
 
 func defaultConfig() map[string]interface{} {
 	return map[string]interface{}{
@@ -442,7 +509,16 @@ func loadEnvironmentVariable(cfg *config.Configuration, key string, envName stri
 	return found, nil
 }
 
-func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg *config.Configuration, warnings []error, finalError error) {
+func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg Config, oldCfg *config.Configuration, warnings []error, finalError error) {
+	oldCfg, warnings, finalError = loadOldConfiguration(configFiles, mockLookupEnv)
+	cfg, moreWarnings := convertConfig(oldCfg)
+
+	warnings = append(warnings, moreWarnings...)
+
+	return cfg, oldCfg, warnings, finalError
+}
+
+func loadOldConfiguration(configFiles []string, mockLookupEnv func(string) (string, bool)) (cfg *config.Configuration, warnings []error, finalError error) {
 	cfg = &config.Configuration{}
 
 	cfg.MockLookupEnv(mockLookupEnv)
@@ -496,14 +572,14 @@ func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string,
 		}
 	}
 
-	moreMarnings, err := loadEnvironmentVariables(cfg)
+	moreWarnings, err := loadEnvironmentVariables(cfg)
 	if err != nil {
 		finalError = err
 	}
 
-	warnings = append(warnings, moreMarnings...)
-	moreMarnings = migrate(cfg)
-	warnings = append(warnings, moreMarnings...)
+	warnings = append(warnings, moreWarnings...)
+	moreWarnings = migrate(cfg)
+	warnings = append(warnings, moreWarnings...)
 
 	loadDefault(cfg)
 
@@ -512,6 +588,69 @@ func loadConfiguration(configFiles []string, mockLookupEnv func(string) (string,
 	}
 
 	return cfg, warnings, finalError
+}
+
+func convertConfig(cfg *config.Configuration) (agentConfig Config, warnings []error) {
+	services, _ := cfg.Get("service")
+	overrideServices := confFieldToSliceMap(services, "service override")
+	agentConfig.Services = make([]Service, 0, len(overrideServices))
+
+	for _, fragment := range overrideServices {
+		srv := Service{}
+
+		moreWarning := srv.fromMap(fragment)
+		if moreWarning != nil {
+			warnings = append(warnings, fmt.Errorf("service %s: %w", srv.Name(), moreWarning))
+		}
+
+		agentConfig.Services = append(agentConfig.Services, srv)
+	}
+
+	return agentConfig, warnings
+}
+
+func (srv *Service) fromMap(fragment map[string]string) (warning error) {
+	var errs types.MultiErrors
+
+	for k, v := range fragment {
+		switch k {
+		case "id":
+			srv.ID = v
+		case "instance":
+			srv.Instance = v
+		case "nagios_nrpe_name":
+			srv.NagiosNRPEName = v
+		case "ignore_ports":
+			values := strings.Split(v, ",")
+
+			for _, s := range values {
+				port, err := strconv.ParseInt(strings.TrimSpace(s), 10, 0)
+				if err != nil {
+					errs = append(errs, fmt.Errorf("ignore_ports \"%s\": %w", s, err))
+
+					continue
+				}
+
+				if port > 65535 {
+					errs = append(errs, fmt.Errorf("%w: ignore_ports %d is larger than 65535", ErrInvalidValue, port))
+				}
+
+				srv.IgnoredPorts = append(srv.IgnoredPorts, int(port))
+			}
+		default:
+			if srv.ExtraAttribute == nil {
+				srv.ExtraAttribute = make(map[string]string)
+			}
+
+			srv.ExtraAttribute[k] = v
+		}
+	}
+
+	if len(errs) > 0 {
+		return errs
+	}
+
+	return nil
 }
 
 func convertToMap(input interface{}) (result map[string]interface{}, ok bool) {

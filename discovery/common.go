@@ -47,6 +47,11 @@ type NameContainer struct {
 	ContainerName string
 }
 
+type ServiceOveride struct {
+	IgnoredPorts   []int
+	ExtraAttribute map[string]string
+}
+
 // ServiceName is the name of a supported service.
 type ServiceName string
 

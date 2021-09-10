@@ -276,6 +276,7 @@ func Test_loadConfiguration(t *testing.T) {
 		absentKeys  []string
 		wantErr     bool
 		warnings    []string
+		wantCfg     Config
 	}{
 		{
 			name: "migration file",
@@ -310,6 +311,52 @@ func Test_loadConfiguration(t *testing.T) {
 				},
 			},
 			warnings: nil,
+		},
+		{
+			name: "services",
+			configFiles: []string{
+				"testdata/services.conf.d",
+			},
+			warnings: nil,
+			wantCfg: Config{
+				Services: Services{
+					{
+						ID:       "apache",
+						Instance: "",
+						ExtraAttribute: map[string]string{
+							"port":      "80",
+							"address":   "127.0.0.1",
+							"http_path": "/",
+							"http_host": "127.0.0.1:80",
+						},
+					},
+					{
+						ID:       "apache",
+						Instance: "CONTAINER_NAME",
+						ExtraAttribute: map[string]string{
+							"port":      "80",
+							"address":   "172.17.0.2",
+							"http_path": "/",
+							"http_host": "127.0.0.1:80",
+						},
+					},
+					{
+						ID: "myapplication",
+						ExtraAttribute: map[string]string{
+							"port":          "8080",
+							"check_type":    "nagios",
+							"check_command": "command-to-run",
+						},
+					},
+					{
+						ID: "custom_webserver",
+						ExtraAttribute: map[string]string{
+							"port":       "8181",
+							"check_type": "http",
+						},
+					},
+				},
+			},
 		},
 		{
 			name: "enabled renamed",
@@ -387,7 +434,7 @@ func Test_loadConfiguration(t *testing.T) {
 				return value, ok
 			}
 
-			cfg, warnings, err := loadConfiguration(tt.configFiles, lookupEnv)
+			cfg, oldCfg, warnings, err := loadConfiguration(tt.configFiles, lookupEnv)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("loadConfiguration() error = %v, wantErr %v", err, tt.wantErr)
 
@@ -409,17 +456,21 @@ func Test_loadConfiguration(t *testing.T) {
 			}
 
 			for _, key := range tt.absentKeys {
-				if v, ok := cfg.Get(key); ok {
+				if v, ok := oldCfg.Get(key); ok {
 					t.Errorf("Get(%v) = %v, want absent", key, v)
 				}
 			}
 
 			for key, want := range tt.wantKeys {
-				if got, ok := cfg.Get(key); !ok {
+				if got, ok := oldCfg.Get(key); !ok {
 					t.Errorf("Get(%v) = nil, want present", key)
 				} else if !reflect.DeepEqual(got, want) {
 					t.Errorf("Get(%v) = %#v, want %#v", key, got, want)
 				}
+			}
+
+			if diff := cmp.Diff(tt.wantCfg, cfg, cmpopts.EquateEmpty()); diff != "" {
+				t.Error(diff)
 			}
 		})
 	}

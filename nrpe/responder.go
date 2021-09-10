@@ -50,19 +50,7 @@ type Responder struct {
 }
 
 // NewResponse returns a Response.
-func NewResponse(servicesOverride []map[string]string, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
-	customChecks := make(map[string]discovery.NameContainer)
-
-	for _, fragment := range servicesOverride {
-		nagiosNRPEName, ok := fragment["nagios_nrpe_name"]
-		if ok {
-			customChecks[nagiosNRPEName] = discovery.NameContainer{
-				Name:          fragment["id"],
-				ContainerName: fragment["instance"],
-			}
-		}
-	}
-
+func NewResponse(customChecks map[string]discovery.NameContainer, checkRegistry checkRegistry, nrpeConfPath []string) Responder {
 	nrpeCommands, allowArguments := readNRPEConf(nrpeConfPath)
 
 	return Responder{
