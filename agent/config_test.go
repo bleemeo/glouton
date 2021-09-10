@@ -317,7 +317,11 @@ func Test_loadConfiguration(t *testing.T) {
 			configFiles: []string{
 				"testdata/services.conf.d",
 			},
-			warnings: nil,
+			warnings: []string{
+				"invalid config value: a key \"id\" is missing in one of your service override",
+				"invalid config value: service id \" not fixable@\" can only contains letters, digits and underscore",
+				"invalid config value: service id \"custom-bad.name\" can not contains dot (.) or dash (-). Changed to \"custom_bad_name\"",
+			},
 			wantCfg: Config{
 				Services: Services{
 					{
@@ -353,6 +357,13 @@ func Test_loadConfiguration(t *testing.T) {
 						ExtraAttribute: map[string]string{
 							"port":       "8181",
 							"check_type": "http",
+						},
+					},
+					{
+						ID: "custom_bad_name",
+						ExtraAttribute: map[string]string{
+							"check_type":    "nagios",
+							"check_command": "azerty",
 						},
 					},
 				},

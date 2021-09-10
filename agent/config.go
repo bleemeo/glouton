@@ -30,6 +30,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/prometheus/common/model"
 )
 
 var (
@@ -606,7 +608,45 @@ func convertConfig(cfg *config.Configuration) (agentConfig Config, warnings []er
 		agentConfig.Services = append(agentConfig.Services, srv)
 	}
 
+	warnings = append(warnings, agentConfig.validate()...)
+
 	return agentConfig, warnings
+}
+
+func (cfg *Config) validate() []error {
+	var warnings []error
+
+	replacer := strings.NewReplacer(".", "_", "-", "_")
+
+	i := 0
+
+	for _, srv := range cfg.Services {
+		if srv.ID == "" {
+			warnings = append(warnings, fmt.Errorf("%w: a key \"id\" is missing in one of your service override", ErrInvalidValue))
+
+			continue
+		}
+
+		if !model.IsValidMetricName(model.LabelValue(srv.ID)) {
+			newID := replacer.Replace(srv.ID)
+			if !model.IsValidMetricName(model.LabelValue(newID)) {
+				warnings = append(warnings, fmt.Errorf("%w: service id \"%s\" can only contains letters, digits and underscore", ErrInvalidValue, srv.ID))
+
+				continue
+			}
+
+			warnings = append(warnings, fmt.Errorf("%w: service id \"%s\" can not contains dot (.) or dash (-). Changed to \"%s\"", ErrInvalidValue, srv.ID, newID))
+
+			srv.ID = newID
+		}
+
+		cfg.Services[i] = srv
+		i++
+	}
+
+	cfg.Services = cfg.Services[:i]
+
+	return warnings
 }
 
 func (srv *Service) fromMap(fragment map[string]string) (warning error) {
