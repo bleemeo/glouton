@@ -137,6 +137,7 @@ type registration struct {
 	includedInMetricsEndpoint bool
 	loop                      *scrapeLoop
 	lastScrape                time.Time
+	lastScrapeDuration        time.Duration
 	gatherer                  labeledGatherer
 	relabelHookSkip           bool
 	lastRebalHookRetry        time.Time
@@ -398,7 +399,7 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v\n", id, reg.description, reg.originalExtraLabels, reg.loop.interval, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape)
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v (duration %v)\n", id, reg.description, reg.originalExtraLabels, reg.loop.interval, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
 
 		reg.l.Unlock()
 	}
@@ -412,7 +413,7 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v\n", id, reg.description, reg.originalExtraLabels, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape)
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v (duration %v)\n", id, reg.description, reg.originalExtraLabels, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
 
 		reg.l.Unlock()
 	}
@@ -765,10 +766,11 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 		return
 	}
 
-	reg.lastScrape = t0
 	gatherMethod := reg.gatherer.GatherPoints
 
 	reg.l.Unlock()
+
+	start := time.Now()
 
 	points, err := gatherMethod(ctx, t0, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0})
 	if err != nil {
@@ -780,6 +782,11 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 			logger.V(1).Printf("Gather of metrics failed, some metrics may be missing: %v", err)
 		}
 	}
+
+	reg.l.Lock()
+	reg.lastScrape = t0
+	reg.lastScrapeDuration = time.Since(start)
+	reg.l.Unlock()
 
 	if len(points) > 0 && r.option.PushPoint != nil {
 		r.option.PushPoint.PushPoints(points)
