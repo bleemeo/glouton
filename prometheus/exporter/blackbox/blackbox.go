@@ -189,7 +189,7 @@ func (m *RegisterManager) updateRegistrations() error {
 			// for each probe is the product of our unability to expose a "__meta_something"
 			// label while doing Collect(). We end up adding the meta labels statically at
 			// registration.
-			id, err := m.registry.RegisterGatherer(hash, collectorFromConfig.collector.RefreshRate, g, nil, collectorFromConfig.labels, true)
+			id, err := m.registry.RegisterGatherer("blackbox for "+collectorFromConfig.collector.URL, hash, collectorFromConfig.collector.RefreshRate, g, nil, collectorFromConfig.labels, true)
 			if err != nil {
 				return err
 			}

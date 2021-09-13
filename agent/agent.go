@@ -618,7 +618,7 @@ func (a *agent) run() { //nolint:cyclop
 		return
 	}
 
-	if _, err := a.gathererRegistry.RegisterPushPointsCallback(baseJitterPlus, func(context.Context, time.Time) {
+	if _, err := a.gathererRegistry.RegisterPushPointsCallback("rulesManager", baseJitterPlus, func(context.Context, time.Time) {
 		rulesManager.Run()
 	}); err != nil {
 		logger.Printf("unable to add recording rules metrics: %v", err)
@@ -684,17 +684,18 @@ func (a *agent) run() { //nolint:cyclop
 	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
 
 	a.collector = collector.New(acc)
-	if _, err := a.gathererRegistry.RegisterPushPointsCallback(baseJitter, a.collector.RunGather); err != nil {
+	if _, err := a.gathererRegistry.RegisterPushPointsCallback("system & services metrics", baseJitter, a.collector.RunGather); err != nil {
 		logger.Printf("unable to add system metrics: %v", err)
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {
-		if _, err := a.gathererRegistry.RegisterPushPointsCallback(baseJitter, processInput.Gather); err != nil {
+		if _, err := a.gathererRegistry.RegisterPushPointsCallback("procces status metrics", baseJitter, processInput.Gather); err != nil {
 			logger.Printf("unable to add processes metrics: %v", err)
 		}
 	}
 
 	if _, err := a.gathererRegistry.RegisterPushPointsCallback(
+		"miscGather",
 		baseJitter,
 		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
 	); err != nil {
@@ -727,14 +728,14 @@ func (a *agent) run() { //nolint:cyclop
 	for _, target := range scrapperSNMPTargets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 		// TODO: use the correct interval
-		if _, err := a.gathererRegistry.RegisterGatherer(hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
+		if _, err := a.gathererRegistry.RegisterGatherer("snmp target "+target.URL.String(), hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
 	for _, target := range targets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
-		if _, err := a.gathererRegistry.RegisterGatherer(hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
+		if _, err := a.gathererRegistry.RegisterGatherer("Prom exporter "+target.URL.String(), hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
@@ -1775,6 +1776,7 @@ func (a *agent) writeDiagnosticZip(w io.Writer) error {
 		a,
 		a.metricFilter,
 		a.discovery,
+		a.gathererRegistry,
 	}
 
 	if a.bleemeoConnector != nil {

@@ -50,7 +50,7 @@ func (d *Discovery) createPrometheusMemcached(service Service) error {
 
 	hash := labels.FromMap(lbls).Hash()
 
-	id, err := d.metricRegistry.RegisterGatherer(hash, defaultInterval, reg, stopCallback, lbls, d.metricFormat == types.MetricFormatPrometheus)
+	id, err := d.metricRegistry.RegisterGatherer("memcached exporter", hash, defaultInterval, reg, stopCallback, lbls, d.metricFormat == types.MetricFormatPrometheus)
 	if err != nil {
 		return err
 	}

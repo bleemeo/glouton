@@ -13,6 +13,7 @@ type scrapeLoop struct {
 	cancel   context.CancelFunc
 	stopped  chan struct{}
 	callback func(context.Context, time.Time)
+	interval time.Duration
 }
 
 func startScrapeLoop(ctx context.Context, interval time.Duration, timeout time.Duration, jitterSeed uint64, callback func(ctx context.Context, t0 time.Time)) *scrapeLoop {
@@ -21,6 +22,7 @@ func startScrapeLoop(ctx context.Context, interval time.Duration, timeout time.D
 	sl := &scrapeLoop{
 		cancel:   cancel,
 		callback: callback,
+		interval: interval,
 		stopped:  make(chan struct{}),
 	}
 

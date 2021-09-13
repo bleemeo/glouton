@@ -90,7 +90,7 @@ type Registry interface {
 
 // GathererRegistry allow to register/unregister prometheus Gatherer.
 type GathererRegistry interface {
-	RegisterGatherer(jitterSeed uint64, interval time.Duration, gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string, pushPoints bool) (int, error)
+	RegisterGatherer(decription string, jitterSeed uint64, interval time.Duration, gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string, pushPoints bool) (int, error)
 	Unregister(id int) bool
 }
 

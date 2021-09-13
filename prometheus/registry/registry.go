@@ -21,8 +21,10 @@
 package registry
 
 import (
+	"archive/zip"
 	"context"
 	"errors"
+	"fmt"
 	"glouton/logger"
 	"glouton/types"
 	"net/http"
@@ -125,12 +127,14 @@ type Option struct {
 
 type registration struct {
 	l                         sync.Mutex
+	description               string
 	originalExtraLabels       map[string]string
 	originalInterval          time.Duration
 	originalJitterSeed        uint64
 	stopCallback              func()
 	includedInMetricsEndpoint bool
 	loop                      *scrapeLoop
+	lastScrape                time.Time
 	gatherer                  labeledGatherer
 	relabelHookSkip           bool
 	lastRebalHookRetry        time.Time
@@ -303,13 +307,14 @@ func (r *Registry) Run(ctx context.Context) error {
 // RegisterPushPointsCallback add a callback that should push points to the registry.
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
-func (r *Registry) RegisterPushPointsCallback(jitterSeed uint64, f func(context.Context, time.Time)) (int, error) {
+func (r *Registry) RegisterPushPointsCallback(description string, jitterSeed uint64, f func(context.Context, time.Time)) (int, error) {
 	r.init()
 
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	reg := &registration{
+		description:               description,
 		includedInMetricsEndpoint: false,
 		originalJitterSeed:        jitterSeed,
 	}
@@ -364,6 +369,55 @@ func (r *Registry) UpdateRelabelHook(hook RelabelHook) {
 	r.condition.Broadcast()
 }
 
+func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
+	r.l.Lock()
+	defer r.l.Unlock()
+
+	file, err := zipFile.Create("scrape-loop.txt")
+	if err != nil {
+		return err
+	}
+
+	countWithLoop := 0
+
+	for _, reg := range r.registrations {
+		if reg.loop != nil {
+			countWithLoop++
+		}
+	}
+
+	fmt.Fprintf(file, "# %d collector registered, %d with a scrape-loop.\n", len(r.registrations), countWithLoop)
+	fmt.Fprintf(file, "# Collectors with loop active:\n")
+
+	for id, reg := range r.registrations {
+		if reg.loop == nil {
+			continue
+		}
+
+		reg.l.Lock()
+
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v\n", id, reg.description, reg.originalExtraLabels, reg.loop.interval, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape)
+
+		reg.l.Unlock()
+	}
+
+	fmt.Fprintf(file, "\n# Collectors with no active loop (only on /metrics):\n")
+
+	for id, reg := range r.registrations {
+		if reg.loop != nil {
+			continue
+		}
+
+		reg.l.Lock()
+
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v\n", id, reg.description, reg.originalExtraLabels, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape)
+
+		reg.l.Unlock()
+	}
+
+	return nil
+}
+
 // scrapeStart block until scraping is allowed.
 func (r *Registry) scrapeStart() {
 	r.l.Lock()
@@ -390,12 +444,13 @@ func (r *Registry) scrapeDone() {
 // In the case, the period is interval. If interval is 0, the UpdateDelay value is used (default to 10 seconds).
 // stopCallback is called when Unregister() is used.
 // extraLabels add labels added. If a labels already exists, extraLabels take precedence.
-func (r *Registry) RegisterGatherer(jitterSeed uint64, interval time.Duration, gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string, pushPoints bool) (int, error) {
+func (r *Registry) RegisterGatherer(description string, jitterSeed uint64, interval time.Duration, gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string, pushPoints bool) (int, error) {
 	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	reg := &registration{
+		description:         description,
 		originalExtraLabels: extraLabels,
 		originalJitterSeed:  jitterSeed,
 		originalInterval:    interval,
@@ -611,7 +666,7 @@ func (r *Registry) AddDefaultCollector() {
 	r.internalRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	r.internalRegistry.MustRegister(collectors.NewGoCollector())
 
-	_, _ = r.RegisterGatherer(baseJitter, defaultInterval, r.internalRegistry, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
+	_, _ = r.RegisterGatherer("go & process collector", baseJitter, defaultInterval, r.internalRegistry, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
 }
 
 // Exporter return an HTTP exporter.
@@ -629,7 +684,7 @@ func (r *Registry) Exporter() http.Handler {
 			ErrorLog:      prefixLogger("/metrics endpoint:"),
 		}).ServeHTTP(w, req)
 	}))
-	_, _ = r.RegisterGatherer(baseJitter, defaultInterval, reg, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
+	_, _ = r.RegisterGatherer("/metrics collector", baseJitter, defaultInterval, reg, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
 
 	return handler
 }
@@ -699,6 +754,8 @@ func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) 
 	if reg.relabelHookSkip {
 		return
 	}
+
+	reg.lastScrape = t0
 
 	points, err := reg.gatherer.GatherPoints(ctx, t0, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0})
 	if err != nil {
