@@ -97,9 +97,11 @@ func Test_NormalizeMetric(t *testing.T) {
 			allowListString: "my.metric",
 			want: Matchers{
 				&labels.Matcher{
-					Type:  labels.MatchEqual,
-					Name:  types.LabelName,
-					Value: "my.metric",
+					Type: labels.MatchEqual,
+					Name: types.LabelName,
+					// The "." is transformed in "_", because "." is invalid for
+					// the name of a metric.
+					Value: "my_metric",
 				},
 			},
 		},
@@ -108,9 +110,12 @@ func Test_NormalizeMetric(t *testing.T) {
 			allowListString: "curr*.$_customer*",
 			want: Matchers{
 				&labels.Matcher{
-					Type:  labels.MatchRegexp,
-					Name:  types.LabelName,
-					Value: "curr.*\\.\\$_customer.*",
+					Type: labels.MatchRegexp,
+					Name: types.LabelName,
+					// The "." is transformed in "_", because "." is invalid for
+					// the name of a metric.
+					// Note: "$" is also invalid, but only some char are transformed.
+					Value: "curr.*_\\$_customer.*",
 				},
 			},
 		},

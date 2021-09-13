@@ -486,7 +486,7 @@ func TestDynamicDiscoverySingle(t *testing.T) {
 			testName: "salt-master-ubuntu-14.04",
 			cmdLine:  []string{"/usr/bin/python", "/usr/bin/salt-master"},
 			want: Service{
-				Name:            "salt-master",
+				Name:            "salt_master",
 				ServiceType:     SaltMasterService,
 				ListenAddresses: []facts.ListenAddress{{NetworkFamily: "tcp", Address: "127.0.0.1", Port: 4505}},
 				IPAddress:       "127.0.0.1",

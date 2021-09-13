@@ -58,6 +58,8 @@ const (
 // and it registry should retry later. Points or gatherer associated will be dropped.
 type RelabelHook func(labels map[string]string) (newLabel map[string]string, retryLater bool)
 
+var errInvalidName = errors.New("invalid metric name or label name")
+
 type pushFunction func(points []types.MetricPoint)
 
 // AddMetricPoints implement PointAdder.
@@ -831,7 +833,17 @@ func (r *Registry) pushPoint(points []types.MetricPoint, ttl time.Duration) {
 	n := 0
 
 	for _, point := range points {
-		var skip bool
+		var (
+			err  error
+			skip bool
+		)
+
+		point.Labels, err = fixLabels(point.Labels)
+		if err != nil {
+			logger.V(2).Printf("Ignoring metric %v: %v", point.Labels, err)
+
+			continue
+		}
 
 		if r.option.MetricFormat == types.MetricFormatBleemeo {
 			newLabelsMap := map[string]string{
@@ -977,7 +989,6 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 	defer c.l.Unlock()
 
 	now := time.Now()
-	replacer := strings.NewReplacer(".", "_")
 
 	c.lastPushedPointsCleanup = now
 
@@ -994,33 +1005,54 @@ func (c *pushCollector) Collect(ch chan<- prometheus.Metric) {
 		labelValues := make([]string, 0)
 
 		for l, v := range p.Labels {
-			if l != "__name__" {
-				if !model.IsValidMetricName(model.LabelValue(l)) {
-					l = replacer.Replace(l)
-					if !model.IsValidMetricName(model.LabelValue(l)) {
-						logger.V(2).Printf("label %#v is ignored since invalid for Prometheus", l)
-
-						continue
-					}
-				}
-
+			if l != types.LabelName {
 				labelKeys = append(labelKeys, l)
 				labelValues = append(labelValues, v)
 			}
 		}
 
 		promMetric, err := prometheus.NewConstMetric(
-			prometheus.NewDesc(p.Labels["__name__"], "", labelKeys, nil),
+			prometheus.NewDesc(p.Labels[types.LabelName], "", labelKeys, nil),
 			prometheus.UntypedValue,
 			p.Value,
 			labelValues...,
 		)
 		if err != nil {
-			logger.V(2).Printf("Ignoring metric %s due to %v", p.Labels["__name__"], err)
+			logger.V(2).Printf("Ignoring metric %s due to %v", p.Labels[types.LabelName], err)
 
 			continue
 		}
 
 		ch <- prometheus.NewMetricWithTimestamp(p.Time, promMetric)
 	}
+}
+
+func fixLabels(lbls map[string]string) (map[string]string, error) {
+	replacer := strings.NewReplacer(".", "_", "-", "_")
+
+	for l, v := range lbls {
+		if l == types.LabelName {
+			if !model.IsValidMetricName(model.LabelValue(v)) {
+				v = replacer.Replace(v)
+
+				if !model.IsValidMetricName(model.LabelValue(v)) {
+					return nil, fmt.Errorf("%w: %v", errInvalidName, v)
+				}
+
+				lbls[types.LabelName] = v
+			}
+		} else {
+			if !model.LabelName(l).IsValid() {
+				newL := replacer.Replace(l)
+				if !model.LabelName(newL).IsValid() {
+					return nil, fmt.Errorf("%w: %v", errInvalidName, l)
+				}
+
+				delete(lbls, l)
+				lbls[l] = v
+			}
+		}
+	}
+
+	return lbls, nil
 }

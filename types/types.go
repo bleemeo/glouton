@@ -17,6 +17,7 @@
 package types
 
 import (
+	"errors"
 	"glouton/logger"
 	"sort"
 	"strings"
@@ -281,4 +282,27 @@ type Monitor struct {
 	ExpectedContent         string
 	ExpectedResponseCode    int
 	ForbiddenContent        string
+}
+
+// MultiErrors is a type containing multiple errors. It implements the error interface.
+type MultiErrors []error
+
+func (errs MultiErrors) Error() string {
+	list := make([]string, len(errs))
+
+	for i, err := range errs {
+		list[i] = err.Error()
+	}
+
+	return strings.Join(list, ", ")
+}
+
+func (errs MultiErrors) Is(target error) bool {
+	for _, err := range errs {
+		if errors.Is(err, target) {
+			return true
+		}
+	}
+
+	return false
 }

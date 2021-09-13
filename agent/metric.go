@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"glouton/config"
 	"glouton/discovery"
-	"glouton/facts/container-runtime/merge"
 	"glouton/jmxtrans"
 	"glouton/logger"
 	"glouton/prometheus/exporter/snmp"
@@ -1096,7 +1095,7 @@ type dynamicScrapper interface {
 	GetContainersLabels() map[string]map[string]string
 }
 
-func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors merge.MultiErrors) (map[string]matcher.Matchers, merge.MultiErrors) {
+func (m *metricFilter) rebuildServicesMetrics(allowList map[string]matcher.Matchers, services []discovery.Service, errors types.MultiErrors) (map[string]matcher.Matchers, types.MultiErrors) {
 	for _, service := range services {
 		if !service.Active {
 			continue
@@ -1159,7 +1158,7 @@ func (m *metricFilter) rebuildDefaultMetrics(services []discovery.Service, list 
 func (m *metricFilter) RebuildDynamicLists(scrapper dynamicScrapper, services []discovery.Service, thresholdMetricNames []string) error {
 	allowList := make(map[string]matcher.Matchers)
 	denyList := make(map[string]matcher.Matchers)
-	errors := merge.MultiErrors{}
+	errors := types.MultiErrors{}
 
 	m.l.Lock()
 	defer m.l.Unlock()
