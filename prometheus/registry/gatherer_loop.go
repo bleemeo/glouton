@@ -34,8 +34,10 @@ func startScrapeLoop(ctx context.Context, interval time.Duration, timeout time.D
 func (sl *scrapeLoop) run(ctx context.Context, interval time.Duration, timeout time.Duration, jitterSeed uint64) {
 	defer close(sl.stopped)
 
+	alignedScrapeTime := sl.offset(interval, jitterSeed).Round(0)
+
 	select {
-	case <-time.After(sl.offset(interval, jitterSeed)):
+	case <-time.After(time.Until(alignedScrapeTime)):
 		// Continue after a scraping offset.
 	case <-ctx.Done():
 		return
@@ -43,7 +45,6 @@ func (sl *scrapeLoop) run(ctx context.Context, interval time.Duration, timeout t
 
 	// Calling Round ensures the time used is the wall clock, as otherwise .Sub
 	// and .Add on time.Time behave differently (see time package docs).
-	alignedScrapeTime := time.Now().Round(0)
 	ticker := time.NewTicker(interval)
 
 	defer ticker.Stop()
@@ -82,7 +83,7 @@ func (sl *scrapeLoop) stop() {
 	<-sl.stopped
 }
 
-func (sl *scrapeLoop) offset(interval time.Duration, jitterSeed uint64) time.Duration {
+func (sl *scrapeLoop) offset(interval time.Duration, jitterSeed uint64) time.Time {
 	now := time.Now().UnixNano()
 
 	var (
@@ -95,5 +96,5 @@ func (sl *scrapeLoop) offset(interval time.Duration, jitterSeed uint64) time.Dur
 		next -= int64(interval)
 	}
 
-	return time.Duration(next)
+	return time.Unix(0, now+next)
 }
