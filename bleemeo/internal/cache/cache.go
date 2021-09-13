@@ -255,7 +255,7 @@ func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountCon
 						MetricsAllowlist: allowListToMap(agentConfig.MetricsAllowlist),
 					}
 
-					config.AgentConfigByName[agentType.ID] = config.AgentConfigByName[agentType.Name]
+					config.AgentConfigByID[agentType.ID] = config.AgentConfigByName[agentType.Name]
 
 					if agentType.Name == bleemeoTypes.AgentTypeAgent {
 						agentTypeFound = true
