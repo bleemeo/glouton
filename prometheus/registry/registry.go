@@ -658,6 +658,8 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 	r.currentDelay = delay
 
 	for _, reg := range r.registrations {
+		reg := reg
+
 		if reg.originalInterval != 0 {
 			continue
 		}
