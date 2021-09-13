@@ -141,6 +141,30 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 
 	cache := cache.Cache{}
 
+	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
+		{
+			ID:   "123",
+			Name: "default",
+		},
+	})
+	cache.SetAgentTypes([]bleemeoTypes.AgentType{
+		{
+			ID:   "456",
+			Name: bleemeoTypes.AgentTypeAgent,
+		},
+	})
+	cache.SetAgentConfigs([]bleemeoTypes.AgentConfig{
+		{
+			MetricsAllowlist: "",
+			MetricResolution: 10,
+			AccountConfig:    "123",
+			AgentType:        "456",
+		},
+	})
+	cache.SetAgent(bleemeoTypes.Agent{
+		CurrentConfigID: "123",
+	})
+
 	state := state.NewMock()
 
 	discovery := &discovery.MockDiscoverer{

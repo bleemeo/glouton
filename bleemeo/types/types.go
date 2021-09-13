@@ -134,3 +134,19 @@ func (r DisableReason) String() string {
 		return "unspecified reason"
 	}
 }
+
+type GloutonAccountConfig struct {
+	ID                    string
+	Name                  string
+	LiveProcessResolution time.Duration
+	LiveProcess           bool
+	DockerIntegration     bool
+	SNMPIntergration      bool
+	AgentConfigByName     map[string]GloutonAgentConfig
+	AgentConfigByID       map[string]GloutonAgentConfig
+}
+
+type GloutonAgentConfig struct {
+	MetricsAllowlist map[string]bool
+	MetricResolution time.Duration
+}

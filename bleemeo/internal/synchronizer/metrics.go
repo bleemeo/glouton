@@ -232,41 +232,20 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 func (s *Synchronizer) filterMetrics(input []types.Metric) []types.Metric {
 	result := make([]types.Metric, 0)
 
-	currentAccountConfig := s.option.Cache.CurrentAccountConfig()
+	defaultConfigID := s.option.Cache.Agent().CurrentConfigID
 	accountConfigs := s.option.Cache.AccountConfigsByUUID()
 	agents := s.option.Cache.AgentsByUUID()
 	monitors := s.option.Cache.MonitorsByAgentUUID()
 
 	for _, m := range input {
-		// retrieve the appropriate configuration for the metric
-		whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+		allowlist, err := common.AllowListForMetric(accountConfigs, defaultConfigID, m.Annotations(), monitors, agents)
+		if err != nil {
+			logger.V(2).Printf("sync: %s", err)
 
-		// TODO: snmp metric should use the correct AgentConfig
-
-		if m.Annotations().BleemeoAgentID != "" {
-			_, present := agents[m.Annotations().BleemeoAgentID]
-			accountConfig := s.option.Cache.CurrentAccountConfig()
-
-			if !present {
-				monitor, present := monitors[bleemeoTypes.AgentID(m.Annotations().BleemeoAgentID)]
-				if !present {
-					logger.V(2).Printf("mqtt: missing monitor for agent '%s'", m.Annotations().BleemeoAgentID)
-
-					continue
-				}
-
-				accountConfig, present = accountConfigs[monitor.AccountConfig]
-				if !present {
-					logger.V(2).Printf("mqtt: missing account configuration '%s'", monitor.AccountConfig)
-
-					continue
-				}
-			}
-
-			whitelist = accountConfig.MetricsAgentWhitelistMap()
+			continue
 		}
 
-		if common.AllowMetric(m.Labels(), m.Annotations(), whitelist) {
+		if common.AllowMetric(m.Labels(), m.Annotations(), allowlist) {
 			result = append(result, m)
 		}
 	}

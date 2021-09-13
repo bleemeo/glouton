@@ -24,14 +24,22 @@ import (
 
 func (s *Synchronizer) syncAccountConfig(fullSync bool, onlyEssential bool) error {
 	if fullSync {
-		currentConfig := s.option.Cache.CurrentAccountConfig()
+		currentConfig, _ := s.option.Cache.CurrentAccountConfig()
 
-		if err := s.accoungConfigUpdateList(); err != nil {
+		if err := s.agentTypesUpdateList(); err != nil {
 			return err
 		}
 
-		newConfig := s.option.Cache.CurrentAccountConfig()
-		if !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
+		if err := s.accountConfigUpdateList(); err != nil {
+			return err
+		}
+
+		if err := s.agentConfigUpdateList(); err != nil {
+			return err
+		}
+
+		newConfig, ok := s.option.Cache.CurrentAccountConfig()
+		if ok && !reflect.DeepEqual(currentConfig, newConfig) && s.option.UpdateConfigCallback != nil {
 			s.option.UpdateConfigCallback()
 		}
 	}
@@ -39,7 +47,34 @@ func (s *Synchronizer) syncAccountConfig(fullSync bool, onlyEssential bool) erro
 	return nil
 }
 
-func (s *Synchronizer) accoungConfigUpdateList() error {
+func (s *Synchronizer) agentTypesUpdateList() error {
+	params := map[string]string{
+		"fields": "id,name,display_name",
+	}
+
+	result, err := s.client.Iter(s.ctx, "agenttype", params)
+	if err != nil {
+		return err
+	}
+
+	agentTypes := make([]types.AgentType, len(result))
+
+	for i, jsonMessage := range result {
+		var agentType types.AgentType
+
+		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
+			continue
+		}
+
+		agentTypes[i] = agentType
+	}
+
+	s.option.Cache.SetAgentTypes(agentTypes)
+
+	return nil
+}
+
+func (s *Synchronizer) accountConfigUpdateList() error {
 	params := map[string]string{
 		"fields": "id,name,metrics_agent_whitelist,metrics_agent_resolution,metrics_monitor_resolution,live_process_resolution,live_process,docker_integration,snmp_integration",
 	}
@@ -62,6 +97,33 @@ func (s *Synchronizer) accoungConfigUpdateList() error {
 	}
 
 	s.option.Cache.SetAccountConfigs(configs)
+
+	return nil
+}
+
+func (s *Synchronizer) agentConfigUpdateList() error {
+	params := map[string]string{
+		"fields": "id,account_config,agent_type,metrics_allowlist,metrics_resolution",
+	}
+
+	result, err := s.client.Iter(s.ctx, "agentconfig", params)
+	if err != nil {
+		return err
+	}
+
+	configs := make([]types.AgentConfig, len(result))
+
+	for i, jsonMessage := range result {
+		var config types.AgentConfig
+
+		if err := json.Unmarshal(jsonMessage, &config); err != nil {
+			continue
+		}
+
+		configs[i] = config
+	}
+
+	s.option.Cache.SetAgentConfigs(configs)
 
 	return nil
 }

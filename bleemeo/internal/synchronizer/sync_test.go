@@ -651,6 +651,10 @@ func runFakeAPI() *mockAPI {
 		return paginatedList([]interface{}{newAccountConfig}), http.StatusOK, nil
 	})
 
+	api.Handle("/v1/agentconfig/", func(r *http.Request) (interface{}, int, error) {
+		return paginatedList([]interface{}{}), http.StatusOK, nil
+	})
+
 	return api
 }
 

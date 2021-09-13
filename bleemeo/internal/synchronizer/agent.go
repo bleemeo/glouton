@@ -38,10 +38,6 @@ func (s *Synchronizer) syncAgent(fullSync bool, onlyEssential bool) error {
 	}
 
 	if fullSync {
-		if err := s.agentTypesUpdateList(); err != nil {
-			return err
-		}
-
 		if err := s.agentsUpdateList(); err != nil {
 			return err
 		}
@@ -79,15 +75,8 @@ func (s *Synchronizer) syncMainAgent() error {
 		return errNoConfig
 	}
 
-	if previousConfig != agent.CurrentConfigID {
-		cfg := s.option.Cache.CurrentAccountConfig()
-
-		// If the config ID is empty, it means the configuration isn't (yet) loaded
-		// from Bleemeo, but should be soon.
-		// syncAccountConfig will take care of calling UpdateConfigCallback
-		if cfg.ID != "" && s.option.UpdateConfigCallback != nil {
-			s.option.UpdateConfigCallback()
-		}
+	if previousConfig != agent.CurrentConfigID && s.option.UpdateConfigCallback != nil {
+		s.option.UpdateConfigCallback()
 	}
 
 	s.option.Cache.SetAccountID(agent.AccountID)
@@ -127,33 +116,6 @@ func (s *Synchronizer) agentsUpdateList() error {
 	}
 
 	s.option.Cache.SetAgentList(agents)
-
-	return nil
-}
-
-func (s *Synchronizer) agentTypesUpdateList() error {
-	params := map[string]string{
-		"fields": "id,name,display_name",
-	}
-
-	result, err := s.client.Iter(s.ctx, "agenttype", params)
-	if err != nil {
-		return err
-	}
-
-	agentTypes := make([]types.AgentType, len(result))
-
-	for i, jsonMessage := range result {
-		var agentType types.AgentType
-
-		if err := json.Unmarshal(jsonMessage, &agentType); err != nil {
-			continue
-		}
-
-		agentTypes[i] = agentType
-	}
-
-	s.option.Cache.SetAgentTypes(agentTypes)
 
 	return nil
 }

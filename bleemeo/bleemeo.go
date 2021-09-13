@@ -108,10 +108,10 @@ func (c *Connector) ApplyCachedConfiguration() {
 		}
 	}
 
-	currentConfig := c.cache.CurrentAccountConfig()
+	currentConfig, ok := c.cache.CurrentAccountConfig()
 
-	if c.option.UpdateMetricResolution != nil && currentConfig.MetricAgentResolution != 0 {
-		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
+	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution != 0 {
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution)
 	}
 }
 
@@ -576,16 +576,36 @@ func (c *Connector) diagnosticCache(file io.Writer) {
 		}
 	}
 
-	accountConfigs := c.cache.AccountConfigsByUUID()
+	accountConfigs := c.cache.AccountConfigs()
+	agentConfigs := c.cache.AgentConfigs()
 
-	fmt.Fprintf(file, "\n# Cache known %d account config\n", len(accountConfigs))
+	fmt.Fprintf(file, "\n# Cache known %d account config (raw)\n", len(accountConfigs))
 
 	for _, ac := range accountConfigs {
 		fmt.Fprintf(file, "%#v\n", ac)
 	}
 
-	fmt.Fprintf(file, "# And current account config is\n")
-	fmt.Fprintf(file, "%#v\n", c.cache.CurrentAccountConfig())
+	fmt.Fprintf(file, "\n# Cache known %d agent config (raw)\n", len(agentConfigs))
+
+	for _, ac := range agentConfigs {
+		fmt.Fprintf(file, "%#v\n", ac)
+	}
+
+	gloutonAccountConfigs := c.cache.AccountConfigsByUUID()
+
+	fmt.Fprintf(file, "\n# Structured account config\n")
+
+	for _, ac := range gloutonAccountConfigs {
+		fmt.Fprintf(file, "%#v\n", ac)
+	}
+
+	config, ok := c.cache.CurrentAccountConfig()
+	if ok {
+		fmt.Fprintf(file, "\n# And current account config is\n")
+		fmt.Fprintf(file, "%#v\n", config)
+	} else {
+		fmt.Fprintf(file, "\n# And current account config is not yet loaded\n")
+	}
 
 	fmt.Fprintf(file, "\n# Cache known %d metrics and %d active metrics\n", len(metrics), activeMetrics)
 	fmt.Fprintf(file, "\n# Cache known %d facts\n", len(c.cache.Facts()))
@@ -734,12 +754,15 @@ func (c *Connector) emitInternalMetric() {
 }
 
 func (c *Connector) updateConfig() {
-	currentConfig := c.cache.CurrentAccountConfig()
+	currentConfig, ok := c.cache.CurrentAccountConfig()
+	if !ok || currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution == 0 {
+		return
+	}
 
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(time.Duration(currentConfig.MetricAgentResolution) * time.Second)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution)
 	}
 }
 

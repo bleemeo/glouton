@@ -101,7 +101,9 @@ func (c containerPayload) compatibilityContainer() types.Container {
 func (s *Synchronizer) syncContainers(fullSync bool, onlyEssential bool) error {
 	var localContainers []facts.Container
 
-	if s.option.Cache.CurrentAccountConfig().DockerIntegration {
+	cfg, ok := s.option.Cache.CurrentAccountConfig()
+
+	if ok && cfg.DockerIntegration {
 		var err error
 
 		// We don't need very fresh information, we sync container after discovery which will update containers anyway.

@@ -118,7 +118,11 @@ func (s *Synchronizer) syncMonitors(fullSync bool, onlyEssential bool) (err erro
 	configs := s.option.Cache.AccountConfigsByUUID()
 
 	for _, m := range monitors {
-		if _, ok := configs[m.AccountConfig]; !ok {
+		if cfg, ok := configs[m.AccountConfig]; !ok {
+			needConfigUpdate = true
+
+			break
+		} else if _, ok := cfg.AgentConfigByName[bleemeoTypes.AgentTypeMonitor]; !ok {
 			needConfigUpdate = true
 
 			break
@@ -175,7 +179,7 @@ func (s *Synchronizer) ApplyMonitorUpdate() error {
 
 		processedMonitors = append(processedMonitors, types.Monitor{
 			ID:                      monitor.ID,
-			MetricMonitorResolution: conf.MetricMonitorResolution,
+			MetricMonitorResolution: conf.AgentConfigByName[bleemeoTypes.AgentTypeMonitor].MetricResolution,
 			CreationDate:            jitterCreationDate,
 			URL:                     monitor.URL,
 			BleemeoAgentID:          monitor.AgentID,

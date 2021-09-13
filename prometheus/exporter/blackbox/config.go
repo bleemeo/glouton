@@ -138,7 +138,7 @@ func genCollectorFromDynamicTarget(monitor types.Monitor, userAgent string) (*co
 	}
 
 	if monitor.MetricMonitorResolution != 0 {
-		confTarget.RefreshRate = time.Duration(monitor.MetricMonitorResolution) * time.Second
+		confTarget.RefreshRate = monitor.MetricMonitorResolution
 	}
 
 	return &collectorWithLabels{
