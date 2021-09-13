@@ -21,11 +21,14 @@ import (
 	"fmt"
 	"glouton/threshold"
 	"math"
-	"strings"
 	"time"
 )
 
-const AgentTypeSNMP = "snmp"
+const (
+	AgentTypeSNMP    = "snmp"
+	AgentTypeAgent   = "agent"
+	AgentTypeMonitor = "connection_check"
+)
 
 // AgentFact is an agent facts.
 type AgentFact struct {
@@ -62,7 +65,7 @@ type Tag struct {
 	IsServiceTag bool   `json:"is_service_tag,omitempty"`
 }
 
-// AccountConfig is the configuration used by this agent.
+// AccountConfig is a configuration of account.
 type AccountConfig struct {
 	ID                      string `json:"id"`
 	Name                    string `json:"name"`
@@ -73,6 +76,15 @@ type AccountConfig struct {
 	LiveProcess             bool   `json:"live_process"`
 	DockerIntegration       bool   `json:"docker_integration"`
 	SNMPIntergration        bool   `json:"snmp_integration"`
+}
+
+// AgentConfig is a configuration for one kind of agent.
+type AgentConfig struct {
+	ID               string `json:"id"`
+	MetricsAllowlist string `json:"metrics_allowlist"`
+	MetricResolution int    `json:"metrics_resolution"`
+	AccountConfig    string `json:"account_config"`
+	AgentType        string `json:"agent_type"`
 }
 
 // Service is a Service object on Bleemeo API.
@@ -200,21 +212,6 @@ func (mr MetricRegistration) RetryAfter() time.Time {
 func (c *Container) FillInspectHash() {
 	bin := sha256.Sum256([]byte(c.ContainerInspect))
 	c.InspectHash = fmt.Sprintf("%x", bin)
-}
-
-// MetricsAgentWhitelistMap return a map with all whitelisted agent metrics.
-func (ac AccountConfig) MetricsAgentWhitelistMap() map[string]bool {
-	result := make(map[string]bool)
-
-	if len(ac.MetricsAgentWhitelist) == 0 {
-		return nil
-	}
-
-	for _, n := range strings.Split(ac.MetricsAgentWhitelist, ",") {
-		result[strings.Trim(n, " \t\n")] = true
-	}
-
-	return result
 }
 
 // ToInternalThreshold convert to a threshold.Threshold (use NaN instead of null pointer for unset threshold).

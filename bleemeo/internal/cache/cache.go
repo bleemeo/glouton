@@ -21,7 +21,9 @@ import (
 	bleemeoTypes "glouton/bleemeo/types"
 	"glouton/logger"
 	"glouton/types"
+	"strings"
 	"sync"
+	"time"
 )
 
 const (
@@ -51,6 +53,7 @@ type data struct {
 	MetricRegistrationsFail []bleemeoTypes.MetricRegistration
 	Agent                   bleemeoTypes.Agent
 	AccountConfigs          []bleemeoTypes.AccountConfig
+	AgentConfigs            []bleemeoTypes.AgentConfig
 	Services                []bleemeoTypes.Service
 	Monitors                []bleemeoTypes.Monitor
 }
@@ -159,21 +162,19 @@ func (c *Cache) SetAgent(agent bleemeoTypes.Agent) {
 
 // CurrentAccountConfig returns our own AccountConfig. If the
 // configuration isn't found and a default is used.
-func (c *Cache) CurrentAccountConfig() bleemeoTypes.AccountConfig {
+func (c *Cache) CurrentAccountConfig() (bleemeoTypes.GloutonAccountConfig, bool) {
+	searchMap := c.AccountConfigsByUUID()
+
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	for _, ac := range c.data.AccountConfigs {
-		if ac.ID == c.data.Agent.CurrentConfigID {
-			return ac
-		}
+	result, ok := searchMap[c.data.Agent.CurrentConfigID]
+
+	if _, ok := result.AgentConfigByName[bleemeoTypes.AgentTypeAgent]; !ok {
+		return result, false
 	}
 
-	return bleemeoTypes.AccountConfig{
-		Name:                  "default",
-		LiveProcess:           true,
-		MetricAgentResolution: 10,
-	}
+	return result, ok
 }
 
 // SetAccountConfigs updates all the external accounts configurations we care about
@@ -185,14 +186,129 @@ func (c *Cache) SetAccountConfigs(configs []bleemeoTypes.AccountConfig) {
 	c.data.AccountConfigs = configs
 }
 
-// AccountConfigsByUUID returns the mapping between the accoutn config UUID and  list of external account configurations.
-func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.AccountConfig {
+// SetAgentConfigs updates all the external accounts configurations we care about
+// (in particular, this is necessary for the monitors).
+func (c *Cache) SetAgentConfigs(configs []bleemeoTypes.AgentConfig) {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
-	for _, v := range c.data.AccountConfigs {
-		result[v.ID] = v
+	c.data.AgentConfigs = configs
+}
+
+// AgentConfigs returns a copy of the AgentConfig.
+func (c *Cache) AgentConfigs() []bleemeoTypes.AgentConfig {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.AgentConfig, len(c.data.AgentConfigs))
+	for i, v := range c.data.AgentConfigs {
+		result[i] = v
+	}
+
+	return result
+}
+
+// AccountConfigs returns a (copy) of the AccountConfig.
+func (c *Cache) AccountConfigs() []bleemeoTypes.AccountConfig {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make([]bleemeoTypes.AccountConfig, len(c.data.AccountConfigs))
+	for i, v := range c.data.AccountConfigs {
+		result[i] = v
+	}
+
+	return result
+}
+
+func (c *Cache) AccountConfigsByUUID() map[string]bleemeoTypes.GloutonAccountConfig {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	result := make(map[string]bleemeoTypes.GloutonAccountConfig, len(c.data.AccountConfigs))
+
+	for _, accountConfig := range c.data.AccountConfigs {
+		config := bleemeoTypes.GloutonAccountConfig{
+			ID:                    accountConfig.ID,
+			Name:                  accountConfig.Name,
+			LiveProcessResolution: time.Duration(accountConfig.LiveProcessResolution) * time.Second,
+			LiveProcess:           accountConfig.LiveProcess,
+			DockerIntegration:     accountConfig.DockerIntegration,
+			SNMPIntergration:      accountConfig.SNMPIntergration,
+			AgentConfigByName:     make(map[string]bleemeoTypes.GloutonAgentConfig),
+			AgentConfigByID:       make(map[string]bleemeoTypes.GloutonAgentConfig),
+		}
+
+		var (
+			agentTypeFound   bool
+			monitorTypeFound bool
+			hasAgentConfig   bool
+		)
+
+		for _, agentType := range c.data.AgentTypes {
+			for _, agentConfig := range c.data.AgentConfigs {
+				hasAgentConfig = true
+
+				if agentConfig.AgentType == agentType.ID && agentConfig.AccountConfig == accountConfig.ID {
+					config.AgentConfigByName[agentType.Name] = bleemeoTypes.GloutonAgentConfig{
+						MetricResolution: time.Duration(agentConfig.MetricResolution) * time.Second,
+						MetricsAllowlist: allowListToMap(agentConfig.MetricsAllowlist),
+					}
+
+					config.AgentConfigByName[agentType.ID] = config.AgentConfigByName[agentType.Name]
+
+					if agentType.Name == bleemeoTypes.AgentTypeAgent {
+						agentTypeFound = true
+					}
+
+					if agentType.Name == bleemeoTypes.AgentTypeMonitor {
+						monitorTypeFound = true
+					}
+
+					break
+				}
+			}
+		}
+
+		// We only fill values from AccountConfig if we have no AgentConfig (i.e. the API is the old version).
+		if !hasAgentConfig {
+			if !agentTypeFound && accountConfig.MetricAgentResolution != 0 {
+				config.AgentConfigByName[bleemeoTypes.AgentTypeAgent] = bleemeoTypes.GloutonAgentConfig{
+					MetricsAllowlist: allowListToMap(accountConfig.MetricsAgentWhitelist),
+					MetricResolution: time.Duration(accountConfig.MetricAgentResolution) * time.Second,
+				}
+			}
+
+			if !monitorTypeFound && accountConfig.MetricMonitorResolution != 0 {
+				config.AgentConfigByName[bleemeoTypes.AgentTypeMonitor] = bleemeoTypes.GloutonAgentConfig{
+					MetricsAllowlist: nil,
+					MetricResolution: time.Duration(accountConfig.MetricMonitorResolution) * time.Second,
+				}
+			}
+		}
+
+		if _, ok := config.AgentConfigByName[bleemeoTypes.AgentTypeSNMP]; !ok {
+			config.SNMPIntergration = false
+		}
+
+		if len(config.AgentConfigByName) > 0 {
+			result[accountConfig.ID] = config
+		}
+	}
+
+	return result
+}
+
+// allowListToMap return a map with from an allow-list.
+func allowListToMap(list string) map[string]bool {
+	if len(list) == 0 {
+		return nil
+	}
+
+	result := make(map[string]bool)
+
+	for _, n := range strings.Split(list, ",") {
+		result[strings.Trim(n, " \t\n")] = true
 	}
 
 	return result

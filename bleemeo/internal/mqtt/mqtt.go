@@ -453,11 +453,11 @@ func (c *Client) run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for ctx.Err() == nil {
-		cfg := c.option.Cache.CurrentAccountConfig()
+		cfg, ok := c.option.Cache.CurrentAccountConfig()
 
 		c.sendPoints()
 
-		if !c.IsSendingSuspended() && cfg.LiveProcess && time.Since(topinfoSendAt) >= time.Duration(cfg.LiveProcessResolution)*time.Second {
+		if !c.IsSendingSuspended() && ok && cfg.LiveProcess && time.Since(topinfoSendAt) >= cfg.LiveProcessResolution {
 			topinfoSendAt = time.Now()
 
 			c.sendTopinfo(ctx, cfg)
@@ -783,8 +783,8 @@ func (c *Client) publishNoLock(topic string, payload []byte, retry bool) {
 	c.pendingMessage = append(c.pendingMessage, msg)
 }
 
-func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.AccountConfig) {
-	topinfo, err := c.option.Process.TopInfo(ctx, time.Duration(cfg.LiveProcessResolution)*time.Second-time.Second)
+func (c *Client) sendTopinfo(ctx context.Context, cfg bleemeoTypes.GloutonAccountConfig) {
+	topinfo, err := c.option.Process.TopInfo(ctx, cfg.LiveProcessResolution-time.Second)
 	if err != nil {
 		logger.V(1).Printf("Unable to get topinfo: %v", err)
 
@@ -867,13 +867,13 @@ func loadRootCAs(caFile string) (*x509.CertPool, error) {
 func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	result := make([]types.MetricPoint, 0, len(input))
 
-	currentAccountConfig := c.option.Cache.CurrentAccountConfig()
+	defaultConfigID := c.option.Cache.Agent().CurrentConfigID
 	accountConfigs := c.option.Cache.AccountConfigsByUUID()
 	monitors := c.option.Cache.MonitorsByAgentUUID()
 	agents := c.option.Cache.AgentsByUUID()
 
 	for _, mp := range input {
-		whitelist, found := c.whitelistForMetricPoint(mp, currentAccountConfig, accountConfigs, monitors, agents)
+		whitelist, found := c.whitelistForMetricPoint(mp, defaultConfigID, accountConfigs, monitors, agents)
 		if !found {
 			continue
 		}
@@ -892,48 +892,20 @@ func (c *Client) filterPoints(input []types.MetricPoint) []types.MetricPoint {
 	return result
 }
 
-func (c *Client) whitelistForMetricPoint(mp types.MetricPoint, currentAccountConfig bleemeoTypes.AccountConfig, accountConfigs map[string]bleemeoTypes.AccountConfig, monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor, agents map[string]bleemeoTypes.Agent) (map[string]bool, bool) {
-	// retrieve the appropriate configuration for the metric
-	whitelist := currentAccountConfig.MetricsAgentWhitelistMap()
+func (c *Client) whitelistForMetricPoint(mp types.MetricPoint, defaultConfigID string, accountConfigs map[string]bleemeoTypes.GloutonAccountConfig, monitors map[bleemeoTypes.AgentID]bleemeoTypes.Monitor, agents map[string]bleemeoTypes.Agent) (map[string]bool, bool) {
+	allowList, err := common.AllowListForMetric(accountConfigs, defaultConfigID, mp.Annotations, monitors, agents)
+	if err != nil {
+		logger.V(2).Printf("mqtt: %s", err)
 
-	// TODO: snmp metric should use the correct AgentConfig
-
-	if mp.Annotations.BleemeoAgentID != "" {
-		monitor, present := monitors[bleemeoTypes.AgentID(mp.Annotations.BleemeoAgentID)]
-		if present {
-			accountConfig, present := accountConfigs[monitor.AccountConfig]
-			if !present {
-				logger.V(2).Printf("mqtt: missing monitor's account configuration '%s'", monitor.AccountConfig)
-
-				return nil, false
-			}
-
-			whitelist = accountConfig.MetricsAgentWhitelistMap()
-		} else {
-			agent, present := agents[mp.Annotations.BleemeoAgentID]
-			if !present {
-				logger.V(2).Printf("mqtt: missing agent '%s'", monitor.AccountConfig)
-
-				return nil, false
-			}
-
-			accountConfig, present := accountConfigs[agent.CurrentConfigID]
-			if !present {
-				logger.V(2).Printf("mqtt: missing agent's account configuration '%s'", agent.CurrentConfigID)
-
-				return nil, false
-			}
-
-			whitelist = accountConfig.MetricsAgentWhitelistMap()
-		}
+		return nil, false
 	}
 
-	return whitelist, true
+	return allowList, true
 }
 
 func (c *Client) ready() bool {
-	cfg := c.option.Cache.CurrentAccountConfig()
-	if cfg.LiveProcessResolution == 0 || cfg.MetricAgentResolution == 0 {
+	cfg, ok := c.option.Cache.CurrentAccountConfig()
+	if !ok || cfg.LiveProcessResolution == 0 || cfg.AgentConfigByName[bleemeoTypes.AgentTypeAgent].MetricResolution == 0 {
 		logger.V(2).Printf("MQTT not ready, Agent as no configuration")
 
 		return false

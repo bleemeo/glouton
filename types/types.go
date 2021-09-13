@@ -274,7 +274,7 @@ func TextToLabels(text string) map[string]string {
 // Monitor represents a monitor instance.
 type Monitor struct {
 	ID                      string
-	MetricMonitorResolution int
+	MetricMonitorResolution time.Duration
 	CreationDate            time.Time
 	URL                     string
 	BleemeoAgentID          string
