@@ -61,6 +61,8 @@ type HTTPClient struct {
 type APIError struct {
 	StatusCode   int
 	Content      string
+	ContentType  string
+	FinalURL     string
 	UnmarshalErr error
 	IsAuthError  bool
 }
@@ -257,7 +259,9 @@ func (c *HTTPClient) PostAuth(path string, data interface{}, username string, pa
 
 	req.SetBasicAuth(username, password)
 
-	return c.sendRequest(req, result, false)
+	statusCode, err = c.sendRequest(req, result, false)
+
+	return statusCode, err
 }
 
 // Iter read all page for given resource.
@@ -413,7 +417,7 @@ func (c *HTTPClient) GetJWT() (string, error) {
 	return token.Token, nil
 }
 
-func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceInsecure bool) (int, error) {
+func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceInsecure bool) (statusCode int, err error) {
 	if time.Until(c.throttleDeadline) > 0 {
 		return 0, APIError{
 			StatusCode: 429,
@@ -458,7 +462,7 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 	}
 
 	if resp.StatusCode >= 400 {
-		err := decodeError(resp)
+		err := fieldsFromResponse(resp, decodeError(resp))
 
 		if resp.StatusCode == 429 {
 			c.throttleConsecutive++
@@ -481,21 +485,39 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 			c.throttleDeadline = time.Now().Add(delay)
 		}
 
-		return 0, err
+		return resp.StatusCode, err
 	}
 
 	if result != nil {
 		err = json.NewDecoder(resp.Body).Decode(result)
 		if err != nil {
-			return 0, APIError{
+			return resp.StatusCode, fieldsFromResponse(resp, APIError{
 				StatusCode:   resp.StatusCode,
 				Content:      "",
 				UnmarshalErr: err,
-			}
+			})
 		}
 	}
 
 	return resp.StatusCode, nil
+}
+
+func fieldsFromResponse(resp *http.Response, err APIError) APIError {
+	if resp == nil {
+		return err
+	}
+
+	if resp.Request != nil && resp.Request.URL != nil {
+		err.FinalURL = resp.Request.URL.String()
+	}
+
+	if resp.Header != nil {
+		err.ContentType = resp.Header.Get("content-type")
+	}
+
+	err.StatusCode = resp.StatusCode
+
+	return err
 }
 
 func decodeError(resp *http.Response) APIError {
@@ -504,7 +526,6 @@ func decodeError(resp *http.Response) APIError {
 		n, _ := resp.Body.Read(partialBody)
 
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      string(partialBody[:n]),
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
@@ -524,7 +545,6 @@ func decodeError(resp *http.Response) APIError {
 	err := json.NewDecoder(resp.Body).Decode(&jsonMessage)
 	if err != nil {
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      "",
 			UnmarshalErr: err,
 			IsAuthError:  resp.StatusCode == 401,
@@ -538,7 +558,6 @@ func decodeError(resp *http.Response) APIError {
 
 	if err != nil {
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      "",
 			UnmarshalErr: err,
 			IsAuthError:  resp.StatusCode == 401,
@@ -547,7 +566,6 @@ func decodeError(resp *http.Response) APIError {
 
 	if errorList != nil {
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      strings.Join(errorList, ", "),
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
@@ -565,7 +583,6 @@ func decodeError(resp *http.Response) APIError {
 		}
 
 		return APIError{
-			StatusCode:   resp.StatusCode,
 			Content:      errorMessage,
 			UnmarshalErr: nil,
 			IsAuthError:  resp.StatusCode == 401,
@@ -573,7 +590,6 @@ func decodeError(resp *http.Response) APIError {
 	}
 
 	return APIError{
-		StatusCode:   resp.StatusCode,
 		Content:      string(jsonMessage),
 		UnmarshalErr: nil,
 		IsAuthError:  resp.StatusCode == 401,

@@ -20,14 +20,15 @@ package client
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"net/http"
-	"reflect"
 	"testing"
 )
 
 func Test_decodeError(t *testing.T) {
 	tests := []struct {
 		name     string
+		reqURL   string
 		response []byte
 		want     APIError
 	}{
@@ -44,8 +45,11 @@ X-Frame-Options: DENY
 Content-Length: 52
 
 ["Usage exceeded. You can connect up to 8 servers."]`),
+			reqURL: "http://localhost:8000/v1/agent/",
 			want: APIError{
 				StatusCode:   400,
+				ContentType:  "application/json",
+				FinalURL:     "http://localhost:8000/v1/agent/",
 				Content:      "Usage exceeded. You can connect up to 8 servers.",
 				IsAuthError:  false,
 				UnmarshalErr: nil,
@@ -67,6 +71,7 @@ Content-Length: 39
 {"detail":"Invalid username/password."}`),
 			want: APIError{
 				StatusCode:   401,
+				ContentType:  "application/json",
 				Content:      "Invalid username/password.",
 				IsAuthError:  true,
 				UnmarshalErr: nil,
@@ -83,6 +88,7 @@ Content-Length: 68
 {"non_field_errors":["Unable to log in with provided credentials."]}`),
 			want: APIError{
 				StatusCode:   400,
+				ContentType:  "application/json",
 				Content:      "Unable to log in with provided credentials.",
 				IsAuthError:  false,
 				UnmarshalErr: nil,
@@ -91,12 +97,48 @@ Content-Length: 68
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(tt.response)), nil)
+			req, err := http.NewRequestWithContext(context.Background(), "GET", tt.reqURL, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got := decodeError(resp); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("decodeError() = %#v, want %#v", got, tt.want)
+
+			resp, err := http.ReadResponse(bufio.NewReader(bytes.NewReader(tt.response)), req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := fieldsFromResponse(resp, decodeError(resp))
+
+			if got.Content != tt.want.Content {
+				t.Errorf("decodeError().Content = %#v, want %#v", APIErrorContent(got), APIErrorContent(tt.want))
+			}
+
+			if got.StatusCode != tt.want.StatusCode {
+				t.Errorf("decodeError().StatusCode = %#v, want %#v", got.StatusCode, tt.want.StatusCode)
+			}
+
+			if got.ContentType != tt.want.ContentType {
+				t.Errorf("decodeError().ContentType = %#v, want %#v", got.ContentType, tt.want.ContentType)
+			}
+
+			if got.FinalURL != tt.want.FinalURL {
+				t.Errorf("decodeError().FinalURL = %#v, want %#v", got.FinalURL, tt.want.FinalURL)
+			}
+
+			isFuns := []struct {
+				name string
+				fun  func(err error) bool
+			}{
+				{name: "IsAuthError", fun: IsAuthError},
+				{name: "IsNotFound", fun: IsNotFound},
+				{name: "IsBadRequest", fun: IsBadRequest},
+				{name: "IsServerError", fun: IsServerError},
+				{name: "IsThrottleError", fun: IsThrottleError},
+			}
+
+			for _, f := range isFuns {
+				if f.fun(got) != f.fun(tt.want) {
+					t.Errorf("%s() = %v, want %v", f.name, f.fun(got), f.fun(tt.want))
+				}
 			}
 		})
 	}

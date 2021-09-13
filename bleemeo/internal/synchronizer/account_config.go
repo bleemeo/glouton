@@ -18,8 +18,12 @@ package synchronizer
 
 import (
 	"encoding/json"
+	"glouton/bleemeo/client"
 	"glouton/bleemeo/types"
+	"glouton/logger"
+	"mime"
 	"reflect"
+	"strings"
 )
 
 func (s *Synchronizer) syncAccountConfig(fullSync bool, onlyEssential bool) error {
@@ -107,6 +111,16 @@ func (s *Synchronizer) agentConfigUpdateList() error {
 	}
 
 	result, err := s.client.Iter(s.ctx, "agentconfig", params)
+	if apiErr, ok := err.(client.APIError); ok {
+		mediatype, _, err := mime.ParseMediaType(apiErr.ContentType)
+		if err == nil && mediatype == "text/html" && strings.Contains(apiErr.FinalURL, "login") {
+			logger.V(2).Printf("Bleemeo API don't support AgentConfig")
+			s.option.Cache.SetAgentConfigs(nil)
+
+			return nil
+		}
+	}
+
 	if err != nil {
 		return err
 	}
