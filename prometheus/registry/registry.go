@@ -381,39 +381,49 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 		return err
 	}
 
-	countWithLoop := 0
+	type regWithID struct {
+		*registration
+		id int
+	}
 
-	for _, reg := range r.registrations {
+	var (
+		loopRegistration   []regWithID
+		noloopRegistration []regWithID
+	)
+
+	for id, reg := range r.registrations {
 		if reg.loop != nil {
-			countWithLoop++
+			loopRegistration = append(loopRegistration, regWithID{id: id, registration: reg})
+		} else {
+			noloopRegistration = append(noloopRegistration, regWithID{id: id, registration: reg})
 		}
 	}
 
-	fmt.Fprintf(file, "# %d collector registered, %d with a scrape-loop.\n", len(r.registrations), countWithLoop)
-	fmt.Fprintf(file, "# Collectors with loop active:\n")
+	sort.Slice(loopRegistration, func(i, j int) bool {
+		return loopRegistration[i].id < loopRegistration[j].id
+	})
 
-	for id, reg := range r.registrations {
-		if reg.loop == nil {
-			continue
-		}
+	sort.Slice(noloopRegistration, func(i, j int) bool {
+		return noloopRegistration[i].id < noloopRegistration[j].id
+	})
 
+	fmt.Fprintf(file, "# %d collector registered, %d with a scrape-loop.\n", len(r.registrations), len(loopRegistration))
+	fmt.Fprintf(file, "# %d collectors with loop active:\n", len(loopRegistration))
+
+	for _, reg := range loopRegistration {
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v (duration %v)\n", id, reg.description, reg.originalExtraLabels, reg.loop.interval, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.description, reg.originalExtraLabels, reg.loop.interval, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
 
 		reg.l.Unlock()
 	}
 
-	fmt.Fprintf(file, "\n# Collectors with no active loop (only on /metrics):\n")
+	fmt.Fprintf(file, "\n# %d collectors with no active loop (only on /metrics):\n", len(noloopRegistration))
 
-	for id, reg := range r.registrations {
-		if reg.loop != nil {
-			continue
-		}
-
+	for _, reg := range noloopRegistration {
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v (duration %v)\n", id, reg.description, reg.originalExtraLabels, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.description, reg.originalExtraLabels, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
 
 		reg.l.Unlock()
 	}
