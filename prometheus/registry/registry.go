@@ -631,11 +631,17 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	gatherers := make(Gatherers, 0, len(r.registrations)+1)
 
 	for _, reg := range r.registrations {
+		reg.l.Lock()
+
 		if reg.relabelHookSkip {
+			reg.l.Unlock()
+
 			continue
 		}
 
 		gatherers = append(gatherers, reg.gatherer)
+
+		reg.l.Unlock()
 	}
 
 	gatherers = append(gatherers, NonProbeGatherer{G: r.registyPush})
@@ -742,22 +748,27 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 }
 
 func (r *Registry) scrape(ctx context.Context, t0 time.Time, reg *registration) {
+	r.l.Lock()
 	reg.l.Lock()
-	defer reg.l.Unlock()
 
 	if reg.relabelHookSkip && time.Since(reg.lastRebalHookRetry) > hookRetryDelay {
-		r.l.Lock()
 		r.setupGatherer(reg, reg.gatherer.source)
-		r.l.Unlock()
 	}
 
+	r.l.Unlock()
+
 	if reg.relabelHookSkip {
+		reg.l.Unlock()
+
 		return
 	}
 
 	reg.lastScrape = t0
+	gatherMethod := reg.gatherer.GatherPoints
 
-	points, err := reg.gatherer.GatherPoints(ctx, t0, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0})
+	reg.l.Unlock()
+
+	points, err := gatherMethod(ctx, t0, GatherState{QueryType: All, FromScrapeLoop: true, T0: t0})
 	if err != nil {
 		if len(points) == 0 {
 			logger.Printf("Gather of metrics failed: %v", err)
