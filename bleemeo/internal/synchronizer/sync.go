@@ -30,6 +30,7 @@ import (
 	"glouton/types"
 	"math"
 	"math/big"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
@@ -62,8 +63,9 @@ type Synchronizer struct {
 	option Option
 	now    func() time.Time
 
-	client       *client.HTTPClient
-	nextFullSync time.Time
+	client           *client.HTTPClient
+	diagnosticClient *http.Client
+	nextFullSync     time.Time
 
 	startedAt               time.Time
 	lastSync                time.Time
@@ -260,9 +262,11 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 // DiagnosticPage return useful information to troubleshoot issue.
 func (s *Synchronizer) DiagnosticPage() string {
+	var tlsConfig *tls.Config
+
 	builder := &strings.Builder{}
 
-	var tlsConfig *tls.Config
+	port := 80
 
 	u, err := url.Parse(s.option.Config.String("bleemeo.api_base"))
 	if err != nil {
@@ -271,14 +275,28 @@ func (s *Synchronizer) DiagnosticPage() string {
 		return builder.String()
 	}
 
-	port := 80
-
 	if u.Scheme == "https" {
 		tlsConfig = &tls.Config{
 			InsecureSkipVerify: s.option.Config.Bool("bleemeo.api_ssl_insecure"), //nolint:gosec
 		}
 		port = 443
 	}
+
+	s.l.Lock()
+
+	if s.diagnosticClient == nil {
+		s.diagnosticClient = &http.Client{
+			Transport: &http.Transport{
+				Proxy:           http.ProxyFromEnvironment,
+				TLSClientConfig: tlsConfig,
+			},
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+	}
+
+	s.l.Unlock()
 
 	if u.Port() != "" {
 		tmp, err := strconv.ParseInt(u.Port(), 10, 0)
@@ -299,7 +317,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 	}()
 
 	go func() {
-		httpMessage <- common.DiagnosticHTTP(u.String(), tlsConfig)
+		httpMessage <- common.DiagnosticHTTP(s.diagnosticClient, u.String())
 	}()
 
 	builder.WriteString(<-tcpMessage)
