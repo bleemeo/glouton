@@ -27,6 +27,7 @@ import (
 	"time"
 
 	bbConf "github.com/prometheus/blackbox_exporter/config"
+	"github.com/prometheus/common/config"
 	"gopkg.in/yaml.v3"
 )
 
@@ -51,8 +52,10 @@ type yamlConfigTarget struct {
 func defaultModule(userAgent string) bbConf.Module {
 	return bbConf.Module{
 		HTTP: bbConf.HTTPProbe{
-			IPProtocol:         "ip4",
-			IPProtocolFallback: true,
+			IPProtocol: "ip4",
+			HTTPClientConfig: config.HTTPClientConfig{
+				FollowRedirects: true,
+			},
 			Headers: map[string]string{
 				"User-Agent": userAgent,
 			},

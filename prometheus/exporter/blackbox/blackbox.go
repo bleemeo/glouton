@@ -111,7 +111,7 @@ func (target configTarget) Collect(ch chan<- prometheus.Metric) {
 
 	end := time.Now()
 	duration := end.Sub(start)
-	_ = extLogger.Log("msg", fmt.Sprintf("check started at %s, ended at %s (duration %s)", start, end, duration))
+	_ = extLogger.Log("msg", fmt.Sprintf("check started at %s, ended at %s (duration %s); success=%v", start, end, duration, success))
 
 	mfs, err := registry.Gather()
 	if err != nil {
