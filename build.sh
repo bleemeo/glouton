@@ -34,8 +34,12 @@ if [ -e .build-cache ]; then
    NODE_MOUNT_CACHE="-v $(pwd)/.build-cache/node:/tmp/home"
 fi
 
-echo "Cleanup workspace"
-rm -fr webui/dist webui/node_modules api/static/assets/css/ api/static/assets/js/ api/api-bindata.go api/api-packr.go api/packrd/
+if [ "${ONLY_GO}" = "1" ]; then
+   echo "Skip cleaning workspace because only Go binary build is enabled"
+else
+   echo "Cleanup workspace"
+   rm -fr webui/dist webui/node_modules api/static/assets/css/ api/static/assets/js/ api/api-bindata.go api/api-packr.go api/packrd/
+fi
 
 if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
    echo "Building webui"
