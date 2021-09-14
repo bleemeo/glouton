@@ -34,7 +34,11 @@ if [ -e .build-cache ]; then
    NODE_MOUNT_CACHE="-v $(pwd)/.build-cache/node:/tmp/home"
 fi
 
+echo "Cleanup workspace"
+rm -fr webui/dist webui/node_modules api/static/assets/css/ api/static/assets/js/ api/api-bindata.go api/api-packr.go api/packrd/
+
 if [ "${SKIP_JS}" != "1" -a "${ONLY_GO}" != "1" ]; then
+   echo "Building webui"
    docker run --rm -u $USER_UID -e HOME=/tmp/home \
       -v $(pwd):/src -w /src/webui ${NODE_MOUNT_CACHE} \
       node:lts \
@@ -43,6 +47,7 @@ fi
 
 GORELEASER_VERSION="v0.176.0"
 
+echo "Building Go binary"
 if [ "${ONLY_GO}" = "1" -a "${WITH_RACE}" != "1" ]; then
    docker run --rm -u $USER_UID:`getent group docker|cut -d: -f 3` -e HOME=/go/pkg -e CGO_ENABLED=0 \
       -v $(pwd):/src -w /src ${GO_MOUNT_CACHE} \
