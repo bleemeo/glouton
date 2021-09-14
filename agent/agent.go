@@ -974,7 +974,7 @@ func (a *agent) run() { //nolint:cyclop
 					a.bleemeoConnector.UpdateMonitors()
 				}
 
-				a.FireTrigger(true, true, false, true)
+				a.FireTrigger(true, true, true, true)
 			}
 		}
 	}()
