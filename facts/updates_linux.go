@@ -26,6 +26,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"time"
 )
 
 func decodeUpdateNotifierFile(content []byte) (pendingUpdates int, pendingSecurityUpdates int) {
@@ -213,6 +214,17 @@ func (uf updateFacter) fromYUM(ctx context.Context) (pendingUpdates int, pending
 	}
 
 	return decodeYUM(content, contentSecurity)
+}
+
+func (uf updateFacter) freshness() time.Time {
+	updateFile := filepath.Join(uf.HostRootPath, "var/lib/update-notifier/updates-available")
+
+	stat, err := os.Stat(updateFile)
+	if err != nil {
+		return time.Time{}
+	}
+
+	return stat.ModTime()
 }
 
 func (uf updateFacter) pendingUpdates(ctx context.Context) (pendingUpdates int, pendingSecurityUpdates int) {
