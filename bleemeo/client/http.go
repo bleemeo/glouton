@@ -273,7 +273,7 @@ func (c *HTTPClient) Iter(ctx context.Context, resource string, params map[strin
 	}
 
 	if _, ok := params["page_size"]; !ok {
-		params["page_size"] = "100"
+		params["page_size"] = "10000"
 	}
 
 	result := make([]json.RawMessage, 0)
