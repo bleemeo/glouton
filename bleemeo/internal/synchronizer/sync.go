@@ -124,12 +124,16 @@ type Option struct {
 
 // New return a new Synchronizer.
 func New(option Option) (*Synchronizer, error) {
+	return newWithNow(option, time.Now)
+}
+
+func newWithNow(option Option, now func() time.Time) (*Synchronizer, error) {
 	s := &Synchronizer{
 		option: option,
-		now:    time.Now,
+		now:    now,
 
 		forceSync:              make(map[string]bool),
-		nextFullSync:           time.Now(),
+		nextFullSync:           now(),
 		retryableMetricFailure: make(map[bleemeoTypes.FailureKind]bool),
 	}
 

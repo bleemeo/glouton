@@ -76,6 +76,10 @@ func (mt *mockTime) Now() time.Time {
 	return mt.now
 }
 
+func (mt *mockTime) Advance(d time.Duration) {
+	mt.now = mt.now.Add(d)
+}
+
 func TestPrioritizeAndFilterMetrics(t *testing.T) {
 	inputNames := []struct {
 		Name         string

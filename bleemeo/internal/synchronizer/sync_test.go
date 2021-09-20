@@ -14,6 +14,7 @@ import (
 	"glouton/discovery"
 	"glouton/facts"
 	"glouton/prometheus/exporter/blackbox"
+	"glouton/prometheus/exporter/snmp"
 	"glouton/store"
 	"glouton/types"
 	"io/ioutil"
@@ -70,8 +71,9 @@ var (
 	}
 
 	newAccountConfig bleemeoTypes.AccountConfig = bleemeoTypes.AccountConfig{
-		ID:   "02eb5b38-d4a0-4db4-9b43-06f63594a515",
-		Name: "the-default",
+		ID:               "02eb5b38-d4a0-4db4-9b43-06f63594a515",
+		Name:             "the-default",
+		SNMPIntergration: true,
 	}
 
 	newMetric1 = metricPayload{
@@ -113,12 +115,12 @@ var (
 		IsMonitor: true,
 	}
 
-	newAgentType1 bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeAgent bleemeoTypes.AgentType = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with Bleemeo agent",
 		ID:          "61zb6a83-d90a-4165-bf04-944e0b2g2a10",
 		Name:        "agent",
 	}
-	newAgentType2 bleemeoTypes.AgentType = bleemeoTypes.AgentType{
+	agentTypeSNMP bleemeoTypes.AgentType = bleemeoTypes.AgentType{
 		DisplayName: "A server monitored with SNMP agent",
 		ID:          "823b6a83-d70a-4768-be64-50450b282a30",
 		Name:        "snmp",
@@ -127,13 +129,13 @@ var (
 	agentConfigAgent = bleemeoTypes.AgentConfig{
 		ID:               "cab64659-a765-4878-84d8-c7b0112aaecb",
 		AccountConfig:    newAccountConfig.ID,
-		AgentType:        newAgentType1.ID,
+		AgentType:        agentTypeAgent.ID,
 		MetricResolution: 10,
 	}
 	agentConfigSNMP = bleemeoTypes.AgentConfig{
 		ID:               "a89d16c1-55be-4d89-9c9b-489c2d86d3fa",
 		AccountConfig:    newAccountConfig.ID,
-		AgentType:        newAgentType2.ID,
+		AgentType:        agentTypeSNMP.ID,
 		MetricResolution: 60,
 	}
 
@@ -152,6 +154,7 @@ type mockAPI struct {
 	PreRequestHook func(*mockAPI, *http.Request) (interface{}, int, error)
 	resources      map[string]mockResource
 	serveMux       *http.ServeMux
+	now            *mockTime
 
 	RequestList      []mockRequest
 	ServerErrorCount int
@@ -188,10 +191,12 @@ type mockResource interface {
 	Store(interface{})
 }
 
+//nolint: cyclop
 func newAPI() *mockAPI {
 	api := &mockAPI{
 		JWTToken:       "random-value",
 		PreRequestHook: nil,
+		now:            &mockTime{now: time.Now()},
 	}
 
 	api.AuthCallback = func(ma *mockAPI, r *http.Request) (interface{}, int, error) {
@@ -219,15 +224,31 @@ func newAPI() *mockAPI {
 		CreateHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
 			agent, _ := valuePtr.(*payloadAgent)
 
+			// TODO: Glouton currently don't send the AccountID for SNMP type but do for
+			// the main agent. We should be consistent (and API should NOT trust the value
+			// from Glouton, so likely drop it ?).
+			if agent.AccountID == "" && agent.AgentType == agentTypeSNMP.ID {
+				agent.AccountID = accountID
+			}
+
 			if agent.AccountID != accountID {
 				err := fmt.Errorf("%w, got %v, want %v", errInvalidAccountID, agent.AccountID, accountID)
 
 				return err
 			}
 
+			if agent.AgentType == "" {
+				agent.AgentType = agentTypeAgent.ID
+			}
+
+			if agent.AgentType == agentTypeAgent.ID {
+				api.JWTUsername = fmt.Sprintf("%s@bleemeo.com", agent.ID)
+				api.JWTPassword = agent.InitialPassword
+			}
+
 			agent.CurrentConfigID = newAccountConfig.ID
-			api.JWTUsername = fmt.Sprintf("%s@bleemeo.com", agent.ID)
-			api.JWTPassword = agent.InitialPassword
+			agent.InitialPassword = "password already set"
+			agent.CreatedAt = api.now.Now()
 
 			return nil
 		},
@@ -294,8 +315,8 @@ func newAPI() *mockAPI {
 	})
 
 	api.resources["agenttype"].SetStore(
-		newAgentType1,
-		newAgentType2,
+		agentTypeAgent,
+		agentTypeSNMP,
 	)
 	api.resources["accountconfig"].SetStore(
 		newAccountConfig,
@@ -918,5 +939,284 @@ func TestSync(t *testing.T) {
 
 	if diff := cmp.Diff(wantMonitor, syncedMonitors); diff != "" {
 		t.Errorf("monitors mistmatch (-want +got)\n%s", diff)
+	}
+}
+
+//nolint: cyclop
+func TestSyncWithSNMP(t *testing.T) {
+	api := newAPI()
+	httpServer := api.Server()
+
+	defer httpServer.Close()
+
+	cfg := &config.Configuration{}
+
+	if err := cfg.LoadByte([]byte("")); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg.Set("logging.level", "debug")
+	cfg.Set("bleemeo.api_base", httpServer.URL)
+	cfg.Set("bleemeo.account_id", accountID)
+	cfg.Set("bleemeo.registration_key", registrationKey)
+
+	cache := cache.Cache{}
+
+	facts := facts.NewMockFacter()
+	// necessary for registration
+	facts.SetFact("fqdn", "test.bleemeo.com")
+
+	state := state.NewMock()
+
+	discovery := &discovery.MockDiscoverer{}
+
+	store := store.New()
+	store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  api.now.Now(),
+				Value: 42.0,
+			},
+			Labels: map[string]string{"__name__": "cpu_used"},
+		},
+	})
+
+	s, err := newWithNow(
+		Option{
+			Cache: &cache,
+			GlobalOption: bleemeoTypes.GlobalOption{
+				Config:    cfg,
+				Facts:     facts,
+				State:     state,
+				Discovery: discovery,
+				Store:     store,
+				SNMP: []snmp.Target{
+					{InitialName: "Z-The-Initial-Name", Address: "127.0.0.1", Type: "unused-today"},
+				},
+				MonitorManager:          (*blackbox.RegisterManager)(nil),
+				NotifyFirstRegistration: func(ctx context.Context) {},
+			},
+		},
+		api.now.Now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.ctx = context.Background()
+	s.startedAt = api.now.Now()
+
+	err = s.setClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	api.now.Advance(time.Second)
+
+	if err := s.runOnce(false); err != nil {
+		t.Fatal(err)
+	}
+
+	if api.ServerErrorCount > 0 {
+		t.Fatalf("Had %d server error, last: %v", api.ServerErrorCount, api.LastServerError)
+	}
+
+	if api.ClientErrorCount > 0 {
+		t.Fatalf("Had %d client error", api.ClientErrorCount)
+	}
+
+	var agents []payloadAgent
+
+	api.resources["agent"].Store(&agents)
+
+	var (
+		idAgentMain string
+		idAgentSNMP string
+	)
+
+	for _, a := range agents {
+		if a.FQDN == "test.bleemeo.com" {
+			idAgentMain = a.ID
+		}
+
+		if a.FQDN == "127.0.0.1" {
+			idAgentSNMP = a.ID
+		}
+	}
+
+	wantAgents := []payloadAgent{
+		{
+			Agent: bleemeoTypes.Agent{
+				ID:              idAgentMain,
+				CreatedAt:       api.now.Now(),
+				AccountID:       accountID,
+				CurrentConfigID: newAccountConfig.ID,
+				AgentType:       agentTypeAgent.ID,
+				FQDN:            "test.bleemeo.com",
+				DisplayName:     "test.bleemeo.com",
+			},
+			Abstracted:      false,
+			InitialPassword: "password already set",
+		},
+		{
+			Agent: bleemeoTypes.Agent{
+				ID:              idAgentSNMP,
+				CreatedAt:       api.now.Now(),
+				AccountID:       accountID,
+				CurrentConfigID: newAccountConfig.ID,
+				AgentType:       agentTypeSNMP.ID,
+				FQDN:            "127.0.0.1",
+				DisplayName:     "Z-The-Initial-Name",
+			},
+			Abstracted:      true,
+			InitialPassword: "password already set",
+		},
+	}
+
+	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
+		t.Errorf("agents mismatch (-want +got)\n%s", diff)
+	}
+
+	store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  api.now.Now(),
+				Value: 42.0,
+			},
+			Labels: map[string]string{"__name__": "cpu_used"},
+		},
+		{
+			Point: types.Point{Time: api.now.Now()},
+			Labels: map[string]string{
+				types.LabelName:       "ifOutOctets",
+				types.LabelSNMPTarget: "127.0.0.1",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: idAgentSNMP,
+			},
+		},
+	})
+
+	api.now.Advance(time.Second)
+
+	if err := s.runOnce(false); err != nil {
+		t.Fatal(err)
+	}
+
+	if api.ServerErrorCount > 0 {
+		t.Fatalf("Had %d server error, last: %v", api.ServerErrorCount, api.LastServerError)
+	}
+
+	if api.ClientErrorCount > 0 {
+		t.Fatalf("Had %d client error", api.ClientErrorCount)
+	}
+
+	var metrics []metricPayload
+
+	api.resources["metric"].Store(&metrics)
+
+	wantMetrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    idAgentMain,
+				LabelsText: `__name__="agent_status"`,
+			},
+			Name: "agent_status",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "2",
+				AgentID:    idAgentMain,
+				LabelsText: `__name__="cpu_used"`,
+			},
+			Name: "cpu_used",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "3",
+				AgentID:    idAgentSNMP,
+				LabelsText: `__name__="ifOutOctets",snmp_target="127.0.0.1"`,
+			},
+			Name: "ifOutOctets",
+		},
+	}
+
+	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
+
+	api.now.Advance(10 * time.Second)
+
+	s, err = newWithNow(
+		Option{
+			Cache: &cache,
+			GlobalOption: bleemeoTypes.GlobalOption{
+				Config:    cfg,
+				Facts:     facts,
+				State:     state,
+				Discovery: discovery,
+				Store:     store,
+				SNMP: []snmp.Target{
+					{InitialName: "Z-The-Initial-Name", Address: "127.0.0.1", Type: "unused-today"},
+				},
+				MonitorManager:          (*blackbox.RegisterManager)(nil),
+				NotifyFirstRegistration: func(ctx context.Context) {},
+			},
+		},
+		api.now.Now,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s.ctx = context.Background()
+	s.startedAt = api.now.Now()
+
+	err = s.setClient()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	api.now.Advance(time.Second)
+
+	store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{
+				Time:  api.now.Now(),
+				Value: 42.0,
+			},
+			Labels: map[string]string{"__name__": "cpu_used"},
+		},
+		{
+			Point: types.Point{Time: api.now.Now()},
+			Labels: map[string]string{
+				types.LabelName:       "ifOutOctets",
+				types.LabelSNMPTarget: "127.0.0.1",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: idAgentSNMP,
+			},
+		},
+	})
+
+	if err := s.runOnce(false); err != nil {
+		t.Fatal(err)
+	}
+
+	if api.ServerErrorCount > 0 {
+		t.Fatalf("Had %d server error, last: %v", api.ServerErrorCount, api.LastServerError)
+	}
+
+	if api.ClientErrorCount > 0 {
+		t.Fatalf("Had %d client error", api.ClientErrorCount)
+	}
+
+	api.resources["metric"].Store(&metrics)
+
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 	}
 }
