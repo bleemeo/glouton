@@ -44,7 +44,7 @@ type GlobalOption struct {
 	NotifyFirstRegistration func(ctx context.Context)
 	BlackboxScraperName     string
 
-	UpdateMetricResolution func(resolution time.Duration)
+	UpdateMetricResolution func(defaultResolution time.Duration, snmpResolution time.Duration)
 	UpdateThresholds       func(thresholds map[threshold.MetricNameItem]threshold.Threshold, firstUpdate bool)
 	UpdateUnits            func(units map[threshold.MetricNameItem]threshold.Unit)
 }

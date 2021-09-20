@@ -110,7 +110,7 @@ func (c *Connector) ApplyCachedConfiguration() {
 	currentConfig, ok := c.cache.CurrentAccountConfig()
 
 	if ok && c.option.UpdateMetricResolution != nil && currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution != 0 {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 
@@ -769,7 +769,7 @@ func (c *Connector) updateConfig() {
 	logger.Printf("Changed to configuration %s", currentConfig.Name)
 
 	if c.option.UpdateMetricResolution != nil {
-		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution)
+		c.option.UpdateMetricResolution(currentConfig.AgentConfigByName[types.AgentTypeAgent].MetricResolution, currentConfig.AgentConfigByName[types.AgentTypeSNMP].MetricResolution)
 	}
 }
 

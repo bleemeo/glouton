@@ -119,6 +119,7 @@ type agent struct {
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
 	snmpTargets            []snmp.Target
+	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
 	metricFormat           types.MetricFormat
@@ -384,21 +385,63 @@ func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
 	a.store.DropAllMetrics()
 }
 
-func (a *agent) updateMetricResolution(resolution time.Duration) {
+func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.l.Lock()
-	a.metricResolution = resolution
+	defer a.l.Unlock()
+
+	for _, id := range a.snmpRegistration {
+		a.gathererRegistry.Unregister(id)
+	}
+
+	if a.snmpRegistration != nil {
+		a.snmpRegistration = a.snmpRegistration[:0]
+	}
+
+	if resolution == 0 {
+		return
+	}
+
+	snmpExporterAddress := a.oldConfig.String("metric.snmp.exporter_address")
+	scrapperSNMPTargets := snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
+
+	for _, target := range scrapperSNMPTargets {
+		hash := labels.FromMap(target.ExtraLabels).Hash()
+
+		id, err := a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "snmp target " + target.URL.String(),
+				JitterSeed:  hash,
+				Interval:    resolution,
+				ExtraLabels: target.ExtraLabels,
+			},
+			target,
+			true,
+		)
+		if err != nil {
+			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
+		} else {
+			a.snmpRegistration = append(a.snmpRegistration, id)
+		}
+	}
+}
+
+func (a *agent) updateMetricResolution(defaultResolution time.Duration, snmpResolution time.Duration) {
+	a.l.Lock()
+	a.metricResolution = defaultResolution
 	a.l.Unlock()
 
-	a.gathererRegistry.UpdateDelay(resolution)
+	a.gathererRegistry.UpdateDelay(defaultResolution)
 
 	services, err := a.discovery.Discovery(a.context, time.Hour)
 	if err != nil {
 		logger.V(1).Printf("error during discovery: %v", err)
 	} else if a.jmx != nil {
-		if err := a.jmx.UpdateConfig(services, resolution); err != nil {
+		if err := a.jmx.UpdateConfig(services, defaultResolution); err != nil {
 			logger.V(1).Printf("failed to update JMX configuration: %v", err)
 		}
 	}
+
+	a.updateSNMPResolution(snmpResolution)
 }
 
 func (a *agent) getConfigThreshold(firstUpdate bool) map[string]threshold.Threshold {
@@ -575,14 +618,9 @@ func (a *agent) run() { //nolint:cyclop
 
 	var targets []*scrapper.Target
 
-	var scrapperSNMPTargets []*scrapper.Target
-
 	if snmpCfg, found := a.oldConfig.Get("metric.snmp.targets"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {
-			snmpExporterAddress := a.oldConfig.String("metric.snmp.exporter_address")
 			a.snmpTargets = snmp.ConfigToURLs(configList)
-
-			scrapperSNMPTargets = snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
 		}
 	}
 
@@ -754,23 +792,7 @@ func (a *agent) run() { //nolint:cyclop
 		a.metricFormat,
 	)
 
-	for _, target := range scrapperSNMPTargets {
-		hash := labels.FromMap(target.ExtraLabels).Hash()
-		// TODO: use the correct interval
-		_, err := a.gathererRegistry.RegisterGatherer(
-			registry.RegistrationOption{
-				Description: "snmp target " + target.URL.String(),
-				JitterSeed:  hash,
-				Interval:    defaultInterval,
-				ExtraLabels: target.ExtraLabels,
-			},
-			target,
-			true,
-		)
-		if err != nil {
-			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
-		}
-	}
+	a.updateSNMPResolution(time.Minute)
 
 	for _, target := range targets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
