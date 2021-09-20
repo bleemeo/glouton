@@ -1180,43 +1180,48 @@ func TestSyncWithSNMP(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	api.now.Advance(time.Second)
+	for n := 1; n <= 2; n++ {
+		n := n
+		t.Run(fmt.Sprintf("sub-run-%d", n), func(t *testing.T) {
+			api.now.Advance(time.Second)
 
-	store.PushPoints([]types.MetricPoint{
-		{
-			Point: types.Point{
-				Time:  api.now.Now(),
-				Value: 42.0,
-			},
-			Labels: map[string]string{"__name__": "cpu_used"},
-		},
-		{
-			Point: types.Point{Time: api.now.Now()},
-			Labels: map[string]string{
-				types.LabelName:       "ifOutOctets",
-				types.LabelSNMPTarget: "127.0.0.1",
-			},
-			Annotations: types.MetricAnnotations{
-				BleemeoAgentID: idAgentSNMP,
-			},
-		},
-	})
+			store.PushPoints([]types.MetricPoint{
+				{
+					Point: types.Point{
+						Time:  api.now.Now(),
+						Value: 42.0,
+					},
+					Labels: map[string]string{"__name__": "cpu_used"},
+				},
+				{
+					Point: types.Point{Time: api.now.Now()},
+					Labels: map[string]string{
+						types.LabelName:       "ifOutOctets",
+						types.LabelSNMPTarget: "127.0.0.1",
+					},
+					Annotations: types.MetricAnnotations{
+						BleemeoAgentID: idAgentSNMP,
+					},
+				},
+			})
 
-	if err := s.runOnce(false); err != nil {
-		t.Fatal(err)
-	}
+			if err := s.runOnce(false); err != nil {
+				t.Fatal(err)
+			}
 
-	if api.ServerErrorCount > 0 {
-		t.Fatalf("Had %d server error, last: %v", api.ServerErrorCount, api.LastServerError)
-	}
+			if api.ServerErrorCount > 0 {
+				t.Fatalf("Had %d server error, last: %v", api.ServerErrorCount, api.LastServerError)
+			}
 
-	if api.ClientErrorCount > 0 {
-		t.Fatalf("Had %d client error", api.ClientErrorCount)
-	}
+			if api.ClientErrorCount > 0 {
+				t.Fatalf("Had %d client error", api.ClientErrorCount)
+			}
 
-	api.resources["metric"].Store(&metrics)
+			api.resources["metric"].Store(&metrics)
 
-	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
-		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+			if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+				t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+			}
+		})
 	}
 }
