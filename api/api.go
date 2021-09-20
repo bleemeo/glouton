@@ -36,6 +36,7 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/99designs/gqlgen/cmd" // Prevent go mod tidy from removing gqlgen dependencies
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
