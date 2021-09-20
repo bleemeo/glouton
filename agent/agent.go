@@ -582,12 +582,6 @@ func (a *agent) run() { //nolint:cyclop
 			snmpExporterAddress := a.oldConfig.String("metric.snmp.exporter_address")
 			a.snmpTargets = snmp.ConfigToURLs(configList)
 
-			if len(a.snmpTargets) > 0 {
-				logger.V(1).Println("SNMP integration is currently in beta and not enabled in this version of Glouton.")
-
-				a.snmpTargets = nil
-			}
-
 			scrapperSNMPTargets = snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
 		}
 	}

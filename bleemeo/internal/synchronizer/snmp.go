@@ -38,12 +38,6 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 		return nil
 	}
 
-	if len(s.option.SNMP) > 0 {
-		logger.V(1).Println("SNMP integration is currently in beta.")
-
-		return nil
-	}
-
 	if onlyEssential {
 		// no essential snmp, skip registering.
 		return nil
