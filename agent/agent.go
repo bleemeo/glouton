@@ -412,6 +412,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 				Description: "snmp target " + target.URL.String(),
 				JitterSeed:  hash,
 				Interval:    resolution,
+				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
 			},
 			target,
