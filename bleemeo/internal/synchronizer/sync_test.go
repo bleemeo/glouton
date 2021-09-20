@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 )
 
@@ -38,22 +40,33 @@ const (
 )
 
 var (
-	errUnknownURLFormat   = errors.New("unknown URL format")
-	errUnknownResource    = errors.New("unknown resource")
-	errUnknownBool        = errors.New("unknown boolean")
-	errUnknownRequestType = errors.New("type of request unknown")
-	errIncorrectID        = errors.New("incorrect id")
-	errInvalidAccountID   = errors.New("invalid accountId supplied")
+	errUnknownURLFormat    = errors.New("unknown URL format")
+	errUnknownResource     = errors.New("unknown resource")
+	errUnknownBool         = errors.New("unknown boolean")
+	errUnknownRequestType  = errors.New("type of request unknown")
+	errIncorrectID         = errors.New("incorrect id")
+	errInvalidAccountID    = errors.New("invalid accountId supplied")
+	errUnexpectedOperation = errors.New("unexpected action")
 )
+
+type serviceMonitor struct {
+	bleemeoTypes.Monitor
+	Account   string `json:"account"`
+	IsMonitor bool   `json:"monitor"`
+}
 
 // this is a go limitation, these are constants but we have to treat them as variables
 //nolint:gochecknoglobals
 var (
-	newAgent bleemeoTypes.Agent = bleemeoTypes.Agent{
-		ID:        "33708da4-28d4-45aa-b811-49c82b594627",
-		AccountID: accountID,
-		// same one as in newAccountConfig
-		CurrentConfigID: "02eb5b38-d4a0-4db4-9b43-06f63594a515",
+	newAgent = payloadAgent{
+		Agent: bleemeoTypes.Agent{
+			ID:        "33708da4-28d4-45aa-b811-49c82b594627",
+			AccountID: accountID,
+			// same one as in newAccountConfig
+			CurrentConfigID: "02eb5b38-d4a0-4db4-9b43-06f63594a515",
+		},
+		Abstracted:      false,
+		InitialPassword: "...",
 	}
 
 	newAccountConfig bleemeoTypes.AccountConfig = bleemeoTypes.AccountConfig{
@@ -61,31 +74,43 @@ var (
 		Name: "the-default",
 	}
 
-	newMetric1 bleemeoTypes.Metric = bleemeoTypes.Metric{
-		ID:            "decce8cf-c2f7-43c3-b66e-10429debd994",
-		LabelsText:    "__name__=\"some_metric_1\",label=\"value\"",
-		Labels:        map[string]string{"__name__": "some_metric_1", "label": "value"},
-		DeactivatedAt: time.Time{},
-	}
-	newMetric2 bleemeoTypes.Metric = bleemeoTypes.Metric{
-		ID:         "055af752-5c01-4abc-9bb2-9d64032ef970",
-		LabelsText: "__name__=\"some_metric_2\",label=\"another_value !\"",
-		Labels:     map[string]string{"__name__": "some_metric_2", "label": "another_value !"},
-	}
-	newMetricActiveMonitor bleemeoTypes.Metric = bleemeoTypes.Metric{
-		ID:         "52b9c46e-00b9-4e80-a852-781426a3a193",
-		LabelsText: "__name__=\"probe_whatever\",instance=\"http://bleemeo.com\"",
-		Labels:     map[string]string{"__name__": "probe_whatever", "instance": "http://bleemeo.com"},
-		ServiceID:  newMonitor.ID,
-	}
-	newMetrics []bleemeoTypes.Metric = []bleemeoTypes.Metric{newMetric1, newMetric2, newMetricActiveMonitor}
-
-	newMonitor bleemeoTypes.Monitor = bleemeoTypes.Monitor{
-		Service: bleemeoTypes.Service{
-			ID: "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
+	newMetric1 = metricPayload{
+		Metric: bleemeoTypes.Metric{
+			ID:            "decce8cf-c2f7-43c3-b66e-10429debd994",
+			AgentID:       newAgent.ID,
+			LabelsText:    "__name__=\"some_metric_1\",label=\"value\"",
+			DeactivatedAt: time.Time{},
 		},
-		URL:     activeMonitorURL,
-		AgentID: newAgent.ID,
+		Name: "some_metric_1",
+	}
+	newMetric2 = metricPayload{
+		Metric: bleemeoTypes.Metric{
+			ID:         "055af752-5c01-4abc-9bb2-9d64032ef970",
+			AgentID:    newAgent.ID,
+			LabelsText: "__name__=\"some_metric_2\",label=\"another_value !\"",
+		},
+		Name: "some_metric_2",
+	}
+	newMetricActiveMonitor = metricPayload{
+		Metric: bleemeoTypes.Metric{
+			ID:         "52b9c46e-00b9-4e80-a852-781426a3a193",
+			AgentID:    newMonitor.AgentID,
+			LabelsText: "__name__=\"probe_whatever\",instance=\"http://bleemeo.com\"",
+			ServiceID:  newMonitor.ID,
+		},
+		Name: "probe_whatever",
+	}
+
+	newMonitor = serviceMonitor{
+		Monitor: bleemeoTypes.Monitor{
+			Service: bleemeoTypes.Service{
+				ID:     "fdd9d999-e2ff-45d3-af2b-6519cf8e3e70",
+				Active: true,
+			},
+			URL:     activeMonitorURL,
+			AgentID: "6b0ba586-0111-4a72-9cc7-f19d4f6558b9",
+		},
+		IsMonitor: true,
 	}
 
 	newAgentType1 bleemeoTypes.AgentType = bleemeoTypes.AgentType{
@@ -226,6 +251,19 @@ func newAPI() *mockAPI {
 	api.AddResource("metric", &genericResource{
 		Type:        metricPayload{},
 		ValidFilter: []string{"agent", "active", "labels_text", "item", "label"},
+		FilterHook: map[string]func(x interface{}, value string) (bool, error){
+			"active": func(x interface{}, value string) (bool, error) {
+				m, ok := x.(metricPayload)
+				if !ok {
+					return false, fmt.Errorf("%w: %T isn't type metricPayload", errUnexpectedOperation, x)
+				}
+
+				value = strings.ToLower(value)
+				active := (value == "true" || value == "1")
+
+				return active == m.DeactivatedAt.IsZero(), nil
+			},
+		},
 		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
 			var data map[string]string
 
@@ -251,7 +289,7 @@ func newAPI() *mockAPI {
 		ValidFilter: []string{"agent"},
 	})
 	api.AddResource("service", &genericResource{
-		Type:        servicePayload{},
+		Type:        serviceMonitor{},
 		ValidFilter: []string{"agent", "active", "monitor"},
 	})
 
@@ -492,6 +530,7 @@ type genericResource struct {
 	ReadOnly   bool
 	PatchHook  func(r *http.Request, body []byte, valuePtr interface{}) error
 	CreateHook func(r *http.Request, body []byte, valuePtr interface{}) error
+	FilterHook map[string]func(x interface{}, value string) (bool, error)
 }
 
 func (res *genericResource) SetStore(values ...interface{}) {
@@ -505,8 +544,16 @@ func (res *genericResource) AddStore(values ...interface{}) {
 		res.store = make(map[string]interface{})
 	}
 
+	wantType := reflect.ValueOf(res.Type).Type()
+
 	for _, x := range values {
 		value := reflect.ValueOf(x)
+		gotType := value.Type()
+
+		if wantType != gotType {
+			panic(fmt.Sprintf("type is %v, want %v", gotType, wantType))
+		}
+
 		id := value.FieldByName("ID").String()
 		res.store[id] = x
 	}
@@ -591,6 +638,45 @@ func (res *genericResource) getFilter(r *http.Request) (map[string]string, error
 	return filter, nil
 }
 
+func (res *genericResource) filterMatch(x interface{}, filter map[string]string) (bool, error) {
+	jsonBytes, err := json.Marshal(x)
+	if err != nil {
+		return false, err
+	}
+
+	var xMap map[string]interface{}
+
+	if err := json.Unmarshal(jsonBytes, &xMap); err != nil {
+		return false, err
+	}
+
+	for k, v := range filter {
+		if hook := res.FilterHook[k]; hook != nil {
+			ok, err := hook(x, v)
+			if err != nil {
+				return false, err
+			}
+
+			if !ok {
+				return false, nil
+			}
+
+			continue
+		}
+
+		// Note: we match *all* field as string... this seems to work
+		// up to now, but if you do comparison with non-string field (boolean, date,...)
+		// it test don't work, it could be due to this cheap comparison :)
+		got := fmt.Sprintf("%v", xMap[k])
+
+		if got != v {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 func (res *genericResource) List(r *http.Request) ([]interface{}, error) {
 	results := make([]interface{}, 0, len(res.store))
 
@@ -600,33 +686,9 @@ func (res *genericResource) List(r *http.Request) ([]interface{}, error) {
 	}
 
 	for _, x := range res.store {
-		match := true
-
-		value := reflect.ValueOf(x)
-
-		for k, v := range filter {
-			if !match {
-				break
-			}
-
-			for n := 0; n < value.Type().NumField(); n++ {
-				jsonTag := value.Type().Field(n).Tag.Get("json")
-				if jsonTag == k {
-					got := value.Field(n).String()
-
-					// Note: we match *all* field as string... this seems to work
-					// up to now, but if you do comparison with non-string field (boolean, date,...)
-					// it test don't work, it could be due to this cheap comparison :)
-					if v != got {
-						match = false
-
-						break
-					}
-				}
-			}
-		}
-
-		if match {
+		if ok, err := res.filterMatch(x, filter); err != nil {
+			return nil, err
+		} else if ok {
 			results = append(results, x)
 		}
 	}
@@ -735,8 +797,13 @@ func TestSync(t *testing.T) {
 	api := newAPI()
 	httpServer := api.Server()
 
+	api.resources["agent"].AddStore(newAgent)
 	api.resources["metric"].AddStore(newMetric1, newMetric2, newMetricActiveMonitor)
 	api.resources["service"].AddStore(newMonitor)
+
+	api.resources["agent"].(*genericResource).CreateHook = func(r *http.Request, body []byte, valuePtr interface{}) error {
+		return fmt.Errorf("%w: agent is already registered, shouldn't re-register", errUnexpectedOperation)
+	}
 
 	defer httpServer.Close()
 
@@ -759,6 +826,11 @@ func TestSync(t *testing.T) {
 	facts.SetFact("fqdn", "test.bleemeo.com")
 
 	state := state.NewMock()
+	_ = state.Set("password", "something")
+	_ = state.Set("agent_uuid", newAgent.ID)
+
+	api.JWTPassword = "something"
+	api.JWTUsername = newAgent.ID + "@bleemeo.com"
 
 	discovery := &discovery.MockDiscoverer{}
 
@@ -812,25 +884,39 @@ func TestSync(t *testing.T) {
 	}
 
 	// Did we store all the metrics ?
-	syncedMetrics := s.option.Cache.MetricsByUUID()
+	syncedMetrics := s.option.Cache.Metrics()
+	want := []bleemeoTypes.Metric{
+		newMetric1.metricFromAPI(),
+		newMetric2.metricFromAPI(),
+		newMetricActiveMonitor.metricFromAPI(),
+		metricPayload{
+			Metric: bleemeoTypes.Metric{
+				ID:      "1",
+				AgentID: newAgent.ID,
+			},
+			Name: "agent_status",
+		}.metricFromAPI(),
+		metricPayload{
+			Metric: bleemeoTypes.Metric{
+				ID:      "2",
+				AgentID: newAgent.ID,
+			},
+			Name: "cpu_used",
+		}.metricFromAPI(),
+	}
 
-	for _, v := range newMetrics {
-		syncedMetric, present := syncedMetrics[v.ID]
-
-		if !present {
-			t.Fatalf("missing metric %s", v.ID)
-		}
-
-		if !reflect.DeepEqual(v, syncedMetric) {
-			t.Fatalf("got invalid metrics %v, want %v", syncedMetric, v)
-		}
+	optMetricSort := cmpopts.SortSlices(func(x bleemeoTypes.Metric, y bleemeoTypes.Metric) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(want, syncedMetrics, optMetricSort); diff != "" {
+		t.Errorf("metrics mistmatch (-want +got)\n%s", diff)
 	}
 
 	// Did we sync and enable the monitor present in the configuration ?
 	syncedMonitors := s.option.Cache.Monitors()
-	syncedMonitor := syncedMonitors[0]
+	wantMonitor := []bleemeoTypes.Monitor{
+		newMonitor.Monitor,
+	}
 
-	if !reflect.DeepEqual(newMonitor, syncedMonitor) {
-		t.Fatalf("got invalid metrics %v, want %v", syncedMonitor, newMonitor)
+	if diff := cmp.Diff(wantMonitor, syncedMonitors); diff != "" {
+		t.Errorf("monitors mistmatch (-want +got)\n%s", diff)
 	}
 }
