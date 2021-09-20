@@ -1,6 +1,6 @@
 module glouton
 
-go 1.13
+go 1.16
 
 require (
 	github.com/99designs/gqlgen v0.13.0
@@ -13,7 +13,6 @@ require (
 	github.com/containerd/typeurl v1.0.2
 	github.com/docker/docker v20.10.8+incompatible
 	github.com/eclipse/paho.mqtt.golang v1.3.5
-	github.com/go-bindata/go-bindata/v3 v3.1.3
 	github.com/go-chi/chi v4.1.2+incompatible
 	github.com/go-kit/kit v0.11.0
 	github.com/go-ole/go-ole v1.2.5

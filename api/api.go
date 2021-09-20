@@ -16,10 +16,9 @@
 
 package api
 
-//go:generate go run github.com/go-bindata/go-bindata/v3/go-bindata -o api-bindata.go -pkg api -fs -nocompress -nomemcopy -prefix static static/...
-
 import (
 	"context"
+	"embed"
 	"errors"
 	"fmt"
 	"glouton/discovery"
@@ -37,11 +36,15 @@ import (
 	"strings"
 	"time"
 
+	_ "github.com/99designs/gqlgen/cmd" // Prevent go mod tidy from removing gqlgen dependencies
 	"github.com/99designs/gqlgen/graphql/handler"
 	"github.com/99designs/gqlgen/graphql/playground"
 	"github.com/go-chi/chi"
 	"github.com/rs/cors"
 )
+
+//go:embed static
+var staticFolder embed.FS //nolint:gochecknoglobals
 
 type containerInterface interface {
 	Containers(ctx context.Context, maxAge time.Duration, includeIgnored bool) (containers []facts.Container, err error)
@@ -82,10 +85,10 @@ type assetsFileServer struct {
 }
 
 func (f *assetsFileServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	r.URL.Path = path.Join("assets", r.URL.Path)
+	r.URL.Path = path.Join("static/assets", r.URL.Path)
 
 	// let the client browser decode the gzipped js files
-	if strings.HasPrefix(r.URL.Path, "assets/js/") {
+	if strings.HasPrefix(r.URL.Path, "static/assets/js/") {
 		w.Header().Add("Content-Encoding", "gzip")
 	}
 
@@ -100,18 +103,15 @@ func (api *API) init() {
 		Debug:            false,
 	}).Handler)
 
-	staticFolder := AssetFile()
-
 	fallbackIndex := []byte("Error while initializing local UI. See Glouton logs")
 
 	var indexBody []byte
 
-	indexFile, err := staticFolder.Open("/index.html")
+	indexFile, err := staticFolder.Open("static/index.html")
 	if err == nil {
 		indexBody, err = ioutil.ReadAll(indexFile)
+		indexFile.Close()
 	}
-
-	indexFile.Close()
 
 	if err != nil {
 		logger.Printf("Error while loading index.html. Local UI will be broken: %v", err)
@@ -128,12 +128,11 @@ func (api *API) init() {
 
 	var diagnosticBody []byte
 
-	diagnosticFile, err := staticFolder.Open("/diagnostic.html")
+	diagnosticFile, err := staticFolder.Open("static/diagnostic.html")
 	if err == nil {
 		diagnosticBody, err = ioutil.ReadAll(diagnosticFile)
+		diagnosticFile.Close()
 	}
-
-	diagnosticFile.Close()
 
 	if err != nil {
 		logger.Printf("Error while loading diagnostic.html: %v", err)
@@ -176,7 +175,7 @@ func (api *API) init() {
 		}
 	})
 
-	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(staticFolder)}))
+	router.Handle("/static/*", http.StripPrefix("/static", &assetsFileServer{fs: http.FileServer(http.FS(staticFolder))}))
 	router.HandleFunc("/*", func(w http.ResponseWriter, r *http.Request) {
 		var err error
 		if indexTmpl == nil {
