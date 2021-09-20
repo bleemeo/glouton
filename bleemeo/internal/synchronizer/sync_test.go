@@ -17,15 +17,17 @@ import (
 	"glouton/store"
 	"glouton/types"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 const (
@@ -33,8 +35,6 @@ const (
 	accountID        string = "9da59f53-1d90-4441-ae58-42c661cfea83"
 	registrationKey  string = "e2c22e59-0621-49e6-b5dd-bdb02cbac9f1"
 	activeMonitorURL string = "http://bleemeo.com"
-	//nolint:gosec
-	jwtToken string = "{\"token\":\"blebleble\"}"
 )
 
 var (
@@ -44,7 +44,6 @@ var (
 	errUnknownRequestType = errors.New("type of request unknown")
 	errIncorrectID        = errors.New("incorrect id")
 	errInvalidAccountID   = errors.New("invalid accountId supplied")
-	errInvalidAuthHeader  = errors.New("invalid authorization header")
 )
 
 // this is a go limitation, these are constants but we have to treat them as variables
@@ -57,12 +56,9 @@ var (
 		CurrentConfigID: "02eb5b38-d4a0-4db4-9b43-06f63594a515",
 	}
 
-	newAgentFact bleemeoTypes.AgentFact = bleemeoTypes.AgentFact{
-		ID: "9690d66d-b47c-42ea-86d8-339373e4658c",
-	}
-
 	newAccountConfig bleemeoTypes.AccountConfig = bleemeoTypes.AccountConfig{
-		ID: "02eb5b38-d4a0-4db4-9b43-06f63594a515",
+		ID:   "02eb5b38-d4a0-4db4-9b43-06f63594a515",
+		Name: "the-default",
 	}
 
 	newMetric1 bleemeoTypes.Metric = bleemeoTypes.Metric{
@@ -102,22 +98,24 @@ var (
 		ID:          "823b6a83-d70a-4768-be64-50450b282a30",
 		Name:        "snmp",
 	}
-	newAgentTypes []bleemeoTypes.AgentType = []bleemeoTypes.AgentType{newAgentType1, newAgentType2}
 
-	uuidRegexp  = regexp.MustCompile("^[a-fA-F0-9]{8}-[a-fA-F0-9]{4}-4[a-fA-F0-9]{3}-[8|9|aA|bB][a-fA-F0-9]{3}-[a-fA-F0-9]{12}$")
-	errNotFound = errors.New("not found")
-)
-
-// getUUID returns the UUID stored in the HTTP query path, if any.
-func getUUID(r *http.Request) (string, bool) {
-	// we don't care about http parameters
-	path := r.RequestURI[:strings.LastIndexByte(r.RequestURI, '/')]
-	if uuidRegexp.MatchString(path) {
-		return uuidRegexp.FindString(path), true
+	agentConfigAgent = bleemeoTypes.AgentConfig{
+		ID:               "cab64659-a765-4878-84d8-c7b0112aaecb",
+		AccountConfig:    newAccountConfig.ID,
+		AgentType:        newAgentType1.ID,
+		MetricResolution: 10,
+	}
+	agentConfigSNMP = bleemeoTypes.AgentConfig{
+		ID:               "a89d16c1-55be-4d89-9c9b-489c2d86d3fa",
+		AccountConfig:    newAccountConfig.ID,
+		AgentType:        newAgentType2.ID,
+		MetricResolution: 60,
 	}
 
-	return "", false
-}
+	defaultIgnoreParam = []string{"fields", "page_size"}
+
+	errNotFound = errors.New("not found")
+)
 
 // mockAPI fake global /v1 API endpoints. Currently only v1/info & v1/jwt-auth
 // Use Handle to add additional endpoints.
@@ -125,6 +123,7 @@ type mockAPI struct {
 	JWTUsername    string
 	JWTPassword    string
 	JWTToken       string
+	AuthCallback   func(*mockAPI, *http.Request) (interface{}, int, error)
 	PreRequestHook func(*mockAPI, *http.Request) (interface{}, int, error)
 	resources      map[string]mockResource
 	serveMux       *http.ServeMux
@@ -169,17 +168,64 @@ func newAPI() *mockAPI {
 		JWTToken:       "random-value",
 		PreRequestHook: nil,
 	}
+
+	api.AuthCallback = func(ma *mockAPI, r *http.Request) (interface{}, int, error) {
+		if r.Method == "POST" && r.URL.Path == "/v1/agent/" {
+			// POST on agent can be authenticated with either JWT or account registration key
+			basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s@bleemeo.com:%s", accountID, registrationKey)))
+
+			if r.Header.Get("Authorization") == basicAuth {
+				return nil, 0, nil
+			}
+		}
+
+		jwtAuth := "JWT " + ma.JWTToken
+		if r.Header.Get("Authorization") != jwtAuth {
+			body := fmt.Sprintf("JWT token = %#v, want %#v", r.Header.Get("Authorization"), jwtAuth)
+
+			return body, http.StatusUnauthorized, nil
+		}
+
+		return nil, 0, nil
+	}
+
 	api.AddResource("agent", &genericResource{
-		Type: bleemeoTypes.Agent{},
+		Type: payloadAgent{},
+		CreateHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
+			agent, _ := valuePtr.(*payloadAgent)
+
+			if agent.AccountID != accountID {
+				err := fmt.Errorf("%w, got %v, want %v", errInvalidAccountID, agent.AccountID, accountID)
+
+				return err
+			}
+
+			agent.CurrentConfigID = newAccountConfig.ID
+			api.JWTUsername = fmt.Sprintf("%s@bleemeo.com", agent.ID)
+			api.JWTPassword = agent.InitialPassword
+
+			return nil
+		},
 	})
 	api.AddResource("agentfact", &genericResource{
-		Type: bleemeoTypes.AgentFact{},
+		Type:        bleemeoTypes.AgentFact{},
+		ValidFilter: []string{"agent"},
 	})
 	api.AddResource("agenttype", &genericResource{
-		Type: bleemeoTypes.AgentType{},
+		Type:     bleemeoTypes.AgentType{},
+		ReadOnly: true,
+	})
+	api.AddResource("accountconfig", &genericResource{
+		Type:     bleemeoTypes.AccountConfig{},
+		ReadOnly: true,
+	})
+	api.AddResource("agentconfig", &genericResource{
+		Type:     bleemeoTypes.AgentConfig{},
+		ReadOnly: true,
 	})
 	api.AddResource("metric", &genericResource{
-		Type: metricPayload{},
+		Type:        metricPayload{},
+		ValidFilter: []string{"agent", "active", "labels_text", "item", "label"},
 		PatchHook: func(r *http.Request, body []byte, valuePtr interface{}) error {
 			var data map[string]string
 
@@ -200,6 +246,26 @@ func newAPI() *mockAPI {
 			return err
 		},
 	})
+	api.AddResource("container", &genericResource{
+		Type:        containerPayload{},
+		ValidFilter: []string{"agent"},
+	})
+	api.AddResource("service", &genericResource{
+		Type:        servicePayload{},
+		ValidFilter: []string{"agent", "active", "monitor"},
+	})
+
+	api.resources["agenttype"].SetStore(
+		newAgentType1,
+		newAgentType2,
+	)
+	api.resources["accountconfig"].SetStore(
+		newAccountConfig,
+	)
+	api.resources["agentconfig"].SetStore(
+		agentConfigAgent,
+		agentConfigSNMP,
+	)
 
 	return api
 }
@@ -283,18 +349,20 @@ func (api *mockAPI) reply(w http.ResponseWriter, r *http.Request, h apiResponder
 }
 
 func (api *mockAPI) jwtHandler(r *http.Request) (interface{}, int, error) {
-	if api.JWTUsername != "" {
-		decoder := json.NewDecoder(r.Body)
-		values := map[string]string{}
+	decoder := json.NewDecoder(r.Body)
+	values := map[string]string{}
 
-		if err := decoder.Decode(&values); err != nil {
-			return nil, http.StatusInternalServerError, err
-		}
-
-		if values["username"] != api.JWTUsername || values["password"] != api.JWTPassword {
-			return `{"non_field_errors":["Unable to log in with provided credentials."]}`, http.StatusBadRequest, nil
-		}
+	if err := decoder.Decode(&values); err != nil {
+		return nil, http.StatusInternalServerError, err
 	}
+
+	if values["username"] != api.JWTUsername || values["password"] != api.JWTPassword {
+		log.Printf("JWT auth fail: got = %s/%s want %s/%s\n", values["username"], values["password"], api.JWTUsername, api.JWTPassword)
+
+		return `{"non_field_errors":["Unable to log in with provided credentials."]}`, http.StatusBadRequest, nil
+	}
+
+	api.JWTToken = uuid.New().String()
 
 	return map[string]string{"token": api.JWTToken}, 200, nil
 }
@@ -360,6 +428,14 @@ func (api *mockAPI) Server() *httptest.Server {
 
 //nolint:cyclop
 func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
+	if api.AuthCallback != nil {
+		response, status, err := api.AuthCallback(api, r)
+
+		if status != 0 || err != nil {
+			return response, status, err
+		}
+	}
+
 	part := strings.Split(r.URL.Path, "/")
 	if len(part) < 4 || part[1] != "v1" || len(part) > 5 {
 		return nil, http.StatusNotImplemented, fmt.Errorf("%w %#v", errUnknownURLFormat, part)
@@ -407,10 +483,13 @@ func (api *mockAPI) defaultHandler(r *http.Request) (interface{}, int, error) {
 }
 
 type genericResource struct {
-	Type    interface{}
-	store   map[string]interface{}
-	autoinc int
+	Type         interface{}
+	ValidFilter  []string
+	IgnoredParam []string
+	store        map[string]interface{}
+	autoinc      int
 
+	ReadOnly   bool
 	PatchHook  func(r *http.Request, body []byte, valuePtr interface{}) error
 	CreateHook func(r *http.Request, body []byte, valuePtr interface{}) error
 }
@@ -463,17 +542,106 @@ func (res *genericResource) Store(list interface{}) {
 	valuePtr.Elem().Set(valueSlice)
 }
 
+func (res *genericResource) getFilter(r *http.Request) (map[string]string, error) {
+	filter := make(map[string]string)
+
+	for k, v := range r.URL.Query() {
+		var (
+			ignore bool
+			ok     bool
+		)
+
+		for _, n := range res.IgnoredParam {
+			if k == n {
+				ignore = true
+
+				break
+			}
+		}
+
+		for _, n := range defaultIgnoreParam {
+			if k == n {
+				ignore = true
+
+				break
+			}
+		}
+
+		if ignore {
+			continue
+		}
+
+		for _, n := range res.ValidFilter {
+			if k == n {
+				ok = true
+
+				if len(v) != 1 {
+					return nil, fmt.Errorf("%w: multi-valued filter %s=%v", errNotImplemented, k, v)
+				}
+
+				filter[k] = v[0]
+			}
+		}
+
+		if !ok {
+			return nil, fmt.Errorf("%w: unknown query param %s (type=%T)", errNotImplemented, k, res.Type)
+		}
+	}
+
+	return filter, nil
+}
+
 func (res *genericResource) List(r *http.Request) ([]interface{}, error) {
 	results := make([]interface{}, 0, len(res.store))
 
+	filter, err := res.getFilter(r)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, x := range res.store {
-		results = append(results, x)
+		match := true
+
+		value := reflect.ValueOf(x)
+
+		for k, v := range filter {
+			if !match {
+				break
+			}
+
+			for n := 0; n < value.Type().NumField(); n++ {
+				jsonTag := value.Type().Field(n).Tag.Get("json")
+				if jsonTag == k {
+					got := value.Field(n).String()
+
+					// Note: we match *all* field as string... this seems to work
+					// up to now, but if you do comparison with non-string field (boolean, date,...)
+					// it test don't work, it could be due to this cheap comparison :)
+					if v != got {
+						match = false
+
+						break
+					}
+				}
+			}
+		}
+
+		if match {
+			results = append(results, x)
+		}
 	}
 
 	return results, nil
 }
 
 func (res *genericResource) Create(r *http.Request) (interface{}, error) {
+	if res.ReadOnly {
+		return nil, clientError{
+			body:       "This resource is read-only",
+			statusCode: http.StatusUnauthorized,
+		}
+	}
+
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
@@ -509,6 +677,13 @@ func (res *genericResource) Create(r *http.Request) (interface{}, error) {
 }
 
 func (res *genericResource) Patch(id string, r *http.Request) (interface{}, error) {
+	if res.ReadOnly {
+		return nil, clientError{
+			body:       "This resource is read-only",
+			statusCode: http.StatusUnauthorized,
+		}
+	}
+
 	body, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		return nil, err
@@ -556,111 +731,12 @@ func (res *genericResource) Patch(id string, r *http.Request) (interface{}, erro
 	return res.store[id], nil
 }
 
-func runFakeAPI() *mockAPI {
-	api := &mockAPI{
-		JWTToken:    jwtToken,
-		JWTUsername: newAgent.ID + "@bleemeo.com",
-	}
-
-	api.Handle("/v1/agent/", func(r *http.Request) (interface{}, int, error) {
-		switch r.Method {
-		case http.MethodPost:
-			basicAuth := "Basic " + base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s@bleemeo.com:%s", accountID, registrationKey)))
-			decoder := json.NewDecoder(r.Body)
-			values := map[string]string{}
-			if err := decoder.Decode(&values); err != nil {
-				return nil, http.StatusInternalServerError, err
-			}
-
-			if values["account"] != accountID {
-				err := fmt.Errorf("%w, got %v, want %v", errInvalidAccountID, values["account"], accountID)
-
-				return nil, http.StatusInternalServerError, err
-			}
-
-			if r.Header.Get("Authorization") != basicAuth {
-				err := fmt.Errorf("%w, got %v, want %v", errInvalidAuthHeader, r.Header.Get("Authorization"), basicAuth)
-
-				return nil, http.StatusInternalServerError, err
-			}
-
-			api.JWTPassword = values["initial_password"]
-
-			return newAgent, http.StatusCreated, nil
-		case http.MethodPatch:
-			return newAgent, http.StatusOK, nil
-		default:
-			return paginatedList([]interface{}{newAgent}), http.StatusOK, nil
-		}
-	})
-
-	api.Handle("/v1/agentfact/", func(r *http.Request) (interface{}, int, error) {
-		if r.Method == http.MethodPost {
-			return newAgentFact, http.StatusCreated, nil
-		}
-
-		if _, present := getUUID(r); present {
-			return newAgentFact, http.StatusOK, nil
-		}
-
-		return paginatedList([]interface{}{newAgentFact}), http.StatusOK, nil
-	})
-
-	api.Handle("/v1/container/", func(r *http.Request) (interface{}, int, error) {
-		return paginatedList([]interface{}{}), http.StatusOK, nil
-	})
-
-	api.Handle("/v1/agenttype/", func(r *http.Request) (interface{}, int, error) {
-		results := make([]interface{}, len(newAgentTypes))
-		for i, m := range newAgentTypes {
-			results[i] = m
-		}
-
-		return paginatedList(results), http.StatusOK, nil
-	})
-
-	api.Handle("/v1/service/", func(r *http.Request) (interface{}, int, error) {
-		return paginatedList([]interface{}{newMonitor}), http.StatusOK, nil
-	})
-
-	api.Handle("/v1/metric/", func(r *http.Request) (interface{}, int, error) {
-		uuid, present := getUUID(r)
-		if present {
-			for _, v := range newMetrics {
-				if v.ID == uuid {
-					return v, http.StatusOK, nil
-				}
-			}
-
-			return "", http.StatusNotFound, nil
-		}
-
-		results := make([]interface{}, len(newMetrics))
-		for i, m := range newMetrics {
-			results[i] = m
-		}
-
-		return paginatedList(results), http.StatusOK, nil
-	})
-
-	api.Handle("/v1/accountconfig/", func(r *http.Request) (interface{}, int, error) {
-		if _, present := getUUID(r); present {
-			return newAccountConfig, http.StatusOK, nil
-		}
-
-		return paginatedList([]interface{}{newAccountConfig}), http.StatusOK, nil
-	})
-
-	api.Handle("/v1/agentconfig/", func(r *http.Request) (interface{}, int, error) {
-		return paginatedList([]interface{}{}), http.StatusOK, nil
-	})
-
-	return api
-}
-
 func TestSync(t *testing.T) {
-	api := runFakeAPI()
+	api := newAPI()
 	httpServer := api.Server()
+
+	api.resources["metric"].AddStore(newMetric1, newMetric2, newMetricActiveMonitor)
+	api.resources["service"].AddStore(newMonitor)
 
 	defer httpServer.Close()
 

@@ -39,7 +39,7 @@ var (
 	errRetryLater     = errors.New("metric registration should be retried laster")
 	errIgnore         = errors.New("metric registration fail but can be ignored (because it registration will be retried automatically)")
 	errAttemptToSpoof = errors.New("attempt to spoof another agent (or missing label)")
-	errNotImplemented = errors.New("not implemented on fakeMetric")
+	errNotImplemented = errors.New("not implemented")
 )
 
 type needRegisterError struct {

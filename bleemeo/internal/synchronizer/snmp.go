@@ -24,7 +24,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type payloadSNMPAgent struct {
+type payloadAgent struct {
 	types.Agent
 	Abstracted      bool   `json:"abstracted"`
 	InitialPassword string `json:"initial_password"`
@@ -72,7 +72,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 	}
 
 	for _, snmp := range localTargets {
-		payload := payloadSNMPAgent{
+		payload := payloadAgent{
 			Agent: types.Agent{
 				FQDN:        snmp.Address,
 				DisplayName: snmp.InitialName,
@@ -101,7 +101,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
 	return nil
 }
 
-func (s *Synchronizer) remoteRegisterSNMP(remoteSNMPs *[]types.Agent, params map[string]string, payload payloadSNMPAgent) error {
+func (s *Synchronizer) remoteRegisterSNMP(remoteSNMPs *[]types.Agent, params map[string]string, payload payloadAgent) error {
 	var result types.Agent
 
 	_, err := s.client.Do(s.ctx, "POST", "v1/agent/", params, payload, &result)

@@ -34,6 +34,17 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+)
+
+const (
+	idAgentTypeAgent = "44aefd1c-29bc-4c67-89cd-197efc1d6650"
+	idAgentTypeSNMP  = "cf1d4e06-1058-4149-864f-82c6b2ba7c7a"
+	idAgentMain      = "1ea3eaa7-3c29-413c-b00e-9dbd7183fb26"
+	idAgentSNMP      = "69956bc0-943f-4125-bb9b-eb4743c83b3c"
+	idAccountConfig  = "553b1cd5-f10a-4f17-87e8-92dc6717a93f"
+	passwordAgent    = "a-secret-password"
 )
 
 type mockMetric struct {
@@ -143,27 +154,50 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 
 	cache.SetAccountConfigs([]bleemeoTypes.AccountConfig{
 		{
-			ID:   "123",
+			ID:   idAccountConfig,
 			Name: "default",
 		},
 	})
 	cache.SetAgentTypes([]bleemeoTypes.AgentType{
 		{
-			ID:   "456",
+			ID:   idAgentTypeAgent,
 			Name: bleemeoTypes.AgentTypeAgent,
+		},
+		{
+			ID:   idAgentTypeSNMP,
+			Name: bleemeoTypes.AgentTypeSNMP,
 		},
 	})
 	cache.SetAgentConfigs([]bleemeoTypes.AgentConfig{
 		{
 			MetricsAllowlist: "",
 			MetricResolution: 10,
-			AccountConfig:    "123",
-			AgentType:        "456",
+			AccountConfig:    idAccountConfig,
+			AgentType:        idAgentTypeAgent,
+		},
+		{
+			MetricsAllowlist: "",
+			MetricResolution: 60,
+			AccountConfig:    idAccountConfig,
+			AgentType:        idAgentTypeSNMP,
 		},
 	})
-	cache.SetAgent(bleemeoTypes.Agent{
-		CurrentConfigID: "123",
+
+	mainAgent := bleemeoTypes.Agent{
+		ID:              idAgentMain,
+		CurrentConfigID: idAccountConfig,
+		AgentType:       idAgentTypeAgent,
+	}
+
+	cache.SetAgentList([]bleemeoTypes.Agent{
+		mainAgent,
+		{
+			ID:              idAgentSNMP,
+			CurrentConfigID: idAccountConfig,
+			AgentType:       idAgentTypeSNMP,
+		},
 	})
+	cache.SetAgent(mainAgent)
 
 	state := state.NewMock()
 
@@ -192,6 +226,10 @@ func newMetricHelper(t *testing.T) *metricTestHelper {
 	helper.s.ctx = context.Background()
 	helper.s.startedAt = helper.mt.Now()
 	helper.s.nextFullSync = helper.mt.Now()
+	helper.s.agentID = idAgentMain
+	helper.api.JWTUsername = idAgentMain + "@bleemeo.com"
+	helper.api.JWTPassword = passwordAgent
+	_ = helper.s.option.State.Set("password", passwordAgent)
 
 	if err := helper.s.setClient(); err != nil {
 		panic(err)
@@ -322,14 +360,15 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
+				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
 			Name: agentStatusName,
 		},
 	}
 
-	if !reflect.DeepEqual(metrics, want) {
-		t.Errorf("metrics = %v, want %v", metrics, want)
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
 	helper.AddTime(30 * time.Minute)
@@ -356,6 +395,7 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "1",
+				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
 			Name: agentStatusName,
@@ -363,14 +403,15 @@ func TestMetricSimpleSync(t *testing.T) {
 		{
 			Metric: bleemeoTypes.Metric{
 				ID:         "2",
+				AgentID:    idAgentMain,
 				LabelsText: "",
 			},
 			Name: "cpu_system",
 		},
 	}
 
-	if !reflect.DeepEqual(metrics, want) {
-		t.Errorf("metrics = %v, want %v", metrics, want)
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 
 	helper.AddTime(30 * time.Minute)
@@ -1299,6 +1340,67 @@ func TestMetricLongItem(t *testing.T) {
 	// No new metrics
 	if len(metrics) != 3 {
 		t.Errorf("len(metrics) = %v, want %v", len(metrics), 3)
+	}
+}
+
+// Few tests with SNMP metrics.
+func TestWithSNMP(t *testing.T) {
+	helper := newMetricHelper(t)
+	defer helper.Close()
+
+	helper.AddTime(time.Minute)
+
+	helper.store.PushPoints([]types.MetricPoint{
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName: "cpu_system",
+			},
+		},
+		{
+			Point: types.Point{Time: helper.mt.Now()},
+			Labels: map[string]string{
+				types.LabelName:       "ifOutOctets",
+				types.LabelSNMPTarget: "127.0.0.1",
+			},
+			Annotations: types.MetricAnnotations{
+				BleemeoAgentID: idAgentSNMP,
+			},
+		},
+	})
+
+	helper.RunSync(1, 0, false).CheckNoError("first sync", true)
+
+	metrics := helper.Metrics()
+	want := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: agentStatusName,
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "2",
+				AgentID:    idAgentMain,
+				LabelsText: "",
+			},
+			Name: "cpu_system",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "3",
+				AgentID:    idAgentSNMP,
+				LabelsText: `__name__="ifOutOctets",snmp_target="127.0.0.1"`,
+			},
+			Name: "ifOutOctets",
+		},
+	}
+
+	if diff := cmp.Diff(want, metrics); diff != "" {
+		t.Errorf("metrics mismatch (-want +got):\n%s", diff)
 	}
 }
 
