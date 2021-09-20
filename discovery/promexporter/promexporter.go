@@ -152,7 +152,16 @@ func (d *DynamicScrapper) update(containers []facts.Container) {
 
 		hash := labels.FromMap(t.ExtraLabels).Hash()
 
-		id, err := d.Registry.RegisterGatherer("Prometheus exporter "+t.URL.String(), hash, defaultInterval, t, nil, t.ExtraLabels, true)
+		id, err := d.Registry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "Prometheus exporter " + t.URL.String(),
+				JitterSeed:  hash,
+				Interval:    defaultInterval,
+				ExtraLabels: t.ExtraLabels,
+			},
+			t,
+			true,
+		)
 		if err != nil {
 			logger.Printf("Failed to register scrapper for %v: %v", t.URL, err)
 

@@ -48,7 +48,15 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 			logger.Printf("Failed to register process-exporter: %v", err)
 			logger.Printf("Processes metrics won't be available on /metrics endpoints")
 		} else {
-			_, err = reg.RegisterGatherer("process-exporter", defaultJitter, defaultInterval, processGatherer, nil, nil, !bleemeoFormat)
+			_, err = reg.RegisterGatherer(
+				registry.RegistrationOption{
+					Description: "process-exporter",
+					Interval:    defaultInterval,
+					JitterSeed:  defaultJitter,
+				},
+				processGatherer,
+				!bleemeoFormat,
+			)
 			if err != nil {
 				logger.Printf("Failed to register process-exporter: %v", err)
 				logger.Printf("Processes metrics won't be available on /metrics endpoints")
@@ -56,7 +64,15 @@ func RegisterExporter(reg *registry.Registry, psLister interface{}, dynamicDisco
 		}
 
 		if bleemeoFormat {
-			if _, err := reg.RegisterPushPointsCallback("process-exporter", defaultJitter, processExporter.PushTo(reg.WithTTL(5*time.Minute))); err != nil {
+			_, err := reg.RegisterPushPointsCallback(
+				registry.RegistrationOption{
+					Description: "process-exporter",
+					Interval:    defaultInterval,
+					JitterSeed:  defaultJitter,
+				},
+				processExporter.PushTo(reg.WithTTL(5*time.Minute)),
+			)
+			if err != nil {
 				logger.Printf("unable to add processes metrics: %v", err)
 			}
 		}

@@ -127,13 +127,18 @@ type Option struct {
 	Filter                metricFilter
 }
 
+type RegistrationOption struct {
+	Description  string
+	JitterSeed   uint64
+	Interval     time.Duration
+	Timeout      time.Duration
+	StopCallback func()
+	ExtraLabels  map[string]string
+}
+
 type registration struct {
 	l                         sync.Mutex
-	description               string
-	originalExtraLabels       map[string]string
-	originalInterval          time.Duration
-	originalJitterSeed        uint64
-	stopCallback              func()
+	option                    RegistrationOption
 	includedInMetricsEndpoint bool
 	loop                      *scrapeLoop
 	lastScrape                time.Time
@@ -310,16 +315,15 @@ func (r *Registry) Run(ctx context.Context) error {
 // RegisterPushPointsCallback add a callback that should push points to the registry.
 // This callback will be called for each collection period. It's mostly used to
 // add Telegraf input (using glouton/collector).
-func (r *Registry) RegisterPushPointsCallback(description string, jitterSeed uint64, f func(context.Context, time.Time)) (int, error) {
+func (r *Registry) RegisterPushPointsCallback(opt RegistrationOption, f func(context.Context, time.Time)) (int, error) {
 	r.init()
 
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	reg := &registration{
-		description:               description,
+		option:                    opt,
 		includedInMetricsEndpoint: false,
-		originalJitterSeed:        jitterSeed,
 	}
 	r.setupGatherer(reg, pushGatherer{fun: f})
 
@@ -413,7 +417,7 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 	for _, reg := range loopRegistration {
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.description, reg.originalExtraLabels, reg.loop.interval, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.option.Description, reg.option.ExtraLabels, reg.loop.interval, reg.option.Interval, reg.option.JitterSeed, reg.lastScrape, reg.lastScrapeDuration)
 
 		reg.l.Unlock()
 	}
@@ -423,7 +427,7 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 	for _, reg := range noloopRegistration {
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.description, reg.originalExtraLabels, reg.originalInterval, reg.originalJitterSeed, reg.lastScrape, reg.lastScrapeDuration)
+		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.option.Description, reg.option.ExtraLabels, reg.option.Interval, reg.option.JitterSeed, reg.lastScrape, reg.lastScrapeDuration)
 
 		reg.l.Unlock()
 	}
@@ -457,17 +461,13 @@ func (r *Registry) scrapeDone() {
 // In the case, the period is interval. If interval is 0, the UpdateDelay value is used (default to 10 seconds).
 // stopCallback is called when Unregister() is used.
 // extraLabels add labels added. If a labels already exists, extraLabels take precedence.
-func (r *Registry) RegisterGatherer(description string, jitterSeed uint64, interval time.Duration, gatherer prometheus.Gatherer, stopCallback func(), extraLabels map[string]string, pushPoints bool) (int, error) {
+func (r *Registry) RegisterGatherer(opt RegistrationOption, gatherer prometheus.Gatherer, pushPoints bool) (int, error) {
 	r.init()
 	r.l.Lock()
 	defer r.l.Unlock()
 
 	reg := &registration{
-		description:         description,
-		originalExtraLabels: extraLabels,
-		originalJitterSeed:  jitterSeed,
-		originalInterval:    interval,
-		stopCallback:        stopCallback,
+		option: opt,
 	}
 	r.setupGatherer(reg, gatherer)
 
@@ -496,16 +496,21 @@ func (r *Registry) addRegistration(reg *registration, startLoop bool) (int, erro
 			})
 		}
 
-		interval := reg.originalInterval
+		interval := reg.option.Interval
 		if interval == 0 {
 			interval = r.currentDelay
+		}
+
+		timeout := interval * 8 / 10
+		if reg.option.Timeout != 0 && reg.option.Timeout < interval {
+			timeout = reg.option.Timeout
 		}
 
 		reg.loop = startScrapeLoop(
 			context.Background(),
 			interval,
-			interval*9/10,
-			reg.originalJitterSeed,
+			timeout,
+			reg.option.JitterSeed,
 			func(ctx context.Context, t0 time.Time) {
 				r.scrapeStart()
 				r.scrape(ctx, t0, reg)
@@ -621,8 +626,8 @@ func (r *Registry) Unregister(id int) bool {
 
 	reg.gatherer.source = nil
 
-	if reg.stopCallback != nil {
-		reg.stopCallback()
+	if reg.option.StopCallback != nil {
+		reg.option.StopCallback()
 	}
 
 	return true
@@ -685,7 +690,15 @@ func (r *Registry) AddDefaultCollector() {
 	r.internalRegistry.MustRegister(collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}))
 	r.internalRegistry.MustRegister(collectors.NewGoCollector())
 
-	_, _ = r.RegisterGatherer("go & process collector", baseJitter, defaultInterval, r.internalRegistry, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
+	_, _ = r.RegisterGatherer(
+		RegistrationOption{
+			Description: "go & process collector",
+			JitterSeed:  baseJitter,
+			Interval:    defaultInterval,
+		},
+		r.internalRegistry,
+		r.option.MetricFormat == types.MetricFormatPrometheus,
+	)
 }
 
 // Exporter return an HTTP exporter.
@@ -703,7 +716,15 @@ func (r *Registry) Exporter() http.Handler {
 			ErrorLog:      prefixLogger("/metrics endpoint:"),
 		}).ServeHTTP(w, req)
 	}))
-	_, _ = r.RegisterGatherer("/metrics collector", baseJitter, defaultInterval, reg, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
+	_, _ = r.RegisterGatherer(
+		RegistrationOption{
+			Description: "/metrics collector",
+			JitterSeed:  baseJitter,
+			Interval:    defaultInterval,
+		},
+		reg,
+		r.option.MetricFormat == types.MetricFormatPrometheus,
+	)
 
 	return handler
 }
@@ -734,7 +755,7 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 	for _, reg := range r.registrations {
 		reg := reg
 
-		if reg.originalInterval != 0 {
+		if reg.option.Interval != 0 {
 			continue
 		}
 
@@ -746,11 +767,16 @@ func (r *Registry) UpdateDelay(delay time.Duration) {
 		reg.loop.stop()
 		r.l.Lock()
 
+		timeout := r.currentDelay * 8 / 10
+		if reg.option.Timeout != 0 && reg.option.Timeout < r.currentDelay {
+			timeout = reg.option.Timeout
+		}
+
 		reg.loop = startScrapeLoop(
 			context.Background(),
 			r.currentDelay,
-			r.currentDelay*9/10,
-			reg.originalJitterSeed,
+			timeout,
+			reg.option.JitterSeed,
 			func(ctx context.Context, t0 time.Time) {
 				r.scrapeStart()
 				r.scrape(ctx, t0, reg)
@@ -982,7 +1008,7 @@ func (r *Registry) applyRelabel(input map[string]string) (labels.Labels, types.M
 }
 
 func (r *Registry) setupGatherer(reg *registration, source prometheus.Gatherer) {
-	extraLabels := r.addMetaLabels(reg.originalExtraLabels)
+	extraLabels := r.addMetaLabels(reg.option.ExtraLabels)
 
 	reg.relabelHookSkip = false
 

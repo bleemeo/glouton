@@ -621,9 +621,16 @@ func (a *agent) run() { //nolint:cyclop
 		return
 	}
 
-	if _, err := a.gathererRegistry.RegisterPushPointsCallback("rulesManager", baseJitterPlus, func(context.Context, time.Time) {
-		rulesManager.Run()
-	}); err != nil {
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		registry.RegistrationOption{
+			Description: "rulesManager",
+			JitterSeed:  baseJitterPlus,
+		},
+		func(context.Context, time.Time) {
+			rulesManager.Run()
+		},
+	)
+	if err != nil {
 		logger.Printf("unable to add recording rules metrics: %v", err)
 	}
 
@@ -687,21 +694,39 @@ func (a *agent) run() { //nolint:cyclop
 	processInput := processInput.New(psFact, a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute)))
 
 	a.collector = collector.New(acc)
-	if _, err := a.gathererRegistry.RegisterPushPointsCallback("system & services metrics", baseJitter, a.collector.RunGather); err != nil {
+
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		registry.RegistrationOption{
+			Description: "system & services metrics",
+			JitterSeed:  baseJitter,
+		},
+		a.collector.RunGather,
+	)
+	if err != nil {
 		logger.Printf("unable to add system metrics: %v", err)
 	}
 
 	if a.metricFormat == types.MetricFormatBleemeo {
-		if _, err := a.gathererRegistry.RegisterPushPointsCallback("procces status metrics", baseJitter, processInput.Gather); err != nil {
+		_, err = a.gathererRegistry.RegisterPushPointsCallback(
+			registry.RegistrationOption{
+				Description: "procces status metrics",
+				JitterSeed:  baseJitter,
+			},
+			processInput.Gather,
+		)
+		if err != nil {
 			logger.Printf("unable to add processes metrics: %v", err)
 		}
 	}
 
-	if _, err := a.gathererRegistry.RegisterPushPointsCallback(
-		"miscGather",
-		baseJitter,
+	_, err = a.gathererRegistry.RegisterPushPointsCallback(
+		registry.RegistrationOption{
+			Description: "miscGather",
+			JitterSeed:  baseJitter,
+		},
 		a.miscGather(a.threshold.WithPusher(a.gathererRegistry.WithTTL(5*time.Minute))),
-	); err != nil {
+	)
+	if err != nil {
 		logger.Printf("unable to add miscGathere metrics: %v", err)
 	}
 
@@ -729,14 +754,35 @@ func (a *agent) run() { //nolint:cyclop
 	for _, target := range scrapperSNMPTargets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 		// TODO: use the correct interval
-		if _, err := a.gathererRegistry.RegisterGatherer("snmp target "+target.URL.String(), hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
+		_, err := a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "snmp target " + target.URL.String(),
+				JitterSeed:  hash,
+				Interval:    defaultInterval,
+				ExtraLabels: target.ExtraLabels,
+			},
+			target,
+			true,
+		)
+		if err != nil {
 			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}
 
 	for _, target := range targets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
-		if _, err := a.gathererRegistry.RegisterGatherer("Prom exporter "+target.URL.String(), hash, defaultInterval, target, nil, target.ExtraLabels, true); err != nil {
+
+		_, err = a.gathererRegistry.RegisterGatherer(
+			registry.RegistrationOption{
+				Description: "Prom exporter " + target.URL.String(),
+				JitterSeed:  hash,
+				Interval:    defaultInterval,
+				ExtraLabels: target.ExtraLabels,
+			},
+			target,
+			true,
+		)
+		if err != nil {
 			logger.Printf("Unable to add Prometheus scrapper for target %s: %v", target.URL.String(), err)
 		}
 	}

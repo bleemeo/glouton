@@ -120,7 +120,7 @@ func TestRegistry_Register(t *testing.T) {
 	}
 	gather2.fillResponse()
 
-	if id1, err = reg.RegisterGatherer("test", baseJitter, defaultInterval, gather1, nil, nil, false); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{}, gather1, false); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
@@ -140,11 +140,11 @@ func TestRegistry_Register(t *testing.T) {
 		t.Errorf("gather1.callCount = %v, want 1", gather1.callCount)
 	}
 
-	if id1, err = reg.RegisterGatherer("test", baseJitter, defaultInterval, gather1, nil, map[string]string{"name": "value"}, false); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{ExtraLabels: map[string]string{"name": "value"}}, gather1, false); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if id2, err = reg.RegisterGatherer("test", baseJitter, defaultInterval, gather2, nil, nil, false); err != nil {
+	if id2, err = reg.RegisterGatherer(RegistrationOption{}, gather2, false); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -178,11 +178,11 @@ func TestRegistry_Register(t *testing.T) {
 
 	stopCallCount := 0
 
-	if id1, err = reg.RegisterGatherer("test", baseJitter, defaultInterval, gather1, func() { stopCallCount++ }, map[string]string{"dummy": "value", "empty-value-to-dropped": ""}, false); err != nil {
+	if id1, err = reg.RegisterGatherer(RegistrationOption{StopCallback: func() { stopCallCount++ }, ExtraLabels: map[string]string{"dummy": "value", "empty-value-to-dropped": ""}}, gather1, false); err != nil {
 		t.Errorf("reg.RegisterGatherer(gather1) failed: %v", err)
 	}
 
-	if _, err = reg.RegisterGatherer("test", baseJitter, defaultInterval, gather2, nil, nil, false); err != nil {
+	if _, err = reg.RegisterGatherer(RegistrationOption{}, gather2, false); err != nil {
 		t.Errorf("re-reg.RegisterGatherer(gather2) failed: %v", err)
 	}
 
@@ -583,27 +583,27 @@ func TestRegistry_run(t *testing.T) {
 	gather2 := &fakeGatherer{name: "name2"}
 	gather2.fillResponse()
 
-	_, err := regBleemeo.RegisterGatherer("test", baseJitter, defaultInterval, gather1, nil, nil, false)
+	_, err := regBleemeo.RegisterGatherer(RegistrationOption{}, gather1, false)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = regBleemeo.RegisterGatherer("test", baseJitter, defaultInterval, gather2, nil, nil, true)
+	_, err = regBleemeo.RegisterGatherer(RegistrationOption{}, gather2, true)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = regPrometheus.RegisterGatherer("test", baseJitter, defaultInterval, gather1, nil, nil, false)
+	_, err = regPrometheus.RegisterGatherer(RegistrationOption{}, gather1, false)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = regPrometheus.RegisterGatherer("test", baseJitter, defaultInterval, gather2, nil, nil, true)
+	_, err = regPrometheus.RegisterGatherer(RegistrationOption{}, gather2, true)
 	if err != nil {
 		t.Error(err)
 	}
 
-	_, err = regBleemeo.RegisterPushPointsCallback("test", baseJitter, func(_ context.Context, t time.Time) {
+	_, err = regBleemeo.RegisterPushPointsCallback(RegistrationOption{}, func(_ context.Context, t time.Time) {
 		l.Lock()
 		bleemeoT0 = t
 		l.Unlock()
@@ -616,7 +616,7 @@ func TestRegistry_run(t *testing.T) {
 		t.Error(err)
 	}
 
-	_, err = regPrometheus.RegisterPushPointsCallback("test", baseJitter, func(_ context.Context, t time.Time) {
+	_, err = regPrometheus.RegisterPushPointsCallback(RegistrationOption{}, func(_ context.Context, t time.Time) {
 		l.Lock()
 		prometheusT0 = t
 		l.Unlock()

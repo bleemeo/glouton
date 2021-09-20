@@ -40,7 +40,15 @@ func (r *Registry) AddNodeExporter(option node.Option) error {
 		return err
 	}
 
-	_, err = r.RegisterGatherer("node_exporter", baseJitter, defaultInterval, reg, nil, nil, r.option.MetricFormat == types.MetricFormatPrometheus)
+	_, err = r.RegisterGatherer(
+		RegistrationOption{
+			Description: "node_exporter",
+			JitterSeed:  baseJitter,
+			Interval:    defaultInterval,
+		},
+		reg,
+		r.option.MetricFormat == types.MetricFormatPrometheus,
+	)
 
 	return err
 }
