@@ -136,6 +136,18 @@ type RegistrationOption struct {
 	ExtraLabels  map[string]string
 }
 
+func (opt RegistrationOption) String() string {
+	hasStop := "without stop callback"
+	if opt.StopCallback != nil {
+		hasStop = "with stop callback"
+	}
+
+	return fmt.Sprintf(
+		"\"%s\" with labels %v; interval=%v, seed=%d, timeout=%v, %s",
+		opt.Description, opt.ExtraLabels, opt.Interval, opt.JitterSeed, opt.Timeout, hasStop,
+	)
+}
+
 type registration struct {
 	l                         sync.Mutex
 	option                    RegistrationOption
@@ -417,7 +429,8 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 	for _, reg := range loopRegistration {
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\tinterval=%v (originalInterval=%v), jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.option.Description, reg.option.ExtraLabels, reg.loop.interval, reg.option.Interval, reg.option.JitterSeed, reg.lastScrape, reg.lastScrapeDuration)
+		fmt.Fprintf(file, "id=%d, lastRun=%v (duration=%v, interval=%v)\n", reg.id, reg.lastScrape, reg.lastScrapeDuration, reg.loop.interval)
+		fmt.Fprintf(file, "    %s\n", reg.option.String())
 
 		reg.l.Unlock()
 	}
@@ -427,7 +440,8 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 	for _, reg := range noloopRegistration {
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, description=%s, extraLabels=%v,\n\toriginalInterval=%v, jitter=%v, lastRun=%v (duration %v)\n", reg.id, reg.option.Description, reg.option.ExtraLabels, reg.option.Interval, reg.option.JitterSeed, reg.lastScrape, reg.lastScrapeDuration)
+		fmt.Fprintf(file, "id=%d, lastRun=%v (duration=%v)\n", reg.id, reg.lastScrape, reg.lastScrapeDuration)
+		fmt.Fprintf(file, "    %s\n", reg.option.String())
 
 		reg.l.Unlock()
 	}
