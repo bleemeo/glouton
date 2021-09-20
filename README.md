@@ -114,8 +114,8 @@ For Powershell, you may set it with `$env:CGO_ENABLED = 0`.
 
 ### Developping the local UI JavaScript
 
-When working on the JavaScript rebuilding the Javascript bundle and running go generate could be slow
-and will use minified JavaScript file which are harded to debug.
+When working on the JavaScript rebuilding the Javascript bundle could be slow
+and will use minified JavaScript file which are harder to debug.
 
 To avoid this, you may want to run and use webpack-dev-server which will serve non-minified
 JavaScript file and rebuild the JavaScript bundle on the file. When doing a change in

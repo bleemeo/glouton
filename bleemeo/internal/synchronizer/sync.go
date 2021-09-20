@@ -328,7 +328,7 @@ func (s *Synchronizer) DiagnosticPage() string {
 		bleemeoTime := s.lastInfo.BleemeoTime()
 		delta := s.lastInfo.TimeDrift()
 		builder.WriteString(fmt.Sprintf(
-			"Bleemeo /v1/info/ fetched at %v. At this moment, time_dift was %v (time expected was %v)\n",
+			"Bleemeo /v1/info/ fetched at %v. At this moment, time_drift was %v (time expected was %v)\n",
 			s.lastInfo.FetchedAt.Format(time.RFC3339),
 			delta.Truncate(time.Second),
 			bleemeoTime.Format(time.RFC3339),
