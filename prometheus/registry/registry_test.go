@@ -527,144 +527,108 @@ func TestRegistry_applyRelabel(t *testing.T) {
 }
 
 func TestRegistry_run(t *testing.T) {
-	var (
-		l                sync.Mutex
-		bleemeoT0        time.Time
-		bleemeoPoints    []types.MetricPoint
-		prometheusT0     time.Time
-		prometheusPoints []types.MetricPoint
-	)
+	for _, format := range []types.MetricFormat{types.MetricFormatBleemeo, types.MetricFormatPrometheus} {
+		format := format
 
-	regBleemeo := &Registry{
-		option: Option{
-			MetricFormat: types.MetricFormatBleemeo,
-			PushPoint: pushFunction(func(points []types.MetricPoint) {
+		t.Run(format.String(), func(t *testing.T) {
+			var (
+				l      sync.Mutex
+				t0     time.Time
+				points []types.MetricPoint
+			)
+
+			reg := &Registry{
+				option: Option{
+					MetricFormat: format,
+					PushPoint: pushFunction(func(pts []types.MetricPoint) {
+						l.Lock()
+						points = append(points, pts...)
+						l.Unlock()
+					}),
+					FQDN:        "example.com",
+					GloutonPort: "1234",
+					Filter:      &fakeFilter{},
+				},
+			}
+			reg.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
+				labels[types.LabelMetaBleemeoUUID] = testAgentID
+
+				return labels, false
+			})
+			reg.init()
+			reg.UpdateDelay(250 * time.Millisecond)
+
+			gather1 := &fakeGatherer{name: "name1"}
+			gather1.fillResponse()
+
+			gather2 := &fakeGatherer{name: "name2"}
+			gather2.fillResponse()
+
+			id1, err := reg.RegisterGatherer(RegistrationOption{}, gather1, false)
+			if err != nil {
+				t.Error(err)
+			}
+
+			id2, err := reg.RegisterGatherer(RegistrationOption{}, gather2, true)
+			if err != nil {
+				t.Error(err)
+			}
+
+			id3, err := reg.RegisterPushPointsCallback(RegistrationOption{}, func(_ context.Context, t time.Time) {
 				l.Lock()
-				bleemeoPoints = append(bleemeoPoints, points...)
+				t0 = t
 				l.Unlock()
-			}),
-			FQDN:        "example.com",
-			GloutonPort: "1234",
-			Filter:      &fakeFilter{},
-		},
-	}
-	regBleemeo.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
-		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
-		return labels, false
-	})
-	regBleemeo.init()
-	regBleemeo.UpdateDelay(250 * time.Millisecond)
+				reg.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
+					{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+				})
+			})
+			if err != nil {
+				t.Error(err)
+			}
 
-	regPrometheus := &Registry{
-		option: Option{
-			MetricFormat: types.MetricFormatPrometheus,
-			PushPoint: pushFunction(func(points []types.MetricPoint) {
+			// We don't know the schedule of scraper... wait until we have the expected number of points
+			deadline := time.Now().Add(time.Second)
+
+			l.Lock()
+
+			for time.Now().Before(deadline) {
+				l.Unlock()
+				time.Sleep(50 * time.Millisecond)
 				l.Lock()
-				prometheusPoints = append(prometheusPoints, points...)
-				l.Unlock()
-			}),
-			FQDN:        "example.com",
-			GloutonPort: "1234",
-			Filter:      &fakeFilter{},
-		},
-	}
-	regPrometheus.UpdateRelabelHook(func(labels map[string]string) (newLabel map[string]string, retryLater bool) {
-		labels[types.LabelMetaBleemeoUUID] = testAgentID
 
-		return labels, false
-	})
-	regPrometheus.init()
-	regPrometheus.UpdateDelay(250 * time.Millisecond)
+				if len(points) == 2 {
+					break
+				}
+			}
 
-	gather1 := &fakeGatherer{name: "name1"}
-	gather1.fillResponse()
+			var want []types.MetricPoint
 
-	gather2 := &fakeGatherer{name: "name2"}
-	gather2.fillResponse()
+			if format == types.MetricFormatBleemeo {
+				want = []types.MetricPoint{
+					{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+					{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
+				}
+			} else if format == types.MetricFormatPrometheus {
+				want = []types.MetricPoint{
+					{Point: types.Point{Time: t0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "instance": "example.com:1234", "instance_uuid": testAgentID, "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+					{Point: types.Point{Time: t0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
+				}
+			}
 
-	_, err := regBleemeo.RegisterGatherer(RegistrationOption{}, gather1, false)
-	if err != nil {
-		t.Error(err)
-	}
+			pointLess := func(x, y types.MetricPoint) bool {
+				return x.Labels[types.LabelName] < y.Labels[types.LabelName]
+			}
 
-	_, err = regBleemeo.RegisterGatherer(RegistrationOption{}, gather2, true)
-	if err != nil {
-		t.Error(err)
-	}
+			if diff := cmp.Diff(want, points, cmpopts.SortSlices(pointLess), cmpopts.EquateApproxTime(50*time.Millisecond)); diff != "" {
+				t.Errorf("points mismatch (-want +got)\n%s", diff)
+			}
 
-	_, err = regPrometheus.RegisterGatherer(RegistrationOption{}, gather1, false)
-	if err != nil {
-		t.Error(err)
-	}
+			l.Unlock()
 
-	_, err = regPrometheus.RegisterGatherer(RegistrationOption{}, gather2, true)
-	if err != nil {
-		t.Error(err)
-	}
-
-	_, err = regBleemeo.RegisterPushPointsCallback(RegistrationOption{}, func(_ context.Context, t time.Time) {
-		l.Lock()
-		bleemeoT0 = t
-		l.Unlock()
-
-		regBleemeo.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
-			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
+			reg.Unregister(id1)
+			reg.Unregister(id2)
+			reg.Unregister(id3)
 		})
-	})
-	if err != nil {
-		t.Error(err)
 	}
-
-	_, err = regPrometheus.RegisterPushPointsCallback(RegistrationOption{}, func(_ context.Context, t time.Time) {
-		l.Lock()
-		prometheusT0 = t
-		l.Unlock()
-
-		regPrometheus.WithTTL(5 * time.Minute).PushPoints([]types.MetricPoint{
-			{Point: types.Point{Time: t, Value: 42.0}, Labels: map[string]string{"__name__": "push", "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-		})
-	})
-	if err != nil {
-		t.Error(err)
-	}
-
-	// We don't know the schedule of scraper... wait until we have the expected number of points
-	deadline := time.Now().Add(time.Second)
-
-	l.Lock()
-
-	for time.Now().Before(deadline) {
-		l.Unlock()
-		time.Sleep(50 * time.Millisecond)
-		l.Lock()
-
-		if len(bleemeoPoints) == 2 && len(prometheusPoints) == 2 {
-			break
-		}
-	}
-
-	want := []types.MetricPoint{
-		{Point: types.Point{Time: bleemeoT0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "item": "/home"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-		{Point: types.Point{Time: bleemeoT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
-	}
-
-	pointLess := func(x, y types.MetricPoint) bool {
-		return x.Labels[types.LabelName] < y.Labels[types.LabelName]
-	}
-
-	if diff := cmp.Diff(want, bleemeoPoints, cmpopts.SortSlices(pointLess), cmpopts.EquateApproxTime(50*time.Millisecond)); diff != "" {
-		t.Errorf("bleemeoPoints != want: %v", diff)
-	}
-
-	want = []types.MetricPoint{
-		{Point: types.Point{Time: prometheusT0, Value: 42.0}, Labels: map[string]string{"__name__": "push", "instance": "example.com:1234", "instance_uuid": testAgentID, "something": "value"}, Annotations: types.MetricAnnotations{BleemeoItem: "/home"}},
-		{Point: types.Point{Time: prometheusT0, Value: 1.0}, Labels: map[string]string{"__name__": "name2", "instance": "example.com:1234", "instance_uuid": testAgentID}},
-	}
-
-	if diff := cmp.Diff(want, prometheusPoints, cmpopts.SortSlices(pointLess), cmpopts.EquateApproxTime(50*time.Millisecond)); diff != "" {
-		t.Errorf("prometheusPoints != want: %v", diff)
-	}
-
-	l.Unlock()
 }
