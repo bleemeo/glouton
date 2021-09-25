@@ -275,6 +275,8 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 	h.api.ResetCount()
 
 	for result.runCount = 0; result.runCount < maxLoop; result.runCount++ {
+		h.s.client = &wrapperClient{s: h.s, client: h.s.realClient, duplicateChecked: true}
+
 		methods := h.s.syncToPerform()
 		if full, ok := methods[syncMethodMetric]; !ok && !forceFirst {
 			break
@@ -301,6 +303,8 @@ func (h *metricTestHelper) RunSync(maxLoop int, timeStep time.Duration, forceFir
 
 // Check verify that runSync was successful without any server error.
 func (res runResult) Check(name string, wantFull bool) {
+	res.h.t.Helper()
+
 	res.CheckAllowError(name, wantFull)
 
 	if res.h.api.ServerErrorCount > 0 {
@@ -310,6 +314,8 @@ func (res runResult) Check(name string, wantFull bool) {
 
 // CheckNoError verify that runSync was successful without any error (client or server).
 func (res runResult) CheckNoError(name string, wantFull bool) {
+	res.h.t.Helper()
+
 	res.Check(name, wantFull)
 
 	if res.h.api.ClientErrorCount > 0 {
@@ -319,6 +325,8 @@ func (res runResult) CheckNoError(name string, wantFull bool) {
 
 // CheckAllowError verify that runSync was successful possibly with error but last sync must be successful.
 func (res runResult) CheckAllowError(name string, wantFull bool) {
+	res.h.t.Helper()
+
 	if res.lastErr != nil {
 		res.h.t.Errorf("%s: sync failed after %d run: %v", name, res.runCount, res.lastErr)
 	}

@@ -43,6 +43,7 @@ var (
 	errConnectorTemporaryDisabled = errors.New("bleemeo connector temporary disabled")
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
 	errIncorrectStatusCode        = errors.New("registration status code is")
+	errUninitialized              = errors.New("uninitialized")
 )
 
 const (
@@ -63,7 +64,8 @@ type Synchronizer struct {
 	option Option
 	now    func() time.Time
 
-	client           *client.HTTPClient
+	realClient       *client.HTTPClient
+	client           *wrapperClient
 	diagnosticClient *http.Client
 	nextFullSync     time.Time
 	fullSyncCount    int
@@ -503,7 +505,7 @@ func (s *Synchronizer) setClient() error {
 		return err
 	}
 
-	s.client = client
+	s.realClient = client
 
 	return nil
 }
@@ -534,12 +536,9 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		return nil
 	}
 
-	// We do not perform this check in maintennace mode (otherwise we could end up checking it every 15 econds),
-	// we will only do it once when getting out of the maintenance mode
-	if !s.IsMaintenance() {
-		if err := s.checkDuplicated(); err != nil {
-			return err
-		}
+	s.client = &wrapperClient{
+		s:      s,
+		client: s.realClient,
 	}
 
 	syncStep := []struct {
@@ -805,7 +804,7 @@ func (s *Synchronizer) register() error {
 		return err
 	}
 
-	statusCode, err := s.client.PostAuth(
+	statusCode, err := s.realClient.PostAuth(
 		"v1/agent/",
 		map[string]string{
 			"account":          accountID,

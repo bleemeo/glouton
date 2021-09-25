@@ -37,11 +37,11 @@ func (s *Synchronizer) syncInfo(full bool, onlyEssential bool) error {
 func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 	var globalInfo bleemeoTypes.GlobalInfo
 
-	statusCode, err := s.client.DoUnauthenticated(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
+	statusCode, err := s.realClient.DoUnauthenticated(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	if err != nil && strings.Contains(err.Error(), "certificate has expired") {
 		// This could happen when local time is really to far away from real time.
 		// Since this request is unauthenticated we retry it with insecure TLS
-		statusCode, err = s.client.DoTLSInsecure(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
+		statusCode, err = s.realClient.DoTLSInsecure(s.ctx, "GET", "v1/info/", nil, nil, &globalInfo)
 	}
 
 	if err != nil {
