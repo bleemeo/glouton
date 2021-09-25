@@ -345,6 +345,20 @@ func (s *Synchronizer) DiagnosticPage() string {
 	}
 	s.l.Unlock()
 
+	var count int
+
+	if s.realClient != nil {
+		count = s.realClient.RequestsCount()
+	}
+
+	builder.WriteString(fmt.Sprintf(
+		"Did %d requests since start time at %s (%v ago). Avg of %.2f request/minute\n",
+		count,
+		s.startedAt.Format(time.RFC3339),
+		time.Since(s.startedAt).Round(time.Second),
+		float64(count)/time.Since(s.startedAt).Minutes()),
+	)
+
 	return builder.String()
 }
 
@@ -540,6 +554,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		s:      s,
 		client: s.realClient,
 	}
+	previousCount := s.realClient.RequestsCount()
 
 	syncStep := []struct {
 		name                 string
@@ -620,7 +635,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 		}
 	}
 
-	logger.V(2).Printf("Synchronization took %v for %v", s.now().Sub(startAt), syncMethods)
+	logger.V(2).Printf("Synchronization took %v for %v (and did %d requests)", s.now().Sub(startAt), syncMethods, s.realClient.RequestsCount()-previousCount)
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
 		s.option.Cache.Save()

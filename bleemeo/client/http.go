@@ -54,6 +54,7 @@ type HTTPClient struct {
 	jwtToken            string
 	throttleDeadline    time.Time
 	throttleConsecutive int
+	requestsCount       int
 }
 
 // APIError are returned when HTTP request got a response but that response is
@@ -166,6 +167,13 @@ func (c *HTTPClient) ThrottleDeadline() time.Time {
 	defer c.l.Unlock()
 
 	return c.throttleDeadline
+}
+
+func (c *HTTPClient) RequestsCount() int {
+	c.l.Lock()
+	defer c.l.Unlock()
+
+	return c.requestsCount
 }
 
 // Do perform the specified request.
@@ -444,6 +452,8 @@ func (c *HTTPClient) sendRequest(req *http.Request, result interface{}, forceIns
 			},
 		}
 	}
+
+	c.requestsCount++
 
 	resp, err := client.Do(req)
 	if err != nil {
