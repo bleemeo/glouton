@@ -27,6 +27,7 @@ import (
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
 	"io/ioutil"
@@ -954,7 +955,7 @@ mainLoop:
 			length := len(lastConnectionTimes)
 
 			if length >= 7 && time.Since(lastConnectionTimes[length-7]) < 10*time.Minute {
-				delay := common.JitterDelay(300, 0.25, 300).Round(time.Second)
+				delay := delay.JitterDelay(5*time.Minute, 0.25).Round(time.Second)
 
 				c.Disable(time.Now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 				logger.Printf("Too many attempts to connect to MQTT were made in the last 10 minutes. Disabling MQTT for %v", delay)
@@ -971,7 +972,10 @@ mainLoop:
 
 				if currentConnectDelay < maximalDelayBetweenConnect {
 					consecutiveError++
-					currentConnectDelay = common.JitterDelay(minimalDelayBetweenConnect.Seconds()*math.Pow(1.55, float64(consecutiveError)), 0.1, maximalDelayBetweenConnect.Seconds())
+					currentConnectDelay = delay.JitterDelay(
+						delay.Exponential(minimalDelayBetweenConnect, 1.55, consecutiveError, maximalDelayBetweenConnect),
+						0.1,
+					)
 					if consecutiveError == 5 {
 						// Trigger facts synchronization to check for duplicate agent
 						_, _ = c.option.Facts.Facts(c.ctx, time.Minute)

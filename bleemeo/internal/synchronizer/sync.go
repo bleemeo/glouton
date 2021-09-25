@@ -26,9 +26,9 @@ import (
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
-	"math"
 	"math/big"
 	"net/http"
 	"net/url"
@@ -172,7 +172,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 	if len(s.option.Cache.FactsByKey()) != 0 {
 		logger.V(2).Printf("Waiting a few seconds before running a full synchronization as this agent has a valid cache")
 
-		minimalDelay = common.JitterDelay(20, 0.5, 20)
+		minimalDelay = delay.JitterDelay(20*time.Second, 0.5)
 	}
 
 	for s.ctx.Err() == nil {
@@ -193,13 +193,19 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 
 			switch {
 			case client.IsAuthError(err) && successiveAuthErrors >= 3:
-				delay := common.JitterDelay(60*math.Pow(1.55, float64(successiveAuthErrors)), 0.1, 21600)
+				delay := delay.JitterDelay(
+					delay.Exponential(60*time.Second, 1.55, successiveAuthErrors, 6*time.Hour),
+					0.1,
+				)
 				s.option.DisableCallback(bleemeoTypes.DisableAuthenticationError, s.now().Add(delay))
 			case client.IsThrottleError(err):
-				deadline := s.client.ThrottleDeadline().Add(common.JitterDelay(15, 0.3, 15))
+				deadline := s.client.ThrottleDeadline().Add(delay.JitterDelay(15*time.Second, 0.3))
 				s.Disable(deadline, bleemeoTypes.DisableTooManyRequests)
 			default:
-				delay := common.JitterDelay(15*math.Pow(1.55, float64(s.successiveErrors)), 0.1, 900)
+				delay := delay.JitterDelay(
+					delay.Exponential(15*time.Second, 1.55, s.successiveErrors, 15*time.Minute),
+					0.1,
+				)
 				s.Disable(s.now().Add(delay), bleemeoTypes.DisableTooManyErrors)
 
 				if client.IsAuthError(err) && successiveAuthErrors == 1 {
@@ -245,12 +251,12 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 		} else {
 			s.successiveErrors = 0
 			successiveAuthErrors = 0
-			minimalDelay = common.JitterDelay(15, 0.05, 15)
+			minimalDelay = delay.JitterDelay(15*time.Second, 0.05)
 		}
 
 		if firstSync {
 			if err == nil {
-				minimalDelay = common.JitterDelay(1, 0.05, 1)
+				minimalDelay = delay.JitterDelay(time.Second, 0.05)
 			}
 
 			firstSync = false
@@ -618,7 +624,7 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
 		s.option.Cache.Save()
-		s.nextFullSync = s.now().Add(common.JitterDelay(3600, 0.1, 3600))
+		s.nextFullSync = s.now().Add(delay.JitterDelay(time.Hour, 0.1))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
@@ -733,7 +739,7 @@ func (s *Synchronizer) checkDuplicated() error {
 			continue
 		}
 
-		until := s.now().Add(common.JitterDelay(900, 0.05, 900))
+		until := s.now().Add(delay.JitterDelay(15*time.Minute, 0.05))
 		s.Disable(until, bleemeoTypes.DisableDuplicatedAgent)
 
 		if s.option.DisableCallback != nil {

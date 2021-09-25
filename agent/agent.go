@@ -28,6 +28,7 @@ import (
 	"glouton/collector"
 	"glouton/config"
 	"glouton/debouncer"
+	"glouton/delay"
 	"glouton/discovery"
 	"glouton/discovery/promexporter"
 	"glouton/facts"
@@ -1097,7 +1098,7 @@ func (a *agent) miscGather(pusher types.PointPusher) func(context.Context, time.
 func (a *agent) sendToTelemetry(ctx context.Context) error {
 	if a.oldConfig.Bool("agent.telemetry.enable") {
 		select {
-		case <-time.After(2*time.Minute + time.Duration(rand.Intn(5))*time.Minute): //nolint:gosec
+		case <-time.After(delay.JitterDelay(5*time.Minute, 0.2)):
 		case <-ctx.Done():
 			return nil
 		}
@@ -1122,7 +1123,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 			tlm.PostInformation(ctx, a.oldConfig.String("agent.telemetry.address"), facts)
 
 			select {
-			case <-time.After(24 * time.Hour):
+			case <-time.After(delay.JitterDelay(24*time.Hour, 0.05)):
 			case <-ctx.Done():
 				return nil
 			}
@@ -1396,28 +1397,22 @@ func (a *agent) hourlyDiscovery(ctx context.Context) error {
 
 	a.FireTrigger(false, false, true, false)
 
-	ticker := time.NewTicker(time.Hour)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-time.After(delay.JitterDelay(time.Hour, 0.1)):
 			a.FireTrigger(true, false, true, false)
 		}
 	}
 }
 
 func (a *agent) dailyFact(ctx context.Context) error {
-	ticker := time.NewTicker(24 * time.Hour)
-	defer ticker.Stop()
-
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-ticker.C:
+		case <-time.After(delay.JitterDelay(24*time.Hour, 0.1)):
 			a.FireTrigger(false, true, false, false)
 		}
 	}

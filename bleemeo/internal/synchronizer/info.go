@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"glouton/bleemeo/internal/common"
 	bleemeoTypes "glouton/bleemeo/types"
+	"glouton/delay"
 	"glouton/logger"
 	"glouton/types"
 	"glouton/version"
@@ -59,7 +60,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 
 	if globalInfo.Agents.MinVersions.Glouton != "" {
 		if !version.Compare(version.Version, globalInfo.Agents.MinVersions.Glouton) {
-			delay := common.JitterDelay(24*time.Hour.Seconds(), 0.1, 24*time.Hour.Seconds())
+			delay := delay.JitterDelay(24*time.Hour, 0.1)
 
 			logger.V(0).Printf("Your agent is unsupported, consider upgrading it (got version %s, expected version >= %s)", version.Version, globalInfo.Agents.MinVersions.Glouton)
 			s.option.DisableCallback(bleemeoTypes.DisableAgentTooOld, s.now().Add(delay))
@@ -81,7 +82,7 @@ func (s *Synchronizer) syncInfoReal(disableOnTimeDrift bool) error {
 		s.option.Acc.AddFields("", map[string]interface{}{"time_drift": delta.Seconds()}, nil, globalInfo.BleemeoTime().Truncate(time.Second))
 
 		if disableOnTimeDrift && globalInfo.IsTimeDriftTooLarge() {
-			delay := common.JitterDelay(30*time.Minute.Seconds(), 0.1, 30*time.Minute.Seconds())
+			delay := delay.JitterDelay(30*time.Minute, 0.1)
 			s.option.DisableCallback(bleemeoTypes.DisableTimeDrift, s.now().Add(delay))
 
 			// force syncing the version again when the synchronizer runs again
