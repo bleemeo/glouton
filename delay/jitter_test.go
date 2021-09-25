@@ -53,6 +53,22 @@ func TestExponential(t *testing.T) {
 				7 * time.Second,
 			},
 		},
+		{
+			name: "1-hour-1.75",
+			args: args{
+				base:        time.Hour,
+				powerFactor: 1.75,
+				max:         12 * time.Hour,
+			},
+			wants: []time.Duration{
+				time.Hour,
+				time.Hour + 45*time.Minute,
+				3*time.Hour + 3*time.Minute + 45*time.Second,
+				5*time.Hour + 21*time.Minute + 33*time.Second,
+				9*time.Hour + 22*time.Minute + 44*time.Second,
+				12 * time.Hour,
+			},
+		},
 	}
 
 	for _, tt := range tests {

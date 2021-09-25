@@ -66,6 +66,7 @@ type Synchronizer struct {
 	client           *client.HTTPClient
 	diagnosticClient *http.Client
 	nextFullSync     time.Time
+	fullSyncCount    int
 
 	startedAt               time.Time
 	lastSync                time.Time
@@ -624,7 +625,11 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 
 	if len(syncMethods) == len(syncStep) && firstErr == nil {
 		s.option.Cache.Save()
-		s.nextFullSync = s.now().Add(delay.JitterDelay(time.Hour, 0.1))
+		s.fullSyncCount++
+		s.nextFullSync = s.now().Add(delay.JitterDelay(
+			delay.Exponential(time.Hour, 1.75, s.fullSyncCount, 12*time.Hour),
+			0.25,
+		))
 		logger.V(1).Printf("New full synchronization scheduled for %s", s.nextFullSync.Format(time.RFC3339))
 	}
 
