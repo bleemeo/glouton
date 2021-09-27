@@ -56,9 +56,18 @@ func (t Telemetry) SaveState(state state) {
 	}
 }
 
-func (t Telemetry) PostInformation(ctx context.Context, url string, facts map[string]string) {
-	body, _ := json.Marshal(map[string]string{
+func (t Telemetry) PostInformation(ctx context.Context, url string, agentid string, facts map[string]string) {
+	var bleemeoActive bool
+
+	if agentid == "" {
+		bleemeoActive = false
+	} else {
+		bleemeoActive = true
+	}
+
+	body, _ := json.Marshal(map[string]interface{}{
 		"id":                  t.ID,
+		"bleemeo_active":      bleemeoActive,
 		"cpu_cores":           facts["cpu_cores"],
 		"cpu_model":           facts["cpu_model_name"],
 		"country":             facts["timezone"],

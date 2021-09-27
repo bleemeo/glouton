@@ -1166,7 +1166,7 @@ func (a *agent) sendToTelemetry(ctx context.Context) error {
 				tlm = t
 			}
 
-			tlm.PostInformation(ctx, a.oldConfig.String("agent.telemetry.address"), facts)
+			tlm.PostInformation(ctx, a.oldConfig.String("agent.telemetry.address"), a.BleemeoAgentID(), facts)
 
 			select {
 			case <-time.After(delay.JitterDelay(24*time.Hour, 0.05)):
