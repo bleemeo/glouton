@@ -77,6 +77,7 @@ type Synchronizer struct {
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	maintenanceMode         bool
+	callUpdateLabels        bool
 	lastMetricCount         int
 	agentID                 string
 
@@ -698,6 +699,13 @@ func (s *Synchronizer) runOnce(onlyEssential bool) error {
 				s.forceSync[step.name] = false || s.forceSync[step.name]
 				s.l.Unlock()
 			}
+		}
+	}
+
+	if s.callUpdateLabels {
+		s.callUpdateLabels = false
+		if s.option.NotifyLabelsUpdate != nil {
+			s.option.NotifyLabelsUpdate(s.ctx)
 		}
 	}
 

@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -39,6 +40,7 @@ const (
 	accountID        string = "9da59f53-1d90-4441-ae58-42c661cfea83"
 	registrationKey  string = "e2c22e59-0621-49e6-b5dd-bdb02cbac9f1"
 	activeMonitorURL string = "http://bleemeo.com"
+	snmpAddress      string = "127.0.0.1"
 )
 
 var (
@@ -828,8 +830,9 @@ type syncTestHelper struct {
 	httpServer *httptest.Server
 
 	// Following fields are options used by some method
-	SNMP         []snmp.Target
-	MetricFormat types.MetricFormat
+	SNMP               []snmp.Target
+	MetricFormat       types.MetricFormat
+	NotifyLabelsUpdate func(ctx context.Context)
 }
 
 // newHelper create an helper with all permanent resource: API, cache, state.
@@ -897,6 +900,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			NotifyFirstRegistration: func(ctx context.Context) {},
 			MetricFormat:            helper.MetricFormat,
 			SNMP:                    helper.SNMP,
+			NotifyLabelsUpdate:      helper.NotifyLabelsUpdate,
 		},
 	}, helper.api.now.Now)
 	if err != nil {
@@ -1048,7 +1052,7 @@ func TestSyncWithSNMP(t *testing.T) {
 	defer helper.Close()
 
 	helper.SNMP = []snmp.Target{
-		{InitialName: "Z-The-Initial-Name", Address: "127.0.0.1", Type: "unused-today"},
+		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today"},
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 
@@ -1076,7 +1080,7 @@ func TestSyncWithSNMP(t *testing.T) {
 			idAgentMain = a.ID
 		}
 
-		if a.FQDN == "127.0.0.1" {
+		if a.FQDN == snmpAddress {
 			idAgentSNMP = a.ID
 		}
 	}
@@ -1102,7 +1106,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				AccountID:       accountID,
 				CurrentConfigID: newAccountConfig.ID,
 				AgentType:       agentTypeSNMP.ID,
-				FQDN:            "127.0.0.1",
+				FQDN:            snmpAddress,
 				DisplayName:     "Z-The-Initial-Name",
 			},
 			Abstracted:      true,
@@ -1119,7 +1123,7 @@ func TestSyncWithSNMP(t *testing.T) {
 		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
 		labels.New(
 			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-			labels.Label{Name: types.LabelSNMPTarget, Value: "127.0.0.1"},
+			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
 			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 		),
 	})
@@ -1155,7 +1159,7 @@ func TestSyncWithSNMP(t *testing.T) {
 			Metric: bleemeoTypes.Metric{
 				ID:         "3",
 				AgentID:    idAgentSNMP,
-				LabelsText: `__name__="ifOutOctets",snmp_target="127.0.0.1"`,
+				LabelsText: fmt.Sprintf(`__name__="ifOutOctets",snmp_target="%s"`, snmpAddress),
 			},
 			Name: "ifOutOctets",
 		},
@@ -1179,7 +1183,7 @@ func TestSyncWithSNMP(t *testing.T) {
 				labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
 				labels.New(
 					labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
-					labels.Label{Name: types.LabelSNMPTarget, Value: "127.0.0.1"},
+					labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
 					labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
 				),
 			})
@@ -1194,5 +1198,223 @@ func TestSyncWithSNMP(t *testing.T) {
 				t.Errorf("metrics mismatch (-want +got)\n%s", diff)
 			}
 		})
+	}
+}
+
+func TestSyncWithSNMPDelete(t *testing.T) {
+	helper := newHelper(t)
+	defer helper.Close()
+
+	var (
+		updateLabelsCallCount int
+		l                     sync.Mutex
+	)
+
+	helper.SNMP = []snmp.Target{
+		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today"},
+	}
+	helper.MetricFormat = types.MetricFormatPrometheus
+	helper.NotifyLabelsUpdate = func(_ context.Context) {
+		l.Lock()
+		defer l.Unlock()
+
+		updateLabelsCallCount++
+	}
+
+	helper.initSynchronizer(t)
+
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+	})
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	var agents []payloadAgent
+
+	helper.api.resources["agent"].Store(&agents)
+
+	var (
+		idAgentMain string
+		idAgentSNMP string
+	)
+
+	for _, a := range agents {
+		if a.FQDN == "test.bleemeo.com" {
+			idAgentMain = a.ID
+		}
+
+		if a.FQDN == snmpAddress {
+			idAgentSNMP = a.ID
+		}
+	}
+
+	wantAgents := []payloadAgent{
+		{
+			Agent: bleemeoTypes.Agent{
+				ID:              idAgentMain,
+				CreatedAt:       helper.api.now.Now(),
+				AccountID:       accountID,
+				CurrentConfigID: newAccountConfig.ID,
+				AgentType:       agentTypeAgent.ID,
+				FQDN:            "test.bleemeo.com",
+				DisplayName:     "test.bleemeo.com",
+			},
+			Abstracted:      false,
+			InitialPassword: "password already set",
+		},
+		{
+			Agent: bleemeoTypes.Agent{
+				ID:              idAgentSNMP,
+				CreatedAt:       helper.api.now.Now(),
+				AccountID:       accountID,
+				CurrentConfigID: newAccountConfig.ID,
+				AgentType:       agentTypeSNMP.ID,
+				FQDN:            snmpAddress,
+				DisplayName:     "Z-The-Initial-Name",
+			},
+			Abstracted:      true,
+			InitialPassword: "password already set",
+		},
+	}
+
+	optAgentSort := cmpopts.SortSlices(func(x payloadAgent, y payloadAgent) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
+		t.Errorf("agents mismatch (-want +got)\n%s", diff)
+	}
+
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+		),
+	})
+
+	helper.api.now.Advance(time.Second)
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	var metrics []metricPayload
+
+	helper.api.resources["metric"].Store(&metrics)
+
+	wantMetrics := []metricPayload{
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "1",
+				AgentID:    idAgentMain,
+				LabelsText: `__name__="agent_status"`,
+			},
+			Name: "agent_status",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "2",
+				AgentID:    idAgentMain,
+				LabelsText: `__name__="cpu_used"`,
+			},
+			Name: "cpu_used",
+		},
+		{
+			Metric: bleemeoTypes.Metric{
+				ID:         "3",
+				AgentID:    idAgentSNMP,
+				LabelsText: fmt.Sprintf(`__name__="ifOutOctets",snmp_target="%s"`, snmpAddress),
+			},
+			Name: "ifOutOctets",
+		},
+	}
+
+	optMetricSort := cmpopts.SortSlices(func(x metricPayload, y metricPayload) bool { return x.ID < y.ID })
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
+
+	helper.api.now.Advance(10 * time.Second)
+
+	// Delete the SNMP agent on API.
+	callCountBefore := updateLabelsCallCount
+
+	helper.api.resources["agent"].DelStore(idAgentSNMP)
+	helper.api.resources["metric"].DelStore("3")
+
+	helper.initSynchronizer(t)
+
+	helper.api.now.Advance(time.Second)
+
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+	})
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	helper.api.resources["agent"].Store(&agents)
+
+	for _, a := range agents {
+		if a.FQDN == snmpAddress {
+			idAgentSNMP = a.ID
+		}
+	}
+
+	wantAgents = []payloadAgent{
+		wantAgents[0],
+		{
+			Agent: bleemeoTypes.Agent{
+				ID:              idAgentSNMP,
+				CreatedAt:       helper.api.now.Now(),
+				AccountID:       accountID,
+				CurrentConfigID: newAccountConfig.ID,
+				AgentType:       agentTypeSNMP.ID,
+				FQDN:            snmpAddress,
+				DisplayName:     "Z-The-Initial-Name",
+			},
+			Abstracted:      true,
+			InitialPassword: "password already set",
+		},
+	}
+
+	if diff := cmp.Diff(wantAgents, agents, cmpopts.EquateEmpty(), optAgentSort); diff != "" {
+		t.Errorf("agents mismatch (-want +got)\n%s", diff)
+	}
+
+	helper.api.now.Advance(time.Second)
+
+	helper.pushPoints(t, []labels.Labels{
+		labels.New(labels.Label{Name: types.LabelName, Value: "cpu_used"}),
+		labels.New(
+			labels.Label{Name: types.LabelName, Value: "ifOutOctets"},
+			labels.Label{Name: types.LabelSNMPTarget, Value: snmpAddress},
+			labels.Label{Name: types.LabelMetaBleemeoTargetAgentUUID, Value: idAgentSNMP},
+		),
+	})
+
+	if err := helper.runOnce(t); err != nil {
+		t.Fatal(err)
+	}
+
+	wantMetrics[2] = metricPayload{
+		Metric: bleemeoTypes.Metric{
+			ID:         "4",
+			AgentID:    idAgentSNMP,
+			LabelsText: fmt.Sprintf(`__name__="ifOutOctets",snmp_target="%s"`, snmpAddress),
+		},
+		Name: "ifOutOctets",
+	}
+
+	helper.api.resources["metric"].Store(&metrics)
+
+	if diff := cmp.Diff(wantMetrics, metrics, cmpopts.EquateEmpty(), optMetricSort); diff != "" {
+		t.Errorf("metrics mismatch (-want +got)\n%s", diff)
+	}
+
+	if callCountBefore == updateLabelsCallCount {
+		t.Errorf("updateLabelsCallCount = %d, want > %d", updateLabelsCallCount, callCountBefore)
 	}
 }

@@ -42,6 +42,7 @@ type GlobalOption struct {
 	MonitorManager          MonitorManager
 	MetricFormat            types.MetricFormat
 	NotifyFirstRegistration func(ctx context.Context)
+	NotifyLabelsUpdate      func(ctx context.Context)
 	BlackboxScraperName     string
 
 	UpdateMetricResolution func(defaultResolution time.Duration, snmpResolution time.Duration)

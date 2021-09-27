@@ -94,6 +94,8 @@ func (s *Synchronizer) syncMainAgent() error {
 }
 
 func (s *Synchronizer) agentsUpdateList() error {
+	oldAgents := s.option.Cache.AgentsByUUID()
+
 	params := map[string]string{
 		"fields": "id,created_at,account,next_config_at,current_config,tags,agent_type,fqdn,display_name",
 	}
@@ -116,6 +118,16 @@ func (s *Synchronizer) agentsUpdateList() error {
 	}
 
 	s.option.Cache.SetAgentList(agents)
+
+	// If an agent is deleted, ensure our Labels on metric are up-to-date.
+	// If an SNMP agent is deleted, it agent UUID is no longer valid and metric
+	// should no longer be labeled with it.
+	newAgents := s.option.Cache.AgentsByUUID()
+	for id := range oldAgents {
+		if _, ok := newAgents[id]; !ok {
+			s.callUpdateLabels = true
+		}
+	}
 
 	return nil
 }

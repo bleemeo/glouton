@@ -385,6 +385,12 @@ func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
 	a.store.DropAllMetrics()
 }
 
+// notifyBleemeoUpdateLabels is called when Labels might change for some metrics.
+// This likely happen when SNMP target are deleted/recreated.
+func (a *agent) notifyBleemeoUpdateLabels(ctx context.Context) {
+	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+}
+
 func (a *agent) updateSNMPResolution(resolution time.Duration) {
 	a.l.Lock()
 	defer a.l.Unlock()
@@ -922,6 +928,7 @@ func (a *agent) run() { //nolint:cyclop
 			UpdateUnits:             a.threshold.SetUnits,
 			MetricFormat:            a.metricFormat,
 			NotifyFirstRegistration: a.notifyBleemeoFirstRegistration,
+			NotifyLabelsUpdate:      a.notifyBleemeoUpdateLabels,
 			BlackboxScraperName:     scaperName,
 		})
 		if err != nil {
