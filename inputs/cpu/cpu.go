@@ -50,14 +50,13 @@ func New() (i telegraf.Input, err error) {
 	return
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	return internal.GatherContext{
-		Measurement: originalContext.Measurement,
-		Tags:        nil,
-	}, false
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	gatherContext.Tags = nil
+
+	return gatherContext, false
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	finalFields := make(map[string]float64)
 
 	var (

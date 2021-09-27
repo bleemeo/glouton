@@ -71,15 +71,12 @@ func New(mountPoint string, blacklist []string) (i telegraf.Input, err error) {
 	return
 }
 
-func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext.Measurement = originalContext.Measurement
-	newContext.Tags = make(map[string]string)
-	item, ok := originalContext.Tags["path"]
+func (dt diskTransformer) renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	item, ok := gatherContext.Tags["path"]
+	gatherContext.Tags = make(map[string]string)
 
 	if !ok {
-		drop = true
-
-		return
+		return gatherContext, true
 	}
 
 	// telegraf's 'disk' input add a backslash to disk names on Windows (https://github.com/influxdata/telegraf/blob/7ae240326bb2d3de80eab24088cf31cfa9da2f82/plugins/inputs/system/ps.go#L135)
@@ -92,9 +89,7 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 	if !strings.HasPrefix(item, dt.mountPoint) {
 		// partition don't start with mountPoint, so it's a parition
 		// which is only inside the container. Ignore it
-		drop = true
-
-		return
+		return gatherContext, true
 	}
 
 	item = strings.TrimPrefix(item, dt.mountPoint)
@@ -104,19 +99,17 @@ func (dt diskTransformer) renameGlobal(originalContext internal.GatherContext) (
 
 	for _, v := range dt.blacklist {
 		if v == item || strings.HasPrefix(item, v+"/") {
-			drop = true
-
-			return
+			return gatherContext, true
 		}
 	}
 
-	newContext.Annotations.BleemeoItem = item
-	newContext.Tags["mountpoint"] = item
+	gatherContext.Annotations.BleemeoItem = item
+	gatherContext.Tags["mountpoint"] = item
 
-	return newContext, drop
+	return gatherContext, false
 }
 
-func (dt diskTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (dt diskTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	usedPerc, ok := fields["used_percent"]
 	delete(fields, "used_percent")
 

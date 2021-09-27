@@ -56,7 +56,7 @@ func New(server string) (i telegraf.Input, err error) {
 	return
 }
 
-func shouldDerivateMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) bool {
+func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
 	if strings.HasPrefix(metricName, "qcache_") {
 		switch metricName {
 		case "qcache_queries_in_cache", "qcache_total_blocks", "qcache_free_blocks", "qcache_free_memory":
@@ -81,7 +81,7 @@ func shouldDerivateMetrics(originalContext internal.GatherContext, currentContex
 	return false
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {

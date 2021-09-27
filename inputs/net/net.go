@@ -56,32 +56,27 @@ func New(blacklist []string) (i telegraf.Input, err error) {
 	return
 }
 
-func (nt netTransformer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext.Measurement = originalContext.Measurement
-	item, ok := originalContext.Tags["interface"]
-	newContext.Tags = make(map[string]string)
+func (nt netTransformer) renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	item, ok := gatherContext.Tags["interface"]
+	gatherContext.Tags = make(map[string]string)
 
 	if !ok {
-		drop = true
-
-		return
+		return gatherContext, true
 	}
 
 	for _, b := range nt.blacklist {
 		if strings.HasPrefix(item, b) {
-			drop = true
-
-			return
+			return gatherContext, true
 		}
 	}
 
-	newContext.Annotations.BleemeoItem = item
-	newContext.Tags["device"] = item
+	gatherContext.Annotations.BleemeoItem = item
+	gatherContext.Tags["device"] = item
 
-	return
+	return gatherContext, false
 }
 
-func (nt netTransformer) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (nt netTransformer) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	for metricName, value := range fields {
 		if metricName == "bytes_sent" {
 			delete(fields, "bytes_sent")

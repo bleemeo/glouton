@@ -45,14 +45,14 @@ func New() (i telegraf.Input, err error) {
 	return
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	delete(fields, "n_cpus")
 	delete(fields, "uptime_format")
 
 	return fields
 }
 
-func renameMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
+func renameMetrics(currentContext internal.GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 	newMetricName = metricName
 	newMeasurement = currentContext.Measurement
 

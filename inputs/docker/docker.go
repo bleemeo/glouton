@@ -66,49 +66,48 @@ type renamer struct {
 	dockerRuntime crTypes.RuntimeInterface
 }
 
-func (r renamer) renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext.Measurement = strings.TrimPrefix(originalContext.Measurement, "docker_")
-	newContext.Tags = make(map[string]string)
+func (r renamer) renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	gatherContext.Measurement = strings.TrimPrefix(gatherContext.Measurement, "docker_")
+	gatherContext.OriginalTags = gatherContext.Tags
+	gatherContext.Tags = make(map[string]string)
 
-	if name, ok := originalContext.Tags["container_name"]; ok {
-		newContext.Annotations.BleemeoItem = name
-		newContext.Tags[types.LabelMetaContainerName] = name
+	if name, ok := gatherContext.OriginalTags["container_name"]; ok {
+		gatherContext.Annotations.BleemeoItem = name
+		gatherContext.Tags[types.LabelMetaContainerName] = name
 	}
 
-	if id, ok := originalContext.OriginalFields["container_id"]; ok {
+	if id, ok := gatherContext.OriginalFields["container_id"]; ok {
 		if containerID, ok := id.(string); ok {
-			newContext.Annotations.ContainerID = containerID
+			gatherContext.Annotations.ContainerID = containerID
 		}
 	}
 
-	c, ok := r.dockerRuntime.CachedContainer(newContext.Annotations.ContainerID)
+	c, ok := r.dockerRuntime.CachedContainer(gatherContext.Annotations.ContainerID)
 	if !ok || facts.ContainerIgnored(c) {
-		drop = true
-
-		return
+		return gatherContext, true
 	}
 
-	switch newContext.Measurement {
+	switch gatherContext.Measurement {
 	case "container_cpu":
-		if originalContext.Tags["cpu"] != "cpu-total" {
-			drop = true
+		if gatherContext.OriginalTags["cpu"] != "cpu-total" {
+			return gatherContext, true
 		}
 	case "container_net":
-		if originalContext.Tags["network"] != "total" {
-			drop = true
+		if gatherContext.OriginalTags["network"] != "total" {
+			return gatherContext, true
 		}
 	case "container_blkio":
-		if originalContext.Tags["device"] != "total" {
-			drop = true
+		if gatherContext.OriginalTags["device"] != "total" {
+			return gatherContext, true
 		}
 
-		newContext.Measurement = "container_io"
+		gatherContext.Measurement = "container_io"
 	}
 
-	return newContext, drop
+	return gatherContext, false
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
 	switch currentContext.Measurement {

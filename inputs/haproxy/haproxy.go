@@ -72,19 +72,17 @@ func New(url string) (i telegraf.Input, err error) {
 	return i, err
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext = originalContext
-
-	if originalContext.Tags["sv"] != "BACKEND" && originalContext.Tags["sv"] != "FRONTEND" {
-		drop = true
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	if gatherContext.Tags["sv"] != "BACKEND" && gatherContext.Tags["sv"] != "FRONTEND" {
+		return gatherContext, true
 	}
 
-	newContext.Annotations.BleemeoItem = newContext.Tags["proxy"]
+	gatherContext.Annotations.BleemeoItem = gatherContext.Tags["proxy"]
 
-	return
+	return gatherContext, false
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
 	for name, value := range fields {

@@ -62,7 +62,7 @@ func TestDefault(t *testing.T) {
 
 func TestRename(t *testing.T) {
 	called := false
-	transformMetrics := func(originalContext GatherContext, currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	transformMetrics := func(currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 		if currentContext.Tags["newTag"] != "value" {
 			t.Errorf("tags[newTag] == %#v, want %#v", currentContext.Tags["newTag"], "value")
 		}
@@ -293,7 +293,7 @@ func TestDeriveFunc(t *testing.T) {
 
 		called2 = true
 	}
-	shouldDerivateMetrics := func(originalContext GatherContext, currentContext GatherContext, metricName string) bool {
+	shouldDerivateMetrics := func(currentContext GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "nt")
 	}
 	t0 := time.Now()
@@ -462,7 +462,7 @@ func TestMeasurementMap(t *testing.T) {
 
 		t.Errorf("fields == %v, want load1, logged or no_match", fields)
 	}
-	renameMetrics := func(originalContext GatherContext, currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string) {
+	renameMetrics := func(currentContext GatherContext, metricName string) (newMeasurement string, newMetricName string) {
 		newMetricName = metricName
 
 		switch metricName {
@@ -572,13 +572,12 @@ func TestRenameCallback2(t *testing.T) {
 	t0 := time.Now()
 	t1 := t0.Add(10 * time.Second)
 	acc := Accumulator{
-		RenameGlobal: func(originalContext GatherContext) (newContext GatherContext, drop bool) {
-			newContext = originalContext
-			newContext.Annotations = types.MetricAnnotations{
+		RenameGlobal: func(gatherContext GatherContext) (GatherContext, bool) {
+			gatherContext.Annotations = types.MetricAnnotations{
 				BleemeoItem: "dbname",
 			}
 
-			return newContext, false
+			return gatherContext, false
 		},
 		RenameCallbacks: []RenameCallback{
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
@@ -638,14 +637,10 @@ func TestLabelsMutation(t *testing.T) {
 	}
 	t0 := time.Now()
 	acc := Accumulator{
-		RenameGlobal: func(originalContext GatherContext) (GatherContext, bool) {
-			newContext := GatherContext{
-				Measurement: originalContext.Measurement,
-				Tags:        make(map[string]string),
-			}
-			newContext.Tags["db"] = "dbname"
+		RenameGlobal: func(gatherContext GatherContext) (GatherContext, bool) {
+			gatherContext.Tags = map[string]string{"db": "dbname"}
 
-			return newContext, false
+			return gatherContext, false
 		},
 		RenameCallbacks: []RenameCallback{
 			func(labels map[string]string, annotations types.MetricAnnotations) (map[string]string, types.MetricAnnotations) {
@@ -677,15 +672,13 @@ func TestLabelsMutation(t *testing.T) {
 func BenchmarkProcessMetrics(b *testing.B) {
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 	}
-	renameGlobal := func(originalContext GatherContext) (newContext GatherContext, drop bool) {
-		originalContext.Tags["added"] = "new"
+	renameGlobal := func(gatherContext GatherContext) (GatherContext, bool) {
+		gatherContext.Tags["added"] = "new"
+		gatherContext.Measurement += "2"
 
-		return GatherContext{
-			Measurement: originalContext.Measurement + "2",
-			Tags:        originalContext.Tags,
-		}, false
+		return gatherContext, false
 	}
-	transformMetrics := func(originalContext GatherContext, currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+	transformMetrics := func(currentContext GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 		return fields
 	}
 
@@ -730,7 +723,7 @@ func BenchmarkProcessMetrics(b *testing.B) {
 func BenchmarkDeriveFunc(b *testing.B) {
 	finalFunc := func(measurement string, fields map[string]interface{}, tags map[string]string, annotations types.MetricAnnotations, t_ ...time.Time) {
 	}
-	shouldDerivateMetrics := func(_, currentContext GatherContext, metricName string) bool {
+	shouldDerivateMetrics := func(currentContext GatherContext, metricName string) bool {
 		return strings.HasSuffix(metricName, "int")
 	}
 

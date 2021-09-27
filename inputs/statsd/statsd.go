@@ -83,30 +83,31 @@ func New(bindAddress string) (i telegraf.Input, err error) {
 	return i, nil
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext.Measurement = "statsd"
-	newContext.Tags = nil
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	gatherContext.Measurement = "statsd"
+	gatherContext.OriginalTags = gatherContext.Tags
+	gatherContext.Tags = nil
 
-	return
+	return gatherContext, false
 }
 
-func shouldDerivateMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) bool {
-	return originalContext.Tags["metric_type"] == "counter"
+func shouldDerivateMetrics(currentContext internal.GatherContext, metricName string) bool {
+	return currentContext.OriginalTags["metric_type"] == "counter"
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
-	if originalContext.Tags["metric_type"] == "timing" {
+	if currentContext.OriginalTags["metric_type"] == "timing" {
 		for key, value := range fields {
 			if key == "count" {
 				value /= 10
 			}
 
-			newFields[fmt.Sprintf("%s_%s", originalContext.Measurement, key)] = value
+			newFields[fmt.Sprintf("%s_%s", currentContext.OriginalMeasurement, key)] = value
 		}
 	} else if _, ok := fields["value"]; ok {
-		newFields[originalContext.Measurement] = fields["value"]
+		newFields[currentContext.OriginalMeasurement] = fields["value"]
 	}
 
 	return newFields

@@ -50,7 +50,7 @@ func New(url string) (i telegraf.Input, err error) {
 	return
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {

@@ -52,14 +52,13 @@ func New(url string, username string, password string) (i telegraf.Input, err er
 	return
 }
 
-func renameGlobal(originalContext internal.GatherContext) (newContext internal.GatherContext, drop bool) {
-	newContext = originalContext
-	newContext.Measurement = "rabbitmq"
+func renameGlobal(gatherContext internal.GatherContext) (internal.GatherContext, bool) {
+	gatherContext.Measurement = "rabbitmq"
 
-	return
+	return gatherContext, false
 }
 
-func transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	newFields := make(map[string]float64)
 
 	for metricName, value := range fields {

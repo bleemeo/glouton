@@ -239,7 +239,7 @@ func (c *winCollector) renameGlobal(originalContext internal.GatherContext) (new
 	return originalContext, drop
 }
 
-func (c *winCollector) transformMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
+func (c *winCollector) transformMetrics(currentContext internal.GatherContext, fields map[string]float64, originalFields map[string]interface{}) map[string]float64 {
 	res := make(map[string]float64, len(fields))
 
 	if currentContext.Measurement == diskIOModuleName {
@@ -301,7 +301,7 @@ func (c *winCollector) transformMetrics(originalContext internal.GatherContext, 
 	return res
 }
 
-func (c winCollector) renameMetrics(originalContext internal.GatherContext, currentContext internal.GatherContext, metricName string) (string, string) {
+func (c winCollector) renameMetrics(currentContext internal.GatherContext, metricName string) (string, string) {
 	newMeasurement := currentContext.Measurement
 
 	switch currentContext.Measurement {
