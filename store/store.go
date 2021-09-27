@@ -25,6 +25,7 @@ import (
 	"glouton/logger"
 	"glouton/types"
 	"reflect"
+	"sort"
 	"sync"
 	"time"
 
@@ -40,6 +41,7 @@ type Store struct {
 	metrics         map[uint64]metric
 	points          map[uint64][]types.Point
 	notifyCallbacks map[int]func([]types.MetricPoint)
+	workLabels      labels.Labels
 	lock            sync.Mutex
 	notifeeLock     sync.Mutex
 }
@@ -247,7 +249,19 @@ func (s *Store) run() {
 // The store lock is assumed to be held.
 // Annotations is always updated with value provided as argument.
 func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric {
-	hash := labels.FromMap(lbls).Hash()
+	if cap(s.workLabels) < len(lbls) {
+		s.workLabels = make(labels.Labels, len(lbls))
+	}
+
+	s.workLabels = s.workLabels[:0]
+
+	for k, v := range lbls {
+		s.workLabels = append(s.workLabels, labels.Label{Name: k, Value: v})
+	}
+
+	sort.Sort(s.workLabels)
+
+	hash := s.workLabels.Hash()
 
 	for n := 0; n < 50; n++ {
 		m, ok := s.metrics[hash]
