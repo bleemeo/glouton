@@ -172,7 +172,8 @@ func FromNagios(value int) Status {
 
 // Metric represent a metric object.
 type Metric interface {
-	// Labels returns labels of the metric. A metric is identified by its labels
+	// Labels returns labels of the metric. A metric is identified by its labels.
+	// The returned map must not be modified, copy it if you need mutation.
 	Labels() map[string]string
 
 	// Annotations of this metric. A annotation is similar to a label but do not participate

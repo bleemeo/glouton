@@ -150,13 +150,7 @@ func (s *Store) MetricsCount() int {
 
 // Labels returns all label of the metric.
 func (m metric) Labels() map[string]string {
-	labels := make(map[string]string)
-
-	for k, v := range m.labels {
-		labels[k] = v
-	}
-
-	return labels
+	return m.labels
 }
 
 // Annotations returns all annotations of the metric.
