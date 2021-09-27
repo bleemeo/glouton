@@ -97,6 +97,7 @@ type Accumulator struct {
 	currentValues    map[string]map[string]metricPoint
 	pastValues       map[string]map[string]metricPoint
 	workStringBuffer []string
+	workResult       map[string]float64
 	now              time.Time
 	l                sync.Mutex
 }
@@ -207,15 +208,18 @@ func (a *Accumulator) doDerivated(result map[string]float64, flatTag string, fie
 }
 
 func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields map[string]interface{}, metricTime time.Time) map[string]float64 {
-	a.l.Lock()
-	defer a.l.Unlock()
-
 	var (
 		searchMetrics map[string]bool
 		flatTag       string
 	)
 
-	result := make(map[string]float64, len(fields))
+	if a.workResult == nil {
+		a.workResult = make(map[string]float64, len(fields))
+	}
+
+	for k := range a.workResult {
+		delete(a.workResult, k)
+	}
 
 	for _, m := range a.DerivatedMetrics {
 		if searchMetrics == nil {
@@ -244,7 +248,7 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 		if !derive {
 			valueFloat, err := convertToFloat(value)
 			if err == nil {
-				result[metricName] = valueFloat
+				a.workResult[metricName] = valueFloat
 			} else {
 				a.AddError(err)
 			}
@@ -256,10 +260,10 @@ func (a *Accumulator) convertToFloatFields(currentContext GatherContext, fields 
 			flatTag = a.flattenTag(currentContext.Tags)
 		}
 
-		a.doDerivated(result, flatTag, len(fields), metricName, value, metricTime)
+		a.doDerivated(a.workResult, flatTag, len(fields), metricName, value, metricTime)
 	}
 
-	return result
+	return a.workResult
 }
 
 func (a *Accumulator) getDerivativeValue(pastMetricPoint metricPoint, currentPoint metricPoint) (float64, bool) {
@@ -308,6 +312,10 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		metricTime = t[0]
 	}
 
+	// Lock is needed for convertToFloatFields and for floatFields (which is
+	// a reference to a.workReslt)
+	a.l.Lock()
+
 	floatFields := a.convertToFloatFields(currentContext, fields, metricTime)
 
 	if a.TransformMetrics != nil {
@@ -332,6 +340,8 @@ func (a *Accumulator) processMetrics(finalFunc accumulatorFunc, measurement stri
 		}
 		fieldsPerMeasurements[currentContext.Measurement] = currentMap
 	}
+
+	a.l.Unlock()
 
 	for _, f := range a.RenameCallbacks {
 		currentContext.Tags, currentContext.Annotations = f(currentContext.Tags, currentContext.Annotations)
