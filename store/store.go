@@ -27,6 +27,8 @@ import (
 	"reflect"
 	"sync"
 	"time"
+
+	"github.com/prometheus/prometheus/pkg/labels"
 )
 
 var errDeletedMetric = errors.New("metric was deleted")
@@ -35,8 +37,8 @@ var errDeletedMetric = errors.New("metric was deleted")
 //
 // See methods GetMetrics and GetMetricPoints.
 type Store struct {
-	metrics         map[int]metric
-	points          map[int][]types.Point
+	metrics         map[uint64]metric
+	points          map[uint64][]types.Point
 	notifyCallbacks map[int]func([]types.MetricPoint)
 	lock            sync.Mutex
 	notifeeLock     sync.Mutex
@@ -45,8 +47,8 @@ type Store struct {
 // New create a return a store. Store should be Close()d before leaving.
 func New() *Store {
 	s := &Store{
-		metrics:         make(map[int]metric),
-		points:          make(map[int][]types.Point),
+		metrics:         make(map[uint64]metric),
+		points:          make(map[uint64][]types.Point),
 		notifyCallbacks: make(map[int]func([]types.MetricPoint)),
 	}
 
@@ -120,8 +122,8 @@ func (s *Store) DropAllMetrics() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	s.metrics = make(map[int]metric)
-	s.points = make(map[int][]types.Point)
+	s.metrics = make(map[uint64]metric)
+	s.points = make(map[uint64][]types.Point)
 }
 
 // Metrics return a list of Metric matching given labels filter.
@@ -184,7 +186,7 @@ type metric struct {
 	labels      map[string]string
 	annotations types.MetricAnnotations
 	store       *Store
-	metricID    int
+	metricID    uint64
 	createAt    time.Time
 }
 
@@ -209,7 +211,7 @@ func (s *Store) run() {
 
 	deletedPoints := 0
 	totalPoints := 0
-	metricToDelete := make([]int, 0)
+	metricToDelete := make([]uint64, 0)
 
 	for metricID := range s.metrics {
 		points := s.points[metricID]
@@ -244,39 +246,36 @@ func (s *Store) run() {
 // If the metric does not exists, it's created.
 // The store lock is assumed to be held.
 // Annotations is always updated with value provided as argument.
-func (s *Store) metricGetOrCreate(labels map[string]string, annotations types.MetricAnnotations) metric {
-	for id, m := range s.metrics {
-		if labelsMatch(m.labels, labels, true) {
+func (s *Store) metricGetOrCreate(lbls map[string]string, annotations types.MetricAnnotations) metric {
+	hash := labels.FromMap(lbls).Hash()
+
+	for n := 0; n < 50; n++ {
+		m, ok := s.metrics[hash]
+		if labelsMatch(m.labels, lbls, true) {
 			m.annotations = annotations
-			s.metrics[id] = m
+			s.metrics[hash] = m
 
 			return m
 		}
-	}
 
-	newID := 1
-	_, ok := s.metrics[newID]
+		if !ok {
+			m := metric{
+				labels:      lbls,
+				annotations: annotations,
+				store:       s,
+				metricID:    hash,
+				createAt:    time.Now(),
+			}
 
-	for ok {
-		newID++
-		if newID == 0 {
-			panic("too many metric in the store. Unable to find new slot")
+			s.metrics[hash] = m
+
+			return m
 		}
 
-		_, ok = s.metrics[newID]
+		hash++
 	}
 
-	m := metric{
-		labels:      labels,
-		annotations: annotations,
-		store:       s,
-		metricID:    newID,
-		createAt:    time.Now(),
-	}
-
-	s.metrics[newID] = m
-
-	return m
+	panic("too many metric in the store. Unable to find new slot")
 }
 
 // PushPoints append new metric points to the store, creating new metric
