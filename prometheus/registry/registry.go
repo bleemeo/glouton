@@ -429,8 +429,9 @@ func (r *Registry) DiagnosticZip(zipFile *zip.Writer) error {
 	for _, reg := range loopRegistration {
 		reg.l.Lock()
 
-		fmt.Fprintf(file, "id=%d, lastRun=%v (duration=%v, interval=%v)\n", reg.id, reg.lastScrape, reg.lastScrapeDuration, reg.loop.interval)
+		fmt.Fprintf(file, "id=%d, lastRun=%v (duration=%v, interval=%v,)\n", reg.id, reg.lastScrape, reg.lastScrapeDuration, reg.loop.interval)
 		fmt.Fprintf(file, "    %s\n", reg.option.String())
+		fmt.Fprintf(file, "    label used: %v\n", dtoLabelToMap(reg.gatherer.labels))
 
 		reg.l.Unlock()
 	}

@@ -146,6 +146,15 @@ func newLabeledGatherer(g prometheus.Gatherer, extraLabels labels.Labels, annota
 	}
 }
 
+func dtoLabelToMap(lbls []*dto.LabelPair) map[string]string {
+	result := make(map[string]string, len(lbls))
+	for _, l := range lbls {
+		result[l.GetName()] = l.GetValue()
+	}
+
+	return result
+}
+
 // Gather implements prometheus.Gather.
 func (g labeledGatherer) Gather() ([]*dto.MetricFamily, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultGatherTimeout)
