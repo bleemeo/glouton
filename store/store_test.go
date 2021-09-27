@@ -17,7 +17,9 @@
 package store
 
 import (
+	"fmt"
 	"glouton/types"
+	"math/rand"
 	"reflect"
 	"testing"
 	"time"
@@ -317,5 +319,181 @@ func TestPoints(t *testing.T) {
 
 	if !reflect.DeepEqual(points[0], p1) {
 		t.Errorf("points[0] == %v, want %v", points[0], p1)
+	}
+}
+
+func makeMetric(b *testing.B, rnd *rand.Rand, labelCount int) map[string]string {
+	b.Helper()
+
+	metricNames := []string{
+		"cpu_used",
+		"agent_config_warning",
+		"container_cpu_used",
+		"container_io_write_bytes",
+		"go_memstats_mcache_inuse_bytes",
+		"mysql_cache_result_qcache_not_cached",
+		"namedprocess_namegroup_memory_bytes",
+		"net_bits_recv",
+		"node_network_receive_bytes_total",
+		"process_cpu_user",
+		"process_resident_memory_bytes",
+		"prometheus_remote_storage_samples_in_total",
+		"redis_uptime",
+		"uptime",
+	}
+
+	labelNames := []string{
+		"action",
+		"address",
+		"alertname",
+		"alertstate",
+		"alias",
+		"application",
+		"build_date",
+		"collector",
+		"container",
+		"container_name",
+		"core",
+		"cpu",
+		"db",
+		"device",
+		"fstype",
+		"generation",
+		"golang_version",
+		"goversion",
+		"groupname",
+		"handler",
+		"hrStorageDescr",
+		"hrStorageType",
+		"instance",
+		"instance_uuid",
+		"item",
+		"job",
+		"method",
+		"mode",
+		"mountpoint",
+		"nodename",
+		"op",
+		"port",
+		"quantile",
+		"role",
+		"scrape_instance",
+		"scrape_job",
+		"state",
+		"status",
+		"status_code",
+		"type",
+		"url",
+	}
+
+	lbls := make(map[string]string, labelCount)
+
+	for n := 0; n < labelCount; n++ {
+		if n == 0 {
+			lbls[types.LabelName] = metricNames[rnd.Intn(len(metricNames))]
+		} else {
+			name := labelNames[rnd.Intn(len(labelNames))]
+			value := fmt.Sprintf(
+				"%s-%s-%d",
+				labelNames[rnd.Intn(len(labelNames))],
+				labelNames[rnd.Intn(len(labelNames))][:2],
+				rnd.Intn(1000),
+			)
+			lbls[name] = value
+		}
+	}
+
+	return lbls
+}
+
+func makeMetrics(b *testing.B, rnd *rand.Rand, metricsCount int, labelsCount int) []map[string]string {
+	b.Helper()
+
+	metricsLabels := make([]map[string]string, 0, metricsCount)
+
+	for n := 0; n < metricsCount; n++ {
+		var lbls map[string]string
+
+		for try := 0; try < 3; try++ {
+			lbls = makeMetric(b, rnd, labelsCount)
+			duplicate := false
+
+			for _, v := range metricsLabels {
+				if reflect.DeepEqual(v, lbls) {
+					duplicate = true
+
+					break
+				}
+			}
+
+			if !duplicate {
+				break
+			}
+
+			if duplicate && try == 2 {
+				b.Logf("A metric will be duplicated")
+			}
+		}
+
+		metricsLabels = append(metricsLabels, lbls)
+	}
+
+	return metricsLabels
+}
+
+func Benchmark_metricGetOrCreate(b *testing.B) {
+	tests := []struct {
+		name        string
+		metricCount int
+		labelsCount int
+	}{
+		{
+			name:        "one",
+			metricCount: 1,
+			labelsCount: 1,
+		},
+		{
+			name:        "7 metrics",
+			metricCount: 7,
+			labelsCount: 1,
+		},
+		{
+			name:        "100 metrics",
+			metricCount: 100,
+			labelsCount: 2,
+		},
+		{
+			name:        "1000 metrics",
+			metricCount: 1000,
+			labelsCount: 3,
+		},
+		{
+			name:        "4000 metrics",
+			metricCount: 4000,
+			labelsCount: 3,
+		},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		b.Run(tt.name, func(b *testing.B) {
+			db := New()
+
+			rnd := rand.New(rand.NewSource(42)) //nolint: gosec
+			metricsLabels := makeMetrics(b, rnd, tt.metricCount, tt.labelsCount)
+
+			// we do not benchmark first time add
+			for _, lbls := range metricsLabels {
+				db.metricGetOrCreate(lbls, types.MetricAnnotations{})
+			}
+
+			b.ResetTimer()
+			for n := 0; n < b.N; n++ {
+				for _, lbls := range metricsLabels {
+					db.metricGetOrCreate(lbls, types.MetricAnnotations{})
+				}
+			}
+		})
 	}
 }
