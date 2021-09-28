@@ -830,7 +830,7 @@ type syncTestHelper struct {
 	httpServer *httptest.Server
 
 	// Following fields are options used by some method
-	SNMP               []snmp.Target
+	SNMP               []*snmp.Target
 	MetricFormat       types.MetricFormat
 	NotifyLabelsUpdate func(ctx context.Context)
 }
@@ -1051,8 +1051,8 @@ func TestSyncWithSNMP(t *testing.T) {
 	helper := newHelper(t)
 	defer helper.Close()
 
-	helper.SNMP = []snmp.Target{
-		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today"},
+	helper.SNMP = []*snmp.Target{
+		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today", MockFacts: map[string]string{}},
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 
@@ -1210,8 +1210,8 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 		l                     sync.Mutex
 	)
 
-	helper.SNMP = []snmp.Target{
-		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today"},
+	helper.SNMP = []*snmp.Target{
+		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today", MockFacts: map[string]string{}},
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func(_ context.Context) {

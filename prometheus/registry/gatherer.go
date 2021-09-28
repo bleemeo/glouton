@@ -228,7 +228,7 @@ func mergeLabels(a []*dto.LabelPair, b []*dto.LabelPair) []*dto.LabelPair {
 
 func (g labeledGatherer) GatherPoints(ctx context.Context, now time.Time, state GatherState) ([]types.MetricPoint, error) {
 	mfs, err := g.GatherWithState(ctx, state)
-	points := familiesToMetricPoints(now, mfs)
+	points := FamiliesToMetricPoints(now, mfs)
 
 	if (g.annotations != types.MetricAnnotations{}) {
 		for i := range points {

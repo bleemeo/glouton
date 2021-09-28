@@ -118,7 +118,7 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
-	snmpTargets            []snmp.Target
+	snmpTargets            []*snmp.Target
 	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
@@ -407,8 +407,7 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 		return
 	}
 
-	snmpExporterAddress := a.oldConfig.String("metric.snmp.exporter_address")
-	scrapperSNMPTargets := snmp.GenerateScrapperTargets(a.snmpTargets, snmpExporterAddress)
+	scrapperSNMPTargets := snmp.GenerateScrapperTargets(a.snmpTargets)
 
 	for _, target := range scrapperSNMPTargets {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
@@ -627,7 +626,12 @@ func (a *agent) run() { //nolint:cyclop
 
 	if snmpCfg, found := a.oldConfig.Get("metric.snmp.targets"); found {
 		if configList, ok := snmpCfg.([]interface{}); ok {
-			a.snmpTargets = snmp.ConfigToURLs(configList)
+			snmpExporterAddress := a.oldConfig.String("metric.snmp.exporter_address")
+			a.snmpTargets, err = snmp.ConfigToURLs(configList, snmpExporterAddress)
+
+			if err != nil {
+				logger.V(1).Printf("The snmp_exporter address is invalid: %w", err)
+			}
 		}
 	}
 
@@ -2102,7 +2106,16 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpTargets))
 
 	for _, t := range a.snmpTargets {
-		fmt.Fprintf(file, "initial_name=%s target=%s module=%s\n", t.InitialName, t.Address, t.Module())
+		fmt.Fprintf(file, "%s\n", t.String())
+		facts, err := t.Facts(context.Background(), 48*time.Hour)
+
+		if err != nil {
+			fmt.Fprintf(file, " facts failed: %v\n", err)
+		} else {
+			for k, v := range facts {
+				fmt.Fprintf(file, " * %s = %s\n", k, v)
+			}
+		}
 	}
 
 	return err

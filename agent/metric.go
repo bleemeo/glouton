@@ -790,7 +790,7 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	return nil
 }
 
-func (m *metricFilter) buildList(config *config.Configuration, snmpTargets []snmp.Target, format types.MetricFormat) error {
+func (m *metricFilter) buildList(config *config.Configuration, snmpTargets []*snmp.Target, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
@@ -851,7 +851,7 @@ func (m *metricFilter) buildList(config *config.Configuration, snmpTargets []snm
 	return nil
 }
 
-func newMetricFilter(config *config.Configuration, snmpTargets []snmp.Target, metricFormat types.MetricFormat) (*metricFilter, error) {
+func newMetricFilter(config *config.Configuration, snmpTargets []*snmp.Target, metricFormat types.MetricFormat) (*metricFilter, error) {
 	filter := metricFilter{}
 	err := filter.buildList(config, snmpTargets, metricFormat)
 

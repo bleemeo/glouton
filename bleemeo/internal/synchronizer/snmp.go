@@ -46,7 +46,7 @@ func (s *Synchronizer) syncSNMP(fullSync bool, onlyEssential bool) error {
 	return s.snmpRegisterAndUpdate(s.option.SNMP)
 }
 
-func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []snmp.Target) error {
+func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error {
 	remoteAgentList := s.option.Cache.Agents()
 	remoteIndexByFqdn := make(map[string]int, len(remoteAgentList))
 

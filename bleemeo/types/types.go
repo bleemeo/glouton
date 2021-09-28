@@ -35,7 +35,7 @@ type GlobalOption struct {
 	Facts                   FactProvider
 	Process                 ProcessProvider
 	Docker                  DockerProvider
-	SNMP                    []snmp.Target
+	SNMP                    []*snmp.Target
 	Store                   Store
 	Acc                     telegraf.Accumulator
 	Discovery               discovery.PersistentDiscoverer
