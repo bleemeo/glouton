@@ -45,6 +45,7 @@ var (
 	errBleemeoUndefined           = errors.New("bleemeo.account_id and/or bleemeo.registration_key is undefined. Please see  https://docs.bleemeo.com/agent/configuration#bleemeoaccount_id ")
 	errIncorrectStatusCode        = errors.New("registration status code is")
 	errUninitialized              = errors.New("uninitialized")
+	errNotExist                   = errors.New("does not exist")
 )
 
 const (

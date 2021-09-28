@@ -49,6 +49,23 @@ func (t *Target) Module() string {
 	return "if_mib"
 }
 
+func (t *Target) Name(ctx context.Context) (string, error) {
+	if t.InitialName != "" {
+		return t.InitialName, nil
+	}
+
+	facts, err := t.Facts(ctx, 48*time.Hour)
+	if err != nil {
+		return "", err
+	}
+
+	if facts["fqdn"] != "" {
+		return facts["fqdn"], nil
+	}
+
+	return t.Address, nil
+}
+
 func (t *Target) scrapeTarget(module string) *scrapper.Target {
 	u := t.snmpExporterAddress.ResolveReference(&url.URL{}) // clone URL
 	qs := u.Query()
@@ -170,10 +187,7 @@ func ConfigToURLs(vMap []interface{}, snmpExporterAddress string) (result []*Tar
 			continue
 		}
 
-		initialName, ok := tmp["initial_name"].(string)
-		if !ok {
-			initialName = target
-		}
+		initialName, _ := tmp["initial_name"].(string)
 
 		t := &Target{
 			InitialName:         initialName,

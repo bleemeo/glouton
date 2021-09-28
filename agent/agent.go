@@ -381,14 +381,14 @@ func (a *agent) UpdateThresholds(thresholds map[threshold.MetricNameItem]thresho
 // notifyBleemeoFirstRegistration is called when Glouton is registered with Bleemeo Cloud platform for the first time
 // This means that when this function is called, BleemeoAgentID and BleemeoAccountID are set.
 func (a *agent) notifyBleemeoFirstRegistration(ctx context.Context) {
-	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 	a.store.DropAllMetrics()
 }
 
 // notifyBleemeoUpdateLabels is called when Labels might change for some metrics.
 // This likely happen when SNMP target are deleted/recreated.
 func (a *agent) notifyBleemeoUpdateLabels(ctx context.Context) {
-	a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+	a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 }
 
 func (a *agent) updateSNMPResolution(resolution time.Duration) {
@@ -941,7 +941,7 @@ func (a *agent) run() { //nolint:cyclop
 			return
 		}
 
-		a.gathererRegistry.UpdateRelabelHook(a.bleemeoConnector.RelabelHook)
+		a.gathererRegistry.UpdateRelabelHook(ctx, a.bleemeoConnector.RelabelHook)
 		tasks = append(tasks, taskInfo{a.bleemeoConnector.Run, "Bleemeo SAAS connector"})
 	}
 
@@ -2103,10 +2103,13 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 		return err
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
 	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpTargets))
 
 	for _, t := range a.snmpTargets {
-		fmt.Fprintf(file, "%s\n", t.String())
+		fmt.Fprintf(file, "\n%s\n", t.String())
 		facts, err := t.Facts(context.Background(), 48*time.Hour)
 
 		if err != nil {
@@ -2118,7 +2121,11 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 		}
 	}
 
-	return err
+	if a.bleemeoConnector != nil {
+		a.bleemeoConnector.DiagnosticSNMPAssociation(ctx, file)
+	}
+
+	return nil
 }
 
 func (a *agent) diagnosticConfig(ctx context.Context, archive types.ArchiveWriter) error {
