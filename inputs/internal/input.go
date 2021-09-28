@@ -16,7 +16,12 @@
 
 package internal
 
-import "github.com/influxdata/telegraf"
+import (
+	"glouton/logger"
+
+	"github.com/influxdata/telegraf"
+	"github.com/influxdata/telegraf/models"
+)
 
 // Input is a generic input that use the modifying Accumulator defined in this package.
 type Input struct {
@@ -48,6 +53,8 @@ func (i *Input) Start(acc telegraf.Accumulator) error {
 // Init performs one time setup of the plugin and returns an error if the
 // configuration is invalid.
 func (i *Input) Init() error {
+	i.fixTelegrafInput()
+
 	if si, ok := i.Input.(telegraf.Initializer); ok {
 		return si.Init()
 	}
@@ -60,4 +67,10 @@ func (i *Input) Stop() {
 	if si, ok := i.Input.(telegraf.ServiceInput); ok {
 		si.Stop()
 	}
+}
+
+// fixTelegrafInput do some fix to make Telegraf input working.
+// It try to initialize all fields that must be initialized like Log.
+func (i *Input) fixTelegrafInput() {
+	models.SetLoggerOnPlugin(i.Input, logger.NewTelegrafLog())
 }
