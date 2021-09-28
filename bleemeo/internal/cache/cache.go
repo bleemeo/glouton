@@ -314,14 +314,18 @@ func allowListToMap(list string) map[string]bool {
 	return result
 }
 
-// FactsByKey returns a map fact.key => facts.
-func (c *Cache) FactsByKey() map[string]bleemeoTypes.AgentFact {
+// FactsByKey returns a map fact.agentid => fact.key => facts.
+func (c *Cache) FactsByKey() map[string]map[string]bleemeoTypes.AgentFact {
 	c.l.Lock()
 	defer c.l.Unlock()
 
-	result := make(map[string]bleemeoTypes.AgentFact)
+	result := make(map[string]map[string]bleemeoTypes.AgentFact)
 	for _, v := range c.data.Facts {
-		result[v.Key] = v
+		if _, ok := result[v.AgentID]; !ok {
+			result[v.AgentID] = make(map[string]bleemeoTypes.AgentFact, len(c.data.Facts)/len(c.data.Agents))
+		}
+
+		result[v.AgentID][v.Key] = v
 	}
 
 	return result

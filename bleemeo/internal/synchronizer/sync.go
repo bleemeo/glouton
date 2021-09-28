@@ -288,7 +288,7 @@ func (s *Synchronizer) Run(ctx context.Context) error {
 			case client.IsAuthError(err) && s.agentID != "":
 				fqdnMessage := ""
 
-				fqdn := s.option.Cache.FactsByKey()["fqdn"].Value
+				fqdn := s.option.Cache.FactsByKey()[s.agentID]["fqdn"].Value
 				if fqdn != "" {
 					fqdnMessage = fmt.Sprintf(" with fqdn %s", fqdn)
 				}
@@ -823,12 +823,12 @@ func (s *Synchronizer) checkDuplicated() error {
 
 	factNames := []string{"fqdn", "primary_address", "primary_mac_address"}
 	for _, name := range factNames {
-		old, ok := oldFacts[name]
+		old, ok := oldFacts[s.agentID][name]
 		if !ok {
 			continue
 		}
 
-		new, ok := newFacts[name] //nolint:predeclared
+		new, ok := newFacts[s.agentID][name] //nolint:predeclared
 		if !ok {
 			continue
 		}
