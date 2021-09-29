@@ -134,7 +134,6 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 
 func (t *Target) extraLabels() map[string]string {
 	return map[string]string{
-		types.LabelMetaScrapeJob:  t.opt.InitialName,
 		types.LabelMetaSNMPTarget: t.opt.Address,
 	}
 }
