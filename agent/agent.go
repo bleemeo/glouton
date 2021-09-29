@@ -1934,7 +1934,25 @@ func (a *agent) DiagnosticZip(zipFile *zip.Writer) error {
 
 		for _, c := range containers {
 			addr, _ := c.ListenAddresses()
-			fmt.Fprintf(file, "Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v\n", c.ContainerName(), c.ID(), facts.ContainerIgnored(c), c.PrimaryAddress(), addr)
+			health, healthMsg := c.Health()
+			fmt.Fprintf(
+				file,
+				"Name=%s, ID=%s, ignored=%v, IP=%s, listenAddr=%v,\n\tState=%v, CreatedAt=%v, StartedAt=%v, FinishedAt=%v, StoppedAndReplaced=%v\n\tHealth=%v (%s) K8S=%v/%v\n",
+				c.ContainerName(),
+				c.ID(),
+				facts.ContainerIgnored(c),
+				c.PrimaryAddress(),
+				addr,
+				c.State(),
+				c.CreatedAt(),
+				c.StartedAt(),
+				c.FinishedAt(),
+				c.StoppedAndReplaced(),
+				health,
+				strings.ReplaceAll(healthMsg, "\n", "\\n"),
+				c.PodNamespace(),
+				c.PodName(),
+			)
 		}
 	}
 
