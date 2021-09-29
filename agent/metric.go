@@ -23,7 +23,6 @@ import (
 	"glouton/discovery"
 	"glouton/jmxtrans"
 	"glouton/logger"
-	"glouton/prometheus/exporter/snmp"
 	"glouton/prometheus/matcher"
 	"glouton/types"
 	"runtime"
@@ -790,14 +789,14 @@ func (m *metricFilter) DiagnosticArchive(ctx context.Context, archive types.Arch
 	return nil
 }
 
-func (m *metricFilter) buildList(config *config.Configuration, snmpTargets []*snmp.Target, format types.MetricFormat) error {
+func (m *metricFilter) buildList(config *config.Configuration, hasSNMP bool, format types.MetricFormat) error {
 	m.l.Lock()
 	defer m.l.Unlock()
 
 	m.staticAllowList = buildMatcherList(config, "allow")
 	m.staticDenyList = buildMatcherList(config, "deny")
 
-	if len(snmpTargets) > 0 {
+	if hasSNMP {
 		for _, val := range snmpMetrics {
 			matchers, err := matcher.NormalizeMetric(val)
 			if err != nil {
@@ -851,9 +850,9 @@ func (m *metricFilter) buildList(config *config.Configuration, snmpTargets []*sn
 	return nil
 }
 
-func newMetricFilter(config *config.Configuration, snmpTargets []*snmp.Target, metricFormat types.MetricFormat) (*metricFilter, error) {
+func newMetricFilter(config *config.Configuration, hasSNMP bool, metricFormat types.MetricFormat) (*metricFilter, error) {
 	filter := metricFilter{}
-	err := filter.buildList(config, snmpTargets, metricFormat)
+	err := filter.buildList(config, hasSNMP, metricFormat)
 
 	return &filter, err
 }

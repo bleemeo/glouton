@@ -390,7 +390,7 @@ func (c *Connector) RelabelHook(ctx context.Context, labels map[string]string) (
 		)
 
 		for _, t := range c.option.SNMP {
-			if t.Address == labels[gloutonTypes.LabelMetaSNMPTarget] {
+			if t.Address() == labels[gloutonTypes.LabelMetaSNMPTarget] {
 				target = t
 
 				break

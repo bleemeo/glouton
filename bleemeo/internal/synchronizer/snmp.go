@@ -57,7 +57,7 @@ type snmpAssociation struct {
 func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, snmpType string, agentsByID map[string]types.Agent) (types.Agent, error) {
 	var association snmpAssociation
 
-	err := s.option.State.Get("bleemeo:snmp:"+target.Address, &association)
+	err := s.option.State.Get("bleemeo:snmp:"+target.Address(), &association)
 	if err != nil {
 		return types.Agent{}, err
 	}
@@ -76,7 +76,7 @@ func (s *Synchronizer) FindSNMPAgent(ctx context.Context, target *snmp.Target, s
 	associatedID := make(map[string]bool, len(s.option.SNMP))
 
 	for _, v := range s.option.SNMP {
-		err := s.option.State.Get("bleemeo:snmp:"+v.Address, &association)
+		err := s.option.State.Get("bleemeo:snmp:"+v.Address(), &association)
 		if err != nil {
 			return types.Agent{}, err
 		}
@@ -130,7 +130,7 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 
 		fqdn := facts["fqdn"]
 		if fqdn == "" {
-			fqdn = snmp.Address
+			fqdn = snmp.Address()
 		}
 
 		payload := payloadAgent{
@@ -156,8 +156,8 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 		}
 
 		newAgent = append(newAgent, tmp)
-		err = s.option.State.Set("bleemeo:snmp:"+snmp.Address, snmpAssociation{
-			Address: snmp.Address,
+		err = s.option.State.Set("bleemeo:snmp:"+snmp.Address(), snmpAssociation{
+			Address: snmp.Address(),
 			ID:      tmp.ID,
 		})
 

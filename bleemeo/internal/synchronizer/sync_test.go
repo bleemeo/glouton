@@ -1052,7 +1052,7 @@ func TestSyncWithSNMP(t *testing.T) {
 	defer helper.Close()
 
 	helper.SNMP = []*snmp.Target{
-		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today", MockFacts: map[string]string{}},
+		snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 
@@ -1211,7 +1211,7 @@ func TestSyncWithSNMPDelete(t *testing.T) {
 	)
 
 	helper.SNMP = []*snmp.Target{
-		{InitialName: "Z-The-Initial-Name", Address: snmpAddress, Type: "unused-today", MockFacts: map[string]string{}},
+		snmp.NewMock(snmp.TargetOptions{InitialName: "Z-The-Initial-Name", Address: snmpAddress}, map[string]string{}),
 	}
 	helper.MetricFormat = types.MetricFormatPrometheus
 	helper.NotifyLabelsUpdate = func(_ context.Context) {

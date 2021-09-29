@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"glouton/facts"
-	"glouton/logger"
 	"glouton/prometheus/registry"
 	"glouton/prometheus/scrapper"
 	"glouton/types"
@@ -32,10 +31,9 @@ import (
 
 // Target represents a snmp config instance.
 type Target struct {
-	InitialName         string
-	Address             string
-	Type                string
-	snmpExporterAddress *url.URL
+	opt             TargetOptions
+	exporterAddress *url.URL
+	manager         *Manager
 
 	l              sync.Mutex
 	facts          map[string]string
@@ -45,13 +43,41 @@ type Target struct {
 	MockFacts map[string]string
 }
 
+type TargetOptions struct {
+	Address     string
+	InitialName string
+}
+
+func New(opt TargetOptions, exporterAddress *url.URL) *Target {
+	return newTarget(opt, exporterAddress, nil)
+}
+
+func NewMock(opt TargetOptions, mockFacts map[string]string) *Target {
+	r := newTarget(opt, nil, nil)
+	r.MockFacts = mockFacts
+
+	return r
+}
+
+func newTarget(opt TargetOptions, exporterAddress *url.URL, mgr *Manager) *Target {
+	return &Target{
+		opt:             opt,
+		exporterAddress: exporterAddress,
+		manager:         mgr,
+	}
+}
+
+func (t *Target) Address() string {
+	return t.opt.Address
+}
+
 func (t *Target) Module() string {
 	return "if_mib"
 }
 
 func (t *Target) Name(ctx context.Context) (string, error) {
-	if t.InitialName != "" {
-		return t.InitialName, nil
+	if t.opt.InitialName != "" {
+		return t.opt.InitialName, nil
 	}
 
 	facts, err := t.Facts(ctx, 48*time.Hour)
@@ -63,23 +89,23 @@ func (t *Target) Name(ctx context.Context) (string, error) {
 		return facts["fqdn"], nil
 	}
 
-	return t.Address, nil
+	return t.opt.Address, nil
 }
 
 func (t *Target) scrapeTarget(module string) *scrapper.Target {
-	u := t.snmpExporterAddress.ResolveReference(&url.URL{}) // clone URL
+	u := t.exporterAddress.ResolveReference(&url.URL{}) // clone URL
 	qs := u.Query()
 	qs.Set("module", module)
-	qs.Set("target", t.Address)
+	qs.Set("target", t.opt.Address)
 	u.RawQuery = qs.Encode()
 
 	target := &scrapper.Target{
 		ExtraLabels: map[string]string{
-			types.LabelMetaScrapeJob: t.InitialName,
+			types.LabelMetaScrapeJob: t.opt.InitialName,
 			// HostPort could be empty, but this ExtraLabels is used by Registry which
 			// correctly handle empty value value (drop the label).
 			types.LabelMetaScrapeInstance: scrapper.HostPort(u),
-			types.LabelMetaSNMPTarget:     t.Address,
+			types.LabelMetaSNMPTarget:     t.opt.Address,
 		},
 		URL:       u,
 		AllowList: []string{},
@@ -90,14 +116,14 @@ func (t *Target) scrapeTarget(module string) *scrapper.Target {
 }
 
 func (t *Target) String() string {
-	return fmt.Sprintf("initial_name=%s target=%s module=%s", t.InitialName, t.Address, t.Module())
+	return fmt.Sprintf("initial_name=%s target=%s module=%s", t.opt.InitialName, t.opt.Address, t.Module())
 }
 
 func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[string]string, err error) {
 	t.l.Lock()
 	defer t.l.Unlock()
 
-	if t.snmpExporterAddress == nil || t.MockFacts != nil {
+	if t.exporterAddress == nil || t.MockFacts != nil {
 		return t.MockFacts, nil
 	}
 
@@ -158,53 +184,6 @@ func factFromPoints(points []types.MetricPoint, now time.Time) map[string]string
 	}
 
 	facts.CleanFacts(result)
-
-	return result
-}
-
-func ConfigToURLs(vMap []interface{}, snmpExporterAddress string) (result []*Target, err error) {
-	u, err := url.Parse(snmpExporterAddress)
-	if err != nil {
-		return nil, fmt.Errorf("invalid exporter URL: %w", err)
-	}
-
-	u, err = u.Parse("snmp")
-	if err != nil {
-		return nil, fmt.Errorf("invalid exporter URL: %w", err)
-	}
-
-	for _, iMap := range vMap {
-		tmp, ok := iMap.(map[string]interface{})
-
-		if !ok {
-			continue
-		}
-
-		target, ok := tmp["target"].(string)
-		if !ok {
-			logger.Printf("Warning: target is absent from the snmp configuration. the scrap URL will not work.")
-
-			continue
-		}
-
-		initialName, _ := tmp["initial_name"].(string)
-
-		t := &Target{
-			InitialName:         initialName,
-			Address:             target,
-			snmpExporterAddress: u,
-		}
-
-		result = append(result, t)
-	}
-
-	return result, nil
-}
-
-func GenerateScrapperTargets(snmpTargets []*Target) (result []*scrapper.Target) {
-	for _, t := range snmpTargets {
-		result = append(result, t.scrapeTarget("if_mib"))
-	}
 
 	return result
 }

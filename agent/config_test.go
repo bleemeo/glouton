@@ -19,6 +19,7 @@ package agent
 
 import (
 	"glouton/config"
+	"net/url"
 	"reflect"
 	"testing"
 
@@ -268,6 +269,15 @@ func Test_migrate(t *testing.T) {
 }
 
 func Test_loadConfiguration(t *testing.T) {
+	URLMustParse := func(raw string) *url.URL {
+		u, err := url.Parse(raw)
+		if err != nil {
+			panic(err)
+		}
+
+		return u
+	}
+
 	tests := []struct {
 		name        string
 		configFiles []string
@@ -295,6 +305,9 @@ func Test_loadConfiguration(t *testing.T) {
 			warnings: []string{
 				"setting is deprecated: metrics.prometheus. See https://docs.bleemeo.com/metrics-sources/prometheus",
 			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
 		},
 		{
 			name: "new file",
@@ -311,6 +324,9 @@ func Test_loadConfiguration(t *testing.T) {
 				},
 			},
 			warnings: nil,
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
 		},
 		{
 			name: "services",
@@ -367,6 +383,7 @@ func Test_loadConfiguration(t *testing.T) {
 						},
 					},
 				},
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
 			},
 		},
 		{
@@ -383,6 +400,9 @@ func Test_loadConfiguration(t *testing.T) {
 				"setting is deprecated: agent.windows_exporter.enabled. Please use agent.windows_exporter.enable",
 				"setting is deprecated: telegraf.docker_metrics_enabled. Please use telegraf.docker_metrics_enable",
 			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
 		},
 		{
 			name: "folder",
@@ -396,6 +416,9 @@ func Test_loadConfiguration(t *testing.T) {
 			},
 			warnings: []string{
 				"setting is deprecated: bleemeo.enabled. Please use bleemeo.enable",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
 			},
 		},
 		{
@@ -416,6 +439,9 @@ func Test_loadConfiguration(t *testing.T) {
 				"environement variable is deprecated: BLEEMEO_AGENT_ACCOUNT, use GLOUTON_BLEEMEO_ACCOUNT_ID instead",
 				"environement variable is deprecated: GLOUTON_KUBERNETES_ENABLED, use GLOUTON_KUBERNETES_ENABLE instead",
 			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
+			},
 		},
 		{
 			name: "bleemeo-agent envs",
@@ -434,6 +460,9 @@ func Test_loadConfiguration(t *testing.T) {
 			warnings: []string{
 				"environement variable is deprecated: BLEEMEO_AGENT_KUBERNETES_ENABLE, use GLOUTON_KUBERNETES_ENABLE instead",
 				"environement variable is deprecated: BLEEMEO_AGENT_BLEEMEO_ENABLED, use GLOUTON_BLEEMEO_ENABLE instead",
+			},
+			wantCfg: Config{
+				SNMP: SNMP{ExporterURL: URLMustParse("http://localhost:9116/snmp")},
 			},
 		},
 		{

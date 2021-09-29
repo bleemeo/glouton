@@ -118,7 +118,7 @@ type agent struct {
 	influxdbConnector      *influxdb.Client
 	threshold              *threshold.Registry
 	jmx                    *jmxtrans.JMX
-	snmpTargets            []*snmp.Target
+	snmpManager            *snmp.Manager
 	snmpRegistration       []int
 	store                  *store.Store
 	gathererRegistry       *registry.Registry
@@ -407,24 +407,22 @@ func (a *agent) updateSNMPResolution(resolution time.Duration) {
 		return
 	}
 
-	scrapperSNMPTargets := snmp.GenerateScrapperTargets(a.snmpTargets)
-
-	for _, target := range scrapperSNMPTargets {
+	for _, target := range a.snmpManager.Gatherers() {
 		hash := labels.FromMap(target.ExtraLabels).Hash()
 
 		id, err := a.gathererRegistry.RegisterGatherer(
 			registry.RegistrationOption{
-				Description: "snmp target " + target.URL.String(),
+				Description: "snmp target " + target.Address,
 				JitterSeed:  hash,
 				Interval:    resolution,
 				Timeout:     40 * time.Second,
 				ExtraLabels: target.ExtraLabels,
 			},
-			target,
+			target.Gatherer,
 			true,
 		)
 		if err != nil {
-			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.URL.String(), err)
+			logger.Printf("Unable to add SNMP scrapper for target %s: %v", target.Address, err)
 		} else {
 			a.snmpRegistration = append(a.snmpRegistration, id)
 		}
@@ -624,22 +622,16 @@ func (a *agent) run() { //nolint:cyclop
 
 	var targets []*scrapper.Target
 
-	if snmpCfg, found := a.oldConfig.Get("metric.snmp.targets"); found {
-		if configList, ok := snmpCfg.([]interface{}); ok {
-			snmpExporterAddress := a.oldConfig.String("metric.snmp.exporter_address")
-			a.snmpTargets, err = snmp.ConfigToURLs(configList, snmpExporterAddress)
-
-			if err != nil {
-				logger.V(1).Printf("The snmp_exporter address is invalid: %w", err)
-			}
-		}
-	}
+	a.snmpManager = snmp.NewManager(
+		a.config.SNMP.ExporterURL,
+		a.config.SNMP.Targets.ToTargetOptions()...,
+	)
 
 	if promCfg, found := a.oldConfig.Get("metric.prometheus.targets"); found {
 		targets = prometheusConfigToURLs(promCfg)
 	}
 
-	mFilter, err := newMetricFilter(a.oldConfig, a.snmpTargets, a.metricFormat)
+	mFilter, err := newMetricFilter(a.oldConfig, len(a.snmpManager.Targets()) > 0, a.metricFormat)
 	if err != nil {
 		logger.Printf("An error occurred while building the metric filter, allow/deny list may be partial: %v", err)
 	}
@@ -923,7 +915,7 @@ func (a *agent) run() { //nolint:cyclop
 			Process:                 psFact,
 			Docker:                  a.containerRuntime,
 			Store:                   filteredStore,
-			SNMP:                    a.snmpTargets,
+			SNMP:                    a.snmpManager.Targets(),
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
@@ -2106,9 +2098,9 @@ func (a *agent) diagnosticSNMP(ctx context.Context, archive types.ArchiveWriter)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpTargets))
+	fmt.Fprintf(file, "# %d SNMP target configured\n", len(a.snmpManager.Targets()))
 
-	for _, t := range a.snmpTargets {
+	for _, t := range a.snmpManager.Targets() {
 		fmt.Fprintf(file, "\n%s\n", t.String())
 		facts, err := t.Facts(context.Background(), 48*time.Hour)
 
