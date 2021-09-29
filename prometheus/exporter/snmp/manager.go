@@ -30,7 +30,7 @@ func NewManager(exporterAddress *url.URL, targets ...TargetOptions) *Manager {
 	}
 
 	for _, t := range targets {
-		mgr.targets = append(mgr.targets, newTarget(t, exporterAddress, mgr))
+		mgr.targets = append(mgr.targets, newTarget(t, exporterAddress))
 	}
 
 	return mgr
@@ -45,12 +45,10 @@ func (m *Manager) Gatherers() []GathererWithInfo {
 	result := make([]GathererWithInfo, 0, len(m.targets))
 
 	for _, t := range m.targets {
-		g := t.scrapeTarget(t.Module())
-
 		result = append(result, GathererWithInfo{
-			Gatherer:    g,
+			Gatherer:    t,
 			Address:     t.Address(),
-			ExtraLabels: g.ExtraLabels,
+			ExtraLabels: t.extraLabels(),
 		})
 	}
 
