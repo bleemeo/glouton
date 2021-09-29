@@ -1,9 +1,7 @@
 package snmp
 
 import (
-	"context"
 	"net/url"
-	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -19,10 +17,7 @@ type GathererWithInfo struct {
 	ExtraLabels map[string]string
 }
 
-// NewManager return a new SNMP manager. It will handle SNMP target status information: if
-// an target failed the last time, its status will be critical. On the other hand, if
-// it succeeded, its status will be ok.
-// The statuses of targets is sent by PushPoint method.
+// NewManager return a new SNMP manager.
 func NewManager(exporterAddress *url.URL, targets ...TargetOptions) *Manager {
 	mgr := &Manager{
 		exporterAddress: exporterAddress,
@@ -53,13 +48,6 @@ func (m *Manager) Gatherers() []GathererWithInfo {
 	}
 
 	return result
-}
-
-// PushPoint send point for the status of each SNMP targets.
-func (m *Manager) PushPoint(ctx context.Context, t0 time.Time) {
-	if m == nil {
-		return
-	}
 }
 
 // Targets return current SNMP target. The result list shouldn't be by caller mutated.

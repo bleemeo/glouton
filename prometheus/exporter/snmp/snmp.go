@@ -28,6 +28,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/gogo/protobuf/proto"
 	dto "github.com/prometheus/client_model/go"
 )
 
@@ -38,12 +39,13 @@ type Target struct {
 	opt             TargetOptions
 	exporterAddress *url.URL
 
-	l              sync.Mutex
-	scraper        *scrapper.Target
-	facts          map[string]string
-	lastFactUpdate time.Time
-	lastSuccess    time.Time
-	consecutiveErr int
+	l                sync.Mutex
+	scraper          *scrapper.Target
+	facts            map[string]string
+	lastFactUpdate   time.Time
+	lastSuccess      time.Time
+	lastErrorMessage string
+	consecutiveErr   int
 
 	// MockFacts could be used for testing. It bypass real facts discovery.
 	MockFacts map[string]string
@@ -123,10 +125,31 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 			t.lastSuccess = time.Now()
 			t.consecutiveErr = 0
 		} else {
+			t.lastErrorMessage = err.Error()
 			t.consecutiveErr++
 		}
 
+		err = nil
+
 		t.l.Unlock()
+	}
+
+	if status, msg := t.getStatus(); status != types.StatusUnset {
+		result = append(result, &dto.MetricFamily{
+			Name: proto.String("agent_status"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Label: []*dto.LabelPair{
+						{Name: proto.String(types.LabelMetaCurrentStatus), Value: proto.String(status.String())},
+						{Name: proto.String(types.LabelMetaCurrentDescription), Value: proto.String(msg)},
+					},
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(status.NagiosCode())),
+					},
+				},
+			},
+		})
 	}
 
 	return result, err
@@ -153,6 +176,33 @@ func (t *Target) buildScraper(module string) *scrapper.Target {
 	}
 
 	return target
+}
+
+func (t *Target) getStatus() (types.Status, string) {
+	t.l.Lock()
+	defer t.l.Unlock()
+
+	if t.lastSuccess.IsZero() && t.consecutiveErr == 0 {
+		// never scrapper, status is not yet available.
+		return types.StatusUnset, ""
+	}
+
+	if t.consecutiveErr == 0 {
+		return types.StatusOk, ""
+	}
+
+	if t.consecutiveErr >= 2 {
+		return types.StatusCritical, t.lastErrorMessage
+	}
+
+	if t.lastSuccess.IsZero() {
+		return types.StatusUnset, ""
+	}
+
+	// At this point: lastSuccess is set (we already had at least one success)
+	// and consecutiveErr == 1 (e.g. the last scrape was an error, but not the one before).
+	// Kept the Ok, as we allow one failure.
+	return types.StatusOk, ""
 }
 
 func (t *Target) String() string {
