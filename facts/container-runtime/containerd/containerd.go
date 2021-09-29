@@ -524,6 +524,14 @@ func (c *Containerd) run(ctx context.Context) error {
 					} else {
 						logger.V(2).Printf("Error while updating container %s: %v", container.ID(), err)
 					}
+
+					if container.State() == facts.ContainerRunning {
+						// Ignore this event. It's likely a task_exit from "docker exec".
+						// We don't want such event to trigger a discovery.
+						c.l.Unlock()
+
+						continue
+					}
 				}
 			}
 
