@@ -564,6 +564,13 @@ func TestRegistry_run(t *testing.T) {
 			gather2 := &fakeGatherer{name: "name2"}
 			gather2.fillResponse()
 
+			// Sleep until the next rounded 250 millisecond.
+			// Then sleep another millisecond.
+			// We do this because the 3 gatherer added below should start at the same time, so we
+			// must ensure the first isn't registered just before a rounded 250ms and other are resgistered after.
+			// If this occur, the first will run while the other aren't yet registered.
+			time.Sleep(time.Until(time.Now().Truncate(250 * time.Millisecond).Add(250 * time.Millisecond).Add(time.Millisecond)))
+
 			id1, err := reg.RegisterGatherer(RegistrationOption{}, gather1, false)
 			if err != nil {
 				t.Error(err)
@@ -597,7 +604,7 @@ func TestRegistry_run(t *testing.T) {
 				time.Sleep(50 * time.Millisecond)
 				l.Lock()
 
-				if len(points) == 2 {
+				if len(points) >= 2 {
 					break
 				}
 			}
