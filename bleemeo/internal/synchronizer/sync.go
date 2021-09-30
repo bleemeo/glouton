@@ -75,6 +75,7 @@ type Synchronizer struct {
 	startedAt               time.Time
 	lastSync                time.Time
 	lastFactUpdatedAt       string
+	lastSNMPcount           int
 	successiveErrors        int
 	warnAccountMismatchDone bool
 	maintenanceMode         bool
@@ -762,6 +763,11 @@ func (s *Synchronizer) syncToPerform() map[string]bool {
 
 	if fullSync || s.lastFactUpdatedAt != localFacts["fact_updated_at"] {
 		syncMethods[syncMethodFact] = fullSync
+	}
+
+	if s.lastSNMPcount != s.option.SNMPOnlineTarget() {
+		syncMethods[syncMethodFact] = fullSync
+		syncMethods[syncMethodSNMP] = fullSync
 	}
 
 	minDelayed := time.Time{}

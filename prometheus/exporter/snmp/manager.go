@@ -1,7 +1,11 @@
 package snmp
 
 import (
+	"context"
+	"glouton/logger"
 	"net/url"
+	"sync"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -9,6 +13,9 @@ import (
 type Manager struct {
 	exporterAddress *url.URL
 	targets         []*Target
+
+	l                  sync.Mutex
+	checkOnlinePending bool
 }
 
 type GathererWithInfo struct {
@@ -29,6 +36,51 @@ func NewManager(exporterAddress *url.URL, targets ...TargetOptions) *Manager {
 	}
 
 	return mgr
+}
+
+// OnlineCount return the number of target that are available (e.g. for which Facts worked).
+// To have accurate value, Facts should be used, else the value will be updated
+// by OnlineCount in *background* (meaning value will be available on later call to OnlineCount).
+func (m *Manager) OnlineCount() int {
+	count := 0
+
+	var needCheck []*Target
+
+	for _, t := range m.targets {
+		t.l.Lock()
+
+		if t.lastFactErr == nil {
+			count++
+		} else {
+			needCheck = append(needCheck, t)
+		}
+
+		t.l.Unlock()
+	}
+
+	if len(needCheck) > 0 {
+		m.l.Lock()
+		defer m.l.Unlock()
+
+		if !m.checkOnlinePending {
+			m.checkOnlinePending = true
+
+			go func() {
+				m.checkTargets(needCheck)
+
+				m.checkOnlinePending = false
+			}()
+		}
+	}
+
+	return count
+}
+
+func (m *Manager) checkTargets(targets []*Target) {
+	for _, t := range targets {
+		logger.V(2).Printf("testing target %v", t.Address())
+		_, _ = t.Facts(context.Background(), 5*time.Minute)
+	}
 }
 
 // Gatherers return gatheres for SNMP metrics of each targets.

@@ -118,9 +118,19 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 	}
 
 	for _, snmp := range localTargets {
+		if _, err := s.FindSNMPAgent(s.ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
+			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
+
+			continue
+		} else if err == nil {
+			continue
+		}
+
 		facts, err := snmp.Facts(s.ctx, 24*time.Hour)
 		if err != nil {
-			return err
+			logger.V(2).Printf("skip registration of SNMP agent: %v", err)
+
+			continue
 		}
 
 		name, err := snmp.Name(s.ctx)
@@ -142,12 +152,6 @@ func (s *Synchronizer) snmpRegisterAndUpdate(localTargets []*snmp.Target) error 
 			},
 			Abstracted:      true,
 			InitialPassword: uuid.New().String(),
-		}
-
-		if _, err := s.FindSNMPAgent(s.ctx, snmp, agentTypeID, remoteAgentList); err != nil && !errors.Is(err, errNotExist) {
-			return err
-		} else if err == nil {
-			continue
 		}
 
 		tmp, err := s.remoteRegisterSNMP(params, payload)

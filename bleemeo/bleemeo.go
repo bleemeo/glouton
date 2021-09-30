@@ -18,6 +18,7 @@ package bleemeo
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"glouton/bleemeo/internal/cache"
 	"glouton/bleemeo/internal/mqtt"
@@ -35,6 +36,8 @@ import (
 
 	gloutonTypes "glouton/types"
 )
+
+var ErrBadOption = errors.New("bad option")
 
 // Connector manager the connection between the Agent and Bleemeo.
 type Connector struct {
@@ -71,6 +74,10 @@ func New(option types.GlobalOption) (c *Connector, err error) {
 		SetBleemeoInMaintenanceMode: c.setMaintenance,
 		IsMqttConnected:             c.Connected,
 	})
+
+	if option.SNMPOnlineTarget == nil {
+		return c, fmt.Errorf("%w: missing SNMPOnlineTarget function", ErrBadOption)
+	}
 
 	return c, err
 }

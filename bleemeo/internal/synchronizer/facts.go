@@ -60,6 +60,8 @@ func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 		localFacts = copyFacts
 	}
 
+	previousFacts := s.option.Cache.FactsByKey()
+
 	allAgentFacts := make(map[string]map[string]string, 1+len(s.option.SNMP))
 	allAgentFacts[s.agentID] = localFacts
 
@@ -72,14 +74,20 @@ func (s *Synchronizer) syncFacts(fullSync bool, onlyEssential bool) error {
 		remoteAgentList := s.option.Cache.AgentsByUUID()
 
 		for _, t := range s.option.SNMP {
-			facts, err := t.Facts(s.ctx, 24*time.Hour)
-			if err != nil {
-				logger.V(2).Printf("unable to get SNMP facts: %v", err)
-
-				continue
-			}
-
 			if agent, err := s.FindSNMPAgent(s.ctx, t, agentTypeID, remoteAgentList); err == nil {
+				facts, err := t.Facts(s.ctx, 24*time.Hour)
+				if err != nil {
+					logger.V(2).Printf("unable to get SNMP facts: %v", err)
+
+					// Reuse previous facts
+					tmp := previousFacts[agent.ID]
+					facts = make(map[string]string, len(tmp))
+
+					for _, v := range tmp {
+						facts[v.Key] = v.Value
+					}
+				}
+
 				allAgentFacts[agent.ID] = facts
 			}
 		}

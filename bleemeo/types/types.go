@@ -36,6 +36,7 @@ type GlobalOption struct {
 	Process                 ProcessProvider
 	Docker                  DockerProvider
 	SNMP                    []*snmp.Target
+	SNMPOnlineTarget        func() int
 	Store                   Store
 	Acc                     telegraf.Accumulator
 	Discovery               discovery.PersistentDiscoverer

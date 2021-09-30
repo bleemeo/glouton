@@ -43,6 +43,8 @@ type Target struct {
 	scraper          *scrapper.Target
 	facts            map[string]string
 	lastFactUpdate   time.Time
+	lastFactErrAt    time.Time
+	lastFactErr      error
 	lastSuccess      time.Time
 	lastErrorMessage string
 	consecutiveErr   int
@@ -206,6 +208,9 @@ func (t *Target) getStatus() (types.Status, string) {
 }
 
 func (t *Target) String() string {
+	t.l.Lock()
+	defer t.l.Unlock()
+
 	return fmt.Sprintf("initial_name=%s target=%s module=%s lastSuccess=%s (consecutive err=%d)", t.opt.InitialName, t.opt.Address, t.Module(), t.lastSuccess, t.consecutiveErr)
 }
 
@@ -221,13 +226,21 @@ func (t *Target) Facts(ctx context.Context, maxAge time.Duration) (facts map[str
 		return t.facts, nil
 	}
 
+	if time.Since(t.lastFactErrAt) < maxAge {
+		return nil, t.lastFactErr
+	}
+
 	tgt := t.buildScraper("discovery")
 
 	tmp, err := tgt.GatherWithState(ctx, registry.GatherState{})
 	if err != nil {
+		t.lastFactErrAt = time.Now()
+		t.lastFactErr = err
+
 		return nil, err
 	}
 
+	t.lastFactErr = nil
 	result := registry.FamiliesToMetricPoints(time.Now(), tmp)
 
 	t.facts = factFromPoints(result, time.Now())

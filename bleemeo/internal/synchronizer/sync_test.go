@@ -900,6 +900,7 @@ func (helper *syncTestHelper) initSynchronizer(t *testing.T) {
 			NotifyFirstRegistration: func(ctx context.Context) {},
 			MetricFormat:            helper.MetricFormat,
 			SNMP:                    helper.SNMP,
+			SNMPOnlineTarget:        func() int { return len(helper.SNMP) },
 			NotifyLabelsUpdate:      helper.NotifyLabelsUpdate,
 		},
 	}, helper.api.now.Now)

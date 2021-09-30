@@ -916,6 +916,7 @@ func (a *agent) run() { //nolint:cyclop
 			Docker:                  a.containerRuntime,
 			Store:                   filteredStore,
 			SNMP:                    a.snmpManager.Targets(),
+			SNMPOnlineTarget:        a.snmpManager.OnlineCount,
 			Acc:                     acc,
 			Discovery:               a.discovery,
 			MonitorManager:          a.monitorManager,
