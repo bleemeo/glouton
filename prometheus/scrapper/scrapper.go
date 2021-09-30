@@ -19,7 +19,6 @@ package scrapper
 import (
 	"bytes"
 	"context"
-	"errors"
 	"fmt"
 	"glouton/logger"
 	"glouton/prometheus/registry"
@@ -36,7 +35,26 @@ import (
 
 const defaultGatherTimeout = 10 * time.Second
 
-var errIncorrectStatus = errors.New("incorrect status")
+type TargetError struct {
+	// First 32kb of response
+	PartialBody []byte
+	StatusCode  int
+	ConnectErr  error
+	ReadErr     error
+	DecodeErr   error
+}
+
+func (e TargetError) Error() string {
+	if e.ReadErr != nil {
+		return e.ReadErr.Error()
+	}
+
+	if e.ConnectErr != nil {
+		return e.ConnectErr.Error()
+	}
+
+	return fmt.Sprintf("unexpected HTTP status %d", e.StatusCode)
+}
 
 // Target is an URL to scrape.
 type Target struct {
@@ -83,7 +101,9 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 
 	resultMap, err := parser.TextToMetricFamilies(reader)
 	if err != nil {
-		return nil, fmt.Errorf("parse metrics from %s: %w", u.String(), err)
+		return nil, TargetError{
+			DecodeErr: err,
+		}
 	}
 
 	result := make([]*dto.MetricFamily, 0, len(resultMap))
@@ -110,19 +130,32 @@ func (t *Target) readAll(ctx context.Context) ([]byte, error) {
 
 	resp, err := http.DefaultClient.Do(req.WithContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, TargetError{
+			ConnectErr: err,
+		}
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		buffer, err := io.ReadAll(io.LimitReader(resp.Body, 32*1024))
+
 		// Ensure response body is read to allow HTTP keep-alive to works
 		_, _ = io.Copy(ioutil.Discard, resp.Body)
 
-		return nil, fmt.Errorf("%w: exporter %s HTTP status is %s", errIncorrectStatus, t.URL.String(), resp.Status)
+		return nil, TargetError{
+			PartialBody: buffer,
+			StatusCode:  resp.StatusCode,
+			ReadErr:     err,
+		}
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		err = TargetError{
+			ReadErr: err,
+		}
+	}
 
 	return body, err
 }

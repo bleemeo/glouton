@@ -17,7 +17,9 @@
 package snmp
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"glouton/facts"
 	"glouton/prometheus/registry"
@@ -127,7 +129,7 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 			t.lastSuccess = time.Now()
 			t.consecutiveErr = 0
 		} else {
-			t.lastErrorMessage = err.Error()
+			t.lastErrorMessage = humanError(err)
 			t.consecutiveErr++
 		}
 
@@ -289,4 +291,22 @@ func factFromPoints(points []types.MetricPoint, now time.Time) map[string]string
 	facts.CleanFacts(result)
 
 	return result
+}
+
+// humanError convert error from the scrapper in easier to understand format.
+func humanError(err error) string {
+	var targetErr scrapper.TargetError
+
+	if errors.As(err, &targetErr) {
+		switch {
+		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("read: connection refused")):
+			return "connection refused"
+		case targetErr.StatusCode >= 400 && bytes.Contains(targetErr.PartialBody, []byte("request timeout")):
+			return "request timeout"
+		case targetErr.ConnectErr != nil:
+			return "snmp_exporter is not running"
+		}
+	}
+
+	return err.Error()
 }

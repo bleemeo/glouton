@@ -17,7 +17,9 @@
 package snmp
 
 import (
+	"fmt"
 	"glouton/prometheus/registry"
+	"glouton/prometheus/scrapper"
 	"os"
 	"path/filepath"
 	"testing"
@@ -79,6 +81,70 @@ func Test_factFromPoints(t *testing.T) {
 
 			if diff := cmp.Diff(tt.want, got); diff != "" {
 				t.Errorf("factFromPoints() missmatch:\n%s", diff)
+			}
+		})
+	}
+}
+
+func Test_humanError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{
+			name: "random error",
+			err:  os.ErrPermission, // this error shouldn't be handled by humanError
+			want: os.ErrPermission.Error(),
+		},
+		{
+			name: "SNMP connection refused",
+			err: scrapper.TargetError{
+				PartialBody: []byte(
+					`An error has occurred while serving metrics:\n\n` +
+						`error collecting metric Desc{fqName: "snmp_error", help: "Error scraping target", constLabels: {}, variableLabels: []}: ` +
+						`error getting target localhost: error reading from socket: read udp 127.0.0.1:46797->127.0.0.1:161: read: connection refused`,
+				),
+				StatusCode: 500,
+			},
+			want: "connection refused",
+		},
+		{
+			name: "exporter connection refused",
+			err: scrapper.TargetError{
+				ConnectErr: fmt.Errorf("something like dial tcp 127.0.0.1:9116: connect: connection refused"), //nolint: goerr113
+			},
+			want: "snmp_exporter is not running",
+		},
+		{
+			name: "SNMP connection refused wrapper",
+			err: fmt.Errorf("i wrap: %w", scrapper.TargetError{
+				PartialBody: []byte(
+					`An error has occurred while serving metrics:\n\n` +
+						`error collecting metric Desc{fqName: "snmp_error", help: "Error scraping target", constLabels: {}, variableLabels: []}: ` +
+						`error getting target localhost: error reading from socket: read udp 127.0.0.1:46797->127.0.0.1:161: read: connection refused`,
+				),
+				StatusCode: 500,
+			}),
+			want: "connection refused",
+		},
+		{
+			name: "SNMP connection timeout",
+			err: scrapper.TargetError{
+				PartialBody: []byte(
+					`An error has occurred while serving metrics:\n\n` +
+						`error collecting metric Desc{fqName: "snmp_error", help: "Error scraping target", constLabels: {}, variableLabels: []}: ` +
+						`error getting target 10.12.3.45: request timeout (after 3 retries)`,
+				),
+				StatusCode: 500,
+			},
+			want: "request timeout",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := humanError(tt.err); got != tt.want {
+				t.Errorf("humanError() = %v, want %v", got, tt.want)
 			}
 		})
 	}
