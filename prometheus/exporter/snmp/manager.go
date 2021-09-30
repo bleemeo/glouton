@@ -68,7 +68,9 @@ func (m *Manager) OnlineCount() int {
 			go func() {
 				m.checkTargets(needCheck)
 
+				m.l.Lock()
 				m.checkOnlinePending = false
+				m.l.Unlock()
 			}()
 		}
 	}
