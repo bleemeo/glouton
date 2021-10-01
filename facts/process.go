@@ -424,12 +424,53 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 }
 
 func sortParentFirst(processes []Process) []Process {
-	// This sort don't work in all case, like when CreateTime is the same AND PID don't increment
-	sort.Slice(processes, func(i, j int) bool {
-		return processes[i].CreateTime.Before(processes[j].CreateTime) || (processes[i].CreateTime.Equal(processes[j].CreateTime) && processes[i].PID < processes[j].PID)
+	pidToIndex := make(map[int]int, len(processes))
+	pidToChildrenCount := make(map[int]int, len(processes))
+	indexToChildrens := make([][]int, len(processes))
+	rootIdx := make([]int, 0, 10)
+	tmp := make([]int, len(processes))
+	tmpIdx := 0
+
+	for i, p := range processes {
+		pidToIndex[p.PID] = i
+		pidToChildrenCount[p.PPID]++
+	}
+
+	for i, p := range processes {
+		i2, ok := pidToIndex[p.PPID]
+		if !ok || p.PID == p.PPID {
+			rootIdx = append(rootIdx, i)
+
+			continue
+		}
+
+		if indexToChildrens[i2] == nil {
+			l := pidToChildrenCount[p.PPID]
+			indexToChildrens[i2] = tmp[tmpIdx : tmpIdx : tmpIdx+l]
+			tmpIdx += l
+		}
+
+		indexToChildrens[i2] = append(indexToChildrens[i2], i)
+	}
+
+	sort.Slice(rootIdx, func(i, j int) bool {
+		p1 := processes[rootIdx[i]]
+		p2 := processes[rootIdx[j]]
+
+		return p1.CreateTime.Before(p2.CreateTime)
 	})
 
-	return processes
+	return addChildrens(indexToChildrens, processes, make([]Process, 0, len(processes)), rootIdx)
+}
+
+func addChildrens(childrens [][]int, proccesses []Process, result []Process, indexes []int) []Process {
+	for _, childI := range indexes {
+		result = append(result, proccesses[childI])
+
+		result = addChildrens(childrens, proccesses, result, childrens[childI])
+	}
+
+	return result
 }
 
 func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {

@@ -1168,6 +1168,9 @@ func TestDeltaCPUPercent(t *testing.T) {
 func Test_sortParentFirst(t *testing.T) {
 	ts0 := time.Now().UnixMilli()
 
+	generatedHoleProcesses1, generatedHoleWant1 := makeHole(makeProcesses(20, 42, false, true), 3, 42)
+	generatedHoleProcesses2, generatedHoleWant2 := makeHole(makeProcesses(200, 43, false, false), 20, 43)
+
 	tests := []struct {
 		name         string
 		processes    []Process
@@ -1200,9 +1203,61 @@ func Test_sortParentFirst(t *testing.T) {
 			autoFillWant: true,
 		},
 		{
-			name:         "generated-30",
-			processes:    makeProcesses(300, 42, false, true),
+			name: "tree-same-time-rnd-pid",
+			processes: []Process{
+				{PID: 1661, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "init"},
+				{PID: 5785, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "kthreadd"},
+				{PID: 12837, PPID: 1661, CreateTime: time.UnixMilli(ts0), Name: "child of init"},
+				{PID: 14195, PPID: 1661, CreateTime: time.UnixMilli(ts0), Name: "child of init"},
+				{PID: 3370, PPID: 12837, CreateTime: time.UnixMilli(ts0), Name: "grand-child of init"},
+				{PID: 5573, PPID: 5785, CreateTime: time.UnixMilli(ts0), Name: "child of kthread"},
+			},
 			autoFillWant: true,
+		},
+		{
+			name: "partial-tree",
+			processes: []Process{
+				{PID: 700, PPID: 400, CreateTime: time.UnixMilli(ts0 + 4), Name: "grand-grand-child of init"},
+				{PID: 1, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "init"},
+				{PID: 2, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "kthreadd"},
+				{PID: 500, PPID: 1, CreateTime: time.UnixMilli(ts0 + 1), Name: "child of init"},
+				// {PID: 400, PPID: 500, CreateTime: time.UnixMilli(ts0+2), Name: "grand-child of init, missing in PS"},
+				{PID: 300, PPID: 400, CreateTime: time.UnixMilli(ts0 + 3), Name: "grand-grand-child of init"},
+				{PID: 301, PPID: 300, CreateTime: time.UnixMilli(ts0), Name: "child of PID 300 with create-time BEFORE parent"},
+			},
+			autoFillWant: true,
+			want: []processOrder{
+				{PIDBefore: 500, PIDAfter: 300},
+				{PIDBefore: 500, PIDAfter: 700},
+				{PIDBefore: 1, PIDAfter: 700},
+			},
+		},
+		{
+			name:         "generated-30",
+			processes:    makeProcesses(300, 42, true, true),
+			autoFillWant: true,
+		},
+		{
+			name:         "generated-100",
+			processes:    makeProcesses(100, 42, true, false),
+			autoFillWant: true,
+		},
+		{
+			name:         "generated-200",
+			processes:    makeProcesses(200, 42, true, false),
+			autoFillWant: true,
+		},
+		{
+			name:         "generated-20-hole",
+			processes:    generatedHoleProcesses1,
+			autoFillWant: true,
+			want:         generatedHoleWant1,
+		},
+		{
+			name:         "generated-200-hole",
+			processes:    generatedHoleProcesses2,
+			autoFillWant: true,
+			want:         generatedHoleWant2,
 		},
 		{
 			name:         "ps-laptop",
@@ -1392,7 +1447,7 @@ type processOrder struct {
 	PIDAfter  int
 }
 
-func makeProcesses(count int, seed int64, sameTime bool, sorted bool) []Process { //nolint: unparam
+func makeProcesses(count int, seed int64, sameTime bool, sorted bool) []Process {
 	rnd := rand.New(rand.NewSource(seed)) //nolint: gosec
 	pidList := make([]int, 0, count)
 	procMap := make(map[int]Process, count)
@@ -1464,4 +1519,50 @@ func generateProcessOrder(processes []Process) []processOrder {
 	}
 
 	return result
+}
+
+func makeHole(processes []Process, removeCount int, seed int64) ([]Process, []processOrder) {
+	rnd := rand.New(rand.NewSource(seed)) //nolint: gosec
+	ppidOf := make(map[int]int, removeCount)
+	indices := rnd.Perm(len(processes))[:removeCount]
+	indicesMap := make(map[int]bool, len(indices))
+	pidDropped := make(map[int]bool, len(indices))
+	order := make([]processOrder, 0, removeCount)
+
+	for _, i := range indices {
+		p := processes[i]
+
+		indicesMap[i] = true
+		ppidOf[p.PID] = p.PPID
+		pidDropped[p.PID] = true
+	}
+
+	i := 0
+
+	for oldI, p := range processes {
+		if indicesMap[oldI] {
+			continue
+		}
+
+		ancetrorPid := p.PPID
+		for pidDropped[ancetrorPid] {
+			tmp, ok := ppidOf[ancetrorPid]
+			if !ok {
+				ancetrorPid = 0
+
+				break
+			}
+
+			ancetrorPid = tmp
+		}
+
+		if ancetrorPid != 0 {
+			order = append(order, processOrder{PIDBefore: ancetrorPid, PIDAfter: p.PID})
+		}
+
+		processes[i] = p
+		i++
+	}
+
+	return processes[:i], order
 }
