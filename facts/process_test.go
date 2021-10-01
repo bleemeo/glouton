@@ -18,8 +18,14 @@ package facts
 
 import (
 	"context"
+	"encoding/csv"
 	"math"
+	"math/rand"
+	"os"
+	"path/filepath"
 	"reflect"
+	"sort"
+	"strconv"
 	"testing"
 	"time"
 
@@ -1157,4 +1163,305 @@ func TestDeltaCPUPercent(t *testing.T) {
 			t.Errorf("pp.processes[%v] == %v, want %v", c.PID, got, c)
 		}
 	}
+}
+
+func Test_sortParentFirst(t *testing.T) {
+	ts0 := time.Now().UnixMilli()
+
+	tests := []struct {
+		name         string
+		processes    []Process
+		want         []processOrder
+		autoFillWant bool // add want entry with PIDBefore=PPID & PIDAfter=PID (unless PPID=PID). Don't add it if PPID don't exists.
+	}{
+		{
+			name: "linear",
+			processes: []Process{
+				{PID: 1, PPID: 1, CreateTime: time.UnixMilli(ts0)},
+				{PID: 2, PPID: 1, CreateTime: time.UnixMilli(ts0 + 1)},
+				{PID: 3, PPID: 2, CreateTime: time.UnixMilli(ts0 + 2)},
+			},
+			want: []processOrder{
+				{PIDBefore: 1, PIDAfter: 2},
+				{PIDBefore: 1, PIDAfter: 3},
+				{PIDBefore: 2, PIDAfter: 3},
+			},
+		},
+		{
+			name: "tree",
+			processes: []Process{
+				{PID: 1, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "init"},
+				{PID: 2, PPID: 0, CreateTime: time.UnixMilli(ts0), Name: "kthreadd"},
+				{PID: 3, PPID: 1, CreateTime: time.UnixMilli(ts0 + 2), Name: "child of init"},
+				{PID: 4, PPID: 1, CreateTime: time.UnixMilli(ts0 + 3), Name: "child of init"},
+				{PID: 5, PPID: 3, CreateTime: time.UnixMilli(ts0 + 4), Name: "grand-child of init"},
+				{PID: 10, PPID: 2, CreateTime: time.UnixMilli(ts0 + 5), Name: "child of kthread"},
+			},
+			autoFillWant: true,
+		},
+		{
+			name:         "generated-30",
+			processes:    makeProcesses(300, 42, false, true),
+			autoFillWant: true,
+		},
+		{
+			name:         "ps-laptop",
+			processes:    loadProcessTestData(t, "ps-laptop.csv"),
+			autoFillWant: true,
+			want: []processOrder{
+				// The easiest to generate this entries is using (on the same system + same state that was used to create the CSV file):
+				// pstree -sTp 1487053
+				{PIDBefore: 1, PIDAfter: 1487053},
+				{PIDBefore: 2663, PIDAfter: 1487053},
+				{PIDBefore: 2747, PIDAfter: 1487053},
+				{PIDBefore: 3420, PIDAfter: 1487053},
+				{PIDBefore: 61316, PIDAfter: 1487053},
+				{PIDBefore: 1486849, PIDAfter: 1487053},
+				{PIDBefore: 1486912, PIDAfter: 1487053},
+			},
+		},
+		{
+			name:         "ps-server",
+			processes:    loadProcessTestData(t, "ps-server.csv"),
+			autoFillWant: true,
+			want: []processOrder{
+				// The easiest to generate this entries is using (on the same system + same state that was used to create the CSV file):
+				// pstree -sTp 2878733
+				{PIDBefore: 1, PIDAfter: 2877733},
+				{PIDBefore: 2877733, PIDAfter: 2877756},
+				{PIDBefore: 2877756, PIDAfter: 2878685},
+				{PIDBefore: 2878685, PIDAfter: 2878687},
+				{PIDBefore: 2878687, PIDAfter: 2878721},
+				{PIDBefore: 2878721, PIDAfter: 2878732},
+				{PIDBefore: 2878732, PIDAfter: 2878733},
+				{PIDBefore: 1, PIDAfter: 2878733},
+			},
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			want := tt.want
+
+			if tt.autoFillWant {
+				want = append(want, generateProcessOrder(tt.processes)...)
+			}
+
+			tt.processes = sortParentFirst(tt.processes)
+
+			for _, w := range want {
+				firstIdx := -1
+				secondIdx := -1
+
+				for i, p := range tt.processes {
+					if p.PID == w.PIDBefore {
+						if firstIdx == -1 {
+							firstIdx = i
+						} else {
+							t.Errorf("PID %d is present at index %d and %d", p.PID, firstIdx, i)
+						}
+					}
+
+					if p.PID == w.PIDAfter {
+						if secondIdx == -1 {
+							secondIdx = i
+						} else {
+							t.Errorf("PID %d is present at index %d and %d", p.PID, secondIdx, i)
+						}
+					}
+				}
+
+				switch {
+				case firstIdx == -1:
+					t.Errorf("PID %d is not present", w.PIDBefore)
+				case secondIdx == -1:
+					t.Errorf("PID %d is not present", w.PIDAfter)
+				case firstIdx >= secondIdx:
+					t.Errorf("PID %d is after PID %d (%d >= %d)", w.PIDBefore, w.PIDAfter, firstIdx, secondIdx)
+				}
+			}
+		})
+	}
+}
+
+type bOrT interface {
+	Helper()
+	Fatal(...interface{})
+}
+
+// loadProcessTestData convert CSV testdata file to list of Process.
+// ps xa -o pid,ppid,lstart | tail -n +2| awk '{date=$3 " " $4 " " $5 " " $6 " " $7; "date -d \"" date "\" +%s"|getline dateS; print $1 "," $2 "," dateS}' > facts/testdata/ps-laptop.csv
+// The CSV is generated with the above command (it above to allow comment to end with a period).
+func loadProcessTestData(t bOrT, filename string) []Process {
+	t.Helper()
+
+	fd, err := os.Open(filepath.Join("testdata", filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	reader := csv.NewReader(fd)
+
+	data, err := reader.ReadAll()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	result := make([]Process, 0, len(data))
+
+	for _, row := range data {
+		pid, err := strconv.ParseInt(row[0], 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ppid, err := strconv.ParseInt(row[1], 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		ts, err := strconv.ParseInt(row[2], 10, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		createdAt := time.Unix(ts, 0)
+
+		result = append(result, Process{
+			PID:        int(pid),
+			PPID:       int(ppid),
+			CreateTime: createdAt,
+		})
+	}
+
+	return result
+}
+
+func Benchmark_sortParentFirst(b *testing.B) {
+	tests := []struct {
+		name             string
+		processesFactory func(b *testing.B) []Process
+	}{
+		{name: "ps-laptop", processesFactory: func(b *testing.B) []Process {
+			b.Helper()
+
+			return loadProcessTestData(b, "ps-laptop.csv")
+		}},
+		{name: "ps-server", processesFactory: func(b *testing.B) []Process {
+			b.Helper()
+
+			return loadProcessTestData(b, "ps-server.csv")
+		}},
+		{name: "count-15", processesFactory: func(b *testing.B) []Process {
+			b.Helper()
+
+			return makeProcesses(15, 43, false, true)
+		}},
+		{name: "count-150", processesFactory: func(b *testing.B) []Process {
+			b.Helper()
+
+			return makeProcesses(150, 44, false, true)
+		}},
+		{name: "count-1500", processesFactory: func(b *testing.B) []Process {
+			b.Helper()
+
+			return makeProcesses(1500, 45, false, true)
+		}},
+	}
+
+	for _, tt := range tests {
+		tt := tt
+
+		b.Run(tt.name, func(b *testing.B) {
+			for n := 0; n < b.N; n++ {
+				b.StopTimer()
+
+				processes := tt.processesFactory(b)
+
+				b.StartTimer()
+
+				_ = sortParentFirst(processes)
+			}
+		})
+	}
+}
+
+type processOrder struct {
+	PIDBefore int
+	PIDAfter  int
+}
+
+func makeProcesses(count int, seed int64, sameTime bool, sorted bool) []Process { //nolint: unparam
+	rnd := rand.New(rand.NewSource(seed)) //nolint: gosec
+	pidList := make([]int, 0, count)
+	procMap := make(map[int]Process, count)
+	ts0 := time.Now().UnixMilli()
+
+	for n := 0; n < count; n++ {
+		var (
+			pid  int
+			ppid int
+		)
+
+		if !sameTime {
+			ts0 += 10
+		}
+
+		for pid == 0 || procMap[pid].PID != 0 {
+			pid = rnd.Intn(32768)
+		}
+
+		if len(pidList) > 0 {
+			ppid = pidList[rnd.Intn(len(pidList))]
+		}
+
+		pidList = append(pidList, pid)
+		procMap[pid] = Process{
+			PID:             pid,
+			PPID:            ppid,
+			CreateTime:      time.UnixMilli(ts0),
+			CreateTimestamp: ts0 / 1000,
+		}
+	}
+
+	result := make([]Process, 0, len(procMap))
+
+	for _, p := range procMap {
+		result = append(result, p)
+	}
+
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].PID < result[j].PID
+	})
+
+	if !sorted {
+		rnd.Shuffle(len(result), func(i, j int) {
+			result[i], result[j] = result[j], result[i]
+		})
+	}
+
+	if len(result) != count {
+		panic("result size missmatch")
+	}
+
+	return result
+}
+
+func generateProcessOrder(processes []Process) []processOrder {
+	var result []processOrder
+
+	existingsPids := make(map[int]bool, len(processes))
+
+	for _, p := range processes {
+		existingsPids[p.PID] = true
+	}
+
+	for _, p := range processes {
+		if p.PID != p.PPID && existingsPids[p.PPID] {
+			result = append(result, processOrder{PIDBefore: p.PPID, PIDAfter: p.PID})
+		}
+	}
+
+	return result
 }

@@ -276,10 +276,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 			newProcesses = append(newProcesses, p)
 		}
 
-		// This sort is important to make sure parent processed are done before children
-		sort.Slice(newProcesses, func(i, j int) bool {
-			return newProcesses[i].CreateTime.Before(newProcesses[j].CreateTime) || (newProcesses[i].CreateTime.Equal(newProcesses[j].CreateTime) && newProcesses[i].PID < newProcesses[j].PID)
-		})
+		newProcesses = sortParentFirst(newProcesses)
 
 		for _, p := range newProcesses {
 			if oldP, ok := pp.processes[p.PID]; ok && oldP.CreateTime.Equal(p.CreateTime) {
@@ -424,6 +421,15 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	logger.V(2).Printf("Completed %d processes update in %v", len(pp.processes), time.Since(now))
 
 	return nil
+}
+
+func sortParentFirst(processes []Process) []Process {
+	// This sort don't work in all case, like when CreateTime is the same AND PID don't increment
+	sort.Slice(processes, func(i, j int) bool {
+		return processes[i].CreateTime.Before(processes[j].CreateTime) || (processes[i].CreateTime.Equal(processes[j].CreateTime) && processes[i].PID < processes[j].PID)
+	})
+
+	return processes
 }
 
 func (pp *ProcessProvider) baseTopinfo() (result TopInfo, err error) {
