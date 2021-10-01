@@ -510,7 +510,9 @@ func (a *agent) run() { //nolint:cyclop
 	}
 
 	a.triggerHandler = debouncer.New(
+		ctx,
 		a.handleTrigger,
+		5*time.Second,
 		10*time.Second,
 	)
 	a.factProvider = facts.NewFacter(
@@ -839,7 +841,6 @@ func (a *agent) run() { //nolint:cyclop
 	tasks := []taskInfo{
 		{a.watchdog, "Agent Watchdog"},
 		{a.store.Run, "Metric store"},
-		{a.triggerHandler.Run, "Internal trigger handler"},
 		{a.containerRuntime.Run, "Docker connector"},
 		{a.healthCheck, "Agent healthcheck"},
 		{a.hourlyDiscovery, "Service Discovery"},

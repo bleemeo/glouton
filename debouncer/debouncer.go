@@ -25,92 +25,62 @@ import (
 // Debouncer make sure target function is not called too often. Run() must be called to works.
 type Debouncer struct {
 	target func(context.Context)
+	period time.Duration
 	delay  time.Duration
+	ctx    context.Context
 
-	l       sync.Mutex
-	trigger bool
-	wakeC   chan interface{}
-	lastRun time.Time
-	timer   *time.Timer
+	l          sync.Mutex
+	runPending bool
+	lastRun    time.Time
 }
 
 // New create a Debouncer. Two call to target won't be called with less that delay between them.
-func New(target func(context.Context), delay time.Duration) *Debouncer {
+func New(ctx context.Context, target func(context.Context), delay time.Duration, period time.Duration) *Debouncer {
 	return &Debouncer{
 		target: target,
+		period: period,
 		delay:  delay,
-		wakeC:  make(chan interface{}),
-		timer:  time.NewTimer(delay),
+		ctx:    ctx,
 	}
 }
 
-// Run perform the call to target() when trigger is called.
-func (dd *Debouncer) Run(ctx context.Context) error {
-	dd.run(ctx, false)
-
-	for ctx.Err() == nil {
-		select {
-		case <-ctx.Done():
-		case <-dd.wakeC:
-			dd.run(ctx, false)
-		case <-dd.timer.C:
-			dd.run(ctx, true)
-		}
-	}
-
-	if !dd.timer.Stop() {
-		<-dd.timer.C
-	}
-
-	return nil
-}
-
-// Trigger will run the target() either immediately or after a delay if previous target() was just run.
+// Trigger will run the target() and ensure target() isn't run more than once every period.
+//
+// Unless a previous call to target() is pending, target() won't be called before delay.
+// For example after a quiet period (no call to Triger()) quickly calling Trigger() multiple
+// times will result in one call to target() delay time after first call to Trigger().
 //
 // Trigger will always return immediately, and most likely before target() was run.
 func (dd *Debouncer) Trigger() {
 	dd.l.Lock()
 	defer dd.l.Unlock()
 
-	dd.trigger = true
-
-	select {
-	case dd.wakeC <- nil:
-	default:
+	if dd.runPending {
+		return
 	}
-}
 
-func (dd *Debouncer) shouldTrigger(fromTimer bool) bool {
-	dd.l.Lock()
-	defer dd.l.Unlock()
+	dd.runPending = true
+	runAgo := time.Since(dd.lastRun)
+	startDelay := dd.delay
 
-	discoveryAgo := time.Since(dd.lastRun)
-	if dd.trigger && discoveryAgo < dd.delay {
-		// Update timer to the new delay
-		if !dd.timer.Stop() && !fromTimer {
-			<-dd.timer.C
+	if runAgo < dd.period {
+		startDelay = dd.period - runAgo
+	}
+
+	go func() {
+		time.Sleep(startDelay)
+
+		dd.l.Lock()
+
+		dd.runPending = false
+		dd.lastRun = time.Now()
+
+		dd.l.Unlock()
+
+		if dd.ctx.Err() != nil {
+			return
 		}
 
-		dd.timer.Reset(dd.delay - discoveryAgo)
-	} else if fromTimer {
-		dd.timer.Reset(dd.delay)
-	}
-
-	if dd.trigger && discoveryAgo >= dd.delay {
-		dd.trigger = false
-
-		return true
-	}
-
-	return false
-}
-
-func (dd *Debouncer) run(ctx context.Context, fromTimer bool) {
-	if dd.shouldTrigger(fromTimer) {
-		dd.target(ctx)
-		dd.l.Lock()
-		defer dd.l.Unlock()
-
-		dd.lastRun = time.Now()
-	}
+		dd.target(dd.ctx)
+	}()
 }
