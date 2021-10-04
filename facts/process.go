@@ -284,6 +284,10 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		newProcesses = sortParentFirst(newProcesses)
 
 		for _, p := range newProcesses {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+
 			// Reuse the previous discovered time if:
 			// * If the same PID & CreateTime (that is, it's the same process)
 			// * AND on the previous discovery, the process was not too young. This is because the process cgroup might be set *after* it's creation by
@@ -421,6 +425,10 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 	for _, p := range newProcessesMap {
 		topinfo.Processes = append(topinfo.Processes, p)
+	}
+
+	if ctx.Err() != nil {
+		return ctx.Err()
 	}
 
 	pp.topinfo = topinfo
