@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/AstromechZA/etcpwdparse"
+	"github.com/cespare/xxhash"
 	"github.com/shirou/gopsutil/cpu"
 	"github.com/shirou/gopsutil/host"
 	"github.com/shirou/gopsutil/mem"
@@ -43,10 +44,11 @@ type ProcessProvider struct {
 	containerRuntime containerRuntime
 	ps               processQuerier
 
-	processes           map[int]Process
-	topinfo             TopInfo
-	lastCPUtimes        cpu.TimesStat
-	lastProcessesUpdate time.Time
+	processes              map[int]Process
+	processesDiscoveryInfo map[int]processDiscoveryInfo
+	topinfo                TopInfo
+	lastCPUtimes           cpu.TimesStat
+	lastProcessesUpdate    time.Time
 }
 
 // Process describe one Process.
@@ -109,6 +111,11 @@ type SwapUsage struct {
 	Total float64 `json:"total"`
 	Used  float64 `json:"used"`
 	Free  float64 `json:"free"`
+}
+
+type processDiscoveryInfo struct {
+	cgroupHash uint64
+	hadError   bool
 }
 
 // NewPsUtilLister creates and populate a PsUtilLister.
@@ -231,6 +238,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	// * There is an additional discovery 30 seconds later for slow to start service anyway.
 	onlyStartedBefore := now.Add(1 * time.Second)
 	newProcessesMap := make(map[int]Process)
+	newProcessesDiscoveryInfoMap := make(map[int]processDiscoveryInfo)
 
 	var queryContainerRuntime ContainerRuntimeProcessQuerier
 
@@ -288,28 +296,35 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 				return ctx.Err()
 			}
 
-			// Reuse the previous discovered time if:
-			// * If the same PID & CreateTime (that is, it's the same process)
-			// * AND on the previous discovery, the process was not too young. This is because the process cgroup might be set *after* it's creation by
-			//     the container runtime, so on previous discovery it might be wrong.
-			if oldP, ok := pp.processes[p.PID]; ok && oldP.CreateTime.Equal(p.CreateTime) && pp.lastProcessesUpdate.Sub(oldP.CreateTime) > 15*time.Second {
-				p.ContainerID = oldP.ContainerID
-				p.ContainerName = oldP.ContainerName
-				newProcessesMap[p.PID] = p
-
-				continue
-			}
+			var hadError bool
 
 			if p.ContainerID != "" || queryContainerRuntime == nil {
 				continue
 			}
 
 			cgroupData, err := pp.ps.CGroupFromPID(p.PID)
-			if err != nil || cgroupData == "" {
+			if err != nil {
 				logger.V(2).Printf("No cgroup data for process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
 			} else {
 				pid2Cgroup[p.PID] = cgroupData
+			}
 
+			cgroupHash := xxhash.Sum64String(cgroupData)
+
+			// Reuse the previous discovered time if:
+			// * If the same PID & CreateTime (that is, it's the same process)
+			// * AND cgroup didn't changed. A process may change cgroup during its lifetime
+			// * AND previous discovery din't had error
+			if oldP, ok := pp.processes[p.PID]; ok && oldP.CreateTime.Equal(p.CreateTime) && pp.processesDiscoveryInfo[p.PID].cgroupHash == cgroupHash && !pp.processesDiscoveryInfo[p.PID].hadError {
+				p.ContainerID = oldP.ContainerID
+				p.ContainerName = oldP.ContainerName
+				newProcessesMap[p.PID] = p
+				newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
+
+				continue
+			}
+
+			if cgroupData != "" {
 				// Test with parent, if cgroupData if the same, it belong to the same container
 				// Note that because the list is sorted by creation time:
 				// * the parent was processed BEFORE the current process
@@ -321,6 +336,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 						parentCGroupData, err = pp.ps.CGroupFromPID(parent.PID)
 						if err != nil {
 							logger.V(2).Printf("No cgroup data for parent of process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
+
 							parentCGroupData = ""
 						} else {
 							pid2Cgroup[parent.PID] = parentCGroupData
@@ -333,12 +349,17 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 						p.ContainerID = parent.ContainerID
 						p.ContainerName = parent.ContainerName
 						newProcessesMap[p.PID] = p
+						newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: newProcessesDiscoveryInfoMap[parent.PID].hadError}
 
 						continue
 					}
 				}
 
 				container, err := queryContainerRuntime.ContainerFromCGroup(ctx, cgroupData)
+				if err != nil {
+					hadError = true
+				}
+
 				if errors.Is(err, ErrContainerDoesNotExists) && now.Sub(p.CreateTime) < 3*time.Second {
 					logger.V(2).Printf("Skipping process %d (%s) created recently and seems to belong to a container", p.PID, p.Name)
 					delete(newProcessesMap, p.PID)
@@ -356,6 +377,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					p.ContainerID = container.ID()
 					p.ContainerName = container.ContainerName()
 					newProcessesMap[p.PID] = p
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
 
 					continue
 				}
@@ -377,8 +399,11 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					p.ContainerName = container.ContainerName()
 
 					newProcessesMap[p.PID] = p
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: false}
 				case err != nil:
 					logger.V(2).Printf("Error when querying container runtime for process %d (%s): %v", p.PID, p.Name, err)
+
+					hadError = true
 
 					fallthrough
 				default:
@@ -389,6 +414,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 						continue
 					}
+
+					newProcessesDiscoveryInfoMap[p.PID] = processDiscoveryInfo{cgroupHash: cgroupHash, hadError: hadError}
 				}
 			}
 		}
@@ -433,6 +460,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 	pp.topinfo = topinfo
 	pp.processes = newProcessesMap
+	pp.processesDiscoveryInfo = newProcessesDiscoveryInfoMap
 	pp.lastProcessesUpdate = now
 
 	logger.V(2).Printf("Completed %d processes update in %v", len(pp.processes), time.Since(now))

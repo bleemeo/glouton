@@ -513,13 +513,13 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:cyclop
 			3:  "well, this value doesn't matter",
 			20: "cgroup-for-user-session",
 			// 12 is absent, simulate "error"
-			42: "container-slice-postgresql",
-			49: "container-slice-postgresql",
+			42: "slice-postgresql",
+			49: "slice-postgresql",
 		},
 	}
 	cr := &mockContainerRuntime{
 		cgroup2Container: map[string]Container{
-			"container-slice-postgresql": FakeContainer{
+			"slice-postgresql": FakeContainer{
 				FakeID:            "postgresql-container-id",
 				FakeContainerName: "postgresql-name",
 			},
@@ -784,11 +784,13 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:cyclop
 		t.Errorf("containerRuntime.ContainerFromPID() called %d times, want 0", len(cr.ContainerFromPIDCalls))
 	}
 
-	if len(cr.ContainerFromCGroupCalls) != 0 {
-		t.Errorf("containerRuntime.ContainerFromCGroupCalls() called %d times, want 0", len(cr.ContainerFromCGroupCalls))
+	// One call, because cgroup failed for redis on previous run
+	if len(cr.ContainerFromCGroupCalls) != 1 {
+		t.Errorf("containerRuntime.ContainerFromCGroupCalls() called %d times, want 1", len(cr.ContainerFromCGroupCalls))
 	}
 
-	if len(psutil.CGroupCalls) != 5 {
+	if len(psutil.CGroupCalls) != 7 {
+		t.Log(psutil.CGroupCalls)
 		t.Errorf("ps.CGroupFromPID() called %d times, want 5", len(psutil.CGroupCalls))
 	}
 
@@ -1034,7 +1036,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:cyclop
 		t.Errorf("containerRuntime.ContainerFromCGroupCalls() called %d times, want 0", len(cr.ContainerFromCGroupCalls))
 	}
 
-	if len(psutil.CGroupCalls) != 0 {
+	if len(psutil.CGroupCalls) != 10 {
 		t.Errorf("ps.CGroupFromPID() called %d times, want 0", len(psutil.CGroupCalls))
 	}
 }
