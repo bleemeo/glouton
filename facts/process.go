@@ -279,7 +279,11 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		newProcesses = sortParentFirst(newProcesses)
 
 		for _, p := range newProcesses {
-			if oldP, ok := pp.processes[p.PID]; ok && oldP.CreateTime.Equal(p.CreateTime) {
+			// Reuse the previous discovered time if:
+			// * If the same PID & CreateTime (that is, it's the same process)
+			// * AND on the previous discovery, the process was not too young. This is because the process cgroup might be set *after* it's creation by
+			//     the container runtime, so on previous discovery it might be wrong.
+			if oldP, ok := pp.processes[p.PID]; ok && oldP.CreateTime.Equal(p.CreateTime) && pp.lastProcessesUpdate.Sub(oldP.CreateTime) > 15*time.Second {
 				p.ContainerID = oldP.ContainerID
 				p.ContainerName = oldP.ContainerName
 				newProcessesMap[p.PID] = p
