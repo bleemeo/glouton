@@ -237,8 +237,8 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	// * The discovery is run 5 seconds after the trigger (apt-get install or docker run)
 	// * There is an additional discovery 30 seconds later for slow to start service anyway.
 	onlyStartedBefore := now.Add(1 * time.Second)
-	newProcessesMap := make(map[int]Process)
-	newProcessesDiscoveryInfoMap := make(map[int]processDiscoveryInfo)
+	newProcessesMap := make(map[int]Process, len(pp.processes))
+	newProcessesDiscoveryInfoMap := make(map[int]processDiscoveryInfo, len(pp.processesDiscoveryInfo))
 
 	var queryContainerRuntime ContainerRuntimeProcessQuerier
 
