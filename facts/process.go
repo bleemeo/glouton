@@ -224,7 +224,12 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 	// usually 1/100th of seconds.
 	// Process must be started at least 1/100th before t0.
 	// Keep some additional margin by doubling this value.
-	onlyStartedBefore := now.Add(-20 * time.Millisecond)
+	//
+	// Also because other fields might be set after process creation (cgroup ?),
+	// avoid processing young processes. This shouldn't be an issue for discovery because:
+	// * The discovery is run 5 seconds after the trigger (apt-get install or docker run)
+	// * There is an additional discovery 30 seconds later for slow to start service anyway.
+	onlyStartedBefore := now.Add(1 * time.Second)
 	newProcessesMap := make(map[int]Process)
 
 	var queryContainerRuntime ContainerRuntimeProcessQuerier
