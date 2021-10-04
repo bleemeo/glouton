@@ -410,7 +410,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 		return err
 	}
 
-	topinfo.Time = time.Now().Unix()
+	topinfo.Time = now.Unix()
 	topinfo.Processes = make([]Process, 0, len(newProcessesMap))
 
 	for _, p := range newProcessesMap {
@@ -419,7 +419,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 
 	pp.topinfo = topinfo
 	pp.processes = newProcessesMap
-	pp.lastProcessesUpdate = time.Now()
+	pp.lastProcessesUpdate = now
 
 	logger.V(2).Printf("Completed %d processes update in %v", len(pp.processes), time.Since(now))
 

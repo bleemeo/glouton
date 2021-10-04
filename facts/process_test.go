@@ -22,6 +22,9 @@ import (
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 )
 
 func TestPsStat2Status(t *testing.T) {
@@ -426,8 +429,13 @@ func TestUpdateProcessesWithTerminated(t *testing.T) {
 		t.Errorf("len(pp.processe) == %v, want %v", len(pp.processes), len(cases))
 	}
 
-	if wantPID := []int{1, 101, 102}; !reflect.DeepEqual(cr.ContainerFromPIDCalls, wantPID) {
-		t.Errorf("ContainerFromPIDCalls = %v, want %v", cr.ContainerFromPIDCalls, wantPID)
+	sortInts := func(i, j int) bool {
+		return i < j
+	}
+	wantPID := []int{1, 101, 102}
+
+	if diff := cmp.Diff(wantPID, cr.ContainerFromPIDCalls, cmpopts.SortSlices(sortInts)); diff != "" {
+		t.Errorf("ContainerFromPIDCalls mismatch (-want+got)\n%s", diff)
 	}
 
 	for _, c := range cases {
@@ -742,7 +750,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:cyclop
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t1.Add(time.Minute), 0)
+	err = pp.updateProcesses(context.Background(), t1.Add(20*time.Second), 0)
 	if err != nil {
 		t.Error(err)
 	}
@@ -943,7 +951,7 @@ func TestUpdateProcessesOptimization(t *testing.T) { //nolint:cyclop
 		},
 	}
 
-	err = pp.updateProcesses(context.Background(), t2.Add(time.Minute), 0)
+	err = pp.updateProcesses(context.Background(), t2.Add(time.Minute).Add(20*time.Second), 0)
 	if err != nil {
 		t.Error(err)
 	}
