@@ -311,7 +311,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					if parentCGroupData == "" {
 						parentCGroupData, err = pp.ps.CGroupFromPID(parent.PID)
 						if err != nil {
-							logger.V(2).Printf("No cgroup data for parent process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
+							logger.V(2).Printf("No cgroup data for parent of process %d (%s): can't read cgroup data: %v", p.PID, p.Name, err)
 							parentCGroupData = ""
 						} else {
 							pid2Cgroup[parent.PID] = parentCGroupData
@@ -319,7 +319,7 @@ func (pp *ProcessProvider) updateProcesses(ctx context.Context, now time.Time, m
 					}
 
 					if parentCGroupData != "" && parentCGroupData == cgroupData {
-						logger.V(2).Printf("Based on parent, process %d (%s) belong to container %s", p.PID, p.Name, parent.ContainerName)
+						logger.V(2).Printf("Based on parent %d, process %d (%s) belong to container %s", p.PPID, p.PID, p.Name, parent.ContainerName)
 
 						p.ContainerID = parent.ContainerID
 						p.ContainerName = parent.ContainerName
