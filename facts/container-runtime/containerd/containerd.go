@@ -54,6 +54,7 @@ type Containerd struct {
 	DeletedContainersCallback func(containersID []string)
 
 	l                sync.Mutex
+	workedOnce       bool
 	openConnection   func(ctx context.Context, address string) (cl containerdClient, err error)
 	client           containerdClient
 	lastUpdate       time.Time
@@ -233,6 +234,10 @@ func (c *Containerd) Containers(ctx context.Context, maxAge time.Duration, inclu
 	if time.Since(c.lastUpdate) >= maxAge {
 		err = c.updateContainers(ctx)
 		if err != nil {
+			if !c.workedOnce {
+				return nil, nil
+			}
+
 			return nil, err
 		}
 	}
@@ -745,6 +750,8 @@ func (c *Containerd) getClient(ctx context.Context) (containerdClient, error) {
 		}
 	}
 
+	c.workedOnce = true
+
 	return c.client, nil
 }
 
@@ -1022,6 +1029,10 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 		q.containersUpdated = true
 
 		if err := q.c.updateContainers(ctx); err != nil {
+			if !q.c.workedOnce {
+				return nil, nil
+			}
+
 			q.containersUpdateErr = err
 
 			return nil, err
@@ -1059,7 +1070,7 @@ func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string)
 	return containerObject{}, false
 }
 
-func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) {
+func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentContainerID string, pid int) (facts.Container, error) { //nolint: cyclop
 	q.c.l.Lock()
 	defer q.c.l.Unlock()
 
@@ -1084,6 +1095,10 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 
 	if q.containersToQueryPIDS == nil {
 		if err := q.listContainers(ctx); err != nil {
+			if !q.c.workedOnce {
+				return nil, nil
+			}
+
 			q.containersToQueryErr = err
 
 			return nil, err
@@ -1138,6 +1153,10 @@ func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int
 		q.containersUpdated = true
 
 		if err := q.c.updateContainers(ctx); err != nil {
+			if !q.c.workedOnce {
+				return nil, nil
+			}
+
 			q.containersUpdateErr = err
 
 			return nil, err

@@ -55,6 +55,7 @@ type Docker struct {
 	DeletedContainersCallback func(containersID []string)
 
 	l                sync.Mutex
+	workedOnce       bool
 	openConnection   func(ctx context.Context, host string) (cl dockerClient, err error)
 	serverAddress    string
 	client           dockerClient
@@ -135,7 +136,11 @@ func (d *Docker) Containers(ctx context.Context, maxAge time.Duration, includeIg
 	if time.Since(d.lastUpdate) >= maxAge {
 		err = d.updateContainers(ctx)
 		if err != nil {
-			return
+			if !d.workedOnce {
+				return nil, nil
+			}
+
+			return nil, err
 		}
 	}
 
@@ -643,6 +648,8 @@ func (d *Docker) getClient(ctx context.Context) (cl dockerClient, err error) {
 		}
 	}
 
+	d.workedOnce = true
+
 	return d.client, nil
 }
 
@@ -1002,14 +1009,20 @@ func (d *dockerProcessQuerier) Processes(ctx context.Context) ([]facts.Process, 
 func (d *dockerProcessQuerier) fillContainers(ctx context.Context) error {
 	if d.containers == nil {
 		_, err := d.d.Containers(ctx, 0, false)
+		d.d.l.Lock()
+
 		if err != nil {
 			d.containers = make(map[string]dockerContainer)
+			if !d.d.workedOnce {
+				err = nil
+			}
+
 			d.errListContainers = err
+
+			d.d.l.Unlock()
 
 			return err
 		}
-
-		d.d.l.Lock()
 
 		d.containers = make(map[string]dockerContainer, len(d.d.containers))
 		for k, v := range d.d.containers {
@@ -1107,9 +1120,15 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 func (d *dockerProcessQuerier) top(ctx context.Context, c facts.Container) (container.ContainerTopOKBody, container.ContainerTopOKBody, error) {
 	d.d.l.Lock()
 	cl, err := d.d.getClient(ctx)
+
+	if err != nil && !d.d.workedOnce {
+		err = nil
+		cl = nil
+	}
+
 	d.d.l.Unlock()
 
-	if err != nil {
+	if err != nil || cl == nil {
 		return container.ContainerTopOKBody{}, container.ContainerTopOKBody{}, err
 	}
 
