@@ -224,7 +224,7 @@ func (d *Discovery) DiagnosticZip(zipFile *zip.Writer) error {
 
 func (d *Discovery) discovery(ctx context.Context, maxAge time.Duration) (services []Service, err error) {
 	if time.Since(d.lastDiscoveryUpdate) >= maxAge {
-		err := d.updateDiscovery(ctx, maxAge)
+		err := d.updateDiscovery(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -283,7 +283,7 @@ func (d *Discovery) reconfigure() {
 	d.lastConfigservicesMap = d.servicesMap
 }
 
-func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) error {
+func (d *Discovery) updateDiscovery(ctx context.Context) error {
 	// Make sure we have a container list. This is important for startup, so
 	// that previously known service could get associated with container.
 	// Without this, a service in a stopped container (which should be shown
@@ -293,7 +293,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context, maxAge time.Duration) e
 		logger.V(1).Printf("error while updating containers: %v", err)
 	}
 
-	r, err := d.dynamicDiscovery.Discovery(ctx, maxAge)
+	r, err := d.dynamicDiscovery.Discovery(ctx, 0)
 	if err != nil {
 		return err
 	}
