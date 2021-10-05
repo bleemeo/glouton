@@ -288,7 +288,7 @@ func (d *Discovery) updateDiscovery(ctx context.Context) error {
 	// that previously known service could get associated with container.
 	// Without this, a service in a stopped container (which should be shown
 	// as critical with "Container Stopped" reason) might disapear.
-	_, err := d.containerInfo.Containers(ctx, 2*time.Hour, false)
+	_, err := d.containerInfo.Containers(ctx, 0, false)
 	if err != nil {
 		logger.V(1).Printf("error while updating containers: %v", err)
 	}

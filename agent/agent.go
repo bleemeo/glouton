@@ -1660,13 +1660,6 @@ func (a *agent) cleanTrigger() (discovery bool, sendFacts bool, systemUpdateMetr
 func (a *agent) handleTrigger(ctx context.Context) {
 	runDiscovery, runFact, runSystemUpdateMetric := a.cleanTrigger()
 	if runDiscovery {
-		// force update of containers. This is important so that discovery correctly
-		// associate service with container or remove service when container is stopped.
-		_, err := a.containerRuntime.Containers(ctx, 0, false)
-		if err != nil {
-			logger.V(1).Printf("error while updating containers: %v", err)
-		}
-
 		services, err := a.discovery.Discovery(ctx, 0)
 		if err != nil {
 			logger.V(1).Printf("error during discovery: %v", err)
