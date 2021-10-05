@@ -138,6 +138,49 @@ func (t *Target) GatherWithState(ctx context.Context, state registry.GatherState
 		t.l.Unlock()
 	}
 
+	var (
+		totalInterfaces     int
+		connectedInterfaces int
+	)
+
+	for _, mf := range result {
+		if mf.GetName() == "ifOperStatus" {
+			for _, m := range mf.Metric {
+				totalInterfaces++
+
+				if m.GetGauge().GetValue() == 1 {
+					connectedInterfaces++
+				}
+			}
+		}
+	}
+
+	if totalInterfaces > 0 {
+		result = append(result, &dto.MetricFamily{
+			Name: proto.String("total_interfaces"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(totalInterfaces)),
+					},
+				},
+			},
+		})
+
+		result = append(result, &dto.MetricFamily{
+			Name: proto.String("connected_interfaces"),
+			Type: dto.MetricType_GAUGE.Enum(),
+			Metric: []*dto.Metric{
+				{
+					Gauge: &dto.Gauge{
+						Value: proto.Float64(float64(connectedInterfaces)),
+					},
+				},
+			},
+		})
+	}
+
 	if status, msg := t.getStatus(); status != types.StatusUnset {
 		result = append(result, &dto.MetricFamily{
 			Name: proto.String("agent_status"),
