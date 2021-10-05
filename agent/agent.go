@@ -615,6 +615,7 @@ func (a *agent) run() { //nolint:cyclop
 			MetricFormat:          a.metricFormat,
 			BlackboxSentScraperID: a.oldConfig.Bool("blackbox.scraper_send_uuid"),
 			Filter:                mFilter,
+			Queryable:             a.store,
 		})
 	if err != nil {
 		logger.Printf("Unable to create the metrics registry: %v", err)

@@ -41,6 +41,7 @@ import (
 	"github.com/prometheus/common/model"
 	"github.com/prometheus/prometheus/pkg/labels"
 	"github.com/prometheus/prometheus/pkg/relabel"
+	"github.com/prometheus/prometheus/storage"
 )
 
 const (
@@ -120,6 +121,7 @@ type Registry struct {
 
 type Option struct {
 	PushPoint             types.PointPusher
+	Queryable             storage.Queryable
 	FQDN                  string
 	GloutonPort           string
 	MetricFormat          types.MetricFormat
@@ -659,6 +661,21 @@ func (r *Registry) Gather() ([]*dto.MetricFamily, error) {
 // GatherWithState implements GathererGatherWithState.
 func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*dto.MetricFamily, error) {
 	r.init()
+
+	if state.QueryType == FromStore {
+		if r.option.Queryable == nil {
+			return nil, nil
+		}
+
+		filter := r.option.Filter
+
+		if state.NoFilter {
+			filter = nil
+		}
+
+		return gatherFromQueryable(ctx, r.option.Queryable, filter)
+	}
+
 	r.l.Lock()
 
 	gatherers := make(Gatherers, 0, len(r.registrations)+1)
@@ -684,6 +701,67 @@ func (r *Registry) GatherWithState(ctx context.Context, state GatherState) ([]*d
 	mfs, err := gatherers.GatherWithState(ctx, state)
 
 	return mfs, err
+}
+
+func gatherFromQueryable(ctx context.Context, queryable storage.Queryable, filter metricFilter) ([]*dto.MetricFamily, error) {
+	var result []*dto.MetricFamily
+
+	now := time.Now()
+	mint := now.Add(-5 * time.Minute)
+
+	querier, err := queryable.Querier(ctx, mint.UnixMilli(), now.UnixMilli())
+	if err != nil {
+		return nil, err
+	}
+
+	series := querier.Select(true, nil)
+	for series.Next() {
+		lbls := series.At().Labels()
+		iter := series.At().Iterator()
+
+		name := lbls.Get(types.LabelName)
+		if len(result) == 0 || result[len(result)-1].GetName() != name {
+			result = append(result, &dto.MetricFamily{
+				Name: &name,
+				Type: dto.MetricType_GAUGE.Enum(),
+			})
+		}
+
+		dtoLabels := make([]*dto.LabelPair, 0, len(lbls)-1)
+
+		for _, l := range lbls {
+			l := l
+
+			if l.Name == types.LabelName {
+				continue
+			}
+
+			dtoLabels = append(dtoLabels, &dto.LabelPair{Name: &l.Name, Value: &l.Value})
+		}
+
+		var lastValue float64
+
+		for iter.Next() {
+			_, lastValue = iter.At()
+		}
+
+		if iter.Err() != nil {
+			return result, iter.Err()
+		}
+
+		metric := &dto.Metric{
+			Label: dtoLabels,
+			Gauge: &dto.Gauge{Value: &lastValue},
+		}
+
+		result[len(result)-1].Metric = append(result[len(result)-1].Metric, metric)
+	}
+
+	if filter != nil {
+		result = filter.FilterFamilies(result)
+	}
+
+	return result, series.Err()
 }
 
 type prefixLogger string

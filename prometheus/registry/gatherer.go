@@ -29,6 +29,8 @@ const (
 	OnlyProbes
 	// All specifies we want all the data, including probes.
 	All
+	// FromStore use the store (queryable) to get recent stored data.
+	FromStore
 )
 
 // GatherState is an argument given to gatherers that support it. It allows us to give extra informations
@@ -59,6 +61,10 @@ func GatherStateFromMap(params map[string][]string) GatherState {
 
 	if _, noFilter := params["noFilter"]; noFilter {
 		state.NoFilter = true
+	}
+
+	if _, fromStore := params["fromStore"]; fromStore {
+		state.QueryType = FromStore
 	}
 
 	return state
