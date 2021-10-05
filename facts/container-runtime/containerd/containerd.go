@@ -986,7 +986,9 @@ type namespaceContainer struct {
 type containerdProcessQuerier struct {
 	c                     *Containerd
 	containersUpdated     bool
+	containersUpdateErr   error
 	containersToQueryPIDS []namespaceContainer
+	containersToQueryErr  error
 	pid2container         map[int]containerObject
 }
 
@@ -1020,6 +1022,8 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 		q.containersUpdated = true
 
 		if err := q.c.updateContainers(ctx); err != nil {
+			q.containersUpdateErr = err
+
 			return nil, err
 		}
 
@@ -1029,7 +1033,7 @@ func (q *containerdProcessQuerier) ContainerFromCGroup(ctx context.Context, cgro
 		}
 	}
 
-	return nil, nil
+	return nil, q.containersUpdateErr
 }
 
 func (q *containerdProcessQuerier) getContainerFromCGroupPath(cgroupPath string) (containerObject, bool) {
@@ -1080,6 +1084,8 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 
 	if q.containersToQueryPIDS == nil {
 		if err := q.listContainers(ctx); err != nil {
+			q.containersToQueryErr = err
+
 			return nil, err
 		}
 	}
@@ -1098,11 +1104,15 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 
 		task, err := obj.container.Task(ctx, nil)
 		if err != nil {
+			q.containersToQueryErr = err
+
 			return nil, err
 		}
 
 		pids, err := task.Pids(ctx)
 		if err != nil {
+			q.containersToQueryErr = err
+
 			return nil, err
 		}
 
@@ -1119,7 +1129,7 @@ func (q *containerdProcessQuerier) ContainerFromPID(ctx context.Context, parentC
 		return c, nil
 	}
 
-	return nil, nil
+	return nil, q.containersToQueryErr
 }
 
 // containerFromPID return the container which had pid as first process. It will update list of containers if needed.
@@ -1128,6 +1138,8 @@ func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int
 		q.containersUpdated = true
 
 		if err := q.c.updateContainers(ctx); err != nil {
+			q.containersUpdateErr = err
+
 			return nil, err
 		}
 
@@ -1138,7 +1150,7 @@ func (q *containerdProcessQuerier) containerFromPID(ctx context.Context, pid int
 		}
 	}
 
-	return nil, nil
+	return nil, q.containersUpdateErr
 }
 
 func (q *containerdProcessQuerier) listContainers(ctx context.Context) error {

@@ -83,8 +83,8 @@ func (d *Docker) LastUpdate() time.Time {
 // ProcessWithCache facts.containerRuntime.
 func (d *Docker) ProcessWithCache() facts.ContainerRuntimeProcessQuerier {
 	return &dockerProcessQuerier{
-		d:                    d,
-		containerProcessDone: make(map[string]bool),
+		d:                   d,
+		containerProcessErr: make(map[string]error),
 	}
 }
 
@@ -977,10 +977,11 @@ var dockerCGroupRE = regexp.MustCompile(
 )
 
 type dockerProcessQuerier struct {
-	d                    *Docker
-	containers           map[string]dockerContainer
-	processesMap         map[int]facts.Process
-	containerProcessDone map[string]bool
+	d                   *Docker
+	errListContainers   error
+	containers          map[string]dockerContainer
+	processesMap        map[int]facts.Process
+	containerProcessErr map[string]error
 }
 
 // Processes returns processes from all running Docker containers.
@@ -998,11 +999,12 @@ func (d *dockerProcessQuerier) Processes(ctx context.Context) ([]facts.Process, 
 	return processes, nil
 }
 
-func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, firstContainer string) error {
+func (d *dockerProcessQuerier) fillContainers(ctx context.Context) error {
 	if d.containers == nil {
 		_, err := d.d.Containers(ctx, 0, false)
 		if err != nil {
 			d.containers = make(map[string]dockerContainer)
+			d.errListContainers = err
 
 			return err
 		}
@@ -1015,6 +1017,19 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 		}
 
 		d.d.l.Unlock()
+	}
+
+	if len(d.containers) == 0 && d.errListContainers != nil {
+		return d.errListContainers
+	}
+
+	return nil
+}
+
+func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, firstContainer string) error {
+	err := d.fillContainers(ctx)
+	if err != nil {
+		return err
 	}
 
 	if d.processesMap == nil {
@@ -1033,10 +1048,6 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 			return nil
 		}
 
-		if d.containerProcessDone[c.ID()] {
-			continue
-		}
-
 		if !c.State().IsRunning() {
 			continue
 		}
@@ -1051,19 +1062,24 @@ func (d *dockerProcessQuerier) processes(ctx context.Context, searchPID int, fir
 }
 
 func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c facts.Container) error {
-	if d.containerProcessDone[c.ID()] {
-		return nil
+	if _, ok := d.containerProcessErr[c.ID()]; ok {
+		return d.containerProcessErr[c.ID()]
 	}
 
-	d.containerProcessDone[c.ID()] = true
 	top, topWaux, err := d.top(ctx, c)
 
 	switch {
 	case err != nil && errdefs.IsNotFound(err):
+		d.containerProcessErr[c.ID()] = nil
+
 		return nil
 	case err != nil && strings.Contains(fmt.Sprintf("%v", err), "is not running"):
+		d.containerProcessErr[c.ID()] = nil
+
 		return nil
 	case err != nil:
+		d.containerProcessErr[c.ID()] = err
+
 		return err
 	}
 
@@ -1082,6 +1098,8 @@ func (d *dockerProcessQuerier) processesContainerMap(ctx context.Context, c fact
 			d.processesMap[p.PID] = p
 		}
 	}
+
+	d.containerProcessErr[c.ID()] = nil
 
 	return nil
 }
@@ -1330,22 +1348,8 @@ func (d *dockerProcessQuerier) ContainerFromCGroup(ctx context.Context, cgroupDa
 		return nil, nil
 	}
 
-	if d.containers == nil {
-		_, err := d.d.Containers(ctx, 0, false)
-		if err != nil {
-			d.containers = make(map[string]dockerContainer)
-
-			return nil, err
-		}
-
-		d.d.l.Lock()
-
-		d.containers = make(map[string]dockerContainer, len(d.d.containers))
-		for k, v := range d.d.containers {
-			d.containers[k] = v
-		}
-
-		d.d.l.Unlock()
+	if err := d.fillContainers(ctx); err != nil {
+		return nil, err
 	}
 
 	c, ok := d.containers[containerID]
