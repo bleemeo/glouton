@@ -48,10 +48,15 @@ const (
 )
 
 type mockMetric struct {
-	Name string
+	Name   string
+	labels map[string]string
 }
 
 func (m mockMetric) Labels() map[string]string {
+	if m.labels != nil {
+		return m.labels
+	}
+
 	return map[string]string{types.LabelName: m.Name}
 }
 
@@ -116,6 +121,254 @@ func TestPrioritizeAndFilterMetrics(t *testing.T) {
 		if !isHighPriority[m.Labels()[types.LabelName]] {
 			t.Errorf("Found metrics %#v at index %d, but it's not prioritary", m.Labels()[types.LabelName], i)
 		}
+	}
+}
+
+func TestPrioritizeAndFilterMetrics2(t *testing.T) {
+	type order struct {
+		LabelBefore string
+		LabelAfter  string
+	}
+
+	cases := []struct {
+		name   string
+		inputs []string
+		format types.MetricFormat
+		order  []order
+	}{
+		{
+			name: "without item are sorted first",
+			inputs: []string{
+				`__name__="cpu_used"`,
+				`__name__="net_bits_recv",item="eth0"`,
+				`__name__="net_bits_sent",item="eth0"`,
+				`__name__="mem_used"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_recv",item="eth0"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_sent",item="eth0"`},
+				{LabelBefore: `__name__="mem_used"`, LabelAfter: `__name__="net_bits_recv",item="eth0"`},
+				{LabelBefore: `__name__="mem_used"`, LabelAfter: `__name__="net_bits_sent",item="eth0"`},
+			},
+		},
+		{
+			name: "network and fs are after",
+			inputs: []string{
+				`__name__="io_reads",item="the_item"`,
+				`__name__="net_bits_recv",item="the_item"`,
+				`__name__="io_writes",item="the_item"`,
+				`__name__="cpu_used"`,
+				`__name__="disk_used_perc",item="the_item"`,
+				`__name__="io_utilization",item="the_item"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="io_writes",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="io_utilization",item="the_item"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+				{LabelBefore: `__name__="io_writes",item="the_item"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+				{LabelBefore: `__name__="io_utilization",item="the_item"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="disk_used_perc",item="the_item"`},
+			},
+		},
+		{
+			name: "custom are always after",
+			inputs: []string{
+				`__name__="custom_metric"`,
+				`__name__="net_bits_recv",item="eth0"`,
+				`__name__="net_bits_recv",item="the_item"`,
+				`__name__="cpu_used"`,
+				`__name__="custom_metric_item",item="the_item"`,
+				`__name__="io_reads",item="the_item"`,
+				`__name__="custom_metric2"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="cpu_used"`, LabelAfter: `__name__="custom_metric"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="custom_metric"`},
+				{LabelBefore: `__name__="net_bits_recv",item="the_item"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="the_item"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="net_bits_recv",item="the_item"`, LabelAfter: `__name__="custom_metric"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="custom_metric_item",item="the_item"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="custom_metric2"`},
+				{LabelBefore: `__name__="io_reads",item="the_item"`, LabelAfter: `__name__="custom_metric"`},
+			},
+		},
+		{
+			name: "network item are sorted",
+			inputs: []string{
+				`__name__="net_bits_sent",item="eno1"`,
+				`__name__="net_bits_recv",item="the_item"`,
+				`__name__="net_bits_recv",item="eth0"`,
+				`__name__="net_bits_recv",item="br-1234"`,
+				`__name__="net_bits_recv",item="eno1"`,
+				`__name__="net_bits_sent",item="eth0"`,
+				`__name__="net_bits_recv",item="eth1"`,
+				`__name__="net_bits_recv",item="br-1"`,
+				`__name__="net_bits_recv",item="br-0"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="eth1"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eth0"`, LabelAfter: `__name__="net_bits_recv",item="eth1"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth1"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth1"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eth1"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_recv",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="the_item"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-0"`},
+				{LabelBefore: `__name__="net_bits_sent",item="eno1"`, LabelAfter: `__name__="net_bits_recv",item="br-1234"`},
+				{LabelBefore: `__name__="net_bits_recv",item="br-0"`, LabelAfter: `__name__="net_bits_recv",item="br-1"`},
+			},
+		},
+	}
+
+	for _, tt := range cases {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			metrics := make([]types.Metric, 0, len(tt.inputs))
+
+			for _, lbls := range tt.inputs {
+				metrics = append(metrics, mockMetric{labels: types.TextToLabels(lbls)})
+			}
+
+			result := prioritizeAndFilterMetrics(tt.format, metrics, false)
+
+			for _, ord := range tt.order {
+				firstIdx := -1
+				secondIdx := -1
+
+				for i, m := range result {
+					if reflect.DeepEqual(m.Labels(), types.TextToLabels(ord.LabelBefore)) {
+						if firstIdx == -1 {
+							firstIdx = i
+						} else {
+							t.Errorf("metric labels %s present at index %d and %d", ord.LabelBefore, firstIdx, i)
+						}
+					}
+
+					if reflect.DeepEqual(m.Labels(), types.TextToLabels(ord.LabelAfter)) {
+						if secondIdx == -1 {
+							secondIdx = i
+						} else {
+							t.Errorf("metric labels %s present at index %d and %d", ord.LabelAfter, secondIdx, i)
+						}
+					}
+				}
+
+				switch {
+				case firstIdx == -1:
+					t.Errorf("metric %s is not present", ord.LabelBefore)
+				case secondIdx == -1:
+					t.Errorf("metric %s is not present", ord.LabelAfter)
+				case firstIdx >= secondIdx:
+					t.Errorf("metric %s is after metric %s (%d >= %d)", ord.LabelBefore, ord.LabelAfter, firstIdx, secondIdx)
+				}
+			}
+		})
+	}
+}
+
+func Test_metricComparator_IsSignificantItem(t *testing.T) {
+	tests := []struct {
+		item string
+		want bool
+	}{
+		{
+			item: "/",
+			want: true,
+		},
+		{
+			item: "/home",
+			want: true,
+		},
+		{
+			item: "/home",
+			want: true,
+		},
+		{
+			item: "/srv",
+			want: true,
+		},
+		{
+			item: "/var",
+			want: true,
+		},
+		{
+			item: "eth0",
+			want: true,
+		},
+		{
+			item: "eth1",
+			want: true,
+		},
+		{
+			item: "ens18",
+			want: true,
+		},
+		{
+			item: "ens1",
+			want: true,
+		},
+		{
+			item: "eno1",
+			want: true,
+		},
+		{
+			item: "eno5",
+			want: true,
+		},
+		{
+			item: "enp7s0",
+			want: true,
+		},
+		{
+			item: "ens1f1",
+			want: true,
+		},
+
+		{
+			item: "/home/user",
+			want: false,
+		},
+		{
+			item: "enp7s0.4010",
+			want: false,
+		},
+		{
+			item: "eth99",
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.item, func(t *testing.T) {
+			t.Parallel()
+
+			m := newComparator(types.MetricFormatBleemeo)
+			if got := m.IsSignificantItem(tt.item); got != tt.want {
+				t.Errorf("metricComparator.IsSignificantItem() = %v, want %v", got, tt.want)
+			}
+		})
 	}
 }
 

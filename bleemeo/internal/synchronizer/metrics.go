@@ -27,7 +27,9 @@ import (
 	"glouton/threshold"
 	"glouton/types"
 	"math/rand"
+	"regexp"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 )
@@ -125,14 +127,13 @@ func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 	return mp.Metric
 }
 
-func prioritizeAndFilterMetrics(format types.MetricFormat, metrics []types.Metric, onlyEssential bool) []types.Metric {
-	swapIdx := 0
-	results := metrics
+type metricComparator struct {
+	isEssentials      map[string]bool
+	isHighCardinality map[string]bool
+	isGoodItem        *regexp.Regexp
+}
 
-	if onlyEssential {
-		results = make([]types.Metric, 0, 100)
-	}
-
+func newComparator(format types.MetricFormat) *metricComparator {
 	essentials := []string{
 		"node_cpu_seconds_global",
 		"node_cpu_seconds_total",
@@ -195,24 +196,137 @@ func prioritizeAndFilterMetrics(format types.MetricFormat, metrics []types.Metri
 		}
 	}
 
-	essentialsMap := make(map[string]interface{}, len(essentials))
-
-	for _, v := range essentials {
-		essentialsMap[v] = nil
+	highCard := []string{
+		"node_filesystem_avail_bytes",
+		"node_filesystem_size_bytes",
+		"node_network_receive_bytes_total",
+		"node_network_transmit_bytes_total",
+		"node_network_receive_packets_total",
+		"node_network_transmit_packets_total",
+		"node_network_receive_errs_total",
+		"node_network_transmit_errs_total",
+		"windows_logical_disk_free_bytes",
+		"windows_logical_disk_size_bytes",
+		"windows_net_bytes_received_total",
+		"windows_net_bytes_sent_total",
+		"windows_net_packets_received_total",
+		"windows_net_packets_sent_total",
+		"windows_net_packets_received_errors",
+		"windows_net_packets_outbound_errors",
+		"net_bits_recv",
+		"net_bits_sent",
+		"net_packets_recv",
+		"net_packets_sent",
+		"net_err_in",
+		"net_err_out",
+		"disk_used_perc",
 	}
 
-	for i, m := range metrics {
-		if _, ok := essentialsMap[m.Labels()[types.LabelName]]; ok {
-			if onlyEssential {
-				results = append(results, m)
-			} else {
-				metrics[i], metrics[swapIdx] = metrics[swapIdx], metrics[i]
-				swapIdx++
-			}
+	isEssentials := make(map[string]bool, len(essentials))
+	isHighCard := make(map[string]bool, len(highCard))
+
+	for _, v := range essentials {
+		isEssentials[v] = true
+	}
+
+	for _, v := range highCard {
+		isHighCard[v] = true
+	}
+
+	return &metricComparator{
+		isEssentials:      isEssentials,
+		isHighCardinality: isHighCard,
+		isGoodItem:        regexp.MustCompile(`^(/|/home|/var|/srv|eth.|eno.|en(s|p)(\d|1\d)(.\d)?)$`),
+	}
+}
+
+func (m *metricComparator) IsEssential(metric map[string]string) bool {
+	return m.isEssentials[metric[types.LabelName]]
+}
+
+func (m *metricComparator) IsHighCardinality(metric map[string]string) bool {
+	return m.isHighCardinality[metric[types.LabelName]]
+}
+
+// IsSignificantItem return true of "important" item. Like "/", "/home" or "eth0".
+// It's aim is having standard filesystem/network interface before exotic one.
+func (m *metricComparator) IsSignificantItem(item string) bool {
+	return m.isGoodItem.MatchString(item)
+}
+
+func getItem(metric map[string]string) string {
+	source := []string{
+		"item",
+		"device",
+		"mountpoint",
+	}
+
+	for _, n := range source {
+		if metric[n] != "" {
+			return metric[n]
 		}
 	}
 
-	return results
+	return ""
+}
+
+func (m *metricComparator) isMoreSignficant(metricA map[string]string, metricB map[string]string) bool {
+	essentialA := m.IsEssential(metricA)
+	essentialB := m.IsEssential(metricB)
+
+	highCardA := m.IsHighCardinality(metricA)
+	highCardB := m.IsHighCardinality(metricB)
+
+	itemA := getItem(metricA)
+	itemB := getItem(metricB)
+
+	itemSignificantA := m.IsSignificantItem(itemA)
+	itemSignificantB := m.IsSignificantItem(itemB)
+
+	switch {
+	case !essentialA:
+		return false
+	case !essentialB:
+		return true
+	// from now, both are essential
+	case !highCardA && highCardB:
+		return true
+	case highCardA && !highCardB:
+		return false
+	case len(metricA) != len(metricB):
+		return len(metricA) < len(metricB)
+	case itemSignificantA && !itemSignificantB:
+		return true
+	case !itemSignificantA && itemSignificantB:
+		return false
+	default:
+		return itemA < itemB
+	}
+}
+
+func prioritizeAndFilterMetrics(format types.MetricFormat, metrics []types.Metric, onlyEssential bool) []types.Metric {
+	cmp := newComparator(format)
+
+	if onlyEssential {
+		i := 0
+
+		for _, m := range metrics {
+			if !cmp.IsEssential(m.Labels()) {
+				continue
+			}
+
+			metrics[i] = m
+			i++
+		}
+
+		metrics = metrics[:i]
+	}
+
+	sort.Slice(metrics, func(i, j int) bool {
+		return cmp.isMoreSignficant(metrics[i].Labels(), metrics[j].Labels())
+	})
+
+	return metrics
 }
 
 func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
