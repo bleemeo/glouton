@@ -14,7 +14,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//nolint:scopelint,goconst
+//nolint:scopelint,goconst,dupl
 package synchronizer
 
 import (
@@ -236,6 +236,44 @@ func TestPrioritizeAndFilterMetrics2(t *testing.T) {
 				{LabelBefore: `__name__="net_bits_recv",item="br-0"`, LabelAfter: `__name__="net_bits_recv",item="br-1"`},
 			},
 		},
+		{
+			name: "container are sorted",
+			inputs: []string{
+				`__name__="container_net_bits_sent",item="my_redis"`,
+				`__name__="container_mem_used",item="my_memcached"`,
+				`__name__="container_cpu_used",item="my_rabbitmq"`,
+				`__name__="container_cpu_used",item="my_redis"`,
+				`__name__="container_cpu_used",item="my_memcached"`,
+				`__name__="container_mem_used",item="my_redis"`,
+				`__name__="container_mem_used",item="my_rabbitmq"`,
+				`__name__="container_net_bits_sent",item="my_memcached"`,
+				`__name__="container_net_bits_sent",item="my_rabbitmq"`,
+			},
+			format: types.MetricFormatBleemeo,
+			order: []order{
+				// What we only want is the item are together. Currently item are sorted in lexical order
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_net_bits_sent",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_rabbitmq"`},
+
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_cpu_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_rabbitmq"`},
+
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_redis"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_net_bits_sent",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_mem_used",item="my_rabbitmq"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_redis"`},
+				{LabelBefore: `__name__="container_mem_used",item="my_memcached"`, LabelAfter: `__name__="container_cpu_used",item="my_rabbitmq"`},
+			},
+		},
 	}
 
 	for _, tt := range cases {
@@ -367,6 +405,107 @@ func Test_metricComparator_IsSignificantItem(t *testing.T) {
 			m := newComparator(types.MetricFormatBleemeo)
 			if got := m.IsSignificantItem(tt.item); got != tt.want {
 				t.Errorf("metricComparator.IsSignificantItem() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_metricComparator_importanceWeight(t *testing.T) {
+	tests := []struct {
+		name         string
+		format       types.MetricFormat
+		metricBefore string
+		metricAfter  string
+	}{
+		{
+			name:         "metric of system dashboard are first 1",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="cpu_used"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 2",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="eth0"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 3",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="the_item"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 4",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="io_reads",item="nvme0"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "metric of system dashboard are first 5",
+			format:       types.MetricFormatPrometheus,
+			metricBefore: `__name__="node_cpu_seconds_global",mode="idle"`,
+			metricAfter:  `__name__="custom_metric"`,
+		},
+		{
+			name:         "high cardinality after important",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="system_pending_security_updates"`,
+			metricAfter:  `__name__="disk_used_perc",item="/random-value"`,
+		},
+		{
+			name:         "good item before important",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="disk_used_perc",item="/home"`,
+			metricAfter:  `__name__="system_pending_security_updates"`,
+		},
+		{
+			name:         "high cardinality after status",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="apache_status"`,
+			metricAfter:  `__name__="net_bits_recv",item="tap150"`,
+		},
+		{
+			name:         "good item before status",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="eth0"`,
+			metricAfter:  `__name__="apache_status"`,
+		},
+		{
+			name:         "high cardinality before custom",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="net_bits_recv",item="tap150"`,
+			metricAfter:  `__name__="custome_metric"`,
+		},
+		{
+			name:         "essential without item first",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="cpu_used"`,
+			metricAfter:  `__name__="cpu_used",item="value"`,
+		},
+		{
+			name:         "essential without item first 2",
+			format:       types.MetricFormatBleemeo,
+			metricBefore: `__name__="cpu_used"`,
+			metricAfter:  `__name__="io_reads",item="/dev/sda"`,
+		},
+	}
+	for _, tt := range tests {
+		tt := tt
+
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			m := newComparator(tt.format)
+
+			metricA := types.TextToLabels(tt.metricBefore)
+			metricB := types.TextToLabels(tt.metricAfter)
+
+			weightA := m.importanceWeight(metricA)
+			weightB := m.importanceWeight(metricB)
+
+			if weightA >= weightB {
+				t.Errorf("weightA = %d, want less than %d", weightA, weightB)
 			}
 		})
 	}

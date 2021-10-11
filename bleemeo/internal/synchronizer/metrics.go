@@ -130,6 +130,7 @@ func (mp metricPayload) metricFromAPI() bleemeoTypes.Metric {
 type metricComparator struct {
 	isEssentials      map[string]bool
 	isHighCardinality map[string]bool
+	isImportant       map[string]bool
 	isGoodItem        *regexp.Regexp
 }
 
@@ -157,6 +158,7 @@ func newComparator(format types.MetricFormat) *metricComparator {
 		"node_network_transmit_packets_total",
 		"node_network_receive_errs_total",
 		"node_network_transmit_errs_total",
+		"agent_config_warning",
 		agentStatusName,
 	}
 
@@ -187,12 +189,12 @@ func newComparator(format types.MetricFormat) *metricComparator {
 
 	if format == types.MetricFormatBleemeo {
 		essentials = []string{
-			"cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal",
+			"cpu_idle", "cpu_wait", "cpu_nice", "cpu_user", "cpu_system", "cpu_interrupt", "cpu_softirq", "cpu_steal", "cpu_guest_nice", "cpu_guest",
 			"mem_free", "mem_cached", "mem_buffered", "mem_used",
 			"io_utilization", "io_read_bytes", "io_write_bytes", "io_reads",
 			"io_writes", "net_bits_recv", "net_bits_sent", "net_packets_recv",
 			"net_packets_sent", "net_err_in", "net_err_out", "disk_used_perc",
-			"swap_used_perc", "cpu_used", "mem_used_perc", agentStatusName,
+			"swap_used_perc", "cpu_used", "mem_used_perc", "agent_config_warning", agentStatusName,
 		}
 	}
 
@@ -222,8 +224,14 @@ func newComparator(format types.MetricFormat) *metricComparator {
 		"disk_used_perc",
 	}
 
+	important := []string{
+		"cpu_used_status", "disk_used_perc_status", "mem_used_perc_status", "swap_used_perc_status",
+		"system_pending_security_updates", "system_pending_security_updates_status",
+	}
+
 	isEssentials := make(map[string]bool, len(essentials))
 	isHighCard := make(map[string]bool, len(highCard))
+	isImportant := make(map[string]bool, len(important))
 
 	for _, v := range essentials {
 		isEssentials[v] = true
@@ -233,9 +241,14 @@ func newComparator(format types.MetricFormat) *metricComparator {
 		isHighCard[v] = true
 	}
 
+	for _, v := range important {
+		isImportant[v] = true
+	}
+
 	return &metricComparator{
 		isEssentials:      isEssentials,
 		isHighCardinality: isHighCard,
+		isImportant:       isImportant,
 		isGoodItem:        regexp.MustCompile(`^(/|/home|/var|/srv|eth.|eno.|en(s|p)(\d|1\d)(.\d)?)$`),
 	}
 }
@@ -244,14 +257,41 @@ func (m *metricComparator) IsEssential(metric map[string]string) bool {
 	return m.isEssentials[metric[types.LabelName]]
 }
 
-func (m *metricComparator) IsHighCardinality(metric map[string]string) bool {
-	return m.isHighCardinality[metric[types.LabelName]]
-}
-
 // IsSignificantItem return true of "important" item. Like "/", "/home" or "eth0".
 // It's aim is having standard filesystem/network interface before exotic one.
 func (m *metricComparator) IsSignificantItem(item string) bool {
 	return m.isGoodItem.MatchString(item)
+}
+
+// importanceFactor return a weight to indicate how important the metric is.
+// The lowest the more important the metric is.
+func (m *metricComparator) importanceWeight(metric map[string]string) int { //nolint: cyclop
+	name := metric[types.LabelName]
+	item := getItem(metric)
+	essential := m.isEssentials[name]
+	highCard := m.isHighCardinality[name]
+	goodItem := m.IsSignificantItem(item)
+	important := m.isImportant[name]
+	seemsStatus := strings.HasSuffix(name, "_status")
+
+	switch {
+	case essential && item == "":
+		return 0
+	case essential && (!highCard || goodItem):
+		return 10
+	case important && (!highCard || goodItem):
+		return 20
+	case seemsStatus && (!highCard || goodItem):
+		return 30
+	case essential:
+		return 40
+	case important:
+		return 50
+	case seemsStatus:
+		return 60
+	default:
+		return 70
+	}
 }
 
 func getItem(metric map[string]string) string {
@@ -270,37 +310,19 @@ func getItem(metric map[string]string) string {
 	return ""
 }
 
-func (m *metricComparator) isMoreSignficant(metricA map[string]string, metricB map[string]string) bool {
-	essentialA := m.IsEssential(metricA)
-	essentialB := m.IsEssential(metricB)
-
-	highCardA := m.IsHighCardinality(metricA)
-	highCardB := m.IsHighCardinality(metricB)
-
-	itemA := getItem(metricA)
-	itemB := getItem(metricB)
-
-	itemSignificantA := m.IsSignificantItem(itemA)
-	itemSignificantB := m.IsSignificantItem(itemB)
+func (m *metricComparator) isLess(metricA map[string]string, metricB map[string]string) bool {
+	weightA := m.importanceWeight(metricA)
+	weightB := m.importanceWeight(metricB)
 
 	switch {
-	case !essentialA:
-		return false
-	case !essentialB:
+	case weightA < weightB:
 		return true
-	// from now, both are essential
-	case !highCardA && highCardB:
-		return true
-	case highCardA && !highCardB:
+	case weightB < weightA:
 		return false
-	case len(metricA) != len(metricB):
-		return len(metricA) < len(metricB)
-	case itemSignificantA && !itemSignificantB:
+	case len(metricA) < len(metricB):
 		return true
-	case !itemSignificantA && itemSignificantB:
-		return false
 	default:
-		return itemA < itemB
+		return len(metricA) == len(metricB) && getItem(metricA) < getItem(metricB)
 	}
 }
 
@@ -323,7 +345,7 @@ func prioritizeAndFilterMetrics(format types.MetricFormat, metrics []types.Metri
 	}
 
 	sort.Slice(metrics, func(i, j int) bool {
-		return cmp.isMoreSignficant(metrics[i].Labels(), metrics[j].Labels())
+		return cmp.isLess(metrics[i].Labels(), metrics[j].Labels())
 	})
 
 	return metrics
