@@ -997,11 +997,7 @@ func (mr *metricRegisterer) doOnePass(currentList []types.Metric, state metricRe
 
 				mr.failedRegistrationByKey[key] = registration
 				mr.s.retryableMetricFailure[registration.LastFailKind] = false
-
-				continue
-			}
-
-			if mr.pendingErr == nil {
+			} else if mr.pendingErr == nil {
 				mr.pendingErr = err
 			}
 
