@@ -1689,8 +1689,13 @@ func Test_httpResponseToMetricFailureKind(t *testing.T) {
 			want:    bleemeoTypes.FailureAllowList,
 		},
 		{
-			name:    "too many metrics",
+			name:    "too many custom metrics",
 			content: `{"label":["Too many non standard metrics"]}`,
+			want:    bleemeoTypes.FailureTooManyMetric,
+		},
+		{
+			name:    "too many metrics",
+			content: `{"label":["Too many metrics"]}`,
 			want:    bleemeoTypes.FailureTooManyMetric,
 		},
 	}

@@ -337,6 +337,8 @@ func httpResponseToMetricFailureKind(content string) bleemeoTypes.FailureKind {
 		return bleemeoTypes.FailureAllowList
 	case strings.Contains(content, "Too many non standard metrics"):
 		return bleemeoTypes.FailureTooManyMetric
+	case strings.Contains(content, "Too many metrics"):
+		return bleemeoTypes.FailureTooManyMetric
 	default:
 		return bleemeoTypes.FailureUnknown
 	}
